@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- YouTube URL paste support on the search page: paste any YouTube link to stream it instantly or download the audio into your music library for offline listening (great for long DJ sets). Downloads run as background jobs with live progress on the preview card; the server watches each job and imports the file with a library scan when it finishes, even if you navigate away mid-download. Pasted-video playback survives queue restore and cross-device resume. Requires the ytmusic-streamer sidecar with the shared music volume mounted (`/music`, configurable via `YT_DOWNLOAD_DIR`); Helm deployments need an RWX music volume in multi-node clusters.
 - Coarse feature flags for the ML/recommendation subsystems, all defaulting ON: `AUDIO_ANALYSIS_ENABLED` (audio analysis queueing, mood buckets, `/api/analysis`, `/api/vibe`), `DISCOVERY_ENABLED` (Discover Weekly cron/processors, `/api/discover`, `/api/recommendations`), and `AUTO_PLAYLISTS_ENABLED` (Made For You mixes, `/api/mixes`). Disabled prefixes stay rate limited and return `404` with `code: FEATURE_DISABLED`, the matching background workers are not registered, and enrichment completion ignores audio/CLAP work while audio analysis is off. The CLAP analyzer machine callbacks (`/api/analysis/vibe/failure`, `/api/analysis/vibe/success`) remain mounted so in-flight analysis work can still report results.
 - `GET /api/system/features` now reports the configured `audioAnalysis`, `discovery`, and `autoPlaylists` flags alongside the detection-based fields; the frontend hides the corresponding home and Explore sections (Recommended, Discover Weekly, mixes, mood pills, mix Refresh actions), pages (`/discover`, `/mix/[id]`, `/vibe`), and TV Discovery nav link when a flag is off.
 - Helm chart values `config.features.audioAnalysis` / `config.features.discovery` / `config.features.autoPlaylists` (default `true`) that render the new env vars on the backend, backend-worker, and AIO workloads.
@@ -19,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Bulk YouTube downloads (paste a channel/playlist → "Download all") now land coherently instead of scattering. A **channel** download is collapsed under one artist (the channel) — its videos no longer fragment across per-DJ artists or "Unknown Artist" — by stamping the channel as artist/album-artist/album. A **playlist** download keeps each track's native artist, since playlists are commonly multi-artist collections, so the real artists are preserved. Either way the tags are written with ffmpeg (stream copy, no re-encode) rather than mutagen, because mutagen-written Vorbis tags were silently unreadable by the library scanner's metadata parser and kept those files from importing at all.
+- The library scanner now reads opus/ogg track durations (`parseFile` is called with `{ duration: true }`), fixing YouTube-downloaded (and other opus) tracks that imported with a 0:00 run-time.
 - Service-worker image cache keys no longer include the rotating auth token, so cached cover art survives the daily token rotation instead of being re-downloaded every 24 hours.
 - Pausing playback while the lazy-loaded Video.js engine chunk is still downloading now completes the pending track load with autoplay suppressed (instead of silently dropping it), and pressing play during the download starts the queued track once ready rather than restarting the previous source from position 0; stopping still cancels the pending load, and the previously playing track is halted immediately when a segmented stream is selected.
 - The custom server's backend proxies (`/api`, `/rest`, Listen Together socket) now register their error handlers through the http-proxy-middleware v3 `on.error` API, restoring the structured 503 JSON response (`{ error, code }`) when the backend is unreachable — the previous v2-style `onError` option was silently ignored, so clients received hpm's plain-text default error instead.
@@ -33,7 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All `/api` traffic is now streamed through the custom server's proxy (like `/rest` and the Listen Together socket) instead of being buffered by a Next.js route handler, preserving backend gzip compression and response streaming. The route handler remains as a fallback.
 - The Video.js segmented-playback engine is lazy-loaded only when a DASH/segmented stream is selected, removing ~730 kB of JavaScript from every page's first load (home route JS: 2065 kB → 1336 kB).
 - Social presence and notification/download polling now pause while the app tab is hidden and refetch immediately when it becomes visible again, cutting background network chatter on mobile.
-
 
 ## [1.5.0] - 2026-03-27
 

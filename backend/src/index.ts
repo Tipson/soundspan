@@ -49,6 +49,7 @@ import adminRoutes from "./routes/admin";
 import releasesRoutes from "./routes/releases";
 import systemRoutes from "./routes/system";
 import ytMusicRoutes from "./routes/youtubeMusic";
+import youtubeRoutes from "./routes/youtube";
 import tidalStreamingRoutes from "./routes/tidalStreaming";
 import trackMappingsRoutes from "./routes/trackMappings";
 import playlistImportRoutes from "./routes/playlistImport";
@@ -306,6 +307,7 @@ if (config.features.audioAnalysis) {
 }
 app.use("/api/system", apiLimiter, systemRoutes);
 app.use("/api/ytmusic", apiLimiter, ytMusicRoutes);
+app.use("/api/youtube", apiLimiter, youtubeRoutes);
 app.use("/api/tidal-streaming", apiLimiter, tidalStreamingRoutes);
 app.use("/api/track-mappings", apiLimiter, trackMappingsRoutes);
 app.use("/api/import", apiLimiter, playlistImportRoutes);
