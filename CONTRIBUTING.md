@@ -170,7 +170,6 @@ Repository workflow and verification now run through AWM rather than the legacy 
 - AWM tests: `.awm/awm-tests.yaml`
 - AWM workflow gates: `.awm/awm-workflows.yaml`
 - AWM feature plan schema: `docs/AWM_FEATURE_PLANS.md`
-- PR gate: `.github/workflows/pr-checks.yml` (`awm-health` job)
 
 Run locally before pushing:
 

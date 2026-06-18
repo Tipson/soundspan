@@ -31,7 +31,6 @@ tests:
           "docs/README.md",
           "docs/TESTING.md",
           "scripts/awm-backend-targeted-verify.sh",
-          ".github/workflows/pr-checks.yml",
           ".github/workflows/quality-visibility.yml",
           ".github/PULL_REQUEST_TEMPLATE.md",
           "scripts/awm-cross-review.sh"

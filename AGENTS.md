@@ -63,12 +63,11 @@ npm --prefix frontend install
 
 ### Reproduce the CI gates locally (run before every PR)
 
-| CI check (`quality-visibility.yml` / `pr-checks.yml`) | Local command | Catches |
+| CI check (`quality-visibility.yml`) | Local command | Catches |
 | --- | --- | --- |
 | Backend Tests + Coverage | `npm --prefix backend run test:coverage` | backend Jest unit/runtime tests + coverage |
 | Frontend Quality Visibility | `npm --prefix frontend run lint` **and** `npm --prefix frontend run build` **and** `npm --prefix frontend run test:coverage` | ESLint, **TypeScript type-check (the `build` step)**, targeted unit coverage |
 | Helm Chart Visibility | `./scripts/helm-chart-render-check.sh` | chart lint + render assertions |
-| ACM Health | `acm health --project soundspan --include-details` | repo contract / receipts |
 
 Notes:
 

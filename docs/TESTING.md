@@ -170,7 +170,6 @@ Backend coverage artifacts include:
 
 AWM repo-contract checks:
 
-- `.github/workflows/pr-checks.yml` (`awm-health` job)
 - `AGENTS.md`
 - `.awm/awm-rules.yaml`
 - `.awm/awm-tests.yaml`
