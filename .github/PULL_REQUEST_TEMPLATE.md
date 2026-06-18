@@ -2,10 +2,6 @@
 
 <!-- Briefly describe what this PR changes and why. -->
 
-## ACM Impact
-
-<!-- Describe any ACM contract/rules/tests/tags/workflow impact. -->
-
 ## Type of Change
 
 -   [ ] Bug fix (non-breaking change that fixes an issue)
@@ -27,11 +23,7 @@ Fixes #
 
 ## Verification
 
--   [ ] `acm init --project soundspan --project-root .`
--   [ ] `acm sync --project soundspan --mode working_tree --insert-new-candidates --project-root .`
--   [ ] `acm verify --project soundspan --phase review --file-changed ...`
--   [ ] `acm review --run --project soundspan --receipt-id <receipt-id>` (when `.acm/acm-workflows.yaml` requires it)
--   [ ] `acm health --project soundspan --include-details`
+-   [ ] Tests pass locally
 -   [ ] Additional targeted checks (list below)
 
 ## Additional Verification Details

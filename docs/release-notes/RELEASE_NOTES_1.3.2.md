@@ -2,7 +2,7 @@
 
 ## Release Summary
 
-soundspan 1.3.2 brings visual polish to the Home and Explore pages, fixes a Listen Together recovery race, and resolves two library sync issues where downloaded albums could stay hidden and provider track imports could stall. On the operations side, CI image builds are consolidated into a single pipeline and project tooling has been migrated to the ACM control plane.
+soundspan 1.3.2 brings visual polish to the Home and Explore pages, fixes a Listen Together recovery race, and resolves two library sync issues where downloaded albums could stay hidden and provider track imports could stall. On the operations side, CI image builds are consolidated into a single pipeline and project tooling has been migrated to the AWM control plane.
 
 ## Fixed
 
@@ -23,8 +23,8 @@ soundspan 1.3.2 brings visual polish to the Home and Explore pages, fixes a List
 ## Admin/Operations
 
 - CI image builds consolidated from 8 separate GitHub Actions workflows into a single unified pipeline with shared release-tag validation, reducing workflow maintenance overhead.
-- Project tooling migrated from custom agent-config scripts to the ACM control plane, removing approximately 30,000 lines of legacy governance scaffolding.
-- Pull request checks now use ACM-driven verification for backend coverage, frontend lint/build/coverage, and Helm chart rendering.
+- Project tooling migrated from custom agent-config scripts to the AWM control plane, removing approximately 30,000 lines of legacy governance scaffolding.
+- Pull request checks now use AWM-driven verification for backend coverage, frontend lint/build/coverage, and Helm chart rendering.
 - Developer documentation reorganized under `docs/maintainers/` and streamlined across README, CONTRIBUTING, and TESTING guides.
 - Backend runtime tests updated to match current API response shapes and behavior.
 

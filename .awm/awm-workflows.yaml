@@ -1,11 +1,11 @@
-version: acm.workflows.v1
+version: awm.workflows.v1
 
 completion:
   required_tasks:
     - key: verify:tests
       select:
         changed_paths_any:
-          - ".acm/**"
+          - ".awm/**"
           - ".claude/**"
           - ".githooks/**"
           - ".github/**"
@@ -30,7 +30,7 @@ completion:
         phases:
           - review
         changed_paths_any:
-          - ".acm/**"
+          - ".awm/**"
           - ".claude/**"
           - ".githooks/**"
           - ".github/**"
@@ -50,7 +50,7 @@ completion:
           - "services/**"
       run:
         argv:
-          - "scripts/acm-cross-review.sh"
+          - "scripts/awm-cross-review.sh"
           - "--provider"
           - "codex"
           - "--model"

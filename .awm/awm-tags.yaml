@@ -1,4 +1,4 @@
-version: acm.tags.v1
+version: awm.tags.v1
 canonical_tags:
   soundspan: [soundspan, music-server, self-hosted]
   backend: [backend, express, api, prisma]
@@ -18,7 +18,7 @@ canonical_tags:
   security: [security, auth, session, oauth]
   helm: [helm, charts, kubernetes, k8s]
   packages: [packages, shared, media-metadata-contract]
-  onboarding: [acm, onboarding, init, context, verify]
+  onboarding: [awm, onboarding, init, context, verify]
   plans: [plan, plans, work, tasks, migration, legacy-plan]
   claude: [claude, slash-commands, command-pack]
   codex: [codex, skills, broker]

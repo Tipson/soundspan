@@ -6,7 +6,7 @@ usage() {
 Run the repo-local cross-LLM review gate for soundspan.
 
 Usage:
-  scripts/acm-cross-review.sh [--provider <codex|claude>] [--model <model>] [--reasoning-effort <level>] [--sandbox <mode>] [--yolo] [--dangerously-skip-permissions]
+  scripts/awm-cross-review.sh [--provider <codex|claude>] [--model <model>] [--reasoning-effort <level>] [--sandbox <mode>] [--yolo] [--dangerously-skip-permissions]
 
 Notes:
   --yolo is the shared high-trust shortcut. For Codex it passes native --yolo;
@@ -14,32 +14,32 @@ Notes:
 
 Cheat sheet:
   Codex default sandboxed review:
-    scripts/acm-cross-review.sh --provider codex --sandbox read-only
+    scripts/awm-cross-review.sh --provider codex --sandbox read-only
   Codex high-trust review in an already isolated container:
-    scripts/acm-cross-review.sh --provider codex --model gpt-5.3-codex --reasoning-effort high --yolo
+    scripts/awm-cross-review.sh --provider codex --model gpt-5.3-codex --reasoning-effort high --yolo
   Claude default print-mode review:
-    scripts/acm-cross-review.sh --provider claude --model sonnet
+    scripts/awm-cross-review.sh --provider claude --model sonnet
   Claude high-trust review in an already isolated container:
-    scripts/acm-cross-review.sh --provider claude --model sonnet --yolo
+    scripts/awm-cross-review.sh --provider claude --model sonnet --yolo
 
 Environment:
-  ACM_PROJECT_ID
-  ACM_PROJECT_ROOT
-  ACM_RECEIPT_ID
-  ACM_PLAN_KEY
-  ACM_REVIEW_KEY
-  ACM_REVIEW_SUMMARY
-  ACM_WORKFLOW_SOURCE_PATH
-  ACM_CROSS_REVIEW_PROVIDER
-  ACM_CROSS_REVIEW_MODEL
-  ACM_CROSS_REVIEW_REASONING_EFFORT
-  ACM_CROSS_REVIEW_SANDBOX
-  ACM_CROSS_REVIEW_YOLO
-  ACM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS
-  ACM_REVIEW_BASELINE_CAPTURED
-  ACM_REVIEW_EFFECTIVE_SCOPE_PATHS_JSON
-  ACM_REVIEW_CHANGED_PATHS_JSON
-  ACM_REVIEW_TASK_DELTA_SOURCE
+  AWM_PROJECT_ID
+  AWM_PROJECT_ROOT
+  AWM_RECEIPT_ID
+  AWM_PLAN_KEY
+  AWM_REVIEW_KEY
+  AWM_REVIEW_SUMMARY
+  AWM_WORKFLOW_SOURCE_PATH
+  AWM_CROSS_REVIEW_PROVIDER
+  AWM_CROSS_REVIEW_MODEL
+  AWM_CROSS_REVIEW_REASONING_EFFORT
+  AWM_CROSS_REVIEW_SANDBOX
+  AWM_CROSS_REVIEW_YOLO
+  AWM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS
+  AWM_REVIEW_BASELINE_CAPTURED
+  AWM_REVIEW_EFFECTIVE_SCOPE_PATHS_JSON
+  AWM_REVIEW_CHANGED_PATHS_JSON
+  AWM_REVIEW_TASK_DELTA_SOURCE
 USAGE
 }
 
@@ -77,21 +77,21 @@ default_codex_sandbox="read-only"
 reasoning_effort_explicit=false
 sandbox_explicit=false
 dangerously_skip_permissions_explicit=false
-if [[ -n "${ACM_CROSS_REVIEW_REASONING_EFFORT:-}" ]]; then
+if [[ -n "${AWM_CROSS_REVIEW_REASONING_EFFORT:-}" ]]; then
   reasoning_effort_explicit=true
 fi
-if [[ -n "${ACM_CROSS_REVIEW_SANDBOX:-}" ]]; then
+if [[ -n "${AWM_CROSS_REVIEW_SANDBOX:-}" ]]; then
   sandbox_explicit=true
 fi
-if [[ "$(normalize_bool "${ACM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS:-false}")" == "true" ]]; then
+if [[ "$(normalize_bool "${AWM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS:-false}")" == "true" ]]; then
   dangerously_skip_permissions_explicit=true
 fi
-review_provider="${ACM_CROSS_REVIEW_PROVIDER:-${default_provider}}"
-review_model="${ACM_CROSS_REVIEW_MODEL:-}"
-review_reasoning_effort="${ACM_CROSS_REVIEW_REASONING_EFFORT:-${default_reasoning_effort}}"
-review_sandbox="${ACM_CROSS_REVIEW_SANDBOX:-${default_codex_sandbox}}"
-review_yolo="$(normalize_bool "${ACM_CROSS_REVIEW_YOLO:-false}")"
-review_dangerously_skip_permissions="$(normalize_bool "${ACM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS:-false}")"
+review_provider="${AWM_CROSS_REVIEW_PROVIDER:-${default_provider}}"
+review_model="${AWM_CROSS_REVIEW_MODEL:-}"
+review_reasoning_effort="${AWM_CROSS_REVIEW_REASONING_EFFORT:-${default_reasoning_effort}}"
+review_sandbox="${AWM_CROSS_REVIEW_SANDBOX:-${default_codex_sandbox}}"
+review_yolo="$(normalize_bool "${AWM_CROSS_REVIEW_YOLO:-false}")"
+review_dangerously_skip_permissions="$(normalize_bool "${AWM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS:-false}")"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -163,24 +163,24 @@ esac
 
 reviewer_cli="${review_provider}"
 if ! command -v "${reviewer_cli}" >/dev/null 2>&1; then
-  echo "${reviewer_cli} CLI is required for scripts/acm-cross-review.sh" >&2
+  echo "${reviewer_cli} CLI is required for scripts/awm-cross-review.sh" >&2
   exit 127
 fi
 if ! command -v git >/dev/null 2>&1; then
-  echo "git is required for scripts/acm-cross-review.sh" >&2
+  echo "git is required for scripts/awm-cross-review.sh" >&2
   exit 127
 fi
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is required for scripts/acm-cross-review.sh" >&2
+  echo "python3 is required for scripts/awm-cross-review.sh" >&2
   exit 127
 fi
-if ! command -v acm >/dev/null 2>&1; then
-  echo "acm CLI is required for scripts/acm-cross-review.sh" >&2
+if ! command -v awm >/dev/null 2>&1; then
+  echo "awm CLI is required for scripts/awm-cross-review.sh" >&2
   exit 127
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-REPO_ROOT="${ACM_PROJECT_ROOT:-}"
+REPO_ROOT="${AWM_PROJECT_ROOT:-}"
 if [[ -z "${REPO_ROOT}" ]]; then
   REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 fi
@@ -205,8 +205,8 @@ plan_fetch_path="${tmp_dir}/plan-fetch.json"
 effective_scope_paths_path="${tmp_dir}/effective-scope-paths.txt"
 tracked_scope_path="${tmp_dir}/tracked-scope-paths.txt"
 untracked_scope_path="${tmp_dir}/untracked-scope-paths.txt"
-provided_changed_paths_json="${ACM_REVIEW_CHANGED_PATHS_JSON:-}"
-provided_effective_scope_json="${ACM_REVIEW_EFFECTIVE_SCOPE_PATHS_JSON:-}"
+provided_changed_paths_json="${AWM_REVIEW_CHANGED_PATHS_JSON:-}"
+provided_effective_scope_json="${AWM_REVIEW_EFFECTIVE_SCOPE_PATHS_JSON:-}"
 repo_changed_count=0
 scoped_changed_count=0
 
@@ -239,17 +239,17 @@ cat >"${schema_path}" <<'JSON'
 }
 JSON
 
-receipt_id="${ACM_RECEIPT_ID:-}"
-if [[ -z "${receipt_id}" && "${ACM_PLAN_KEY:-}" == plan:* ]]; then
-  receipt_id="${ACM_PLAN_KEY#plan:}"
+receipt_id="${AWM_RECEIPT_ID:-}"
+if [[ -z "${receipt_id}" && "${AWM_PLAN_KEY:-}" == plan:* ]]; then
+  receipt_id="${AWM_PLAN_KEY#plan:}"
 fi
-active_plan_key="${ACM_PLAN_KEY:-}"
+active_plan_key="${AWM_PLAN_KEY:-}"
 if [[ -z "${active_plan_key}" && -n "${receipt_id}" ]]; then
   active_plan_key="plan:${receipt_id}"
 fi
 
-if [[ -z "${ACM_PROJECT_ID:-}" || -z "${receipt_id}" ]]; then
-  echo "ACM_PROJECT_ID and ACM_RECEIPT_ID (or plan:<receipt_id>) are required for receipt-scoped review" >&2
+if [[ -z "${AWM_PROJECT_ID:-}" || -z "${receipt_id}" ]]; then
+  echo "AWM_PROJECT_ID and AWM_RECEIPT_ID (or plan:<receipt_id>) are required for receipt-scoped review" >&2
   exit 2
 fi
 
@@ -281,13 +281,13 @@ with open(output_path, "w", encoding="utf-8") as handle:
         handle.write(path + "\n")
 PY
   else
-    ACM_LOG_SINK=discard acm fetch \
-      --project "${ACM_PROJECT_ID}" \
+    AWM_LOG_SINK=discard awm fetch \
+      --project "${AWM_PROJECT_ID}" \
       --key "receipt:${receipt_id}" >"${receipt_fetch_path}"
     : >"${plan_fetch_path}"
     if [[ -n "${active_plan_key}" ]]; then
-      if ! ACM_LOG_SINK=discard acm fetch \
-        --project "${ACM_PROJECT_ID}" \
+      if ! AWM_LOG_SINK=discard awm fetch \
+        --project "${AWM_PROJECT_ID}" \
         --key "${active_plan_key}" >"${plan_fetch_path}" 2>/dev/null; then
         : >"${plan_fetch_path}"
       fi
@@ -387,16 +387,16 @@ import sys
 
 changed_path, scope_path = sys.argv[1], sys.argv[2]
 completion_managed_paths = {
-    ".acm/acm-rules.yaml",
-    ".acm/acm-tags.yaml",
-    ".acm/acm-tests.yaml",
-    ".acm/acm-workflows.yaml",
-    ".acm/init_candidates.json",
+    ".awm/awm-rules.yaml",
+    ".awm/awm-tags.yaml",
+    ".awm/awm-tests.yaml",
+    ".awm/awm-workflows.yaml",
+    ".awm/init_candidates.json",
     ".env.example",
     ".gitignore",
-    "acm-rules.yaml",
-    "acm-tests.yaml",
-    "acm-workflows.yaml",
+    "awm-rules.yaml",
+    "awm-tests.yaml",
+    "awm-workflows.yaml",
 }
 
 
@@ -432,11 +432,11 @@ PY
   unscoped_changed_count=$(( repo_changed_count - scoped_changed_count ))
 
   if (( repo_changed_count > 0 && scoped_changed_count == 0 )); then
-    printf 'FAIL: Review gate blocked before model execution: %s changed file(s), %s scoped change(s). Rerun acm context with broader known scope or declare missing files through acm work before rerunning acm review.\n' "${repo_changed_count}" "${scoped_changed_count}"
+    printf 'FAIL: Review gate blocked before model execution: %s changed file(s), %s scoped change(s). Rerun awm context with broader known scope or declare missing files through awm work before rerunning awm review.\n' "${repo_changed_count}" "${scoped_changed_count}"
     exit 1
   fi
   if (( unscoped_changed_count > 0 )); then
-    printf 'FAIL: Review gate blocked before model execution: %s changed file(s), %s scoped change(s), %s unscoped change(s). Declare the missing files through acm work or start a broader context before rerunning acm review.\n' "${repo_changed_count}" "${scoped_changed_count}" "${unscoped_changed_count}"
+    printf 'FAIL: Review gate blocked before model execution: %s changed file(s), %s scoped change(s), %s unscoped change(s). Declare the missing files through awm work or start a broader context before rerunning awm review.\n' "${repo_changed_count}" "${scoped_changed_count}" "${unscoped_changed_count}"
     exit 1
   fi
 
@@ -487,7 +487,7 @@ fi
 cat >"${prompt_path}" <<EOF
 Review the current task-scoped uncommitted changes in the repository at ${REPO_ROOT}.
 
-You are the cross-LLM review gate for ACM. This review is read-only, must not modify files by any means, and blocks completion if there are real issues.
+You are the cross-LLM review gate for AWM. This review is read-only, must not modify files by any means, and blocks completion if there are real issues.
 
 Changed files:
 $(if [[ -s "${changed_files_path}" ]]; then cat "${changed_files_path}"; else echo "(no changed files detected)"; fi)
@@ -500,9 +500,9 @@ Scope counts:
 - scoped_changed: ${scoped_changed_count}
 
 Instructions:
-- Start by reading AGENTS.md and .acm/acm-workflows.yaml when present.
+- Start by reading AGENTS.md and .awm/awm-workflows.yaml when present.
 - Do not modify, create, delete, rename, stage, or overwrite files, and do not use any command, tool, or redirection that writes to the filesystem; if an action would change files by any means, do not do it.
-- Treat the review scope as the active effective scope: receipt 'initial_scope_paths', any 'plan.discovered_paths', plus ACM-managed governance files already allowed by completion reporting.
+- Treat the review scope as the active effective scope: receipt 'initial_scope_paths', any 'plan.discovered_paths', plus AWM-managed governance files already allowed by completion reporting.
 - Review only the changed files listed above. Open a changed file or run local diff commands for those paths only when the diff summary suggests a plausible blocking risk, and do not roam through unrelated files.
 - Keep the investigation tight: after the initial AGENTS/workflow reads, use at most 8 additional read-only commands before deciding pass/fail.
 - Focus on blocking issues only: correctness bugs, regressions, broken command semantics, contract/schema drift, CLI/MCP parity gaps, workflow-gate mistakes, missing verification coverage, or docs/examples/skills drift that would mislead users.
@@ -513,12 +513,12 @@ Instructions:
 - Return JSON only that matches the provided schema.
 
 Context:
-- project_id: ${ACM_PROJECT_ID:-}
+- project_id: ${AWM_PROJECT_ID:-}
 - receipt_id: ${receipt_id}
 - plan_key: ${active_plan_key}
-- review_key: ${ACM_REVIEW_KEY:-review:cross-llm}
-- review_summary: ${ACM_REVIEW_SUMMARY:-Cross-LLM review}
-- workflow_source_path: ${ACM_WORKFLOW_SOURCE_PATH:-.acm/acm-workflows.yaml}
+- review_key: ${AWM_REVIEW_KEY:-review:cross-llm}
+- review_summary: ${AWM_REVIEW_SUMMARY:-Cross-LLM review}
+- workflow_source_path: ${AWM_WORKFLOW_SOURCE_PATH:-.awm/awm-workflows.yaml}
 EOF
 
 reviewer_args=()

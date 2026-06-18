@@ -29,7 +29,7 @@ This index is the central navigation page for all project documentation under `d
 2. Read [`DATA_MODEL.md`](DATA_MODEL.md) for entity relationships and resolution chains
 3. Use [`TEST_MATRIX.md`](TEST_MATRIX.md) for fast, targeted test commands by domain
 4. Use [`TESTING.md`](TESTING.md) for test framework/layout/command standards
-5. Use [`../AGENTS.md`](../AGENTS.md) for the active ACM repo contract
+5. Use [`../AGENTS.md`](../AGENTS.md) for the active AWM repo contract
 6. Use domain start-here guides in [`../backend/src/routes/README.md`](../backend/src/routes/README.md), [`../backend/src/services/README.md`](../backend/src/services/README.md), and [`../frontend/features/README.md`](../frontend/features/README.md)
 7. Use [`FEATURE_INDEX.json`](FEATURE_INDEX.json) for machine-readable feature-to-code mapping
 8. Use [`maintainers/README.md`](maintainers/README.md) for retained maintainer-only guidance
@@ -63,8 +63,8 @@ This index is the central navigation page for all project documentation under `d
 | [`TEST_MATRIX.md`](TEST_MATRIX.md) | Contributors/agents | Domain-to-test-file mapping for fast targeted verification |
 | [`FEATURE_INDEX.json`](FEATURE_INDEX.json) | Agents | Machine-readable feature-to-code mapping for navigation and verification |
 | [`TESTING.md`](TESTING.md) | Contributors/operators | Test frameworks, directory structure, commands, CI coverage visibility, and manual-vs-automated boundaries |
-| [`../AGENTS.md`](../AGENTS.md) | Contributors/agents | Active ACM repo contract and task loop |
-| [`ACM_FEATURE_PLANS.md`](ACM_FEATURE_PLANS.md) | Contributors/agents | Visible repo-local schema for formal feature plans stored in ACM |
+| [`../AGENTS.md`](../AGENTS.md) | Contributors/agents | Active AWM repo contract and task loop |
+| [`AWM_FEATURE_PLANS.md`](AWM_FEATURE_PLANS.md) | Contributors/agents | Visible repo-local schema for formal feature plans stored in AWM |
 | [`maintainers/README.md`](maintainers/README.md) | Maintainers | Index of retained maintainer-only guidance |
 | [`maintainers/LOGGING_STANDARDS.md`](maintainers/LOGGING_STANDARDS.md) | Maintainers | Current shared logging guidance for runtime code |
 | [`maintainers/RELEASE_NOTES_TEMPLATE.md`](maintainers/RELEASE_NOTES_TEMPLATE.md) | Maintainers | Manual release-notes scaffold for published releases |
@@ -86,13 +86,13 @@ This index is the central navigation page for all project documentation under `d
 
 ---
 
-Key ACM helper commands:
-- `acm context --project soundspan --task-text "<task>" --phase plan` starts scoped work.
-- `acm verify --project soundspan --phase review --file-changed <path>` runs repo-defined verification; backend changes stay receipt-scoped and targeted here.
-- `acm review --run --project soundspan --receipt-id <receipt-id>` satisfies repo-defined workflow gates when `.acm/acm-workflows.yaml` selects the current task.
-- `acm review --run --project soundspan --receipt-id <receipt-id>` also promotes full backend `build` + `test:coverage` when the active receipt includes backend or shared media-contract changes.
-- `acm verify --project soundspan --receipt-id <receipt-id> --phase review --file-changed <path>` selects `acm-feature-plan-validate` for feature-relevant work and runs it with active receipt/plan context.
-- `python3 scripts/acm-feature-plan-validate.py` is the repo-local validator behind that verify check and can be run directly for debugging.
-- `acm health --project soundspan --include-details` checks ACM index/rules health.
-- `acm work search --project soundspan --scope all --query "<topic>"` finds current and historical work by topic.
-- `acm work list --project soundspan --scope all` lists the broader work inventory when you need to browse history.
+Key AWM helper commands:
+- `awm context --project soundspan --task-text "<task>" --phase plan` starts scoped work.
+- `awm verify --project soundspan --phase review --file-changed <path>` runs repo-defined verification; backend changes stay receipt-scoped and targeted here.
+- `awm review --run --project soundspan --receipt-id <receipt-id>` satisfies repo-defined workflow gates when `.awm/awm-workflows.yaml` selects the current task.
+- `awm review --run --project soundspan --receipt-id <receipt-id>` also promotes full backend `build` + `test:coverage` when the active receipt includes backend or shared media-contract changes.
+- `awm verify --project soundspan --receipt-id <receipt-id> --phase review --file-changed <path>` selects `awm-feature-plan-validate` for feature-relevant work and runs it with active receipt/plan context.
+- `python3 scripts/awm-feature-plan-validate.py` is the repo-local validator behind that verify check and can be run directly for debugging.
+- `awm health --project soundspan --include-details` checks AWM index/rules health.
+- `awm work search --project soundspan --scope all --query "<topic>"` finds current and historical work by topic.
+- `awm work list --project soundspan --scope all` lists the broader work inventory when you need to browse history.

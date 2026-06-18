@@ -1,28 +1,28 @@
-version: acm.tests.v1
+version: awm.tests.v1
 defaults:
   cwd: .
   timeout_sec: 900
 tests:
   - id: context-smoke
-    summary: Ensure ACM can return scoped context for soundspan
+    summary: Ensure AWM can return scoped context for soundspan
     command:
-      argv: ["acm", "context", "--project", "soundspan", "--task-text", "soundspan ACM smoke test", "--phase", "plan"]
+      argv: ["awm", "context", "--project", "soundspan", "--task-text", "soundspan AWM smoke test", "--phase", "plan"]
     select:
       always_run: true
     expected:
       exit_code: 0
 
-  - id: acm-health
-    summary: Ensure the ACM repo contract and workflow gates remain healthy
+  - id: awm-health
+    summary: Ensure the AWM repo contract and workflow gates remain healthy
     command:
-      argv: ["acm", "health", "--project", "soundspan", "--include-details"]
+      argv: ["awm", "health", "--project", "soundspan", "--include-details"]
     select:
       phases: ["execute", "review"]
       changed_paths_any:
         [
           "AGENTS.md",
           "CLAUDE.md",
-          ".acm/**",
+          ".awm/**",
           ".claude/**",
           ".githooks/**",
           ".gitignore",
@@ -30,60 +30,60 @@ tests:
           "CONTRIBUTING.md",
           "docs/README.md",
           "docs/TESTING.md",
-          "scripts/acm-backend-targeted-verify.sh",
+          "scripts/awm-backend-targeted-verify.sh",
           ".github/workflows/pr-checks.yml",
           ".github/workflows/quality-visibility.yml",
           ".github/PULL_REQUEST_TEMPLATE.md",
-          "scripts/acm-cross-review.sh"
+          "scripts/awm-cross-review.sh"
         ]
     expected:
       exit_code: 0
 
-  - id: acm-cross-review-help
-    summary: Ensure the ACM cross-review gate script parses and exposes help
+  - id: awm-cross-review-help
+    summary: Ensure the AWM cross-review gate script parses and exposes help
     command:
-      argv: ["bash", "scripts/acm-cross-review.sh", "--help"]
+      argv: ["bash", "scripts/awm-cross-review.sh", "--help"]
     select:
       phases: ["execute", "review"]
-      changed_paths_any: ["scripts/acm-cross-review.sh", ".acm/acm-workflows.yaml"]
+      changed_paths_any: ["scripts/awm-cross-review.sh", ".awm/awm-workflows.yaml"]
     expected:
       exit_code: 0
 
-  - id: acm-cross-review-provider-flags
-    summary: Ensure the ACM cross-review gate script covers shared yolo and provider flags
+  - id: awm-cross-review-provider-flags
+    summary: Ensure the AWM cross-review gate script covers shared yolo and provider flags
     command:
-      argv: ["python3", "scripts/test_acm_cross_review.py"]
+      argv: ["python3", "scripts/test_awm_cross_review.py"]
     select:
       phases: ["execute", "review"]
-      changed_paths_any: ["scripts/acm-cross-review.sh", "scripts/test_acm_cross_review.py", ".acm/acm-workflows.yaml", ".acm/acm-tests.yaml"]
+      changed_paths_any: ["scripts/awm-cross-review.sh", "scripts/test_awm_cross_review.py", ".awm/awm-workflows.yaml", ".awm/awm-tests.yaml"]
     expected:
       exit_code: 0
 
-  - id: acm-backend-targeted-verify-help
-    summary: Ensure the ACM targeted backend verify script parses and exposes help
+  - id: awm-backend-targeted-verify-help
+    summary: Ensure the AWM targeted backend verify script parses and exposes help
     command:
-      argv: ["bash", "scripts/acm-backend-targeted-verify.sh", "--help"]
+      argv: ["bash", "scripts/awm-backend-targeted-verify.sh", "--help"]
     select:
       phases: ["execute", "review"]
       changed_paths_any:
-        ["scripts/acm-backend-targeted-verify.sh", ".acm/acm-tests.yaml", ".acm/acm-workflows.yaml"]
+        ["scripts/awm-backend-targeted-verify.sh", ".awm/awm-tests.yaml", ".awm/awm-workflows.yaml"]
     expected:
       exit_code: 0
 
-  - id: acm-feature-plan-help
-    summary: Ensure the ACM feature-plan validator exposes help
+  - id: awm-feature-plan-help
+    summary: Ensure the AWM feature-plan validator exposes help
     command:
-      argv: ["python3", "scripts/acm-feature-plan-validate.py", "--help"]
+      argv: ["python3", "scripts/awm-feature-plan-validate.py", "--help"]
     select:
       phases: ["execute", "review"]
-      changed_paths_any: ["scripts/acm-feature-plan-validate.py"]
+      changed_paths_any: ["scripts/awm-feature-plan-validate.py"]
     expected:
       exit_code: 0
 
-  - id: acm-feature-plan-validate
-    summary: Validate the repo-local ACM feature plan schema for active feature work
+  - id: awm-feature-plan-validate
+    summary: Validate the repo-local AWM feature plan schema for active feature work
     command:
-      argv: ["python3", "scripts/acm-feature-plan-validate.py"]
+      argv: ["python3", "scripts/awm-feature-plan-validate.py"]
     select:
       phases: ["execute", "review"]
       changed_paths_any:
@@ -103,7 +103,7 @@ tests:
   - id: backend-targeted-tests
     summary: Run receipt-scoped targeted backend Jest tests
     command:
-      argv: ["bash", "scripts/acm-backend-targeted-verify.sh"]
+      argv: ["bash", "scripts/awm-backend-targeted-verify.sh"]
     select:
       phases: ["execute", "review"]
       changed_paths_any: ["backend/**", "packages/media-metadata-contract/**"]

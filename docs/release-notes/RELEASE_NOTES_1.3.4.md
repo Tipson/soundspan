@@ -12,7 +12,7 @@ soundspan 1.3.4 fixes three user-facing bugs: liked remote tracks that were save
 
 ## Changed
 
-- No user-facing changes. Internal maintainer verification tooling was updated (ACM review scripts, frontend coverage checks, Python sidecar test scaffolds).
+- No user-facing changes. Internal maintainer verification tooling was updated (AWM review scripts, frontend coverage checks, Python sidecar test scaffolds).
 
 ## Deployment and Distribution
 

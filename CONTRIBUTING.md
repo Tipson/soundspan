@@ -17,7 +17,7 @@ After cloning, activate the repo's pre-commit hook:
 git config core.hooksPath .githooks
 ```
 
-This runs `acm verify` on staged code files before each commit.
+This runs `awm verify` on staged code files before each commit.
 
 ## Branch Strategy
 
@@ -161,34 +161,34 @@ Recommended rollout:
 3. Make visibility workflow blocking.
 4. Add required status checks in branch protection for release branches/tags.
 
-## ACM Repo Contract
+## AWM Repo Contract
 
-Repository workflow and verification now run through ACM rather than the legacy agents-template toolchain.
+Repository workflow and verification now run through AWM rather than the legacy agents-template toolchain.
 
 - Repo contract: `AGENTS.md`
-- ACM rules: `.acm/acm-rules.yaml`
-- ACM tests: `.acm/acm-tests.yaml`
-- ACM workflow gates: `.acm/acm-workflows.yaml`
-- ACM feature plan schema: `docs/ACM_FEATURE_PLANS.md`
-- PR gate: `.github/workflows/pr-checks.yml` (`acm-health` job)
+- AWM rules: `.awm/awm-rules.yaml`
+- AWM tests: `.awm/awm-tests.yaml`
+- AWM workflow gates: `.awm/awm-workflows.yaml`
+- AWM feature plan schema: `docs/AWM_FEATURE_PLANS.md`
+- PR gate: `.github/workflows/pr-checks.yml` (`awm-health` job)
 
 Run locally before pushing:
 
 ```bash
-acm sync --project soundspan --mode working_tree --insert-new-candidates --project-root .
-acm verify --project soundspan --phase review --file-changed <path>
-acm health --project soundspan --include-details
+awm sync --project soundspan --mode working_tree --insert-new-candidates --project-root .
+awm verify --project soundspan --phase review --file-changed <path>
+awm health --project soundspan --include-details
 ```
 
-For backend or `packages/media-metadata-contract/` changes, `acm verify` remains receipt-scoped and targeted. The full backend `build` + `test:coverage` gate is promoted through the runnable review step below before `done`.
+For backend or `packages/media-metadata-contract/` changes, `awm verify` remains receipt-scoped and targeted. The full backend `build` + `test:coverage` gate is promoted through the runnable review step below before `done`.
 
 When the active receipt matches a repo-defined review gate, also run:
 
 ```bash
-acm review --run --project soundspan --receipt-id <receipt-id>
+awm review --run --project soundspan --receipt-id <receipt-id>
 ```
 
-For net-new feature work, use the repo-local ACM feature plan schema from `docs/ACM_FEATURE_PLANS.md`: root plans use `kind=feature`, split execution streams use `kind=feature_stream`, and `acm verify` enforces the required hierarchy and metadata through `scripts/acm-feature-plan-validate.py`.
+For net-new feature work, use the repo-local AWM feature plan schema from `docs/AWM_FEATURE_PLANS.md`: root plans use `kind=feature`, split execution streams use `kind=feature_stream`, and `awm verify` enforces the required hierarchy and metadata through `scripts/awm-feature-plan-validate.py`.
 
 ## Pull Request Process
 

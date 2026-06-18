@@ -1,12 +1,12 @@
-version: acm.rules.v1
+version: awm.rules.v1
 rules:
   # ── Core workflow ──────────────────────────────────────────────────
 
   - id: rule_start_with_context
-    summary: Start non-trivial work with ACM context.
-    content: For multi-step, multi-file, or governed changes, run `acm context --project soundspan ...` before opening or editing files, then follow the returned hard rules. Trivial single-file fixes can skip the ACM ceremony.
+    summary: Start non-trivial work with AWM context.
+    content: For multi-step, multi-file, or governed changes, run `awm context --project soundspan ...` before opening or editing files, then follow the returned hard rules. Trivial single-file fixes can skip the AWM ceremony.
     enforcement: hard
-    tags: [acm, context, workflow]
+    tags: [awm, context, workflow]
 
   - id: rule_fetch_minimal
     summary: Keep retrieved context tight.
@@ -21,15 +21,15 @@ rules:
     tags: [workflow, safety]
 
   - id: rule_track_multistep_work
-    summary: Track multi-step work in ACM.
-    content: Use `acm work` for multi-step, multi-file, or handoff-prone tasks. Include `verify:tests` for executable changes.
+    summary: Track multi-step work in AWM.
+    content: Use `awm work` for multi-step, multi-file, or handoff-prone tasks. Include `verify:tests` for executable changes.
     enforcement: hard
     tags: [work, planning]
 
   - id: rule_plan_before_code
     summary: Plan multi-step work before writing implementation code.
     content: |
-      For tasks with more than one implementation step, create ACM work
+      For tasks with more than one implementation step, create AWM work
       with explicit steps and acceptance criteria before writing any
       implementation code. Single-file, single-purpose fixes are exempt.
     enforcement: hard
@@ -43,7 +43,7 @@ rules:
 
   - id: rule_verify_before_completion
     summary: Verify executable changes before completion.
-    content: For code, config, schema, or behavior changes, run `acm verify --project soundspan ...` before `done`.
+    content: For code, config, schema, or behavior changes, run `awm verify --project soundspan ...` before `done`.
     enforcement: hard
     tags: [verify, testing, completion]
 
@@ -94,20 +94,20 @@ rules:
   # ── Workflow alignment ─────────────────────────────────────────────
 
   - id: rule_workflow_gates_sync
-    summary: Keep workflow gates and ACM guidance aligned.
-    content: Changes to ACM workflow-gate behavior or repo-local review automation must keep `.acm/acm-workflows.yaml`, the root agent contracts, `.claude/acm-broker/**`, and any impacted maintainer docs or CI files semantically aligned.
+    summary: Keep workflow gates and AWM guidance aligned.
+    content: Changes to AWM workflow-gate behavior or repo-local review automation must keep `.awm/awm-workflows.yaml`, the root agent contracts, `.claude/awm-broker/**`, and any impacted maintainer docs or CI files semantically aligned.
     enforcement: hard
     tags: [workflow, docs, claude]
 
-  - id: rule_work_history_via_acm
-    summary: Use ACM work list and search for plan history.
-    content: For current, deferred, or completed work lookup, use `acm work list/search --project soundspan --scope all` and fetch the returned keys for details.
+  - id: rule_work_history_via_awm
+    summary: Use AWM work list and search for plan history.
+    content: For current, deferred, or completed work lookup, use `awm work list/search --project soundspan --scope all` and fetch the returned keys for details.
     enforcement: hard
-    tags: [plans, history, acm]
+    tags: [plans, history, awm]
 
   - id: rule_feature_plan_schema
-    summary: Use the repo-local ACM feature plan schema for net-new feature work.
-    content: For net-new feature work, create a root ACM plan with `kind=feature`, explicit objective and scope metadata, stage statuses, and top-level `stage:*` tasks that own child tasks through `parent_task_key`. Use `kind=feature_stream` and `parent_plan_key` for split workstreams. `acm verify` enforces the schema through `scripts/acm-feature-plan-validate.py`.
+    summary: Use the repo-local AWM feature plan schema for net-new feature work.
+    content: For net-new feature work, create a root AWM plan with `kind=feature`, explicit objective and scope metadata, stage statuses, and top-level `stage:*` tasks that own child tasks through `parent_task_key`. Use `kind=feature_stream` and `parent_plan_key` for split workstreams. `awm verify` enforces the schema through `scripts/awm-feature-plan-validate.py`.
     enforcement: hard
     tags: [planning, workflow, docs]
 
@@ -139,6 +139,6 @@ rules:
 
   - id: rule_xhigh_review
     summary: Run the repo-standard xhigh cross-LLM review for substantial implementation work.
-    content: Before final completion on non-trivial implementation work, satisfy the repo review gate with `acm review --run --project soundspan --receipt-id <receipt-id>`. Keep model and reasoning settings in `.acm/acm-workflows.yaml`.
+    content: Before final completion on non-trivial implementation work, satisfy the repo review gate with `awm review --run --project soundspan --receipt-id <receipt-id>`. Keep model and reasoning settings in `.awm/awm-workflows.yaml`.
     enforcement: soft
     tags: [review, codex, workflow]

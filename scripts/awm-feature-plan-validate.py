@@ -36,44 +36,44 @@ def normalized_list(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Validate soundspan's repo-local ACM feature plan convention."
+        description="Validate soundspan's repo-local AWM feature plan convention."
     )
     parser.add_argument(
         "--project",
-        default=os.environ.get("ACM_PROJECT_ID", "soundspan"),
-        help="ACM project id (defaults to ACM_PROJECT_ID or soundspan).",
+        default=os.environ.get("AWM_PROJECT_ID", "soundspan"),
+        help="AWM project id (defaults to AWM_PROJECT_ID or soundspan).",
     )
     parser.add_argument(
         "--plan-key",
-        default=os.environ.get("ACM_PLAN_KEY", ""),
-        help="Plan key to validate (defaults to ACM_PLAN_KEY).",
+        default=os.environ.get("AWM_PLAN_KEY", ""),
+        help="Plan key to validate (defaults to AWM_PLAN_KEY).",
     )
     parser.add_argument(
         "--receipt-id",
-        default=os.environ.get("ACM_RECEIPT_ID", ""),
+        default=os.environ.get("AWM_RECEIPT_ID", ""),
         help="Receipt id to derive plan:<receipt_id> when --plan-key is omitted.",
     )
     return parser.parse_args()
 
 
 def fail(message):
-    print(f"acm-feature-plan-validate: {message}", file=sys.stderr)
+    print(f"awm-feature-plan-validate: {message}", file=sys.stderr)
     return 1
 
 
 def fetch_plan(project, plan_key, allow_unmaterialized=False):
     env = os.environ.copy()
-    env["ACM_LOG_SINK"] = "discard"
-    command = ["acm", "fetch", "--project", project, "--key", plan_key]
+    env["AWM_LOG_SINK"] = "discard"
+    command = ["awm", "fetch", "--project", project, "--key", plan_key]
     result = subprocess.run(command, capture_output=True, text=True, env=env)
     if result.returncode != 0:
         raise RuntimeError(
-            f"acm fetch failed for {plan_key}: {trimmed(result.stderr) or trimmed(result.stdout) or 'unknown error'}"
+            f"awm fetch failed for {plan_key}: {trimmed(result.stderr) or trimmed(result.stdout) or 'unknown error'}"
         )
     try:
         envelope = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"acm fetch returned invalid JSON for {plan_key}: {exc}") from exc
+        raise RuntimeError(f"awm fetch returned invalid JSON for {plan_key}: {exc}") from exc
     items = envelope.get("result", {}).get("items", [])
     if not items:
         if allow_unmaterialized:
@@ -293,7 +293,7 @@ def main():
 
     if not plan_key:
         print(
-            "acm-feature-plan-validate: skip - no ACM_PLAN_KEY or ACM_RECEIPT_ID was provided",
+            "awm-feature-plan-validate: skip - no AWM_PLAN_KEY or AWM_RECEIPT_ID was provided",
             file=sys.stderr,
         )
         return 0
@@ -302,7 +302,7 @@ def main():
         current_plan = fetch_plan(args.project, plan_key, allow_unmaterialized=True)
         if current_plan is None:
             print(
-                f"acm-feature-plan-validate: skip - active plan {plan_key} has no materialized content in this receipt context"
+                f"awm-feature-plan-validate: skip - active plan {plan_key} has no materialized content in this receipt context"
             )
             return 0
         chain = build_chain(args.project, current_plan)
@@ -314,20 +314,20 @@ def main():
     managed_hierarchy = root_kind == ROOT_KIND or current_kind == STREAM_KIND
     if not managed_hierarchy:
         print(
-            f'acm-feature-plan-validate: skip - active plan {plan_key} uses kind "{current_kind or "unspecified"}", not the repo-local feature plan schema'
+            f'awm-feature-plan-validate: skip - active plan {plan_key} uses kind "{current_kind or "unspecified"}", not the repo-local feature plan schema'
         )
         return 0
 
     errors = validate_feature_hierarchy(chain)
     if errors:
-        print("acm-feature-plan-validate: feature plan contract failed:", file=sys.stderr)
+        print("awm-feature-plan-validate: feature plan contract failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
 
     chain_text = " -> ".join(plan["__plan_key"] for plan in chain)
     print(
-        f"acm-feature-plan-validate: ok - validated feature plan hierarchy {chain_text}"
+        f"awm-feature-plan-validate: ok - validated feature plan hierarchy {chain_text}"
     )
     return 0
 

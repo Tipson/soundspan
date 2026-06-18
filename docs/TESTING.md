@@ -168,63 +168,63 @@ Backend coverage artifacts include:
 - `backend/coverage/jest-results.json`
 - generated markdown summary (`backend/coverage/coverage-summary.md`)
 
-ACM repo-contract checks:
+AWM repo-contract checks:
 
-- `.github/workflows/pr-checks.yml` (`acm-health` job)
+- `.github/workflows/pr-checks.yml` (`awm-health` job)
 - `AGENTS.md`
-- `.acm/acm-rules.yaml`
-- `.acm/acm-tests.yaml`
-- `.acm/acm-workflows.yaml`
-- `scripts/acm-cross-review.sh`
-- `scripts/acm-feature-plan-validate.py`
+- `.awm/awm-rules.yaml`
+- `.awm/awm-tests.yaml`
+- `.awm/awm-workflows.yaml`
+- `scripts/awm-cross-review.sh`
+- `scripts/awm-feature-plan-validate.py`
 
-Promoted ACM verify quality gates:
+Promoted AWM verify quality gates:
 
-- `bash scripts/acm-cross-review.sh --help` (when the ACM review gate surface changes)
-- `python3 scripts/test_acm_cross_review.py` (when the ACM review gate flag semantics change)
-- `bash scripts/acm-backend-targeted-verify.sh --help` (when the targeted backend verify surface changes)
+- `bash scripts/awm-cross-review.sh --help` (when the AWM review gate surface changes)
+- `python3 scripts/test_awm_cross_review.py` (when the AWM review gate flag semantics change)
+- `bash scripts/awm-backend-targeted-verify.sh --help` (when the targeted backend verify surface changes)
 - `npm --prefix frontend run lint`
 - `npm --prefix frontend run build`
 - `npm --prefix frontend run test:coverage`
 - `./scripts/helm-chart-render-check.sh`
 
-Recommended local ACM validation:
+Recommended local AWM validation:
 
 ```bash
-acm verify --project soundspan --phase review --file-changed <path>
-acm health --project soundspan --include-details
+awm verify --project soundspan --phase review --file-changed <path>
+awm health --project soundspan --include-details
 ```
 
 Backend note:
 
-- `acm verify` now keeps backend validation receipt-scoped and targeted via `scripts/acm-backend-targeted-verify.sh`.
-- Full backend `build` and `test:coverage` are promoted by `acm review --run` before completion when the active receipt includes backend or `packages/media-metadata-contract/` changes.
-- The runnable review gate stays provider-aware through `.acm/acm-workflows.yaml` `run.argv`, and `scripts/acm-cross-review.sh --yolo` is the shared high-trust shortcut: Codex gets native `--yolo`, while Claude maps it to `--dangerously-skip-permissions`.
-- `scripts/acm-cross-review.sh` now embeds an untrimmed scoped review packet, including the workflow context, unified diff, and changed-file snapshots, directly into the nested reviewer prompt so the default zero-tool review packet stays self-contained.
+- `awm verify` now keeps backend validation receipt-scoped and targeted via `scripts/awm-backend-targeted-verify.sh`.
+- Full backend `build` and `test:coverage` are promoted by `awm review --run` before completion when the active receipt includes backend or `packages/media-metadata-contract/` changes.
+- The runnable review gate stays provider-aware through `.awm/awm-workflows.yaml` `run.argv`, and `scripts/awm-cross-review.sh --yolo` is the shared high-trust shortcut: Codex gets native `--yolo`, while Claude maps it to `--dangerously-skip-permissions`.
+- `scripts/awm-cross-review.sh` now embeds an untrimmed scoped review packet, including the workflow context, unified diff, and changed-file snapshots, directly into the nested reviewer prompt so the default zero-tool review packet stays self-contained.
 
-When the active receipt matches a repo-defined review gate in `.acm/acm-workflows.yaml`, run this before `acm done`:
-
-```bash
-acm review --run --project soundspan --receipt-id <receipt-id>
-```
-
-When the active plan is a repo-local feature plan, keep the plan itself in the ACM `kind=feature` / `kind=feature_stream` schema described in `docs/ACM_FEATURE_PLANS.md`, then run `acm verify` with the active receipt and changed files so the validator is selected:
+When the active receipt matches a repo-defined review gate in `.awm/awm-workflows.yaml`, run this before `awm done`:
 
 ```bash
-acm verify --project soundspan --receipt-id <receipt-id> --phase review --file-changed backend/src/routes/social.ts
+awm review --run --project soundspan --receipt-id <receipt-id>
 ```
 
-That verify check executes `scripts/acm-feature-plan-validate.py` with the active receipt and plan context before completion.
+When the active plan is a repo-local feature plan, keep the plan itself in the AWM `kind=feature` / `kind=feature_stream` schema described in `docs/AWM_FEATURE_PLANS.md`, then run `awm verify` with the active receipt and changed files so the validator is selected:
+
+```bash
+awm verify --project soundspan --receipt-id <receipt-id> --phase review --file-changed backend/src/routes/social.ts
+```
+
+That verify check executes `scripts/awm-feature-plan-validate.py` with the active receipt and plan context before completion.
 
 Examples:
 
 ```bash
-acm verify --project soundspan --phase review --file-changed backend/src/routes/social.ts
-acm verify --project soundspan --phase review --file-changed frontend/app/page.tsx
-acm verify --project soundspan --phase review --file-changed charts/soundspan/Chart.yaml
+awm verify --project soundspan --phase review --file-changed backend/src/routes/social.ts
+awm verify --project soundspan --phase review --file-changed frontend/app/page.tsx
+awm verify --project soundspan --phase review --file-changed charts/soundspan/Chart.yaml
 ```
 
-Release helpers remain maintainer-invoked workflows outside `acm verify`; use `scripts/release/*.mjs` when you are preparing an actual release rather than validating ordinary code changes.
+Release helpers remain maintainer-invoked workflows outside `awm verify`; use `scripts/release/*.mjs` when you are preparing an actual release rather than validating ordinary code changes.
 
 ## Sidecar Test Standard
 

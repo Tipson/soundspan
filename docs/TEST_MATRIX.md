@@ -45,12 +45,12 @@ npm --prefix frontend run test:component:coverage
 
 ```bash
 # Receipt-scoped, targeted verify
-acm verify --project soundspan --phase review --file-changed <path>
+awm verify --project soundspan --phase review --file-changed <path>
 
 # Promoted full backend build + coverage gate before done
-acm review --run --project soundspan --receipt-id <receipt-id>
+awm review --run --project soundspan --receipt-id <receipt-id>
 
-acm health --project soundspan --include-details
+awm health --project soundspan --include-details
 ```
 
 ## Domain-to-Test Map

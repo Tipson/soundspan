@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = REPO_ROOT / "scripts" / "acm-cross-review.sh"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "awm-cross-review.sh"
 
 
 def write_executable(path: Path, content: str) -> None:
@@ -27,8 +27,8 @@ class CrossReviewScriptTests(unittest.TestCase):
                 bin_dir / "codex",
                 """#!/usr/bin/env bash
 set -euo pipefail
-capture_path="${ACM_TEST_CAPTURE:?}"
-prompt_path="${ACM_TEST_PROMPT:?}"
+capture_path="${AWM_TEST_CAPTURE:?}"
+prompt_path="${AWM_TEST_PROMPT:?}"
 printf '%s\n' "$@" >"${capture_path}"
 cat >"${prompt_path}"
 output_path=""
@@ -50,14 +50,14 @@ printf '{"status":"pass","summary":"ok","findings":[]}\n' >"${output_path}"
                 bin_dir / "claude",
                 """#!/usr/bin/env bash
 set -euo pipefail
-capture_path="${ACM_TEST_CAPTURE:?}"
-prompt_path="${ACM_TEST_PROMPT:?}"
+capture_path="${AWM_TEST_CAPTURE:?}"
+prompt_path="${AWM_TEST_PROMPT:?}"
 printf '%s\n' "$@" >"${capture_path}"
 cat >"${prompt_path}"
 printf '{"status":"pass","summary":"ok","findings":[]}\n'
 """,
             )
-            write_executable(bin_dir / "acm", "#!/usr/bin/env bash\nexit 0\n")
+            write_executable(bin_dir / "awm", "#!/usr/bin/env bash\nexit 0\n")
             project_root = temp / "project-root"
             project_root.mkdir()
 
@@ -65,11 +65,11 @@ printf '{"status":"pass","summary":"ok","findings":[]}\n'
             env.update(
                 {
                     "PATH": str(bin_dir) + os.pathsep + env.get("PATH", ""),
-                    "ACM_PROJECT_ID": "test-project",
-                    "ACM_RECEIPT_ID": "receipt-test",
-                    "ACM_PROJECT_ROOT": str(project_root),
-                    "ACM_TEST_CAPTURE": str(capture_path),
-                    "ACM_TEST_PROMPT": str(prompt_path),
+                    "AWM_PROJECT_ID": "test-project",
+                    "AWM_RECEIPT_ID": "receipt-test",
+                    "AWM_PROJECT_ROOT": str(project_root),
+                    "AWM_TEST_CAPTURE": str(capture_path),
+                    "AWM_TEST_PROMPT": str(prompt_path),
                 }
             )
             if extra_env:
@@ -96,7 +96,7 @@ printf '{"status":"pass","summary":"ok","findings":[]}\n'
             bin_dir.mkdir()
             write_executable(bin_dir / "codex", "#!/usr/bin/env bash\nexit 0\n")
             write_executable(bin_dir / "claude", "#!/usr/bin/env bash\nexit 0\n")
-            write_executable(bin_dir / "acm", "#!/usr/bin/env bash\nexit 0\n")
+            write_executable(bin_dir / "awm", "#!/usr/bin/env bash\nexit 0\n")
             project_root = temp / "project-root"
             project_root.mkdir()
 
@@ -104,9 +104,9 @@ printf '{"status":"pass","summary":"ok","findings":[]}\n'
             env.update(
                 {
                     "PATH": str(bin_dir) + os.pathsep + env.get("PATH", ""),
-                    "ACM_PROJECT_ID": "test-project",
-                    "ACM_RECEIPT_ID": "receipt-test",
-                    "ACM_PROJECT_ROOT": str(project_root),
+                    "AWM_PROJECT_ID": "test-project",
+                    "AWM_RECEIPT_ID": "receipt-test",
+                    "AWM_PROJECT_ROOT": str(project_root),
                 }
             )
 
@@ -165,7 +165,7 @@ printf '{"status":"pass","summary":"ok","findings":[]}\n'
         self.assertIn("--dangerously-skip-permissions is only supported with --provider claude", output)
 
     def test_allows_codex_when_dangerous_permissions_env_is_false(self):
-        args, _ = self.run_script(["--provider", "codex"], {"ACM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS": "false"})
+        args, _ = self.run_script(["--provider", "codex"], {"AWM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS": "false"})
         self.assert_sequence(args, ["--model", "gpt-5.3-codex"])
 
 

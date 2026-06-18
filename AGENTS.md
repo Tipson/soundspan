@@ -6,13 +6,13 @@ Repository contract for soundspan.
 
 1. Read this file for repo rules and conventions.
 2. See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and PR workflow.
-3. If your agent runtime provides ACM, see [.acm/AGENTS-ACM.md](.acm/AGENTS-ACM.md) for the enhanced workflow.  If you are unaware or unsure of what ACM is, do not read the file.
+3. If your agent runtime provides AWM, see [.awm/AGENTS-AWM.md](.awm/AGENTS-AWM.md) for the enhanced workflow.  If you are unaware or unsure of what AWM is, do not read the file.
 4. If using Claude, also read [CLAUDE.md](CLAUDE.md).
 
 ## Source Of Truth
 
 - Follow this file first.
-- `CLAUDE.md` and `.claude/acm-broker/**` are tool-specific companions. If they disagree with this file, this file wins.
+- `CLAUDE.md` and `.claude/awm-broker/**` are tool-specific companions. If they disagree with this file, this file wins.
 
 ## Working Rules
 
@@ -34,7 +34,7 @@ Repository contract for soundspan.
   - python sidecars: `services/common/logging_utils.py`
 - **Changelog:** Keep `CHANGELOG.md` updated for user-visible or behavior-changing work.
 - **Documentation coverage:** Exported TypeScript symbols, runtime Python modules, and implemented OpenAPI routes should remain fully documented when touched.
-- **Storage:** SQLite at `.acm/context.db` by default. Configure `ACM_PG_DSN` for multi-agent coordination.
+- **Storage:** SQLite at `.awm/context.db` by default. Configure `AWM_PG_DSN` for multi-agent coordination.
 
 ## Verification Evidence Protocol
 

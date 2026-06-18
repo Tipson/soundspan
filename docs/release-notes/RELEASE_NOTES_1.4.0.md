@@ -13,8 +13,8 @@ soundspan 1.4.0 is a major browser-first feature release adding exploratory alte
 - Listen Together connection indicators no longer flicker grey during brief network reconnects; a 2-second grace period absorbs transient disconnects before updating the UI.
 - Volume slider popup in the full player is narrower with better spacing between the slider track and percentage label.
 - UMAP projection worker entrypoint now resolves correctly in both tsx source runtime and compiled dist builds.
-- ACM cross-review now takes its Codex sandbox mode from workflow/script arguments instead of hardcoding `read-only` in the script.
-- ACM cross-LLM review now sends an untrimmed scoped review packet into the nested Codex reviewer so the read-only sandbox no longer depends on inner shell access.
+- AWM cross-review now takes its Codex sandbox mode from workflow/script arguments instead of hardcoding `read-only` in the script.
+- AWM cross-LLM review now sends an untrimmed scoped review packet into the nested Codex reviewer so the read-only sandbox no longer depends on inner shell access.
 
 ## Added
 

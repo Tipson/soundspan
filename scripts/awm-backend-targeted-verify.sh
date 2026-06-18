@@ -3,16 +3,16 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Run receipt-scoped targeted backend verification for ACM.
+Run receipt-scoped targeted backend verification for AWM.
 
 Usage:
-  scripts/acm-backend-targeted-verify.sh
+  scripts/awm-backend-targeted-verify.sh
 
 Environment:
-  ACM_PROJECT_ID
-  ACM_PROJECT_ROOT
-  ACM_RECEIPT_ID
-  ACM_PLAN_KEY
+  AWM_PROJECT_ID
+  AWM_PROJECT_ROOT
+  AWM_RECEIPT_ID
+  AWM_PLAN_KEY
 USAGE
 }
 
@@ -21,42 +21,42 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-if ! command -v acm >/dev/null 2>&1; then
-  echo "acm CLI is required for scripts/acm-backend-targeted-verify.sh" >&2
+if ! command -v awm >/dev/null 2>&1; then
+  echo "awm CLI is required for scripts/awm-backend-targeted-verify.sh" >&2
   exit 127
 fi
 if ! command -v git >/dev/null 2>&1; then
-  echo "git is required for scripts/acm-backend-targeted-verify.sh" >&2
+  echo "git is required for scripts/awm-backend-targeted-verify.sh" >&2
   exit 127
 fi
 if ! command -v npm >/dev/null 2>&1; then
-  echo "npm is required for scripts/acm-backend-targeted-verify.sh" >&2
+  echo "npm is required for scripts/awm-backend-targeted-verify.sh" >&2
   exit 127
 fi
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is required for scripts/acm-backend-targeted-verify.sh" >&2
+  echo "python3 is required for scripts/awm-backend-targeted-verify.sh" >&2
   exit 127
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-REPO_ROOT="${ACM_PROJECT_ROOT:-}"
+REPO_ROOT="${AWM_PROJECT_ROOT:-}"
 if [[ -z "${REPO_ROOT}" ]]; then
   REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 fi
 
-receipt_id="${ACM_RECEIPT_ID:-}"
-if [[ -z "${receipt_id}" && "${ACM_PLAN_KEY:-}" == plan:* ]]; then
-  receipt_id="${ACM_PLAN_KEY#plan:}"
+receipt_id="${AWM_RECEIPT_ID:-}"
+if [[ -z "${receipt_id}" && "${AWM_PLAN_KEY:-}" == plan:* ]]; then
+  receipt_id="${AWM_PLAN_KEY#plan:}"
 fi
-project_id="${ACM_PROJECT_ID:-soundspan}"
+project_id="${AWM_PROJECT_ID:-soundspan}"
 
 if [[ -z "${receipt_id}" ]]; then
-  echo "ACM_RECEIPT_ID (or ACM_PLAN_KEY=plan:<receipt_id>) is required for receipt-scoped verify" >&2
+  echo "AWM_RECEIPT_ID (or AWM_PLAN_KEY=plan:<receipt_id>) is required for receipt-scoped verify" >&2
   exit 2
 fi
 
 if ! git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "scripts/acm-backend-targeted-verify.sh must run inside a git worktree" >&2
+  echo "scripts/awm-backend-targeted-verify.sh must run inside a git worktree" >&2
   exit 2
 fi
 
@@ -76,10 +76,10 @@ backend_changed_files_path="${tmp_dir}/backend-changed-files.txt"
 tracked_changed="$(git -C "${REPO_ROOT}" diff --name-only --diff-filter=ACDMRTUXB HEAD -- 2>/dev/null || true)"
 untracked_changed="$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard 2>/dev/null || true)"
 
-ACM_LOG_SINK=discard acm fetch \
+AWM_LOG_SINK=discard awm fetch \
   --project "${project_id}" \
   --key "receipt:${receipt_id}" >"${receipt_fetch_path}"
-ACM_LOG_SINK=discard acm fetch \
+AWM_LOG_SINK=discard awm fetch \
   --project "${project_id}" \
   --key "plan:${receipt_id}" >"${plan_fetch_path}"
 

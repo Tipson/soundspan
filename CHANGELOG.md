@@ -56,8 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Listen Together connection indicators no longer flicker grey during brief network reconnects; a 2-second grace period absorbs transient disconnects before updating the UI.
 - Volume slider popup in the full player is narrower with better spacing between the slider track and percentage label.
 - UMAP projection worker entrypoint now resolves correctly in both tsx source runtime and compiled dist builds.
-- ACM cross-review now takes its Codex sandbox mode from workflow/script arguments instead of hardcoding `read-only` in the script.
-- ACM cross-LLM review now sends an untrimmed scoped review packet into the nested Codex reviewer so the read-only sandbox no longer depends on inner shell access.
+- AWM cross-review now takes its Codex sandbox mode from workflow/script arguments instead of hardcoding `read-only` in the script.
+- AWM cross-LLM review now sends an untrimmed scoped review packet into the nested Codex reviewer so the read-only sandbox no longer depends on inner shell access.
 
 ## [1.3.4] - 2026-03-09
 
@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Maintainer verification now runs through repo-local ACM review and feature-plan validation scripts, adds a semantic targeted frontend coverage check, and standardizes pytest scaffolds across Python sidecars.
+- Maintainer verification now runs through repo-local AWM review and feature-plan validation scripts, adds a semantic targeted frontend coverage check, and standardizes pytest scaffolds across Python sidecars.
 
 ### Fixed
 
@@ -98,8 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Discover Weekly and My Liked hero sections now show actual cover art from their first track instead of a placeholder icon.
 - My Liked page header simplified to a single cover image instead of a mosaic grid.
 - CI image builds consolidated from 8 separate workflows into a single unified pipeline with shared release-tag validation.
-- Project tooling migrated from custom agent-config scripts to the ACM control plane, removing ~30k lines of legacy governance scaffolding.
-- PR checks updated to use ACM-driven verification for backend coverage, frontend lint/build/coverage, and Helm chart rendering.
+- Project tooling migrated from custom agent-config scripts to the AWM control plane, removing ~30k lines of legacy governance scaffolding.
+- PR checks updated to use AWM-driven verification for backend coverage, frontend lint/build/coverage, and Helm chart rendering.
 - Developer documentation reorganized under `docs/maintainers/` and streamlined across README, CONTRIBUTING, and TESTING guides.
 - Backend runtime tests aligned with current API response shapes and behavior.
 

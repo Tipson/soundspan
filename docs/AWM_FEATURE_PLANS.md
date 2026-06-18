@@ -1,18 +1,18 @@
-# ACM Feature Plans
+# AWM Feature Plans
 
-This file defines the repo-local feature planning convention that sits on top of ACM's built-in plan/task schema.
+This file defines the repo-local feature planning convention that sits on top of AWM's built-in plan/task schema.
 
-ACM remains the system of record for active plans and task state. This document makes the expected structure visible in the repo so feature planning is not "only in the database."
+AWM remains the system of record for active plans and task state. This document makes the expected structure visible in the repo so feature planning is not "only in the database."
 
 ## When It Applies
 
 Use this contract for net-new feature work and large user-facing capability expansions.
 
-Do not force it onto small bugfixes, review-only tasks, workflow-governance work, or narrow maintenance changes. Those can keep using thinner ACM plans.
+Do not force it onto small bugfixes, review-only tasks, workflow-governance work, or narrow maintenance changes. Those can keep using thinner AWM plans.
 
 ## Root Feature Plan
 
-Create one root ACM plan with:
+Create one root AWM plan with:
 
 - `kind=feature`
 - `objective`
@@ -66,7 +66,7 @@ The root feature plan holds the whole feature contract. Child stream plans hold 
 Root feature plan:
 
 ```bash
-acm work --project soundspan --receipt-id <feature-receipt-id> --mode merge \
+awm work --project soundspan --receipt-id <feature-receipt-id> --mode merge \
   --plan-json '{
     "title":"Offline playlist downloads",
     "kind":"feature",
@@ -96,7 +96,7 @@ acm work --project soundspan --receipt-id <feature-receipt-id> --mode merge \
 Child stream plan:
 
 ```bash
-acm work --project soundspan --receipt-id <stream-receipt-id> --mode merge \
+awm work --project soundspan --receipt-id <stream-receipt-id> --mode merge \
   --plan-json '{
     "title":"Offline playlist downloads - backend stream",
     "kind":"feature_stream",
@@ -116,12 +116,12 @@ acm work --project soundspan --receipt-id <stream-receipt-id> --mode merge \
 
 ## Verification
 
-Use `acm verify` with the active receipt and changed files so the repo-local validator is selected:
+Use `awm verify` with the active receipt and changed files so the repo-local validator is selected:
 
 ```bash
-acm verify --project soundspan --receipt-id <receipt-id> --phase review --file-changed backend/src/routes/social.ts
+awm verify --project soundspan --receipt-id <receipt-id> --phase review --file-changed backend/src/routes/social.ts
 ```
 
-That verify check executes `scripts/acm-feature-plan-validate.py` with the active receipt and plan context.
+That verify check executes `scripts/awm-feature-plan-validate.py` with the active receipt and plan context.
 
 For plans in the feature schema, it fails when required metadata, stage grouping, hierarchy links, or leaf-task acceptance criteria are missing. For non-feature plans, the script exits cleanly and the gate is not selected.
