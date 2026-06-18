@@ -8,6 +8,7 @@ import { config } from "./config";
 import { redisClient } from "./utils/redis";
 import { prisma } from "./utils/db";
 import { logger } from "./utils/logger";
+import { isOriginAllowed } from "./utils/cors";
 import {
     getRuntimeDrainState,
     setRuntimeDrainState,
@@ -32,28 +33,24 @@ import offlineRoutes from "./routes/offline";
 import playlistsRoutes from "./routes/playlists";
 import shareLinkRoutes from "./routes/shareLinks";
 import searchRoutes from "./routes/search";
-import recommendationsRoutes from "./routes/recommendations";
 import downloadsRoutes from "./routes/downloads";
 import webhooksRoutes from "./routes/webhooks";
 import audiobooksRoutes from "./routes/audiobooks";
 import podcastsRoutes from "./routes/podcasts";
 import artistsRoutes from "./routes/artists";
 import soulseekRoutes from "./routes/soulseek";
-import discoverRoutes from "./routes/discover";
 import apiKeysRoutes from "./routes/apiKeys";
-import mixesRoutes from "./routes/mixes";
 import enrichmentRoutes from "./routes/enrichment";
 import homepageRoutes from "./routes/homepage";
 import deviceLinkRoutes from "./routes/deviceLink";
 import spotifyRoutes from "./routes/spotify";
 import notificationsRoutes from "./routes/notifications";
 import browseRoutes from "./routes/browse";
-import analysisRoutes from "./routes/analysis";
 import adminRoutes from "./routes/admin";
 import releasesRoutes from "./routes/releases";
-import vibeRoutes from "./routes/vibe";
 import systemRoutes from "./routes/system";
 import ytMusicRoutes from "./routes/youtubeMusic";
+import youtubeRoutes from "./routes/youtube";
 import tidalStreamingRoutes from "./routes/tidalStreaming";
 import trackMappingsRoutes from "./routes/trackMappings";
 import playlistImportRoutes from "./routes/playlistImport";
@@ -67,6 +64,7 @@ import { startPersistLoop, stopPersistLoop, persistAllGroups } from "./services/
 import { createServer } from "http";
 import type { Socket } from "net";
 import { errorHandler } from "./middleware/errorHandler";
+import { createFeatureDisabledHandler } from "./utils/featureGate";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { createDependencyReadinessTracker } from "./utils/dependencyReadiness";
 import {
@@ -134,37 +132,19 @@ app.use(
 app.use(
     cors({
         origin: (origin, callback) => {
-            // For self-hosted apps: allow all origins by default
-            // Users deploy on their own domains/IPs - we can't predict them
-            // Security is handled by authentication, not CORS
-            if (!origin) {
-                // Allow requests with no origin (same-origin, curl, etc.)
-                callback(null, true);
-            } else if (
-                config.allowedOrigins === true ||
-                config.nodeEnv === "development"
-            ) {
-                // Explicitly allow all origins
-                callback(null, true);
-            } else if (
-                Array.isArray(config.allowedOrigins) &&
-                config.allowedOrigins.length > 0
-            ) {
-                // Check against specific allowed origins if configured
-                if (config.allowedOrigins.includes(origin)) {
-                    callback(null, true);
-                } else {
-                    // For self-hosted: allow anyway but log it
-                    // Users shouldn't have to configure CORS for their own app
-                    logger.debug(
-                        `[CORS] Origin ${origin} not in allowlist, allowing anyway (self-hosted)`
-                    );
-                    callback(null, true);
-                }
-            } else {
-                // No restrictions - allow all (self-hosted default)
-                callback(null, true);
+            // Self-hosted default is permissive (no allowlist → allow all), but
+            // when ALLOWED_ORIGINS is explicitly configured it is enforced.
+            const allowed = isOriginAllowed(
+                origin,
+                config.allowedOrigins,
+                config.nodeEnv
+            );
+            if (!allowed) {
+                logger.warn(
+                    `[CORS] Origin ${origin} not in ALLOWED_ORIGINS allowlist; denying`
+                );
             }
+            callback(null, allowed);
         },
         credentials: true,
     })
@@ -232,7 +212,10 @@ app.use("/api/onboarding", onboardingRoutes); // Public onboarding routes
 
 // Apply general API rate limiting to all API routes
 app.use("/api/api-keys", apiLimiter, apiKeysRoutes);
-app.use("/api/device-link", apiLimiter, deviceLinkRoutes);
+// device-link/verify is an unauthenticated endpoint that mints full-privilege
+// API keys, so it sits on the stricter authLimiter rather than the lenient
+// general apiLimiter.
+app.use("/api/device-link", authLimiter, deviceLinkRoutes);
 // NOTE: /api/library has its own rate limiting (imageLimiter for cover-art, apiLimiter for others)
 app.use("/api/library", libraryRoutes);
 app.use("/api/plays", apiLimiter, playsRoutes);
@@ -245,7 +228,18 @@ app.use("/api/offline", apiLimiter, offlineRoutes);
 app.use("/api/playlists", apiLimiter, playlistsRoutes);
 app.use("/api/share-links", apiLimiter, shareLinkRoutes);
 app.use("/api/search", apiLimiter, searchRoutes);
-app.use("/api/recommendations", apiLimiter, recommendationsRoutes);
+// Feature-gated routers are required lazily so disabled subsystems skip their
+// module side effects entirely; disabled prefixes stay rate limited and
+// return a clean 404 payload.
+if (config.features.discovery) {
+    app.use(
+        "/api/recommendations",
+        apiLimiter,
+        require("./routes/recommendations").default
+    );
+} else {
+    app.use("/api/recommendations", apiLimiter, createFeatureDisabledHandler());
+}
 app.use("/api/downloads", apiLimiter, downloadsRoutes);
 app.use("/api/notifications", apiLimiter, notificationsRoutes);
 app.use("/api/webhooks", webhooksRoutes); // Webhooks should not be rate limited
@@ -254,18 +248,52 @@ app.use("/api/audiobooks", audiobooksRoutes);
 app.use("/api/podcasts", apiLimiter, podcastsRoutes);
 app.use("/api/artists", apiLimiter, artistsRoutes);
 app.use("/api/soulseek", apiLimiter, soulseekRoutes);
-app.use("/api/discover", apiLimiter, discoverRoutes);
-app.use("/api/mixes", apiLimiter, mixesRoutes);
+if (config.features.discovery) {
+    app.use("/api/discover", apiLimiter, require("./routes/discover").default);
+} else {
+    logger.info(
+        "[Features] Discovery disabled (DISCOVERY_ENABLED=false); /api/discover and /api/recommendations return 404"
+    );
+    app.use("/api/discover", apiLimiter, createFeatureDisabledHandler());
+}
+if (config.features.autoPlaylists) {
+    app.use("/api/mixes", apiLimiter, require("./routes/mixes").default);
+} else {
+    logger.info(
+        "[Features] Auto playlists disabled (AUTO_PLAYLISTS_ENABLED=false); /api/mixes returns 404"
+    );
+    app.use("/api/mixes", apiLimiter, createFeatureDisabledHandler());
+}
 app.use("/api/enrichment", apiLimiter, enrichmentRoutes);
 app.use("/api/homepage", apiLimiter, homepageRoutes);
 app.use("/api/spotify", apiLimiter, spotifyRoutes);
 app.use("/api/browse", apiLimiter, browseRoutes);
-app.use("/api/analysis", apiLimiter, analysisRoutes);
+if (config.features.audioAnalysis) {
+    app.use("/api/analysis", apiLimiter, require("./routes/analysis").default);
+} else {
+    logger.info(
+        "[Features] Audio analysis disabled (AUDIO_ANALYSIS_ENABLED=false); /api/analysis and /api/vibe return 404"
+    );
+    // Keep the CLAP analyzer machine callbacks (/vibe/failure, /vibe/success)
+    // reachable so analyzers draining in-flight work (e.g. AIO deployments)
+    // can still report results while the feature is off.
+    app.use(
+        "/api/analysis",
+        apiLimiter,
+        require("./routes/analysisInternal").default,
+        createFeatureDisabledHandler()
+    );
+}
 app.use("/api/admin", apiLimiter, adminRoutes);
 app.use("/api/releases", apiLimiter, releasesRoutes);
-app.use("/api/vibe", apiLimiter, vibeRoutes);
+if (config.features.audioAnalysis) {
+    app.use("/api/vibe", apiLimiter, require("./routes/vibe").default);
+} else {
+    app.use("/api/vibe", apiLimiter, createFeatureDisabledHandler());
+}
 app.use("/api/system", apiLimiter, systemRoutes);
 app.use("/api/ytmusic", apiLimiter, ytMusicRoutes);
+app.use("/api/youtube", apiLimiter, youtubeRoutes);
 app.use("/api/tidal-streaming", apiLimiter, tidalStreamingRoutes);
 app.use("/api/track-mappings", apiLimiter, trackMappingsRoutes);
 app.use("/api/import", apiLimiter, playlistImportRoutes);

@@ -157,7 +157,10 @@ function createSeededRng(seed: number): () => number {
     };
 }
 
-function seededShuffle<T>(items: T[], seedKey: string): T[] {
+// Exported for unit testing: a seeded Fisher-Yates that is deterministic per
+// seed, returns a fresh array (no in-place mutation), and is uniform — unlike
+// the biased `Array.sort()` comparator it replaced (F6).
+export function seededShuffle<T>(items: T[], seedKey: string): T[] {
     const shuffled = [...items];
     const rng = createSeededRng(getSeededRandom(seedKey));
     for (let i = shuffled.length - 1; i > 0; i -= 1) {
@@ -1959,12 +1962,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
 
-        const seed = getSeededRandom(`high-energy-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `high-energy-${today}`);
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -2061,12 +2059,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
 
-        const seed = getSeededRandom(`late-night-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `late-night-${today}`);
 
         // Determine if daily or weekly based on available tracks
         const isWeekly = tracks.length >= this.MIN_TRACKS_WEEKLY;
@@ -2173,12 +2166,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
 
-        const seed = getSeededRandom(`happy-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `happy-${today}`);
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -2320,13 +2308,11 @@ export class ProgrammaticPlaylistService {
             return aScore - bScore;
         });
 
-        const seed = getSeededRandom(`melancholy-${today}`);
-        let random = seed;
         // Take top 50 most melancholy tracks, then shuffle
-        const shuffled = sortedTracks.slice(0, 50).sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(
+            sortedTracks.slice(0, 50),
+            `melancholy-${today}`
+        );
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -2404,12 +2390,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
 
-        const seed = getSeededRandom(`dance-floor-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `dance-floor-${today}`);
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -2485,12 +2466,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
 
-        const seed = getSeededRandom(`acoustic-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `acoustic-${today}`);
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -2567,12 +2543,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
 
-        const seed = getSeededRandom(`instrumental-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `instrumental-${today}`);
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -2618,12 +2589,7 @@ export class ProgrammaticPlaylistService {
 
         if (tracks.length < 15) return null;
 
-        const seed = getSeededRandom(`mood-${moodTag}-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `mood-${moodTag}-${today}`);
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -2726,12 +2692,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
 
-        const seed = getSeededRandom(`road-trip-${today}`);
-        let random = seed;
-        const shuffled = tracks.sort(() => {
-            random = (random * 9301 + 49297) % 233280;
-            return random / 233280 - 0.5;
-        });
+        const shuffled = seededShuffle(tracks, `road-trip-${today}`);
 
         const selectedTracks = shuffled.slice(0, this.TRACK_LIMIT);
         const coverUrls = selectedTracks
@@ -3815,9 +3776,6 @@ export class ProgrammaticPlaylistService {
 
         // Build a journey through keys
         const journey: typeof tracks = [];
-        const seed = getSeededRandom(`key-journey-${today}`);
-        let seedVal = seed;
-
         for (const key of keyOrder) {
             const keyTracks = byKey.get(key) || [];
             if (
@@ -3830,11 +3788,12 @@ export class ProgrammaticPlaylistService {
                     keyTracks.length,
                     this.WEEKLY_TRACK_LIMIT - journey.length
                 );
-                seedVal = (seedVal * 9301 + 49297) % 233280;
-                const shuffled = keyTracks.sort(() => {
-                    seedVal = (seedVal * 9301 + 49297) % 233280;
-                    return seedVal / 233280 - 0.5;
-                });
+                // Include the key in the seed so each key's shuffle is
+                // independent; a shared accumulator would correlate them.
+                const shuffled = seededShuffle(
+                    keyTracks,
+                    `key-journey-${today}-${key}`
+                );
                 journey.push(...shuffled.slice(0, count));
             }
         }

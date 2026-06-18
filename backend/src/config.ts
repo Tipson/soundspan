@@ -5,6 +5,7 @@ import { validateMusicConfig, MusicConfig } from "./utils/configValidator";
 import { logger } from "./utils/logger";
 import {
     isEnvFlagEnabled,
+    parseEnvBool,
     parseEnvCsv,
     parseEnvInt,
 } from "./utils/envParsers";
@@ -104,12 +105,30 @@ export const config = {
         mode: process.env.DISCOVERY_MODE === "legacy" ? "legacy" : "recommendation",
     },
 
+    // Coarse feature flags for ML/recommendation subsystems.
+    // All default ON to preserve existing behavior; operators can disable
+    // them per-deployment (e.g. via the Helm chart's config.features values).
+    features: {
+        // Audio analysis queueing/consumption (Essentia + CLAP vibe embeddings)
+        audioAnalysis: parseEnvBool(process.env.AUDIO_ANALYSIS_ENABLED, true),
+        // Discover Weekly recommendations + discovery auto-download lifecycle
+        discovery: parseEnvBool(process.env.DISCOVERY_ENABLED, true),
+        // Made For You mixes / programmatic playlist generation
+        autoPlaylists: parseEnvBool(process.env.AUTO_PLAYLISTS_ENABLED, true),
+    },
+
     audiobookshelf: process.env.AUDIOBOOKSHELF_URL
         ? {
               url: process.env.AUDIOBOOKSHELF_URL,
               token: process.env.AUDIOBOOKSHELF_TOKEN!,
           }
         : undefined,
+
+    // YouTube Music streamer sidecar (also serves the regular-YouTube /yt/
+    // endpoints used for URL-paste streaming and download-to-library)
+    ytmusicStreamer: {
+        url: process.env.YTMUSIC_STREAMER_URL || "http://127.0.0.1:8586",
+    },
 
     allowedOrigins:
         allowedOriginsFromEnv ||

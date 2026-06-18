@@ -553,8 +553,11 @@ export class MusicScannerService {
         relativePath: string,
         musicPath: string
     ): Promise<void> {
-        // Extract metadata
-        const metadata = await parseFile(absolutePath);
+        // Extract metadata. `duration: true` is required for opus/ogg (and
+        // other formats where the duration lives in the last page/atom) —
+        // without it music-metadata returns no duration and tracks import as
+        // 0:00. YouTube downloads are opus by default, so this is load-bearing.
+        const metadata = await parseFile(absolutePath, { duration: true });
         const stats = await fs.promises.stat(absolutePath);
 
         // Parse basic info
@@ -823,38 +826,42 @@ export class MusicScannerService {
         const isDiscoveryAlbum =
             isDiscoveryByPath || isDiscoveryByJob || isDiscoveryArtist;
 
-        // Get or create album
-        let album = await prisma.album.findFirst({
-            where: {
-                artistId: artist.id,
-                title: albumTitle,
-            },
-        });
+        // Get or create album.
+        //
+        // Resolve on the UNIQUE MusicBrainz release-group MBID first, so two
+        // albums that share a title but are different release groups — e.g.
+        // the two self-titled Crystal Castles albums (2008 and 2010) — never
+        // merge into one. Only un-tagged files (no release-group id) fall back
+        // to a title match, and only against other un-tagged (temp-rgMbid)
+        // albums, so an un-tagged file is never merged into a properly
+        // MBID-identified album of a possibly-different release.
+        let album = albumMbid
+            ? await prisma.album.findFirst({
+                  where: { artistId: artist.id, rgMbid: albumMbid },
+              })
+            : await prisma.album.findFirst({
+                  where: {
+                      artistId: artist.id,
+                      title: albumTitle,
+                      rgMbid: { startsWith: "temp-" },
+                  },
+              });
 
         if (!album) {
-            // Try to find by release group MBID if available
-            if (albumMbid) {
-                album = await prisma.album.findUnique({
-                    where: { rgMbid: albumMbid },
-                });
-            }
+            // Create new album (un-tagged files get a unique temporary MBID).
+            const rgMbid =
+                albumMbid || `temp-${Date.now()}-${Math.random()}`;
 
-            if (!album) {
-                // Create new album (use a temporary MBID for now)
-                const rgMbid =
-                    albumMbid || `temp-${Date.now()}-${Math.random()}`;
-
-                album = await prisma.album.create({
-                    data: {
-                        title: albumTitle,
-                        artistId: artist.id,
-                        rgMbid,
-                        year,
-                        primaryType: "Album",
-                        location: isDiscoveryAlbum ? "DISCOVER" : "LIBRARY",
-                    },
-                });
-            }
+            album = await prisma.album.create({
+                data: {
+                    title: albumTitle,
+                    artistId: artist.id,
+                    rgMbid,
+                    year,
+                    primaryType: "Album",
+                    location: isDiscoveryAlbum ? "DISCOVER" : "LIBRARY",
+                },
+            });
 
             // Extract cover art if we have an extractor
             // Re-extract if: no cover, OR native cover file is missing

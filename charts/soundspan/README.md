@@ -249,6 +249,25 @@ ytmusicStreamer:
 These **sidecars** work in both AIO and Individual modes.
 In AIO mode, they run as separate pods alongside the all-in-one container.
 
+#### YouTube downloads and the music volume
+
+When `ytmusicStreamer.enabled` is true, the streamer pod also mounts the
+chart's music volume at `/music` (controlled by
+`ytmusicStreamer.musicMount.enabled`, default `true`). This is required for
+the YouTube URL download-to-library feature: pasted-URL downloads are
+written to `YT_DOWNLOAD_DIR` (default `/music/YouTube Downloads`) and
+imported by the backend's library scan.
+
+Notes:
+- In multi-node clusters the music volume must be **RWX**
+  (`ReadWriteMany`), because the backend and ytmusic-streamer pods mount
+  it read-write concurrently and may be scheduled on different nodes.
+- All `music.persistence` variants are supported (`existingClaim`,
+  chart-managed PVC, `hostPath`).
+- Setting `ytmusicStreamer.musicMount.enabled: false` disables the mount;
+  YouTube downloads then land on the pod's ephemeral filesystem and are
+  lost on restart.
+
 ### Audio Analyzers (Individual Mode Only)
 
 ```yaml
@@ -261,6 +280,38 @@ audioAnalyzerClap:
 
 > Unlike the sidecars above, these analyzer deployments are only used in Individual mode.
 > In AIO mode, audio analysis is built into the single AIO container.
+
+### Feature Flags (ML / Recommendations / Auto Playlists)
+
+Coarse feature flags for the ML/recommendation subsystems. All default to
+`true` (current behavior). They render as `AUDIO_ANALYSIS_ENABLED`,
+`DISCOVERY_ENABLED`, and `AUTO_PLAYLISTS_ENABLED` on the backend,
+backend-worker, and AIO workloads (per-workload `env` maps override them).
+
+```yaml
+config:
+  features:
+    audioAnalysis: true   # audio analysis queueing (Essentia + CLAP), mood buckets, /api/analysis, /api/vibe
+    discovery: true       # Discover Weekly cron/processor, /api/discover, /api/recommendations
+    autoPlaylists: true   # Made For You mixes, /api/mixes
+```
+
+When a flag is `false`, the backend does not mount the corresponding API
+routes (they return `404` with `code: FEATURE_DISABLED`) and skips the
+matching background workers.
+
+> `config.features.audioAnalysis` only controls the backend side (queueing and
+> consumption of analysis work). The analyzer Deployments are still controlled
+> by `audioAnalyzer.enabled` / `audioAnalyzerClap.enabled` — when setting
+> `config.features.audioAnalysis=false`, also disable the analyzer sidecars
+> since no new work will be queued for them.
+>
+> In AIO mode the analyzers run inside the all-in-one container and are not
+> controlled by `audioAnalyzer.enabled` / `audioAnalyzerClap.enabled`; with
+> `config.features.audioAnalysis=false` they stay up and drain any leftover
+> queued work. The analyzer machine callbacks (`/api/analysis/vibe/failure`,
+> `/api/analysis/vibe/success`) remain mounted even when the flag is off so
+> in-flight work can still report results.
 
 ### External Database / Redis (Individual Mode)
 
@@ -469,6 +520,9 @@ When `deploymentMode=individual` and `backendWorker.enabled=true`, the chart inj
 
 | Env Var | Helm Value | Required | Default |
 | --- | --- | --- | --- |
+| `AUDIO_ANALYSIS_ENABLED` | `config.features.audioAnalysis` | No | `true` |
+| `DISCOVERY_ENABLED` | `config.features.discovery` | No | `true` |
+| `AUTO_PLAYLISTS_ENABLED` | `config.features.autoPlaylists` | No | `true` |
 | `LIDARR_ENABLED` | `config.lidarrEnabled` | No | `false` |
 | `LIDARR_URL` | `config.lidarrUrl` | If Lidarr enabled | none |
 | `LIDARR_API_KEY` | `config.lidarrApiKey` | If Lidarr enabled | none |

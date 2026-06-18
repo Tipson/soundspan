@@ -428,6 +428,16 @@ ytmusicStreamer:
     storageClass: ""
     accessMode: ReadWriteOnce
     existingClaim: ""
+  # Mount the chart's music volume at /music (same volume the backend
+  # mounts, read-write). Required for the YouTube URL download-to-library
+  # feature: downloads are written to YT_DOWNLOAD_DIR (default
+  # "/music/YouTube Downloads") and imported by the backend's library scan.
+  # In multi-node clusters the music volume must be RWX (ReadWriteMany)
+  # because the backend and ytmusic-streamer pods mount it concurrently.
+  # Set enabled: false to opt out (YouTube downloads then land on the
+  # pod's ephemeral filesystem and are lost on restart).
+  musicMount:
+    enabled: true
   env:
     DEBUG: ""
     # ── Rate-pacing & request safety ─────────────────────────────────
@@ -451,6 +461,12 @@ ytmusicStreamer:
     # - tv: legacy TV parser only
     # - native: ytmusicapi yt.search() only
     YTMUSIC_SEARCH_MODE: "auto"
+    # Destination for YouTube URL downloads inside the music volume.
+    # Uncomment to override the chart default ("/music/YouTube Downloads").
+    # YT_DOWNLOAD_DIR: "/music/YouTube Downloads"
+    # Max concurrent YouTube URL downloads. Downloads run on their own
+    # thread pool so long jobs never starve streaming/search.
+    # YT_DOWNLOAD_CONCURRENCY: "2"
   # -- Additional environment variable sources for YT Music streamer container.
   # Example:
   # envFrom:
@@ -622,6 +638,22 @@ config:
   deezerApiKey: ""
   # -- Set to true to expose API docs publicly
   docsPublic: false
+  # -- Coarse feature flags for ML/recommendation subsystems (all default ON).
+  #    Rendered as AUDIO_ANALYSIS_ENABLED / DISCOVERY_ENABLED /
+  #    AUTO_PLAYLISTS_ENABLED on the backend, backend-worker, and AIO workloads.
+  features:
+    # -- Backend queueing/consumption of audio analysis work (Essentia + CLAP),
+    #    mood-bucket worker, /api/analysis and /api/vibe routes.
+    #    Note: the analyzers' Deployments are still controlled by
+    #    audioAnalyzer.enabled / audioAnalyzerClap.enabled; setting this false
+    #    stops the backend from queueing analysis work, so the analyzer
+    #    sidecars should also be disabled.
+    audioAnalysis: true
+    # -- Discover Weekly cron/processor, /api/discover and /api/recommendations
+    #    routes, and the discovery auto-download lifecycle.
+    discovery: true
+    # -- Made For You mixes (on-demand programmatic playlists, /api/mixes).
+    autoPlaylists: true
   # -- Enables Socket.IO Redis adapter for Listen Together cross-pod fanout.
   #    Keep true for multi-replica backend API deployments.
   listenTogetherRedisAdapterEnabled: true

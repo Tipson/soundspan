@@ -18,8 +18,11 @@ import asyncio
 import json
 import os
 import re
+import subprocess
 import sys
 import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Optional, Literal, cast
 
@@ -39,6 +42,58 @@ from common.sidecar_runtime_utils import (
     env_float,
     env_int,
 )
+from yt_download import (
+    PROXY_AUDIO_FORMAT_SELECTORS,
+    YT_PLAYER_CLIENTS,
+    build_playlist_entries,
+    build_tag_rewrite_command,
+    bulk_album_metadata,
+    classify_youtube_url,
+    derive_proxy_audio_container,
+    extract_video_id as _extract_video_id,
+    find_active_download_job,
+    find_existing_download,
+    resolve_download_filepath,
+)
+
+
+def _safe_remove(path: str) -> None:
+    """Remove a file if it exists, swallowing OS errors."""
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def _stamp_audio_tags(filepath: str, tags: dict) -> None:
+    """
+    Rewrite audio tags on a downloaded file via ffmpeg (stream copy, no
+    re-encode), covering the opus/flac/ogg/mp3/m4a containers the /yt/
+    downloader produces. ffmpeg-written tags stay readable by the backend
+    scanner's music-metadata parser; mutagen-written Vorbis tags silently break
+    it. Best effort — never raises into the download flow.
+    """
+    if not tags:
+        return
+    root, ext = os.path.splitext(filepath)
+    tmp_path = f"{root}.tagtmp{ext}"
+    cmd = build_tag_rewrite_command(filepath, tags, tmp_path)
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            log.warning(
+                f"ffmpeg tag stamp failed for {filepath}: "
+                f"{(result.stderr or '').strip()[:300]}"
+            )
+            _safe_remove(tmp_path)
+            return
+        os.replace(tmp_path, filepath)
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"Failed to stamp audio tags on {filepath}: {e}")
+        _safe_remove(tmp_path)
 
 # ════════════════════════════════════════════════════════════════════
 # WORKAROUND REGISTRY — ytmusicapi issue #813  (OAuth + WEB_REMIX broken)
@@ -106,6 +161,14 @@ app = FastAPI(title="soundspan YouTube Music Streamer", version="1.0.0")
 
 # ── Paths ───────────────────────────────────────────────────────────
 DATA_PATH = Path(os.getenv("DATA_PATH", "/data"))
+# Default destination for /yt/ downloads. Must point inside the shared
+# music volume so the backend's library scanner can pick the files up.
+YT_DOWNLOAD_DIR = os.getenv("YT_DOWNLOAD_DIR", "/music/YouTube Downloads")
+# Upper bound on entries returned by /yt/playlist-info (and therefore on how
+# many download jobs the bulk-download UI fans out at once). Bounds yt-dlp
+# enumeration cost and response size for very large channels; the preview
+# reports truncation when a playlist/channel holds more than this.
+YT_PLAYLIST_MAX_ENTRIES = max(1, env_int("YT_PLAYLIST_MAX_ENTRIES", "200"))
 
 # ════════════════════════════════════════════════════════════════════
 # Rate-pacing & request safety configuration
@@ -588,6 +651,114 @@ def _is_issue_813_invalid_argument_error(err: Exception) -> bool:
         "badrequest",
     )
     return any(marker in message for marker in markers)
+
+
+def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> dict:
+    """
+    Use yt-dlp to extract audio stream URL for a regular YouTube video.
+    Same as _get_stream_url_sync but targets youtube.com (not music.youtube.com)
+    and does not require OAuth authentication.
+    Returns dict with url, format, duration, expires_at.
+    """
+    import yt_dlp
+
+    cache_key = f"yt:{video_id}"
+
+    # Check cache first
+    cached = _stream_cache.get(cache_key)
+    if cached and cached.get("expires_at", 0) > time.time():
+        log.debug(f"Stream URL cache hit for {cache_key}")
+        return cached
+
+    # Enforce inter-extraction delay to avoid rapid-fire requests
+    global _last_extract_time
+    now = time.time()
+    elapsed = now - _last_extract_time
+    min_gap = random.uniform(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
+    if elapsed < min_gap:
+        sleep_time = min_gap - elapsed
+        log.debug(f"Throttling yt-dlp extraction by {sleep_time:.2f}s")
+        time.sleep(sleep_time)
+    _last_extract_time = time.time()
+
+    # Map quality to yt-dlp format selection (shared with /yt/info so the
+    # audioFormat hint matches what this proxy serves)
+    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(
+        quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"]
+    )
+
+    ydl_opts = {
+        "format": fmt,
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+        "http_headers": {
+            "User-Agent": _USER_AGENT,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.youtube.com/",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": YT_PLAYER_CLIENTS,
+            },
+        },
+    }
+
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+            if not info:
+                raise ValueError("No info extracted")
+
+            stream_url = info.get("url")
+            if not stream_url:
+                formats = info.get("formats", [])
+                audio_formats = [
+                    f for f in formats
+                    if f.get("acodec") != "none" and f.get("vcodec") in ("none", None)
+                ]
+                if audio_formats:
+                    audio_formats.sort(key=lambda f: f.get("abr", 0) or 0, reverse=True)
+                    stream_url = audio_formats[0].get("url")
+
+            if not stream_url:
+                raise ValueError("No audio stream URL found")
+
+            result = {
+                "url": stream_url,
+                "content_type": info.get("audio_ext", "m4a"),
+                "duration": info.get("duration", 0),
+                "title": info.get("title", ""),
+                "artist": info.get("artist") or info.get("uploader", ""),
+                "expires_at": time.time() + STREAM_CACHE_TTL,
+                "abr": info.get("abr", 0),
+                "acodec": info.get("acodec", ""),
+            }
+
+            _stream_cache[cache_key] = result
+            log.debug(f"Extracted YT stream URL for {cache_key}: {result['acodec']} @ {result['abr']}kbps")
+            return result
+
+    except Exception as e:
+        error_str = str(e)
+        log.error(f"yt-dlp extraction failed for YT video {video_id}: {error_str}")
+
+        if "Sign in to confirm your age" in error_str or (
+            "age" in error_str.lower() and "confirm" in error_str.lower()
+        ):
+            raise HTTPException(
+                status_code=451,
+                detail={
+                    "error": "age_restricted",
+                    "message": "This content requires age verification and cannot be streamed.",
+                    "video_id": video_id,
+                },
+            )
+
+        raise HTTPException(status_code=502, detail=f"Failed to extract stream: {error_str}")
 
 
 def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> dict:
@@ -1866,6 +2037,605 @@ async def library_playlists(
     except Exception as e:
         log.error(f"Get library playlists failed for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ════════════════════════════════════════════════════════════════════
+# /yt/ endpoints — Regular YouTube (no OAuth required)
+# ════════════════════════════════════════════════════════════════════
+
+
+@app.get("/yt/info")
+async def yt_video_info(url: str = Query(...)):
+    """
+    Return metadata for a regular YouTube video.
+    No authentication required — uses yt-dlp anonymous extraction.
+    """
+    import yt_dlp
+
+    try:
+        video_id = _extract_video_id(url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    ydl_opts = {
+        # Select the exact format the /yt/ stream proxy serves at its
+        # default quality so the audioFormat hint below matches the bytes
+        # the player will receive.
+        "format": PROXY_AUDIO_FORMAT_SELECTORS["HIGH"],
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+        "skip_download": True,
+        "http_headers": {
+            "User-Agent": _USER_AGENT,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.youtube.com/",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": YT_PLAYER_CLIENTS,
+            },
+        },
+    }
+
+    try:
+        def _extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(
+                    f"https://www.youtube.com/watch?v={video_id}",
+                    download=False,
+                )
+
+        info = await asyncio.to_thread(_extract)
+        if not info:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        thumbnails = info.get("thumbnails", [])
+        best_thumb = thumbnails[-1]["url"] if thumbnails else None
+
+        return {
+            "videoId": info.get("id", video_id),
+            "title": info.get("title", ""),
+            "uploader": info.get("uploader", ""),
+            "duration": info.get("duration", 0),
+            "thumbnail": best_thumb,
+            "uploadDate": info.get("upload_date", ""),
+            # Container the /yt/ stream proxy serves — derived from the
+            # same format selection (and acodec mapping) the proxy uses,
+            # so the player's decode hint (webm vs mp4) always matches.
+            "audioFormat": derive_proxy_audio_container(info),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"yt-dlp info extraction failed for {url}: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch video info: {e}")
+
+
+@app.get("/yt/playlist-info")
+async def yt_playlist_info(url: str = Query(...)):
+    """
+    Enumerate a YouTube playlist or channel into a bounded list of video
+    entries for the bulk-download UI. No authentication required — uses
+    yt-dlp anonymous flat extraction (fast: it lists entries without
+    resolving each video's formats).
+
+    Rejects single-video URLs (use /yt/info) and auto-generated radio/mix
+    lists (list=RD*, which YouTube does not expose as a static set) with 422
+    so the UI can explain why.
+    """
+    import yt_dlp
+
+    classification = classify_youtube_url(url)
+    kind = classification.get("kind")
+
+    if kind == "mix":
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This is an auto-generated YouTube mix/radio, which can't be "
+                "downloaded as a set. Paste the individual video instead."
+            ),
+        )
+    if kind not in ("playlist", "channel"):
+        raise HTTPException(
+            status_code=422,
+            detail="URL is not a YouTube playlist or channel.",
+        )
+
+    enumerate_url = classification["enumerate_url"]
+    # Fetch one past the cap so truncation is detectable even when yt-dlp
+    # does not report a playlist_count (common for channel tabs): the extra
+    # entry tips build_playlist_entries into truncated=True.
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "playlistend": YT_PLAYLIST_MAX_ENTRIES + 1,
+        "http_headers": {
+            "User-Agent": _USER_AGENT,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.youtube.com/",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": YT_PLAYER_CLIENTS,
+            },
+        },
+    }
+
+    try:
+        def _extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(enumerate_url, download=False)
+
+        info = await asyncio.to_thread(_extract)
+        if not info:
+            raise HTTPException(
+                status_code=404, detail="Playlist or channel not found"
+            )
+
+        summary = build_playlist_entries(info, YT_PLAYLIST_MAX_ENTRIES)
+        if summary["count"] == 0:
+            raise HTTPException(
+                status_code=422,
+                detail="No downloadable videos found in this playlist or channel.",
+            )
+
+        return {
+            "kind": kind,
+            "playlistId": classification.get("playlist_id"),
+            "channel": classification.get("channel"),
+            "sourceUrl": enumerate_url,
+            **summary,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"yt-dlp playlist enumeration failed for {url}: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to enumerate playlist/channel: {e}",
+        )
+
+
+@app.get("/yt/proxy/{video_id}")
+async def yt_proxy_stream(
+    video_id: str,
+    quality: str = "HIGH",
+    request: Request = None,
+):
+    """
+    Proxy audio stream from a regular YouTube video.
+    No OAuth required — uses anonymous yt-dlp extraction.
+    Same Range-request handling as the YouTube Music proxy.
+    """
+    stream_info = await asyncio.to_thread(_get_yt_stream_url_sync, video_id, quality)
+    stream_url = stream_info["url"]
+
+    acodec = stream_info.get("acodec", "")
+    if "opus" in acodec:
+        content_type = "audio/webm"
+    elif "mp4a" in acodec or "aac" in acodec:
+        content_type = "audio/mp4"
+    else:
+        content_type = "audio/mp4"
+
+    headers = {
+        "User-Agent": _USER_AGENT,
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.youtube.com/",
+        "Origin": "https://www.youtube.com",
+    }
+    if request and "range" in request.headers:
+        headers["Range"] = request.headers["range"]
+
+    async def stream_audio():
+        async with build_stream_proxy_client(user_agent=_USER_AGENT) as client:
+            try:
+                async with client.stream("GET", stream_url, headers=headers) as response:
+                    async for chunk in response.aiter_bytes(chunk_size=65536):
+                        yield chunk
+            except (httpx.HTTPError, httpx.StreamError, httpx.ReadError) as e:
+                log.error(f"Upstream stream error for YT {video_id}: {e}")
+                return
+
+    if headers.get("Range"):
+        client = build_stream_proxy_client(user_agent=_USER_AGENT)
+        try:
+            upstream = await client.send(
+                client.build_request("GET", stream_url, headers=headers),
+                stream=True,
+            )
+        except Exception:
+            # client.send failed before the StreamingResponse generator took
+            # ownership — close the client here or the connection leaks.
+            await client.aclose()
+            raise
+        response_headers = {
+            "Content-Type": content_type,
+            "Accept-Ranges": "bytes",
+        }
+        if "content-range" in upstream.headers:
+            response_headers["Content-Range"] = upstream.headers["content-range"]
+        if "content-length" in upstream.headers:
+            response_headers["Content-Length"] = upstream.headers["content-length"]
+
+        async def range_stream():
+            try:
+                async for chunk in upstream.aiter_bytes(chunk_size=65536):
+                    yield chunk
+            except (httpx.HTTPError, httpx.StreamError, httpx.ReadError) as e:
+                log.warning(f"Upstream read error during YT range stream for {video_id}: {e}")
+            finally:
+                await upstream.aclose()
+                await client.aclose()
+
+        return StreamingResponse(
+            range_stream(),
+            status_code=upstream.status_code,
+            headers=response_headers,
+        )
+
+    return StreamingResponse(
+        stream_audio(),
+        media_type=content_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+class YtDownloadRequest(BaseModel):
+    video_id: str
+    format: str = "mp3"
+    quality: str = "HIGH"
+    output_dir: Optional[str] = None  # defaults to YT_DOWNLOAD_DIR
+    # Optional grouping label (e.g. the playlist/channel title) so the
+    # downloads view can group a bulk run's jobs by where they came from.
+    source: Optional[str] = None
+    # Bulk source type ("channel" | "playlist"). Only channels are collapsed to
+    # a single artist on import; playlists keep each track's native metadata.
+    source_kind: Optional[str] = None
+
+
+# ── Download job store (in-memory) ──────────────────────────────────
+# Jobs are lost on restart — acceptable, because the on-disk idempotency
+# check prevents re-downloading completed files on a retried request.
+_yt_download_jobs: dict[str, dict] = {}
+# Strong references to in-flight tasks: asyncio only keeps weak refs to
+# tasks, so an unreferenced download task could be garbage-collected.
+_yt_download_tasks: set = set()
+YT_DOWNLOAD_JOB_TTL = 6 * 60 * 60  # prune terminal jobs after 6 hours
+# Downloads run on a dedicated, size-limited executor so multi-hour yt-dlp
+# jobs cannot exhaust the event loop's shared default thread pool — used by
+# every asyncio.to_thread call (stream-URL extraction, search, /yt/info,
+# /yt/proxy) — and starve streaming for all users. Jobs beyond the limit
+# wait in the executor's queue and stay in the "queued" state until a
+# worker picks them up.
+YT_DOWNLOAD_CONCURRENCY = max(1, env_int("YT_DOWNLOAD_CONCURRENCY", "2"))
+_yt_download_executor = ThreadPoolExecutor(
+    max_workers=YT_DOWNLOAD_CONCURRENCY,
+    thread_name_prefix="yt-download",
+)
+
+
+# Terminal download-job states (no longer doing work).
+TERMINAL_DOWNLOAD_STATUSES = ("completed", "failed", "cancelled")
+
+
+def _prune_yt_download_jobs():
+    """Drop terminal jobs older than the TTL to bound memory."""
+    cutoff = time.time() - YT_DOWNLOAD_JOB_TTL
+    stale = [
+        job_id
+        for job_id, job in _yt_download_jobs.items()
+        if job.get("status") in TERMINAL_DOWNLOAD_STATUSES
+        and job.get("created_at", 0) <= cutoff
+    ]
+    for job_id in stale:
+        del _yt_download_jobs[job_id]
+    if stale:
+        log.debug(f"Pruned {len(stale)} stale YT download job(s)")
+
+
+def _new_yt_download_job(
+    video_id: str,
+    status: str = "queued",
+    source: Optional[str] = None,
+    source_kind: Optional[str] = None,
+) -> dict:
+    """Create and register a download job record."""
+    _prune_yt_download_jobs()
+    job = {
+        "job_id": uuid.uuid4().hex,
+        "video_id": video_id,
+        "status": status,
+        "progress_pct": 0.0,
+        "file_path": None,
+        "title": "",
+        "error": None,
+        "already_existed": False,
+        "source": source,
+        "source_kind": source_kind,
+        "cancel_requested": False,
+        "created_at": time.time(),
+    }
+    _yt_download_jobs[job["job_id"]] = job
+    return job
+
+
+def _yt_download_job_payload(job: dict) -> dict:
+    """Public job-status shape returned to the backend."""
+    return {
+        "job_id": job["job_id"],
+        "video_id": job["video_id"],
+        "status": job["status"],
+        "progress_pct": job["progress_pct"],
+        "file_path": job["file_path"],
+        "title": job["title"],
+        "error": job["error"],
+        "already_existed": job["already_existed"],
+        "source": job.get("source"),
+        "created_at": job.get("created_at"),
+    }
+
+
+def _yt_download_sync(job: dict, audio_format: str, quality: str, output_dir: str):
+    """
+    Blocking yt-dlp download executed in a worker thread. Updates the job
+    record via progress hooks (downloading -> processing -> completed).
+    """
+    import yt_dlp
+
+    video_id = job["video_id"]
+
+    # Enforce inter-extraction delay to avoid rapid-fire requests —
+    # same pacing pattern as the stream-URL extraction paths.
+    global _last_extract_time
+    now = time.time()
+    elapsed = now - _last_extract_time
+    min_gap = random.uniform(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
+    if elapsed < min_gap:
+        sleep_time = min_gap - elapsed
+        log.debug(f"Throttling yt-dlp download by {sleep_time:.2f}s")
+        time.sleep(sleep_time)
+    _last_extract_time = time.time()
+
+    def _progress_hook(d: dict):
+        # Abort an in-flight download when the job has been cancelled; yt-dlp
+        # propagates the exception out of extract_info().
+        if job.get("cancel_requested"):
+            raise yt_dlp.utils.DownloadCancelled("cancelled by user")
+        status = d.get("status")
+        if status == "downloading":
+            job["status"] = "downloading"
+            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            downloaded = d.get("downloaded_bytes") or 0
+            if total > 0:
+                job["progress_pct"] = round(
+                    min(99.0, downloaded * 100.0 / total), 1
+                )
+        elif status == "finished":
+            # Raw media fetched — FFmpeg postprocessing (extract/convert,
+            # metadata, thumbnail) runs next.
+            job["status"] = "processing"
+            job["progress_pct"] = max(float(job.get("progress_pct") or 0), 99.0)
+
+    outtmpl = os.path.join(output_dir, "%(title)s [%(id)s].%(ext)s")
+    postprocessors = [
+        {
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": audio_format,
+            "preferredquality": "320" if audio_format == "mp3" else "0",
+        },
+        {"key": "FFmpegMetadata"},
+        {"key": "EmbedThumbnail"},
+    ]
+
+    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(
+        quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"]
+    )
+
+    ydl_opts = {
+        "format": fmt,
+        "outtmpl": outtmpl,
+        "postprocessors": postprocessors,
+        "writethumbnail": True,
+        "quiet": True,
+        "no_warnings": True,
+        "progress_hooks": [_progress_hook],
+        "http_headers": {
+            "User-Agent": _USER_AGENT,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.youtube.com/",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": YT_PLAYER_CLIENTS,
+            },
+        },
+    }
+
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    # Cancelled while still queued in the executor — never start the download.
+    if job.get("cancel_requested"):
+        job["status"] = "cancelled"
+        return
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+
+    if not info:
+        raise ValueError("Download failed — no info returned")
+
+    # Resolve the real output path from yt-dlp's info dict (postprocessors
+    # change the extension); fall back to the escaped-glob directory scan.
+    filepath = resolve_download_filepath(info, audio_format)
+    if not filepath:
+        filepath = find_existing_download(output_dir, video_id)
+    if not filepath:
+        raise ValueError("Download completed but output file not found")
+
+    # Bulk (playlist/channel) downloads: stamp the source as artist/album so
+    # the channel's videos group under one artist instead of each video's own
+    # (often per-DJ) YouTube artist tag. Written via ffmpeg so the tagged files
+    # stay readable by the library scanner. Single-video downloads (no source)
+    # keep their native metadata.
+    bulk_tags = bulk_album_metadata(job.get("source"), job.get("source_kind"))
+    if bulk_tags:
+        _stamp_audio_tags(filepath, bulk_tags)
+
+    job["file_path"] = filepath
+    job["title"] = info.get("title", "")
+    job["progress_pct"] = 100.0
+    job["status"] = "completed"
+    log.info(f"YT download completed for {video_id}: {filepath}")
+
+
+async def _run_yt_download_job(job: dict, audio_format: str, quality: str, output_dir: str):
+    """Background task wrapper that records failures on the job."""
+    try:
+        # Dedicated executor, NOT asyncio.to_thread: to_thread shares the
+        # loop's default pool with all other endpoints' blocking calls.
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            _yt_download_executor,
+            _yt_download_sync,
+            job,
+            audio_format,
+            quality,
+            output_dir,
+        )
+    except Exception as e:
+        if job.get("cancel_requested"):
+            job["status"] = "cancelled"
+            job["error"] = None
+            log.info(f"YT download cancelled for {job['video_id']}")
+        else:
+            log.error(f"YT download failed for {job['video_id']}: {e}")
+            job["status"] = "failed"
+            job["error"] = str(e)
+
+
+@app.post("/yt/download")
+async def yt_download(req: YtDownloadRequest):
+    """
+    Start a background audio download for a regular YouTube video.
+    Returns {job_id, status} immediately; poll GET /yt/download/{job_id}
+    for progress. Uses yt-dlp with FFmpeg postprocessors for format
+    conversion, metadata embedding, and thumbnail embedding.
+    No OAuth required.
+    """
+    video_id = req.video_id
+    output_dir = req.output_dir or YT_DOWNLOAD_DIR
+    audio_format = req.format.lower()
+
+    if audio_format not in ("mp3", "opus", "flac", "m4a"):
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {audio_format}")
+
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Reuse a non-terminal job for the same video: a second concurrent
+    # yt-dlp run would clash on the same output path, and during the
+    # postprocessing window the raw container file would falsely satisfy
+    # the on-disk idempotency check below. No awaits between this check
+    # and job registration, so it is atomic on the event loop.
+    active = find_active_download_job(_yt_download_jobs, video_id)
+    if active:
+        log.info(
+            f"YT download already in flight for {video_id} "
+            f"(job={active['job_id']}, status={active['status']})"
+        )
+        return {"job_id": active["job_id"], "status": active["status"]}
+
+    # Check for existing download (idempotent)
+    existing = find_existing_download(output_dir, video_id)
+    if existing:
+        log.info(f"YT download already exists: {existing}")
+        job = _new_yt_download_job(
+            video_id,
+            status="completed",
+            source=req.source,
+            source_kind=req.source_kind,
+        )
+        job["progress_pct"] = 100.0
+        job["file_path"] = existing
+        job["title"] = os.path.basename(existing)
+        job["already_existed"] = True
+        return {"job_id": job["job_id"], "status": job["status"]}
+
+    job = _new_yt_download_job(
+        video_id, source=req.source, source_kind=req.source_kind
+    )
+    task = asyncio.create_task(
+        _run_yt_download_job(job, audio_format, req.quality, output_dir)
+    )
+    _yt_download_tasks.add(task)
+    task.add_done_callback(_yt_download_tasks.discard)
+    log.info(
+        f"YT download queued for {video_id} "
+        f"(job={job['job_id']}, format={audio_format}, quality={req.quality})"
+    )
+    return {"job_id": job["job_id"], "status": job["status"]}
+
+
+@app.get("/yt/download/{job_id}")
+async def yt_download_status(job_id: str):
+    """
+    Return the status of a download job started via POST /yt/download.
+    404 when the job is unknown (e.g. after a sidecar restart).
+    """
+    job = _yt_download_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Download job not found")
+    return _yt_download_job_payload(job)
+
+
+@app.get("/yt/downloads")
+async def yt_downloads_list():
+    """
+    List all known download jobs (active + recent terminal within the 6h
+    TTL), newest first, for the downloads view. The store is in-memory and
+    per-pod, so it resets on a sidecar restart.
+    """
+    _prune_yt_download_jobs()
+    jobs = sorted(
+        _yt_download_jobs.values(),
+        key=lambda j: j.get("created_at") or 0,
+        reverse=True,
+    )
+    return {"jobs": [_yt_download_job_payload(j) for j in jobs]}
+
+
+@app.delete("/yt/downloads/{job_id}")
+async def yt_download_cancel(job_id: str):
+    """
+    Cancel a download job. A still-queued job never starts; an in-flight job
+    is aborted at its next progress tick. Terminal jobs are a no-op. 404 when
+    the job is unknown.
+    """
+    job = _yt_download_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Download job not found")
+    if job["status"] in TERMINAL_DOWNLOAD_STATUSES:
+        return _yt_download_job_payload(job)
+    job["cancel_requested"] = True
+    if job["status"] == "queued":
+        # Not yet picked up by a worker — settle it terminally now; the
+        # worker's pre-download check also bails if it starts in the meantime.
+        job["status"] = "cancelled"
+    log.info(
+        f"YT download cancel requested for {job['video_id']} (job={job_id})"
+    )
+    return _yt_download_job_payload(job)
 
 
 # ── Cleanup ─────────────────────────────────────────────────────────

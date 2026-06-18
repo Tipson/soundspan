@@ -8,6 +8,8 @@ const mockFsExistsSync = jest.fn();
 const mockFsStatSync = jest.fn();
 const mockFsUnlinkSync = jest.fn();
 const mockMkdir = jest.fn();
+const mockRm = jest.fn();
+const mockStat = jest.fn();
 
 jest.mock("slsk-client", () => ({
     __esModule: true,
@@ -38,6 +40,8 @@ jest.mock("fs", () => ({
 
 jest.mock("fs/promises", () => ({
     mkdir: (...args: unknown[]) => mockMkdir(...args),
+    rm: (...args: unknown[]) => mockRm(...args),
+    stat: (...args: unknown[]) => mockStat(...args),
 }));
 
 jest.mock("p-queue", () => ({
@@ -1130,7 +1134,7 @@ describe("soulseek service", () => {
                 search: jest.fn(),
                 download: jest.fn(),
             };
-            mockFsExistsSync.mockReturnValue(true);
+            mockRm.mockResolvedValue(undefined);
 
             const promise = soulseekService.downloadTrack(
                 makeTrackMatch({ username: "timeout-user" }),
@@ -1141,7 +1145,9 @@ describe("soulseek service", () => {
             const result = await promise;
 
             expect(result).toEqual({ success: false, error: "Download timed out" });
-            expect(mockFsUnlinkSync).toHaveBeenCalledWith("/music/timeout.flac");
+            expect(mockRm).toHaveBeenCalledWith("/music/timeout.flac", {
+                force: true,
+            });
             expect((soulseekService as any).failedUsers.get("timeout-user")).toEqual(
                 expect.objectContaining({ failures: 1 })
             );
@@ -1199,7 +1205,17 @@ describe("soulseek service", () => {
             jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
                 undefined
             );
-            mockFsExistsSync.mockReturnValue(false);
+            // The post-download check is `await stat(destPath)`, which REJECTS
+            // when the file is missing — that is the real "not written" path.
+            // (Previously this test only set existsSync=false and left mockStat
+            // returning undefined, so it passed for the wrong reason: reading
+            // `.size` on undefined threw a TypeError that was swallowed into the
+            // same "File not written" result. Reject mockStat so the genuine
+            // not-found branch is exercised.)
+            const enoent = Object.assign(new Error("ENOENT: no such file"), {
+                code: "ENOENT",
+            });
+            mockStat.mockRejectedValueOnce(enoent);
             (soulseekService as any).client = {
                 search: jest.fn(),
                 download: jest.fn(
@@ -1218,6 +1234,9 @@ describe("soulseek service", () => {
                 "/music/missing.flac"
             );
 
+            // The error comes from stat() rejecting on the missing file, not
+            // from an incidental TypeError — assert the verification ran.
+            expect(mockStat).toHaveBeenCalledWith("/music/missing.flac");
             expect(result).toEqual({ success: false, error: "File not written" });
         });
 
@@ -1234,8 +1253,7 @@ describe("soulseek service", () => {
                     ) => cb(null, { buffer: Buffer.from("ok") })
                 ),
             };
-            mockFsExistsSync.mockReturnValue(true);
-            mockFsStatSync.mockReturnValue({ size: 4096 });
+            mockStat.mockResolvedValue({ size: 4096 });
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch(),

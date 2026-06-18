@@ -312,6 +312,141 @@ describe("playbackState routes runtime", () => {
         );
     });
 
+    it("round-trips youtube-direct queue items with their audio format", async () => {
+        mockUpsert.mockResolvedValueOnce({
+            id: "state-yt-direct",
+            userId: "u1",
+            deviceId: "desktop",
+            playbackType: "track",
+        });
+
+        const req = {
+            user: { id: "u1" },
+            header: () => "desktop",
+            body: {
+                playbackType: "track",
+                trackId: "yt-dQw4w9WgXcQ",
+                queue: [
+                    {
+                        id: "yt-dQw4w9WgXcQ",
+                        title: "Some DJ Set",
+                        duration: 7200,
+                        streamSource: "youtube-direct",
+                        youtubeVideoId: "dQw4w9WgXcQ",
+                        youtubeAudioFormat: "webm",
+                        artist: { name: "Uploader" },
+                        album: { title: "YouTube" },
+                    },
+                ],
+                currentIndex: 0,
+            },
+        } as any;
+        const res = createRes();
+
+        await postState(req, res);
+
+        expect(mockUpsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                update: expect.objectContaining({
+                    queue: [
+                        expect.objectContaining({
+                            id: "yt-dQw4w9WgXcQ",
+                            mediaSource: "youtube-direct",
+                            streamSource: "youtube-direct",
+                            youtubeVideoId: "dQw4w9WgXcQ",
+                            youtubeAudioFormat: "webm",
+                            provider: expect.objectContaining({
+                                source: "youtube-direct",
+                                providerTrackId: "dQw4w9WgXcQ",
+                                youtubeVideoId: "dQw4w9WgXcQ",
+                                youtubeAudioFormat: "webm",
+                            }),
+                        }),
+                    ],
+                }),
+            })
+        );
+        expect(res.statusCode).toBe(200);
+    });
+
+    it("passes through podcast episode queue items and defaults tracks to itemType track", async () => {
+        mockUpsert.mockResolvedValueOnce({
+            id: "state-mixed",
+            userId: "u1",
+            deviceId: "legacy",
+            playbackType: "podcast",
+        });
+
+        const req = {
+            user: { id: "u1" },
+            header: () => "",
+            body: {
+                playbackType: "podcast",
+                podcastId: "pod-1:ep-1",
+                queue: [
+                    {
+                        itemType: "episode",
+                        id: "pod-1:ep-1",
+                        title: "Episode One",
+                        podcastTitle: "My Podcast",
+                        podcastId: "pod-1",
+                        episodeId: "ep-1",
+                        coverUrl: "/covers/pod.jpg",
+                        duration: "3600",
+                        description: "should be stripped",
+                    },
+                    {
+                        // Derives podcastId/episodeId from the composite id.
+                        itemType: "episode",
+                        id: "pod-2:ep-9",
+                        title: "Episode Nine",
+                        duration: 120,
+                    },
+                    {
+                        id: "t1",
+                        title: "Queued Track",
+                        duration: 200,
+                        artist: { id: "a1", name: "Artist A" },
+                        album: { id: "al1", title: "Album A", coverArt: null },
+                    },
+                ],
+                currentIndex: 0,
+            },
+        } as any;
+        const res = createRes();
+
+        await postState(req, res);
+
+        const savedQueue = mockUpsert.mock.calls[0][0].update.queue;
+        expect(savedQueue).toHaveLength(3);
+        expect(savedQueue[0]).toEqual({
+            itemType: "episode",
+            id: "pod-1:ep-1",
+            title: "Episode One",
+            podcastTitle: "My Podcast",
+            podcastId: "pod-1",
+            episodeId: "ep-1",
+            coverUrl: "/covers/pod.jpg",
+            duration: 3600,
+        });
+        expect(savedQueue[1]).toEqual(
+            expect.objectContaining({
+                itemType: "episode",
+                podcastId: "pod-2",
+                episodeId: "ep-9",
+                coverUrl: null,
+            })
+        );
+        expect(savedQueue[2]).toEqual(
+            expect.objectContaining({
+                itemType: "track",
+                id: "t1",
+                title: "Queued Track",
+            })
+        );
+        expect(res.statusCode).toBe(200);
+    });
+
     it("falls back to DbNull when queue sanitization throws", async () => {
         mockUpsert.mockResolvedValueOnce({ id: "state-3" });
 

@@ -24,6 +24,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/cacheHelpers.ts` | Core |
 | `backend/src/services/coverArt.ts` | Core |
 | `backend/src/services/coverArtExtractor.ts` | Core |
+| `backend/src/services/coverArtResize.ts` | Core |
 | `backend/src/services/dataCache.ts` | Core |
 | `backend/src/services/deezer.ts` | Core |
 | `backend/src/services/discoverWeekly.ts` | Core |
@@ -99,6 +100,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/vibeAnalysisCleanup.ts` | Core |
 | `backend/src/services/vibeVocabulary.ts` | Core |
 | `backend/src/services/wikidata.ts` | Core |
+| `backend/src/services/youtubeDownload.ts` | Core |
 | `backend/src/services/youtubeMusic.ts` | Core |
 
 ## Update Rule
