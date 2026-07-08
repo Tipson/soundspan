@@ -129,7 +129,7 @@ printf '{"status":"pass","summary":"ok","findings":[]}\n'
 
     def test_default_codex_args(self):
         args, _ = self.run_script([])
-        self.assert_sequence(args, ["--model", "gpt-5.3-codex"])
+        self.assert_sequence(args, ["--model", "gpt-5.5"])
         self.assert_sequence(args, ["-c", 'model_reasoning_effort="xhigh"'])
         self.assert_sequence(args, ["--sandbox", "read-only"])
 
@@ -166,7 +166,7 @@ printf '{"status":"pass","summary":"ok","findings":[]}\n'
 
     def test_allows_codex_when_dangerous_permissions_env_is_false(self):
         args, _ = self.run_script(["--provider", "codex"], {"AWM_CROSS_REVIEW_DANGEROUSLY_SKIP_PERMISSIONS": "false"})
-        self.assert_sequence(args, ["--model", "gpt-5.3-codex"])
+        self.assert_sequence(args, ["--model", "gpt-5.5"])
 
 
 if __name__ == "__main__":

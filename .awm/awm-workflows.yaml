@@ -54,7 +54,7 @@ completion:
           - "--provider"
           - "codex"
           - "--model"
-          - "gpt-5.3-codex"
+          - "gpt-5.5"
           - "--reasoning-effort"
           - "high"
           # In already isolated containerized hosts, prefer the shared high-trust shortcut.

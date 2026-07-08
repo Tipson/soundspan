@@ -16,7 +16,7 @@ Cheat sheet:
   Codex default sandboxed review:
     scripts/awm-cross-review.sh --provider codex --sandbox read-only
   Codex high-trust review in an already isolated container:
-    scripts/awm-cross-review.sh --provider codex --model gpt-5.3-codex --reasoning-effort high --yolo
+    scripts/awm-cross-review.sh --provider codex --model gpt-5.5 --reasoning-effort high --yolo
   Claude default print-mode review:
     scripts/awm-cross-review.sh --provider claude --model sonnet
   Claude high-trust review in an already isolated container:
@@ -70,7 +70,7 @@ normalize_bool() {
 }
 
 default_provider="codex"
-default_codex_model="gpt-5.3-codex"
+default_codex_model="gpt-5.5"
 default_claude_model=""
 default_reasoning_effort="xhigh"
 default_codex_sandbox="read-only"
