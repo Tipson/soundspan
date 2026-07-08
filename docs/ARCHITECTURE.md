@@ -18,7 +18,7 @@ graph TD
     AC["audio-analyzer-clap<br/>LAION-CLAP"]
 
     Browser -->|HTTP/WS| FE
-    FE -->|"next.config rewrites /api/*"| BE
+    FE -->|"custom-server streaming proxy /api/*, /rest/*, Listen Together WS"| BE
     BE --> PG
     BE --> RD
     BW --> PG
@@ -36,13 +36,12 @@ graph TD
 
 | Source | Target | Protocol | Port | Auth | Purpose |
 |--------|--------|----------|------|------|---------|
-| frontend | backend | HTTP (Next.js rewrites `/api/*`) | 3006 | JWT cookie | All API requests |
-| frontend | backend | HTTP (Next.js rewrites `/api/admin/*`) | 3006 | Admin session | Admin-only operational surfaces such as Library Health and Bull Board |
-| frontend | backend | WebSocket (Socket.IO) | 3006 | JWT | Listen Together real-time sync |
+| frontend | backend | HTTP (custom-server streaming proxy `/api/*`; Next route-handler fallback) | 3006 | JWT cookie | All API requests (admin-only surfaces such as Library Health and Bull Board included) |
+| frontend | backend | WebSocket (Socket.IO, proxied by the custom server) | 3006 | JWT (`handshake.auth.token`) | Listen Together real-time sync |
 | backend | PostgreSQL | TCP (Prisma) | 5432 | Connection string | All persistent state |
 | backend | Redis | TCP | 6379 | None | Listen Together presence/state, cache, pub/sub, stream queues |
 | backend | tidal-downloader | HTTP | 8585 | `INTERNAL_API_SECRET` header | TIDAL OAuth, search, stream extraction, downloads |
-| backend | ytmusic-streamer | HTTP | 8586 | None (sidecar-internal) | YT Music OAuth, search, stream proxy, browse shelves |
+| backend | ytmusic-streamer | HTTP | 8586 | None (sidecar-internal) | YT Music OAuth, search, stream proxy, browse shelves; `/yt/*` pasted-URL preview/stream/download jobs |
 | backend-worker | PostgreSQL | TCP (Prisma) | 5432 | Connection string | Background job state |
 | backend-worker | Redis | TCP | 6379 | None | Job queues (BullMQ/streams), scheduler claims |
 | audio-analyzer | PostgreSQL | TCP (direct) | 5432 | Connection string | Analysis results write |
@@ -67,10 +66,10 @@ graph TD
 ### Browser to API
 
 ```
-Browser → frontend:3030 → Next.js rewrite /api/* → backend:3006 → Prisma → PostgreSQL
+Browser → frontend:3030 → custom-server streaming proxy /api/* → backend:3006 → Prisma → PostgreSQL
 ```
 
-The frontend proxies all `/api/*` requests to the backend via `next.config.ts` rewrites. The browser never talks to the backend directly. `frontend/lib/api.ts` is the canonical API boundary — no direct `fetch` calls from components.
+The frontend's custom server (`frontend/server.js` + `frontend/server-proxy.js`) streams all `/api/*` requests to the backend via http-proxy-middleware — no body buffering, backend gzip and streaming preserved — enforcing a configurable time-to-first-byte budget (`PROXY_REQUEST_TIMEOUT_MS`, default 20s; `PROXY_IMPORT_PREVIEW_TIMEOUT_MS`, default 90s → `504 UPSTREAM_TIMEOUT`). The Next route handler at `app/api/[...path]` remains as a fallback. The browser never talks to the backend directly. `frontend/lib/api.ts` is the canonical API boundary — no direct `fetch` calls from components.
 
 ### Music Playback (Local Library)
 
@@ -101,6 +100,20 @@ Browser → GET /api/ytmusic/proxy/:videoId
 ```
 
 YouTube `videoId` is permanent; stream URLs from yt-dlp expire in hours. Only `videoId` is stored in `TrackYtMusic`, stream URL is extracted at playback time.
+
+### YouTube URL Paste (Stream & Download)
+
+```
+Browser pastes a YouTube URL on /search
+  → GET /api/youtube/info | /playlist-info (any authenticated user)
+  → GET /api/youtube/stream/:videoId → ytmusic-streamer /yt/proxy/:id (instant playback)
+  → POST /api/youtube/download (admin only)
+    → ytmusic-streamer /yt/download → yt-dlp writes audio under YT_DOWNLOAD_DIR on the shared /music volume
+    → backend watcher polls the job to a terminal state and enqueues ONE coalesced library scan
+      (stable Bull jobId; completions during an active scan trigger exactly one follow-up scan)
+```
+
+Download endpoints (start/status/list/cancel) are admin-gated server-side (`requireAdmin`), matching the app's downloads model; the download UI and downloads polling are hidden for non-admin users. The ytmusic-streamer pod mounts the music volume for this flow (RWX in multi-node Helm deployments).
 
 ### Track Resolution Priority
 
@@ -159,6 +172,8 @@ The backend supports three runtime roles via `BACKEND_PROCESS_ROLE`:
 | `worker` | No (health endpoint only) | Yes | |
 
 For small deployments, `all` is fine. For scale-out, run separate `api` and `worker` containers sharing the same DB and Redis.
+
+Coarse feature flags (`AUDIO_ANALYSIS_ENABLED`, `DISCOVERY_ENABLED`, `AUTO_PLAYLISTS_ENABLED`, all default `true`) gate both sides: with a flag off, the API process does not mount the subsystem's routes (requests get `404` with `code: FEATURE_DISABLED`) and the worker process does not register its queues/crons. The flags are exposed through Helm values (`config.features.*`) and forwarded by the docker-compose files.
 
 ## Key Runtime Boundaries
 
