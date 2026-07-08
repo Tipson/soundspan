@@ -4,18 +4,22 @@
  * Exposes the sidecar's /yt/ endpoints to the frontend for regular YouTube
  * video streaming and downloading. All routes require session authentication
  * but do NOT require YouTube Music OAuth — they work with any YouTube URL.
+ * Download endpoints (start/status/list/cancel) additionally require the
+ * admin role, matching the app-wide admin-only download model; info and
+ * streaming stay available to every authenticated user.
  *
  * Endpoints:
  * - GET  /api/youtube/info?url=   — Video metadata
  * - GET  /api/youtube/stream/:videoId — Proxied audio stream
- * - POST /api/youtube/download    — Start a background download job (202)
- * - GET  /api/youtube/download/:jobId — Poll job status; queues a library
- *   scan once when the job completes
+ * - POST /api/youtube/download    — Start a background download job (202, admin)
+ * - GET  /api/youtube/download/:jobId — Poll job status (admin); queues a
+ *   library scan once when the job completes
  */
 
 import { Router, Request, Response } from "express";
+import type Bull from "bull";
 import { z } from "zod";
-import { requireAuth, requireAuthOrToken } from "../middleware/auth";
+import { requireAuth, requireAuthOrToken, requireAdmin } from "../middleware/auth";
 import {
     youtubeDownloadService,
     watchYouTubeDownloadJobUntilTerminal,
@@ -214,8 +218,13 @@ router.get(
 
 // ── Download ──────────────────────────────────────────────────────
 
+/** Canonical 11-character YouTube video id (same format the frontend validates). */
+const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
+
 const downloadBodySchema = z.object({
-    videoId: z.string().min(1),
+    videoId: z
+        .string()
+        .regex(YOUTUBE_VIDEO_ID_REGEX, "videoId must be an 11-character YouTube video id"),
     format: z.enum(["mp3", "opus", "flac", "m4a"]).default("mp3"),
     quality: z.enum(["LOW", "MEDIUM", "HIGH", "LOSSLESS"]).default("HIGH"),
     // Optional grouping label (playlist/channel title) for bulk runs.
@@ -229,7 +238,7 @@ const downloadBodySchema = z.object({
  * @openapi
  * /api/youtube/download:
  *   post:
- *     summary: Start a background YouTube audio download job
+ *     summary: Start a background YouTube audio download job (admin only)
  *     tags: [YouTube]
  *     requestBody:
  *       required: true
@@ -255,10 +264,12 @@ const downloadBodySchema = z.object({
  *           GET /api/youtube/download/{jobId} for UI progress.
  *       400:
  *         description: Invalid request body
+ *       403:
+ *         description: Authenticated but not an admin
  *       502:
  *         description: Sidecar unavailable or rejected the download
  */
-router.post("/download", requireAuth, async (req: Request, res: Response) => {
+router.post("/download", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
         const { videoId, format, quality, source, sourceKind } =
             downloadBodySchema.parse(req.body);
@@ -309,9 +320,151 @@ router.post("/download", requireAuth, async (req: Request, res: Response) => {
 const scannedDownloadJobIds = new Set<string>();
 
 /**
- * Queue a library scan for a completed download job exactly once. Removes
- * the job from the dedupe set again when the enqueue fails so a later
- * caller (watcher retry or status poll) can try again.
+ * Upper bound on remembered download-job ids. The sidecar prunes terminal
+ * jobs after 6h, so anything still referenced by a poll fits comfortably
+ * within this window; oldest ids are evicted first (insertion order).
+ */
+const MAX_SCANNED_DOWNLOAD_JOB_IDS = 1000;
+
+/**
+ * Remember `jobId` in `seen`, evicting the oldest remembered ids (Sets
+ * iterate in insertion order) once `maxSize` is exceeded, so the dedupe set
+ * cannot grow without bound over the process lifetime.
+ */
+export function rememberBoundedJobId(
+    seen: Set<string>,
+    jobId: string,
+    maxSize: number
+): void {
+    seen.add(jobId);
+    while (seen.size > maxSize) {
+        const oldest = seen.values().next().value;
+        if (oldest === undefined) {
+            break;
+        }
+        seen.delete(oldest);
+    }
+}
+
+// ── Library scan coalescing ───────────────────────────────────────
+//
+// A bulk run can complete hundreds of download jobs in quick succession;
+// enqueueing one full-library scan per job would serialize hundreds of
+// redundant scans. Instead, completions coalesce into at most one QUEUED
+// scan at a time:
+// - no scan pending → enqueue one (stable Bull jobId, so concurrent adds
+//   collapse into a single job while it exists);
+// - a scan is queued but not started → nothing to do, it will pick the new
+//   file up when it runs;
+// - a scan is RUNNING → its file enumeration may already have passed the
+//   new file, so remember to enqueue exactly one follow-up scan when it
+//   settles.
+//
+// Scans stay full-library (not scoped to the YouTube download dir):
+// MusicScannerService.scanLibrary() diffs ALL DB tracks against the files
+// found under the given path and flags the rest MISSING_FROM_DISK, so a
+// scoped scan would corrupt the library.
+
+/** Stable Bull job id for the coalesced YouTube-download library scan. */
+const YOUTUBE_SCAN_JOB_ID = "youtube-download-library-scan";
+
+/** The coalesced scan job currently queued or running, if any. */
+let pendingScanJob: Bull.Job | null = null;
+/** Set when a download completes while a scan is running: one follow-up scan. */
+let followUpScanUserId: string | null = null;
+
+/**
+ * Request a (coalesced) full-library scan on behalf of a completed
+ * download. See the coalescing rules above; throws when the initial
+ * enqueue fails so the caller can retry on a later poll/watcher tick.
+ */
+async function requestCoalescedLibraryScan(userId: string): Promise<void> {
+    for (;;) {
+        const tracked = pendingScanJob;
+        if (!tracked) {
+            await enqueueCoalescedScanJob(userId);
+            return;
+        }
+
+        let state: string;
+        try {
+            state = await tracked.getState();
+        } catch {
+            state = "unknown";
+        }
+        if (tracked !== pendingScanJob) {
+            // The tracked job settled while we looked at it — re-evaluate.
+            continue;
+        }
+        if (state === "waiting" || state === "delayed" || state === "paused") {
+            // Queued but not started: the scan will see this file when it
+            // runs. Nothing to enqueue.
+            return;
+        }
+        // Active (or terminal-but-not-yet-observed): the scan may already
+        // have enumerated files, so ask for exactly one follow-up scan once
+        // it settles. The watcher consumes this flag.
+        followUpScanUserId = userId;
+        return;
+    }
+}
+
+/** Enqueue the coalesced scan job and watch it until it settles. */
+async function enqueueCoalescedScanJob(userId: string): Promise<void> {
+    const { scanQueue } = await import("../workers/queues");
+    const job = await scanQueue.add(
+        "scan",
+        {
+            userId,
+            source: "youtube-download",
+        },
+        {
+            // Bull ignores add() while a job with this id exists, so
+            // concurrent enqueues collapse into one. Remove the record on
+            // settle so the id is reusable for the next scan.
+            jobId: YOUTUBE_SCAN_JOB_ID,
+            removeOnComplete: true,
+            removeOnFail: true,
+        }
+    );
+    pendingScanJob = job;
+    void watchCoalescedScanJob(job);
+}
+
+/**
+ * Wait for the coalesced scan job to settle, then enqueue the single
+ * follow-up scan if any download completed while it was running.
+ */
+async function watchCoalescedScanJob(job: Bull.Job): Promise<void> {
+    try {
+        await job.finished();
+    } catch {
+        // A failed/removed scan still settles the coalescing state; the
+        // follow-up below (or the next completed download) re-enqueues.
+    }
+    if (pendingScanJob === job) {
+        pendingScanJob = null;
+    }
+    const followUpUserId = followUpScanUserId;
+    followUpScanUserId = null;
+    if (followUpUserId !== null) {
+        try {
+            await enqueueCoalescedScanJob(followUpUserId);
+            logger.debug(
+                "[YouTube Route] Follow-up library scan queued after running scan settled"
+            );
+        } catch (scanErr: any) {
+            logger.warn(
+                `[YouTube Route] Failed to queue follow-up library scan: ${scanErr.message}`
+            );
+        }
+    }
+}
+
+/**
+ * Queue a (coalesced) library scan for a completed download job exactly
+ * once. Removes the job from the dedupe set again when the enqueue fails so
+ * a later caller (watcher retry or status poll) can try again.
  */
 async function enqueueLibraryScanForDownloadJob(
     jobId: string,
@@ -320,15 +473,15 @@ async function enqueueLibraryScanForDownloadJob(
     if (scannedDownloadJobIds.has(jobId)) {
         return;
     }
-    scannedDownloadJobIds.add(jobId);
+    rememberBoundedJobId(
+        scannedDownloadJobIds,
+        jobId,
+        MAX_SCANNED_DOWNLOAD_JOB_IDS
+    );
     try {
-        const { scanQueue } = await import("../workers/queues");
-        await scanQueue.add("scan", {
-            userId,
-            source: "youtube-download",
-        });
+        await requestCoalescedLibraryScan(userId);
         logger.debug(
-            `[YouTube Route] Library scan queued after download job ${jobId}`
+            `[YouTube Route] Library scan requested after download job ${jobId}`
         );
     } catch (scanErr: any) {
         // Allow a later watcher tick / status poll to retry the enqueue.
@@ -367,7 +520,7 @@ function watchDownloadJobAndQueueScan(jobId: string, userId: string): void {
  * @openapi
  * /api/youtube/download/{jobId}:
  *   get:
- *     summary: Get YouTube download job status
+ *     summary: Get YouTube download job status (admin only)
  *     description: >
  *       Proxies the sidecar's job store for UI progress. The library scan
  *       is normally queued by the server-side job watcher; as a fallback
@@ -383,6 +536,8 @@ function watchDownloadJobAndQueueScan(jobId: string, userId: string): void {
  *     responses:
  *       200:
  *         description: Job status (queued, downloading, processing, completed, failed)
+ *       403:
+ *         description: Authenticated but not an admin
  *       404:
  *         description: Unknown job id (e.g. sidecar restarted)
  *       502:
@@ -391,6 +546,7 @@ function watchDownloadJobAndQueueScan(jobId: string, userId: string): void {
 router.get(
     "/download/:jobId",
     requireAuth,
+    requireAdmin,
     async (req: Request, res: Response) => {
         try {
             const { jobId } = req.params;
@@ -429,15 +585,17 @@ router.get(
  * @openapi
  * /api/youtube/downloads:
  *   get:
- *     summary: List YouTube download jobs (active + recent) for the UI
+ *     summary: List YouTube download jobs (active + recent) for the UI (admin only)
  *     tags: [YouTube]
  *     responses:
  *       200:
  *         description: Array of download jobs (newest first)
+ *       403:
+ *         description: Authenticated but not an admin
  *       502:
  *         description: Sidecar unavailable
  */
-router.get("/downloads", requireAuth, async (_req: Request, res: Response) => {
+router.get("/downloads", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
     try {
         const jobs = await youtubeDownloadService.listDownloads();
         return res.json({ jobs });
@@ -451,7 +609,7 @@ router.get("/downloads", requireAuth, async (_req: Request, res: Response) => {
  * @openapi
  * /api/youtube/downloads/{jobId}:
  *   delete:
- *     summary: Cancel a YouTube download job
+ *     summary: Cancel a YouTube download job (admin only)
  *     tags: [YouTube]
  *     parameters:
  *       - in: path
@@ -462,6 +620,8 @@ router.get("/downloads", requireAuth, async (_req: Request, res: Response) => {
  *     responses:
  *       200:
  *         description: Updated job (cancelled / cancel requested)
+ *       403:
+ *         description: Authenticated but not an admin
  *       404:
  *         description: Unknown job id
  *       502:
@@ -470,6 +630,7 @@ router.get("/downloads", requireAuth, async (_req: Request, res: Response) => {
 router.delete(
     "/downloads/:jobId",
     requireAuth,
+    requireAdmin,
     async (req: Request, res: Response) => {
         try {
             const { jobId } = req.params;
