@@ -30,6 +30,10 @@ services:
       - STREAMING_ENGINE_MODE=${STREAMING_ENGINE_MODE:-}
       # Preserve Redis streams/groups across restarts unless explicitly overridden
       - REDIS_FLUSH_ON_STARTUP=${REDIS_FLUSH_ON_STARTUP:-false}
+      # Coarse feature flags for ML/recommendation subsystems (default: true)
+      - AUDIO_ANALYSIS_ENABLED=${AUDIO_ANALYSIS_ENABLED:-true}
+      - DISCOVERY_ENABLED=${DISCOVERY_ENABLED:-true}
+      - AUTO_PLAYLISTS_ENABLED=${AUTO_PLAYLISTS_ENABLED:-true}
       # Lidarr webhook callback URL - how Lidarr reaches soundspan when downloads complete
       # Default uses host.docker.internal which works on most setups with extra_hosts below
       # Override if using custom Docker networks: e.g., http://192.168.0.20:3030
