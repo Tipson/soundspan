@@ -817,12 +817,17 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             state.setRepeatOneCount(0);
 
             if (isEpisodeQueueItem(item)) {
-                // Stop the audible source right away, then flip the media
-                // state only once the episode's saved progress is known (or
-                // the lookup timed out). The progress is baked into
-                // currentPodcast BEFORE the audio load, so the load effect
-                // starts the stream at the resume position deterministically
-                // instead of racing a post-load seek whose lock expires.
+                // Advance the queue cursor immediately so a rapid second
+                // skip resolves from the episode's index instead of the
+                // stale one (which would land on the same episode and make
+                // it impossible to skip past). Stop the audible source
+                // right away, then flip the media state only once the
+                // episode's saved progress is known (or the lookup timed
+                // out). The progress is baked into currentPodcast BEFORE
+                // the audio load, so the load effect starts the stream at
+                // the resume position deterministically instead of racing
+                // a post-load seek whose lock expires.
+                state.setCurrentIndex(index);
                 playbackState.setIsPlaying(false);
 
                 let started = false;
@@ -848,7 +853,6 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     });
                     if (!start) return;
                     const currentPlayback = playbackRef.current;
-                    state.setCurrentIndex(index);
                     state.setCurrentTrack(null);
                     state.setCurrentAudiobook(null);
                     state.setPlaybackType("podcast");
@@ -1191,11 +1195,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.setQueue([episodeItem, ...validTracks]);
                 state.setCurrentIndex(0);
                 if (state.isShuffle) {
+                    // Seed a real shuffle order (the playing episode keeps
+                    // position 0); identity indices would silently play the
+                    // "shuffled" queue sequentially.
                     state.setShuffleIndices(
-                        Array.from(
-                            { length: validTracks.length + 1 },
-                            (_, i) => i
-                        )
+                        generateShuffleIndices(validTracks.length + 1, 0)
                     );
                 }
                 if (shouldToastSuccess) {
@@ -1232,10 +1236,14 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.setShuffleIndices((prevIndices) => {
                     if (prevIndices.length === 0) return prevIndices;
 
-                    const queueLen = state.queue.length; // length before append
+                    // Non-empty shuffle indices cover every queue position,
+                    // so the pre-append queue length equals
+                    // prevIndices.length. Deriving it inside the functional
+                    // updater keeps rapid back-to-back adds from stamping
+                    // overlapping indices off a stale queue snapshot.
                     const insertedIndices = Array.from(
                         { length: insertCount },
-                        (_, offset) => queueLen + offset
+                        (_, offset) => prevIndices.length + offset
                     );
                     const newIndices = [...prevIndices, ...insertedIndices];
                     queueDebugLog("addTracksToQueue() shuffleIndices appended", {
@@ -1527,13 +1535,18 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            const queueLenBeforeAppend = state.queue.length;
             state.setQueue((prev) => [...prev, item]);
             if (state.isShuffle) {
+                // Compute the appended queue index inside the functional
+                // updater: non-empty shuffle indices cover every queue
+                // position, so the new item's index is prevIndices.length.
+                // A snapshot taken outside the updater goes stale when two
+                // adds land before a re-render, stamping the same index
+                // twice (one queue position would then never play).
                 state.setShuffleIndices((prevIndices) =>
                     prevIndices.length === 0
                         ? prevIndices
-                        : [...prevIndices, queueLenBeforeAppend]
+                        : [...prevIndices, prevIndices.length]
                 );
             }
             toast.success(`Added "${episode.title}" to queue`);
@@ -1633,42 +1646,33 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            state.setQueue((prev) => {
-                const newQueue = [...prev];
-                newQueue.splice(index, 1);
+            const newQueue = state.queue.filter((_, i) => i !== index);
+            state.setQueue(newQueue);
 
-                if (index < state.currentIndex) {
-                    state.setCurrentIndex((prevIndex) => prevIndex - 1);
-                } else if (
-                    index === state.currentIndex &&
-                    index === newQueue.length
-                ) {
+            if (index < state.currentIndex) {
+                state.setCurrentIndex((prevIndex) => prevIndex - 1);
+            } else if (
+                index === state.currentIndex &&
+                index === newQueue.length
+            ) {
+                const first = newQueue[0];
+                if (!first) {
+                    // The queue emptied out: keep a playing episode's
+                    // position before playback stops.
+                    persistEpisodeProgressBeforeSwitch(null);
                     state.setCurrentIndex(0);
-                    const first = newQueue[0];
-                    if (!first) {
-                        state.setCurrentTrack(null);
-                        state.setCurrentPodcast(null);
-                        playbackRef.current.setIsPlaying(false);
-                    } else if (isEpisodeQueueItem(first)) {
-                        state.setCurrentTrack(null);
-                        state.setPlaybackType("podcast");
-                        state.setCurrentPodcast({
-                            id: first.id,
-                            title: first.title,
-                            podcastTitle: first.podcastTitle,
-                            coverUrl: first.coverUrl,
-                            duration: first.duration,
-                            progress: null,
-                        });
-                    } else {
-                        state.setCurrentTrack(first);
-                        state.setPlaybackType("track");
-                        state.setCurrentPodcast(null);
-                    }
+                    state.setCurrentTrack(null);
+                    state.setCurrentPodcast(null);
+                    playbackRef.current.setIsPlaying(false);
+                } else {
+                    // Removing the currently playing LAST item: hand off to
+                    // the shared start path so the outgoing episode's
+                    // progress is persisted and the new current item (track
+                    // or episode) resumes from its saved progress instead
+                    // of restarting at 0:00.
+                    startQueueItemAtIndex(0, first);
                 }
-
-                return newQueue;
-            });
+            }
 
             // Update shuffle indices: remove the index and shift remaining
             if (state.isShuffle) {
@@ -1679,7 +1683,12 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 });
             }
         },
-        [state, getActiveListenTogetherSession]
+        [
+            state,
+            getActiveListenTogetherSession,
+            persistEpisodeProgressBeforeSwitch,
+            startQueueItemAtIndex,
+        ]
     );
 
     const clearQueue = useCallback(() => {
