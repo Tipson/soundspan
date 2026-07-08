@@ -1,5 +1,11 @@
 import { Request, Response } from "express";
 
+// The route reports a pepper fingerprint via utils/apiKeyHash, which resolves
+// its pepper from env; set one before the module under test loads.
+process.env.SETTINGS_ENCRYPTION_KEY =
+    process.env.SETTINGS_ENCRYPTION_KEY ||
+    "admin-secrets-status-test-key-123456";
+
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (_req: Request, _res: Response, next: () => void) => next(),
     requireAdmin: (_req: Request, _res: Response, next: () => void) => next(),
@@ -24,6 +30,7 @@ jest.mock("../../utils/db", () => ({
         user: { findMany: jest.fn() },
         userSettings: { findMany: jest.fn() },
         systemSettings: { findMany: jest.fn() },
+        apiKey: { findMany: jest.fn() },
     },
 }));
 
@@ -35,6 +42,7 @@ const mockUserSettingsFindMany =
     prisma.userSettings.findMany as unknown as jest.Mock;
 const mockSystemSettingsFindMany =
     prisma.systemSettings.findMany as unknown as jest.Mock;
+const mockApiKeyFindMany = prisma.apiKey.findMany as unknown as jest.Mock;
 
 function getHandler(path: string, method: "get" | "delete") {
     const layer = (router as any).stack.find(
@@ -90,6 +98,12 @@ describe("admin secrets-status route", () => {
         mockSystemSettingsFindMany.mockResolvedValue([
             { lidarrApiKey: "v2:x:y:z:w", openaiApiKey: "33:44" },
         ]);
+        // 2 hashed + 1 legacy plaintext API key.
+        mockApiKeyFindMany.mockResolvedValue([
+            { key: "hmac:" + "a".repeat(64) },
+            { key: "b".repeat(64) }, // legacy plaintext
+            { key: "hmac:" + "c".repeat(64) },
+        ]);
 
         const res = createRes();
         await handler({} as any, res);
@@ -109,6 +123,16 @@ describe("admin secrets-status route", () => {
                     systemSettings: { total: 2, v2: 1, legacy: 1 },
                 },
             },
+            apiKeys: {
+                total: 3,
+                hashed: 2,
+                plaintext: 1,
+                migrationComplete: false,
+                // 8-hex pepper-VALUE fingerprint: comparing it against the
+                // backfill script's logged fingerprint catches a script-env vs
+                // app-env pepper mismatch before --apply writes anything.
+                pepperFingerprint: expect.stringMatching(/^[0-9a-f]{8}$/),
+            },
         });
         // Only counts are returned — never the secret values themselves.
         expect(JSON.stringify(res.body)).not.toContain("v2:salt:iv:tag:ct");
@@ -122,6 +146,9 @@ describe("admin secrets-status route", () => {
         mockSystemSettingsFindMany.mockResolvedValue([
             { lidarrApiKey: "v2:e:f:g:h" },
         ]);
+        mockApiKeyFindMany.mockResolvedValue([
+            { key: "hmac:" + "a".repeat(64) },
+        ]);
 
         const res = createRes();
         await handler({} as any, res);
@@ -129,6 +156,8 @@ describe("admin secrets-status route", () => {
         expect(res.body.settingsCipher.legacy).toBe(0);
         expect(res.body.settingsCipher.v2).toBe(2);
         expect(res.body.settingsCipher.migrationComplete).toBe(true);
+        expect(res.body.apiKeys.plaintext).toBe(0);
+        expect(res.body.apiKeys.migrationComplete).toBe(true);
     });
 
     it("returns 500 when a query fails", async () => {
