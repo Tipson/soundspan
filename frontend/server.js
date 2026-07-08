@@ -111,13 +111,17 @@ const subsonicRestProxy = createBackendProxy({
 
 // Streams /api traffic straight to the backend (no body buffering or
 // gzip stripping, unlike the Next route-handler fallback in
-// app/api/[...path]/route.ts).
+// app/api/[...path]/route.ts). Enforces the configurable
+// time-to-first-byte budget (PROXY_REQUEST_TIMEOUT_MS /
+// PROXY_IMPORT_PREVIEW_TIMEOUT_MS) with the 504 UPSTREAM_TIMEOUT
+// contract; streaming is untimed once the backend starts responding.
 const apiProxy = createBackendProxy({
     name: "api-proxy",
     target: backendUrl,
     logger: serverLogger,
     errorMessage: "API backend unavailable",
     errorCode: "API_PROXY_UNAVAILABLE",
+    firstByteTimeout: true,
 });
 
 app.prepare().then(() => {
