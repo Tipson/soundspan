@@ -38,12 +38,13 @@ jest.mock("../../utils/db", () => ({
 }));
 
 const mockLoggerDebug = jest.fn();
+const mockLoggerWarn = jest.fn();
 const mockLoggerError = jest.fn();
 jest.mock("../../utils/logger", () => ({
     logger: {
         debug: (...args: unknown[]) => mockLoggerDebug(...args),
         info: jest.fn(),
-        warn: jest.fn(),
+        warn: (...args: unknown[]) => mockLoggerWarn(...args),
         error: (...args: unknown[]) => mockLoggerError(...args),
     },
 }));
@@ -182,6 +183,19 @@ describe("webhooks routes runtime", () => {
         expect(invalidRes.statusCode).toBe(401);
     });
 
+    it("accepts but loudly warns when no webhook secret is configured", async () => {
+        // beforeEach configures lidarrWebhookSecret: null.
+        const req = { body: { eventType: "Test" }, headers: {} } as any;
+        const res = createRes();
+
+        await postLidarr(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(mockLoggerWarn).toHaveBeenCalledWith(
+            expect.stringContaining("WITHOUT authentication")
+        );
+    });
+
     it("handles Grab events, starts cleaner when matched, and ignores missing ids", async () => {
         mockOnDownloadGrabbed.mockResolvedValueOnce({ matched: true });
 
@@ -267,6 +281,13 @@ describe("webhooks routes runtime", () => {
             expect.any(String)
         );
 
+        // Unmatched (external) downloads must NOT enqueue an unconditional
+        // full-library scan — that was an abusable DoS on an unauthenticated,
+        // unthrottled endpoint (F32). They DO still get a scan, but a
+        // COALESCED one: a stable Bull jobId collapses any burst of unmatched
+        // webhooks into a single queued scan, so external Lidarr imports keep
+        // appearing without manual intervention.
+        mockScanQueueAdd.mockClear();
         mockOnDownloadComplete.mockResolvedValueOnce({ jobId: null });
         const externalReq = {
             body: {
@@ -280,10 +301,20 @@ describe("webhooks routes runtime", () => {
         const externalRes = createRes();
         await postLidarr(externalReq, externalRes);
 
-        expect(mockScanQueueAdd).toHaveBeenLastCalledWith("scan", {
-            type: "full",
-            source: "lidarr-import-external",
-        });
+        expect(externalRes.statusCode).toBe(200);
+        expect(mockScanQueueAdd).toHaveBeenCalledTimes(1);
+        expect(mockScanQueueAdd).toHaveBeenCalledWith(
+            "scan",
+            expect.objectContaining({
+                userId: null,
+                source: "lidarr-webhook-external",
+            }),
+            expect.objectContaining({
+                jobId: "lidarr-external-import-scan",
+                removeOnComplete: true,
+                removeOnFail: true,
+            })
+        );
 
         const noIdReq = {
             body: { eventType: "Rename" },
