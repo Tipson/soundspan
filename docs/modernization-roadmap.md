@@ -31,7 +31,7 @@ The audit found **0 true false positives** but several packaging/measurement err
 | #8 | JS toolchain: workspaces + pinned Node (pre-existing issue) | 0 / 0 / 2 |
 | #10 | CI security scanning & supply-chain guardrails (Wave 0) | 0 / 0 / 3 |
 | #11 | Secrets & credential storage hardening | 4 / 0 / 4 |
-| #12 | Request-path auth & egress hardening | 4 / 0 / 8 |
+| #12 | Request-path auth & egress hardening | 5 / 0 / 8 |
 | #13 | Background-job idempotency, retries & reconciler dedup | 2 / 1 / 8 |
 | #14 | Backend error-handling unification & route god-file decomposition | 0 / 0 / 6 |
 | #15 | Type-safety ratchet (backend any + frontend strict + typed API) | 0 / 1 / 2 |
@@ -90,7 +90,7 @@ _(includes F54; dimension tallies double-count the F2/F44 and F17/F47 duplicate 
 | [F30](#f30) | ✅ | security | high | S | low |  | #12 | Internal CLAP-callback endpoints fail open and use non-constant-time secret comparison |
 | [F31](#f31) | ⬜ | security | high | M | medium | ⚠️ | #12 | FastAPI sidecars have zero inbound authentication and use unvalidated user_id as a file… |
 | [F32](#f32) | ⬜ | security | high | M | low |  | #12 | Lidarr webhook is unauthenticated and unthrottled by default and parses payload as unty… |
-| [F33](#f33) | ⬜ | security | high | M | medium |  | #12 | SSRF guard blocks only literal private hosts — DNS rebinding to an internal IP bypasses… |
+| [F33](#f33) | ✅ | security | high | M | medium |  | #12 | SSRF guard blocks only literal private hosts — DNS rebinding to an internal IP bypasses… |
 | [F34](#f34) | ✅ | security | medium | S | low |  | #12 | CORS allows every origin unconditionally despite an allowlist knob, while credentials:t… |
 | [F35](#f35) | ✅ | security | medium→low | S | medium |  | #12 | Helmet ships without HSTS/CSP, session cookie 'secure' is opt-in via string env, and tr… |
 | [F36](#f36) | ✅ | security | medium→low | S | low |  | #11 | jwt.verify omits the algorithms pin and /refresh re-reads the secret inline as `as any` |
@@ -603,7 +603,9 @@ _(includes F54; dimension tallies double-count the F2/F44 and F17/F47 duplicate 
 
 ### F33 — SSRF guard blocks only literal private hosts — DNS rebinding to an internal IP bypasses it
 
-**⬜ open** · dimension: security · severity: high · effort: M · risk: medium · epic: #12
+**✅ complete** (`feat/f33-ssrf-guard`) · dimension: security · severity: high · effort: M · risk: medium · epic: #12
+
+> **Fix shipped.** Added async `resolveSafeOutboundUrl` / `resolveSafeOutboundRedirectTarget` (`outboundUrlSafety.ts`) that DNS-resolve the host and range-check every resolved IP, reusing the shared private/loopback/link-local predicates — which now cover **all of `127.0.0.0/8` and `0.0.0.0/8`** rather than only the canonical literals (a DNS answer of `127.0.0.53` previously passed the range check). Applied at the actual fetch entry points: `rss-parser.parseFeed` **and each feed redirect hop** (followed manually with per-hop re-validation), `imageProxy.fetchExternalImage` + its redirect hops, and `podcastCache.downloadCover` (redirects hard-disabled there). The systemSettings admin connection test deliberately keeps the **string check only** — those endpoints are admin-only and legitimately target Docker/LAN hosts (`http://lidarr:8686`) in the documented compose deployment. The string-only `normalizeSafeOutboundUrl` stays as the sync pre-check at non-fetch validation sites (no broad async ripple). Tests mock `dns/promises` in every touched suite (no live-DNS dependence). **Residual (noted in code):** check-time resolution leaves a DNS-rebinding window; pinning the resolved IP into the request agent is a larger follow-up. The YouTube route stays out of scope (backend never fetches the user URL, per the audit).
 
 **Files:** `backend/src/services/outboundUrlSafety.ts:41`, `backend/src/services/outboundUrlSafety.ts:58`, `backend/src/services/imageProxy.ts:41`, `backend/src/services/youtubeDownload.ts:185`
 

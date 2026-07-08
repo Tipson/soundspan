@@ -21,6 +21,11 @@ const WEBHOOK_URL_ALIASES = [BRAND_SLUG];
 const ADMIN_TEST_URL_ERROR = "URL must be a valid public HTTP(S) URL";
 
 function normalizeAdminTestUrl(url: string): string | null {
+    // Deliberately the STRING check only (no DNS resolution): admin connection
+    // tests legitimately target Docker-network and LAN hostnames
+    // (http://lidarr:8686 resolves to 172.16/12 in the documented compose
+    // deployment), the endpoints are admin-only, and an admin probing their own
+    // integrations is not the SSRF vector the DNS-resolving guard exists for.
     const normalizedUrl = normalizeSafeOutboundUrl(url);
 
     return normalizedUrl ? normalizedUrl.replace(/\/+$/, "") : null;

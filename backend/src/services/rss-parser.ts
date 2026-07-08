@@ -1,7 +1,13 @@
 import Parser from "rss-parser";
-import axios from "axios";
+import axios, { type AxiosResponse } from "axios";
 import { logger } from "../utils/logger";
-import { normalizeSafeOutboundUrl } from "./outboundUrlSafety";
+import {
+    resolveSafeOutboundUrl,
+    resolveSafeOutboundRedirectTarget,
+} from "./outboundUrlSafety";
+
+/** Redirect-hop cap for feed fetches (matches the image proxy's limit). */
+const MAX_FEED_REDIRECTS = 5;
 
 interface RSSPodcast {
     title: string;
@@ -92,23 +98,59 @@ class RSSParserService {
         options: RSSFeedRequestOptions = {}
     ): Promise<ParsedPodcastFeed> {
         try {
-            const safeFeedUrl = normalizeSafeOutboundUrl(feedUrl);
+            const safeFeedUrl = await resolveSafeOutboundUrl(feedUrl);
             if (!safeFeedUrl) {
                 throw new Error("Invalid or private feed URL");
             }
 
             logger.debug(`\n [RSS PARSER] Fetching feed: ${safeFeedUrl}`);
-            const response = await axios.get<string>(safeFeedUrl, {
-                responseType: "text",
-                timeout: 60000,
-                headers: {
-                    Accept: "application/rss+xml",
-                    "User-Agent": "rss-parser",
-                    ...(options.headers ?? {}),
-                },
-                validateStatus: (status) =>
-                    (status >= 200 && status < 300) || status === 304,
-            });
+            // Follow redirects manually so EVERY hop is re-validated by the
+            // DNS-resolving SSRF guard — axios' built-in following would fetch
+            // a public feed's 302 to http://10.0.0.5/ without any check.
+            let currentUrl = safeFeedUrl;
+            let response: AxiosResponse<string>;
+            for (let hop = 0; ; hop += 1) {
+                response = await axios.get<string>(currentUrl, {
+                    responseType: "text",
+                    timeout: 60000,
+                    maxRedirects: 0,
+                    headers: {
+                        Accept: "application/rss+xml",
+                        "User-Agent": "rss-parser",
+                        ...(options.headers ?? {}),
+                    },
+                    validateStatus: (status) =>
+                        (status >= 200 && status < 300) ||
+                        status === 304 ||
+                        (status >= 300 && status < 400),
+                });
+                if (response.status < 300 || response.status === 304) {
+                    break;
+                }
+                if (hop >= MAX_FEED_REDIRECTS) {
+                    throw new Error("Too many redirects");
+                }
+                const location = this.getHeaderValue(
+                    response.headers,
+                    "location"
+                );
+                if (!location) {
+                    throw new Error("Redirect without a Location header");
+                }
+                const nextUrl = await resolveSafeOutboundRedirectTarget(
+                    location,
+                    currentUrl
+                );
+                if (!nextUrl) {
+                    throw new Error(
+                        "Invalid or private feed redirect target"
+                    );
+                }
+                logger.debug(
+                    ` [RSS PARSER] Following feed redirect (${response.status}) -> ${nextUrl}`
+                );
+                currentUrl = nextUrl;
+            }
 
             const feedMetadata = {
                 etag: this.getHeaderValue(response.headers, "etag"),
