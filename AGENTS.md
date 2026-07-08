@@ -50,16 +50,18 @@ There is **no root install** — `backend/`, `frontend/`, and `packages/media-me
 
 ```bash
 # 1. Build the shared contract FIRST. The backend depends on it via a `file:`
-#    path, which npm COPIES (not symlinks) at install time — so its dist/ must
-#    exist before you install the backend, or the copy will lack it.
+#    path, which npm SYMLINKS at install time — so anything that loads the
+#    contract at runtime needs its dist/ to exist. The backend's pretest/
+#    prebuild scripts compile it automatically, but other entry points
+#    (e.g. `npm run dev`) do not.
 npm --prefix packages/media-metadata-contract run build
 
-# 2. Install the apps (their copy of the contract now includes dist/).
+# 2. Install the apps (the symlinked contract now includes dist/).
 npm --prefix backend install
 npm --prefix frontend install
 ```
 
-> Gotcha: if `npm --prefix backend test` reports `Cannot find module '@soundspan/media-metadata-contract'`, the backend was installed before the contract's `dist/` existed. Rebuild it (`npm --prefix packages/media-metadata-contract run build`) and re-run `npm --prefix backend install`.
+> Gotcha: if the backend reports `Cannot find module '@soundspan/media-metadata-contract'`, the contract's `dist/` doesn't exist yet (the symlinked package is present but unbuilt). Build it with `npm --prefix packages/media-metadata-contract run build`.
 
 ### Reproduce the CI gates locally (run before every PR)
 
