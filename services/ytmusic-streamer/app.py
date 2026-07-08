@@ -2292,10 +2292,12 @@ async def yt_proxy_stream(
 
 
 class YtDownloadRequest(BaseModel):
+    # NOTE: no output_dir field — the write path is server configuration
+    # (YT_DOWNLOAD_DIR). Accepting a caller-chosen path would let any client
+    # write downloads to an arbitrary directory.
     video_id: str
     format: str = "mp3"
     quality: str = "HIGH"
-    output_dir: Optional[str] = None  # defaults to YT_DOWNLOAD_DIR
     # Optional grouping label (e.g. the playlist/channel title) so the
     # downloads view can group a bulk run's jobs by where they came from.
     source: Optional[str] = None
@@ -2534,7 +2536,7 @@ async def yt_download(req: YtDownloadRequest):
     No OAuth required.
     """
     video_id = req.video_id
-    output_dir = req.output_dir or YT_DOWNLOAD_DIR
+    output_dir = YT_DOWNLOAD_DIR
     audio_format = req.format.lower()
 
     if audio_format not in ("mp3", "opus", "flac", "m4a"):

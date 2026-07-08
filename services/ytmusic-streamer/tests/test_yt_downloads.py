@@ -100,10 +100,11 @@ async def test_cancel_unknown_job_404(client):
 
 
 @pytest.mark.anyio
-async def test_post_download_records_source(client, tmp_path):
+async def test_post_download_records_source(client, tmp_path, monkeypatch):
     import app as app_module
 
     app_module._yt_download_jobs.clear()
+    monkeypatch.setattr(app_module, "YT_DOWNLOAD_DIR", str(tmp_path))
 
     async def _noop(*args, **kwargs):
         return None
@@ -116,10 +117,60 @@ async def test_post_download_records_source(client, tmp_path):
                 "format": "opus",
                 "quality": "HIGH",
                 "source": "My Channel",
-                "output_dir": str(tmp_path),
             },
         )
 
     assert resp.status_code == 200
     job_id = resp.json()["job_id"]
     assert app_module._yt_download_jobs[job_id]["source"] == "My Channel"
+
+
+def test_download_request_model_has_no_output_dir():
+    """The write path is server config (YT_DOWNLOAD_DIR); callers must not
+    be able to point downloads at an arbitrary directory."""
+    import app as app_module
+
+    assert "output_dir" not in app_module.YtDownloadRequest.model_fields
+
+
+@pytest.mark.anyio
+async def test_post_download_ignores_client_output_dir(
+    client, tmp_path, monkeypatch
+):
+    """A client-supplied output_dir is ignored: the idempotency check (and
+    the download itself) always target the server-configured
+    YT_DOWNLOAD_DIR, never a caller-chosen path."""
+    import app as app_module
+
+    app_module._yt_download_jobs.clear()
+    download_dir = tmp_path / "downloads"
+    download_dir.mkdir()
+    evil_dir = tmp_path / "evil"
+    evil_dir.mkdir()
+    monkeypatch.setattr(app_module, "YT_DOWNLOAD_DIR", str(download_dir))
+
+    # Seed a completed download in the configured dir. If the endpoint
+    # honored the caller's (empty) output_dir it would miss this file and
+    # queue a fresh download instead of reporting completed.
+    existing = download_dir / "Song [vidoutdirAA].mp3"
+    existing.write_bytes(b"x")
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    with patch("app._run_yt_download_job", _noop):
+        resp = await client.post(
+            "/yt/download",
+            json={
+                "video_id": "vidoutdirAA",
+                "format": "mp3",
+                "quality": "HIGH",
+                "output_dir": str(evil_dir),
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "completed"
+    job = app_module._yt_download_jobs[body["job_id"]]
+    assert job["file_path"] == str(existing)
