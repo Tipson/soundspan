@@ -134,7 +134,15 @@ describe("listen together socket runtime behavior", () => {
             }
         }
 
+        // Mutable config mock so tests can exercise ALLOWED_ORIGINS allowlist
+        // semantics ([] = unset → allow all, matching the Express app).
+        const configMock = {
+            nodeEnv: "production",
+            allowedOrigins: [] as boolean | string[],
+        };
+
         jest.doMock("socket.io", () => ({ Server: MockServer }));
+        jest.doMock("../../config", () => ({ config: configMock }));
         jest.doMock("jsonwebtoken", () => ({
             __esModule: true,
             default: {
@@ -188,6 +196,7 @@ describe("listen together socket runtime behavior", () => {
         return {
             getIO: () => ioInstance,
             getServerOptions: () => serverOptions,
+            configMock,
             namespace,
             createIORedisClient,
             adapterPubClient,
@@ -278,6 +287,45 @@ describe("listen together socket runtime behavior", () => {
         expect(mocks.adapterSubClient.disconnect).toHaveBeenCalledTimes(1);
         expect(mocks.mutationLockClient.disconnect).toHaveBeenCalledTimes(1);
         expect(socketService.getListenTogetherIO()).toBeNull();
+    });
+
+    it("enforces the Express ALLOWED_ORIGINS allowlist semantics for socket CORS", () => {
+        process.env = {
+            ...originalEnv,
+            JWT_SECRET: "test-secret",
+            LISTEN_TOGETHER_STATE_SYNC_ENABLED: "false",
+        };
+        const mocks = setupListenTogetherSocketMocks();
+
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const socketService = require("../listenTogetherSocket");
+        socketService.setupListenTogetherSocket({
+            on: () => undefined,
+        } as any);
+
+        const corsOptions = mocks.getServerOptions().cors;
+        expect(corsOptions.credentials).toBe(true);
+
+        const evaluate = (origin?: string) => {
+            let allowed: unknown;
+            corsOptions.origin(origin, (_err: unknown, allow?: unknown) => {
+                allowed = allow;
+            });
+            return allowed;
+        };
+
+        // ALLOWED_ORIGINS unset ([]) → allow all origins, matching index.ts.
+        expect(evaluate("https://anything.example")).toBe(true);
+        // Requests with no Origin header (same-origin) are always allowed.
+        expect(evaluate(undefined)).toBe(true);
+
+        // A configured allowlist is enforced.
+        mocks.configMock.allowedOrigins = ["https://app.example"];
+        expect(evaluate("https://app.example")).toBe(true);
+        expect(evaluate("https://evil.example")).toBe(false);
+        expect(evaluate(undefined)).toBe(true);
+
+        socketService.shutdownListenTogetherSocket();
     });
 
     it("handles join, playback, queue, ready, ping, and leave socket events with expected acks", async () => {

@@ -1154,6 +1154,55 @@ describe("library cover-art proxy compatibility", () => {
         existsSpy.mockRestore();
     });
 
+    it("enforces the ALLOWED_ORIGINS allowlist on cover art CORS headers", async () => {
+        const { config } = jest.requireMock("../../config") as {
+            config: Record<string, unknown>;
+        };
+        config.allowedOrigins = ["https://allowed.example"];
+        config.nodeEnv = "production";
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
+
+        try {
+            const deniedReq = {
+                query: { url: "native:albums/native-query.jpg" },
+                params: {},
+                headers: { origin: "https://evil.example" },
+            } as any;
+            const deniedRes = createRes();
+            await coverArtHandler(deniedReq, deniedRes);
+            const deniedHeaders =
+                deniedRes.sendFile.mock.calls[0][1].headers;
+            expect(deniedHeaders).not.toHaveProperty(
+                "Access-Control-Allow-Origin"
+            );
+            expect(deniedHeaders).not.toHaveProperty(
+                "Access-Control-Allow-Credentials"
+            );
+
+            const allowedReq = {
+                query: { url: "native:albums/native-query.jpg" },
+                params: {},
+                headers: { origin: "https://allowed.example" },
+            } as any;
+            const allowedRes = createRes();
+            await coverArtHandler(allowedReq, allowedRes);
+            expect(allowedRes.sendFile).toHaveBeenCalledWith(
+                "/tmp/covers/albums/native-query.jpg",
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        "Access-Control-Allow-Origin":
+                            "https://allowed.example",
+                        "Access-Control-Allow-Credentials": "true",
+                    }),
+                })
+            );
+        } finally {
+            delete config.allowedOrigins;
+            delete config.nodeEnv;
+            existsSpy.mockRestore();
+        }
+    });
+
     it("serves canonicalized legacy native query and id paths and backfills album cover urls", async () => {
         const existsSpy = jest.spyOn(fs, "existsSync").mockImplementation((candidate) =>
             String(candidate).startsWith("/tmp/covers/albums/")

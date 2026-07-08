@@ -15,6 +15,7 @@ import fs from "fs";
 
 // Static imports for performance (avoid dynamic imports in hot paths)
 import { config } from "../config";
+import { isOriginAllowed } from "../utils/cors";
 import { fanartService } from "../services/fanart";
 import { deezerService } from "../services/deezer";
 import { imageProviderService } from "../services/imageProvider";
@@ -796,14 +797,33 @@ const buildMultiTrackRadio = async (
     return { trackIds: resultIds, preserveInputOrder: true };
 };
 
-const applyCoverArtCorsHeaders = (res: ExpressResponse, origin?: string) => {
-    if (origin) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-    } else {
-        res.setHeader("Access-Control-Allow-Origin", "*");
+// Cover art reflects the request Origin with credentials only when it passes
+// the same ALLOWED_ORIGINS allowlist the Express app enforces (utils/cors.ts);
+// unlisted origins get no CORS headers (still served, like the cors
+// middleware's deny). No allowlist configured → all origins allowed.
+const buildCoverArtCorsHeaders = (
+    origin?: string
+): Record<string, string> => {
+    const headers: Record<string, string> = {
+        "Cross-Origin-Resource-Policy": "cross-origin",
+    };
+    if (!origin) {
+        headers["Access-Control-Allow-Origin"] = "*";
+    } else if (
+        isOriginAllowed(origin, config.allowedOrigins, config.nodeEnv)
+    ) {
+        headers["Access-Control-Allow-Origin"] = origin;
+        headers["Access-Control-Allow-Credentials"] = "true";
     }
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    return headers;
+};
+
+const applyCoverArtCorsHeaders = (res: ExpressResponse, origin?: string) => {
+    for (const [name, value] of Object.entries(
+        buildCoverArtCorsHeaders(origin)
+    )) {
+        res.setHeader(name, value);
+    }
 };
 
 const sendResizedNativeCoverResponse = (
@@ -4224,18 +4244,11 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
                 }
 
                 // Serve the file directly
-                const requestOrigin = req.headers.origin;
                 const headers: Record<string, string> = {
                     "Content-Type": "image/jpeg", // Assume JPEG for now
                     "Cache-Control": COVER_ART_IMAGE_CACHE_CONTROL,
-                    "Cross-Origin-Resource-Policy": "cross-origin",
+                    ...buildCoverArtCorsHeaders(req.headers.origin),
                 };
-                if (requestOrigin) {
-                    headers["Access-Control-Allow-Origin"] = requestOrigin;
-                    headers["Access-Control-Allow-Credentials"] = "true";
-                } else {
-                    headers["Access-Control-Allow-Origin"] = "*";
-                }
 
                 return res.sendFile(nativeCacheHit.cachePath, {
                     headers,
@@ -4294,18 +4307,11 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
                     }
 
                     // Serve the file directly
-                    const requestOrigin = req.headers.origin;
                     const headers: Record<string, string> = {
                         "Content-Type": "image/jpeg",
                         "Cache-Control": COVER_ART_IMAGE_CACHE_CONTROL,
-                        "Cross-Origin-Resource-Policy": "cross-origin",
+                        ...buildCoverArtCorsHeaders(req.headers.origin),
                     };
-                    if (requestOrigin) {
-                        headers["Access-Control-Allow-Origin"] = requestOrigin;
-                        headers["Access-Control-Allow-Credentials"] = "true";
-                    } else {
-                        headers["Access-Control-Allow-Origin"] = "*";
-                    }
 
                     return res.sendFile(nativeCacheHit.cachePath, {
                         headers,

@@ -13,6 +13,8 @@ import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
+import { config } from "../config";
+import { isOriginAllowed } from "../utils/cors";
 import { createIORedisClient } from "../utils/ioredis";
 import { listenTogetherClusterSync } from "./listenTogetherClusterSync";
 import { listenTogetherStateStore } from "./listenTogetherStateStore";
@@ -484,7 +486,36 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
     io = new Server(httpServer, {
         path: "/socket.io/listen-together",
         cors: {
-            origin: (_origin, cb) => cb(null, true), // Same CORS policy as Express
+            // Same ALLOWED_ORIGINS allowlist semantics as the Express app
+            // (utils/cors.ts): no allowlist configured → allow all origins
+            // (self-hosted default); a configured allowlist is enforced.
+            //
+            // Deny here means CORS headers are OMITTED, not that the
+            // handshake is rejected: engine.io feeds this into the `cors`
+            // middleware, whose dynamic-origin deny path calls next() with
+            // no error (engine.io only aborts on a middleware error). So
+            // handshakes proxied same-origin through the frontend server
+            // (browser never applies CORS) keep working regardless of the
+            // allowlist; only genuinely cross-origin browsers to unlisted
+            // origins are blocked, by the browser, for lack of an ACAO
+            // header — matching the Express layer exactly.
+            //
+            // Scope: CORS only governs the HTTP long-polling transport.
+            // WebSocket connections are never subject to CORS, so a
+            // cross-site page can open the handshake — but it cannot
+            // authenticate: auth is a JWT supplied by application JS in
+            // `handshake.auth.token` (never a cookie), which a cross-site
+            // attacker cannot obtain, and the auth middleware below
+            // rejects tokenless connections. Do not "harden" this with a
+            // hard allowRequest origin check — it would reject legitimate
+            // same-origin handshakes proxied through the frontend server
+            // (changeOrigin rewrites Host, so the backend cannot
+            // distinguish them from cross-origin) for no security gain.
+            origin: (origin, cb) =>
+                cb(
+                    null,
+                    isOriginAllowed(origin, config.allowedOrigins, config.nodeEnv)
+                ),
             credentials: true,
         },
         transports: LISTEN_TOGETHER_SOCKET_TRANSPORTS,

@@ -12,6 +12,8 @@ import PQueue from "p-queue";
 import { AppError, ErrorCode, ErrorCategory } from "../utils/errors";
 import { parseRangeHeader } from "../utils/rangeParser";
 import { parseFile } from "music-metadata";
+import { isOriginAllowed } from "../utils/cors";
+import { config } from "../config";
 
 // Set FFmpeg path to bundled binary
 ffmpeg.setFfmpegPath(ffmpegPath.path);
@@ -475,9 +477,17 @@ export class AudioStreamingService {
                 "Content-Length": contentLength.toString(),
             };
 
-            // Add CORS headers from request origin
-            if (req.headers.origin) {
-                headers["Access-Control-Allow-Origin"] = req.headers.origin;
+            // Reflect the request Origin with credentials only when it passes
+            // the same ALLOWED_ORIGINS allowlist the Express app enforces
+            // (utils/cors.ts). With no allowlist configured, all origins are
+            // allowed (self-hosted default); same-origin requests carry no
+            // Origin header and need no CORS headers.
+            const origin = req.headers.origin;
+            if (
+                origin &&
+                isOriginAllowed(origin, config.allowedOrigins, config.nodeEnv)
+            ) {
+                headers["Access-Control-Allow-Origin"] = origin;
                 headers["Access-Control-Allow-Credentials"] = "true";
             }
 

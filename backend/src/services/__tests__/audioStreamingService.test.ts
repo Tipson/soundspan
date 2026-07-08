@@ -28,6 +28,13 @@ const mockPrisma = {
 const mockParseFile = jest.fn();
 const mockParseRangeHeader = jest.fn();
 
+// Mutable config mock so individual tests can exercise the ALLOWED_ORIGINS
+// allowlist semantics ([] = unset → allow all, matching index.ts).
+const mockConfig = {
+    nodeEnv: "production",
+    allowedOrigins: [] as boolean | string[],
+};
+
 type FfmpegMode = "success" | "error" | "throw";
 
 const ffmpegControl: {
@@ -113,6 +120,10 @@ jest.mock("music-metadata", () => ({
 
 jest.mock("../../utils/rangeParser", () => ({
     parseRangeHeader: mockParseRangeHeader,
+}));
+
+jest.mock("../../config", () => ({
+    config: mockConfig,
 }));
 
 jest.mock("@ffmpeg-installer/ffmpeg", () => ({
@@ -234,6 +245,9 @@ describe("AudioStreamingService", () => {
 
         mockParseFile.mockResolvedValue({ format: { bitrate: 500000 } });
         mockParseRangeHeader.mockReturnValue({ ok: true, start: 0, end: 99 });
+
+        mockConfig.nodeEnv = "production";
+        mockConfig.allowedOrigins = [];
     });
 
     afterEach(() => {
@@ -749,6 +763,69 @@ describe("AudioStreamingService", () => {
                 { start: 0, end: 999 }
             );
             // pipeline() owns piping + teardown of both streams.
+            expect(mockPipeline).toHaveBeenCalledWith(stream, res);
+        });
+
+        it("reflects an allowlisted origin with credentials when ALLOWED_ORIGINS is configured", async () => {
+            const service = createService();
+            const stream = createMockReadStream();
+
+            mockConfig.allowedOrigins = ["https://client.example"];
+            mockFsStat.mockResolvedValueOnce({ size: 1000 });
+            mockFsCreateReadStream.mockReturnValueOnce(stream);
+
+            const req: any = {
+                headers: {
+                    origin: "https://client.example",
+                },
+            };
+            const res = createMockResponse();
+
+            await service.streamFileWithRangeSupport(
+                req,
+                res as any,
+                "/music/song.flac",
+                "audio/flac"
+            );
+
+            expect(res.set).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    "Access-Control-Allow-Origin": "https://client.example",
+                    "Access-Control-Allow-Credentials": "true",
+                })
+            );
+        });
+
+        it("omits CORS headers for origins outside the configured ALLOWED_ORIGINS allowlist", async () => {
+            const service = createService();
+            const stream = createMockReadStream();
+
+            mockConfig.allowedOrigins = ["https://app.example"];
+            mockFsStat.mockResolvedValueOnce({ size: 1000 });
+            mockFsCreateReadStream.mockReturnValueOnce(stream);
+
+            const req: any = {
+                headers: {
+                    origin: "https://evil.example",
+                },
+            };
+            const res = createMockResponse();
+
+            await service.streamFileWithRangeSupport(
+                req,
+                res as any,
+                "/music/song.flac",
+                "audio/flac"
+            );
+
+            const headers = res.set.mock.calls[0][0];
+            expect(headers).not.toHaveProperty("Access-Control-Allow-Origin");
+            expect(headers).not.toHaveProperty(
+                "Access-Control-Allow-Credentials"
+            );
+            // The stream itself is still served; only the credentialed CORS
+            // reflection is withheld.
+            expect(res.status).toHaveBeenCalledWith(200);
             expect(mockPipeline).toHaveBeenCalledWith(stream, res);
         });
 
