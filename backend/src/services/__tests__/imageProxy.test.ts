@@ -1,6 +1,7 @@
 import {
     fetchExternalImage,
     normalizeExternalImageUrl,
+    MAX_EXTERNAL_IMAGE_BYTES,
 } from "../imageProxy";
 
 describe("imageProxy", () => {
@@ -225,6 +226,88 @@ describe("imageProxy", () => {
                 url: "https://example.com/final-error.jpg",
                 message: "network down",
             });
+        });
+
+        it("caps proxied images at 15MB by default", () => {
+            expect(MAX_EXTERNAL_IMAGE_BYTES).toBe(15 * 1024 * 1024);
+        });
+
+        it("rejects responses whose Content-Length exceeds the byte cap without retrying", async () => {
+            global.fetch = jest.fn().mockResolvedValue(
+                new Response("tiny-body", {
+                    status: 200,
+                    headers: {
+                        "content-type": "image/jpeg",
+                        "content-length": "2048",
+                    },
+                })
+            ) as any;
+
+            const result = await fetchExternalImage({
+                url: "https://example.com/huge.jpg",
+                maxRetries: 3,
+                maxBytes: 1024,
+            });
+
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            expect(result).toEqual({
+                ok: false,
+                status: "fetch_error",
+                url: "https://example.com/huge.jpg",
+                message: expect.stringContaining("exceeds"),
+            });
+        });
+
+        it("rejects bodies that exceed the byte cap mid-stream when Content-Length is absent", async () => {
+            const chunk = new Uint8Array(512);
+            const body = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(chunk);
+                    controller.enqueue(chunk);
+                    controller.enqueue(chunk); // 1536 bytes > 1024 cap
+                    controller.close();
+                },
+            });
+            global.fetch = jest.fn().mockResolvedValue(
+                new Response(body, {
+                    status: 200,
+                    headers: { "content-type": "image/jpeg" },
+                })
+            ) as any;
+
+            const result = await fetchExternalImage({
+                url: "https://example.com/bomb.jpg",
+                maxRetries: 3,
+                maxBytes: 1024,
+            });
+
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            expect(result).toEqual({
+                ok: false,
+                status: "fetch_error",
+                url: "https://example.com/bomb.jpg",
+                message: expect.stringContaining("exceeds"),
+            });
+        });
+
+        it("accepts images under the byte cap", async () => {
+            global.fetch = jest.fn().mockResolvedValue(
+                new Response("image-bytes", {
+                    status: 200,
+                    headers: { "content-type": "image/jpeg" },
+                })
+            ) as any;
+
+            const result = await fetchExternalImage({
+                url: "https://example.com/small.jpg",
+                maxRetries: 1,
+                maxBytes: 1024,
+            });
+
+            expect(result.ok).toBe(true);
+            if (result.ok) {
+                expect(result.buffer.toString()).toBe("image-bytes");
+            }
         });
 
         it("returns final fetch_error message for unknown non-Error throw", async () => {

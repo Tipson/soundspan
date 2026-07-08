@@ -9,6 +9,7 @@ jest.mock("../../utils/logger", () => ({
 
 import sharp from "sharp";
 import {
+    COVER_ART_MAX_INPUT_PIXELS,
     COVER_ART_SIZES,
     negotiateCoverArtFormat,
     resizeCoverArt,
@@ -149,6 +150,26 @@ describe("resizeCoverArt", () => {
             contentType: "image/jpeg",
             size: null,
             format: "webp",
+        });
+
+        expect(result.resized).toBe(false);
+        expect(result.buffer).toBe(input);
+        expect(result.contentType).toBe("image/jpeg");
+    });
+
+    it("defaults the decode pixel limit to 50MP", () => {
+        expect(COVER_ART_MAX_INPUT_PIXELS).toBe(50_000_000);
+    });
+
+    it("refuses to decode images above the pixel limit and serves the original", async () => {
+        const input = await makeImage(64, 64); // 4096 px > 1000 px limit
+
+        const result = await resizeCoverArt({
+            buffer: input,
+            contentType: "image/jpeg",
+            size: 320,
+            format: "webp",
+            limitInputPixels: 1000,
         });
 
         expect(result.resized).toBe(false);

@@ -18,6 +18,14 @@ import { logger } from "../utils/logger";
 export const COVER_ART_SIZES = [64, 128, 192, 320, 512, 768] as const;
 
 /**
+ * Maximum input pixel count (width x height) accepted for decoding. Sharp's
+ * default (~268MP) is far larger than any legitimate cover art needs; an
+ * explicit 50MP ceiling makes decompression bombs fail fast at decode time
+ * instead of exhausting memory.
+ */
+export const COVER_ART_MAX_INPUT_PIXELS = 50_000_000; // ~50MP
+
+/**
  * Output format negotiated from the request Accept header.
  * "original" keeps the source encoding (jpeg/png/...).
  */
@@ -85,23 +93,32 @@ export interface CoverArtResizeResult {
 /**
  * Resizes a cover-art buffer to fit within `size` x `size` (aspect
  * preserved, never upscaled) and optionally converts it to webp.
- * Returns the original buffer untouched when `size` is null or when the
- * input cannot be decoded as an image.
+ * Returns the original buffer untouched when `size` is null, when the
+ * input cannot be decoded as an image, or when the input exceeds the
+ * decode pixel limit (`limitInputPixels`, default
+ * {@link COVER_ART_MAX_INPUT_PIXELS}).
  */
 export async function resizeCoverArt(options: {
     buffer: Buffer;
     contentType: string | null;
     size: number | null;
     format: CoverArtFormat;
+    limitInputPixels?: number;
 }): Promise<CoverArtResizeResult> {
-    const { buffer, contentType, size, format } = options;
+    const {
+        buffer,
+        contentType,
+        size,
+        format,
+        limitInputPixels = COVER_ART_MAX_INPUT_PIXELS,
+    } = options;
 
     if (size === null) {
         return { buffer, contentType, resized: false };
     }
 
     try {
-        let pipeline = sharp(buffer).resize({
+        let pipeline = sharp(buffer, { limitInputPixels }).resize({
             width: size,
             height: size,
             fit: "inside",

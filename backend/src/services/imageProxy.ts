@@ -6,6 +6,14 @@ import {
 } from "./outboundUrlSafety";
 
 /**
+ * Maximum number of bytes accepted for a proxied external image. Cover art
+ * is comfortably below this; anything larger is rejected instead of being
+ * buffered into memory (checked against Content-Length when present and
+ * enforced while the body is read).
+ */
+export const MAX_EXTERNAL_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB
+
+/**
  * Normalizes a remote image URL with the shared outbound safety policy.
  */
 export const normalizeExternalImageUrl = (
@@ -78,19 +86,62 @@ async function fetchWithSafeRedirects(options: {
 }
 
 /**
- * Executes fetchExternalImage.
+ * Reads a response body while enforcing a byte cap. Returns null (after
+ * cancelling the body stream) when the declared Content-Length or the bytes
+ * actually read exceed `maxBytes`, so oversized images are never fully
+ * buffered into memory.
+ */
+async function readBodyWithByteCap(
+    response: Response,
+    maxBytes: number
+): Promise<Buffer | null> {
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+        await response.body?.cancel().catch(() => {});
+        return null;
+    }
+
+    if (!response.body) {
+        const buffer = Buffer.from(await response.arrayBuffer());
+        return buffer.byteLength > maxBytes ? null : buffer;
+    }
+
+    const reader = response.body.getReader();
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+            await reader.cancel().catch(() => {});
+            return null;
+        }
+        chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks);
+}
+
+/**
+ * Fetches an external image with SSRF-safe URL/redirect handling, retries on
+ * transient failures, and a byte cap (`maxBytes`, default
+ * {@link MAX_EXTERNAL_IMAGE_BYTES}) enforced both via Content-Length and while
+ * reading the body. Oversized images resolve to `{ ok: false, status:
+ * "fetch_error" }` rather than throwing.
  */
 export async function fetchExternalImage(options: {
     url: string;
     timeoutMs?: number;
     maxRedirects?: number;
     maxRetries?: number;
+    maxBytes?: number;
 }): Promise<ExternalImageResult> {
     const {
         url,
         timeoutMs = 15000,
         maxRedirects = 3,
         maxRetries = 3,
+        maxBytes = MAX_EXTERNAL_IMAGE_BYTES,
     } = options;
     const safeUrl = normalizeExternalImageUrl(url);
 
@@ -143,7 +194,15 @@ export async function fetchExternalImage(options: {
                 };
             }
 
-            const buffer = Buffer.from(await response.arrayBuffer());
+            const buffer = await readBodyWithByteCap(response, maxBytes);
+            if (buffer === null) {
+                return {
+                    ok: false,
+                    url: finalUrl,
+                    status: "fetch_error",
+                    message: `Image exceeds maximum size of ${maxBytes} bytes`,
+                };
+            }
             const contentType = response.headers.get("content-type");
             const etag = crypto.createHash("md5").update(buffer).digest("hex");
 
