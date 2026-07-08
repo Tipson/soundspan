@@ -5,10 +5,12 @@ import { requireInternalSecret } from "../middleware/internalAuth";
 
 const router = Router();
 
-// Every endpoint in this router is a machine-to-machine callback authenticated
-// by the shared internal secret. Guard the whole router so the check is applied
-// uniformly and fails closed when the secret is unconfigured.
-router.use(requireInternalSecret);
+// Each machine-to-machine callback is guarded per-route (rather than with a
+// router-wide `router.use`) so that when this router is mounted in front of
+// the feature-disabled handler (index.ts, AUDIO_ANALYSIS_ENABLED=false),
+// non-callback /api/analysis paths fall through to the documented
+// FEATURE_DISABLED 404 instead of being rejected 403 by the secret check.
+// requireInternalSecret fails closed when the secret is unconfigured.
 
 /**
  * @openapi
@@ -52,7 +54,7 @@ router.use(requireInternalSecret);
  * POST /api/analysis/vibe/failure
  * Record a vibe embedding failure (called by CLAP analyzer)
  */
-router.post("/vibe/failure", async (req, res) => {
+router.post("/vibe/failure", requireInternalSecret, async (req, res) => {
     try {
         const { trackId, trackName, errorMessage, errorCode } = req.body;
 
@@ -111,7 +113,7 @@ router.post("/vibe/failure", async (req, res) => {
  * POST /api/analysis/vibe/success
  * Resolve failure records when a vibe embedding succeeds (called by CLAP analyzer)
  */
-router.post("/vibe/success", async (req, res) => {
+router.post("/vibe/success", requireInternalSecret, async (req, res) => {
     try {
         const { trackId } = req.body;
 

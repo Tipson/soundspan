@@ -109,7 +109,7 @@ function getHandler(method: "get" | "post" | "put", path: string) {
     return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// The internal vibe endpoints are guarded by the router-level
+// The internal vibe endpoints are guarded by the per-route
 // requireInternalSecret middleware. getHandler() returns only the final route
 // handler, so compose the real middleware in front of it to exercise the full
 // production chain (the handler runs only if the middleware calls next()).
