@@ -832,9 +832,8 @@ export class MusicScannerService {
         // albums that share a title but are different release groups — e.g.
         // the two self-titled Crystal Castles albums (2008 and 2010) — never
         // merge into one. Only un-tagged files (no release-group id) fall back
-        // to a title match, and only against other un-tagged (temp-rgMbid)
-        // albums, so an un-tagged file is never merged into a properly
-        // MBID-identified album of a possibly-different release.
+        // to an exact-title match within the artist, so files tagged with
+        // distinct release groups are never merged by title.
         let album = albumMbid
             ? await prisma.album.findFirst({
                   where: { artistId: artist.id, rgMbid: albumMbid },
@@ -843,25 +842,62 @@ export class MusicScannerService {
                   where: {
                       artistId: artist.id,
                       title: albumTitle,
-                      rgMbid: { startsWith: "temp-" },
                   },
               });
+
+        // rgMbid is globally unique. A tagged file may reference a release
+        // group that already exists under a DIFFERENT artist row — e.g.
+        // compilation tracks lacking an albumartist tag fall back to the
+        // per-track artist, or inconsistent "A & B" vs "B & A" albumartist
+        // tags resolve to different primary artists. The artist-scoped
+        // lookup above misses those rows, and creating a new album would
+        // violate the unique constraint — so fall back to a global lookup
+        // and reuse the existing album.
+        if (!album && albumMbid) {
+            album = await prisma.album.findUnique({
+                where: { rgMbid: albumMbid },
+            });
+        }
 
         if (!album) {
             // Create new album (un-tagged files get a unique temporary MBID).
             const rgMbid =
                 albumMbid || `temp-${Date.now()}-${Math.random()}`;
 
-            album = await prisma.album.create({
-                data: {
-                    title: albumTitle,
-                    artistId: artist.id,
-                    rgMbid,
-                    year,
-                    primaryType: "Album",
-                    location: isDiscoveryAlbum ? "DISCOVER" : "LIBRARY",
-                },
-            });
+            try {
+                album = await prisma.album.create({
+                    data: {
+                        title: albumTitle,
+                        artistId: artist.id,
+                        rgMbid,
+                        year,
+                        primaryType: "Album",
+                        location: isDiscoveryAlbum ? "DISCOVER" : "LIBRARY",
+                    },
+                });
+            } catch (error: any) {
+                // Handle concurrent scanner workers (queue concurrency is 10)
+                // creating the same release group at the same time: recover
+                // from the unique violation by re-looking the album up
+                // globally on rgMbid, mirroring the artist-create recovery
+                // above. Without this the P2002 bubbles to the per-file catch
+                // and the track gets marked UNREADABLE_METADATA.
+                if (error.code === "P2002") {
+                    const existingAlbum = await prisma.album.findUnique({
+                        where: { rgMbid },
+                    });
+                    if (existingAlbum) {
+                        logger.debug(
+                            `[SCANNER] Album create raced on rgMbid ${rgMbid}; reusing existing album "${existingAlbum.title}"`
+                        );
+                        album = existingAlbum;
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    throw error;
+                }
+            }
 
             // Extract cover art if we have an extractor
             // Re-extract if: no cover, OR native cover file is missing

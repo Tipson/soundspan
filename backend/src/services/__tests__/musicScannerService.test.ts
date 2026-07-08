@@ -379,7 +379,7 @@ describe("MusicScannerService.scanLibrary", () => {
         );
     });
 
-    it("falls back to a temp-rgMbid title match only for un-tagged files", async () => {
+    it("falls back to a title match within the artist for un-tagged files", async () => {
         const scanner = new MusicScannerService();
 
         jest.spyOn(
@@ -398,13 +398,14 @@ describe("MusicScannerService.scanLibrary", () => {
 
         await scanner.scanLibrary("/music");
 
-        // Un-tagged files match by title but only against other un-tagged
-        // (temp-rgMbid) albums, never a properly MBID-identified album.
+        // Un-tagged files match by exact title against ALL of the artist's
+        // albums (real rgMbid or temp-) so a mixed-tag folder does not split
+        // into duplicate same-titled albums. Tagged files never reach this
+        // path, so distinct release groups still never merge.
         expect(mockPrisma.album.findFirst).toHaveBeenCalledWith({
             where: {
                 artistId: "artist-1",
                 title: "Test Album",
-                rgMbid: { startsWith: "temp-" },
             },
         });
     });
@@ -1811,4 +1812,213 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
             })
         );
     });
-}); 
+});
+
+describe("MusicScannerService.processAudioFile album resolution (PR #5 regressions)", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+
+        mockStat.mockResolvedValue({
+            mtime: new Date("2026-02-01T00:00:00.000Z"),
+            size: 4096,
+        });
+
+        mockPrisma.artist.findFirst.mockResolvedValue({
+            id: "artist-b",
+            name: "Artist B",
+            normalizedName: "artist b",
+            mbid: "mbid-artist-b",
+        });
+        mockPrisma.artist.findMany.mockResolvedValue([]);
+        mockPrisma.artist.findUnique.mockResolvedValue(null);
+
+        mockPrisma.album.findFirst.mockResolvedValue(null);
+        mockPrisma.album.findUnique.mockResolvedValue(null);
+        mockPrisma.album.findMany.mockResolvedValue([]);
+        mockPrisma.album.create.mockResolvedValue({
+            id: "album-created",
+            title: "Shared Album",
+            coverUrl: null,
+            location: "LIBRARY",
+            rgMbid: "rg-created",
+        });
+        mockPrisma.album.update.mockResolvedValue({});
+
+        mockPrisma.track.upsert.mockResolvedValue({ id: "track-1" });
+        mockPrisma.downloadJob.findMany.mockResolvedValue([]);
+        mockPrisma.discoveryAlbum.findFirst.mockResolvedValue(null);
+        mockPrisma.ownedAlbum.upsert.mockResolvedValue({});
+        mockPrisma.libraryHealthRecord.deleteMany.mockResolvedValue({
+            count: 0,
+        });
+    });
+
+    function mockTaggedFile(rgMbid: string, album = "Shared Album") {
+        mockParseFile.mockResolvedValue({
+            common: {
+                title: "Track Title",
+                track: { no: 1 },
+                disk: { no: 1 },
+                albumartist: "Artist B",
+                artist: "Artist B",
+                album,
+                year: 2020,
+                musicbrainz_releasegroupid: rgMbid,
+            },
+            format: {
+                duration: 200,
+                codec: "audio/flac",
+            },
+        } as any);
+    }
+
+    it("reuses an album whose release group already exists under a different artist", async () => {
+        const scanner = new MusicScannerService() as any;
+        mockTaggedFile("rg-shared");
+
+        // Artist-scoped lookup misses (the album row belongs to artist-a),
+        // but rgMbid is globally unique so the global lookup finds it.
+        mockPrisma.album.findFirst.mockResolvedValueOnce(null);
+        mockPrisma.album.findUnique.mockResolvedValueOnce({
+            id: "album-other-artist",
+            title: "Shared Album",
+            coverUrl: null,
+            location: "LIBRARY",
+            rgMbid: "rg-shared",
+            artistId: "artist-a",
+        });
+
+        await scanner.processAudioFile(
+            "/music/Artist B/Shared Album/01 Track.flac",
+            "Artist B/Shared Album/01 Track.flac",
+            "/music"
+        );
+
+        expect(mockPrisma.album.findFirst).toHaveBeenCalledWith({
+            where: { artistId: "artist-b", rgMbid: "rg-shared" },
+        });
+        expect(mockPrisma.album.findUnique).toHaveBeenCalledWith({
+            where: { rgMbid: "rg-shared" },
+        });
+        // The existing album is reused — no create, so no P2002 crash that
+        // would mark the file UNREADABLE_METADATA on every rescan.
+        expect(mockPrisma.album.create).not.toHaveBeenCalled();
+        expect(mockPrisma.track.upsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                create: expect.objectContaining({
+                    albumId: "album-other-artist",
+                }),
+                update: expect.objectContaining({
+                    albumId: "album-other-artist",
+                }),
+            })
+        );
+    });
+
+    it("recovers from album.create P2002 by re-looking up the album globally", async () => {
+        const scanner = new MusicScannerService() as any;
+        mockTaggedFile("rg-race");
+        const conflict = new Error("unique violation on rgMbid");
+        (conflict as Error & { code: string }).code = "P2002";
+
+        mockPrisma.album.findFirst.mockResolvedValueOnce(null);
+        mockPrisma.album.findUnique
+            // Global fallback lookup before create: still nothing (a
+            // concurrent scanner worker has not committed yet).
+            .mockResolvedValueOnce(null)
+            // Recovery re-lookup after the P2002: the racing worker's row.
+            .mockResolvedValueOnce({
+                id: "album-raced",
+                title: "Shared Album",
+                coverUrl: null,
+                location: "LIBRARY",
+                rgMbid: "rg-race",
+            });
+        mockPrisma.album.create.mockRejectedValueOnce(conflict);
+
+        await scanner.processAudioFile(
+            "/music/Artist B/Shared Album/01 Track.flac",
+            "Artist B/Shared Album/01 Track.flac",
+            "/music"
+        );
+
+        expect(mockPrisma.album.create).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.album.findUnique).toHaveBeenLastCalledWith({
+            where: { rgMbid: "rg-race" },
+        });
+        // File is processed normally against the recovered album.
+        expect(mockPrisma.track.upsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                create: expect.objectContaining({ albumId: "album-raced" }),
+                update: expect.objectContaining({ albumId: "album-raced" }),
+            })
+        );
+    });
+
+    it("rethrows album.create P2002 when the recovery lookup finds nothing", async () => {
+        const scanner = new MusicScannerService() as any;
+        mockTaggedFile("rg-ghost");
+        const conflict = new Error("unique violation on rgMbid");
+        (conflict as Error & { code: string }).code = "P2002";
+
+        mockPrisma.album.findFirst.mockResolvedValueOnce(null);
+        mockPrisma.album.findUnique.mockResolvedValue(null);
+        mockPrisma.album.create.mockRejectedValueOnce(conflict);
+
+        await expect(
+            scanner.processAudioFile(
+                "/music/Artist B/Shared Album/01 Track.flac",
+                "Artist B/Shared Album/01 Track.flac",
+                "/music"
+            )
+        ).rejects.toThrow("unique violation on rgMbid");
+        expect(mockPrisma.track.upsert).not.toHaveBeenCalled();
+    });
+
+    it("matches un-tagged files to a same-titled sibling album with a real rgMbid", async () => {
+        const scanner = new MusicScannerService() as any;
+        // Un-tagged file (no musicbrainz_releasegroupid) in a folder whose
+        // tagged siblings already created a real-rgMbid album.
+        mockParseFile.mockResolvedValue({
+            common: {
+                title: "Untagged Track",
+                track: { no: 2 },
+                disk: { no: 1 },
+                albumartist: "Artist B",
+                artist: "Artist B",
+                album: "Mixed Album",
+                year: 2020,
+            },
+            format: {
+                duration: 180,
+                codec: "audio/flac",
+            },
+        } as any);
+        mockPrisma.album.findFirst.mockResolvedValueOnce({
+            id: "album-real",
+            title: "Mixed Album",
+            coverUrl: null,
+            location: "LIBRARY",
+            rgMbid: "rg-real",
+        });
+
+        await scanner.processAudioFile(
+            "/music/Artist B/Mixed Album/02 Untagged Track.flac",
+            "Artist B/Mixed Album/02 Untagged Track.flac",
+            "/music"
+        );
+
+        // Exact-title match within the artist across ALL albums — not just
+        // temp- ones — so no duplicate same-titled album is created.
+        expect(mockPrisma.album.findFirst).toHaveBeenCalledWith({
+            where: { artistId: "artist-b", title: "Mixed Album" },
+        });
+        expect(mockPrisma.album.create).not.toHaveBeenCalled();
+        expect(mockPrisma.track.upsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                create: expect.objectContaining({ albumId: "album-real" }),
+                update: expect.objectContaining({ albumId: "album-real" }),
+            })
+        );
+    });
+});
