@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     resolveAdaptivePollingInterval,
+    resolveAdminGatedPollingEnabled,
     resolveFixedPollingInterval,
     resolvePollingEnabled,
     resolvePollingJitter,
@@ -37,6 +38,19 @@ test("resolveVisibilityGatedPollingInterval pauses polling while hidden", () => 
     assert.equal(resolveVisibilityGatedPollingInterval(30_000, false), false);
     assert.equal(resolveVisibilityGatedPollingInterval(false, true), false);
     assert.equal(resolveVisibilityGatedPollingInterval(false, false), false);
+});
+
+test("resolveAdminGatedPollingEnabled only polls for admins", () => {
+    // Admin: keeps the default-enabled contract and explicit flags.
+    assert.equal(resolveAdminGatedPollingEnabled(undefined, "admin"), true);
+    assert.equal(resolveAdminGatedPollingEnabled(true, "admin"), true);
+    assert.equal(resolveAdminGatedPollingEnabled(false, "admin"), false);
+
+    // Non-admin / unauthenticated: never polls (the endpoints 403).
+    assert.equal(resolveAdminGatedPollingEnabled(undefined, "user"), false);
+    assert.equal(resolveAdminGatedPollingEnabled(true, "user"), false);
+    assert.equal(resolveAdminGatedPollingEnabled(true, undefined), false);
+    assert.equal(resolveAdminGatedPollingEnabled(true, null), false);
 });
 
 test("resolveAdaptivePollingInterval switches between active and idle cadences", () => {

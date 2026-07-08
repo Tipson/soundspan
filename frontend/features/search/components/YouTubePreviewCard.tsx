@@ -11,6 +11,11 @@ interface YouTubePreviewCardProps {
     isDownloading: boolean;
     /** Download progress percentage (0-100), or null when unknown/idle. */
     downloadProgress: number | null;
+    /**
+     * Whether the current user may download (admin-only, matching the
+     * backend gate). Playback stays available regardless.
+     */
+    canDownload: boolean;
     onPlay: () => void;
     onDownload: (format: string, quality: string) => Promise<void>;
 }
@@ -36,6 +41,7 @@ export function YouTubePreviewCard({
     isLoading,
     isDownloading,
     downloadProgress,
+    canDownload,
     onPlay,
     onDownload,
 }: YouTubePreviewCardProps) {
@@ -109,7 +115,8 @@ export function YouTubePreviewCard({
                                 Play
                             </button>
 
-                            {/* Download button with dropdown */}
+                            {/* Download button with dropdown (admin only) */}
+                            {canDownload && (
                             <div className="relative">
                                 <button
                                     onClick={() =>
@@ -153,10 +160,11 @@ export function YouTubePreviewCard({
                                     </div>
                                 )}
                             </div>
+                            )}
                         </div>
 
-                        {/* Download progress bar */}
-                        {isDownloading && downloadProgress !== null && (
+                        {/* Download progress bar (admin only) */}
+                        {canDownload && isDownloading && downloadProgress !== null && (
                             <div className="mt-3 h-1 w-full rounded-full bg-white/10 overflow-hidden">
                                 <div
                                     className="h-full bg-green-500 transition-all duration-500"

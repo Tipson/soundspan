@@ -3316,7 +3316,7 @@ class ApiClient {
     /**
      * Start a background download of a regular YouTube video into the
      * library. Returns immediately with a job id; poll
-     * getYouTubeDownloadStatus() for progress.
+     * getYouTubeDownloadStatus() for progress. Admin only (403 otherwise).
      */
     async downloadYouTube(
         videoId: string,
@@ -3345,6 +3345,7 @@ class ApiClient {
     /**
      * List YouTube download jobs (active + recent) for the downloads view in
      * the activity panel. The sidecar's job store is in-memory per pod.
+     * Admin only (403 otherwise).
      */
     async getYouTubeDownloads(): Promise<YouTubeDownloadJob[]> {
         const res = await this.get<{ jobs: YouTubeDownloadJob[] }>(
@@ -3355,7 +3356,7 @@ class ApiClient {
 
     /**
      * Cancel a YouTube download job (queued jobs never start; in-flight jobs
-     * abort at the next progress tick).
+     * abort at the next progress tick). Admin only (403 otherwise).
      */
     async cancelYouTubeDownload(jobId: string): Promise<YouTubeDownloadJob> {
         return this.delete<YouTubeDownloadJob>(
@@ -3367,6 +3368,7 @@ class ApiClient {
      * Poll the status of a YouTube download job started via
      * downloadYouTube(). Used for UI progress only — the backend watches
      * the job server-side and queues the library scan on completion.
+     * Admin only (403 otherwise).
      */
     async getYouTubeDownloadStatus(jobId: string): Promise<{
         jobId: string;

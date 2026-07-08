@@ -22,6 +22,7 @@ import { SimilarArtistsGrid } from "@/features/search/components/SimilarArtistsG
 import { AliasResolutionBanner } from "@/features/search/components/AliasResolutionBanner";
 import { SoulseekSongsList } from "@/features/search/components/SoulseekSongsList";
 import { TVSearchInput } from "@/features/search/components/TVSearchInput";
+import { useAuth } from "@/lib/auth-context";
 import type { FilterTab } from "@/features/search/types";
 
 type SearchSectionView = "tracks" | "albums" | "artists" | null;
@@ -32,6 +33,10 @@ type SearchSectionView = "tracks" | "albums" | "artists" | null;
 export default function SearchPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    // Downloads are admin-only app-wide (mirrors lib/download-context.tsx and
+    // the backend's requireAdmin gate on /api/youtube download endpoints).
+    const { user } = useAuth();
+    const canDownloadYouTube = user?.role === "admin";
     const [filterTab, setFilterTab] = useState<FilterTab>("all");
     const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
     const isPodcastTab = filterTab === "podcasts";
@@ -175,6 +180,7 @@ export default function SearchPage() {
                         isLoading={isYtLoading}
                         isDownloading={isDownloading}
                         downloadProgress={downloadProgress}
+                        canDownload={canDownloadYouTube}
                         onPlay={handleYtPlay}
                         onDownload={handleYtDownload}
                     />
@@ -188,6 +194,7 @@ export default function SearchPage() {
                         error={ytPlaylistError}
                         isDownloading={isYtPlaylistDownloading}
                         progress={ytPlaylistProgress}
+                        canDownload={canDownloadYouTube}
                         onDownloadAll={handleYtDownloadAll}
                         onCancel={handleYtPlaylistCancel}
                     />

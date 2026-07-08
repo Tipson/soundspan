@@ -13,6 +13,11 @@ interface YouTubePlaylistPreviewCardProps {
     error: string | null;
     isDownloading: boolean;
     progress: BulkDownloadProgress | null;
+    /**
+     * Whether the current user may bulk-download (admin-only, matching the
+     * backend gate). The playlist preview itself stays for everyone.
+     */
+    canDownload: boolean;
     onDownloadAll: (format: string, quality: string) => Promise<void>;
     onCancel: () => void;
 }
@@ -32,6 +37,7 @@ export function YouTubePlaylistPreviewCard({
     error,
     isDownloading,
     progress,
+    canDownload,
     onDownloadAll,
     onCancel,
 }: YouTubePlaylistPreviewCardProps) {
@@ -137,7 +143,8 @@ export function YouTubePlaylistPreviewCard({
                     </ol>
                 )}
 
-                {/* Actions */}
+                {/* Actions (bulk download is admin only) */}
+                {canDownload && (
                 <div className="flex items-center gap-3 mt-5">
                     <div className="relative">
                         <button
@@ -191,9 +198,10 @@ export function YouTubePlaylistPreviewCard({
                         </button>
                     )}
                 </div>
+                )}
 
-                {/* Aggregate progress bar */}
-                {isDownloading && progress && (
+                {/* Aggregate progress bar (admin only) */}
+                {canDownload && isDownloading && progress && (
                     <div className="mt-3">
                         <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
                             <div

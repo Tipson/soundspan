@@ -30,6 +30,7 @@ function render(props: Partial<Parameters<typeof YouTubePlaylistPreviewCard>[0]>
             error: null,
             isDownloading: false,
             progress: null,
+            canDownload: true,
             onDownloadAll: async () => undefined,
             onCancel: () => undefined,
             ...props,
@@ -79,6 +80,33 @@ test("renders the error message", () => {
         error: "This playlist is private.",
     });
     assert.match(html, /This playlist is private\./);
+});
+
+test("hides the download affordances for non-admin users but keeps the preview", () => {
+    const html = render({ canDownload: false });
+    // Preview stays for everyone.
+    assert.match(html, /Late Night Mix/);
+    assert.match(html, /Track One/);
+    // Downloads are admin-only.
+    assert.doesNotMatch(html, /Download all/);
+});
+
+test("hides progress and Cancel for non-admin users even while downloading", () => {
+    const html = render({
+        canDownload: false,
+        isDownloading: true,
+        progress: {
+            total: 3,
+            completed: 1,
+            failed: 0,
+            active: 2,
+            pending: 0,
+            pct: 33,
+            done: false,
+        },
+    });
+    assert.doesNotMatch(html, /Cancel/);
+    assert.doesNotMatch(html, /width:33%/);
 });
 
 test("while downloading, shows aggregate progress and a Cancel control", () => {

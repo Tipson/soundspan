@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { createFrontendLogger } from "@/lib/logger";
 import {
     resolveAdaptivePollingInterval,
-    resolvePollingEnabled,
+    resolveAdminGatedPollingEnabled,
 } from "@/hooks/pollingCadence";
 import type {
     YouTubeDownloadJob,
@@ -44,11 +45,18 @@ export interface UseActiveYouTubeDownloadsReturn {
  * Poll the YouTube bulk-download job list for the activity panel. Adaptive
  * cadence: fast while downloads are active, slow when idle. Cancelling routes
  * to the dedicated YouTube cancel endpoint and refreshes the list.
+ *
+ * Downloads are an admin-only surface (the backend endpoints require the
+ * admin role), so polling is disabled entirely for non-admin users.
  */
 export function useActiveYouTubeDownloads(
     options: { enabled?: boolean } = {}
 ): UseActiveYouTubeDownloadsReturn {
-    const enabled = resolvePollingEnabled(options.enabled);
+    const { user } = useAuth();
+    const enabled = resolveAdminGatedPollingEnabled(
+        options.enabled,
+        user?.role
+    );
     const queryClient = useQueryClient();
 
     const fetchJobs = useCallback(() => api.getYouTubeDownloads(), []);

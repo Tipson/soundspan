@@ -13,6 +13,18 @@ export function resolvePollingEnabled(enabled?: boolean): boolean {
 }
 
 /**
+ * Gates polling behind the admin role on top of the default-enabled
+ * contract. Used for admin-only surfaces (e.g. the YouTube downloads list):
+ * polling those endpoints as a non-admin would just 403-spam the backend.
+ */
+export function resolveAdminGatedPollingEnabled(
+    enabled: boolean | undefined,
+    role: string | null | undefined
+): boolean {
+    return resolvePollingEnabled(enabled) && role === "admin";
+}
+
+/**
  * Resolves a fixed polling interval, returning false when polling is disabled.
  */
 export function resolveFixedPollingInterval(
