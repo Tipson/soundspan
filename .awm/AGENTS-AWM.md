@@ -61,6 +61,7 @@ For single review-gate updates, `awm review` is the thinner wrapper around `awm 
 - Cross-LLM review: for non-trivial implementation work, satisfy the repo review gate before final completion:
   - `awm review --run --project soundspan --receipt-id <receipt-id>`
   - reviewer provider, model, reasoning, and shared `--yolo` settings live in `.awm/awm-workflows.yaml`
+  - Treat the gate as a loop, and findings as TDD input rather than suggestions: fix each blocking finding (with a regression test where applicable), then re-run the gate until it passes. Multiple rounds are normal — the gate regularly catches real bugs on work that already passed tests.
 
 ## Ruleset Maintenance
 
