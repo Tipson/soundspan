@@ -3,14 +3,14 @@
 Segmented streaming is an experimental feature.
 
 - It is not part of the standard deployment path.
-- Keep standard self-hosting setup on direct playback (`howler`) unless you are explicitly evaluating segmented mode.
+- Keep standard self-hosting setup on direct playback (`native`, the default) unless you are explicitly evaluating segmented mode.
 - This document is the single source for segmented-streaming runtime knobs, rollout guidance, and primary-mode reversion procedures.
 
 ## Runtime Controls
 
 | Variable | Default | Values | Purpose |
 | --- | --- | --- | --- |
-| `STREAMING_ENGINE_MODE` | `howler` | `howler`, `videojs`, `native` | Frontend runtime engine mode (`howler` direct primary playback, `videojs` segmented experimental playback, `native` direct playback via the native `<audio>`-element engine — see [NATIVE_AUDIO_ENGINE.md](NATIVE_AUDIO_ENGINE.md)). |
+| `STREAMING_ENGINE_MODE` | `native` | `native`, `howler`, `videojs` | Frontend runtime engine mode (`native` direct playback via the native `<audio>`-element engine — the default, see [NATIVE_AUDIO_ENGINE.md](NATIVE_AUDIO_ENGINE.md); `howler` legacy direct playback fallback; `videojs` segmented experimental playback). |
 | `SEGMENTED_SESSION_PREWARM_ENABLED` | `true` | `true`, `false` | Enables next-track segmented session prewarm + validation. |
 | `LISTEN_TOGETHER_SEGMENTED_PLAYBACK_ENABLED` | `false` | `true`, `false` | Enables segmented startup/handoff/recovery while a Listen Together group is active. |
 | `SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MS` | `20000` | `1500-22000` | Runtime startup timeout used to trigger segmented startup retries when startup stalls. |
@@ -26,10 +26,10 @@ Primary runtime knob:
 
 - `STREAMING_ENGINE_MODE` (container runtime env, not `NEXT_PUBLIC_*` build args)
 - effective behavior:
-  - unset/empty: defaults to `howler` (direct)
-  - `howler`: direct playback mode
+  - unset/empty: defaults to `native` (direct; see [NATIVE_AUDIO_ENGINE.md](NATIVE_AUDIO_ENGINE.md))
+  - `native`: direct playback via the native `<audio>`-element engine (the default)
+  - `howler`: legacy direct playback mode (gated fallback)
   - `videojs`: segmented playback mode (experimental)
-  - `native`: direct playback via the native `<audio>`-element engine (opt-in; see [NATIVE_AUDIO_ENGINE.md](NATIVE_AUDIO_ENGINE.md))
 
 Guardrails:
 
@@ -45,16 +45,16 @@ Guardrails:
 | 1 | Local-library segmented users only | Rolling-update tests complete with no fatal interruption spikes; startup and seek latencies stay within accepted SLO budgets. |
 | 2 | Limited production cohort (local + selected provider tracks) | Rebuffer/hour and handoff-failure metrics stay below rollback thresholds for at least 24h. |
 | 3 | Broader production cohort including provider-heavy sessions | Error budget and session continuity metrics remain stable through at least one controlled deploy window. |
-| 4 | Segmented runtime (`videojs`, experimental) | Keep direct-stream compatibility and explicit return-to-primary (`howler`) path validated. |
+| 4 | Segmented runtime (`videojs`, experimental) | Keep direct-stream compatibility and explicit return-to-primary (`native`) path validated. |
 
 ## Primary-Mode Reversion Trigger Matrix
 
 | Trigger | Signal | Immediate action |
 | --- | --- | --- |
-| Session create failures | sustained `session.create` error/reject increase against baseline | Switch frontend to `STREAMING_ENGINE_MODE=howler` and restart frontend runtime. |
-| Handoff recovery failures | sustained `session.handoff_failure`/`session.handoff_load_error` increase | Switch to `howler`; keep backend telemetry enabled for diagnosis. |
-| Segment/manifest instability | repeated manifest/segment fetch errors with user-facing interruptions | Switch frontend engine back to primary `howler` immediately; investigate segmented backend path offline. |
-| Deployment disruption regression | interruption rate breaches rollout SLO window during controlled deploy | Switch the active deployment wave back to primary `howler` before further rollout expansion. |
+| Session create failures | sustained `session.create` error/reject increase against baseline | Switch frontend to `STREAMING_ENGINE_MODE=native` (or unset it) and restart frontend runtime. |
+| Handoff recovery failures | sustained `session.handoff_failure`/`session.handoff_load_error` increase | Switch to `native`; keep backend telemetry enabled for diagnosis. |
+| Segment/manifest instability | repeated manifest/segment fetch errors with user-facing interruptions | Switch frontend engine back to primary `native` immediately; investigate segmented backend path offline. |
+| Deployment disruption regression | interruption rate breaches rollout SLO window during controlled deploy | Switch the active deployment wave back to primary `native` before further rollout expansion. |
 
 ## Startup Contract and Correlation
 
@@ -91,20 +91,20 @@ npx tsx scripts/measure-segmented-startup-baseline.ts --input <capture.ndjson> -
 npx tsx scripts/measure-segmented-startup-baseline.ts --input <baseline.ndjson> --label baseline --compare-input <wave.ndjson> --compare-label wave [--output <report.md>]
 ```
 
-## Primary Mode Procedure (`howler`)
+## Primary Mode Procedure (`native`)
 
 1. Set runtime env on frontend process and restart frontend service only (no rebuild).
 
 Split stack:
 
 ```bash
-STREAMING_ENGINE_MODE=howler docker compose up -d frontend
+STREAMING_ENGINE_MODE=native docker compose up -d frontend
 ```
 
 AIO:
 
 ```bash
-STREAMING_ENGINE_MODE=howler docker compose -f docker-compose.aio.yml up -d soundspan
+STREAMING_ENGINE_MODE=native docker compose -f docker-compose.aio.yml up -d soundspan
 ```
 
 2. Validate primary-mode reversion:

@@ -30,7 +30,7 @@ case "$ENGINE_MODE" in
   ""|"videojs"|"howler"|"native")
     ;;
   *)
-    echo "[WARN] Invalid STREAMING_ENGINE_MODE '$ENGINE_MODE'; expected howler|videojs|native (videojs and native are opt-in). Using primary default (howler)."
+    echo "[WARN] Invalid STREAMING_ENGINE_MODE '$ENGINE_MODE'; expected native|howler|videojs. Using primary default (native)."
     ENGINE_MODE=""
     ;;
 esac
@@ -41,7 +41,7 @@ else
   export STREAMING_ENGINE_MODE=""
 fi
 
-echo "[CONFIG] STREAMING_ENGINE_MODE: ${ENGINE_MODE:-howler (primary default)}"
+echo "[CONFIG] STREAMING_ENGINE_MODE: ${ENGINE_MODE:-native (primary default)}"
 
 SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MS_VALUE="${SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MS:-}"
 if [ -n "$SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MS_VALUE" ]; then

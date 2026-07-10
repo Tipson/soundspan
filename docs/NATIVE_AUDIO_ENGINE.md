@@ -1,6 +1,6 @@
 # Native Audio Element Engine
 
-The native engine (`STREAMING_ENGINE_MODE=native`) is an opt-in direct-playback backend that drives a single browser-owned `<audio>` element instead of Howler.js. It implements the same `AudioEngine` contract as the other backends and plugs into the hybrid runtime router — no orchestrator changes, and Howler remains the default and the gated fallback.
+The native engine is the **default** direct-playback backend (as of the post-1.7.0 flip): it drives a single browser-owned `<audio>` element instead of Howler.js, implements the same `AudioEngine` contract as the other backends, and plugs into the hybrid runtime router — no orchestrator changes. Howler remains the gated fallback: set `STREAMING_ENGINE_MODE=howler` to revert a deployment, and the Android WebView platform pin selects Howler automatically.
 
 Tracked in GH issue #42.
 
@@ -17,27 +17,29 @@ Owning one element makes double-play structurally impossible within the engine: 
 
 **Hi-res audio is a design constraint.** The bare media-element pipeline is the best hi-res path a browser can offer for 24-bit/192 kHz FLAC. The engine never routes through an `AudioContext` except the one narrowly gated iOS bridge below.
 
-## Enabling It
+## Selecting an Engine
+
+The native engine is the default — no configuration needed. To revert a deployment to the legacy Howler engine:
 
 ```bash
 # docker compose (frontend runtime env, not a build arg)
-STREAMING_ENGINE_MODE=native docker compose up -d frontend
+STREAMING_ENGINE_MODE=howler docker compose up -d frontend
 
 # AIO
-STREAMING_ENGINE_MODE=native docker compose -f docker-compose.aio.yml up -d soundspan
+STREAMING_ENGINE_MODE=howler docker compose -f docker-compose.aio.yml up -d soundspan
 ```
 
-Helm: set `STREAMING_ENGINE_MODE: native` under the frontend deployment's runtime env (see `charts/soundspan/values.yaml`).
+Helm: set `STREAMING_ENGINE_MODE: howler` under the frontend deployment's runtime env (see `charts/soundspan/values.yaml`).
 
-Reverting is the same knob back to `howler` (or unset) plus a frontend restart. The flag doubles as a live diagnostic: a user reporting double-play or background playback death can be flipped between engines to isolate the layer.
+The flag doubles as a live diagnostic: a user reporting double-play or background playback death can be flipped between engines to isolate the layer.
 
 ## Selection Precedence
 
 Selection is explicit and unit-tested (`frontend/lib/audio-engine/engineSelectionPolicy.ts`), highest priority first:
 
 1. **Platform pins.** Android WebView is pinned to Howler even when the flag is `native` — Howler's Web Audio mode is the established fix for crackling/popping on track changes there.
-2. **The engine-mode flag.** `native` selects the native element engine and fully suppresses the Tauri auto-upgrade path.
-3. **Default.** Howler, with the existing Tauri platform upgrade allowed.
+2. **The engine-mode flag.** `native` (the default when unset) selects the native element engine and fully suppresses the Tauri auto-upgrade path; `howler` selects the legacy engine with the Tauri platform upgrade allowed.
+3. **Default.** Native (`DEFAULT_STREAMING_ENGINE_MODE` in `frontend/lib/audio-engine/types.ts`).
 
 ## Architecture
 
@@ -75,9 +77,9 @@ All playback client metrics (`[Playback][ClientMetric]` log lines and the backen
 
 This makes howler and native directly comparable over a soak window: playback error events by `MEDIA_ERR` code, playback-start latency, and recovery attempts. The engine additionally emits `[NativeAudioEngine][Telemetry]` events (`playback_start_latency`, `recovery_attempt`, `playback_error`, `load_retry_applied`) tagged `engineMode: native`.
 
-Exit criteria for flipping the default to `native`: no metric regression against the howler baseline and zero new double-play/background-death reports attributable to the native mode.
+Those were the exit criteria for flipping the default (met during the 1.7.0 soak: no metric regression against the howler baseline, zero new double-play/background-death reports). They remain the criteria for evaluating any deployment that reverts to `howler` and considers switching back.
 
-## Manual Test Matrix (before flipping any default)
+## Manual Test Matrix (exercised during the 1.7.0 soak; re-run when the engine changes materially)
 
 - Desktop Chrome/Firefox/Safari playback, seek, track advance
 - 24/192 FLAC plays via the bare element pipeline (no AudioContext in the default path)
@@ -90,4 +92,4 @@ Exit criteria for flipping the default to `native`: no metric regression against
 
 ## Rollout
 
-Opt-in flag → soak → flip default to `native` → Howler remains the gated fallback (not removed). Out of scope: removing Howler/Video.js/Tauri adapters, crossfade, and true bit-perfect hi-res output (impossible from web APIs).
+Opt-in flag (1.7.0) → soaked on the operator deployment → default flipped to `native` post-1.7.0. Howler remains the gated fallback (not removed). Out of scope: removing Howler/Video.js/Tauri adapters, crossfade, and true bit-perfect hi-res output (impossible from web APIs).

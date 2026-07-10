@@ -522,12 +522,12 @@ case "$ENGINE_MODE" in
     ""|"videojs"|"howler"|"native")
         ;;
     *)
-        echo "WARN: Invalid STREAMING_ENGINE_MODE '$ENGINE_MODE'; expected howler|videojs|native (videojs and native are opt-in). Using primary default (howler)."
+        echo "WARN: Invalid STREAMING_ENGINE_MODE '$ENGINE_MODE'; expected native|howler|videojs. Using primary default (native)."
         ENGINE_MODE=""
         ;;
 esac
 
-echo "Frontend runtime STREAMING_ENGINE_MODE: ${ENGINE_MODE:-howler (primary default)}"
+echo "Frontend runtime STREAMING_ENGINE_MODE: ${ENGINE_MODE:-native (primary default)}"
 
 echo "Starting soundspan..."
 exec env \
