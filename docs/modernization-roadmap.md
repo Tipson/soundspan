@@ -36,7 +36,7 @@ The audit found **0 true false positives** but several packaging/measurement err
 | #14 | Backend error-handling unification & route god-file decomposition | 0 / 0 / 6 |
 | #15 | Type-safety ratchet (backend any + frontend strict + typed API) | 0 / 1 / 2 |
 | #16 | Frontend consolidation, decomposition & render performance | 0 / 0 / 5 |
-| #17 | Database & streaming performance | 1 / 2 / 5 |
+| #17 | Database & streaming performance | 1 / 3 / 5 |
 | #18 | Provider abstractions: acquisition, streaming & engine seams | 0 / 0 / 4 |
 | #19 | Framework & production-image modernization | 0 / 0 / 6 |
 | — | Standalone (no epic) | 1 / 0 / 1 |
@@ -72,7 +72,7 @@ _(includes F54; dimension tallies double-count the F2/F44 and F17/F47 duplicate 
 | [F12](#f12) | ⬜ | performance | high | M | medium |  | #16 | Player UI re-renders 4×/second during playback: useAudio() pipes the high-frequency cur… |
 | [F13](#f13) | 🟡 | performance | high | L | medium |  | #17 | Per-track/per-candidate N+1 query loops dominate Spotify import and Discover Weekly hot… |
 | [F14](#f14) | ✅ | performance | high | M | medium |  | #17 | pgvector ANN searches never set ivfflat.probes — every 'similar tracks' / vibe query sc… |
-| [F15](#f15) | ⬜ | performance | medium | M | medium |  | #17 | ORDER BY RANDOM() full-table scans on Track / track_embeddings for radio, random tracks… |
+| [F15](#f15) | 🟡 | performance | medium | M | medium |  | #17 | ORDER BY RANDOM() full-table scans on Track / track_embeddings for radio, random tracks… |
 | [F16](#f16) | ⬜ | performance | medium | M | medium |  | #17 | Genre filtering scans JSONB with jsonb_array_elements_text + LOWER(...) LIKE '%g%' inst… |
 | [F17](#f17) | ⬜ | performance | medium | M | low |  | #19 | API runtime transpiles TypeScript on every cold start via tsx and ships the full TS too… |
 | [F18](#f18) | 🟡 | performance | medium | M | low |  | #17 | Soulseek downloads buffer whole files into heap; cleanup uses sync fs and audio streami… |
@@ -335,7 +335,9 @@ _(includes F54; dimension tallies double-count the F2/F44 and F17/F47 duplicate 
 
 ### F15 — ORDER BY RANDOM() full-table scans on Track / track_embeddings for radio, random tracks, and the vibe map
 
-**⬜ open** · dimension: performance · severity: medium · effort: M · risk: medium · epic: #17
+**🟡 partial (PR #110)** · dimension: performance · severity: medium · effort: M · risk: medium · epic: #17
+
+> **Fix shipped.** `/tracks/shuffle`'s large-library branch — the audited priority (genuinely frequent, uncapped at `MAX_LIMIT`, no cache) — now samples via a new indexed `Track.random double precision` column (btree index, DB-generated `random()` default) instead of a full-table `ORDER BY RANDOM()` scan+sort: pick a uniform pivot in `[0,1)`, `WHERE random >= pivot ORDER BY random ASC LIMIT n`, with a wrap-around top-up query (`random < pivot`) for the exact `LIMIT` when the pivot lands near 1.0. This deletes the endpoint's raw-SQL site. Benchmarked on the local 15,230-track corpus (branch `perf/f15-shuffle-random-column`): `LIMIT 100` p50 ~2.0ms → ~0.7ms, p95 ~4.1ms → ~1.5ms; `LIMIT 1000` p50 ~2.7ms → ~2.0ms, p95 ~3.3ms → ~2.4ms. Sampling honesty (cross-review corrected an earlier "no gross skew" claim): pivot-successor sampling selects each track with probability proportional to its local gap between adjacent persisted `random` values, not 1/N — measured on the live corpus, collision probability is 2.03× true-uniform (theory says exactly 2×: Σgap² → 2/N), the 2,000-draw diagnostic (1,766 distinct ids, max repeat 5) actually sits ~2.7σ below the uniform null (expected ≈1,874 distinct; P(max-repeat≥5) < 0.5%), and the 20-bucket check mathematically cannot detect this (≈760 tracks/bucket averages the gap variance away). At real usage scale (limit=100, rolling 100-gap window over the actual corpus) per-track inclusion probability has CV ≈ 11% (range 68%–141% of fair) and adjacent-request page-overlap chance is ≈ 1.3% per pair; the persisted values never re-roll, so this bias is permanent per-library. Judgment: acceptable for a shuffle feature — approximate per-track fairness, not literal uniformity. Per this finding's own audit corrections, radio multi-seed Fallback B (library.ts:759) and the vibe-map's `umapProjection` sampling are intentionally left as-is: Fallback B because its `NOT IN` + JSONB predicates blunt the win ("consider leaving it unless profiling shows it matters"), and `umapProjection` because it's already gated behind a 24h cache and runs at most once/day, not per request. The discoverWeekly.ts citation in this finding's Problem statement was confirmed FALSE (no `ORDER BY RANDOM` exists there). Tests: `backend/src/routes/__tests__/libraryRuntime.test.ts` (shuffle empty/small/large-full-page/large-top-up-shortfall/error cases, rewritten off the deleted raw-SQL mock to assert exact-`limit` sampling behavior instead of pinning the removed `$queryRaw` call).
 
 **Files:** `backend/src/routes/library.ts:3994`, `backend/src/routes/library.ts:759`, `backend/src/services/umapProjection.ts:269`, `backend/src/services/discoverWeekly.ts`
 
