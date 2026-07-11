@@ -16,6 +16,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/albumResolutionService.ts` | Core |
 | `backend/src/services/artistCountsService.ts` | Core |
 | `backend/src/services/artistResolutionService.ts` | Core |
+| `backend/src/services/artistSlotAllocation.ts` | Core |
 | `backend/src/services/audioAnalysisCleanup.ts` | Core |
 | `backend/src/services/audiobookCache.ts` | Core |
 | `backend/src/services/audiobookshelf.ts` | Core |
