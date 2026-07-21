@@ -19,6 +19,7 @@ The CLAP service generates audio embeddings for similarity/vibe workflows.
 | `CLAP_WORKERS` | `2` | Analysis workers |
 | `CLAP_THREADS_PER_WORKER` | `1` | CPU threads per worker |
 | `CLAP_SLEEP_INTERVAL` | `5` | Queue poll interval (seconds) |
+| `CLAP_REDIS_SOCKET_TIMEOUT` | `10` | Redis read timeout (seconds); effective minimum is `CLAP_SLEEP_INTERVAL + 5` |
 
 ### Usage
 

@@ -9,6 +9,24 @@ def get_int_env(name: str, default: Union[int, str]) -> int:
     return int(os.getenv(name, str(default)))
 
 
+def get_blocking_socket_timeout(
+    name: str,
+    default: int,
+    *,
+    blocking_timeout: int,
+    safety_margin: int = 5,
+) -> int:
+    """Read a positive socket timeout that safely exceeds a blocking command."""
+    if blocking_timeout <= 0 or safety_margin <= 0:
+        raise ValueError("blocking timeout and safety margin must be positive")
+
+    configured_timeout = get_int_env(name, default)
+    if configured_timeout <= 0:
+        raise ValueError(f"{name} must be positive")
+
+    return max(configured_timeout, blocking_timeout + safety_margin)
+
+
 def configure_thread_env(
     threads_per_worker: int,
     *,

@@ -84,6 +84,7 @@ services:
             BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:3007}
             MUSIC_PATH: /music
             SLEEP_INTERVAL: ${CLAP_SLEEP_INTERVAL:-5}
+            CLAP_REDIS_SOCKET_TIMEOUT: ${CLAP_REDIS_SOCKET_TIMEOUT:-10}
             NUM_WORKERS: ${CLAP_WORKERS:-2}
             THREADS_PER_WORKER: ${CLAP_THREADS_PER_WORKER:-1}
             MODEL_IDLE_TIMEOUT: ${CLAP_MODEL_IDLE_TIMEOUT:-300}

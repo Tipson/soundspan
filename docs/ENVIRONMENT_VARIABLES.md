@@ -188,6 +188,7 @@ Experimental feature note:
 | `DB_RECONCILE_MAX_INTERVAL_SECONDS` | `audio-analyzer` | Optional | `max(BRPOP_TIMEOUT*12, 60)` | Maximum DB reconciliation interval while idle. |
 | `DB_RECONCILE_BACKOFF_MULTIPLIER` | `audio-analyzer` | Optional | `2.0` | Idle reconciliation backoff multiplier. |
 | `CLAP_SLEEP_INTERVAL` | compose host variable mapping to `audio-analyzer-clap:SLEEP_INTERVAL` | Optional | `5` | Loop interval between CLAP analyzer cycles (seconds). |
+| `CLAP_REDIS_SOCKET_TIMEOUT` | `soundspan` (AIO) and compose host variable mapping to `audio-analyzer-clap:CLAP_REDIS_SOCKET_TIMEOUT` | Optional | `10` | Redis socket read timeout for the CLAP queue worker (seconds). The runtime enforces an effective minimum of `CLAP_SLEEP_INTERVAL + 5` so blocking queue polls complete before the socket deadline. |
 | `CLAP_WORKERS` | compose host variable mapping to `audio-analyzer-clap:NUM_WORKERS` | Optional | `2` | Parallel CLAP workers. |
 | `CLAP_THREADS_PER_WORKER` | compose host variable mapping to `audio-analyzer-clap:THREADS_PER_WORKER` | Optional | `1` | CPU threads per CLAP worker. |
 | `CLAP_MODEL_IDLE_TIMEOUT` | compose host variable mapping to `audio-analyzer-clap:MODEL_IDLE_TIMEOUT` | Optional | `300` | Idle timeout before unloading CLAP model (seconds). |
@@ -242,6 +243,7 @@ Used primarily with `docker-compose.local.yml` (host-run backend/frontend; conta
 | --- | --- | --- | --- | --- |
 | `BACKEND_URL` | `audio-analyzer-clap-local` | Optional | `http://host.docker.internal:3007` | Local CLAP callback target to host-run backend. |
 | `CLAP_SLEEP_INTERVAL` | `audio-analyzer-clap-local` | Optional | `5` | CLAP local analyzer loop interval. |
+| `CLAP_REDIS_SOCKET_TIMEOUT` | `audio-analyzer-clap-local` | Optional | `10` | CLAP Redis socket read timeout; effective minimum is `CLAP_SLEEP_INTERVAL + 5` seconds. |
 | `CLAP_WORKERS` | `audio-analyzer-clap-local` | Optional | `2` | CLAP local worker count. |
 | `CLAP_THREADS_PER_WORKER` | `audio-analyzer-clap-local` | Optional | `1` | CLAP local threads per worker. |
 | `CLAP_MODEL_IDLE_TIMEOUT` | `audio-analyzer-clap-local` | Optional | `300` | CLAP local model idle unload timeout. |

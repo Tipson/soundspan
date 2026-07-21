@@ -47,7 +47,11 @@ for _root in _POTENTIAL_PROJECT_ROOTS:
         break
 
 from services.common.logging_utils import configure_service_logger
-from services.common.analyzer_env import configure_thread_env, get_int_env
+from services.common.analyzer_env import (
+    configure_thread_env,
+    get_blocking_socket_timeout,
+    get_int_env,
+)
 
 # CPU thread limiting must be set before importing torch
 THREADS_PER_WORKER = get_int_env('THREADS_PER_WORKER', 1)
@@ -76,6 +80,11 @@ REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 DATABASE_URL = os.getenv('DATABASE_URL', '')
 MUSIC_PATH = os.getenv('MUSIC_PATH', '/music')
 SLEEP_INTERVAL = get_int_env('SLEEP_INTERVAL', 5)
+REDIS_SOCKET_TIMEOUT = get_blocking_socket_timeout(
+    'CLAP_REDIS_SOCKET_TIMEOUT',
+    10,
+    blocking_timeout=SLEEP_INTERVAL,
+)
 NUM_WORKERS = get_int_env('NUM_WORKERS', 2)
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://backend:3006')
 MODEL_IDLE_TIMEOUT = get_int_env('MODEL_IDLE_TIMEOUT', 300)
@@ -385,7 +394,10 @@ class Worker:
         logger.info(f"Worker {self.worker_id} starting...")
 
         try:
-            self.redis_client = redis.from_url(REDIS_URL)
+            self.redis_client = redis.from_url(
+                REDIS_URL,
+                socket_timeout=REDIS_SOCKET_TIMEOUT,
+            )
             self.db = DatabaseConnection(DATABASE_URL)
             self.db.connect()
 
@@ -831,6 +843,7 @@ def main():
     logger.info(f"  Num workers: {NUM_WORKERS}")
     logger.info(f"  Threads per worker: {THREADS_PER_WORKER}")
     logger.info(f"  Sleep interval: {SLEEP_INTERVAL}s")
+    logger.info(f"  Redis socket timeout: {REDIS_SOCKET_TIMEOUT}s")
     logger.info(f"  Model idle timeout: {MODEL_IDLE_TIMEOUT}s")
     logger.info("=" * 60)
 
