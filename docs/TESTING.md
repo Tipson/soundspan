@@ -14,7 +14,7 @@ It defines:
 | Component | Framework | Primary command(s) | Notes |
 | --- | --- | --- | --- |
 | Backend (`backend/`) | Jest + ts-jest | `npm --prefix backend test`, `npm --prefix backend run test:coverage` | Unit/integration/contract/runtime tests under `backend/src/**/__tests__` |
-| Frontend (`frontend/`) | Node test runner (unit + component + coverage), Playwright (E2E), ESLint | `npm --prefix frontend run test:unit`, `npm --prefix frontend run test:coverage`, `npm --prefix frontend run test:component`, `npm --prefix frontend run test:component:coverage`, `npm --prefix frontend run test:component:coverage:changed`, `npm --prefix frontend run test:coverage:social`, `npm --prefix frontend run test:e2e`, `npm --prefix frontend run test:predeploy`, `npm --prefix frontend run lint` | Unit specs under `frontend/tests/unit`; component specs under `frontend/tests/component`; E2E specs under `frontend/tests/e2e` |
+| Frontend (`frontend/`) | Node test runner (unit + component + coverage), Playwright (E2E), ESLint | `npm --prefix frontend run test:unit`, `npm --prefix frontend run test:coverage`, `npm --prefix frontend run test:component`, `npm --prefix frontend run test:component:coverage`, `npm --prefix frontend run test:component:coverage:changed`, `npm --prefix frontend run test:coverage:social`, `npm --prefix frontend run test:config:runtime`, `npm --prefix frontend run test:e2e`, `npm --prefix frontend run test:predeploy`, `npm --prefix frontend run lint` | Unit specs under `frontend/tests/unit`; component specs under `frontend/tests/component`; E2E specs under `frontend/tests/e2e`; the runtime-config smoke reloads production Next.js config after dependency pruning in the AIO image |
 | Python sidecars (`services/*`) | `pytest` | N/A | Real `pytest` suites exist under `services/*/tests/` — 141 test functions total (tidal-downloader 55, ytmusic-streamer 81, audio-analyzer 3, audio-analyzer-clap 2); `pytest` is a declared dependency (`requirements-test.txt`) for tidal-downloader and ytmusic-streamer, each with its own `tests/conftest.py` |
 
 ## Directory Structure (Canonical)
@@ -117,6 +117,7 @@ npm --prefix frontend run test:component
 npm --prefix frontend run test:component:coverage
 npm --prefix frontend run test:component:coverage:changed
 npm --prefix frontend run test:coverage:social
+npm --prefix frontend run test:config:runtime
 npm --prefix frontend run test:e2e
 npm --prefix frontend run test:predeploy
 ```

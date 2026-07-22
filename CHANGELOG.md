@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The AIO frontend now starts after its build-only dependencies are pruned. `next.config.ts` no longer imports the development-only `@next/bundle-analyzer` package during normal production startup; it loads the plugin only for explicit `ANALYZE=true` builds. The AIO image build now reloads the production Next.js config after pruning so missing runtime config dependencies fail the image build instead of causing a restart loop after deployment (#183).
 - CLAP workers no longer spam `Timeout reading from socket` while an empty Redis queue completes its normal blocking poll (#183). redis-py 8 introduced a five-second default socket timeout, which raced soundspan's five-second `BLPOP`; the queue connection now uses a bounded 10-second read timeout with a five-second safety margin above `SLEEP_INTERVAL`. Operators can tune it with `CLAP_REDIS_SOCKET_TIMEOUT`; unsafe lower values are clamped to `SLEEP_INTERVAL + 5`.
 - The animated player UI (the mini/overlay/full-player shell) no longer
   re-renders 4×/second during playback — smoother UI with less battery drain and
