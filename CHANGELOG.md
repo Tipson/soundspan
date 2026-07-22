@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The MusicCNN audio analyzer now lets its normal 30-second Redis queue poll finish instead of failing after redis-py's shorter socket deadline. Its socket timeout defaults to 35 seconds, stays at least five seconds above `BRPOP_TIMEOUT`, and can be tuned with `AUDIO_REDIS_SOCKET_TIMEOUT` (#183).
+- The frontend proxy no longer adds a new timeout listener to a reused browser connection for every API request. This removes the repeated `MaxListenersExceededWarning` messages while preserving the existing backend response deadlines and streaming behavior (#183).
 - The AIO frontend now starts after its build-only dependencies are pruned. `next.config.ts` no longer imports the development-only `@next/bundle-analyzer` package during normal production startup; it loads the plugin only for explicit `ANALYZE=true` builds. The AIO image build now reloads the production Next.js config after pruning so missing runtime config dependencies fail the image build instead of causing a restart loop after deployment (#183).
 - CLAP workers no longer spam `Timeout reading from socket` while an empty Redis queue completes its normal blocking poll (#183). redis-py 8 introduced a five-second default socket timeout, which raced soundspan's five-second `BLPOP`; the queue connection now uses a bounded 10-second read timeout with a five-second safety margin above `SLEEP_INTERVAL`. Operators can tune it with `CLAP_REDIS_SOCKET_TIMEOUT`; unsafe lower values are clamped to `SLEEP_INTERVAL + 5`.
 - The animated player UI (the mini/overlay/full-player shell) no longer

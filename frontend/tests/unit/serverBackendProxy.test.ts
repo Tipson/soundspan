@@ -75,7 +75,7 @@ test("buildBackendProxyOptions registers the error handler via the v3+ on.error 
     assert.equal(options.ws, false);
     assert.equal(options.changeOrigin, true);
     assert.equal(options.xfwd, true);
-    assert.equal(options.timeout, 120000);
+    assert.equal("timeout" in options, false);
     assert.equal(options.proxyTimeout, 120000);
 });
 
@@ -237,11 +237,11 @@ test("buildBackendProxyOptions registers the first-byte timeout handler when ena
     });
 
     assert.equal(typeof options.on?.proxyReq, "function");
-    assert.equal(options.timeout, 120000);
+    assert.equal("timeout" in options, false);
     assert.equal(options.proxyTimeout, 120000);
 });
 
-test("buildBackendProxyOptions widens socket timeouts to cover configured first-byte budgets", () => {
+test("buildBackendProxyOptions widens only the upstream timeout for configured first-byte budgets", () => {
     const options = buildBackendProxyOptions({
         name: "api-proxy",
         target: "http://127.0.0.1:3006",
@@ -252,7 +252,7 @@ test("buildBackendProxyOptions widens socket timeouts to cover configured first-
         env: { PROXY_REQUEST_TIMEOUT_MS: "300000" },
     });
 
-    assert.equal(options.timeout, 300000);
+    assert.equal("timeout" in options, false);
     assert.equal(options.proxyTimeout, 300000);
 });
 
