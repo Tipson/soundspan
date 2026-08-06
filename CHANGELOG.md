@@ -114,6 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Admin/Operations
 
+- `.github/dependabot.yml` now suppresses only the two proven Node toolchain ceilings from the 2026-07 dependency review: `@types/node` majors in both backend and frontend stay aligned with the Node 24 runtime images (#181/#198), and backend TypeScript 7 stays deferred while ts-jest 29.4.12 peers `typescript >=4.3 <7` (#180). Python analyzer and CLAP updates remain visible so runtime-and-lock modernization paths are not silently closed; the header's yt-dlp/ytmusicapi never-ignore rule is untouched.
+
 - Database migration `20260711012100_add_track_random_sample_column` (roadmap F15) adds `Track.random double precision` (DB-generated `random()` default) plus a btree index, backing the new `/tracks/shuffle` sampling query above. Because the default is volatile, this `ADD COLUMN` rewrites the whole table in PostgreSQL 16 (not the metadata-only fast path constant defaults get) — milliseconds at the current 15,230-row corpus. Every writer (Prisma upserts in the scanner, any future inserts) gets a value automatically with zero app-code changes; the Python analyzer sidecars only `UPDATE` existing `Track` rows, so they need no changes either. The `CREATE INDEX` is non-`CONCURRENT` (repo migration convention), so it briefly locks writes to `Track` while it builds — negligible at homelab scale.
 
 ### Security
