@@ -22,6 +22,13 @@ import {
     loadVocabulary,
     VocabTerm
 } from "../services/vibeVocabulary";
+import {
+    CALIBRATION_MIN_EMBEDDED_TRACKS,
+    computeCalibration,
+    countEmbeddedTracks,
+    parseCachedCalibration,
+    type CalibrationPayload,
+} from "../services/vibeCalibration";
 import { MOOD_CONFIG, VALID_MOODS, MoodType, MOOD_BUCKET_MIN_SCORE } from "../services/moodBucketService";
 import { fetchEmbeddingsByTrackIds } from "../services/trackEmbeddings";
 import { parseJourneyRequest } from "./vibeJourneyRequest";
@@ -1328,5 +1335,100 @@ router.get("/status", requireAuth, async (req, res) => {
     }
 });
 
+const CALIBRATION_CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h
+const CALIBRATION_CACHE_KEY_PREFIX = "vibe:calibration:v1:";
+
+/**
+ * Single-flight for cold-cache calibration computes, keyed by cache key.
+ * The pairwise-distance compute is O(sample²); without this, N concurrent
+ * cold-cache requests (e.g. several map tabs opening after the TTL lapses)
+ * would each run the full sample + compute. The first request computes and
+ * caches; concurrent callers await the same promise. Entries clear in
+ * `finally`, so a failed compute is retriable immediately.
+ */
+const calibrationInFlight = new Map<string, Promise<CalibrationPayload>>();
+
+async function getCachedOrComputeCalibration(
+    cacheKey: string
+): Promise<CalibrationPayload> {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+        const payload = parseCachedCalibration(cached);
+        if (payload) return payload;
+        logger.warn("Ignoring invalid vibe calibration cache payload", {
+            cacheKey,
+        });
+    }
+
+    let compute = calibrationInFlight.get(cacheKey);
+    if (!compute) {
+        compute = computeCalibration()
+            .then(async (payload) => {
+                await redisClient.setEx(
+                    cacheKey,
+                    CALIBRATION_CACHE_TTL_SECONDS,
+                    JSON.stringify(payload)
+                );
+                return payload;
+            })
+            .finally(() => {
+                calibrationInFlight.delete(cacheKey);
+            });
+        calibrationInFlight.set(cacheKey, compute);
+    }
+    return compute;
+}
+
+async function getCalibrationResponse() {
+    const embeddedCount = await countEmbeddedTracks();
+    if (embeddedCount < CALIBRATION_MIN_EMBEDDED_TRACKS) {
+        return { sampleSize: 0, quantiles: [] };
+    }
+    const cacheKey = `${CALIBRATION_CACHE_KEY_PREFIX}${embeddedCount}`;
+    return getCachedOrComputeCalibration(cacheKey);
+}
+
+/**
+ * @openapi
+ * /api/vibe/calibration:
+ *   get:
+ *     summary: Get library-calibrated pairwise-distance quantiles
+ *     description: Returns the p0-p100 percentiles of pairwise CLAP cosine distance over a bounded random sample of embedded tracks in this library, so the UI can express match strength as "closer than N% of random pairs in your library" instead of a fixed linear mapping that reads as inflated on libraries where unrelated tracks rarely exceed distance ~1.0. The sample is drawn via an id-only indexed scan plus a primary-key fetch (never a full-table random sort), cached for 24h keyed on the embedded-track count, and concurrent cold-cache requests collapse into a single compute.
+ *     tags: [Vibe]
+ *     security:
+ *       - sessionAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Distance quantiles, or an empty result when fewer than 10 tracks are embedded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 sampleSize:
+ *                   type: integer
+ *                   description: Number of tracks sampled (0 when the library has fewer than 10 embedded tracks)
+ *                 updatedAt:
+ *                   type: string
+ *                   description: ISO timestamp the sample was computed (omitted when sampleSize is 0)
+ *                 quantiles:
+ *                   type: array
+ *                   items:
+ *                     type: number
+ *                   description: p0..p100 percentiles of pairwise cosine distance (101 values), empty when sampleSize is 0
+ *       401:
+ *         description: Not authenticated
+ */
+router.get("/calibration", requireAuth, async (_req, res) => {
+    try {
+        return res.json(await getCalibrationResponse());
+    } catch (error: any) {
+        logger.error("Vibe calibration error:", error);
+        return res
+            .status(500)
+            .json({ error: "Failed to compute vibe calibration" });
+    }
+});
 
 export default router;
