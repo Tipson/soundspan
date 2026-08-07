@@ -75,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Backend and frontend transitive dependencies with published same-major
+  security fixes are now constrained to patched releases. The overrides cover
+  the active YAML/glob/URI/IP/WebSocket/Socket.IO/parser utility advisories
+  without forcing breaking direct-dependency downgrades.
 - `POST /api/vibe/alchemy` now rejects weight arrays that sum to zero (e.g. all-zero or all-negative weights, which are floored to 0) with a 400 instead of letting a NaN-filled blended vector reach pgvector and surface as an opaque 500.
 - The MusicCNN audio analyzer now lets its normal 30-second Redis queue poll finish instead of failing after redis-py's shorter socket deadline. Its socket timeout defaults to 35 seconds, stays at least five seconds above `BRPOP_TIMEOUT`, and can be tuned with `AUDIO_REDIS_SOCKET_TIMEOUT` (#183).
 - The frontend proxy no longer adds a new timeout listener to a reused browser connection for every API request. This removes the repeated `MaxListenersExceededWarning` messages while preserving the existing backend response deadlines and streaming behavior (#183).
