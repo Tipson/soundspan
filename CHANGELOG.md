@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- YouTube Music streamer Uvicorn raised from 0.51.0 to 0.52.1, with the
+  hash-pinned runtime lock regenerated alongside its `>=0.52.0` manifest floor.
 - TIDAL downloader Uvicorn raised from 0.51.0 to 0.52.1, with the hash-pinned
   runtime lock regenerated alongside its `>=0.52.0` manifest floor.
 - The CLAP sidecar and all-in-one hash locks now satisfy the CLAP manifest's
