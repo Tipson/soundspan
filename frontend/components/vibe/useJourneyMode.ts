@@ -72,7 +72,6 @@ interface JourneyRequest {
     waypoints: VibeListItem[];
     loading: boolean;
     error: string | null;
-    clear: () => void;
     invalidate: () => void;
     run: (fromId: string, toTrackId: string | undefined,
         mood: string | undefined, steps: number) => void;
@@ -110,7 +109,7 @@ function useJourneyRequest(inJourney: boolean,
     }, []);
     const waypoints = useMemo(() => annotateOnMap(route?.waypoints ?? [], trackById),
         [route, trackById]);
-    return { route, waypoints, loading, error, clear, invalidate, run };
+    return { route, waypoints, loading, error, invalidate, run };
 }
 
 function useJourneyMoods(inJourney: boolean): JourneyMoodOption[] {
@@ -139,8 +138,8 @@ function useJourneyEntry(args: UseJourneyModeArgs, request: JourneyRequest) {
     const pickDestination = useCallback((id: string) => {
         if (args.state.mode !== "journey" || id === args.state.fromId) return;
         args.dispatch({ type: "SET_DEST", id });
-        request.clear();
-    }, [args.state, args.dispatch, request.clear]);
+        request.invalidate();
+    }, [args.state, args.dispatch, request.invalidate]);
     return { canStartJourney, startJourney, pickDestination };
 }
 
@@ -226,8 +225,14 @@ export function useJourneyMode(args: UseJourneyModeArgs): UseJourneyMode {
         waypoints: request.waypoints, loading: request.loading, error: request.error,
         canSubmit: !!(state.destTrackId || state.moodTarget), quantiles: args.quantiles,
         togglePick: () => args.dispatch({ type: "TOGGLE_PICK" }),
-        chooseMood: (mood) => { args.dispatch({ type: "SET_MOOD_TARGET", mood }); request.clear(); },
-        setSteps: (steps) => args.dispatch({ type: "SET_STEPS", steps }),
+        chooseMood: (mood) => {
+            args.dispatch({ type: "SET_MOOD_TARGET", mood });
+            request.invalidate();
+        },
+        setSteps: (steps) => {
+            args.dispatch({ type: "SET_STEPS", steps });
+            request.invalidate();
+        },
         submit: actions.submit, drift: actions.drift, play, save: save.save,
         saving: save.saving, close: args.exitToExplore,
     };

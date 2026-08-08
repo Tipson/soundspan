@@ -40,8 +40,8 @@ graph TD
 | frontend | backend | WebSocket (Socket.IO, proxied by the custom server) | 3006 | JWT (`handshake.auth.token`) | Listen Together real-time sync |
 | backend | PostgreSQL | TCP (Prisma) | 5432 | Connection string | All persistent state |
 | backend | Redis | TCP | 6379 | None | Listen Together presence/state, cache, pub/sub, stream queues |
-| backend | tidal-downloader | HTTP | 8585 | None (sidecar enforces no inbound auth today; network isolation is the control) | TIDAL OAuth, search, stream extraction, downloads |
-| backend | ytmusic-streamer | HTTP | 8586 | None (sidecar-internal) | YT Music OAuth, search, stream proxy, browse shelves; `/yt/*` pasted-URL preview/stream/download jobs |
+| backend | tidal-downloader | HTTP | 8585 | `x-internal-secret` (`INTERNAL_API_SECRET`); `/health` exempt | TIDAL OAuth, search, stream extraction, downloads |
+| backend | ytmusic-streamer | HTTP | 8586 | `x-internal-secret` (`INTERNAL_API_SECRET`); `/health` exempt | YT Music OAuth, search, stream proxy, browse shelves; `/yt/*` pasted-URL preview/stream/download jobs |
 | backend-worker | PostgreSQL | TCP (Prisma) | 5432 | Connection string | Background job state |
 | backend-worker | Redis | TCP | 6379 | None | Job queues (Bull/streams), scheduler claims |
 | audio-analyzer | PostgreSQL | TCP (direct) | 5432 | Connection string | Analysis results write |

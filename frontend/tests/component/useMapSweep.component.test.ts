@@ -26,6 +26,17 @@ const apiState: {
     addImpl: (playlistId: string, ref: { trackId: string }) => Promise<unknown>;
 } = { addImpl: async () => ({}) };
 
+interface Deferred<T> {
+    promise: Promise<T>;
+    resolve: (value: T) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => { resolve = done; });
+    return { promise, resolve };
+}
+
 mock.module("@/lib/api", {
     namedExports: {
         api: {
@@ -264,5 +275,24 @@ test("save: a full save is a success toast", async () => {
     assert.equal(toasts.warning.length, 0);
     assert.equal(toasts.success.length, 1);
     assert.match(toasts.success[0], /Saved 2 tracks to Vibe sweep/);
+    await h.unmount();
+});
+
+test("save completion does not dismiss a newer sweep result", async () => {
+    const pendingAdd = deferred<unknown>();
+    apiState.addImpl = () => pendingAdd.promise;
+    const h = await mountSweep();
+    await h.act(() => h.latest().begin({ x: 100, y: 500 }));
+    await h.act(() => void h.latest().finish(false));
+
+    let savePromise!: Promise<void>;
+    await h.act(() => { savePromise = h.latest().save(); });
+    await h.act(() => h.latest().begin({ x: 900, y: 500 }));
+    await h.act(() => void h.latest().finish(false));
+    assert.deepEqual(h.latest().result?.ids, ["t-right"]);
+
+    pendingAdd.resolve({});
+    await h.act(async () => { await savePromise; });
+    assert.deepEqual(h.latest().result?.ids, ["t-right"]);
     await h.unmount();
 });

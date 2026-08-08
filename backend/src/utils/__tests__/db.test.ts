@@ -120,6 +120,15 @@ describe("db connection pool config", () => {
         expect(poolConfig.connectionTimeoutMillis).toBe(15_000);
     });
 
+    it("passes the DATABASE_URL schema to the Prisma pg adapter", () => {
+        const { prismaPgCtor } = loadDbModule({
+            databaseUrl:
+                "postgresql://soundspan:secret@db.example:5432/soundspan?schema=tenant_a&sslmode=require",
+        });
+
+        expect(prismaPgCtor.mock.calls[0][1]).toEqual({ schema: "tenant_a" });
+    });
+
     it("falls back to role=all defaults when entrypoint inference is unknown", () => {
         const { prismaPgCtor, logger } = loadDbModule({
             argv1: "/app/dist/custom-entry.js",

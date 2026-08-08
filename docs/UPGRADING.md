@@ -50,10 +50,11 @@ to `24` across the board to match.
 
 **Action required:** none for operators running the published images — they
 already bundle their own Node runtime. Self-builders and host-runners should
-build/run with **Node 24** going forward. The package `engines.node` floor is
-intentionally left at `>=20.9.0` (unchanged, operator decision), so this is a
-recommendation, not a hard break — but CI and the shipped images no longer
-test against anything older than 24.
+build/run with **Node 24** going forward. The root, backend, frontend, and
+shared-contract packages now declare `engines.node: ">=24.0.0"`; source
+installs on Node 20–23 are no longer supported. Use the repository's `.nvmrc`
+to select the same runtime as CI and the published images.
+
 ## Native `<audio>`-element engine is now the default playback engine (1.8.0)
 
 **Who this affects:** every deployment that does not explicitly set `STREAMING_ENGINE_MODE`.

@@ -29,6 +29,23 @@ def test_docker_python_matches_lock_target() -> None:
     assert lock_version == image_version
 
 
+def test_security_audit_python_matches_image_runtime() -> None:
+    """The security matrix must evaluate markers with the shipped interpreter."""
+    service_root = Path(__file__).resolve().parents[1]
+    repository_root = service_root.parents[1]
+    workflow = (repository_root / ".github/workflows/security-scanning.yml").read_text(
+        encoding="utf-8"
+    )
+    matrix_match = re.search(
+        r"requirements: services/audio-analyzer-clap/requirements\.lock\s+"
+        r"python-version: \"(\d+)\.(\d+)\"",
+        workflow,
+    )
+
+    assert matrix_match is not None
+    assert tuple(int(part) for part in matrix_match.groups()) == (3, 12)
+
+
 def test_redis_floor_is_satisfied_by_all_runtime_locks() -> None:
     """Both CLAP deployment locks must satisfy the manifest's Redis floor."""
     service_root = Path(__file__).resolve().parents[1]

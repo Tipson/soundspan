@@ -345,6 +345,25 @@ test("journey teardown resets loading before the mode is re-entered", async () =
     await h.unmount();
 });
 
+test("journey input changes invalidate an in-flight route", async () => {
+    const h = await mountVibe();
+    await h.act(() => h.latest().startJourney());
+    await h.act(() => h.latest().journey?.chooseMood("moodHappy"));
+    await h.act(() => h.latest().journey?.submit());
+    assert.equal(h.latest().journey?.loading, true);
+
+    await h.act(() => h.latest().journey?.chooseMood("moodSad"));
+    assert.equal(h.latest().journey?.loading, false);
+
+    apiCalls.journey[0].resolve({
+        target: { label: "Happy" },
+        waypoints: [],
+    });
+    await h.act(async () => { await apiCalls.journey[0].promise; });
+    assert.equal(h.latest().journey?.targetLabel, null);
+    await h.unmount();
+});
+
 test("alchemy teardown resets loading before the mode is re-entered", async () => {
     const h = await mountVibe();
     await h.act(() =>
@@ -366,6 +385,26 @@ test("alchemy teardown resets loading before the mode is re-entered", async () =
     apiCalls.alchemy[0].resolve({ tracks: [] });
     await h.act(async () => { await apiCalls.alchemy[0].promise; });
     assert.equal(h.latest().alchemy?.loading, false);
+    await h.unmount();
+});
+
+test("alchemy ingredient changes invalidate an in-flight blend", async () => {
+    const h = await mountVibe();
+    await h.act(() =>
+        h.latest().onDotClick("t2", { ctrlOrMeta: true, shift: false })
+    );
+    await h.act(() =>
+        h.latest().onDotClick("t3", { ctrlOrMeta: true, shift: false })
+    );
+    await h.act(() => h.latest().alchemy?.blend());
+    assert.equal(h.latest().alchemy?.loading, true);
+
+    await h.act(() => h.latest().alchemy?.setWeight("t2", 2));
+    assert.equal(h.latest().alchemy?.loading, false);
+
+    apiCalls.alchemy[0].resolve({ tracks: [] });
+    await h.act(async () => { await apiCalls.alchemy[0].promise; });
+    assert.deepEqual(h.latest().alchemy?.results, []);
     await h.unmount();
 });
 

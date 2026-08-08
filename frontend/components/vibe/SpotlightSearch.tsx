@@ -142,10 +142,14 @@ function useDropdownController(args: {
         const row = args.rows[index];
         if (!row) return;
         setSuppressed(true);
-        if (row.kind === "match") args.onLocate(row.track.id);
+        if (row.kind === "match") {
+            args.remote.reset();
+            args.onLocate(row.track.id);
+        }
         else void args.remote.run();
     }, [args]);
     const change = useCallback((value: string) => {
+        args.remote.reset();
         args.setQuery(value);
         setActive(0);
         setSuppressed(false);

@@ -1,9 +1,9 @@
 name: Security Scanning
 
 # Vulnerability / secret scanning (docs/modernization-roadmap.md F45, epic
-# #10, #59 WS2.4). Every job below is deliberately non-blocking on day one --
-# see each job's continue-on-error comment -- so red findings are visible
-# signal without gating a PR. The blocking ratchet is tracked for 1.10.0.
+# #10, #59 WS2.4). Trivy and gitleaks remain visibility-only until the 1.10
+# ratchet. pip-audit is blocking: checked-in compatibility exceptions are
+# explicit per matrix lane, and every unexpected advisory fails the job.
 #
 # Trivy scans of the published GHCR images live in their own workflow,
 # image-security-scanning.yml (schedule/workflow_dispatch only): keeping
@@ -175,8 +175,6 @@ jobs:
   pip-audit:
     name: pip-audit (${{ matrix.requirements }})
     runs-on: ubuntu-latest
-    # non-blocking day one; ratchet to blocking in 1.10.0 (#59)
-    continue-on-error: true
     timeout-minutes: 20
     permissions:
       contents: read
@@ -192,12 +190,18 @@ jobs:
           # ytmusic-streamer + tidal-downloader images are python:3.14-slim.
           - requirements: services/ytmusic-streamer/requirements.lock
             python-version: "3.14"
+            audit-args: --disable-pip --no-deps
+            ignore-vulns: ""
           - requirements: services/tidal-downloader/requirements.lock
             python-version: "3.14"
-          # audio-analyzer-clap image is python:3.10-slim. Pulls in
+            audit-args: --disable-pip --no-deps
+            ignore-vulns: ""
+          # audio-analyzer-clap image is python:3.12-slim. Pulls in
           # torch/torchaudio/torchvision -- can be slow on a cold pip cache.
           - requirements: services/audio-analyzer-clap/requirements.lock
-            python-version: "3.10"
+            python-version: "3.12"
+            audit-args: --disable-pip --no-deps
+            ignore-vulns: ""
           # audio-analyzer's image is ubuntu:20.04 / Python 3.8 (EOL, below
           # pip-audit's >=3.10 floor). Its lock is compiled FOR 3.8; auditing it
           # on 3.10 is the nearest supported approximation. Exact-pin audits do
@@ -206,19 +210,75 @@ jobs:
           # (accepted, documented gap).
           - requirements: services/audio-analyzer/requirements.lock
             python-version: "3.10"
+            audit-args: --disable-pip --no-deps
+            # Compatibility exceptions: docs/SECURITY.md. Any new ID fails.
+            ignore-vulns: >-
+              --ignore-vuln CVE-2025-12060
+              --ignore-vuln CVE-2026-12479
+              --ignore-vuln CVE-2026-12480
+              --ignore-vuln CVE-2026-12481
+              --ignore-vuln CVE-2026-12482
+              --ignore-vuln CVE-2026-12484
+              --ignore-vuln CVE-2026-24049
+              --ignore-vuln CVE-2026-9335
+              --ignore-vuln GHSA-537c-gmf6-5ccf
+              --ignore-vuln PYSEC-2025-121
+              --ignore-vuln PYSEC-2025-76
+              --ignore-vuln PYSEC-2026-141
+              --ignore-vuln PYSEC-2026-1487
+              --ignore-vuln PYSEC-2026-1805
+              --ignore-vuln PYSEC-2026-1994
+              --ignore-vuln PYSEC-2026-1996
+              --ignore-vuln PYSEC-2026-1997
+              --ignore-vuln PYSEC-2026-1998
+              --ignore-vuln PYSEC-2026-1999
+              --ignore-vuln PYSEC-2026-2044
+              --ignore-vuln PYSEC-2026-2046
+              --ignore-vuln PYSEC-2026-2141
+              --ignore-vuln PYSEC-2026-2275
+              --ignore-vuln PYSEC-2026-2320
+              --ignore-vuln PYSEC-2026-2324
+              --ignore-vuln PYSEC-2026-2547
+              --ignore-vuln PYSEC-2026-3447
+              --ignore-vuln PYSEC-2026-35
+              --ignore-vuln PYSEC-2026-3552
+              --ignore-vuln PYSEC-2026-3553
+              --ignore-vuln PYSEC-2026-3554
+              --ignore-vuln PYSEC-2026-36
+              --ignore-vuln PYSEC-2026-89
           # AIO image bakes the analyzer + clap deps into one Debian-bookworm
           # system Python 3.11 site-packages; requirements-aio.lock is that
           # merged, jointly-resolved tree.
           - requirements: requirements-aio.lock
             python-version: "3.11"
+            audit-args: --disable-pip --no-deps
+            # TensorFlow 2.15 compatibility exceptions: docs/SECURITY.md.
+            ignore-vulns: >-
+              --ignore-vuln CVE-2025-12060
+              --ignore-vuln CVE-2026-12479
+              --ignore-vuln CVE-2026-12480
+              --ignore-vuln CVE-2026-12481
+              --ignore-vuln CVE-2026-12482
+              --ignore-vuln CVE-2026-12484
+              --ignore-vuln CVE-2026-9335
+              --ignore-vuln PYSEC-2025-121
+              --ignore-vuln PYSEC-2025-76
+              --ignore-vuln PYSEC-2026-1487
+              --ignore-vuln PYSEC-2026-1805
+              --ignore-vuln PYSEC-2026-2324
+              --ignore-vuln PYSEC-2026-2547
           # Loose full manifests via requirements-test.txt (-> requirements.txt):
           # audits the un-locked floors, INCLUDING the deliberately-exempt
           # yt-dlp/ytmusicapi that never appear in a lock. Images are
           # python:3.14-slim.
           - requirements: services/tidal-downloader/requirements-test.txt
             python-version: "3.14"
+            audit-args: ""
+            ignore-vulns: ""
           - requirements: services/ytmusic-streamer/requirements-test.txt
             python-version: "3.14"
+            audit-args: ""
+            ignore-vulns: ""
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -235,13 +295,12 @@ jobs:
 
       - name: Audit ${{ matrix.requirements }}
         run: |
-          set +e
+          set -o pipefail
           {
             echo "## pip-audit: ${{ matrix.requirements }} (Python ${{ matrix.python-version }})"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
-          if ! pip-audit -r "${{ matrix.requirements }}" -f markdown >> "$GITHUB_STEP_SUMMARY" 2>>"$GITHUB_STEP_SUMMARY"; then
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "_(pip-audit reported findings and/or a resolution error for this file -- see above; non-blocking.)_" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          pip-audit ${{ matrix.audit-args }} ${{ matrix.ignore-vulns }} \
+            -r "${{ matrix.requirements }}" -f markdown 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

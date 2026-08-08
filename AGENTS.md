@@ -42,7 +42,7 @@ There is **no root install** — `backend/`, `frontend/`, and `packages/media-me
 
 ### Prerequisites
 
-- **Node.js ≥ 20.9** — the frontend is Next.js 16 and will not build on older Node (Node 18 fails with `Node.js version ">=20.9.0" is required`). CI uses Node **24** for both backend and frontend jobs. Match ≥ 20.9 locally.
+- **Node.js ≥ 24** — the custom frontend proxy requires Node 24 and every Node-based image and CI job runs Node 24. Match the `.nvmrc` locally.
 - **npm 9+** — each package commits its own lockfile; use `npm ci` for reproducible installs.
 - **Python 3.11+** — only when changing the `services/**` sidecars.
 
@@ -55,7 +55,7 @@ There is **no root install** — `backend/`, `frontend/`, and `packages/media-me
 npm run setup        # npm run setup:ci for lockfile-exact installs
 
 # Node version: `.nvmrc` pins 24 for local dev; `engines` in every
-# package declares the floor (>= 20.9, required by Next 16).
+# package declares the same Node 24 floor.
 ```
 
 Equivalent manual sequence (what `npm run setup` runs):
@@ -83,7 +83,7 @@ Notes:
 
 - **The frontend has two type-check gates.** `next build` checks the Next build graph (`app/`, `lib/`, `components/`, `hooks/`, `features/`), while `npm run typecheck` checks the complete frontend TypeScript project, including standalone `tests/**` files, without reusing incremental state. `npm run lint` and the `node --test`/`tsx` runners transpile without type-checking.
 - **RAM:** per the targeted-testing rule above, iterate with `npm --prefix backend test -- <file>`; run the full `test:coverage` once before opening the PR.
-- **No Node ≥ 20.9 handy?** Type-checking still requires the repository's supported Node/npm toolchain and installed frontend dependencies; use `npm --prefix frontend run typecheck` for the standalone gate.
+- **No Node ≥ 24 handy?** Type-checking still requires the repository's supported Node/npm toolchain and installed frontend dependencies; use `npm --prefix frontend run typecheck` for the standalone gate.
 
 ## Verification Evidence Protocol
 

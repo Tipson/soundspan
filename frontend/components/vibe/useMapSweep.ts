@@ -167,7 +167,7 @@ function useSweepSave(result: SweepResult | null, setResult: StrokeState["setRes
             toast.error("Couldn't save that playlist");
         } finally {
             setSaving(false);
-            setResult(null);
+            setResult((current) => current === result ? null : current);
         }
     }, [result, setResult]);
     return { saving, save };

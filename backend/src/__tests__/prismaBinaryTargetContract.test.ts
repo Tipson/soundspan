@@ -24,3 +24,24 @@ describe("prisma engine-less client contract", () => {
         expect(config).toContain('env("DATABASE_URL")');
     });
 });
+
+describe("shuffle migration rollout contract", () => {
+    const migrationPath = path.resolve(
+        __dirname,
+        "../../prisma/migrations/20260711012100_add_track_random_sample_column/migration.sql",
+    );
+    const migration = fs.readFileSync(migrationPath, "utf8");
+
+    it("backfills the volatile random default without rewriting Track on ADD COLUMN", () => {
+        expect(migration).toContain('ADD COLUMN "random" DOUBLE PRECISION;');
+        expect(migration).toContain('ALTER COLUMN "random" SET DEFAULT random()');
+        expect(migration).toContain('UPDATE "Track" SET "random" = random()');
+        expect(migration).not.toMatch(/ADD COLUMN[^;]+NOT NULL[^;]+DEFAULT random\(\)/s);
+    });
+
+    it("builds the sampling index without blocking Track writes", () => {
+        expect(migration).toContain(
+            'CREATE INDEX CONCURRENTLY "Track_random_idx" ON "Track"("random")',
+        );
+    });
+});

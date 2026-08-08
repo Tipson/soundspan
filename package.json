@@ -4,7 +4,7 @@
     "private": true,
     "description": "Repo-level orchestration for the soundspan packages (backend, frontend, media-metadata-contract). Not a published package and deliberately NOT an npm workspace: each package keeps its own lockfile so the per-package Docker image builds and CI caching stay intact (GH #8; full workspace conversion is a tracked follow-up).",
     "engines": {
-        "node": ">=20.9.0"
+        "node": ">=24.0.0"
     },
     "scripts": {
         "setup": "npm --prefix packages/media-metadata-contract install && npm --prefix packages/media-metadata-contract run build && npm --prefix backend install && npm --prefix frontend install",

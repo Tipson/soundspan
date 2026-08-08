@@ -54,18 +54,18 @@ function useBlendRequest(state: ModeState) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const generation = useRef(0);
-    const clear = useCallback(() => {
+    const invalidate = useCallback(() => {
+        generation.current++;
         setRows(null);
         setError(null);
+        setLoading(false);
     }, []);
     const inAlchemy = state.mode === "alchemy";
     useEffect(() => {
         if (!inAlchemy) {
-            clear();
-            generation.current++;
-            setLoading(false);
+            invalidate();
         }
-    }, [inAlchemy, clear]);
+    }, [inAlchemy, invalidate]);
     const run = useCallback(() => {
         if (state.mode !== "alchemy" || state.ingredients.length < 2) return;
         const request = ++generation.current;
@@ -84,7 +84,7 @@ function useBlendRequest(state: ModeState) {
                 if (request === generation.current) setLoading(false);
             });
     }, [state]);
-    return { rows, loading, error, clear, run };
+    return { rows, loading, error, invalidate, run };
 }
 
 function ingredientViews(state: ModeState,
@@ -102,8 +102,8 @@ export function useAlchemyMode(args: UseAlchemyModeArgs): UseAlchemyMode {
     const blend = useBlendRequest(args.state);
     const addIngredient = useCallback((id: string) => {
         args.dispatch({ type: "ADD_ALCHEMY", id });
-        blend.clear();
-    }, [args.dispatch, blend.clear]);
+        blend.invalidate();
+    }, [args.dispatch, blend.invalidate]);
     const play = useCallback(() => {
         if (blend.rows?.length) {
             args.controls.playTracks(blend.rows.map(waypointToTrack), 0, true);
@@ -117,9 +117,13 @@ export function useAlchemyMode(args: UseAlchemyModeArgs): UseAlchemyMode {
         ingredients: ingredientViews(args.state, args.trackById), results,
         loading: blend.loading, error: blend.error,
         canBlend: args.state.ingredients.length >= 2, quantiles: args.quantiles,
-        remove: (id: string) => { args.dispatch({ type: "REMOVE_ALCHEMY", id }); blend.clear(); },
+        remove: (id: string) => {
+            args.dispatch({ type: "REMOVE_ALCHEMY", id });
+            blend.invalidate();
+        },
         setWeight: (id: string, weight: number) => {
-            args.dispatch({ type: "SET_WEIGHT", id, weight }); blend.clear();
+            args.dispatch({ type: "SET_WEIGHT", id, weight });
+            blend.invalidate();
         },
         blend: blend.run, play, clear: args.exitToExplore,
     } : null;

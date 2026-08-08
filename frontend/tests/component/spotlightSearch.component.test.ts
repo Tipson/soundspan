@@ -21,13 +21,17 @@ GlobalRegistrator.register();
     true;
 
 const vibeSearchCalls: string[] = [];
+let vibeSearchImpl = async (q: string) => ({
+    query: q,
+    tracks: [{ id: "vibe-result-1" }],
+});
 
 mock.module("@/lib/api", {
     namedExports: {
         api: {
             vibeSearch: async (q: string) => {
                 vibeSearchCalls.push(q);
-                return { query: q, tracks: [{ id: "vibe-result-1" }] };
+                return vibeSearchImpl(q);
             },
         },
     },
@@ -49,7 +53,17 @@ after(() => {
 
 beforeEach(() => {
     vibeSearchCalls.length = 0;
+    vibeSearchImpl = async (q: string) => ({
+        query: q,
+        tracks: [{ id: "vibe-result-1" }],
+    });
 });
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => { resolve = done; });
+    return { promise, resolve };
+}
 
 function track(
     id: string,
@@ -325,6 +339,39 @@ test("Enter with zero local matches falls through to the vibe search", async () 
 
     assert.deepEqual(vibeSearchCalls, ["zzzznomatch"]);
 
+    await unmount(mounted);
+});
+
+test("typing a new query invalidates an in-flight vibe search", async () => {
+    const pending = deferred<{ query: string; tracks: { id: string }[] }>();
+    vibeSearchImpl = () => pending.promise;
+    const results: string[][] = [];
+    const { SpotlightSearch } = await import(
+        "../../components/vibe/SpotlightSearch"
+    );
+    const mounted = await mount(React.createElement(SpotlightSearch, {
+        tracks,
+        onLocate: () => undefined,
+        onResults: (ids: Set<string>) => results.push([...ids]),
+        onClear: () => undefined,
+    }));
+    const input = mounted.container.querySelector(
+        'input[aria-label="Spotlight a vibe"]'
+    ) as HTMLInputElement;
+
+    await React.act(async () => {
+        input.focus();
+        typeInto(input, "zzzznomatch");
+    });
+    await React.act(async () => {
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    assert.deepEqual(vibeSearchCalls, ["zzzznomatch"]);
+
+    await React.act(async () => { typeInto(input, "aurora"); });
+    pending.resolve({ query: "zzzznomatch", tracks: [{ id: "stale" }] });
+    await React.act(async () => { await pending.promise; });
+    assert.deepEqual(results, []);
     await unmount(mounted);
 });
 
