@@ -4,8 +4,15 @@ All notable changes to soundspan are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+## [1.9.0] - 2026-08-08
 
 ### Added
 
@@ -265,7 +272,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session cookies are now **`secure` by default in production**, and the reverse-proxy trust level is configurable. The cookie `secure` flag was opt-in via a raw `process.env.SECURE_COOKIES === "true"` (defaulting off), so a production deploy that forgot the flag silently shipped non-secure cookies; it now defaults to `true` when `NODE_ENV=production` and is resolved through `config.ts` (set `SECURE_COOKIES=false` for an HTTP-only local-network deploy). `trust proxy` was hardcoded to `true` (trust every hop), which let a client spoof `X-Forwarded-For` to evade per-IP rate limits; set `TRUST_PROXY_HOPS` to your real reverse-proxy depth (usually `1`) for spoof-resistant client-IP resolution. The default remains trust-all to preserve existing multi-hop setups. (Helmet already ships CSP and HSTS by default — unchanged.)
 - JWT verification now **pins the algorithm** to `HS256`. All auth-class `jwt.verify` call sites (auth middleware, the `/api/auth/refresh` route, onboarding, and the Listen Together socket) pass `algorithms: ["HS256"]` so a token can never be accepted under a different or `none` algorithm. (The segmented-streaming session-token verifies use a separate `SESSION_TOKEN_SECRET` and are tracked under F37.) The `/refresh` route previously re-read the secret inline as `process.env.JWT_SECRET || process.env.SESSION_SECRET!` and cast the result to `any`; it now goes through a shared `verifyAuthToken` helper that resolves the secret from one validated source and returns a typed payload. Existing tokens (already HS256) are unaffected.
 - API keys are now stored as a **keyed hash (HMAC-SHA256) at rest** instead of verbatim, so a read-only database exposure (a dump, a replica, a raw-query slip) yields only hashes, not working credentials. Validation hashes the presented key and looks it up by hash; **existing device keys keep working with no re-pairing** thanks to a transitional plaintext-lookup fallback. New keys are hashed before insert and the raw value is shown only once at creation. `GET /api/admin/secrets-status` also reports hashed-vs-plaintext key counts, and `scripts/hash-existing-api-keys.ts` migrates legacy rows in bulk (forward-only, dry-run by default). The hash pepper resolves from `API_KEY_PEPPER` → `SETTINGS_ENCRYPTION_KEY` → `ENCRYPTION_KEY` (compat alias) → `SESSION_SECRET`, and `secrets-status` exposes an `apiKeys.pepperFingerprint` (an 8-hex identifier of the pepper *value*) that must match the migration script's logged fingerprint before running it with `--apply`. See `docs/UPGRADING.md`.
-
 
 ## [1.5.0] - 2026-03-27
 
