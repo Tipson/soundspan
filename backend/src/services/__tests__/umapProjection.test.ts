@@ -375,6 +375,7 @@ describe("computeMapProjection", () => {
                 ],
                 nNeighbors: 2,
             },
+            execArgv: ["--import", "tsx"],
         });
         expect(pipeline.setEx).toHaveBeenCalledWith(
             "vibe:map:v3:projection",
@@ -442,5 +443,20 @@ describe("computeMapProjection", () => {
 
         await expect(computeMapProjection()).rejects.toThrow("UMAP worker exited with code 2");
         expect(pipeline.exec).not.toHaveBeenCalled();
+    });
+});
+
+describe("umapWorkerOptions", () => {
+    it("registers tsx only for the development TypeScript worker", () => {
+        const { umapWorkerOptions } = loadModule();
+        const embeddings = [[1, 2, 3]];
+
+        expect(umapWorkerOptions("/workers/umapWorker.ts", embeddings, 2)).toEqual({
+            workerData: { embeddings, nNeighbors: 2 },
+            execArgv: ["--import", "tsx"],
+        });
+        expect(umapWorkerOptions("/workers/umapWorker.js", embeddings, 2)).toEqual({
+            workerData: { embeddings, nNeighbors: 2 },
+        });
     });
 });
