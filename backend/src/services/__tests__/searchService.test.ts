@@ -77,7 +77,11 @@ describe("search service", () => {
         ]);
 
         await expect(
-            searchService.searchArtists({ query: "radio head", limit: 5, offset: 0 })
+            searchService.searchArtists({
+                query: "radio head",
+                limit: 5,
+                offset: 0,
+            }),
         ).resolves.toEqual([
             expect.objectContaining({ id: "artist-1", rank: 0.91 }),
         ]);
@@ -91,7 +95,7 @@ describe("search service", () => {
             },
         ]);
         await expect(
-            searchService.searchArtists({ query: "!!!", limit: 5, offset: 1 })
+            searchService.searchArtists({ query: "!!!", limit: 5, offset: 1 }),
         ).resolves.toEqual([
             {
                 id: "artist-2",
@@ -112,7 +116,11 @@ describe("search service", () => {
             },
         ]);
         await expect(
-            searchService.searchArtists({ query: "recovered", limit: 3, offset: 0 })
+            searchService.searchArtists({
+                query: "recovered",
+                limit: 3,
+                offset: 0,
+            }),
         ).resolves.toEqual([
             {
                 id: "artist-3",
@@ -152,11 +160,11 @@ describe("search service", () => {
             ]);
 
         await expect(
-            searchService.searchAlbums({ query: "album", limit: 3, offset: 0 })
+            searchService.searchAlbums({ query: "album", limit: 3, offset: 0 }),
         ).resolves.toEqual([expect.objectContaining({ id: "album-1" })]);
 
         await expect(
-            searchService.searchTracks({ query: "track", limit: 3, offset: 0 })
+            searchService.searchTracks({ query: "track", limit: 3, offset: 0 }),
         ).resolves.toEqual([expect.objectContaining({ id: "track-1" })]);
 
         prisma.$queryRaw.mockRejectedValueOnce(new Error("album fts failed"));
@@ -171,7 +179,11 @@ describe("search service", () => {
             },
         ]);
         await expect(
-            searchService.searchAlbums({ query: "fallback", limit: 5, offset: 0 })
+            searchService.searchAlbums({
+                query: "fallback",
+                limit: 5,
+                offset: 0,
+            }),
         ).resolves.toEqual([
             {
                 id: "album-2",
@@ -198,7 +210,7 @@ describe("search service", () => {
             },
         ]);
         await expect(
-            searchService.searchTracks({ query: "***", limit: 5, offset: 0 })
+            searchService.searchTracks({ query: "***", limit: 5, offset: 0 }),
         ).resolves.toEqual([
             {
                 id: "track-2",
@@ -242,11 +254,19 @@ describe("search service", () => {
             .mockResolvedValueOnce([]);
 
         await expect(
-            searchService.searchPodcastsFTS({ query: "pod", limit: 5, offset: 0 })
+            searchService.searchPodcastsFTS({
+                query: "pod",
+                limit: 5,
+                offset: 0,
+            }),
         ).resolves.toEqual([expect.objectContaining({ id: "pod-1" })]);
 
         await expect(
-            searchService.searchEpisodes({ query: "episode", limit: 5, offset: 0 })
+            searchService.searchEpisodes({
+                query: "episode",
+                limit: 5,
+                offset: 0,
+            }),
         ).resolves.toEqual([expect.objectContaining({ id: "ep-1" })]);
 
         prisma.audiobook.findMany.mockResolvedValueOnce([
@@ -266,7 +286,7 @@ describe("search service", () => {
                 query: "audiobook",
                 limit: 5,
                 offset: 0,
-            })
+            }),
         ).resolves.toEqual([
             expect.objectContaining({
                 id: "book-1",
@@ -291,7 +311,7 @@ describe("search service", () => {
                 query: "fallback pod",
                 limit: 5,
                 offset: 0,
-            })
+            }),
         ).resolves.toEqual([expect.objectContaining({ id: "pod-2" })]);
     });
 
@@ -305,20 +325,35 @@ describe("search service", () => {
             episodes: [],
         };
 
-        await expect(searchService.searchArtists({ query: "   " })).resolves.toEqual([]);
-        await expect(searchService.searchAlbums({ query: "   " })).resolves.toEqual([]);
-        await expect(searchService.searchTracks({ query: "   " })).resolves.toEqual([]);
-        await expect(searchService.searchPodcasts({ query: "   " })).resolves.toEqual([]);
-        await expect(searchService.searchPodcastsFTS({ query: "   " })).resolves.toEqual([]);
-        await expect(searchService.searchEpisodes({ query: "   " })).resolves.toEqual([]);
         await expect(
-            searchService.searchAudiobooksFTS({ query: "   " })
+            searchService.searchArtists({ query: "   " }),
         ).resolves.toEqual([]);
         await expect(
-            searchService.searchByType({ query: "   ", type: "albums" })
+            searchService.searchAlbums({ query: "   " }),
+        ).resolves.toEqual([]);
+        await expect(
+            searchService.searchTracks({ query: "   " }),
+        ).resolves.toEqual([]);
+        await expect(
+            searchService.searchPodcasts({ query: "   " }),
+        ).resolves.toEqual([]);
+        await expect(
+            searchService.searchPodcastsFTS({ query: "   " }),
+        ).resolves.toEqual([]);
+        await expect(
+            searchService.searchEpisodes({ query: "   " }),
+        ).resolves.toEqual([]);
+        await expect(
+            searchService.searchAudiobooksFTS({ query: "   " }),
+        ).resolves.toEqual([]);
+        await expect(
+            searchService.searchByType({ query: "   ", type: "albums" }),
         ).resolves.toEqual(emptyResults);
 
-        const allSearch = await searchService.searchAll({ query: "   ", limit: 5 });
+        const allSearch = await searchService.searchAll({
+            query: "   ",
+            limit: 5,
+        });
         expect(allSearch).toEqual(emptyResults);
 
         expect(redisClient.get).not.toHaveBeenCalled();
@@ -328,16 +363,20 @@ describe("search service", () => {
     });
 
     it("searchPodcasts handles empty query and database errors deterministically", async () => {
-        await expect(searchService.searchPodcasts({ query: "   " })).resolves.toEqual([]);
+        await expect(
+            searchService.searchPodcasts({ query: "   " }),
+        ).resolves.toEqual([]);
         expect(prisma.podcast.findMany).not.toHaveBeenCalled();
 
         prisma.podcast.findMany.mockRejectedValueOnce(
-            new Error("podcast like search failed")
+            new Error("podcast like search failed"),
         );
-        await expect(searchService.searchPodcasts({ query: "rock" })).resolves.toEqual([]);
+        await expect(
+            searchService.searchPodcasts({ query: "rock" }),
+        ).resolves.toEqual([]);
         expect(logger.error).toHaveBeenCalledWith(
             "Podcast search error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -362,7 +401,11 @@ describe("search service", () => {
 
     it("searchByType returns empty result for empty query and warns on cache write failure for unknown type", async () => {
         await expect(
-            searchService.searchByType({ query: "   ", type: "tracks", limit: 3 })
+            searchService.searchByType({
+                query: "   ",
+                type: "tracks",
+                limit: 3,
+            }),
         ).resolves.toEqual({
             artists: [],
             albums: [],
@@ -375,7 +418,9 @@ describe("search service", () => {
         expect(redisClient.setEx).not.toHaveBeenCalled();
 
         redisClient.get.mockResolvedValueOnce(null);
-        redisClient.setEx.mockRejectedValueOnce(new Error("cache write failed"));
+        redisClient.setEx.mockRejectedValueOnce(
+            new Error("cache write failed"),
+        );
 
         const unknownTypeResult = await searchService.searchByType({
             query: "rock",
@@ -393,7 +438,7 @@ describe("search service", () => {
         });
         expect(logger.warn).toHaveBeenCalledWith(
             "[SEARCH] Redis write error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(redisClient.setEx).toHaveBeenCalled();
     });
@@ -405,9 +450,11 @@ describe("search service", () => {
                 albums: [],
                 tracks: [],
                 podcasts: [],
-                audiobooks: [{ id: "book-9", coverUrl: "https://cached-cover" }],
+                audiobooks: [
+                    { id: "book-9", coverUrl: "https://cached-cover" },
+                ],
                 episodes: [],
-            })
+            }),
         );
 
         const cacheHit = await searchService.searchAll({
@@ -445,8 +492,12 @@ describe("search service", () => {
                 rank: 1,
             },
         ]);
-        jest.spyOn(searchService, "searchPodcastsFTS").mockResolvedValueOnce([]);
-        jest.spyOn(searchService, "searchAudiobooksFTS").mockResolvedValueOnce([]);
+        jest.spyOn(searchService, "searchPodcastsFTS").mockResolvedValueOnce(
+            [],
+        );
+        jest.spyOn(searchService, "searchAudiobooksFTS").mockResolvedValueOnce(
+            [],
+        );
         jest.spyOn(searchService, "searchEpisodes").mockResolvedValueOnce([]);
         jest.spyOn(searchService, "filterTracksByGenre").mockResolvedValueOnce([
             {
@@ -460,7 +511,9 @@ describe("search service", () => {
                 rank: 1,
             },
         ]);
-        redisClient.setEx.mockRejectedValueOnce(new Error("redis write failed"));
+        redisClient.setEx.mockRejectedValueOnce(
+            new Error("redis write failed"),
+        );
 
         const cacheMiss = await searchService.searchAll({
             query: "artist",
@@ -473,7 +526,7 @@ describe("search service", () => {
         expect(redisClient.setEx).toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
             "[SEARCH] Redis cache write error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -502,18 +555,27 @@ describe("search service", () => {
                     rank: 0.9,
                 },
             ],
-            "jazz"
+            "jazz",
         );
         expect(filtered).toEqual([expect.objectContaining({ id: "track-2" })]);
 
         redisClient.get.mockResolvedValueOnce(
-            JSON.stringify({ artists: [{ id: "a" }], albums: [], tracks: [], podcasts: [], audiobooks: [], episodes: [] })
+            JSON.stringify({
+                artists: [{ id: "a" }],
+                albums: [],
+                tracks: [],
+                podcasts: [],
+                audiobooks: [],
+                episodes: [],
+            }),
         );
         await expect(
-            searchService.searchByType({ query: "cached", type: "artists", limit: 5 })
-        ).resolves.toEqual(
-            expect.objectContaining({ artists: [{ id: "a" }] })
-        );
+            searchService.searchByType({
+                query: "cached",
+                type: "artists",
+                limit: 5,
+            }),
+        ).resolves.toEqual(expect.objectContaining({ artists: [{ id: "a" }] }));
 
         redisClient.get.mockResolvedValue(null);
 
@@ -571,17 +633,25 @@ describe("search service", () => {
             genre: "electronic",
         });
 
-        jest.spyOn(searchService, "searchPodcastsFTS").mockResolvedValueOnce([]);
+        jest.spyOn(searchService, "searchPodcastsFTS").mockResolvedValueOnce(
+            [],
+        );
         await searchService.searchByType({ query: "pod", type: "podcasts" });
 
-        jest.spyOn(searchService, "searchAudiobooksFTS").mockResolvedValueOnce([]);
+        jest.spyOn(searchService, "searchAudiobooksFTS").mockResolvedValueOnce(
+            [],
+        );
         await searchService.searchByType({ query: "book", type: "audiobooks" });
 
         jest.spyOn(searchService, "searchEpisodes").mockResolvedValueOnce([]);
         await searchService.searchByType({ query: "ep", type: "episodes" });
 
         await expect(
-            searchService.searchByType({ query: "  ", type: "artists", limit: 5 })
+            searchService.searchByType({
+                query: "  ",
+                type: "artists",
+                limit: 5,
+            }),
         ).resolves.toEqual({
             artists: [],
             albums: [],
@@ -599,7 +669,7 @@ describe("search service", () => {
         });
         expect(logger.warn).toHaveBeenCalledWith(
             "[SEARCH] Redis read error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(cachedParseFail.albums).toEqual([]);
 
@@ -610,7 +680,7 @@ describe("search service", () => {
         });
         expect(logger.warn).toHaveBeenCalledWith(
             "[SEARCH] Redis cache read error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(allParseFail).toEqual({
             artists: [],
@@ -622,7 +692,7 @@ describe("search service", () => {
         });
 
         await expect(
-            searchService.searchByType({ query: "noop", type: "unknown" })
+            searchService.searchByType({ query: "noop", type: "unknown" }),
         ).resolves.toEqual({
             artists: [],
             albums: [],
@@ -700,7 +770,7 @@ describe("search service", () => {
                         { remoteTrackCount: { gt: 0 } },
                     ],
                 }),
-            })
+            }),
         );
     });
 
@@ -725,7 +795,7 @@ describe("search service", () => {
                         { remoteTrackCount: { gt: 0 } },
                     ],
                 }),
-            })
+            }),
         );
     });
 

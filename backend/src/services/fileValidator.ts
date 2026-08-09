@@ -8,7 +8,9 @@ import PQueue from "p-queue";
 
 type LibraryHealthRecordDelegate = {
     upsert(args: Prisma.LibraryHealthRecordUpsertArgs): Promise<unknown>;
-    deleteMany(args: Prisma.LibraryHealthRecordDeleteManyArgs): Promise<unknown>;
+    deleteMany(
+        args: Prisma.LibraryHealthRecordDeleteManyArgs,
+    ): Promise<unknown>;
 };
 
 function getLibraryHealthRecordDelegate(): LibraryHealthRecordDelegate {
@@ -35,7 +37,7 @@ export class FileValidatorService {
     private async markTrackMissing(
         trackId: string,
         filePath: string,
-        detail?: string
+        detail?: string,
     ): Promise<void> {
         await getLibraryHealthRecordDelegate().upsert({
             where: { trackId },
@@ -86,7 +88,7 @@ export class FileValidatorService {
         });
 
         logger.debug(
-            `[FileValidator] Found ${tracks.length} tracks to validate`
+            `[FileValidator] Found ${tracks.length} tracks to validate`,
         );
 
         // Check each track's file existence
@@ -97,13 +99,17 @@ export class FileValidatorService {
             await this.validationQueue.add(async () => {
                 try {
                     const absolutePath = path.normalize(
-                        path.join(config.music.musicPath, track.filePath)
+                        path.join(config.music.musicPath, track.filePath),
                     );
 
                     // Prevent path traversal attacks
-                    if (!absolutePath.startsWith(path.normalize(config.music.musicPath))) {
+                    if (
+                        !absolutePath.startsWith(
+                            path.normalize(config.music.musicPath),
+                        )
+                    ) {
                         logger.warn(
-                            `[FileValidator] Path traversal attempt detected: ${track.filePath}`
+                            `[FileValidator] Path traversal attempt detected: ${track.filePath}`,
                         );
                         missingTrackIds.push(track.id);
                         result.tracksChecked++;
@@ -114,7 +120,7 @@ export class FileValidatorService {
 
                     if (!exists) {
                         logger.debug(
-                            `[FileValidator] Missing file: ${track.filePath} (${track.title})`
+                            `[FileValidator] Missing file: ${track.filePath} (${track.title})`,
                         );
                         missingTrackIds.push(track.id);
                     } else {
@@ -126,13 +132,13 @@ export class FileValidatorService {
                     // Log progress every 100 tracks
                     if (result.tracksChecked % 100 === 0) {
                         logger.debug(
-                            `[FileValidator] Progress: ${result.tracksChecked}/${tracks.length} tracks checked, ${missingTrackIds.length} missing`
+                            `[FileValidator] Progress: ${result.tracksChecked}/${tracks.length} tracks checked, ${missingTrackIds.length} missing`,
                         );
                     }
                 } catch (err: any) {
                     logger.error(
                         `[FileValidator] Error checking ${track.filePath}:`,
-                        err.message
+                        err.message,
                     );
                 }
             });
@@ -153,23 +159,23 @@ export class FileValidatorService {
 
         if (missingTrackIds.length > 0) {
             logger.debug(
-                `[FileValidator] Recording ${missingTrackIds.length} missing tracks in library health...`
+                `[FileValidator] Recording ${missingTrackIds.length} missing tracks in library health...`,
             );
 
             const missingTracks = tracks.filter((track) =>
-                missingTrackIds.includes(track.id)
+                missingTrackIds.includes(track.id),
             );
             await Promise.all(
                 missingTracks.map((track) =>
-                    this.markTrackMissing(track.id, track.filePath)
-                )
+                    this.markTrackMissing(track.id, track.filePath),
+                ),
             );
         }
 
         result.duration = Date.now() - startTime;
 
         logger.debug(
-            `[FileValidator] Validation complete: ${result.tracksChecked} checked, ${result.tracksMissing.length} unhealthy (${result.duration}ms)`
+            `[FileValidator] Validation complete: ${result.tracksChecked} checked, ${result.tracksMissing.length} unhealthy (${result.duration}ms)`,
         );
 
         return result;
@@ -205,18 +211,18 @@ export class FileValidatorService {
         }
 
         const absolutePath = path.normalize(
-            path.join(config.music.musicPath, track.filePath)
+            path.join(config.music.musicPath, track.filePath),
         );
 
         // Prevent path traversal attacks
         if (!absolutePath.startsWith(path.normalize(config.music.musicPath))) {
             logger.warn(
-                `[FileValidator] Path traversal attempt detected: ${track.filePath}`
+                `[FileValidator] Path traversal attempt detected: ${track.filePath}`,
             );
             await this.markTrackMissing(
                 track.id,
                 track.filePath,
-                "Path traversal attempt detected during validation"
+                "Path traversal attempt detected during validation",
             );
             return false;
         }
@@ -225,7 +231,7 @@ export class FileValidatorService {
 
         if (!exists) {
             logger.debug(
-                `[FileValidator] Track file missing, recording health issue: ${track.title}`
+                `[FileValidator] Track file missing, recording health issue: ${track.title}`,
             );
             await this.markTrackMissing(track.id, track.filePath);
             return false;

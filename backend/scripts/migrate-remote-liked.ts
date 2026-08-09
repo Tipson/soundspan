@@ -27,9 +27,7 @@ function parseCliArgs(argv: string[]): CliOptions {
         ? Number.parseInt(batchArg.split("=")[1] || "", 10)
         : 100;
     const batchSize =
-        Number.isFinite(parsedBatch) && parsedBatch > 0
-            ? parsedBatch
-            : 100;
+        Number.isFinite(parsedBatch) && parsedBatch > 0 ? parsedBatch : 100;
 
     return { dryRun, batchSize };
 }
@@ -41,7 +39,7 @@ async function runMigration(options: CliOptions): Promise<void> {
     let offset = 0;
 
     console.log(
-        `[migrate-remote-liked] starting (dryRun=${options.dryRun}, batchSize=${options.batchSize})`
+        `[migrate-remote-liked] starting (dryRun=${options.dryRun}, batchSize=${options.batchSize})`,
     );
 
     const tablePresence = await prisma.$queryRaw<
@@ -54,7 +52,7 @@ async function runMigration(options: CliOptions): Promise<void> {
     ) AS present`;
     if (!tablePresence[0]?.present) {
         console.log(
-            "[migrate-remote-liked] RemoteLikedTrack table not present; nothing to migrate"
+            "[migrate-remote-liked] RemoteLikedTrack table not present; nothing to migrate",
         );
         return;
     }
@@ -78,7 +76,7 @@ async function runMigration(options: CliOptions): Promise<void> {
                 LIMIT $2
             `,
             offset,
-            options.batchSize
+            options.batchSize,
         );
 
         if (batch.length === 0) break;
@@ -91,7 +89,7 @@ async function runMigration(options: CliOptions): Promise<void> {
                 if (!Number.isFinite(tidalId) || tidalId <= 0) {
                     skipped += 1;
                     console.warn(
-                        `[migrate-remote-liked] skipping invalid tidal external id: ${legacyRow.externalId}`
+                        `[migrate-remote-liked] skipping invalid tidal external id: ${legacyRow.externalId}`,
                     );
                     continue;
                 }
@@ -150,7 +148,7 @@ async function runMigration(options: CliOptions): Promise<void> {
                 if (!videoId) {
                     skipped += 1;
                     console.warn(
-                        "[migrate-remote-liked] skipping empty youtube external id"
+                        "[migrate-remote-liked] skipping empty youtube external id",
                     );
                     continue;
                 }
@@ -198,18 +196,18 @@ async function runMigration(options: CliOptions): Promise<void> {
 
             skipped += 1;
             console.warn(
-                `[migrate-remote-liked] skipping unsupported provider: ${legacyRow.provider}`
+                `[migrate-remote-liked] skipping unsupported provider: ${legacyRow.provider}`,
             );
         }
 
         offset += batch.length;
         console.log(
-            `[migrate-remote-liked] progress processed=${processed} migrated=${migrated} skipped=${skipped}`
+            `[migrate-remote-liked] progress processed=${processed} migrated=${migrated} skipped=${skipped}`,
         );
     }
 
     console.log(
-        `[migrate-remote-liked] complete processed=${processed} migrated=${migrated} skipped=${skipped}`
+        `[migrate-remote-liked] complete processed=${processed} migrated=${migrated} skipped=${skipped}`,
     );
 }
 

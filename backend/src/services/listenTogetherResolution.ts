@@ -60,7 +60,10 @@ function hasToken(value: string | null | undefined): boolean {
     return typeof value === "string" && value.trim().length > 0;
 }
 
-function hasDurationMismatch(expectedSeconds: number, actualSeconds: number): boolean {
+function hasDurationMismatch(
+    expectedSeconds: number,
+    actualSeconds: number,
+): boolean {
     if (!Number.isFinite(expectedSeconds) || !Number.isFinite(actualSeconds)) {
         return false;
     }
@@ -74,7 +77,7 @@ function hasDurationMismatch(expectedSeconds: number, actualSeconds: number): bo
  * Returns cached per-user provider connectivity flags used for queue resolution.
  */
 export async function getUserProviderProfile(
-    userId: string
+    userId: string,
 ): Promise<UserProviderProfile> {
     const cached = profileCache.get(userId);
     if (cached && cached.expiresAt > Date.now()) {
@@ -122,13 +125,19 @@ type MappingWithTargets = {
 
 interface ResolveTrackContext {
     mappingsById?: Map<string, MappingWithTargets>;
-    trackTidalById?: Map<string, { id: string; tidalId: number; duration: number }>;
-    trackYtById?: Map<string, { id: string; videoId: string; duration: number }>;
+    trackTidalById?: Map<
+        string,
+        { id: string; tidalId: number; duration: number }
+    >;
+    trackYtById?: Map<
+        string,
+        { id: string; videoId: string; duration: number }
+    >;
 }
 
 async function loadMapping(
     mappingId: string,
-    context?: ResolveTrackContext
+    context?: ResolveTrackContext,
 ): Promise<MappingWithTargets | null> {
     const cached = context?.mappingsById?.get(mappingId);
     if (cached) return cached;
@@ -166,7 +175,7 @@ async function loadMapping(
 export async function resolveTrackForUser(
     item: TrackResolutionInput,
     profile: UserProviderProfile,
-    context?: ResolveTrackContext
+    context?: ResolveTrackContext,
 ): Promise<ResolvedSource> {
     const localTrackId =
         item.localTrackId ??
@@ -184,7 +193,11 @@ export async function resolveTrackForUser(
             return { available: false, reason: "stale" };
         }
         if (mapping.trackId) {
-            return { available: true, source: "local", trackId: mapping.trackId };
+            return {
+                available: true,
+                source: "local",
+                trackId: mapping.trackId,
+            };
         }
 
         if (!profile.hasTidal && !profile.hasYtMusic) {
@@ -195,7 +208,9 @@ export async function resolveTrackForUser(
         }
 
         if (mapping.trackTidal && profile.hasTidal) {
-            if (hasDurationMismatch(item.duration, mapping.trackTidal.duration)) {
+            if (
+                hasDurationMismatch(item.duration, mapping.trackTidal.duration)
+            ) {
                 return { available: false, reason: "duration-mismatch" };
             }
             return {
@@ -207,7 +222,12 @@ export async function resolveTrackForUser(
         }
 
         if (mapping.trackYtMusic && profile.hasYtMusic) {
-            if (hasDurationMismatch(item.duration, mapping.trackYtMusic.duration)) {
+            if (
+                hasDurationMismatch(
+                    item.duration,
+                    mapping.trackYtMusic.duration,
+                )
+            ) {
                 return { available: false, reason: "duration-mismatch" };
             }
             return {
@@ -228,16 +248,18 @@ export async function resolveTrackForUser(
             ? context?.trackTidalById?.get(item.trackTidalId)
             : undefined;
         if (!tidalTrack && item.trackTidalId) {
-            tidalTrack = (await prisma.trackTidal.findUnique({
-                where: { id: item.trackTidalId },
-                select: { id: true, tidalId: true, duration: true },
-            })) ?? undefined;
+            tidalTrack =
+                (await prisma.trackTidal.findUnique({
+                    where: { id: item.trackTidalId },
+                    select: { id: true, tidalId: true, duration: true },
+                })) ?? undefined;
         }
         if (!tidalTrack && typeof item.tidalTrackId === "number") {
-            tidalTrack = (await prisma.trackTidal.findUnique({
-                where: { tidalId: item.tidalTrackId },
-                select: { id: true, tidalId: true, duration: true },
-            })) ?? undefined;
+            tidalTrack =
+                (await prisma.trackTidal.findUnique({
+                    where: { tidalId: item.tidalTrackId },
+                    select: { id: true, tidalId: true, duration: true },
+                })) ?? undefined;
         }
 
         if (profile.hasTidal && tidalTrack) {
@@ -271,7 +293,12 @@ export async function resolveTrackForUser(
                 crossMapping?.trackYtMusic &&
                 crossMapping.confidence >= MIN_MAPPING_CONFIDENCE
             ) {
-                if (!hasDurationMismatch(item.duration, crossMapping.trackYtMusic.duration)) {
+                if (
+                    !hasDurationMismatch(
+                        item.duration,
+                        crossMapping.trackYtMusic.duration,
+                    )
+                ) {
                     return {
                         available: true,
                         source: "youtube",
@@ -282,7 +309,10 @@ export async function resolveTrackForUser(
             }
         }
 
-        return { available: false, reason: resolvedTidalId ? "no-provider" : "no-mapping" };
+        return {
+            available: false,
+            reason: resolvedTidalId ? "no-provider" : "no-mapping",
+        };
     }
 
     if (item.trackYtMusicId || typeof item.youtubeVideoId === "string") {
@@ -292,16 +322,18 @@ export async function resolveTrackForUser(
             ? context?.trackYtById?.get(item.trackYtMusicId)
             : undefined;
         if (!ytTrack && item.trackYtMusicId) {
-            ytTrack = (await prisma.trackYtMusic.findUnique({
-                where: { id: item.trackYtMusicId },
-                select: { id: true, videoId: true, duration: true },
-            })) ?? undefined;
+            ytTrack =
+                (await prisma.trackYtMusic.findUnique({
+                    where: { id: item.trackYtMusicId },
+                    select: { id: true, videoId: true, duration: true },
+                })) ?? undefined;
         }
         if (!ytTrack && typeof item.youtubeVideoId === "string") {
-            ytTrack = (await prisma.trackYtMusic.findUnique({
-                where: { videoId: item.youtubeVideoId },
-                select: { id: true, videoId: true, duration: true },
-            })) ?? undefined;
+            ytTrack =
+                (await prisma.trackYtMusic.findUnique({
+                    where: { videoId: item.youtubeVideoId },
+                    select: { id: true, videoId: true, duration: true },
+                })) ?? undefined;
         }
 
         if (profile.hasYtMusic && ytTrack) {
@@ -335,7 +367,12 @@ export async function resolveTrackForUser(
                 crossMapping?.trackTidal &&
                 crossMapping.confidence >= MIN_MAPPING_CONFIDENCE
             ) {
-                if (!hasDurationMismatch(item.duration, crossMapping.trackTidal.duration)) {
+                if (
+                    !hasDurationMismatch(
+                        item.duration,
+                        crossMapping.trackTidal.duration,
+                    )
+                ) {
                     return {
                         available: true,
                         source: "tidal",
@@ -346,7 +383,10 @@ export async function resolveTrackForUser(
             }
         }
 
-        return { available: false, reason: resolvedYtId ? "no-provider" : "no-mapping" };
+        return {
+            available: false,
+            reason: resolvedYtId ? "no-provider" : "no-mapping",
+        };
     }
 
     return { available: false, reason: "no-mapping" };
@@ -357,7 +397,7 @@ export async function resolveTrackForUser(
  */
 export async function resolveQueueForUser(
     queue: TrackResolutionInput[],
-    userId: string
+    userId: string,
 ): Promise<Map<number, ResolvedSource>> {
     const profile = await getUserProviderProfile(userId);
 
@@ -365,22 +405,22 @@ export async function resolveQueueForUser(
         new Set(
             queue
                 .map((item) => item.trackMappingId)
-                .filter((value): value is string => typeof value === "string")
-        )
+                .filter((value): value is string => typeof value === "string"),
+        ),
     );
     const trackTidalIds = Array.from(
         new Set(
             queue
                 .map((item) => item.trackTidalId)
-                .filter((value): value is string => typeof value === "string")
-        )
+                .filter((value): value is string => typeof value === "string"),
+        ),
     );
     const trackYtMusicIds = Array.from(
         new Set(
             queue
                 .map((item) => item.trackYtMusicId)
-                .filter((value): value is string => typeof value === "string")
-        )
+                .filter((value): value is string => typeof value === "string"),
+        ),
     );
 
     const [mappings, tidalTracks, ytTracks] = await Promise.all([
@@ -423,11 +463,18 @@ export async function resolveQueueForUser(
 
     const resolved = new Map<number, ResolvedSource>();
     for (let index = 0; index < queue.length; index += 1) {
-        resolved.set(index, await resolveTrackForUser(queue[index], profile, context));
+        resolved.set(
+            index,
+            await resolveTrackForUser(queue[index], profile, context),
+        );
     }
 
-    const available = Array.from(resolved.values()).filter((r) => r.available).length;
-    log.debug(`Resolved queue for user ${userId}: ${available}/${queue.length} available`);
+    const available = Array.from(resolved.values()).filter(
+        (r) => r.available,
+    ).length;
+    log.debug(
+        `Resolved queue for user ${userId}: ${available}/${queue.length} available`,
+    );
 
     return resolved;
 }

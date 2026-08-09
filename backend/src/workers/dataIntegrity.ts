@@ -19,7 +19,9 @@ const DATA_INTEGRITY_PRISMA_RETRY_ATTEMPTS = 3;
 
 function isRetryableDataIntegrityPrismaError(error: unknown): boolean {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(error.code);
+        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(
+            error.code,
+        );
     }
 
     if (error instanceof Prisma.PrismaClientRustPanicError) {
@@ -46,7 +48,7 @@ function isRetryableDataIntegrityPrismaError(error: unknown): boolean {
 
 async function withDataIntegrityPrismaRetry<T>(
     operationName: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
 ): Promise<T> {
     for (let attempt = 1; ; attempt += 1) {
         try {
@@ -61,7 +63,7 @@ async function withDataIntegrityPrismaRetry<T>(
 
             logger.warn(
                 `[DataIntegrity/Prisma] ${operationName} failed (attempt ${attempt}/${DATA_INTEGRITY_PRISMA_RETRY_ATTEMPTS}), retrying`,
-                error
+                error,
             );
             await prisma.$connect().catch(() => {});
             await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
@@ -103,12 +105,12 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 where: {
                     expiresAt: { lt: new Date() },
                 },
-            })
+            }),
     );
     report.expiredExclusions = expiredExclusions.count;
     if (expiredExclusions.count > 0) {
         logger.debug(
-            `     Removed ${expiredExclusions.count} expired exclusions`
+            `     Removed ${expiredExclusions.count} expired exclusions`,
         );
     }
 
@@ -120,12 +122,12 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 where: {
                     trackId: null,
                 },
-            })
+            }),
     );
     report.orphanedDiscoveryTracks = orphanedDiscoveryTracks.count;
     if (orphanedDiscoveryTracks.count > 0) {
         logger.debug(
-            `     Removed ${orphanedDiscoveryTracks.count} orphaned discovery track records`
+            `     Removed ${orphanedDiscoveryTracks.count} orphaned discovery track records`,
         );
     }
 
@@ -136,7 +138,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
             prisma.album.findMany({
                 where: { location: "DISCOVER" },
                 include: { artist: true },
-            })
+            }),
     );
 
     for (const album of discoverAlbums) {
@@ -161,7 +163,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                         ],
                         status: { in: ["ACTIVE", "LIKED", "MOVED"] },
                     },
-                })
+                }),
         );
 
         // Also check if there's an OwnedAlbum record (user liked it)
@@ -173,7 +175,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                         artistId: album.artistId,
                         rgMbid: album.rgMbid,
                     },
-                })
+                }),
         );
 
         if (!hasActiveRecord && !hasOwnedRecord) {
@@ -183,7 +185,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 () =>
                     prisma.track.deleteMany({
                         where: { albumId: album.id },
-                    })
+                    }),
             );
             // Delete album
             await withDataIntegrityPrismaRetry(
@@ -191,11 +193,11 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 () =>
                     prisma.album.delete({
                         where: { id: album.id },
-                    })
+                    }),
             );
             report.orphanedAlbums++;
             logger.debug(
-                `     Removed orphaned album: ${album.artist.name} - ${album.title}`
+                `     Removed orphaned album: ${album.artist.name} - ${album.title}`,
             );
         }
     }
@@ -206,7 +208,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
     // - Lidarr downloads a different album than requested (e.g., "Broods" album vs "Evergreen" album)
     // - Album title metadata differs from the requested album
     // - Scanner ran before DiscoveryAlbum records were created
-    
+
     const discoveryJobs = await withDataIntegrityPrismaRetry(
         "runDataIntegrityCheck.downloadJob.findMany.discoveryJobs",
         () =>
@@ -215,14 +217,14 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                     discoveryBatchId: { not: null },
                     status: { in: ["pending", "processing", "completed"] },
                 },
-            })
+            }),
     );
-    
+
     // Build sets of discovery album titles AND artist names (normalized)
     const discoveryAlbumTitles = new Set<string>();
     const discoveryArtistNames = new Set<string>();
     const discoveryArtistMbids = new Set<string>();
-    
+
     for (const job of discoveryJobs) {
         const {
             normalizedAlbumTitle: albumTitle,
@@ -233,19 +235,19 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
         if (artistName) discoveryArtistNames.add(artistName);
         if (artistMbid) discoveryArtistMbids.add(artistMbid);
     }
-    
+
     // Also check DiscoveryAlbum table for ALL discoveries (not just active)
     // This catches albums where Lidarr downloaded a different album than requested
     const allDiscoveryAlbums = await withDataIntegrityPrismaRetry(
         "runDataIntegrityCheck.discoveryAlbum.findMany.all",
-        () => prisma.discoveryAlbum.findMany()
+        () => prisma.discoveryAlbum.findMany(),
     );
     for (const da of allDiscoveryAlbums) {
         discoveryAlbumTitles.add(da.albumTitle.toLowerCase().trim());
         discoveryArtistNames.add(da.artistName.toLowerCase().trim());
         if (da.artistMbid) discoveryArtistMbids.add(da.artistMbid);
     }
-    
+
     // Find LIBRARY albums that might be discovery
     const libraryAlbums = await withDataIntegrityPrismaRetry(
         "runDataIntegrityCheck.album.findMany.library",
@@ -253,24 +255,26 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
             prisma.album.findMany({
                 where: { location: "LIBRARY" },
                 include: { artist: true },
-            })
+            }),
     );
-    
+
     let mislocatedAlbumsFixed = 0;
     for (const album of libraryAlbums) {
         const normalizedTitle = album.title.toLowerCase().trim();
         const normalizedArtist = album.artist.name.toLowerCase().trim();
-        
+
         // Match criteria:
         // 1. Album title matches a discovery download, OR
         // 2. Artist name matches a discovery download (catches Lidarr downloading wrong album), OR
         // 3. Artist MBID matches a discovery download
         const albumMatches = discoveryAlbumTitles.has(normalizedTitle);
         const artistNameMatches = discoveryArtistNames.has(normalizedArtist);
-        const artistMbidMatches = album.artist.mbid ? discoveryArtistMbids.has(album.artist.mbid) : false;
-        
+        const artistMbidMatches = album.artist.mbid
+            ? discoveryArtistMbids.has(album.artist.mbid)
+            : false;
+
         if (!albumMatches && !artistNameMatches && !artistMbidMatches) continue;
-        
+
         // KEY FIX: Check if artist has ANY protected OwnedAlbum records:
         // - native_scan = real user library from before discovery
         // - discovery_liked = user liked a discovery album (should be kept!)
@@ -282,14 +286,14 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                         artistId: album.artistId,
                         source: { in: ["native_scan", "discovery_liked"] },
                     },
-                })
+                }),
         );
-        
+
         if (hasProtectedOwnedAlbum) {
             // Artist has protected content - this album should stay as LIBRARY
             continue;
         }
-        
+
         // Also check if artist has any LIKED discovery albums (double-check)
         const hasLikedDiscovery = await withDataIntegrityPrismaRetry(
             "runDataIntegrityCheck.discoveryAlbum.findFirst.liked",
@@ -299,23 +303,23 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                         artistMbid: album.artist.mbid || undefined,
                         status: { in: ["LIKED", "MOVED"] },
                     },
-                })
+                }),
         );
-        
+
         if (hasLikedDiscovery) {
             // User liked albums from this artist - don't touch
             continue;
         }
-        
-        const reason = albumMatches 
-            ? `album title "${album.title}" matches discovery` 
+
+        const reason = albumMatches
+            ? `album title "${album.title}" matches discovery`
             : artistNameMatches
-                ? `artist "${album.artist.name}" matches discovery`
-                : `artist MBID matches discovery`;
+              ? `artist "${album.artist.name}" matches discovery`
+              : `artist MBID matches discovery`;
         logger.debug(
-            `     Fixing mislocated album: ${album.artist.name} - ${album.title} (LIBRARY -> DISCOVER, ${reason})`
+            `     Fixing mislocated album: ${album.artist.name} - ${album.title} (LIBRARY -> DISCOVER, ${reason})`,
         );
-        
+
         // Update album location
         await withDataIntegrityPrismaRetry(
             "runDataIntegrityCheck.album.update.mislocated",
@@ -323,9 +327,9 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 prisma.album.update({
                     where: { id: album.id },
                     data: { location: "DISCOVER" },
-                })
+                }),
         );
-        
+
         // Remove OwnedAlbum record (but only non-native ones)
         await withDataIntegrityPrismaRetry(
             "runDataIntegrityCheck.ownedAlbum.deleteMany.mislocated",
@@ -335,12 +339,12 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                         rgMbid: album.rgMbid,
                         source: { not: "native_scan" },
                     },
-                })
+                }),
         );
-        
+
         mislocatedAlbumsFixed++;
     }
-    
+
     report.mislocatedAlbums = mislocatedAlbumsFixed;
     if (mislocatedAlbumsFixed > 0) {
         logger.debug(`     Fixed ${mislocatedAlbumsFixed} mislocated albums`);
@@ -356,7 +360,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                     tracks: { none: {} },
                 },
                 include: { artist: true },
-            })
+            }),
     );
 
     for (const album of emptyAlbums) {
@@ -366,7 +370,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
             () =>
                 prisma.album.delete({
                     where: { id: album.id },
-                })
+                }),
         );
 
         // Also delete any associated OwnedAlbum records
@@ -375,12 +379,12 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
             () =>
                 prisma.ownedAlbum.deleteMany({
                     where: { rgMbid: album.rgMbid },
-                })
+                }),
         );
 
         report.orphanedAlbums++;
         logger.debug(
-            `     Removed empty album (no tracks): ${album.artist.name} - ${album.title}`
+            `     Removed empty album (no tracks): ${album.artist.name} - ${album.title}`,
         );
     }
 
@@ -393,11 +397,11 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
             WHERE NOT EXISTS (
                 SELECT 1 FROM "Album" a WHERE a."rgMbid" = oa."rgMbid"
             )
-        `
+        `,
     );
     if (orphanedOwnedAlbums > 0) {
         logger.debug(
-            `     Removed ${orphanedOwnedAlbums} orphaned OwnedAlbum records`
+            `     Removed ${orphanedOwnedAlbums} orphaned OwnedAlbum records`,
         );
     }
 
@@ -410,7 +414,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                     mbid: { startsWith: "temp-" },
                 },
                 include: { albums: true },
-            })
+            }),
     );
 
     for (const tempArtist of tempArtists) {
@@ -423,7 +427,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                         normalizedName: tempArtist.normalizedName,
                         mbid: { not: { startsWith: "temp-" } },
                     },
-                })
+                }),
         );
 
         if (realArtist) {
@@ -434,7 +438,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                     prisma.album.updateMany({
                         where: { artistId: tempArtist.id },
                         data: { artistId: realArtist.id },
-                    })
+                    }),
             );
 
             // Delete SimilarArtist relations
@@ -448,7 +452,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                                 { toArtistId: tempArtist.id },
                             ],
                         },
-                    })
+                    }),
             );
 
             // Delete temp artist
@@ -457,12 +461,12 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 () =>
                     prisma.artist.delete({
                         where: { id: tempArtist.id },
-                    })
+                    }),
             );
 
             report.consolidatedArtists++;
             logger.debug(
-                `     Consolidated "${tempArtist.name}" (temp) into real artist`
+                `     Consolidated "${tempArtist.name}" (temp) into real artist`,
             );
         }
     }
@@ -475,7 +479,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 where: {
                     albums: { none: {} },
                 },
-            })
+            }),
     );
 
     if (orphanedArtists.length > 0) {
@@ -498,7 +502,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                             },
                         ],
                     },
-                })
+                }),
         );
 
         // Delete orphaned artists
@@ -507,7 +511,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
             () =>
                 prisma.artist.deleteMany({
                     where: { id: { in: orphanedArtists.map((a) => a.id) } },
-                })
+                }),
         );
 
         report.orphanedArtists = orphanedArtists.length;
@@ -525,7 +529,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                     status: { in: ["completed", "failed"] },
                     completedAt: { lt: thirtyDaysAgo },
                 },
-            })
+            }),
     );
     report.oldDownloadJobs = oldJobs.count;
     if (oldJobs.count > 0) {
@@ -536,9 +540,11 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
     logger.debug("\nData integrity check complete:");
     logger.debug(`   - Expired exclusions: ${report.expiredExclusions}`);
     logger.debug(
-        `   - Orphaned discovery tracks: ${report.orphanedDiscoveryTracks}`
+        `   - Orphaned discovery tracks: ${report.orphanedDiscoveryTracks}`,
     );
-    logger.debug(`   - Mislocated albums (LIBRARY->DISCOVER): ${report.mislocatedAlbums}`);
+    logger.debug(
+        `   - Mislocated albums (LIBRARY->DISCOVER): ${report.mislocatedAlbums}`,
+    );
     logger.debug(`   - Orphaned albums: ${report.orphanedAlbums}`);
     logger.debug(`   - Consolidated artists: ${report.consolidatedArtists}`);
     logger.debug(`   - Orphaned artists: ${report.orphanedArtists}`);

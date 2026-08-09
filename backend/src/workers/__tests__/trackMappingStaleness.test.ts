@@ -13,9 +13,7 @@ describe("trackMappingStaleness worker", () => {
         await Promise.resolve();
     }
 
-    function loadWorker(options?: {
-        env?: Record<string, string>;
-    }) {
+    function loadWorker(options?: { env?: Record<string, string> }) {
         process.env = {
             ...originalEnv,
             ...options?.env,
@@ -107,10 +105,10 @@ describe("trackMappingStaleness worker", () => {
         expect(markStale).toHaveBeenCalledTimes(1);
         expect(markStale).toHaveBeenCalledWith("mapping-stale");
         expect(logger.info).toHaveBeenCalledWith(
-            "[TrackMappingStaleness] Marked 1 stale track mappings"
+            "[TrackMappingStaleness] Marked 1 stale track mappings",
         );
         expect(logger.info).toHaveBeenCalledWith(
-            "[TrackMappingStaleness] Worker started (intervalMs=1500)"
+            "[TrackMappingStaleness] Worker started (intervalMs=1500)",
         );
 
         module.stopTrackMappingStalenessWorker();
@@ -129,7 +127,7 @@ describe("trackMappingStaleness worker", () => {
 
         expect(setIntervalSpy).toHaveBeenCalledWith(
             expect.any(Function),
-            6 * 60 * 60 * 1000
+            6 * 60 * 60 * 1000,
         );
 
         module.stopTrackMappingStalenessWorker();
@@ -169,9 +167,11 @@ describe("trackMappingStaleness worker", () => {
                 expect.objectContaining({
                     take: 100,
                     orderBy: { createdAt: "asc" },
-                })
+                }),
             );
-            expect(Object.prototype.hasOwnProperty.call(call[0], "skip")).toBe(false);
+            expect(Object.prototype.hasOwnProperty.call(call[0], "skip")).toBe(
+                false,
+            );
         }
 
         module.stopTrackMappingStalenessWorker();
@@ -200,7 +200,9 @@ describe("trackMappingStaleness worker", () => {
                 trackYtMusic: null,
             },
         ]);
-        markStale.mockRejectedValueOnce(staleError).mockResolvedValueOnce(undefined);
+        markStale
+            .mockRejectedValueOnce(staleError)
+            .mockResolvedValueOnce(undefined);
 
         module.startTrackMappingStalenessWorker();
         await flushMicrotasks();
@@ -208,10 +210,10 @@ describe("trackMappingStaleness worker", () => {
         expect(markStale).toHaveBeenCalledTimes(2);
         expect(logger.warn).toHaveBeenCalledWith(
             "[TrackMappingStaleness] Failed to mark stale mapping mapping-1",
-            staleError
+            staleError,
         );
         expect(logger.info).toHaveBeenCalledWith(
-            "[TrackMappingStaleness] Marked 1 stale track mappings"
+            "[TrackMappingStaleness] Marked 1 stale track mappings",
         );
 
         module.stopTrackMappingStalenessWorker();
@@ -273,8 +275,18 @@ describe("trackMappingStaleness worker", () => {
         await flushMicrotasks();
 
         expect(findMany).toHaveBeenCalledTimes(2);
-        expect(Object.prototype.hasOwnProperty.call(findMany.mock.calls[0][0], "skip")).toBe(false);
-        expect(Object.prototype.hasOwnProperty.call(findMany.mock.calls[1][0], "skip")).toBe(false);
+        expect(
+            Object.prototype.hasOwnProperty.call(
+                findMany.mock.calls[0][0],
+                "skip",
+            ),
+        ).toBe(false);
+        expect(
+            Object.prototype.hasOwnProperty.call(
+                findMany.mock.calls[1][0],
+                "skip",
+            ),
+        ).toBe(false);
 
         module.stopTrackMappingStalenessWorker();
     });
@@ -307,7 +319,12 @@ describe("trackMappingStaleness worker", () => {
         await jest.advanceTimersByTimeAsync(1000);
         await flushMicrotasks();
         expect(findMany).toHaveBeenCalledTimes(2);
-        expect(Object.prototype.hasOwnProperty.call(findMany.mock.calls[1][0], "skip")).toBe(false);
+        expect(
+            Object.prototype.hasOwnProperty.call(
+                findMany.mock.calls[1][0],
+                "skip",
+            ),
+        ).toBe(false);
 
         module.stopTrackMappingStalenessWorker();
     });

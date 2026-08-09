@@ -36,9 +36,12 @@ class DownloadQueueManager {
 
     constructor() {
         // Start periodic cleanup of stale downloads (every 5 minutes)
-        this.cleanupInterval = setInterval(() => {
-            this.cleanupStaleDownloads();
-        }, 5 * 60 * 1000);
+        this.cleanupInterval = setInterval(
+            () => {
+                this.cleanupStaleDownloads();
+            },
+            5 * 60 * 1000,
+        );
     }
 
     /**
@@ -56,7 +59,7 @@ class DownloadQueueManager {
             userId?: string;
             tier?: string;
             similarity?: number;
-        }
+        },
     ) {
         const info: DownloadInfo = {
             downloadId,
@@ -75,7 +78,7 @@ class DownloadQueueManager {
 
         this.activeDownloads.set(downloadId, info);
         logger.debug(
-            `[DOWNLOAD] Started: "${albumTitle}" by ${artistName} (${downloadId})`
+            `[DOWNLOAD] Started: "${albumTitle}" by ${artistName} (${downloadId})`,
         );
         logger.debug(`   Album MBID: ${albumMbid}`);
         logger.debug(`   Active downloads: ${this.activeDownloads.size}`);
@@ -128,7 +131,7 @@ class DownloadQueueManager {
         const info = this.activeDownloads.get(downloadId);
         if (!info) {
             logger.debug(
-                `  Download ${downloadId} not tracked, ignoring failure`
+                `  Download ${downloadId} not tracked, ignoring failure`,
             );
             return;
         }
@@ -150,7 +153,7 @@ class DownloadQueueManager {
             // Check if all downloads are done
             if (this.activeDownloads.size === 0) {
                 logger.debug(
-                    `⏰ All downloads finished (some failed). Starting refresh...`
+                    `⏰ All downloads finished (some failed). Starting refresh...`,
                 );
                 this.clearTimeout();
                 this.triggerFullRefresh();
@@ -168,9 +171,8 @@ class DownloadQueueManager {
                 return;
             }
 
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (
@@ -194,7 +196,7 @@ class DownloadQueueManager {
                 {
                     headers: { "X-Api-Key": settings.lidarrApiKey },
                     timeout: 10000,
-                }
+                },
             );
 
             logger.debug(`   Retry search triggered in Lidarr`);
@@ -210,9 +212,8 @@ class DownloadQueueManager {
         try {
             logger.debug(`    Cleaning up failed album: ${info.albumTitle}`);
 
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (
@@ -233,7 +234,7 @@ class DownloadQueueManager {
                         {
                             headers: { "X-Api-Key": settings.lidarrApiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
                     logger.debug(`   Removed album from Lidarr`);
                 } catch (error: any) {
@@ -249,7 +250,7 @@ class DownloadQueueManager {
                         {
                             headers: { "X-Api-Key": settings.lidarrApiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
 
                     const artist = artistResponse.data;
@@ -264,15 +265,15 @@ class DownloadQueueManager {
                                 params: { deleteFiles: false },
                                 headers: { "X-Api-Key": settings.lidarrApiKey },
                                 timeout: 10000,
-                            }
+                            },
                         );
                         logger.debug(
-                            `   Removed artist from Lidarr (no other albums)`
+                            `   Removed artist from Lidarr (no other albums)`,
                         );
                     }
                 } catch (error: any) {
                     logger.debug(
-                        ` Failed to check/remove artist: ${error.message}`
+                        ` Failed to check/remove artist: ${error.message}`,
                     );
                 }
             }
@@ -287,7 +288,7 @@ class DownloadQueueManager {
 
             // Notify callbacks about unavailable album
             logger.debug(
-                `   [NOTIFY] Notifying ${this.unavailableCallbacks.length} callbacks about unavailable album`
+                `   [NOTIFY] Notifying ${this.unavailableCallbacks.length} callbacks about unavailable album`,
             );
             for (const callback of this.unavailableCallbacks) {
                 try {
@@ -315,35 +316,35 @@ class DownloadQueueManager {
     private startTimeout() {
         const timeoutMs = this.TIMEOUT_MINUTES * 60 * 1000;
         logger.debug(
-            `[TIMER] Starting ${this.TIMEOUT_MINUTES}-minute timeout for automatic scan`
+            `[TIMER] Starting ${this.TIMEOUT_MINUTES}-minute timeout for automatic scan`,
         );
 
         this.timeoutTimer = setTimeout(() => {
             if (this.activeDownloads.size > 0) {
                 logger.debug(
-                    `\n  Timeout reached! ${this.activeDownloads.size} downloads still pending.`
+                    `\n  Timeout reached! ${this.activeDownloads.size} downloads still pending.`,
                 );
                 logger.debug(`   These downloads never completed:`);
 
                 // Mark each pending download as failed to trigger callbacks
                 for (const [downloadId, info] of this.activeDownloads) {
                     logger.debug(
-                        `     - ${info.albumTitle} by ${info.artistName}`
+                        `     - ${info.albumTitle} by ${info.artistName}`,
                     );
                     // This will trigger the unavailable album callback
                     this.failDownload(
                         downloadId,
-                        "Download timeout - never completed"
+                        "Download timeout - never completed",
                     ).catch((err) => {
                         logger.error(
                             `Error failing download ${downloadId}:`,
-                            err
+                            err,
                         );
                     });
                 }
 
                 logger.debug(
-                    `   Triggering scan anyway to process completed downloads...\n`
+                    `   Triggering scan anyway to process completed downloads...\n`,
                 );
             } else {
                 this.triggerFullRefresh();
@@ -383,7 +384,7 @@ class DownloadQueueManager {
 
             logger.debug("soundspan sync started");
             logger.debug(
-                "\n[SUCCESS] Full library refresh complete! New music should appear shortly.\n"
+                "\n[SUCCESS] Full library refresh complete! New music should appear shortly.\n",
             );
         } catch (error) {
             logger.error(" Library refresh error:", error);
@@ -395,9 +396,8 @@ class DownloadQueueManager {
      */
     private async clearFailedLidarrImports(): Promise<void> {
         try {
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (!settings.lidarrEnabled || !settings.lidarrUrl) {
@@ -420,7 +420,7 @@ class DownloadQueueManager {
                 {
                     headers: { "X-Api-Key": apiKey },
                     timeout: 10000,
-                }
+                },
             );
 
             const queue = response.data.records || [];
@@ -431,7 +431,7 @@ class DownloadQueueManager {
                     item.trackedDownloadStatus === "warning" ||
                     item.trackedDownloadStatus === "error" ||
                     item.status === "warning" ||
-                    item.status === "failed"
+                    item.status === "failed",
             );
 
             if (failed.length === 0) {
@@ -460,7 +460,7 @@ class DownloadQueueManager {
                             },
                             headers: { "X-Api-Key": apiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
 
                     // Trigger new search if album ID is available
@@ -474,14 +474,14 @@ class DownloadQueueManager {
                             {
                                 headers: { "X-Api-Key": apiKey },
                                 timeout: 10000,
-                            }
+                            },
                         );
                         logger.debug(
-                            `         → Blocklisted and searching for alternative`
+                            `         → Blocklisted and searching for alternative`,
                         );
                     } else {
                         logger.debug(
-                            `         → Blocklisted (no album ID for re-search)`
+                            `         → Blocklisted (no album ID for re-search)`,
                         );
                     }
                 } catch (error: any) {
@@ -567,8 +567,8 @@ class DownloadQueueManager {
                     `[CLEANUP] Cleaning up stale download: "${
                         info.albumTitle
                     }" (${downloadId}) - age: ${Math.round(
-                        age / 60000
-                    )} minutes`
+                        age / 60000,
+                    )} minutes`,
                 );
                 this.activeDownloads.delete(downloadId);
                 cleanedCount++;
@@ -577,7 +577,7 @@ class DownloadQueueManager {
 
         if (cleanedCount > 0) {
             logger.debug(
-                `[CLEANUP] Cleaned up ${cleanedCount} stale download(s)`
+                `[CLEANUP] Cleaned up ${cleanedCount} stale download(s)`,
             );
         }
 
@@ -591,28 +591,30 @@ class DownloadQueueManager {
      */
     async reconcileOnStartup(): Promise<{ loaded: number; failed: number }> {
         const { prisma } = await import("../utils/db");
-        
+
         const staleThreshold = new Date(Date.now() - this.STALE_TIMEOUT_MS);
-        
+
         // Mark stale processing jobs as failed
         const staleResult = await prisma.downloadJob.updateMany({
             where: {
                 status: "processing",
-                startedAt: { lt: staleThreshold }
+                startedAt: { lt: staleThreshold },
             },
             data: {
                 status: "failed",
-                error: "Server restart - download was processing but never completed"
-            }
+                error: "Server restart - download was processing but never completed",
+            },
         });
-        
-        logger.debug(`[DOWNLOAD] Marked ${staleResult.count} stale downloads as failed`);
-        
+
+        logger.debug(
+            `[DOWNLOAD] Marked ${staleResult.count} stale downloads as failed`,
+        );
+
         // Load recent processing jobs into memory (not stale)
         const activeJobs = await prisma.downloadJob.findMany({
             where: {
                 status: "processing",
-                startedAt: { gte: staleThreshold }
+                startedAt: { gte: staleThreshold },
             },
             select: {
                 id: true,
@@ -621,13 +623,13 @@ class DownloadQueueManager {
                 lidarrRef: true,
                 metadata: true,
                 startedAt: true,
-                attempts: true
-            }
+                attempts: true,
+            },
         });
-        
+
         // Populate in-memory map from database
         for (const job of activeJobs) {
-            const metadata = job.metadata as Record<string, any> || {};
+            const metadata = (job.metadata as Record<string, any>) || {};
             this.activeDownloads.set(job.lidarrRef || job.id, {
                 downloadId: job.lidarrRef || job.id,
                 albumTitle: job.subject,
@@ -640,12 +642,14 @@ class DownloadQueueManager {
                 startTime: job.startedAt?.getTime() || Date.now(),
                 userId: metadata.userId,
                 tier: metadata.tier,
-                similarity: metadata.similarity
+                similarity: metadata.similarity,
             });
         }
-        
-        logger.debug(`[DOWNLOAD] Loaded ${activeJobs.length} active downloads from database`);
-        
+
+        logger.debug(
+            `[DOWNLOAD] Loaded ${activeJobs.length} active downloads from database`,
+        );
+
         return { loaded: activeJobs.length, failed: staleResult.count };
     }
 
@@ -667,7 +671,7 @@ class DownloadQueueManager {
      */
     private async linkDownloadJob(downloadId: string, albumMbid: string) {
         logger.debug(
-            `   [LINK] Attempting to link download job for MBID: ${albumMbid}`
+            `   [LINK] Attempting to link download job for MBID: ${albumMbid}`,
         );
         try {
             const { prisma } = await import("../utils/db");
@@ -684,7 +688,7 @@ class DownloadQueueManager {
             });
             logger.debug(
                 `   [LINK] Found ${existingJobs.length} job(s) with this MBID:`,
-                JSON.stringify(existingJobs, null, 2)
+                JSON.stringify(existingJobs, null, 2),
             );
 
             const result = await prisma.downloadJob.updateMany({
@@ -702,20 +706,20 @@ class DownloadQueueManager {
 
             if (result.count === 0) {
                 logger.debug(
-                    `     No matching download jobs found to link with Lidarr ID ${downloadId}`
+                    `     No matching download jobs found to link with Lidarr ID ${downloadId}`,
                 );
                 logger.debug(
-                    ` This means either: no job exists, job already has lidarrRef, or status is not pending/processing`
+                    ` This means either: no job exists, job already has lidarrRef, or status is not pending/processing`,
                 );
             } else {
                 logger.debug(
-                    `   Linked Lidarr download ${downloadId} to ${result.count} download job(s)`
+                    `   Linked Lidarr download ${downloadId} to ${result.count} download job(s)`,
                 );
             }
         } catch (error: any) {
             logger.error(
                 ` Failed to persist Lidarr download link:`,
-                error.message
+                error.message,
             );
             logger.error(`   Error details:`, error);
         }

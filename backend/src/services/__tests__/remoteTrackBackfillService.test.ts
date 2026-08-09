@@ -28,17 +28,22 @@ jest.mock("../../utils/logger", () => ({
 
 const mockResolveArtist = jest.fn();
 jest.mock("../artistResolutionService", () => ({
-    resolveArtistForRemoteTrack: (...args: unknown[]) => mockResolveArtist(...args),
+    resolveArtistForRemoteTrack: (...args: unknown[]) =>
+        mockResolveArtist(...args),
 }));
 
 const mockResolveAlbum = jest.fn();
 jest.mock("../albumResolutionService", () => ({
-    resolveAlbumForRemoteTrack: (...args: unknown[]) => mockResolveAlbum(...args),
+    resolveAlbumForRemoteTrack: (...args: unknown[]) =>
+        mockResolveAlbum(...args),
 }));
 
-const mockBackfillCounts = jest.fn().mockResolvedValue({ processed: 0, errors: 0 });
+const mockBackfillCounts = jest
+    .fn()
+    .mockResolvedValue({ processed: 0, errors: 0 });
 jest.mock("../artistCountsService", () => ({
-    backfillAllArtistCounts: (...args: unknown[]) => mockBackfillCounts(...args),
+    backfillAllArtistCounts: (...args: unknown[]) =>
+        mockBackfillCounts(...args),
 }));
 
 import {
@@ -65,7 +70,12 @@ describe("remoteTrackBackfillService", () => {
         it("processes TrackTidal rows with null artistId", async () => {
             mockPrisma.trackTidal.findMany
                 .mockResolvedValueOnce([
-                    { id: "tt-1", artist: "Artist A", album: "Album A", artistId: null },
+                    {
+                        id: "tt-1",
+                        artist: "Artist A",
+                        album: "Album A",
+                        artistId: null,
+                    },
                 ])
                 .mockResolvedValueOnce([]);
 
@@ -100,7 +110,12 @@ describe("remoteTrackBackfillService", () => {
             mockPrisma.trackTidal.findMany.mockResolvedValue([]);
             mockPrisma.trackYtMusic.findMany
                 .mockResolvedValueOnce([
-                    { id: "yt-1", artist: "Artist B", album: "Album B", artistId: null },
+                    {
+                        id: "yt-1",
+                        artist: "Artist B",
+                        album: "Album B",
+                        artistId: null,
+                    },
                 ])
                 .mockResolvedValueOnce([]);
 
@@ -131,7 +146,12 @@ describe("remoteTrackBackfillService", () => {
         it("sets albumId to null when album resolution returns null", async () => {
             mockPrisma.trackTidal.findMany
                 .mockResolvedValueOnce([
-                    { id: "tt-2", artist: "Artist C", album: "Single", artistId: null },
+                    {
+                        id: "tt-2",
+                        artist: "Artist C",
+                        album: "Single",
+                        artistId: null,
+                    },
                 ])
                 .mockResolvedValueOnce([]);
             mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);
@@ -166,7 +186,9 @@ describe("remoteTrackBackfillService", () => {
             mockPrisma.trackTidal.findMany.mockImplementation(async (args) => {
                 const lastId = args.where?.AND?.[1]?.id?.gt;
                 if (lastId === undefined) {
-                    throw new Error("TrackTidal query did not include a cursor");
+                    throw new Error(
+                        "TrackTidal query did not include a cursor",
+                    );
                 }
                 return lastId < row.id ? [row] : [];
             });
@@ -191,7 +213,7 @@ describe("remoteTrackBackfillService", () => {
                             { id: { gt: "tt-sticky" } },
                         ],
                     },
-                })
+                }),
             );
         });
 
@@ -215,12 +237,10 @@ describe("remoteTrackBackfillService", () => {
             });
             mockPrisma.trackTidal.update.mockResolvedValue({});
             mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);
-            jest.spyOn(global, "setTimeout").mockImplementation(
-                (callback) => {
-                    callback();
-                    return {} as NodeJS.Timeout;
-                }
-            );
+            jest.spyOn(global, "setTimeout").mockImplementation((callback) => {
+                callback();
+                return {} as NodeJS.Timeout;
+            });
 
             await expect(backfillRemoteArtistAlbumLinks()).resolves.toEqual({
                 tidalProcessed: 100_000,
@@ -228,16 +248,23 @@ describe("remoteTrackBackfillService", () => {
                 errors: 0,
             });
 
-            expect(mockPrisma.trackTidal.findMany).toHaveBeenCalledTimes(100_000);
+            expect(mockPrisma.trackTidal.findMany).toHaveBeenCalledTimes(
+                100_000,
+            );
             expect(mockLog.warn).toHaveBeenCalledWith(
-                "TrackTidal backfill exceeded 100000 iterations, stopping"
+                "TrackTidal backfill exceeded 100000 iterations, stopping",
             );
         });
 
         it("retries album resolution when artistId set but albumId null", async () => {
             mockPrisma.trackTidal.findMany
                 .mockResolvedValueOnce([
-                    { id: "tt-3", artist: "Artist D", album: "Album D", artistId: "existing-artist" },
+                    {
+                        id: "tt-3",
+                        artist: "Artist D",
+                        album: "Album D",
+                        artistId: "existing-artist",
+                    },
                 ])
                 .mockResolvedValueOnce([]);
             mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);
@@ -254,15 +281,29 @@ describe("remoteTrackBackfillService", () => {
             // Should NOT call resolveArtist since artistId is already set
             expect(mockResolveArtist).not.toHaveBeenCalled();
             // Should call resolveAlbum with the existing artistId
-            expect(mockResolveAlbum).toHaveBeenCalledWith("Album D", "existing-artist", "tidal");
+            expect(mockResolveAlbum).toHaveBeenCalledWith(
+                "Album D",
+                "existing-artist",
+                "tidal",
+            );
             expect(result.tidalProcessed).toBe(1);
         });
 
         it("counts errors but continues processing", async () => {
             mockPrisma.trackTidal.findMany
                 .mockResolvedValueOnce([
-                    { id: "tt-fail", artist: "Bad Artist", album: "Bad Album", artistId: null },
-                    { id: "tt-ok", artist: "Good Artist", album: "Good Album", artistId: null },
+                    {
+                        id: "tt-fail",
+                        artist: "Bad Artist",
+                        album: "Bad Album",
+                        artistId: null,
+                    },
+                    {
+                        id: "tt-ok",
+                        artist: "Good Artist",
+                        album: "Good Album",
+                        artistId: null,
+                    },
                 ])
                 .mockResolvedValueOnce([]);
             mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);
@@ -288,11 +329,20 @@ describe("remoteTrackBackfillService", () => {
         });
 
         it("breaks out of loop when entire batch fails", async () => {
-            mockPrisma.trackTidal.findMany
-                .mockResolvedValueOnce([
-                    { id: "tt-fail-1", artist: "Bad", album: "Bad", artistId: null },
-                    { id: "tt-fail-2", artist: "Bad2", album: "Bad2", artistId: null },
-                ]);
+            mockPrisma.trackTidal.findMany.mockResolvedValueOnce([
+                {
+                    id: "tt-fail-1",
+                    artist: "Bad",
+                    album: "Bad",
+                    artistId: null,
+                },
+                {
+                    id: "tt-fail-2",
+                    artist: "Bad2",
+                    album: "Bad2",
+                    artistId: null,
+                },
+            ]);
             // Should not be called again because we break after full-batch failure
             mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);
 
@@ -309,7 +359,12 @@ describe("remoteTrackBackfillService", () => {
         it("refreshes artist counts after processing", async () => {
             mockPrisma.trackTidal.findMany
                 .mockResolvedValueOnce([
-                    { id: "tt-1", artist: "Artist", album: "Album", artistId: null },
+                    {
+                        id: "tt-1",
+                        artist: "Artist",
+                        album: "Album",
+                        artistId: null,
+                    },
                 ])
                 .mockResolvedValueOnce([]);
             mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);

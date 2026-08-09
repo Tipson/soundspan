@@ -65,12 +65,14 @@ const mockLoggerWarn = logger.warn as jest.Mock;
 const mockLoggerError = logger.error as jest.Mock;
 const mockParseSourceUrl = playlistImportService.parseSourceUrl as jest.Mock;
 const mockPreviewImport = playlistImportService.previewImport as jest.Mock;
-const mockPreviewM3UImport = playlistImportService.previewM3UImport as jest.Mock;
+const mockPreviewM3UImport =
+    playlistImportService.previewM3UImport as jest.Mock;
 const mockImportPlaylist = playlistImportService.importPlaylist as jest.Mock;
 const mockCreateJob = importJobStore.createJob as jest.Mock;
 const mockGetJob = importJobStore.getJob as jest.Mock;
 const mockListJobsForUser = importJobStore.listJobsForUser as jest.Mock;
-const mockFindActiveJobForSource = importJobStore.findActiveJobForSource as jest.Mock;
+const mockFindActiveJobForSource =
+    importJobStore.findActiveJobForSource as jest.Mock;
 const mockUpdateJob = importJobStore.updateJob as jest.Mock;
 const mockEnqueueImportJob = genericImportJobRunner.enqueue as jest.Mock;
 
@@ -173,7 +175,7 @@ describe("playlistImport route core coverage", () => {
             expect(res.body).toEqual({ deduped: false, job: createdJob });
             expect(mockFindActiveJobForSource).toHaveBeenCalledWith(
                 "user-1",
-                "spotify:37i9dQZF1DX4JAvHpjipBk"
+                "spotify:37i9dQZF1DX4JAvHpjipBk",
             );
             expect(mockCreateJob).toHaveBeenCalledWith({
                 userId: "user-1",
@@ -238,7 +240,9 @@ describe("playlistImport route core coverage", () => {
                 error: "Valid playlist URL is required",
             });
             expect(unsupportedRes.status).toBe(400);
-            expect(unsupportedRes.body).toEqual({ error: "Unsupported playlist URL" });
+            expect(unsupportedRes.body).toEqual({
+                error: "Unsupported playlist URL",
+            });
         });
 
         it("returns 500 when submit fails", async () => {
@@ -258,14 +262,16 @@ describe("playlistImport route core coverage", () => {
             expect(res.body).toEqual({ error: "Failed to submit import job" });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] Job submit failed:",
-                boom
+                boom,
             );
         });
     });
 
     describe("GET /api/import/jobs", () => {
         it("lists the current user's jobs", async () => {
-            const jobs = [{ id: "job-1", userId: "user-1", status: "completed" }];
+            const jobs = [
+                { id: "job-1", userId: "user-1", status: "completed" },
+            ];
             mockListJobsForUser.mockResolvedValueOnce(jobs);
 
             const res = await request(app)
@@ -289,7 +295,7 @@ describe("playlistImport route core coverage", () => {
             expect(res.body).toEqual({ error: "Failed to list import jobs" });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] Job list failed:",
-                boom
+                boom,
             );
         });
     });
@@ -335,10 +341,12 @@ describe("playlistImport route core coverage", () => {
                 error: "Not authorized to view this import job",
             });
             expect(errorRes.status).toBe(500);
-            expect(errorRes.body).toEqual({ error: "Failed to load import job" });
+            expect(errorRes.body).toEqual({
+                error: "Failed to load import job",
+            });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] Job status failed:",
-                boom
+                boom,
             );
         });
     });
@@ -367,7 +375,7 @@ describe("playlistImport route core coverage", () => {
             expect(res.body).toEqual({ job });
             expect(mockFindActiveJobForSource).toHaveBeenCalledWith(
                 "user-1",
-                "tidal:a1b2c3d4-e5f6-0000-0000-000000000001"
+                "tidal:a1b2c3d4-e5f6-0000-0000-000000000001",
             );
         });
 
@@ -409,23 +417,31 @@ describe("playlistImport route core coverage", () => {
                 error: "Valid playlist URL is required",
             });
             expect(unsupportedRes.status).toBe(400);
-            expect(unsupportedRes.body).toEqual({ error: "Unsupported playlist URL" });
+            expect(unsupportedRes.body).toEqual({
+                error: "Unsupported playlist URL",
+            });
             expect(notFoundRes.status).toBe(404);
             expect(notFoundRes.body).toEqual({
                 error: "No active import job found for source",
             });
             expect(errorRes.status).toBe(500);
-            expect(errorRes.body).toEqual({ error: "Failed to reconnect import job" });
+            expect(errorRes.body).toEqual({
+                error: "Failed to reconnect import job",
+            });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] Job reconnect failed:",
-                boom
+                boom,
             );
         });
     });
 
     describe("POST /api/import/jobs/:jobId/cancel", () => {
         it("updates the job status to cancelling", async () => {
-            const currentJob = { id: "job-1", userId: "user-1", status: "resolving" };
+            const currentJob = {
+                id: "job-1",
+                userId: "user-1",
+                status: "resolving",
+            };
             const cancelledJob = {
                 id: "job-1",
                 userId: "user-1",
@@ -484,12 +500,16 @@ describe("playlistImport route core coverage", () => {
                 error: "Not authorized to cancel this import job",
             });
             expect(conflictRes.status).toBe(409);
-            expect(conflictRes.body).toEqual({ error: "Import job already completed" });
+            expect(conflictRes.body).toEqual({
+                error: "Import job already completed",
+            });
             expect(errorRes.status).toBe(500);
-            expect(errorRes.body).toEqual({ error: "Failed to cancel import job" });
+            expect(errorRes.body).toEqual({
+                error: "Failed to cancel import job",
+            });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] Job cancel failed:",
-                boom
+                boom,
             );
         });
     });
@@ -516,7 +536,8 @@ describe("playlistImport route core coverage", () => {
                     unresolved: 0,
                 },
             };
-            const content = "#EXTM3U\n#EXTINF:200,Artist A - Song A\n/music/a.flac";
+            const content =
+                "#EXTM3U\n#EXTINF:200,Artist A - Song A\n/music/a.flac";
             mockPreviewM3UImport.mockResolvedValueOnce(m3uPreview);
 
             const res = await request(app)
@@ -526,7 +547,10 @@ describe("playlistImport route core coverage", () => {
 
             expect(res.status).toBe(200);
             expect(res.body).toEqual(m3uPreview);
-            expect(mockPreviewM3UImport).toHaveBeenCalledWith("Road Trip", content);
+            expect(mockPreviewM3UImport).toHaveBeenCalledWith(
+                "Road Trip",
+                content,
+            );
         });
 
         it("returns default name, validation failures, and 500 for M3U preview", async () => {
@@ -561,20 +585,27 @@ describe("playlistImport route core coverage", () => {
             const errorRes = await request(app)
                 .post("/api/import/m3u/preview")
                 .set(AUTH_HEADER, AUTH_VALUE)
-                .send({ content: "#EXTM3U\n#EXTINF:1,Artist - Song\n/music/a.flac" });
+                .send({
+                    content: "#EXTM3U\n#EXTINF:1,Artist - Song\n/music/a.flac",
+                });
 
             expect(defaultNameRes.status).toBe(200);
-            expect(mockPreviewM3UImport).toHaveBeenCalledWith("M3U import", "#EXTM3U\n");
+            expect(mockPreviewM3UImport).toHaveBeenCalledWith(
+                "M3U import",
+                "#EXTM3U\n",
+            );
             expect(missingContentRes.status).toBe(400);
             expect(missingContentRes.body).toEqual({
                 error: "Playlist file content is required",
             });
             expect([400, 413]).toContain(tooLargeRes.status);
             expect(errorRes.status).toBe(500);
-            expect(errorRes.body).toEqual({ error: "Failed to preview M3U import" });
+            expect(errorRes.body).toEqual({
+                error: "Failed to preview M3U import",
+            });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] M3U preview failed:",
-                boom
+                boom,
             );
         });
     });
@@ -596,7 +627,10 @@ describe("playlistImport route core coverage", () => {
 
             expect(res.status).toBe(200);
             expect(res.body).toEqual(previewResult);
-            expect(mockPreviewImport).toHaveBeenCalledWith("user-1", spotifyUrl);
+            expect(mockPreviewImport).toHaveBeenCalledWith(
+                "user-1",
+                spotifyUrl,
+            );
         });
 
         it("returns 400, 502, and 500 for preview failures", async () => {
@@ -605,14 +639,16 @@ describe("playlistImport route core coverage", () => {
                 .set(AUTH_HEADER, AUTH_VALUE)
                 .send({ url: "not-a-url" });
 
-            mockPreviewImport.mockRejectedValueOnce(new Error("Unsupported playlist URL"));
+            mockPreviewImport.mockRejectedValueOnce(
+                new Error("Unsupported playlist URL"),
+            );
             const unsupportedRes = await request(app)
                 .post("/api/import/preview")
                 .set(AUTH_HEADER, AUTH_VALUE)
                 .send({ url: spotifyUrl });
 
             mockPreviewImport.mockRejectedValueOnce(
-                new Error("ECONNREFUSED: connect failed to ytmusic-streamer")
+                new Error("ECONNREFUSED: connect failed to ytmusic-streamer"),
             );
             const unavailableRes = await request(app)
                 .post("/api/import/preview")
@@ -631,18 +667,24 @@ describe("playlistImport route core coverage", () => {
                 error: "Valid playlist URL is required",
             });
             expect(unsupportedRes.status).toBe(400);
-            expect(unsupportedRes.body).toEqual({ error: "Unsupported playlist URL" });
+            expect(unsupportedRes.body).toEqual({
+                error: "Unsupported playlist URL",
+            });
             expect(unavailableRes.status).toBe(502);
-            expect(unavailableRes.body).toEqual({ error: "External service unavailable" });
+            expect(unavailableRes.body).toEqual({
+                error: "External service unavailable",
+            });
             expect(mockLoggerWarn).toHaveBeenCalledWith(
                 "[Import] External service unavailable:",
-                expect.any(Error)
+                expect.any(Error),
             );
             expect(errorRes.status).toBe(500);
-            expect(errorRes.body).toEqual({ error: "Failed to preview import" });
+            expect(errorRes.body).toEqual({
+                error: "Failed to preview import",
+            });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] Preview failed:",
-                boom
+                boom,
             );
         });
     });
@@ -666,7 +708,7 @@ describe("playlistImport route core coverage", () => {
             expect(mockImportPlaylist).toHaveBeenCalledWith(
                 "user-1",
                 previewData,
-                "Custom Name"
+                "Custom Name",
             );
         });
 
@@ -677,7 +719,7 @@ describe("playlistImport route core coverage", () => {
                 .send({ name: "Missing preview" });
 
             mockImportPlaylist.mockRejectedValueOnce(
-                new Error("Invalid track reference for track 2")
+                new Error("Invalid track reference for track 2"),
             );
             const invalidTrackRes = await request(app)
                 .post("/api/import/execute")
@@ -700,10 +742,12 @@ describe("playlistImport route core coverage", () => {
                 error: "Invalid track reference for track 2",
             });
             expect(errorRes.status).toBe(500);
-            expect(errorRes.body).toEqual({ error: "Failed to execute import" });
+            expect(errorRes.body).toEqual({
+                error: "Failed to execute import",
+            });
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "[Import] Execute failed:",
-                boom
+                boom,
             );
         });
     });

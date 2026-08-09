@@ -51,7 +51,7 @@ class AudiobookshelfService {
                 throw error;
             }
             logger.debug(
-                "  Could not load Audiobookshelf from database, checking .env"
+                "  Could not load Audiobookshelf from database, checking .env",
             );
         }
 
@@ -103,7 +103,7 @@ class AudiobookshelfService {
     async getLibraryItems(libraryId: string) {
         await this.ensureInitialized();
         const response = await this.client!.get(
-            `/api/libraries/${libraryId}/items`
+            `/api/libraries/${libraryId}/items`,
         );
         return response.data.results || [];
     }
@@ -126,7 +126,7 @@ class AudiobookshelfService {
                     const itemsWithSeries = items.filter(
                         (item: any) =>
                             item.media?.metadata?.series ||
-                            item.media?.metadata?.seriesName
+                            item.media?.metadata?.seriesName,
                     );
                     if (itemsWithSeries.length > 0) {
                         logger.debug(
@@ -134,13 +134,16 @@ class AudiobookshelfService {
                             JSON.stringify(
                                 itemsWithSeries[0],
                                 null,
-                                2
-                            ).substring(0, 2000)
+                                2,
+                            ).substring(0, 2000),
                         );
                     } else {
                         logger.debug(
                             "[AUDIOBOOKSHELF DEBUG] No items with series found! Sample item:",
-                            JSON.stringify(items[0], null, 2).substring(0, 1000)
+                            JSON.stringify(items[0], null, 2).substring(
+                                0,
+                                1000,
+                            ),
                         );
                     }
                 }
@@ -168,7 +171,7 @@ class AudiobookshelfService {
 
         const libraries = await this.getLibraries();
         const podcastLibraries = libraries.filter(
-            (library: any) => library.mediaType === "podcast"
+            (library: any) => library.mediaType === "podcast",
         );
 
         const libraryResults = await Promise.all(
@@ -178,11 +181,11 @@ class AudiobookshelfService {
                 } catch (error) {
                     logger.error(
                         `Audiobookshelf: failed to load podcast library ${library.id}`,
-                        error
+                        error,
                     );
                     return [];
                 }
-            })
+            }),
         );
 
         const allPodcasts = libraryResults.flat();
@@ -201,7 +204,7 @@ class AudiobookshelfService {
     async getAudiobook(audiobookId: string) {
         await this.ensureInitialized();
         const response = await this.client!.get(
-            `/api/items/${audiobookId}?expanded=1`
+            `/api/items/${audiobookId}?expanded=1`,
         );
         return response.data;
     }
@@ -219,7 +222,7 @@ class AudiobookshelfService {
     async getProgress(audiobookId: string) {
         await this.ensureInitialized();
         const response = await this.client!.get(
-            `/api/me/progress/${audiobookId}`
+            `/api/me/progress/${audiobookId}`,
         );
         return response.data;
     }
@@ -231,7 +234,7 @@ class AudiobookshelfService {
         audiobookId: string,
         currentTime: number,
         duration: number,
-        isFinished: boolean = false
+        isFinished: boolean = false,
     ) {
         await this.ensureInitialized();
         const response = await this.client!.patch(
@@ -240,7 +243,7 @@ class AudiobookshelfService {
                 currentTime,
                 duration,
                 isFinished,
-            }
+            },
         );
         return response.data;
     }
@@ -301,7 +304,7 @@ class AudiobookshelfService {
         // Get the podcast to find the episode
         const podcast = await this.getPodcast(podcastId);
         const episode = podcast.media?.episodes?.find(
-            (ep: any) => ep.id === episodeId
+            (ep: any) => ep.id === episodeId,
         );
 
         if (!episode) {
@@ -333,7 +336,7 @@ class AudiobookshelfService {
     async searchAudiobooks(query: string) {
         await this.ensureInitialized();
         const response = await this.client!.get(
-            `/api/search/books?q=${encodeURIComponent(query)}`
+            `/api/search/books?q=${encodeURIComponent(query)}`,
         );
         return response.data.book || [];
     }
@@ -350,7 +353,7 @@ class AudiobookshelfService {
             // Fetch all audiobooks from Audiobookshelf API
             const audiobooks = await this.getAllAudiobooks();
             logger.debug(
-                `[AUDIOBOOKSHELF] Found ${audiobooks.length} audiobooks to sync`
+                `[AUDIOBOOKSHELF] Found ${audiobooks.length} audiobooks to sync`,
             );
 
             // Map and upsert each audiobook to database
@@ -358,12 +361,16 @@ class AudiobookshelfService {
             for (const item of audiobooks) {
                 try {
                     const metadata = item.media?.metadata || {};
-                    
+
                     // Extract series information (check both possible formats)
                     let series: string | null = null;
                     let seriesSequence: string | null = null;
-                    
-                    if (metadata.series && Array.isArray(metadata.series) && metadata.series.length > 0) {
+
+                    if (
+                        metadata.series &&
+                        Array.isArray(metadata.series) &&
+                        metadata.series.length > 0
+                    ) {
                         series = metadata.series[0].name || null;
                         seriesSequence = metadata.series[0].sequence || null;
                     } else if (metadata.seriesName) {
@@ -375,8 +382,12 @@ class AudiobookshelfService {
                         where: { id: item.id },
                         update: {
                             title: metadata.title || "Untitled",
-                            author: metadata.authorName || metadata.author || null,
-                            narrator: metadata.narratorName || metadata.narrator || null,
+                            author:
+                                metadata.authorName || metadata.author || null,
+                            narrator:
+                                metadata.narratorName ||
+                                metadata.narrator ||
+                                null,
                             description: metadata.description || null,
                             publishedYear: metadata.publishedYear
                                 ? parseInt(metadata.publishedYear, 10)
@@ -405,8 +416,12 @@ class AudiobookshelfService {
                         create: {
                             id: item.id,
                             title: metadata.title || "Untitled",
-                            author: metadata.authorName || metadata.author || null,
-                            narrator: metadata.narratorName || metadata.narrator || null,
+                            author:
+                                metadata.authorName || metadata.author || null,
+                            narrator:
+                                metadata.narratorName ||
+                                metadata.narrator ||
+                                null,
                             description: metadata.description || null,
                             publishedYear: metadata.publishedYear
                                 ? parseInt(metadata.publishedYear, 10)
@@ -436,13 +451,13 @@ class AudiobookshelfService {
                 } catch (error) {
                     logger.error(
                         `[AUDIOBOOKSHELF] Failed to sync audiobook ${item.id}:`,
-                        error
+                        error,
                     );
                 }
             }
 
             logger.debug(
-                `[AUDIOBOOKSHELF] Successfully synced ${syncedCount}/${audiobooks.length} audiobooks to cache`
+                `[AUDIOBOOKSHELF] Successfully synced ${syncedCount}/${audiobooks.length} audiobooks to cache`,
             );
             return { synced: syncedCount, total: audiobooks.length };
         } catch (error) {

@@ -45,7 +45,7 @@ export class ImageProviderService {
     async getArtistImage(
         artistName: string,
         mbid?: string,
-        options: ImageSearchOptions = {}
+        options: ImageSearchOptions = {},
     ): Promise<ImageResult | null> {
         const { timeout = 5000 } = options;
 
@@ -55,7 +55,7 @@ export class ImageProviderService {
         try {
             const deezerImage = await this.getArtistImageFromDeezer(
                 artistName,
-                timeout
+                timeout,
             );
             if (deezerImage) {
                 logger.debug(`  Found image from Deezer`);
@@ -65,7 +65,7 @@ export class ImageProviderService {
             logger.debug(
                 `    Deezer failed: ${
                     error instanceof Error ? error.message : "Unknown error"
-                }`
+                }`,
             );
         }
 
@@ -74,7 +74,7 @@ export class ImageProviderService {
             try {
                 const fanartImage = await this.getArtistImageFromFanart(
                     mbid,
-                    timeout
+                    timeout,
                 );
                 if (fanartImage) {
                     logger.debug(`  Found image from Fanart.tv`);
@@ -84,7 +84,7 @@ export class ImageProviderService {
                 logger.debug(
                     `Fanart.tv failed: ${
                         error instanceof Error ? error.message : "Unknown error"
-                    }`
+                    }`,
                 );
             }
         }
@@ -94,7 +94,7 @@ export class ImageProviderService {
             try {
                 const mbImage = await this.getArtistImageFromMusicBrainz(
                     mbid,
-                    timeout
+                    timeout,
                 );
                 if (mbImage) {
                     logger.debug(`  Found image from MusicBrainz`);
@@ -104,7 +104,7 @@ export class ImageProviderService {
                 logger.debug(
                     `MusicBrainz failed: ${
                         error instanceof Error ? error.message : "Unknown error"
-                    }`
+                    }`,
                 );
             }
         }
@@ -120,12 +120,12 @@ export class ImageProviderService {
         artistName: string,
         albumTitle: string,
         rgMbid?: string,
-        options: ImageSearchOptions = {}
+        options: ImageSearchOptions = {},
     ): Promise<ImageResult | null> {
         const { timeout = 5000 } = options;
 
         logger.debug(
-            `[IMAGE] Searching for album cover: ${artistName} - ${albumTitle}`
+            `[IMAGE] Searching for album cover: ${artistName} - ${albumTitle}`,
         );
 
         // Try Deezer first (most reliable)
@@ -133,7 +133,7 @@ export class ImageProviderService {
             const deezerCover = await this.getAlbumCoverFromDeezer(
                 artistName,
                 albumTitle,
-                timeout
+                timeout,
             );
             if (deezerCover) {
                 logger.debug(`  Found cover from Deezer`);
@@ -143,7 +143,7 @@ export class ImageProviderService {
             logger.debug(
                 `    Deezer failed: ${
                     error instanceof Error ? error.message : "Unknown error"
-                }`
+                }`,
             );
         }
 
@@ -152,7 +152,7 @@ export class ImageProviderService {
             try {
                 const mbCover = await this.getAlbumCoverFromMusicBrainz(
                     rgMbid,
-                    timeout
+                    timeout,
                 );
                 if (mbCover) {
                     logger.debug(`  Found cover from MusicBrainz`);
@@ -162,7 +162,7 @@ export class ImageProviderService {
                 logger.debug(
                     `MusicBrainz failed: ${
                         error instanceof Error ? error.message : "Unknown error"
-                    }`
+                    }`,
                 );
             }
         }
@@ -172,7 +172,7 @@ export class ImageProviderService {
             try {
                 const fanartCover = await this.getAlbumCoverFromFanart(
                     rgMbid,
-                    timeout
+                    timeout,
                 );
                 if (fanartCover) {
                     logger.debug(`  Found cover from Fanart.tv`);
@@ -182,7 +182,7 @@ export class ImageProviderService {
                 logger.debug(
                     `Fanart.tv failed: ${
                         error instanceof Error ? error.message : "Unknown error"
-                    }`
+                    }`,
                 );
             }
         }
@@ -196,14 +196,14 @@ export class ImageProviderService {
      */
     private async getArtistImageFromDeezer(
         artistName: string,
-        timeout: number
+        timeout: number,
     ): Promise<ImageResult | null> {
         const normalizedName = this.normalizeLookupValue(artistName);
         const response = await rateLimiter.execute("deezer", () =>
             axios.get(`${this.DEEZER_API_URL}/search/artist`, {
                 params: { q: normalizedName, limit: 1 },
                 timeout,
-            })
+            }),
         );
 
         if (response.data.data && response.data.data.length > 0) {
@@ -229,13 +229,16 @@ export class ImageProviderService {
     private async getAlbumCoverFromDeezer(
         artistName: string,
         albumTitle: string,
-        _timeout: number
+        _timeout: number,
     ): Promise<ImageResult | null> {
         // Delegate to deezerService which has better matching logic:
         // title variant generation, multi-query search with scoring, and 24h Redis caching.
         // Dynamic import to avoid circular dependency (imageProvider ← coverArt ← deezer).
         const { deezerService } = await import("./deezer");
-        const coverUrl = await deezerService.getAlbumCover(artistName, albumTitle);
+        const coverUrl = await deezerService.getAlbumCover(
+            artistName,
+            albumTitle,
+        );
         if (coverUrl) {
             return { url: coverUrl, source: "deezer", size: "xl" };
         }
@@ -247,7 +250,7 @@ export class ImageProviderService {
      */
     private async getArtistImageFromFanart(
         mbid: string,
-        timeout: number
+        timeout: number,
     ): Promise<ImageResult | null> {
         if (!this.FANART_API_KEY) {
             return null;
@@ -257,7 +260,7 @@ export class ImageProviderService {
             axios.get(`${this.FANART_API_URL}/music/${mbid}`, {
                 params: { api_key: this.FANART_API_KEY },
                 timeout,
-            })
+            }),
         );
 
         // Fanart.tv provides multiple image types, prefer artistthumb
@@ -280,7 +283,7 @@ export class ImageProviderService {
      */
     private async getAlbumCoverFromFanart(
         rgMbid: string,
-        timeout: number
+        timeout: number,
     ): Promise<ImageResult | null> {
         if (!this.FANART_API_KEY) {
             return null;
@@ -290,7 +293,7 @@ export class ImageProviderService {
             axios.get(`${this.FANART_API_URL}/music/albums/${rgMbid}`, {
                 params: { api_key: this.FANART_API_KEY },
                 timeout,
-            })
+            }),
         );
 
         // Prefer albumcover, fall back to cdart
@@ -313,7 +316,7 @@ export class ImageProviderService {
      */
     private async getArtistImageFromMusicBrainz(
         mbid: string,
-        timeout: number
+        timeout: number,
     ): Promise<ImageResult | null> {
         // MusicBrainz doesn't have direct artist images, but we can check for image relationships
         // This is a placeholder - in practice, we'd need to parse relationships
@@ -325,21 +328,24 @@ export class ImageProviderService {
      */
     private async getAlbumCoverFromMusicBrainz(
         rgMbid: string,
-        timeout: number
+        timeout: number,
     ): Promise<ImageResult | null> {
         try {
             const response = await rateLimiter.execute("coverart", () =>
-                axios.get(`https://coverartarchive.org/release-group/${rgMbid}`, {
-                    timeout,
-                    validateStatus: (status) => status === 200,
-                })
+                axios.get(
+                    `https://coverartarchive.org/release-group/${rgMbid}`,
+                    {
+                        timeout,
+                        validateStatus: (status) => status === 200,
+                    },
+                ),
             );
 
             if (response.data.images && response.data.images.length > 0) {
                 // Find front cover
                 const frontCover =
                     response.data.images.find(
-                        (img: any) => img.front === true
+                        (img: any) => img.front === true,
                     ) || response.data.images[0];
 
                 return {
@@ -363,21 +369,21 @@ export class ImageProviderService {
      */
     async getArtistImageFromLastFm(
         artistName: string,
-        mbid?: string
+        mbid?: string,
     ): Promise<ImageResult | null> {
         try {
             const { lastFmService } = await import("./lastfm");
             const artistInfo = await lastFmService.getArtistInfo(
                 artistName,
-                mbid
+                mbid,
             );
 
             if (artistInfo?.image) {
                 const megaImage = artistInfo.image.find(
-                    (img: any) => img.size === "mega"
+                    (img: any) => img.size === "mega",
                 );
                 const largeImage = artistInfo.image.find(
-                    (img: any) => img.size === "extralarge"
+                    (img: any) => img.size === "extralarge",
                 );
                 const image = megaImage || largeImage;
 
@@ -393,7 +399,7 @@ export class ImageProviderService {
             logger.debug(
                 `Last.fm failed: ${
                     error instanceof Error ? error.message : "Unknown error"
-                }`
+                }`,
             );
         }
 

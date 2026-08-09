@@ -20,7 +20,7 @@ export function normalizeForMatching(str: string): string {
             // Remove edition markers
             .replace(
                 /\s*[-–—]\s*(deluxe|remaster|bonus|special|anniversary|expanded|limited|collector|edition).*$/i,
-                ""
+                "",
             )
             // Remove punctuation except spaces
             .replace(/[^\w\s]/g, "")
@@ -89,7 +89,7 @@ export function calculateSimilarity(str1: string, str2: string): number {
 export function fuzzyMatch(
     str1: string,
     str2: string,
-    threshold: number = 0.8
+    threshold: number = 0.8,
 ): boolean {
     const similarity = calculateSimilarity(str1, str2);
     return similarity >= threshold;
@@ -104,7 +104,7 @@ export function matchAlbum(
     album1: string,
     artist2: string,
     album2: string,
-    threshold: number = 0.75
+    threshold: number = 0.75,
 ): boolean {
     const artistMatch = fuzzyMatch(artist1, artist2, threshold);
     const albumMatch = fuzzyMatch(album1, album2, threshold);

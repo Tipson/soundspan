@@ -270,18 +270,22 @@ jest.mock("../../services/trackMappingService", () => ({
 }));
 
 jest.mock("../../services/remoteTrackMetadataResolver", () => ({
-    resolveRemoteTrackMetadataForRequest: jest.fn(async ({ metadata }: any) => ({
-        title: metadata?.title ?? "Unknown",
-        artist: metadata?.artist ?? "Unknown",
-        album: metadata?.album ?? "Unknown",
-        duration: metadata?.duration ?? 180,
-        thumbnailUrl: metadata?.thumbnailUrl,
-        isrc: metadata?.isrc,
-        explicit: metadata?.explicit,
-    })),
+    resolveRemoteTrackMetadataForRequest: jest.fn(
+        async ({ metadata }: any) => ({
+            title: metadata?.title ?? "Unknown",
+            artist: metadata?.artist ?? "Unknown",
+            album: metadata?.album ?? "Unknown",
+            duration: metadata?.duration ?? 180,
+            thumbnailUrl: metadata?.thumbnailUrl,
+            isrc: metadata?.isrc,
+            explicit: metadata?.explicit,
+        }),
+    ),
 }));
 
-jest.mock("music-metadata", () => ({ parseFile: jest.fn() }), { virtual: true });
+jest.mock("music-metadata", () => ({ parseFile: jest.fn() }), {
+    virtual: true,
+});
 
 jest.mock("../../services/unifiedTrackResponse", () => ({
     normalizeLocalTrack: jest.fn((track: any) => ({
@@ -336,7 +340,8 @@ const mockPlaylistItemFindMany = prisma.playlistItem.findMany as jest.Mock;
 const mockQueryRaw = prisma.$queryRaw as jest.Mock;
 const mockTrackFindUnique = prisma.track.findUnique as jest.Mock;
 const mockUserSettingsFindUnique = prisma.userSettings.findUnique as jest.Mock;
-const mockLikedRemoteDeleteMany = prisma.likedRemoteTrack.deleteMany as jest.Mock;
+const mockLikedRemoteDeleteMany = prisma.likedRemoteTrack
+    .deleteMany as jest.Mock;
 const mockTrackTidalFindUnique = prisma.trackTidal.findUnique as jest.Mock;
 const mockAudioStreamingService = AudioStreamingService as unknown as jest.Mock;
 const mockParseFile = parseFile as jest.Mock;
@@ -353,7 +358,7 @@ const mockScoreTracksAgainstSeed = scoreTracksAgainstSeed as jest.Mock;
 
 function getGetHandler(path: string, stackIndex = 0) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -430,35 +435,31 @@ describe("library branch coverage focus", () => {
     const radioHandler = getGetHandler("/radio");
     const likedHandler = getGetHandler("/liked");
     const trackPreferenceGetHandler = getGetHandler("/tracks/:id/preference");
-    const trackPreferencePostHandler =
-        (router as any).stack.find(
-            (entry: any) =>
-                entry.route?.path === "/tracks/:id/preference" &&
-                entry.route?.methods?.post
-        ).route.stack[0].handle;
-    const albumPreferencePostHandler =
-        (router as any).stack.find(
-            (entry: any) =>
-                entry.route?.path === "/albums/:id/preference" &&
-                entry.route?.methods?.post
-        ).route.stack[0].handle;
+    const trackPreferencePostHandler = (router as any).stack.find(
+        (entry: any) =>
+            entry.route?.path === "/tracks/:id/preference" &&
+            entry.route?.methods?.post,
+    ).route.stack[0].handle;
+    const albumPreferencePostHandler = (router as any).stack.find(
+        (entry: any) =>
+            entry.route?.path === "/albums/:id/preference" &&
+            entry.route?.methods?.post,
+    ).route.stack[0].handle;
     const remotePreferenceGetHandler = getGetHandler(
-        "/remote-tracks/:id/preference"
+        "/remote-tracks/:id/preference",
     );
-    const remotePreferencePostHandler =
-        (router as any).stack.find(
-            (entry: any) =>
-                entry.route?.path === "/remote-tracks/:id/preference" &&
-                entry.route?.methods?.post
-        ).route.stack[0].handle;
+    const remotePreferencePostHandler = (router as any).stack.find(
+        (entry: any) =>
+            entry.route?.path === "/remote-tracks/:id/preference" &&
+            entry.route?.methods?.post,
+    ).route.stack[0].handle;
     const audioInfoHandler = getGetHandler("/tracks/:id/audio-info", 1);
     const artistsHandler = getGetHandler("/artists");
-    const remoteBackfillHandler =
-        (router as any).stack.find(
-            (entry: any) =>
-                entry.route?.path === "/backfill-remote-artists" &&
-                entry.route?.methods?.post
-        ).route.stack[0].handle;
+    const remoteBackfillHandler = (router as any).stack.find(
+        (entry: any) =>
+            entry.route?.path === "/backfill-remote-artists" &&
+            entry.route?.methods?.post,
+    ).route.stack[0].handle;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -527,7 +528,11 @@ describe("library branch coverage focus", () => {
     it("returns empty tracks when artist-name lookup has no match", async () => {
         mockArtistFindFirst.mockResolvedValueOnce(null);
         const req = {
-            query: { type: "artist-name", value: "No Such Artist", limit: "10" },
+            query: {
+                type: "artist-name",
+                value: "No Such Artist",
+                limit: "10",
+            },
             user: { id: "u1" },
         } as any;
         const res = createRes();
@@ -588,7 +593,9 @@ describe("library branch coverage focus", () => {
         const deniedRes = createRes();
         await radioHandler(deniedReq, deniedRes);
         expect(deniedRes.statusCode).toBe(403);
-        expect(deniedRes.body).toEqual({ error: "Access denied to private playlist" });
+        expect(deniedRes.body).toEqual({
+            error: "Access denied to private playlist",
+        });
     });
 
     it("returns empty tracks for tracks radio with blank list", async () => {
@@ -614,7 +621,9 @@ describe("library branch coverage focus", () => {
         await radioHandler(req, res);
 
         expect(res.statusCode).toBe(400);
-        expect(res.body).toEqual({ error: "Track IDs required for tracks radio" });
+        expect(res.body).toEqual({
+            error: "Track IDs required for tracks radio",
+        });
     });
 
     it("returns empty tracks when seeded tracks do not exist", async () => {
@@ -788,7 +797,9 @@ describe("library branch coverage focus", () => {
             { fromArtistId: "artist-main", toArtistId: "sim-a", weight: 0.8 },
         ]);
         mockLikedTrackFindMany
-            .mockResolvedValueOnce([{ trackId: "sim-track-1", likedAt: new Date() }])
+            .mockResolvedValueOnce([
+                { trackId: "sim-track-1", likedAt: new Date() },
+            ])
             .mockResolvedValueOnce([]);
         mockDislikedEntityFindMany
             .mockResolvedValueOnce([])
@@ -887,7 +898,10 @@ describe("library branch coverage focus", () => {
             user: { id: "u1" },
         } as any;
         const invalidTidalGetRes = createRes();
-        await remotePreferenceGetHandler(invalidTidalGetReq, invalidTidalGetRes);
+        await remotePreferenceGetHandler(
+            invalidTidalGetReq,
+            invalidTidalGetRes,
+        );
         expect(invalidTidalGetRes.statusCode).toBe(400);
 
         const postNoUserReq = {
@@ -914,7 +928,9 @@ describe("library branch coverage focus", () => {
 
     it("covers audio-info playback auth and playback-file resolution branches", async () => {
         const existsSpy = jest.spyOn(fs, "existsSync");
-        existsSpy.mockImplementation((p: any) => !String(p).includes("missing"));
+        existsSpy.mockImplementation(
+            (p: any) => !String(p).includes("missing"),
+        );
 
         mockTrackFindUnique.mockResolvedValue({
             filePath: "artist/album/source.flac",
@@ -926,7 +942,10 @@ describe("library branch coverage focus", () => {
             query: { playback: "true" },
         } as any;
         const unauthorizedPlaybackRes = createRes();
-        await audioInfoHandler(unauthorizedPlaybackReq, unauthorizedPlaybackRes);
+        await audioInfoHandler(
+            unauthorizedPlaybackReq,
+            unauthorizedPlaybackRes,
+        );
         expect(unauthorizedPlaybackRes.statusCode).toBe(401);
 
         const getStreamFilePath = jest
@@ -937,7 +956,9 @@ describe("library branch coverage focus", () => {
             streamFileWithRangeSupport: jest.fn(),
             destroy: jest.fn(),
         }));
-        mockUserSettingsFindUnique.mockResolvedValueOnce({ playbackQuality: "invalid" });
+        mockUserSettingsFindUnique.mockResolvedValueOnce({
+            playbackQuality: "invalid",
+        });
 
         const missingPlaybackReq = {
             params: { id: "track-1" },
@@ -974,7 +995,7 @@ describe("library branch coverage focus", () => {
                 bitDepth: 16,
                 lossless: true,
                 channels: 2,
-            })
+            }),
         );
 
         existsSpy.mockRestore();
@@ -989,7 +1010,7 @@ describe("library branch coverage focus", () => {
                     findMany: txArtistFindMany,
                     count: txArtistCount,
                 },
-            })
+            }),
         );
         mockArtistCount.mockResolvedValue(0);
 
@@ -1003,10 +1024,13 @@ describe("library branch coverage focus", () => {
         expect(txArtistFindMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({
-                    OR: [{ tracksTidal: { some: {} } }, { tracksYtMusic: { some: {} } }],
+                    OR: [
+                        { tracksTidal: { some: {} } },
+                        { tracksYtMusic: { some: {} } },
+                    ],
                     NOT: { albums: { some: { tracks: { some: {} } } } },
                 }),
-            })
+            }),
         );
 
         const allReq = {
@@ -1025,7 +1049,7 @@ describe("library branch coverage focus", () => {
                         { tracksYtMusic: { some: {} } },
                     ],
                 }),
-            })
+            }),
         );
     });
 
@@ -1073,7 +1097,9 @@ describe("library branch coverage focus", () => {
                 },
             ])
             .mockResolvedValueOnce([])
-            .mockResolvedValueOnce([makeHydratedTrack("artist-track-1", "artist-main")]);
+            .mockResolvedValueOnce([
+                makeHydratedTrack("artist-track-1", "artist-main"),
+            ]);
         mockOwnedAlbumFindMany.mockResolvedValue([]);
         mockSimilarArtistFindMany.mockResolvedValue([]);
 
@@ -1085,7 +1111,9 @@ describe("library branch coverage focus", () => {
         await radioHandler(artistNameReq, artistNameRes);
         expect(artistNameRes.statusCode).toBe(200);
 
-        mockLikedTrackFindMany.mockResolvedValueOnce([{ trackId: "seed-like-1" }]);
+        mockLikedTrackFindMany.mockResolvedValueOnce([
+            { trackId: "seed-like-1" },
+        ]);
         mockTrackFindMany.mockResolvedValueOnce([]);
         const myLikedReq = {
             query: { type: "playlist", value: "my-liked", limit: "5" },
@@ -1096,7 +1124,10 @@ describe("library branch coverage focus", () => {
         expect(myLikedRes.statusCode).toBe(200);
         expect(myLikedRes.body).toEqual({ tracks: [] });
 
-        mockPlaylistFindUnique.mockResolvedValueOnce({ userId: "u1", isPublic: false });
+        mockPlaylistFindUnique.mockResolvedValueOnce({
+            userId: "u1",
+            isPublic: false,
+        });
         mockPlaylistItemFindMany.mockResolvedValueOnce([
             { trackId: "seed-pl-1" },
             { trackId: null },

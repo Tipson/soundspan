@@ -12,10 +12,8 @@ import type {
 
 type AssertExact<T extends true> = T;
 type IsExact<A, B> =
-    (<T>() => T extends A ? 1 : 2) extends
-    (<T>() => T extends B ? 1 : 2)
-        ? (<T>() => T extends B ? 1 : 2) extends
-          (<T>() => T extends A ? 1 : 2)
+    (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+        ? (<T>() => T extends B ? 1 : 2) extends <T>() => T extends A ? 1 : 2
             ? true
             : false
         : false;
@@ -56,8 +54,12 @@ describe("segmentedManifestService", () => {
         const { firstImport, secondImport, segmentedManifestService } =
             await resolveManifestService();
 
-        expect(firstImport.segmentedManifestService).toBe(segmentedManifestService);
-        expect(secondImport.segmentedManifestService).toBe(segmentedManifestService);
+        expect(firstImport.segmentedManifestService).toBe(
+            segmentedManifestService,
+        );
+        expect(secondImport.segmentedManifestService).toBe(
+            segmentedManifestService,
+        );
         expect(segmentedManifestService.constructor.name).toBe(
             "SegmentedManifestService",
         );
@@ -67,7 +69,8 @@ describe("segmentedManifestService", () => {
     });
 
     it("calls segmentedSegmentService.ensureLocalDashSegments with the request", async () => {
-        const { segmentedManifestService, mocks } = await resolveManifestService();
+        const { segmentedManifestService, mocks } =
+            await resolveManifestService();
         const request: LocalDashAssetRequest = {
             trackId: "track-1",
             sourcePath: "/music/track-1.flac",
@@ -90,7 +93,8 @@ describe("segmentedManifestService", () => {
     });
 
     it("returns the asset produced by segmentedSegmentService", async () => {
-        const { segmentedManifestService, mocks } = await resolveManifestService();
+        const { segmentedManifestService, mocks } =
+            await resolveManifestService();
         const request: LocalDashAssetRequest = {
             trackId: "track-2",
             sourcePath: "/music/track-2.flac",
@@ -113,7 +117,8 @@ describe("segmentedManifestService", () => {
     });
 
     it("passes through every request property unchanged", async () => {
-        const { segmentedManifestService, mocks } = await resolveManifestService();
+        const { segmentedManifestService, mocks } =
+            await resolveManifestService();
         const request: LocalDashAssetRequest = {
             trackId: "track-3",
             sourcePath: "/music/track-3.flac",
@@ -133,7 +138,9 @@ describe("segmentedManifestService", () => {
 
         await segmentedManifestService.getOrCreateLocalDashAsset(request);
 
-        expect(mocks.mockEnsureLocalDashSegments.mock.calls[0]?.[0]).toBe(request);
+        expect(mocks.mockEnsureLocalDashSegments.mock.calls[0]?.[0]).toBe(
+            request,
+        );
         expect(mocks.mockEnsureLocalDashSegments.mock.calls[0]?.[0]).toEqual({
             trackId: "track-3",
             sourcePath: "/music/track-3.flac",

@@ -59,11 +59,11 @@ const mockApiKeyDelete = prismaClient.apiKey.delete as jest.Mock;
 function getHandler(
     path: string,
     method: "get" | "post" | "delete",
-    stackIndex?: number
+    stackIndex?: number,
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -154,7 +154,7 @@ describe("deviceLink routes runtime", () => {
                 code: expect.stringMatching(/^[A-Z2-9]{6}$/),
                 expiresIn: 300,
                 expiresAt: expect.any(Date),
-            })
+            }),
         );
     });
 
@@ -178,7 +178,9 @@ describe("deviceLink routes runtime", () => {
         await postGenerate(req, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to generate device link code" });
+        expect(res.body).toEqual({
+            error: "Failed to generate device link code",
+        });
     });
 
     it("validates verify payload and handles all code state branches", async () => {
@@ -299,7 +301,7 @@ describe("deviceLink routes runtime", () => {
         expect(mockDeviceCodeUpdateMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "link-1", usedAt: null },
-            })
+            }),
         );
         // No full-privilege API key is minted when the claim loses the race.
         expect(mockApiKeyCreate).not.toHaveBeenCalled();
@@ -315,7 +317,9 @@ describe("deviceLink routes runtime", () => {
         await postVerify(req, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to verify device link code" });
+        expect(res.body).toEqual({
+            error: "Failed to verify device link code",
+        });
     });
 
     it("returns code status across pending/used/expired/not-found and handles failures", async () => {
@@ -396,8 +400,11 @@ describe("deviceLink routes runtime", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
             expect.arrayContaining([
-                expect.objectContaining({ id: "api-key-1", name: "Mobile Device" }),
-            ])
+                expect.objectContaining({
+                    id: "api-key-1",
+                    name: "Mobile Device",
+                }),
+            ]),
         );
 
         mockApiKeyFindMany.mockRejectedValueOnce(new Error("db down"));

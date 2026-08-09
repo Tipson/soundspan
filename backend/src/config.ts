@@ -18,7 +18,7 @@ dotenv.config({ quiet: true });
 // `Number.parseInt(value || `${fallback}`, 10)` then `>0 ? : fallback` idiom).
 const positiveIntEnvOr = (
     value: string | undefined,
-    fallback: number
+    fallback: number,
 ): number => {
     const parsed = Number.parseInt((value ?? "").trim() || `${fallback}`, 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -69,7 +69,7 @@ try {
             logger.error(`   - ${err.path.join(".")}: ${err.message}`);
         });
         logger.error(
-            "\n Please check your .env file and ensure all required variables are set."
+            "\n Please check your .env file and ensure all required variables are set.",
         );
         process.exit(1);
     }
@@ -126,7 +126,7 @@ export const config = {
 
     // Legacy (pre-GCM) at-rest decryption fails closed when true.
     settingsDecryptFailClosed: isEnvFlagEnabled(
-        process.env.SETTINGS_DECRYPT_FAIL_CLOSED
+        process.env.SETTINGS_DECRYPT_FAIL_CLOSED,
     ),
 
     // Session cookie `secure` flag. Defaults to true in production (cookies
@@ -135,13 +135,15 @@ export const config = {
     // any environment. Routed through config to satisfy the env-boundary rule.
     secureCookies: parseEnvBool(
         process.env.SECURE_COOKIES,
-        (process.env.NODE_ENV || "development") === "production"
+        (process.env.NODE_ENV || "development") === "production",
     ),
 
     // Express `trust proxy` value: a numeric hop count for spoof-resistant IP
     // resolution, or `true` (trust all) by default. Set TRUST_PROXY_HOPS to your
     // real reverse-proxy depth (usually 1) to enable spoof protection.
-    trustProxy: (trustProxyHops >= 0 ? trustProxyHops : true) as number | boolean,
+    trustProxy: (trustProxyHops >= 0 ? trustProxyHops : true) as
+        | number
+        | boolean,
 
     // Worker event-loop stall watchdog (issue #43): a stall above the warn
     // threshold logs the active Bull jobs so liveness-probe kills can be
@@ -149,11 +151,11 @@ export const config = {
     workerEventLoop: {
         warnThresholdMs: parseEnvInt(
             process.env.WORKER_EVENT_LOOP_WARN_MS,
-            1000
+            1000,
         ),
         sampleIntervalMs: parseEnvInt(
             process.env.WORKER_EVENT_LOOP_SAMPLE_MS,
-            5000
+            5000,
         ),
     },
 
@@ -163,11 +165,11 @@ export const config = {
     generationDiversity: {
         weightAlpha: parseEnvFloat(
             process.env.GENERATION_ARTIST_WEIGHT_ALPHA,
-            0.5
+            0.5,
         ),
         shareCeiling: parseEnvFloat(
             process.env.GENERATION_ARTIST_SHARE_CEILING,
-            0.3
+            0.3,
         ),
     },
 
@@ -191,11 +193,13 @@ export const config = {
     },
 
     // Lidarr - now reads from database via lidarrService.ensureInitialized()
-    lidarr: isEnvFlagEnabled(process.env.LIDARR_ENABLED) ? {
-        url: process.env.LIDARR_URL!,
-        apiKey: process.env.LIDARR_API_KEY!,
-        enabled: true,
-    } : undefined,
+    lidarr: isEnvFlagEnabled(process.env.LIDARR_ENABLED)
+        ? {
+              url: process.env.LIDARR_URL!,
+              apiKey: process.env.LIDARR_API_KEY!,
+              enabled: true,
+          }
+        : undefined,
 
     // Last.fm - operator-provided via env or system settings
     lastfm: {
@@ -213,7 +217,10 @@ export const config = {
     },
 
     discover: {
-        mode: process.env.DISCOVERY_MODE === "legacy" ? "legacy" : "recommendation",
+        mode:
+            process.env.DISCOVERY_MODE === "legacy"
+                ? "legacy"
+                : "recommendation",
     },
 
     // Coarse feature flags for ML/recommendation subsystems.
@@ -231,7 +238,7 @@ export const config = {
     listenTogether: {
         reconnectSloMs: positiveIntEnvOr(
             process.env.LISTEN_TOGETHER_RECONNECT_SLO_MS,
-            5000
+            5000,
         ),
         allowPolling: process.env.LISTEN_TOGETHER_ALLOW_POLLING === "true",
         redisAdapterEnabled:
@@ -240,7 +247,7 @@ export const config = {
             process.env.LISTEN_TOGETHER_MUTATION_LOCK_ENABLED !== "false",
         mutationLockTtlMs: positiveIntEnvOr(
             process.env.LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS,
-            3000
+            3000,
         ),
         mutationLockPrefix:
             process.env.LISTEN_TOGETHER_MUTATION_LOCK_PREFIX ||
@@ -250,11 +257,11 @@ export const config = {
     readiness: {
         dependencyCheckIntervalMs: positiveIntEnvOr(
             process.env.READINESS_DEPENDENCY_CHECK_INTERVAL_MS,
-            5000
+            5000,
         ),
         dependencyCheckTimeoutMs: positiveIntEnvOr(
             process.env.READINESS_DEPENDENCY_CHECK_TIMEOUT_MS,
-            2000
+            2000,
         ),
         requireDependencies:
             process.env.READINESS_REQUIRE_DEPENDENCIES !== "false",
@@ -267,10 +274,10 @@ export const config = {
             process.env.SEGMENTED_STREAMING_DASH_BUILD_LOCK_PREFIX ||
             "segmented-streaming:dash-build-lock",
         dashBuildLockTtlMsOverride: positiveIntEnvOrNull(
-            process.env.SEGMENTED_STREAMING_DASH_BUILD_LOCK_TTL_MS
+            process.env.SEGMENTED_STREAMING_DASH_BUILD_LOCK_TTL_MS,
         ),
         localSegmentDurationSecOverride: positiveNumberEnvOrNull(
-            process.env.SEGMENTED_LOCAL_SEG_DURATION_SEC
+            process.env.SEGMENTED_LOCAL_SEG_DURATION_SEC,
         ),
         ffmpegPathOverride: process.env.FFMPEG_PATH?.trim() || undefined,
         traceEnabled:
@@ -280,16 +287,16 @@ export const config = {
             basePathOverride:
                 process.env.SEGMENTED_STREAMING_CACHE_PATH?.trim() || undefined,
             maxGbOverride: positiveNumberEnvOrNull(
-                process.env.SEGMENTED_STREAMING_CACHE_MAX_GB
+                process.env.SEGMENTED_STREAMING_CACHE_MAX_GB,
             ),
             pruneIntervalMsOverride: positiveNumberEnvOrNull(
-                process.env.SEGMENTED_STREAMING_CACHE_PRUNE_INTERVAL_MS
+                process.env.SEGMENTED_STREAMING_CACHE_PRUNE_INTERVAL_MS,
             ),
             minAgeMsOverride: positiveNumberEnvOrNull(
-                process.env.SEGMENTED_STREAMING_CACHE_MIN_AGE_MS
+                process.env.SEGMENTED_STREAMING_CACHE_MIN_AGE_MS,
             ),
             pruneTargetRatioOverride: positiveNumberEnvOrNull(
-                process.env.SEGMENTED_STREAMING_CACHE_PRUNE_TARGET_RATIO
+                process.env.SEGMENTED_STREAMING_CACHE_PRUNE_TARGET_RATIO,
             ),
             schemaVersionOverride:
                 process.env.SEGMENTED_STREAMING_CACHE_SCHEMA_VERSION?.trim() ||
@@ -328,7 +335,7 @@ export const config = {
     webhooks: {
         lidarrAllowUnauthenticated: parseEnvBool(
             process.env.LIDARR_WEBHOOK_ALLOW_UNAUTHENTICATED,
-            false
+            false,
         ),
     },
 

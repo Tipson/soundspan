@@ -34,7 +34,10 @@ function getCachedOrNull<T>(key: string): T | null {
 
 function setCache(key: string, data: any): void {
     pruneExpiredCacheEntries();
-    ytBrowseCache.set(key, { data, expiresAt: Date.now() + YTMUSIC_BROWSE_TTL_MS });
+    ytBrowseCache.set(key, {
+        data,
+        expiresAt: Date.now() + YTMUSIC_BROWSE_TTL_MS,
+    });
     trimCacheIfNeeded();
 }
 
@@ -65,7 +68,7 @@ function parseBoundedInt(
     value: unknown,
     fallback: number,
     min: number,
-    max: number
+    max: number,
 ): number {
     if (typeof value !== "string") {
         return fallback;
@@ -119,7 +122,9 @@ function resolveHttpStatusFromError(error: any): number | null {
 async function ensureYtMusicEnabled(res: Response): Promise<boolean> {
     const settings = await getSystemSettings();
     if (!settings?.ytMusicEnabled) {
-        res.status(403).json({ error: "YouTube Music integration is not enabled" });
+        res.status(403).json({
+            error: "YouTube Music integration is not enabled",
+        });
         return false;
     }
 
@@ -175,47 +180,54 @@ function isBrowseImageHostAllowed(hostname: string): boolean {
  *       401:
  *         description: Not authenticated
  */
-router.get("/ytmusic/image", imageLimiter, async (req: Request, res: Response) => {
-    const rawUrl = req.query.url;
-    if (typeof rawUrl !== "string" || !rawUrl.trim()) {
-        return res.status(400).json({ error: "url query parameter is required" });
-    }
+router.get(
+    "/ytmusic/image",
+    imageLimiter,
+    async (req: Request, res: Response) => {
+        const rawUrl = req.query.url;
+        if (typeof rawUrl !== "string" || !rawUrl.trim()) {
+            return res
+                .status(400)
+                .json({ error: "url query parameter is required" });
+        }
 
-    let parsed: URL;
-    try {
-        parsed = new URL(rawUrl);
-    } catch {
-        return res.status(400).json({ error: "Invalid URL" });
-    }
+        let parsed: URL;
+        try {
+            parsed = new URL(rawUrl);
+        } catch {
+            return res.status(400).json({ error: "Invalid URL" });
+        }
 
-    if (!isBrowseImageHostAllowed(parsed.hostname)) {
-        return res.status(400).json({ error: "URL host not allowed" });
-    }
+        if (!isBrowseImageHostAllowed(parsed.hostname)) {
+            return res.status(400).json({ error: "URL host not allowed" });
+        }
 
-    const key = browseImageCacheKey(rawUrl);
+        const key = browseImageCacheKey(rawUrl);
 
-    // Check disk cache
-    const cached = getBrowseImageFromCache(key);
-    if (cached) {
-        res.set("Content-Type", cached.contentType);
+        // Check disk cache
+        const cached = getBrowseImageFromCache(key);
+        if (cached) {
+            res.set("Content-Type", cached.contentType);
+            res.set("Cache-Control", "public, max-age=604800, immutable");
+            return res.sendFile(cached.filePath);
+        }
+
+        // Fetch, cache, and serve
+        const entry = await fetchAndCacheBrowseImage(rawUrl);
+        if (!entry) {
+            return res.status(404).json({ error: "Failed to fetch image" });
+        }
+
+        res.set("Content-Type", entry.contentType);
         res.set("Cache-Control", "public, max-age=604800, immutable");
-        return res.sendFile(cached.filePath);
-    }
-
-    // Fetch, cache, and serve
-    const entry = await fetchAndCacheBrowseImage(rawUrl);
-    if (!entry) {
-        return res.status(404).json({ error: "Failed to fetch image" });
-    }
-
-    res.set("Content-Type", entry.contentType);
-    res.set("Cache-Control", "public, max-age=604800, immutable");
-    return res.sendFile(entry.filePath);
-});
+        return res.sendFile(entry.filePath);
+    },
+);
 
 // ── Deprecated Deezer browse routes (410 Gone) ─────────────────
 
-const GONE_MSG = "Deezer browse has been replaced by YouTube Music. Use /api/browse/ytmusic/* endpoints instead.";
+const GONE_MSG =
+    "Deezer browse has been replaced by YouTube Music. Use /api/browse/ytmusic/* endpoints instead.";
 
 /**
  * @openapi
@@ -233,7 +245,7 @@ const GONE_MSG = "Deezer browse has been replaced by YouTube Music. Use /api/bro
  *         description: Not authenticated
  */
 router.get("/playlists/featured", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -251,7 +263,7 @@ router.get("/playlists/featured", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/playlists/search", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -275,7 +287,7 @@ router.get("/playlists/search", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/playlists/:id", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -293,7 +305,7 @@ router.get("/playlists/:id", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/radios", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -311,7 +323,7 @@ router.get("/radios", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/radios/by-genre", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -335,7 +347,7 @@ router.get("/radios/by-genre", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/radios/:id", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -353,7 +365,7 @@ router.get("/radios/:id", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/genres", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -377,7 +389,7 @@ router.get("/genres", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/genres/:id/playlists", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -401,7 +413,7 @@ router.get("/genres/:id/playlists", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/genres/:id", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 /**
  * @openapi
@@ -419,7 +431,7 @@ router.get("/genres/:id", (_req: Request, res: Response) =>
  *         description: Not authenticated
  */
 router.get("/all", (_req: Request, res: Response) =>
-    res.status(410).json({ error: GONE_MSG })
+    res.status(410).json({ error: GONE_MSG }),
 );
 
 // ── Retained: URL parse (supports Spotify + Deezer URLs for import) ──
@@ -461,7 +473,9 @@ router.post("/playlists/parse", async (req: Request, res: Response) => {
         }
         const normalizedUrl = String(url).trim();
         const parsedUrl = parseProviderUrlCandidate(normalizedUrl);
-        const normalizedHost = parsedUrl?.hostname.toLowerCase().replace(/^www\./, "");
+        const normalizedHost = parsedUrl?.hostname
+            .toLowerCase()
+            .replace(/^www\./, "");
         const normalizedPath = parsedUrl?.pathname.replace(/\/+$/, "");
 
         // Try Deezer
@@ -503,7 +517,7 @@ router.post("/playlists/parse", async (req: Request, res: Response) => {
             normalizedHost === "m.youtube.com";
         const ytListId =
             isYouTubeHost && normalizedPath === "/playlist"
-                ? parsedUrl?.searchParams.get("list") ?? null
+                ? (parsedUrl?.searchParams.get("list") ?? null)
                 : null;
         if (ytListId && /^[A-Za-z0-9_-]+$/.test(ytListId)) {
             return res.json({
@@ -515,7 +529,9 @@ router.post("/playlists/parse", async (req: Request, res: Response) => {
         }
 
         // Try TIDAL playlist
-        const isTidalHost = normalizedHost === "tidal.com" || normalizedHost === "listen.tidal.com";
+        const isTidalHost =
+            normalizedHost === "tidal.com" ||
+            normalizedHost === "listen.tidal.com";
         const tidalPathSegments = (normalizedPath ?? "")
             .split("/")
             .filter(Boolean);
@@ -672,7 +688,7 @@ router.get("/ytmusic/home", async (req: Request, res: Response) => {
             req.query.limit,
             YTMUSIC_HOME_DEFAULT_LIMIT,
             1,
-            YTMUSIC_HOME_MAX_LIMIT
+            YTMUSIC_HOME_MAX_LIMIT,
         );
         const cacheKey = `home:${limit}:${userId ?? "public"}`;
 
@@ -734,8 +750,7 @@ router.get("/ytmusic/mood-playlists", async (req: Request, res: Response) => {
         const params = parseMoodParams(req.query.params);
         if (!params) {
             return res.status(400).json({
-                error:
-                    "params query parameter is required and must be a non-empty string up to 512 characters",
+                error: "params query parameter is required and must be a non-empty string up to 512 characters",
             });
         }
 
@@ -789,57 +804,59 @@ router.get("/ytmusic/mood-playlists", async (req: Request, res: Response) => {
  *       401:
  *         description: Not authenticated
  */
-router.get("/ytmusic/album/:id", async (req: Request<{ id: string }>, res: Response) => {
-    try {
-        if (!(await ensureYtMusicEnabled(res))) {
-            return;
-        }
+router.get(
+    "/ytmusic/album/:id",
+    async (req: Request<{ id: string }>, res: Response) => {
+        try {
+            if (!(await ensureYtMusicEnabled(res))) {
+                return;
+            }
 
-        const { id } = req.params;
-        const cacheKey = `album:${id}`;
+            const { id } = req.params;
+            const cacheKey = `album:${id}`;
 
-        const cached = getCachedOrNull(cacheKey);
-        if (cached) {
-            return res.json(cached);
-        }
+            const cached = getCachedOrNull(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
 
-        const album = await ytMusicService.getBrowseAlbum(id);
+            const album = await ytMusicService.getBrowseAlbum(id);
 
-        // Normalize to YtMusicBrowsePlaylist shape so the frontend detail page
-        // can render it uniformly without knowing whether it's an album or playlist.
-        const description = [
-            album.artist,
-            album.year,
-        ].filter(Boolean).join(" \u00B7 ");
+            // Normalize to YtMusicBrowsePlaylist shape so the frontend detail page
+            // can render it uniformly without knowing whether it's an album or playlist.
+            const description = [album.artist, album.year]
+                .filter(Boolean)
+                .join(" \u00B7 ");
 
-        const result = {
-            id,
-            title: album.title,
-            description,
-            trackCount: album.trackCount ?? album.tracks.length,
-            thumbnailUrl: album.coverUrl,
-            tracks: album.tracks.map((t) => ({
-                videoId: t.videoId,
-                title: t.title,
-                artist: t.artist,
-                artists: t.artists,
-                album: album.title ?? "",
-                duration: t.duration_seconds ?? 0,
+            const result = {
+                id,
+                title: album.title,
+                description,
+                trackCount: album.trackCount ?? album.tracks.length,
                 thumbnailUrl: album.coverUrl,
-            })),
-            source: "ytmusic" as const,
-            type: "album" as const,
-        };
-        setCache(cacheKey, result);
-        res.json(result);
-    } catch (error: any) {
-        if (error.response?.status === 404) {
-            return res.status(404).json({ error: "Album not found" });
+                tracks: album.tracks.map((t) => ({
+                    videoId: t.videoId,
+                    title: t.title,
+                    artist: t.artist,
+                    artists: t.artists,
+                    album: album.title ?? "",
+                    duration: t.duration_seconds ?? 0,
+                    thumbnailUrl: album.coverUrl,
+                })),
+                source: "ytmusic" as const,
+                type: "album" as const,
+            };
+            setCache(cacheKey, result);
+            res.json(result);
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return res.status(404).json({ error: "Album not found" });
+            }
+            logger.error("[Browse] YT Music album error:", error);
+            res.status(500).json({ error: "Failed to fetch album" });
         }
-        logger.error("[Browse] YT Music album error:", error);
-        res.status(500).json({ error: "Failed to fetch album" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -872,38 +889,41 @@ router.get("/ytmusic/album/:id", async (req: Request<{ id: string }>, res: Respo
  *       401:
  *         description: Not authenticated
  */
-router.get("/ytmusic/playlist/:id", async (req: Request<{ id: string }>, res: Response) => {
-    try {
-        if (!(await ensureYtMusicEnabled(res))) {
-            return;
-        }
+router.get(
+    "/ytmusic/playlist/:id",
+    async (req: Request<{ id: string }>, res: Response) => {
+        try {
+            if (!(await ensureYtMusicEnabled(res))) {
+                return;
+            }
 
-        const { id } = req.params;
-        const limit = parseBoundedInt(
-            req.query.limit,
-            YTMUSIC_PLAYLIST_DEFAULT_LIMIT,
-            1,
-            YTMUSIC_PLAYLIST_MAX_LIMIT
-        );
-        const cacheKey = `playlist:${id}:${limit}`;
+            const { id } = req.params;
+            const limit = parseBoundedInt(
+                req.query.limit,
+                YTMUSIC_PLAYLIST_DEFAULT_LIMIT,
+                1,
+                YTMUSIC_PLAYLIST_MAX_LIMIT,
+            );
+            const cacheKey = `playlist:${id}:${limit}`;
 
-        const cached = getCachedOrNull(cacheKey);
-        if (cached) {
-            return res.json(cached);
-        }
+            const cached = getCachedOrNull(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
 
-        const playlist = await ytMusicService.getBrowsePlaylist(id, limit);
-        const result = { ...playlist, source: "ytmusic" as const };
-        setCache(cacheKey, result);
-        res.json(result);
-    } catch (error: any) {
-        if (error.response?.status === 404) {
-            return res.status(404).json({ error: "Playlist not found" });
+            const playlist = await ytMusicService.getBrowsePlaylist(id, limit);
+            const result = { ...playlist, source: "ytmusic" as const };
+            setCache(cacheKey, result);
+            res.json(result);
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return res.status(404).json({ error: "Playlist not found" });
+            }
+            logger.error("[Browse] YT Music playlist error:", error);
+            res.status(500).json({ error: "Failed to fetch playlist" });
         }
-        logger.error("[Browse] YT Music playlist error:", error);
-        res.status(500).json({ error: "Failed to fetch playlist" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -936,7 +956,11 @@ router.get("/ytmusic/mixes", async (req: Request, res: Response) => {
             return res.json(cached);
         }
 
-        const mixes = await ytMusicService.getLibraryPlaylists(userId, 25, true);
+        const mixes = await ytMusicService.getLibraryPlaylists(
+            userId,
+            25,
+            true,
+        );
         const result = { mixes, source: "ytmusic" as const };
         setCache(cacheKey, result);
         res.json(result);
@@ -953,7 +977,10 @@ router.get("/ytmusic/mixes", async (req: Request, res: Response) => {
                         : "Invalid request for mixes",
             });
         }
-        logger.error("[Browse] YT Music mixes error:", error?.message || "unknown");
+        logger.error(
+            "[Browse] YT Music mixes error:",
+            error?.message || "unknown",
+        );
         res.status(500).json({ error: "Failed to fetch YT Music mixes" });
     }
 });
@@ -983,7 +1010,10 @@ function setTidalCache(key: string, data: any): void {
     for (const [k, v] of tidalBrowseCache.entries()) {
         if (v.expiresAt <= now) tidalBrowseCache.delete(k);
     }
-    tidalBrowseCache.set(key, { data, expiresAt: Date.now() + TIDAL_BROWSE_TTL_MS });
+    tidalBrowseCache.set(key, {
+        data,
+        expiresAt: Date.now() + TIDAL_BROWSE_TTL_MS,
+    });
     while (tidalBrowseCache.size > TIDAL_BROWSE_MAX_CACHE_ENTRIES) {
         const oldestKey = tidalBrowseCache.keys().next().value;
         if (!oldestKey) break;
@@ -995,22 +1025,30 @@ function setTidalCache(key: string, data: any): void {
  * Check that TIDAL integration is both enabled and the sidecar is reachable.
  * Returns false (and sends 403) when not available.
  */
-async function ensureTidalEnabled(req: Request, res: Response): Promise<boolean> {
+async function ensureTidalEnabled(
+    req: Request,
+    res: Response,
+): Promise<boolean> {
     const [enabled, available] = await Promise.all([
         tidalStreamingService.isEnabled(),
         tidalStreamingService.isAvailable(),
     ]);
     if (!enabled || !available) {
-        res.status(403).json({ error: "TIDAL integration is not enabled or not available" });
+        res.status(403).json({
+            error: "TIDAL integration is not enabled or not available",
+        });
         return false;
     }
     // Verify user has authenticated TIDAL credentials
     const userId = req.user?.id;
     if (userId) {
         try {
-            const authStatus = await tidalStreamingService.getAuthStatus(userId);
+            const authStatus =
+                await tidalStreamingService.getAuthStatus(userId);
             if (!authStatus.authenticated) {
-                res.status(403).json({ error: "TIDAL credentials not authenticated" });
+                res.status(403).json({
+                    error: "TIDAL credentials not authenticated",
+                });
                 return false;
             }
         } catch {
@@ -1020,10 +1058,7 @@ async function ensureTidalEnabled(req: Request, res: Response): Promise<boolean>
     return true;
 }
 
-const TIDAL_IMAGE_ALLOWED_HOSTS = [
-    "resources.tidal.com",
-    ".tidal.com",
-];
+const TIDAL_IMAGE_ALLOWED_HOSTS = ["resources.tidal.com", ".tidal.com"];
 
 function isTidalImageHostAllowed(hostname: string): boolean {
     const lower = hostname.toLowerCase();
@@ -1063,43 +1098,49 @@ function isTidalImageHostAllowed(hostname: string): boolean {
  *       401:
  *         description: Not authenticated
  */
-router.get("/tidal/image", imageLimiter, async (req: Request, res: Response) => {
-    const rawUrl = req.query.url;
-    if (typeof rawUrl !== "string" || !rawUrl.trim()) {
-        return res.status(400).json({ error: "url query parameter is required" });
-    }
+router.get(
+    "/tidal/image",
+    imageLimiter,
+    async (req: Request, res: Response) => {
+        const rawUrl = req.query.url;
+        if (typeof rawUrl !== "string" || !rawUrl.trim()) {
+            return res
+                .status(400)
+                .json({ error: "url query parameter is required" });
+        }
 
-    let parsed: URL;
-    try {
-        parsed = new URL(rawUrl);
-    } catch {
-        return res.status(400).json({ error: "Invalid URL" });
-    }
+        let parsed: URL;
+        try {
+            parsed = new URL(rawUrl);
+        } catch {
+            return res.status(400).json({ error: "Invalid URL" });
+        }
 
-    if (!isTidalImageHostAllowed(parsed.hostname)) {
-        return res.status(400).json({ error: "URL host not allowed" });
-    }
+        if (!isTidalImageHostAllowed(parsed.hostname)) {
+            return res.status(400).json({ error: "URL host not allowed" });
+        }
 
-    const key = browseImageCacheKey(rawUrl);
+        const key = browseImageCacheKey(rawUrl);
 
-    // Check disk cache
-    const cached = getBrowseImageFromCache(key);
-    if (cached) {
-        res.set("Content-Type", cached.contentType);
+        // Check disk cache
+        const cached = getBrowseImageFromCache(key);
+        if (cached) {
+            res.set("Content-Type", cached.contentType);
+            res.set("Cache-Control", "public, max-age=604800, immutable");
+            return res.sendFile(cached.filePath);
+        }
+
+        // Fetch, cache, and serve
+        const entry = await fetchAndCacheBrowseImage(rawUrl);
+        if (!entry) {
+            return res.status(404).json({ error: "Failed to fetch image" });
+        }
+
+        res.set("Content-Type", entry.contentType);
         res.set("Cache-Control", "public, max-age=604800, immutable");
-        return res.sendFile(cached.filePath);
-    }
-
-    // Fetch, cache, and serve
-    const entry = await fetchAndCacheBrowseImage(rawUrl);
-    if (!entry) {
-        return res.status(404).json({ error: "Failed to fetch image" });
-    }
-
-    res.set("Content-Type", entry.contentType);
-    res.set("Cache-Control", "public, max-age=604800, immutable");
-    return res.sendFile(entry.filePath);
-});
+        return res.sendFile(entry.filePath);
+    },
+);
 
 /**
  * @openapi
@@ -1125,7 +1166,8 @@ router.get("/tidal/home", async (req: Request, res: Response) => {
         }
 
         const userId = req.user!.id;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
+        const quality =
+            await tidalStreamingService.getUserPreferredQuality(userId);
         const cacheKey = `tidal:home:${quality}:${userId}`;
 
         const cached = getTidalCachedOrNull(cacheKey);
@@ -1133,7 +1175,10 @@ router.get("/tidal/home", async (req: Request, res: Response) => {
             return res.json(cached);
         }
 
-        const shelves = await tidalStreamingService.getHomeShelves(userId, quality);
+        const shelves = await tidalStreamingService.getHomeShelves(
+            userId,
+            quality,
+        );
         const result = { shelves, source: "tidal" as const };
         setTidalCache(cacheKey, result);
         res.json(result);
@@ -1167,7 +1212,8 @@ router.get("/tidal/explore", async (req: Request, res: Response) => {
         }
 
         const userId = req.user!.id;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
+        const quality =
+            await tidalStreamingService.getUserPreferredQuality(userId);
         const cacheKey = `tidal:explore:${quality}:${userId}`;
 
         const cached = getTidalCachedOrNull(cacheKey);
@@ -1175,13 +1221,21 @@ router.get("/tidal/explore", async (req: Request, res: Response) => {
             return res.json(cached);
         }
 
-        const shelves = await tidalStreamingService.getExploreShelves(userId, quality);
+        const shelves = await tidalStreamingService.getExploreShelves(
+            userId,
+            quality,
+        );
         const result = { shelves, source: "tidal" as const };
         setTidalCache(cacheKey, result);
         res.json(result);
     } catch (error: any) {
-        logger.error("[Browse] TIDAL explore error:", error?.message || "unknown");
-        res.status(500).json({ error: "Failed to fetch TIDAL explore content" });
+        logger.error(
+            "[Browse] TIDAL explore error:",
+            error?.message || "unknown",
+        );
+        res.status(500).json({
+            error: "Failed to fetch TIDAL explore content",
+        });
     }
 });
 
@@ -1209,7 +1263,8 @@ router.get("/tidal/genres", async (req: Request, res: Response) => {
         }
 
         const userId = req.user!.id;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
+        const quality =
+            await tidalStreamingService.getUserPreferredQuality(userId);
         const cacheKey = `tidal:genres:${quality}:${userId}`;
 
         const cached = getTidalCachedOrNull(cacheKey);
@@ -1222,7 +1277,10 @@ router.get("/tidal/genres", async (req: Request, res: Response) => {
         setTidalCache(cacheKey, result);
         res.json(result);
     } catch (error: any) {
-        logger.error("[Browse] TIDAL genres error:", error?.message || "unknown");
+        logger.error(
+            "[Browse] TIDAL genres error:",
+            error?.message || "unknown",
+        );
         res.status(500).json({ error: "Failed to fetch TIDAL genres" });
     }
 });
@@ -1251,7 +1309,8 @@ router.get("/tidal/moods", async (req: Request, res: Response) => {
         }
 
         const userId = req.user!.id;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
+        const quality =
+            await tidalStreamingService.getUserPreferredQuality(userId);
         const cacheKey = `tidal:moods:${quality}:${userId}`;
 
         const cached = getTidalCachedOrNull(cacheKey);
@@ -1264,7 +1323,10 @@ router.get("/tidal/moods", async (req: Request, res: Response) => {
         setTidalCache(cacheKey, result);
         res.json(result);
     } catch (error: any) {
-        logger.error("[Browse] TIDAL moods error:", error?.message || "unknown");
+        logger.error(
+            "[Browse] TIDAL moods error:",
+            error?.message || "unknown",
+        );
         res.status(500).json({ error: "Failed to fetch TIDAL moods" });
     }
 });
@@ -1293,7 +1355,8 @@ router.get("/tidal/mixes", async (req: Request, res: Response) => {
         }
 
         const userId = req.user!.id;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
+        const quality =
+            await tidalStreamingService.getUserPreferredQuality(userId);
         const cacheKey = `tidal:mixes:${quality}:${userId}`;
 
         const cached = getTidalCachedOrNull(cacheKey);
@@ -1306,7 +1369,10 @@ router.get("/tidal/mixes", async (req: Request, res: Response) => {
         setTidalCache(cacheKey, result);
         res.json(result);
     } catch (error: any) {
-        logger.error("[Browse] TIDAL mixes error:", error?.message || "unknown");
+        logger.error(
+            "[Browse] TIDAL mixes error:",
+            error?.message || "unknown",
+        );
         res.status(500).json({ error: "Failed to fetch TIDAL mixes" });
     }
 });
@@ -1345,14 +1411,17 @@ router.get("/tidal/genre-playlists", async (req: Request, res: Response) => {
 
         const path = req.query.path;
         if (typeof path !== "string" || !path.trim()) {
-            return res.status(400).json({ error: "path query parameter is required" });
+            return res
+                .status(400)
+                .json({ error: "path query parameter is required" });
         }
         if (path.length > 200) {
             return res.status(400).json({ error: "path parameter too long" });
         }
 
         const userId = req.user!.id;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
+        const quality =
+            await tidalStreamingService.getUserPreferredQuality(userId);
         const cacheKey = `tidal:genre-playlists:${quality}:${path}:${userId}`;
 
         const cached = getTidalCachedOrNull(cacheKey);
@@ -1360,13 +1429,22 @@ router.get("/tidal/genre-playlists", async (req: Request, res: Response) => {
             return res.json(cached);
         }
 
-        const playlists = await tidalStreamingService.getGenrePlaylists(userId, path, quality);
+        const playlists = await tidalStreamingService.getGenrePlaylists(
+            userId,
+            path,
+            quality,
+        );
         const result = { playlists, source: "tidal" as const };
         setTidalCache(cacheKey, result);
         res.json(result);
     } catch (error: any) {
-        logger.error("[Browse] TIDAL genre playlists error:", error?.message || "unknown");
-        res.status(500).json({ error: "Failed to fetch TIDAL genre playlists" });
+        logger.error(
+            "[Browse] TIDAL genre playlists error:",
+            error?.message || "unknown",
+        );
+        res.status(500).json({
+            error: "Failed to fetch TIDAL genre playlists",
+        });
     }
 });
 
@@ -1399,38 +1477,52 @@ router.get("/tidal/genre-playlists", async (req: Request, res: Response) => {
  *       401:
  *         description: Not authenticated
  */
-router.get("/tidal/playlist/:id", async (req: Request<{ id: string }>, res: Response) => {
-    try {
-        if (!(await ensureTidalEnabled(req, res))) {
-            return;
+router.get(
+    "/tidal/playlist/:id",
+    async (req: Request<{ id: string }>, res: Response) => {
+        try {
+            if (!(await ensureTidalEnabled(req, res))) {
+                return;
+            }
+
+            const { id } = req.params;
+            const userId = req.user!.id;
+            const limitRaw = req.query.limit;
+            const limit =
+                typeof limitRaw === "string" && limitRaw.trim()
+                    ? Number.parseInt(limitRaw, 10)
+                    : undefined;
+            const validLimit =
+                typeof limit === "number" && Number.isFinite(limit) && limit > 0
+                    ? Math.min(limit, 500)
+                    : undefined;
+            const quality =
+                await tidalStreamingService.getUserPreferredQuality(userId);
+            const cacheKey = `tidal:playlist:${quality}:${id}:${validLimit ?? "all"}:${userId}`;
+
+            const cached = getTidalCachedOrNull(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
+
+            const playlist = await tidalStreamingService.getBrowsePlaylist(
+                userId,
+                id,
+                quality,
+                validLimit,
+            );
+            const result = { ...playlist, source: "tidal" as const };
+            setTidalCache(cacheKey, result);
+            res.json(result);
+        } catch (error: any) {
+            logger.error(
+                "[Browse] TIDAL playlist error:",
+                error?.message || "unknown",
+            );
+            res.status(500).json({ error: "Failed to fetch TIDAL playlist" });
         }
-
-        const { id } = req.params;
-        const userId = req.user!.id;
-        const limitRaw = req.query.limit;
-        const limit = typeof limitRaw === "string" && limitRaw.trim()
-            ? Number.parseInt(limitRaw, 10)
-            : undefined;
-        const validLimit = typeof limit === "number" && Number.isFinite(limit) && limit > 0
-            ? Math.min(limit, 500)
-            : undefined;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
-        const cacheKey = `tidal:playlist:${quality}:${id}:${validLimit ?? "all"}:${userId}`;
-
-        const cached = getTidalCachedOrNull(cacheKey);
-        if (cached) {
-            return res.json(cached);
-        }
-
-        const playlist = await tidalStreamingService.getBrowsePlaylist(userId, id, quality, validLimit);
-        const result = { ...playlist, source: "tidal" as const };
-        setTidalCache(cacheKey, result);
-        res.json(result);
-    } catch (error: any) {
-        logger.error("[Browse] TIDAL playlist error:", error?.message || "unknown");
-        res.status(500).json({ error: "Failed to fetch TIDAL playlist" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -1456,30 +1548,41 @@ router.get("/tidal/playlist/:id", async (req: Request<{ id: string }>, res: Resp
  *       401:
  *         description: Not authenticated
  */
-router.get("/tidal/mix/:id", async (req: Request<{ id: string }>, res: Response) => {
-    try {
-        if (!(await ensureTidalEnabled(req, res))) {
-            return;
+router.get(
+    "/tidal/mix/:id",
+    async (req: Request<{ id: string }>, res: Response) => {
+        try {
+            if (!(await ensureTidalEnabled(req, res))) {
+                return;
+            }
+
+            const { id } = req.params;
+            const userId = req.user!.id;
+            const quality =
+                await tidalStreamingService.getUserPreferredQuality(userId);
+            const cacheKey = `tidal:mix:${quality}:${id}:${userId}`;
+
+            const cached = getTidalCachedOrNull(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
+
+            const mix = await tidalStreamingService.getBrowseMix(
+                userId,
+                id,
+                quality,
+            );
+            const result = { ...mix, source: "tidal" as const };
+            setTidalCache(cacheKey, result);
+            res.json(result);
+        } catch (error: any) {
+            logger.error(
+                "[Browse] TIDAL mix error:",
+                error?.message || "unknown",
+            );
+            res.status(500).json({ error: "Failed to fetch TIDAL mix" });
         }
-
-        const { id } = req.params;
-        const userId = req.user!.id;
-        const quality = await tidalStreamingService.getUserPreferredQuality(userId);
-        const cacheKey = `tidal:mix:${quality}:${id}:${userId}`;
-
-        const cached = getTidalCachedOrNull(cacheKey);
-        if (cached) {
-            return res.json(cached);
-        }
-
-        const mix = await tidalStreamingService.getBrowseMix(userId, id, quality);
-        const result = { ...mix, source: "tidal" as const };
-        setTidalCache(cacheKey, result);
-        res.json(result);
-    } catch (error: any) {
-        logger.error("[Browse] TIDAL mix error:", error?.message || "unknown");
-        res.status(500).json({ error: "Failed to fetch TIDAL mix" });
-    }
-});
+    },
+);
 
 export default router;

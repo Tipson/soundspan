@@ -25,7 +25,7 @@ export const selectTracksWithArtistDiversity = <
     tracks: T[],
     targetCount: number,
     strictCap: number,
-    relaxedCap: number
+    relaxedCap: number,
 ): T[] => {
     if (!Array.isArray(tracks) || targetCount <= 0) {
         return [];
@@ -37,9 +37,9 @@ export const selectTracksWithArtistDiversity = <
 
     const trySelect = (track: T, cap: number): boolean => {
         const artistKey =
-            typeof track.artistId === "string" && track.artistId.length > 0 ?
-                track.artistId
-            :   `unknown:${track.id}`;
+            typeof track.artistId === "string" && track.artistId.length > 0
+                ? track.artistId
+                : `unknown:${track.id}`;
         const count = artistCounts.get(artistKey) ?? 0;
 
         if (count >= cap) {
@@ -91,7 +91,7 @@ export const buildMultiTrackRadio = async (
     seedTrackIds: string[],
     excludeTrackIds: string[],
     limitNum: number,
-    userId: string | undefined
+    userId: string | undefined,
 ): Promise<{ trackIds: string[]; preserveInputOrder: boolean }> => {
     if (seedTrackIds.length === 0) {
         return { trackIds: [], preserveInputOrder: true };
@@ -125,7 +125,9 @@ export const buildMultiTrackRadio = async (
             album: {
                 select: {
                     artistId: true,
-                    artist: { select: { id: true, genres: true, userGenres: true } },
+                    artist: {
+                        select: { id: true, genres: true, userGenres: true },
+                    },
                 },
             },
         },
@@ -142,8 +144,8 @@ export const buildMultiTrackRadio = async (
     const allTags = new Set<string>();
     const allGenres = new Set<string>();
     for (const t of seedTracks) {
-        for (const tag of (t.lastfmTags || [])) allTags.add(tag);
-        for (const genre of (t.essentiaGenres || [])) allGenres.add(genre);
+        for (const tag of t.lastfmTags || []) allTags.add(tag);
+        for (const genre of t.essentiaGenres || []) allGenres.add(genre);
     }
 
     // Collect seed artist IDs for fallback
@@ -189,12 +191,12 @@ export const buildMultiTrackRadio = async (
         });
 
         logger.debug(
-            `[Radio:multi-seed] Found ${candidates.length} analyzed candidates to score against ${seedTracks.length} seed tracks`
+            `[Radio:multi-seed] Found ${candidates.length} analyzed candidates to score against ${seedTracks.length} seed tracks`,
         );
 
         const preferenceScores = await buildTrackPreferenceScoreMapForUser(
             userId,
-            candidates.map((c) => c.id)
+            candidates.map((c) => c.id),
         );
 
         const scored = scoreTracksAgainstSeed(
@@ -203,16 +205,16 @@ export const buildMultiTrackRadio = async (
             [...allGenres],
             candidates,
             preferenceScores,
-            applyTrackPreferenceSimilarityBias
+            applyTrackPreferenceSimilarityBias,
         );
 
         logger.debug(
-            `[Radio:multi-seed] Vibe scoring matched ${scored.length} tracks above threshold`
+            `[Radio:multi-seed] Vibe scoring matched ${scored.length} tracks above threshold`,
         );
 
         // Apply artist diversity to scored results
         const candidateArtistMap = new Map(
-            candidates.map((c) => [c.id, c.album?.artistId ?? ""])
+            candidates.map((c) => [c.id, c.album?.artistId ?? ""]),
         );
         const scoredWithArtist = scored.map((s) => ({
             id: s.id,
@@ -226,7 +228,7 @@ export const buildMultiTrackRadio = async (
             scoredWithArtist,
             limitNum,
             strictCap,
-            relaxedCap
+            relaxedCap,
         );
         resultIds = diverseMatches.map((m) => m.id);
     }
@@ -247,7 +249,7 @@ export const buildMultiTrackRadio = async (
         resultIds.push(...newArtistIds);
         if (newArtistIds.length > 0) {
             logger.debug(
-                `[Radio:multi-seed] Fallback A: added ${newArtistIds.length} tracks from seed artists`
+                `[Radio:multi-seed] Fallback A: added ${newArtistIds.length} tracks from seed artists`,
             );
         }
     }
@@ -271,7 +273,7 @@ export const buildMultiTrackRadio = async (
                     Prisma.sql`EXISTS (
                         SELECT 1 FROM jsonb_array_elements_text("Artist"."genres") AS g
                         WHERE LOWER(g) LIKE ${`%${g}%`}
-                    )`
+                    )`,
             );
             const genreTracks = await prisma.$queryRaw<{ id: string }[]>`
                 SELECT "Track"."id"
@@ -287,7 +289,7 @@ export const buildMultiTrackRadio = async (
             resultIds.push(...newGenreIds);
             if (newGenreIds.length > 0) {
                 logger.debug(
-                    `[Radio:multi-seed] Fallback B: added ${newGenreIds.length} tracks from genre expansion (${genreKeywords.join(", ")})`
+                    `[Radio:multi-seed] Fallback B: added ${newGenreIds.length} tracks from genre expansion (${genreKeywords.join(", ")})`,
                 );
             }
         }
@@ -308,14 +310,12 @@ export const buildMultiTrackRadio = async (
         resultIds.push(...newRandomIds);
         if (newRandomIds.length > 0) {
             logger.debug(
-                `[Radio:multi-seed] Fallback C: added ${newRandomIds.length} random library tracks`
+                `[Radio:multi-seed] Fallback C: added ${newRandomIds.length} random library tracks`,
             );
         }
     }
 
-    logger.debug(
-        `[Radio:multi-seed] Final queue: ${resultIds.length} tracks`
-    );
+    logger.debug(`[Radio:multi-seed] Final queue: ${resultIds.length} tracks`);
 
     return { trackIds: resultIds, preserveInputOrder: true };
 };

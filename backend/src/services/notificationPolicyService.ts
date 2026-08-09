@@ -66,10 +66,10 @@ class NotificationPolicyService {
      */
     async evaluateNotification(
         jobId: string,
-        eventType: "complete" | "failed" | "retry" | "timeout"
+        eventType: "complete" | "failed" | "retry" | "timeout",
     ): Promise<NotificationDecision> {
         logger.debug(
-            `[NOTIFICATION-POLICY] Evaluating: ${jobId} (${eventType})`
+            `[NOTIFICATION-POLICY] Evaluating: ${jobId} (${eventType})`,
         );
 
         // Fetch job with current state
@@ -135,7 +135,7 @@ class NotificationPolicyService {
      */
     private async evaluateCompletedJob(
         job: any,
-        eventType: string
+        eventType: string,
     ): Promise<NotificationDecision> {
         if (eventType !== "complete") {
             return {
@@ -165,7 +165,7 @@ class NotificationPolicyService {
      */
     private async evaluateProcessingJob(
         job: any,
-        eventType: string
+        eventType: string,
     ): Promise<NotificationDecision> {
         // Processing jobs should never send notifications
         // They're still in active retry window
@@ -218,7 +218,7 @@ class NotificationPolicyService {
      */
     private async evaluateFailedJob(
         job: any,
-        eventType: string
+        eventType: string,
     ): Promise<NotificationDecision> {
         if (eventType !== "failed" && eventType !== "timeout") {
             return {
@@ -239,7 +239,7 @@ class NotificationPolicyService {
         // Classify the failure
         const classification = this.classifyFailure(
             job,
-            job.error || "Unknown error"
+            job.error || "Unknown error",
         );
 
         // Critical errors always notify
@@ -299,16 +299,16 @@ class NotificationPolicyService {
         if (elapsed > windowMs) {
             logger.debug(
                 `[NOTIFICATION-POLICY]   Retry window expired (${Math.round(
-                    elapsed / 60000
-                )}m > ${retryWindowMinutes}m)`
+                    elapsed / 60000,
+                )}m > ${retryWindowMinutes}m)`,
             );
             return false;
         }
 
         logger.debug(
             `[NOTIFICATION-POLICY]   In retry window (${Math.round(
-                elapsed / 60000
-            )}m < ${retryWindowMinutes}m)`
+                elapsed / 60000,
+            )}m < ${retryWindowMinutes}m)`,
         );
         return true;
     }
@@ -349,7 +349,7 @@ class NotificationPolicyService {
                 otherMeta?.notificationSent === true
             ) {
                 logger.debug(
-                    `[NOTIFICATION-POLICY]   Found duplicate notification in job ${otherNotifiedJob.id}`
+                    `[NOTIFICATION-POLICY]   Found duplicate notification in job ${otherNotifiedJob.id}`,
                 );
                 return true;
             }
@@ -369,7 +369,7 @@ class NotificationPolicyService {
         for (const pattern of CRITICAL_PATTERNS) {
             if (errorLower.includes(pattern)) {
                 logger.debug(
-                    `[NOTIFICATION-POLICY]   Classified as CRITICAL: ${pattern}`
+                    `[NOTIFICATION-POLICY]   Classified as CRITICAL: ${pattern}`,
                 );
                 return "critical";
             }
@@ -379,7 +379,7 @@ class NotificationPolicyService {
         for (const pattern of PERMANENT_PATTERNS) {
             if (errorLower.includes(pattern)) {
                 logger.debug(
-                    `[NOTIFICATION-POLICY]   Classified as PERMANENT: ${pattern}`
+                    `[NOTIFICATION-POLICY]   Classified as PERMANENT: ${pattern}`,
                 );
                 return "permanent";
             }
@@ -389,7 +389,7 @@ class NotificationPolicyService {
         for (const pattern of TRANSIENT_PATTERNS) {
             if (errorLower.includes(pattern)) {
                 logger.debug(
-                    `[NOTIFICATION-POLICY]   Classified as TRANSIENT: ${pattern}`
+                    `[NOTIFICATION-POLICY]   Classified as TRANSIENT: ${pattern}`,
                 );
                 return "transient";
             }
@@ -397,7 +397,7 @@ class NotificationPolicyService {
 
         // Default to transient if unknown
         logger.debug(
-            `[NOTIFICATION-POLICY]   Classified as TRANSIENT (default)`
+            `[NOTIFICATION-POLICY]   Classified as TRANSIENT (default)`,
         );
         return "transient";
     }

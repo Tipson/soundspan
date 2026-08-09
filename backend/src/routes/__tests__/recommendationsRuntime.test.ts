@@ -71,7 +71,7 @@ const mockRedisMGet = redisClient.mGet as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) throw new Error(`GET route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -170,7 +170,10 @@ describe("recommendations routes runtime", () => {
             { artistId: "r1", _count: { rgMbid: 5 } },
             { artistId: "r3", _count: { rgMbid: 1 } },
         ]);
-        mockRedisMGet.mockResolvedValue(["native:artists/r1-cache.jpg", "NOT_FOUND"]);
+        mockRedisMGet.mockResolvedValue([
+            "native:artists/r1-cache.jpg",
+            "NOT_FOUND",
+        ]);
 
         const req = { user: { id: "u1" }, query: { limit: "10" } } as any;
         const res = createRes();
@@ -183,14 +186,14 @@ describe("recommendations routes runtime", () => {
                 id: "r1",
                 coverArt: "native:artists/r1-cache.jpg",
                 albumCount: 5,
-            })
+            }),
         );
         expect(res.body.artists[1]).toEqual(
             expect.objectContaining({
                 id: "r3",
                 coverArt: null,
                 albumCount: 1,
-            })
+            }),
         );
         expect(mockRedisMGet).toHaveBeenCalledWith(["hero:r1", "hero:r3"]);
     });
@@ -223,7 +226,9 @@ describe("recommendations routes runtime", () => {
             },
         ]);
         mockOwnedAlbumFindMany.mockResolvedValue([]);
-        mockAlbumGroupBy.mockResolvedValue([{ artistId: "r1", _count: { rgMbid: 2 } }]);
+        mockAlbumGroupBy.mockResolvedValue([
+            { artistId: "r1", _count: { rgMbid: 2 } },
+        ]);
         mockRedisMGet.mockRejectedValue(new Error("redis down"));
 
         const req = { user: { id: "u1" }, query: { limit: "5" } } as any;
@@ -238,7 +243,7 @@ describe("recommendations routes runtime", () => {
                 id: "r1",
                 coverArt: null,
                 albumCount: 2,
-            })
+            }),
         );
         expect(mockRedisMGet).toHaveBeenCalledWith(["hero:r1"]);
     });
@@ -253,7 +258,10 @@ describe("recommendations routes runtime", () => {
     });
 
     it("returns artist recommendations with owned album metadata", async () => {
-        mockArtistFindUnique.mockResolvedValue({ id: "seed-1", name: "Seed Artist" });
+        mockArtistFindUnique.mockResolvedValue({
+            id: "seed-1",
+            name: "Seed Artist",
+        });
         mockSimilarArtistFindMany.mockResolvedValue([
             { toArtistId: "sim-1", weight: 0.9 },
             { toArtistId: "sim-2", weight: 0.7 },
@@ -267,20 +275,25 @@ describe("recommendations routes runtime", () => {
             { id: "al-2", artistId: "sim-1", rgMbid: "rg-2", year: 2023 },
             { id: "al-3", artistId: "sim-2", rgMbid: "rg-3", year: 2022 },
         ]);
-        mockOwnedAlbumFindMany.mockResolvedValue([{ artistId: "sim-1", rgMbid: "rg-1" }]);
+        mockOwnedAlbumFindMany.mockResolvedValue([
+            { artistId: "sim-1", rgMbid: "rg-1" },
+        ]);
 
         const req = { query: { seedArtistId: "seed-1" } } as any;
         const res = createRes();
         await getRecommendations(req, res);
 
         expect(res.statusCode).toBe(200);
-        expect(res.body.seedArtist).toEqual({ id: "seed-1", name: "Seed Artist" });
+        expect(res.body.seedArtist).toEqual({
+            id: "seed-1",
+            name: "Seed Artist",
+        });
         expect(res.body.recommendations).toHaveLength(2);
         expect(res.body.recommendations[0].topAlbums[0]).toEqual(
-            expect.objectContaining({ rgMbid: "rg-1", owned: true })
+            expect.objectContaining({ rgMbid: "rg-1", owned: true }),
         );
         expect(res.body.recommendations[1].topAlbums[0]).toEqual(
-            expect.objectContaining({ rgMbid: "rg-3", owned: false })
+            expect.objectContaining({ rgMbid: "rg-3", owned: false }),
         );
     });
 
@@ -295,7 +308,10 @@ describe("recommendations routes runtime", () => {
     });
 
     it("returns empty recommendations for seed artists with no similar artists", async () => {
-        mockArtistFindUnique.mockResolvedValue({ id: "seed-1", name: "Seed Artist" });
+        mockArtistFindUnique.mockResolvedValue({
+            id: "seed-1",
+            name: "Seed Artist",
+        });
         mockSimilarArtistFindMany.mockResolvedValue([]);
         mockArtistFindMany.mockResolvedValue([]);
         mockAlbumFindMany.mockResolvedValue([]);
@@ -376,10 +392,10 @@ describe("recommendations routes runtime", () => {
         });
         expect(res.body.recommendations).toHaveLength(2);
         expect(res.body.recommendations[0]).toEqual(
-            expect.objectContaining({ id: "rec-al-1", owned: true })
+            expect.objectContaining({ id: "rec-al-1", owned: true }),
         );
         expect(res.body.recommendations[1]).toEqual(
-            expect.objectContaining({ id: "rec-al-2", owned: false })
+            expect.objectContaining({ id: "rec-al-2", owned: false }),
         );
     });
 
@@ -425,7 +441,7 @@ describe("recommendations routes runtime", () => {
                 id: "rec-al-1",
                 title: "Duplicate Album",
                 owned: true,
-            })
+            }),
         );
     });
 
@@ -495,7 +511,7 @@ describe("recommendations routes runtime", () => {
                 id: "track-1",
                 inLibrary: true,
                 similarity: 0.91,
-            })
+            }),
         );
         expect(res.body.recommendations[1]).toEqual(
             expect.objectContaining({
@@ -503,7 +519,7 @@ describe("recommendations routes runtime", () => {
                 artist: "Unknown Artist",
                 inLibrary: false,
                 lastFmUrl: "https://last.fm/unknown",
-            })
+            }),
         );
     });
 
@@ -548,7 +564,7 @@ describe("recommendations routes runtime", () => {
                     }),
                 }),
                 take: 20,
-            })
+            }),
         );
         expect(res.body.recommendations).toEqual([
             expect.objectContaining({
@@ -568,7 +584,9 @@ describe("recommendations routes runtime", () => {
         await getTrackRecommendations(req, res);
 
         expect(res.statusCode).toBe(400);
-        expect(res.body).toEqual({ error: "Could not resolve seed artist and title" });
+        expect(res.body).toEqual({
+            error: "Could not resolve seed artist and title",
+        });
     });
 
     it("falls back to title matching when artist-matched candidates are missing", async () => {
@@ -588,18 +606,16 @@ describe("recommendations routes runtime", () => {
                 url: "https://last.fm/match",
             },
         ]);
-        mockTrackFindMany
-            .mockResolvedValueOnce([])
-            .mockResolvedValueOnce([
-                {
-                    id: "track-1",
-                    title: "Unrelated Library Track",
-                    album: {
-                        title: "Library Album",
-                        artist: { name: "Other Library Artist" },
-                    },
+        mockTrackFindMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+            {
+                id: "track-1",
+                title: "Unrelated Library Track",
+                album: {
+                    title: "Library Album",
+                    artist: { name: "Other Library Artist" },
                 },
-            ]);
+            },
+        ]);
 
         const req = { query: { seedTrackId: "seed-track" } } as any;
         const res = createRes();
@@ -614,7 +630,7 @@ describe("recommendations routes runtime", () => {
                 artist: "Totally Different Artist",
                 inLibrary: false,
                 similarity: 1,
-            })
+            }),
         );
     });
 });

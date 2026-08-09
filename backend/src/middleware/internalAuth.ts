@@ -26,12 +26,12 @@ function secretsMatch(provided: string, expected: string): boolean {
 export function requireInternalSecret(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
 ): void {
     const expected = process.env.INTERNAL_API_SECRET;
     if (!expected) {
         logger.error(
-            "INTERNAL_API_SECRET is not configured; rejecting internal request"
+            "INTERNAL_API_SECRET is not configured; rejecting internal request",
         );
         res.status(403).json({ error: "Forbidden" });
         return;

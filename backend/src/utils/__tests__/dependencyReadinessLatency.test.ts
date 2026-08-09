@@ -62,7 +62,9 @@ describe("dependency readiness tracker latency", () => {
         jest.doMock("../logger", () => ({ logger }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { createDependencyReadinessTracker } = require("../dependencyReadiness");
+        const {
+            createDependencyReadinessTracker,
+        } = require("../dependencyReadiness");
         return createDependencyReadinessTracker("latency-test");
     }
 

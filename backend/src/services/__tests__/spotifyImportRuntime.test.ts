@@ -168,7 +168,9 @@ describe("spotify import runtime behavior", () => {
         };
     }
 
-    function makeSpotifyTrack(overrides: Partial<Record<string, unknown>> = {}) {
+    function makeSpotifyTrack(
+        overrides: Partial<Record<string, unknown>> = {},
+    ) {
         return {
             spotifyId: "sp-track-1",
             title: "Song A",
@@ -188,24 +190,26 @@ describe("spotify import runtime behavior", () => {
     it("falls back to database when cached import job JSON is malformed", async () => {
         const { prisma, redisClient } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce("{not-json");
-        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce({
-            id: "job-db-fallback",
-            userId: "u1",
-            spotifyPlaylistId: "sp-db-fallback",
-            playlistName: "DB Fallback",
-            status: "pending",
-            progress: 1,
-            albumsTotal: 1,
-            albumsCompleted: 0,
-            tracksMatched: 0,
-            tracksTotal: 3,
-            tracksDownloadable: 3,
-            createdPlaylistId: null,
-            error: null,
-            createdAt: new Date("2026-01-09T00:00:00.000Z"),
-            updatedAt: new Date("2026-01-09T00:01:00.000Z"),
-            pendingTracks: [],
-        });
+        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(
+            {
+                id: "job-db-fallback",
+                userId: "u1",
+                spotifyPlaylistId: "sp-db-fallback",
+                playlistName: "DB Fallback",
+                status: "pending",
+                progress: 1,
+                albumsTotal: 1,
+                albumsCompleted: 0,
+                tracksMatched: 0,
+                tracksTotal: 3,
+                tracksDownloadable: 3,
+                createdPlaylistId: null,
+                error: null,
+                createdAt: new Date("2026-01-09T00:00:00.000Z"),
+                updatedAt: new Date("2026-01-09T00:01:00.000Z"),
+                pendingTracks: [],
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -218,7 +222,8 @@ describe("spotify import runtime behavior", () => {
     });
 
     it("clears stale recording cache and rejects generatePreview on invalid Spotify URL", async () => {
-        const { spotifyService, musicBrainzService } = setupSpotifyImportMocks();
+        const { spotifyService, musicBrainzService } =
+            setupSpotifyImportMocks();
         (spotifyService.getPlaylist as jest.Mock).mockResolvedValueOnce(null);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -226,12 +231,14 @@ describe("spotify import runtime behavior", () => {
 
         await expect(
             spotifyImportService.generatePreview(
-                "https://open.spotify.com/playlist/missing"
-            )
+                "https://open.spotify.com/playlist/missing",
+            ),
         ).rejects.toThrow(
-            "Could not fetch playlist from Spotify. Make sure it's a valid public playlist URL."
+            "Could not fetch playlist from Spotify. Make sure it's a valid public playlist URL.",
         );
-        expect(musicBrainzService.clearStaleRecordingCaches).toHaveBeenCalledTimes(1);
+        expect(
+            musicBrainzService.clearStaleRecordingCaches,
+        ).toHaveBeenCalledTimes(1);
     });
 
     it("maps Spotify playlist metadata and delegates preview generation", async () => {
@@ -284,7 +291,7 @@ describe("spotify import runtime behavior", () => {
             });
 
         const result = await spotifyImportService.generatePreview(
-            "https://open.spotify.com/playlist/sp-1"
+            "https://open.spotify.com/playlist/sp-1",
         );
 
         expect(delegate).toHaveBeenCalledWith(
@@ -297,7 +304,7 @@ describe("spotify import runtime behavior", () => {
                 owner: "owner-1",
                 trackCount: 2,
             }),
-            "Spotify"
+            "Spotify",
         );
         expect(result.summary.total).toBe(2);
     });
@@ -350,9 +357,10 @@ describe("spotify import runtime behavior", () => {
             ],
         };
 
-        const result = await spotifyImportService.generatePreviewFromDeezer(
-            deezerPlaylist
-        );
+        const result =
+            await spotifyImportService.generatePreviewFromDeezer(
+                deezerPlaylist,
+            );
 
         expect(delegate).toHaveBeenCalledWith(
             [
@@ -368,7 +376,7 @@ describe("spotify import runtime behavior", () => {
                 owner: "user",
                 trackCount: 1,
             }),
-            "Deezer"
+            "Deezer",
         );
         expect(result.summary.notFound).toBe(1);
     });
@@ -388,7 +396,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         const result = await (spotifyImportService as any).matchTrack(
-            makeSpotifyTrack()
+            makeSpotifyTrack(),
         );
 
         expect(result).toEqual(
@@ -399,7 +407,7 @@ describe("spotify import runtime behavior", () => {
                     id: "track-exact-1",
                     artistName: "Artist A",
                 }),
-            })
+            }),
         );
         expect(prisma.track.findFirst).toHaveBeenCalledTimes(1);
     });
@@ -407,7 +415,9 @@ describe("spotify import runtime behavior", () => {
     it("falls back to full-artist exact matching when primary-artist exact lookup misses", async () => {
         const { prisma } = setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { extractPrimaryArtist } = require("../../utils/artistNormalization");
+        const {
+            extractPrimaryArtist,
+        } = require("../../utils/artistNormalization");
         (extractPrimaryArtist as jest.Mock).mockReturnValueOnce("Artist A");
         (prisma.track.findFirst as jest.Mock)
             .mockResolvedValueOnce(null)
@@ -424,7 +434,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         const result = await (spotifyImportService as any).matchTrack(
-            makeSpotifyTrack({ artist: "Artist A feat. Guest" })
+            makeSpotifyTrack({ artist: "Artist A feat. Guest" }),
         );
 
         expect(result.matchType).toBe("exact");
@@ -449,7 +459,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         const result = await (spotifyImportService as any).matchTrack(
-            makeSpotifyTrack({ album: "Album A (Super Deluxe Edition)" })
+            makeSpotifyTrack({ album: "Album A (Super Deluxe Edition)" }),
         );
 
         expect(prisma.album.findMany).toHaveBeenCalledTimes(1);
@@ -476,7 +486,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         const result = await (spotifyImportService as any).matchTrack(
-            makeSpotifyTrack({ album: "Unknown Album" })
+            makeSpotifyTrack({ album: "Unknown Album" }),
         );
 
         expect(result.matchType).toBe("fuzzy");
@@ -509,7 +519,7 @@ describe("spotify import runtime behavior", () => {
                 artist: "Long Artist Name",
                 title: "Very Long Song Title",
                 album: "Unknown Album",
-            })
+            }),
         );
 
         expect(result.matchType).toBe("fuzzy");
@@ -576,11 +586,11 @@ describe("spotify import runtime behavior", () => {
         const { spotifyImportService } = require("../spotifyImport");
 
         await expect(
-            spotifyImportService.getPendingTracksCount("playlist-1")
+            spotifyImportService.getPendingTracksCount("playlist-1"),
         ).resolves.toBe(3);
 
         await expect(
-            spotifyImportService.getPendingTracks("playlist-1")
+            spotifyImportService.getPendingTracks("playlist-1"),
         ).resolves.toEqual([
             {
                 id: "p1",
@@ -606,24 +616,26 @@ describe("spotify import runtime behavior", () => {
     it("loads job state from database on cache miss and repopulates redis cache", async () => {
         const { prisma, redisClient } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(null);
-        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce({
-            id: "job-db",
-            userId: "u1",
-            spotifyPlaylistId: "sp-db",
-            playlistName: "DB Job",
-            status: "pending",
-            progress: 10,
-            albumsTotal: 4,
-            albumsCompleted: 1,
-            tracksMatched: 2,
-            tracksTotal: 12,
-            tracksDownloadable: 10,
-            createdPlaylistId: null,
-            error: null,
-            createdAt: new Date("2026-01-03T00:00:00.000Z"),
-            updatedAt: new Date("2026-01-03T00:05:00.000Z"),
-            pendingTracks: [{ artist: "A", title: "B", album: "C" }],
-        });
+        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(
+            {
+                id: "job-db",
+                userId: "u1",
+                spotifyPlaylistId: "sp-db",
+                playlistName: "DB Job",
+                status: "pending",
+                progress: 10,
+                albumsTotal: 4,
+                albumsCompleted: 1,
+                tracksMatched: 2,
+                tracksTotal: 12,
+                tracksDownloadable: 10,
+                createdPlaylistId: null,
+                error: null,
+                createdAt: new Date("2026-01-03T00:00:00.000Z"),
+                updatedAt: new Date("2026-01-03T00:05:00.000Z"),
+                pendingTracks: [{ artist: "A", title: "B", album: "C" }],
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -633,24 +645,28 @@ describe("spotify import runtime behavior", () => {
         expect(redisClient.setEx).toHaveBeenCalledWith(
             "import:job:job-db",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
     it("returns null from getJob when neither redis nor database has the import job", async () => {
         const { prisma, redisClient } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(null);
-        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.getJob("missing-job")).resolves.toBeNull();
+        await expect(
+            spotifyImportService.getJob("missing-job"),
+        ).resolves.toBeNull();
     });
 
     it("recreates redis client and retries when cache read sees a closed connection", async () => {
         const { redisClient, redisRecoveryClient } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockRejectedValueOnce(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
         (redisRecoveryClient.get as jest.Mock).mockResolvedValueOnce(
             JSON.stringify({
@@ -670,7 +686,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-04T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-04T00:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -687,7 +703,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("@prisma/client");
         const retryable = new Prisma.PrismaClientKnownRequestError(
-            "temporary outage"
+            "temporary outage",
         );
         (prisma.spotifyImportJob.findMany as jest.Mock)
             .mockRejectedValueOnce(retryable)
@@ -695,7 +711,9 @@ describe("spotify import runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.getUserJobs("u-retry")).resolves.toEqual([]);
+        await expect(
+            spotifyImportService.getUserJobs("u-retry"),
+        ).resolves.toEqual([]);
 
         expect(prisma.$connect).toHaveBeenCalledTimes(1);
         expect(prisma.spotifyImportJob.findMany).toHaveBeenCalledTimes(2);
@@ -704,13 +722,15 @@ describe("spotify import runtime behavior", () => {
     it("propagates non-retryable prisma errors without reconnect attempts", async () => {
         const { prisma } = setupSpotifyImportMocks();
         const boom = new Error("non-retryable");
-        (prisma.spotifyImportJob.findMany as jest.Mock).mockRejectedValueOnce(boom);
+        (prisma.spotifyImportJob.findMany as jest.Mock).mockRejectedValueOnce(
+            boom,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.getUserJobs("u-fail")).rejects.toThrow(
-            "non-retryable"
-        );
+        await expect(
+            spotifyImportService.getUserJobs("u-fail"),
+        ).rejects.toThrow("non-retryable");
 
         expect(prisma.$connect).not.toHaveBeenCalled();
         expect(prisma.spotifyImportJob.findMany).toHaveBeenCalledTimes(1);
@@ -721,14 +741,16 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("@prisma/client");
         const retryable = new Prisma.PrismaClientKnownRequestError(
-            "db still unavailable"
+            "db still unavailable",
         );
-        (prisma.spotifyImportJob.findMany as jest.Mock).mockRejectedValue(retryable);
+        (prisma.spotifyImportJob.findMany as jest.Mock).mockRejectedValue(
+            retryable,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.getUserJobs("u-retry-exhausted")
+            spotifyImportService.getUserJobs("u-retry-exhausted"),
         ).rejects.toThrow("db still unavailable");
 
         expect(prisma.$connect).toHaveBeenCalledTimes(2);
@@ -738,20 +760,25 @@ describe("spotify import runtime behavior", () => {
     it("falls back to database when redis read fails with non-retryable error", async () => {
         const { redisClient, prisma } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockRejectedValueOnce(
-            new Error("permission denied")
+            new Error("permission denied"),
         );
-        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.getJob("job-redis-fail")).resolves.toBeNull();
+        await expect(
+            spotifyImportService.getJob("job-redis-fail"),
+        ).resolves.toBeNull();
         expect(prisma.spotifyImportJob.findUnique).toHaveBeenCalledWith({
             where: { id: "job-redis-fail" },
         });
     });
 
     it("retries redis writes during cancelJob when cache connection closes", async () => {
-        const { prisma, redisClient, redisRecoveryClient } = setupSpotifyImportMocks();
+        const { prisma, redisClient, redisRecoveryClient } =
+            setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(
             JSON.stringify({
                 id: "job-cancel-redis-retry",
@@ -770,16 +797,16 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-07T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-07T00:02:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
         (redisClient.setEx as jest.Mock).mockRejectedValueOnce(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.cancelJob("job-cancel-redis-retry")
+            spotifyImportService.cancelJob("job-cancel-redis-retry"),
         ).resolves.toEqual({
             playlistCreated: false,
             playlistId: null,
@@ -812,7 +839,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-04T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-04T00:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -847,7 +874,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-04T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-04T00:02:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -863,7 +890,7 @@ describe("spotify import runtime behavior", () => {
                     status: "failed",
                     error: "Import cancelled by user",
                 }),
-            })
+            }),
         );
         expect(prisma.spotifyImportJob.upsert).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -871,7 +898,7 @@ describe("spotify import runtime behavior", () => {
                 update: expect.objectContaining({
                     status: "cancelled",
                 }),
-            })
+            }),
         );
         expect(result).toEqual({
             playlistCreated: false,
@@ -887,9 +914,9 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
 
-        await expect(spotifyImportService.cancelJob("missing-job")).rejects.toThrow(
-            "Import job not found"
-        );
+        await expect(
+            spotifyImportService.cancelJob("missing-job"),
+        ).rejects.toThrow("Import job not found");
     });
 
     it("rejects refreshJobMatches when the import job does not exist", async () => {
@@ -900,7 +927,7 @@ describe("spotify import runtime behavior", () => {
         const { spotifyImportService } = require("../spotifyImport");
 
         await expect(
-            spotifyImportService.refreshJobMatches("missing-job")
+            spotifyImportService.refreshJobMatches("missing-job"),
         ).rejects.toThrow("Import job not found");
     });
 
@@ -924,14 +951,14 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-05T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-05T00:10:00.000Z").toISOString(),
                 pendingTracks: [{ artist: "A", title: "B", album: "C" }],
-            })
+            }),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
 
         await expect(
-            spotifyImportService.refreshJobMatches("job-no-playlist")
+            spotifyImportService.refreshJobMatches("job-no-playlist"),
         ).rejects.toThrow("No playlist created for this job");
     });
 
@@ -959,7 +986,7 @@ describe("spotify import runtime behavior", () => {
                     { artist: "Artist B", title: "Song B", album: "Album B" },
                     { artist: "Artist C", title: "Song C", album: "Album C" },
                 ],
-            })
+            }),
         );
         (prisma.playlistItem.findMany as jest.Mock).mockResolvedValueOnce([
             { trackId: "existing-1" },
@@ -971,9 +998,8 @@ describe("spotify import runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        const result = await spotifyImportService.refreshJobMatches(
-            "job-refresh"
-        );
+        const result =
+            await spotifyImportService.refreshJobMatches("job-refresh");
 
         expect(prisma.playlistItem.create).toHaveBeenCalledTimes(1);
         expect(prisma.playlistItem.create).toHaveBeenCalledWith({
@@ -989,7 +1015,7 @@ describe("spotify import runtime behavior", () => {
                 update: expect.objectContaining({
                     tracksMatched: 2,
                 }),
-            })
+            }),
         );
         expect(result).toEqual({ added: 1, total: 2 });
     });
@@ -1022,8 +1048,8 @@ describe("spotify import runtime behavior", () => {
                         downloadable: 0,
                         notFound: 1,
                     },
-                }
-            )
+                },
+            ),
         ).rejects.toThrow("Invalid userId provided: NaN");
     });
 
@@ -1047,7 +1073,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-06T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-06T00:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
         (prisma.downloadJob.findMany as jest.Mock).mockResolvedValueOnce([]);
 
@@ -1061,10 +1087,10 @@ describe("spotify import runtime behavior", () => {
                 update: expect.objectContaining({
                     status: "failed",
                     error: expect.stringContaining(
-                        "No download jobs were created for this import"
+                        "No download jobs were created for this import",
                     ),
                 }),
-            })
+            }),
         );
     });
 
@@ -1088,7 +1114,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-06T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-06T00:02:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
         (prisma.downloadJob.findMany as jest.Mock).mockResolvedValueOnce([
             {
@@ -1107,7 +1133,7 @@ describe("spotify import runtime behavior", () => {
                 data: expect.objectContaining({
                     error: "Timed out waiting for download",
                 }),
-            })
+            }),
         );
         expect(scanQueue.add).not.toHaveBeenCalled();
         expect(prisma.spotifyImportJob.upsert).toHaveBeenCalledWith(
@@ -1116,7 +1142,7 @@ describe("spotify import runtime behavior", () => {
                 update: expect.objectContaining({
                     status: "downloading",
                 }),
-            })
+            }),
         );
     });
 
@@ -1140,7 +1166,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-07T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-07T00:02:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
         (prisma.downloadJob.findMany as jest.Mock).mockResolvedValueOnce([
             {
@@ -1168,14 +1194,14 @@ describe("spotify import runtime behavior", () => {
                     status: "failed",
                     error: "Timed out waiting for download",
                 }),
-            })
+            }),
         );
         expect(scanQueue.add).toHaveBeenCalledWith(
             "scan",
             expect.objectContaining({
                 userId: "u1",
                 spotifyImportJobId: "job-timeout",
-            })
+            }),
         );
         expect(prisma.spotifyImportJob.upsert).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1184,26 +1210,29 @@ describe("spotify import runtime behavior", () => {
                     status: "scanning",
                     progress: 75,
                 }),
-            })
+            }),
         );
     });
 
     it("returns from buildPlaylistAfterScan when import job cannot be found", async () => {
         const { redisClient, prisma } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(null);
-        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.buildPlaylistAfterScan("missing-after-scan")
+            spotifyImportService.buildPlaylistAfterScan("missing-after-scan"),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).not.toHaveBeenCalled();
     });
 
     it("builds playlist after scan using pre-matched tracks and marks job complete", async () => {
-        const { redisClient, prisma, notificationService } = setupSpotifyImportMocks();
+        const { redisClient, prisma, notificationService } =
+            setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(
             JSON.stringify({
                 id: "job-build-after-scan",
@@ -1231,7 +1260,7 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: "track-pre-1",
                     },
                 ],
-            })
+            }),
         );
         (prisma.track.findUnique as jest.Mock).mockResolvedValueOnce({
             id: "track-pre-1",
@@ -1248,7 +1277,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.buildPlaylistAfterScan("job-build-after-scan")
+            spotifyImportService.buildPlaylistAfterScan("job-build-after-scan"),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
@@ -1259,7 +1288,7 @@ describe("spotify import runtime behavior", () => {
                         create: [{ trackId: "track-pre-1", sort: 0 }],
                     },
                 }),
-            })
+            }),
         );
         expect(prisma.spotifyImportJob.upsert).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1269,19 +1298,20 @@ describe("spotify import runtime behavior", () => {
                     progress: 100,
                     createdPlaylistId: "playlist-built",
                 }),
-            })
+            }),
         );
         expect(notificationService.notifyImportComplete).toHaveBeenCalledWith(
             "u1",
             "After Scan Build",
             "playlist-built",
             1,
-            1
+            1,
         );
     });
 
     it("exercises deep buildPlaylist fallback matching strategies and saves unmatched pending tracks", async () => {
-        const { redisClient, prisma, deezerService } = setupSpotifyImportMocks();
+        const { redisClient, prisma, deezerService } =
+            setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(
             JSON.stringify({
                 id: "job-build-fallbacks",
@@ -1309,7 +1339,7 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: null,
                     },
                 ],
-            })
+            }),
         );
         (prisma.playlist.create as jest.Mock).mockResolvedValueOnce({
             id: "playlist-fallbacks",
@@ -1341,13 +1371,13 @@ describe("spotify import runtime behavior", () => {
             normalizedName: "long artist name",
         });
         (deezerService.getTrackPreview as jest.Mock).mockRejectedValueOnce(
-            new Error("preview unavailable")
+            new Error("preview unavailable"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.buildPlaylistAfterScan("job-build-fallbacks")
+            spotifyImportService.buildPlaylistAfterScan("job-build-fallbacks"),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
@@ -1356,7 +1386,7 @@ describe("spotify import runtime behavior", () => {
                     spotifyPlaylistId: "sp-11",
                     items: undefined,
                 }),
-            })
+            }),
         );
         expect(prisma.playlistPendingTrack.createMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1367,24 +1397,28 @@ describe("spotify import runtime behavior", () => {
                         spotifyTitle: "Very Long Song Title - 2011 Remaster",
                     }),
                 ]),
-            })
+            }),
         );
     });
 
     it("returns early from reconcilePendingTracks when there are no pending entries", async () => {
         const { prisma } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([]);
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.reconcilePendingTracks()).resolves.toEqual(
-            { playlistsUpdated: 0, tracksAdded: 0 }
-        );
+        await expect(
+            spotifyImportService.reconcilePendingTracks(),
+        ).resolves.toEqual({ playlistsUpdated: 0, tracksAdded: 0 });
     });
 
     it("reconciles matched pending tracks into playlist and emits playlist-updated notification", async () => {
         const { prisma, notificationService } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 id: "pending-1",
                 playlistId: "playlist-1",
@@ -1432,14 +1466,16 @@ describe("spotify import runtime behavior", () => {
                     playlistId: "playlist-1",
                     tracksAdded: 1,
                 }),
-            })
+            }),
         );
         expect(result).toEqual({ playlistsUpdated: 1, tracksAdded: 1 });
     });
 
     it("reconciles pending tracks through strategy-2/3/4 fallback matching paths", async () => {
         const { prisma } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 id: "pending-fallback-1",
                 playlistId: "playlist-fallback",
@@ -1460,69 +1496,79 @@ describe("spotify import runtime behavior", () => {
         (prisma.playlistItem.findMany as jest.Mock).mockResolvedValueOnce([
             { trackId: "existing-track-1" },
         ]);
-        (prisma.track.findFirst as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.select?.id && query?.where?.title?.equals) {
+        (prisma.track.findFirst as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.select?.id && query?.where?.title?.equals) {
+                    return null;
+                }
                 return null;
-            }
-            return null;
-        });
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.select?.title && query?.take === 5) {
-                return [
-                    {
-                        title: "Library Fallback Candidate",
-                        album: {
-                            artist: {
-                                name: "Fallback Artist",
-                                normalizedName: "fallback artist",
+            },
+        );
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.select?.title && query?.take === 5) {
+                    return [
+                        {
+                            title: "Library Fallback Candidate",
+                            album: {
+                                artist: {
+                                    name: "Fallback Artist",
+                                    normalizedName: "fallback artist",
+                                },
                             },
                         },
-                    },
-                ];
-            }
+                    ];
+                }
 
-            if (
-                query?.where?.title?.contains &&
-                query?.include?.album &&
-                query?.take === 10
-            ) {
+                if (
+                    query?.where?.title?.contains &&
+                    query?.include?.album &&
+                    query?.take === 10
+                ) {
+                    return [];
+                }
+
+                if (
+                    query?.where?.title?.contains &&
+                    query?.include?.album &&
+                    query?.take === 20
+                ) {
+                    return [
+                        {
+                            id: "track-low-score",
+                            title: "Different Song",
+                            album: {
+                                artist: {
+                                    name: "Different Artist",
+                                    normalizedName: "different artist",
+                                },
+                            },
+                        },
+                    ];
+                }
+
+                if (
+                    query?.where?.title?.equals &&
+                    query?.include?.album &&
+                    query?.take === 10
+                ) {
+                    return [
+                        {
+                            id: "track-strategy-4",
+                            title: "Long Pending Song Extended",
+                            album: {
+                                artist: {
+                                    name: "Fallback Artist",
+                                    normalizedName: "fallback artist",
+                                },
+                            },
+                        },
+                    ];
+                }
+
                 return [];
-            }
-
-            if (
-                query?.where?.title?.contains &&
-                query?.include?.album &&
-                query?.take === 20
-            ) {
-                return [
-                    {
-                        id: "track-low-score",
-                        title: "Different Song",
-                        album: {
-                            artist: { name: "Different Artist", normalizedName: "different artist" },
-                        },
-                    },
-                ];
-            }
-
-            if (
-                query?.where?.title?.equals &&
-                query?.include?.album &&
-                query?.take === 10
-            ) {
-                return [
-                    {
-                        id: "track-strategy-4",
-                        title: "Long Pending Song Extended",
-                        album: {
-                            artist: { name: "Fallback Artist", normalizedName: "fallback artist" },
-                        },
-                    },
-                ];
-            }
-
-            return [];
-        });
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -1548,16 +1594,16 @@ describe("spotify import runtime behavior", () => {
         (prisma.spotifyImportJob.findMany as jest.Mock)
             .mockRejectedValueOnce(
                 new Prisma.PrismaClientUnknownRequestError(
-                    "Engine has already exited"
-                )
+                    "Engine has already exited",
+                ),
             )
             .mockResolvedValueOnce([]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.getUserJobs("u-unknown")).resolves.toEqual(
-            []
-        );
+        await expect(
+            spotifyImportService.getUserJobs("u-unknown"),
+        ).resolves.toEqual([]);
         expect(prisma.spotifyImportJob.findMany).toHaveBeenCalledTimes(2);
         expect(prisma.$connect).toHaveBeenCalledTimes(1);
     });
@@ -1648,7 +1694,7 @@ describe("spotify import runtime behavior", () => {
             "sp-playlist-1",
             "Import Start Playlist",
             ["rg-direct", "rg-resolved"],
-            preview as any
+            preview as any,
         );
 
         expect(job.id).toContain("import_");
@@ -1660,12 +1706,12 @@ describe("spotify import runtime behavior", () => {
                     artist: "Artist Resolved",
                     albumMbid: "rg-resolved",
                 }),
-            ])
+            ]),
         );
         expect(processSpy).toHaveBeenCalledWith(
             expect.objectContaining({ id: job.id }),
             [],
-            preview
+            preview,
         );
     });
 
@@ -1745,7 +1791,11 @@ describe("spotify import runtime behavior", () => {
         };
 
         await expect(
-            (spotifyImportService as any).processImport(job, ["sp-unk"], preview)
+            (spotifyImportService as any).processImport(
+                job,
+                ["sp-unk"],
+                preview,
+            ),
         ).resolves.toBeUndefined();
 
         expect(acquisitionService.acquireTracks).toHaveBeenCalledWith(
@@ -1756,7 +1806,7 @@ describe("spotify import runtime behavior", () => {
             expect.objectContaining({
                 userId: "u1",
                 spotifyImportJobId: "job-process-unknown",
-            })
+            }),
         );
         expect(completionSpy).toHaveBeenCalledWith("job-process-unknown");
         expect(prisma.spotifyImportJob.upsert).toHaveBeenCalled();
@@ -1819,8 +1869,8 @@ describe("spotify import runtime behavior", () => {
             (spotifyImportService as any).processImport(
                 badJob,
                 ["rg-invalid"],
-                albumPreview
-            )
+                albumPreview,
+            ),
         ).resolves.toBeUndefined();
         expect(acquisitionService.acquireAlbum).not.toHaveBeenCalled();
     });
@@ -1858,10 +1908,9 @@ describe("spotify import runtime behavior", () => {
             }),
         ];
 
-        const stats = await (spotifyImportService as any).enrichUnknownAlbumsViaMusicBrainz(
-            tracks,
-            "[Test Import]"
-        );
+        const stats = await (
+            spotifyImportService as any
+        ).enrichUnknownAlbumsViaMusicBrainz(tracks, "[Test Import]");
 
         expect(stats.resolved).toBe(2);
         expect(stats.failed).toBe(1);
@@ -1882,14 +1931,14 @@ describe("spotify import runtime behavior", () => {
         await expect(
             (spotifyImportService as any).findAlbumMbid(
                 "Missing Artist",
-                "Missing Album"
-            )
+                "Missing Album",
+            ),
         ).resolves.toEqual({ artistMbid: null, albumMbid: null });
         await expect(
             (spotifyImportService as any).findAlbumMbid(
                 "Error Artist",
-                "Error Album"
-            )
+                "Error Album",
+            ),
         ).resolves.toEqual({ artistMbid: null, albumMbid: null });
     });
 
@@ -1898,7 +1947,9 @@ describe("spotify import runtime behavior", () => {
         (musicBrainzService.searchArtist as jest.Mock).mockResolvedValueOnce([
             { id: "artist-1", name: "Artist One" },
         ]);
-        (musicBrainzService.getReleaseGroups as jest.Mock).mockResolvedValueOnce([
+        (
+            musicBrainzService.getReleaseGroups as jest.Mock
+        ).mockResolvedValueOnce([
             { id: "rg-a", title: "Other Album" },
             { id: "rg-b", title: "Target Album" },
         ]);
@@ -1908,8 +1959,8 @@ describe("spotify import runtime behavior", () => {
         await expect(
             (spotifyImportService as any).findAlbumMbid(
                 "Artist One",
-                "Target Album"
-            )
+                "Target Album",
+            ),
         ).resolves.toEqual({ artistMbid: "artist-1", albumMbid: "rg-b" });
     });
 
@@ -1918,11 +1969,13 @@ describe("spotify import runtime behavior", () => {
         (musicBrainzService.searchArtist as jest.Mock).mockResolvedValue([
             { id: "artist-u", name: "Artist Unknown" },
         ]);
-        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValueOnce({
-            albumName: "Recovered Album",
-            albumMbid: "rg-recovered",
-            artistMbid: "artist-k",
-        });
+        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValueOnce(
+            {
+                albumName: "Recovered Album",
+                albumMbid: "rg-recovered",
+                artistMbid: "artist-k",
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -1941,27 +1994,32 @@ describe("spotify import runtime behavior", () => {
             albumId: "sp-k-album",
         });
 
-        jest
-            .spyOn(spotifyImportService as any, "enrichUnknownAlbumsViaMusicBrainz")
-            .mockImplementation(async (tracks: unknown) => {
-                const mutableTracks = tracks as any[];
-                mutableTracks[0].albumId = "mbid:rg-pre-resolved";
-                mutableTracks[0].album = "Recovered Unknown";
-                return { resolved: 1, failed: 0, cached: new Map() };
-            });
-        jest
-            .spyOn(spotifyImportService as any, "matchTrack")
-            .mockImplementation(async (spotifyTrack: any) => ({
-                spotifyTrack,
-                localTrack: null,
-                matchType: "none",
-                matchConfidence: 0,
-            }));
-        jest
-            .spyOn(spotifyImportService as any, "findAlbumMbid")
-            .mockResolvedValue({ artistMbid: "artist-k", albumMbid: null });
+        jest.spyOn(
+            spotifyImportService as any,
+            "enrichUnknownAlbumsViaMusicBrainz",
+        ).mockImplementation(async (tracks: unknown) => {
+            const mutableTracks = tracks as any[];
+            mutableTracks[0].albumId = "mbid:rg-pre-resolved";
+            mutableTracks[0].album = "Recovered Unknown";
+            return { resolved: 1, failed: 0, cached: new Map() };
+        });
+        jest.spyOn(
+            spotifyImportService as any,
+            "matchTrack",
+        ).mockImplementation(async (spotifyTrack: any) => ({
+            spotifyTrack,
+            localTrack: null,
+            matchType: "none",
+            matchConfidence: 0,
+        }));
+        jest.spyOn(
+            spotifyImportService as any,
+            "findAlbumMbid",
+        ).mockResolvedValue({ artistMbid: "artist-k", albumMbid: null });
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const preview = await (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             [unknownTrack, knownTrack],
             {
                 id: "playlist-preview",
@@ -1971,7 +2029,7 @@ describe("spotify import runtime behavior", () => {
                 imageUrl: null,
                 trackCount: 2,
             },
-            "Spotify"
+            "Spotify",
         );
 
         expect(preview.albumsToDownload).toEqual(
@@ -1985,7 +2043,7 @@ describe("spotify import runtime behavior", () => {
                     artistName: "Artist Known",
                     albumName: "Recovered Album",
                 }),
-            ])
+            ]),
         );
         expect(preview.summary.downloadable).toBe(2);
     });
@@ -1996,103 +2054,124 @@ describe("spotify import runtime behavior", () => {
             id: "track-strategy",
             title: "Epic Song One",
         });
-        (prisma.track.findFirst as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.where?.id?.in) {
-                const contains = String(query?.where?.title?.contains || "").toLowerCase();
-                if (contains.includes("epic")) {
-                    return { id: "track-strategy", title: "Epic Song One" };
-                }
-                if (contains.includes("lost")) {
-                    return {
-                        id: "track-title-only",
-                        title: "Lost Ballad of Shadows Extended Version",
-                    };
-                }
-                return null;
-            }
-
-            if (query?.where?.title?.startsWith) {
-                const startsWith = String(query.where.title.startsWith).toLowerCase();
-                if (startsWith.includes("lost ballad")) {
-                    return { id: "track-low", title: "Not Similar Song" };
-                }
-                return null;
-            }
-
-            return null;
-        });
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (
-                query?.take === 10 &&
-                query?.where?.title?.contains &&
-                !query?.include
-            ) {
-                const search = String(query.where.title.contains).toLowerCase();
-                if (search.includes("epic")) {
-                    return [{ id: "track-candidate", title: "Different Epic Demo" }];
-                }
-                return [];
-            }
-
-            if (
-                query?.take === 50 &&
-                query?.include?.album &&
-                query?.where?.album?.artist?.normalizedName?.contains
-            ) {
-                const artistNeedle = String(
-                    query.where.album.artist.normalizedName.contains
-                ).toLowerCase();
-                if (artistNeedle.includes("artist")) {
-                    return [
-                        {
-                            id: "track-strategy",
-                            title: "Epic Song One",
-                            album: { artist: { name: "Artist One" } },
-                        },
-                    ];
-                }
-                return [];
-            }
-
-            if (
-                query?.take === 20 &&
-                query?.where?.title?.contains &&
-                query?.include?.album
-            ) {
-                const firstWord = String(query.where.title.contains).toLowerCase();
-                if (firstWord.includes("lost")) {
-                    return [
-                        {
-                            id: "track-fuzzy-low",
-                            title: "Lost Shadows (Alt)",
-                            album: { artist: { name: "Other Artist" } },
-                        },
-                    ];
-                }
-                return [];
-            }
-
-            if (
-                query?.take === 50 &&
-                query?.where?.title?.contains &&
-                query?.include?.album &&
-                !query?.where?.album
-            ) {
-                const titleNeedle = String(query.where.title.contains).toLowerCase();
-                if (titleNeedle.includes("lost ballad")) {
-                    return [
-                        {
+        (prisma.track.findFirst as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.where?.id?.in) {
+                    const contains = String(
+                        query?.where?.title?.contains || "",
+                    ).toLowerCase();
+                    if (contains.includes("epic")) {
+                        return { id: "track-strategy", title: "Epic Song One" };
+                    }
+                    if (contains.includes("lost")) {
+                        return {
                             id: "track-title-only",
                             title: "Lost Ballad of Shadows Extended Version",
-                            album: { artist: { name: "Compilation Artist" } },
-                        },
-                    ];
+                        };
+                    }
+                    return null;
                 }
-                return [];
-            }
 
-            return [];
-        });
+                if (query?.where?.title?.startsWith) {
+                    const startsWith = String(
+                        query.where.title.startsWith,
+                    ).toLowerCase();
+                    if (startsWith.includes("lost ballad")) {
+                        return { id: "track-low", title: "Not Similar Song" };
+                    }
+                    return null;
+                }
+
+                return null;
+            },
+        );
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (
+                    query?.take === 10 &&
+                    query?.where?.title?.contains &&
+                    !query?.include
+                ) {
+                    const search = String(
+                        query.where.title.contains,
+                    ).toLowerCase();
+                    if (search.includes("epic")) {
+                        return [
+                            {
+                                id: "track-candidate",
+                                title: "Different Epic Demo",
+                            },
+                        ];
+                    }
+                    return [];
+                }
+
+                if (
+                    query?.take === 50 &&
+                    query?.include?.album &&
+                    query?.where?.album?.artist?.normalizedName?.contains
+                ) {
+                    const artistNeedle = String(
+                        query.where.album.artist.normalizedName.contains,
+                    ).toLowerCase();
+                    if (artistNeedle.includes("artist")) {
+                        return [
+                            {
+                                id: "track-strategy",
+                                title: "Epic Song One",
+                                album: { artist: { name: "Artist One" } },
+                            },
+                        ];
+                    }
+                    return [];
+                }
+
+                if (
+                    query?.take === 20 &&
+                    query?.where?.title?.contains &&
+                    query?.include?.album
+                ) {
+                    const firstWord = String(
+                        query.where.title.contains,
+                    ).toLowerCase();
+                    if (firstWord.includes("lost")) {
+                        return [
+                            {
+                                id: "track-fuzzy-low",
+                                title: "Lost Shadows (Alt)",
+                                album: { artist: { name: "Other Artist" } },
+                            },
+                        ];
+                    }
+                    return [];
+                }
+
+                if (
+                    query?.take === 50 &&
+                    query?.where?.title?.contains &&
+                    query?.include?.album &&
+                    !query?.where?.album
+                ) {
+                    const titleNeedle = String(
+                        query.where.title.contains,
+                    ).toLowerCase();
+                    if (titleNeedle.includes("lost ballad")) {
+                        return [
+                            {
+                                id: "track-title-only",
+                                title: "Lost Ballad of Shadows Extended Version",
+                                album: {
+                                    artist: { name: "Compilation Artist" },
+                                },
+                            },
+                        ];
+                    }
+                    return [];
+                }
+
+                return [];
+            },
+        );
         (prisma.artist.findFirst as jest.Mock).mockResolvedValueOnce(null);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2150,7 +2229,7 @@ describe("spotify import runtime behavior", () => {
         };
 
         await expect(
-            (spotifyImportService as any).buildPlaylist(deepJob)
+            (spotifyImportService as any).buildPlaylist(deepJob),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
@@ -2159,11 +2238,13 @@ describe("spotify import runtime behavior", () => {
                     spotifyPlaylistId: "sp-deep",
                     items: {
                         create: expect.arrayContaining([
-                            expect.objectContaining({ trackId: "track-strategy" }),
+                            expect.objectContaining({
+                                trackId: "track-strategy",
+                            }),
                         ]),
                     },
                 }),
-            })
+            }),
         );
         expect(prisma.playlistPendingTrack.createMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -2173,7 +2254,7 @@ describe("spotify import runtime behavior", () => {
                         spotifyTitle: "Completely Unmatched Song",
                     }),
                 ]),
-            })
+            }),
         );
     });
 
@@ -2197,7 +2278,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-12T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-12T00:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
         (acquisitionService.acquireAlbum as jest.Mock).mockResolvedValueOnce({
             success: true,
@@ -2269,8 +2350,8 @@ describe("spotify import runtime behavior", () => {
             (spotifyImportService as any).processImport(
                 job,
                 ["rg-regular"],
-                preview
-            )
+                preview,
+            ),
         ).resolves.toBeUndefined();
 
         expect(acquisitionService.acquireAlbum).toHaveBeenCalledWith(
@@ -2282,7 +2363,7 @@ describe("spotify import runtime behavior", () => {
             expect.objectContaining({
                 userId: "u1",
                 spotifyImportJobId: "job-regular-download",
-            })
+            }),
         );
         expect(completionSpy).toHaveBeenCalledWith("job-regular-download");
     });
@@ -2293,16 +2374,16 @@ describe("spotify import runtime behavior", () => {
         const { Prisma } = require("@prisma/client");
         (prisma.spotifyImportJob.findMany as jest.Mock)
             .mockRejectedValueOnce(
-                new Prisma.PrismaClientRustPanicError("panic in query engine")
+                new Prisma.PrismaClientRustPanicError("panic in query engine"),
             )
             .mockRejectedValueOnce("Can't reach database server")
             .mockResolvedValueOnce([]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.getUserJobs("u-rust-generic")).resolves.toEqual(
-            []
-        );
+        await expect(
+            spotifyImportService.getUserJobs("u-rust-generic"),
+        ).resolves.toEqual([]);
 
         expect(prisma.spotifyImportJob.findMany).toHaveBeenCalledTimes(3);
         expect(prisma.$connect).toHaveBeenCalledTimes(2);
@@ -2396,7 +2477,7 @@ describe("spotify import runtime behavior", () => {
             "sp-strategy",
             "Strategy Mapping Playlist",
             ["rg-s3", "rg-s4"],
-            preview as any
+            preview as any,
         );
 
         expect(job.pendingTracks).toEqual(
@@ -2409,7 +2490,7 @@ describe("spotify import runtime behavior", () => {
                     title: "Similar Song",
                     albumMbid: "rg-s4",
                 }),
-            ])
+            ]),
         );
         expect(processSpy).toHaveBeenCalled();
     });
@@ -2418,9 +2499,10 @@ describe("spotify import runtime behavior", () => {
         const { prisma } = setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest.spyOn(spotifyImportService as any, "processImport").mockRejectedValue(
-            new Error("process import exploded")
-        );
+        jest.spyOn(
+            spotifyImportService as any,
+            "processImport",
+        ).mockRejectedValue(new Error("process import exploded"));
 
         const preview = {
             playlist: {
@@ -2446,18 +2528,19 @@ describe("spotify import runtime behavior", () => {
             "sp-process-fail",
             "Process Fail Playlist",
             [],
-            preview as any
+            preview as any,
         );
 
         await new Promise((resolve) => setImmediate(resolve));
 
-        const upsertCalls = (prisma.spotifyImportJob.upsert as jest.Mock).mock.calls;
+        const upsertCalls = (prisma.spotifyImportJob.upsert as jest.Mock).mock
+            .calls;
         expect(
             upsertCalls.some(
                 (call: any[]) =>
                     call?.[0]?.update?.status === "failed" &&
-                    call?.[0]?.update?.error === "process import exploded"
-            )
+                    call?.[0]?.update?.error === "process import exploded",
+            ),
         ).toBe(true);
     });
 
@@ -2465,9 +2548,10 @@ describe("spotify import runtime behavior", () => {
         setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest
-            .spyOn(spotifyImportService as any, "buildPlaylist")
-            .mockRejectedValueOnce(new Error("playlist build failed"));
+        jest.spyOn(
+            spotifyImportService as any,
+            "buildPlaylist",
+        ).mockRejectedValueOnce(new Error("playlist build failed"));
 
         const job = {
             id: "job-no-download-build-fail",
@@ -2506,7 +2590,7 @@ describe("spotify import runtime behavior", () => {
                     downloadable: 0,
                     notFound: 1,
                 },
-            })
+            }),
         ).rejects.toThrow("playlist build failed");
 
         expect(job.status).toBe("failed");
@@ -2524,89 +2608,98 @@ describe("spotify import runtime behavior", () => {
             .mockResolvedValueOnce(null)
             .mockResolvedValueOnce(null);
 
-        (prisma.track.findFirst as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.where?.title?.equals && query?.where?.album?.artist?.normalizedName) {
+        (prisma.track.findFirst as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (
+                    query?.where?.title?.equals &&
+                    query?.where?.album?.artist?.normalizedName
+                ) {
+                    return null;
+                }
+                if (
+                    query?.where?.title?.startsWith &&
+                    query?.where?.album?.artist?.normalizedName
+                ) {
+                    return {
+                        id: "track-startswith-hit",
+                        title: "Long StartsWith Match Title",
+                    };
+                }
+                if (query?.where?.id?.in && query?.where?.title?.contains) {
+                    return {
+                        id: query.where.id.in[0],
+                        title: "Matched Title",
+                    };
+                }
                 return null;
-            }
-            if (
-                query?.where?.title?.startsWith &&
-                query?.where?.album?.artist?.normalizedName
-            ) {
-                return {
-                    id: "track-startswith-hit",
-                    title: "Long StartsWith Match Title",
-                };
-            }
-            if (query?.where?.id?.in && query?.where?.title?.contains) {
-                return {
-                    id: query.where.id.in[0],
-                    title: "Matched Title",
-                };
-            }
-            return null;
-        });
+            },
+        );
 
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (
-                query?.where?.title?.contains &&
-                query?.where?.album?.artist?.normalizedName &&
-                query?.take === 10
-            ) {
-                return [];
-            }
-            if (
-                query?.where?.album?.artist?.normalizedName &&
-                query?.include?.album &&
-                query?.take === 50
-            ) {
-                const artistNeedle = String(
-                    query.where.album.artist.normalizedName.contains || ""
-                ).toLowerCase();
-                if (artistNeedle.includes("fuzzy")) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (
+                    query?.where?.title?.contains &&
+                    query?.where?.album?.artist?.normalizedName &&
+                    query?.take === 10
+                ) {
+                    return [];
+                }
+                if (
+                    query?.where?.album?.artist?.normalizedName &&
+                    query?.include?.album &&
+                    query?.take === 50
+                ) {
+                    const artistNeedle = String(
+                        query.where.album.artist.normalizedName.contains || "",
+                    ).toLowerCase();
+                    if (artistNeedle.includes("fuzzy")) {
+                        return [
+                            {
+                                id: "track-fuzzy-best",
+                                title: "Fuzzy Winner Song",
+                                album: { artist: { name: "Fuzzy Artist" } },
+                            },
+                        ];
+                    }
+                    return [];
+                }
+                if (
+                    query?.where?.title?.contains &&
+                    query?.where?.album?.artist?.normalizedName &&
+                    query?.include?.album &&
+                    query?.take === 20
+                ) {
+                    const firstWord = String(
+                        query.where.title.contains,
+                    ).toLowerCase();
+                    if (firstWord.includes("fuzzy")) {
+                        return [
+                            {
+                                id: "track-fuzzy-best",
+                                title: "Fuzzy Winner Song",
+                                album: { artist: { name: "Fuzzy Artist" } },
+                            },
+                        ];
+                    }
+                    return [];
+                }
+                if (
+                    query?.where?.title?.contains &&
+                    !query?.where?.album &&
+                    query?.include?.album &&
+                    query?.take === 50
+                ) {
                     return [
                         {
-                            id: "track-fuzzy-best",
-                            title: "Fuzzy Winner Song",
-                            album: { artist: { name: "Fuzzy Artist" } },
+                            id: "track-title-only",
+                            title: "Very Long Title Only Match Anthem",
+                            album: { artist: { name: "Compilation Artist" } },
                         },
                     ];
                 }
                 return [];
-            }
-            if (
-                query?.where?.title?.contains &&
-                query?.where?.album?.artist?.normalizedName &&
-                query?.include?.album &&
-                query?.take === 20
-            ) {
-                const firstWord = String(query.where.title.contains).toLowerCase();
-                if (firstWord.includes("fuzzy")) {
-                    return [
-                        {
-                            id: "track-fuzzy-best",
-                            title: "Fuzzy Winner Song",
-                            album: { artist: { name: "Fuzzy Artist" } },
-                        },
-                    ];
-                }
-                return [];
-            }
-            if (
-                query?.where?.title?.contains &&
-                !query?.where?.album &&
-                query?.include?.album &&
-                query?.take === 50
-            ) {
-                return [
-                    {
-                        id: "track-title-only",
-                        title: "Very Long Title Only Match Anthem",
-                        album: { artist: { name: "Compilation Artist" } },
-                    },
-                ];
-            }
-            return [];
-        });
+            },
+        );
         (prisma.artist.findFirst as jest.Mock).mockResolvedValue(null);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2656,7 +2749,7 @@ describe("spotify import runtime behavior", () => {
         };
 
         await expect(
-            (spotifyImportService as any).buildPlaylist(deepJob)
+            (spotifyImportService as any).buildPlaylist(deepJob),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
@@ -2665,13 +2758,19 @@ describe("spotify import runtime behavior", () => {
                     spotifyPlaylistId: "sp-branches",
                     items: {
                         create: expect.arrayContaining([
-                            expect.objectContaining({ trackId: "track-startswith-hit" }),
-                            expect.objectContaining({ trackId: "track-fuzzy-best" }),
-                            expect.objectContaining({ trackId: "track-title-only" }),
+                            expect.objectContaining({
+                                trackId: "track-startswith-hit",
+                            }),
+                            expect.objectContaining({
+                                trackId: "track-fuzzy-best",
+                            }),
+                            expect.objectContaining({
+                                trackId: "track-title-only",
+                            }),
                         ]),
                     },
                 }),
-            })
+            }),
         );
     });
 
@@ -2688,9 +2787,9 @@ describe("spotify import runtime behavior", () => {
         (prisma.playlist.create as jest.Mock).mockResolvedValueOnce({
             id: "playlist-notif-fail",
         });
-        (notificationService.notifyImportComplete as jest.Mock).mockRejectedValueOnce(
-            new Error("notification down")
-        );
+        (
+            notificationService.notifyImportComplete as jest.Mock
+        ).mockRejectedValueOnce(new Error("notification down"));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -2721,7 +2820,7 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: "track-notif-1",
                     },
                 ],
-            })
+            }),
         ).resolves.toBeUndefined();
     });
 
@@ -2745,7 +2844,7 @@ describe("spotify import runtime behavior", () => {
             makeSpotifyTrack({
                 artist: "Artist A",
                 album: "Album A (Super Deluxe Edition)",
-            })
+            }),
         );
 
         expect(result.matchType).toBe("exact");
@@ -2756,7 +2855,9 @@ describe("spotify import runtime behavior", () => {
     it("uses full-artist strategy-3 fallback when primary-artist title matching returns no results", async () => {
         const { prisma } = setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { extractPrimaryArtist } = require("../../utils/artistNormalization");
+        const {
+            extractPrimaryArtist,
+        } = require("../../utils/artistNormalization");
         (extractPrimaryArtist as jest.Mock).mockReturnValueOnce("Artist A");
         (prisma.track.findFirst as jest.Mock).mockResolvedValueOnce(null); // strategy 1
         (prisma.track.findMany as jest.Mock)
@@ -2779,7 +2880,7 @@ describe("spotify import runtime behavior", () => {
             makeSpotifyTrack({
                 artist: "Artist A feat. Guest",
                 album: "Unknown Album",
-            })
+            }),
         );
 
         expect(prisma.track.findMany).toHaveBeenCalledTimes(2);
@@ -2816,7 +2917,7 @@ describe("spotify import runtime behavior", () => {
             makeSpotifyTrack({
                 artist: "Artist A",
                 album: "My Album",
-            })
+            }),
         );
 
         expect(result.matchType).toBe("exact");
@@ -2827,7 +2928,9 @@ describe("spotify import runtime behavior", () => {
     it("falls back to full-artist fuzzy search strategy when earlier fuzzy passes find nothing", async () => {
         const { prisma } = setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { extractPrimaryArtist } = require("../../utils/artistNormalization");
+        const {
+            extractPrimaryArtist,
+        } = require("../../utils/artistNormalization");
         (extractPrimaryArtist as jest.Mock).mockReturnValueOnce("Artist");
         (prisma.track.findFirst as jest.Mock).mockResolvedValueOnce(null); // strategy 1
         (prisma.track.findMany as jest.Mock)
@@ -2855,7 +2958,7 @@ describe("spotify import runtime behavior", () => {
                 artist: "Artist Feat Guest",
                 title: "Long Song Title",
                 album: "Unknown Album",
-            })
+            }),
         );
 
         expect(result.matchType).toBe("fuzzy");
@@ -2874,7 +2977,7 @@ describe("spotify import runtime behavior", () => {
                 artist: "No Match Artist",
                 title: "No Match Song",
                 album: "Unknown Album",
-            })
+            }),
         );
 
         expect(result).toEqual(
@@ -2882,7 +2985,7 @@ describe("spotify import runtime behavior", () => {
                 matchType: "none",
                 matchConfidence: 0,
                 localTrack: null,
-            })
+            }),
         );
     });
 
@@ -2891,7 +2994,9 @@ describe("spotify import runtime behavior", () => {
         (musicBrainzService.searchArtist as jest.Mock).mockResolvedValueOnce([
             { id: "artist-no-rg", name: "Artist No RG" },
         ]);
-        (musicBrainzService.getReleaseGroups as jest.Mock).mockResolvedValueOnce([
+        (
+            musicBrainzService.getReleaseGroups as jest.Mock
+        ).mockResolvedValueOnce([
             { id: "rg-low-1", title: "Completely Different Album" },
             { id: "rg-low-2", title: "Another Different Album" },
         ]);
@@ -2901,8 +3006,8 @@ describe("spotify import runtime behavior", () => {
         await expect(
             (spotifyImportService as any).findAlbumMbid(
                 "Artist No RG",
-                "Target Album Name"
-            )
+                "Target Album Name",
+            ),
         ).resolves.toEqual({ artistMbid: "artist-no-rg", albumMbid: null });
     });
 
@@ -2910,14 +3015,16 @@ describe("spotify import runtime behavior", () => {
         setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        const stats = await (spotifyImportService as any).enrichUnknownAlbumsViaMusicBrainz(
+        const stats = await (
+            spotifyImportService as any
+        ).enrichUnknownAlbumsViaMusicBrainz(
             [
                 makeSpotifyTrack({
                     spotifyId: "sp-known-1",
                     album: "Known Album",
                 }),
             ],
-            "[Known Tracks]"
+            "[Known Tracks]",
         );
 
         expect(stats).toEqual({
@@ -2929,7 +3036,9 @@ describe("spotify import runtime behavior", () => {
 
     it("caches unresolved unknown-album lookups and increments failed counters for duplicates", async () => {
         const { musicBrainzService } = setupSpotifyImportMocks();
-        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValueOnce(null);
+        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -2948,9 +3057,11 @@ describe("spotify import runtime behavior", () => {
             }),
         ];
 
-        const stats = await (spotifyImportService as any).enrichUnknownAlbumsViaMusicBrainz(
+        const stats = await (
+            spotifyImportService as any
+        ).enrichUnknownAlbumsViaMusicBrainz(
             duplicateUnknownTracks,
-            "[Unknown Duplicate]"
+            "[Unknown Duplicate]",
         );
 
         expect(stats.resolved).toBe(0);
@@ -2962,12 +3073,12 @@ describe("spotify import runtime behavior", () => {
         setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest
-            .spyOn(spotifyImportService as any, "enrichUnknownAlbumsViaMusicBrainz")
-            .mockRejectedValueOnce(new Error("enrichment failed"));
-        jest
-            .spyOn(spotifyImportService as any, "matchTrack")
-            .mockResolvedValue({
+        jest.spyOn(
+            spotifyImportService as any,
+            "enrichUnknownAlbumsViaMusicBrainz",
+        ).mockRejectedValueOnce(new Error("enrichment failed"));
+        jest.spyOn(spotifyImportService as any, "matchTrack").mockResolvedValue(
+            {
                 spotifyTrack: makeSpotifyTrack({
                     spotifyId: "sp-preview-unknown",
                     artist: "Preview Artist",
@@ -2977,13 +3088,19 @@ describe("spotify import runtime behavior", () => {
                 localTrack: null,
                 matchType: "none",
                 matchConfidence: 0,
-            });
-        jest.spyOn(spotifyImportService as any, "findAlbumMbid").mockResolvedValue({
+            },
+        );
+        jest.spyOn(
+            spotifyImportService as any,
+            "findAlbumMbid",
+        ).mockResolvedValue({
             artistMbid: null,
             albumMbid: null,
         });
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const preview = await (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             [
                 makeSpotifyTrack({
                     spotifyId: "sp-preview-unknown",
@@ -3000,7 +3117,7 @@ describe("spotify import runtime behavior", () => {
                 imageUrl: null,
                 trackCount: 1,
             },
-            "Spotify"
+            "Spotify",
         );
 
         expect(preview.summary.total).toBe(1);
@@ -3028,10 +3145,10 @@ describe("spotify import runtime behavior", () => {
             pendingTracks: [],
         };
         (redisClient.get as jest.Mock).mockResolvedValueOnce(
-            JSON.stringify(activeJob)
+            JSON.stringify(activeJob),
         );
         (redisClient.setEx as jest.Mock).mockRejectedValueOnce(
-            new Error("cache write failed")
+            new Error("cache write failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -3039,7 +3156,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { logger } = require("../../utils/logger");
         await expect(
-            spotifyImportService.cancelJob("job-cancel-cache-warn")
+            spotifyImportService.cancelJob("job-cancel-cache-warn"),
         ).resolves.toEqual({
             playlistCreated: false,
             playlistId: null,
@@ -3048,35 +3165,37 @@ describe("spotify import runtime behavior", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "Failed to cache import job job-cancel-cache-warn in Redis:"
+                "Failed to cache import job job-cancel-cache-warn in Redis:",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("returns DB-backed import jobs when redis repopulation fails", async () => {
         const { prisma, redisClient } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(null);
-        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce({
-            id: "job-db-cache-warn",
-            userId: "u1",
-            spotifyPlaylistId: "sp-db-cache-warn",
-            playlistName: "DB Cache Warn",
-            status: "pending",
-            progress: 5,
-            albumsTotal: 1,
-            albumsCompleted: 0,
-            tracksMatched: 0,
-            tracksTotal: 2,
-            tracksDownloadable: 2,
-            createdPlaylistId: null,
-            error: null,
-            createdAt: new Date("2026-01-14T00:00:00.000Z"),
-            updatedAt: new Date("2026-01-14T00:01:00.000Z"),
-            pendingTracks: [],
-        });
+        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(
+            {
+                id: "job-db-cache-warn",
+                userId: "u1",
+                spotifyPlaylistId: "sp-db-cache-warn",
+                playlistName: "DB Cache Warn",
+                status: "pending",
+                progress: 5,
+                albumsTotal: 1,
+                albumsCompleted: 0,
+                tracksMatched: 0,
+                tracksTotal: 2,
+                tracksDownloadable: 2,
+                createdPlaylistId: null,
+                error: null,
+                createdAt: new Date("2026-01-14T00:00:00.000Z"),
+                updatedAt: new Date("2026-01-14T00:01:00.000Z"),
+                pendingTracks: [],
+            },
+        );
         (redisClient.setEx as jest.Mock).mockRejectedValueOnce(
-            new Error("repopulate failed")
+            new Error("repopulate failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -3088,9 +3207,9 @@ describe("spotify import runtime behavior", () => {
         expect(job?.id).toBe("job-db-cache-warn");
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "Failed to cache import job job-db-cache-warn in Redis:"
+                "Failed to cache import job job-db-cache-warn in Redis:",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -3115,7 +3234,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-14T00:00:00.000Z"),
                 updatedAt: new Date("2026-01-14T00:01:00.000Z"),
                 pendingTracks: [],
-            })
+            }),
         );
         (prisma.downloadJob.findMany as jest.Mock).mockResolvedValueOnce([
             {
@@ -3133,7 +3252,7 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.checkImportCompletion("job-pending-order")
+            spotifyImportService.checkImportCompletion("job-pending-order"),
         ).resolves.toBeUndefined();
 
         expect(scanQueue.add).not.toHaveBeenCalled();
@@ -3144,17 +3263,19 @@ describe("spotify import runtime behavior", () => {
         const { prisma } = setupSpotifyImportMocks();
         (prisma.track.findUnique as jest.Mock).mockResolvedValue(null);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.take === 10 && query?.where?.title?.contains) {
-                return [
-                    {
-                        id: "track-build-s3-direct",
-                        title: "Direct Similarity Anthem",
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.take === 10 && query?.where?.title?.contains) {
+                    return [
+                        {
+                            id: "track-build-s3-direct",
+                            title: "Direct Similarity Anthem",
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -3185,17 +3306,21 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: null,
                     },
                 ],
-            })
+            }),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({
                     items: {
-                        create: [expect.objectContaining({ trackId: "track-build-s3-direct" })],
+                        create: [
+                            expect.objectContaining({
+                                trackId: "track-build-s3-direct",
+                            }),
+                        ],
                     },
                 }),
-            })
+            }),
         );
     });
 
@@ -3203,18 +3328,19 @@ describe("spotify import runtime behavior", () => {
         const { prisma } = setupSpotifyImportMocks();
         (prisma.track.findUnique as jest.Mock).mockResolvedValue(null);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.take === 10 && query?.where?.title?.contains) {
-                return [
-                    {
-                        id: "track-build-s3-containment",
-                        title:
-                            "Containment Match Song and a very long extended alternate live studio take",
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.take === 10 && query?.where?.title?.contains) {
+                    return [
+                        {
+                            id: "track-build-s3-containment",
+                            title: "Containment Match Song and a very long extended alternate live studio take",
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -3245,7 +3371,7 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: null,
                     },
                 ],
-            })
+            }),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
@@ -3259,7 +3385,7 @@ describe("spotify import runtime behavior", () => {
                         ],
                     },
                 }),
-            })
+            }),
         );
     });
 
@@ -3267,24 +3393,26 @@ describe("spotify import runtime behavior", () => {
         const { prisma } = setupSpotifyImportMocks();
         (prisma.track.findUnique as jest.Mock).mockResolvedValue(null);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.take === 10 && query?.where?.title?.contains) {
-                return []; // strategy 3
-            }
-            if (query?.take === 50 && query?.include?.album) {
-                return []; // strategy 3.5
-            }
-            if (query?.take === 20 && query?.include?.album) {
-                return [
-                    {
-                        id: "track-build-s5-best",
-                        title: "Fuzzy Last Resort Anthem",
-                        album: { artist: { name: "Fuzzy Final Artist" } },
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.take === 10 && query?.where?.title?.contains) {
+                    return []; // strategy 3
+                }
+                if (query?.take === 50 && query?.include?.album) {
+                    return []; // strategy 3.5
+                }
+                if (query?.take === 20 && query?.include?.album) {
+                    return [
+                        {
+                            id: "track-build-s5-best",
+                            title: "Fuzzy Last Resort Anthem",
+                            album: { artist: { name: "Fuzzy Final Artist" } },
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -3315,23 +3443,29 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: null,
                     },
                 ],
-            })
+            }),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({
                     items: {
-                        create: [expect.objectContaining({ trackId: "track-build-s5-best" })],
+                        create: [
+                            expect.objectContaining({
+                                trackId: "track-build-s5-best",
+                            }),
+                        ],
                     },
                 }),
-            })
+            }),
         );
     });
 
     it("reconciles pending tracks through strategy-2 similarity/containment and strategy-3 score thresholds", async () => {
         const { prisma } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 id: "pending-direct",
                 playlistId: "playlist-advanced",
@@ -3377,47 +3511,50 @@ describe("spotify import runtime behavior", () => {
         });
         (prisma.playlistItem.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.select?.title && query?.take === 5) {
-                return [];
-            }
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.select?.title && query?.take === 5) {
+                    return [];
+                }
 
-            if (query?.take === 10 && query?.include?.album) {
-                const containsTerm = String(query?.where?.title?.contains || "");
-                if (containsTerm.includes("Direct Similarity")) {
+                if (query?.take === 10 && query?.include?.album) {
+                    const containsTerm = String(
+                        query?.where?.title?.contains || "",
+                    );
+                    if (containsTerm.includes("Direct Similarity")) {
+                        return [
+                            {
+                                id: "track-reconcile-direct",
+                                title: "Direct Similarity Song",
+                                album: { artist: { name: "Artist One" } },
+                            },
+                        ];
+                    }
+                    if (containsTerm.includes("Containment Seed")) {
+                        return [
+                            {
+                                id: "track-reconcile-containment",
+                                title: "Containment Seed Song with a very long extended alternate mix version",
+                                album: { artist: { name: "Artist Two" } },
+                            },
+                        ];
+                    }
+                    return [];
+                }
+
+                if (query?.take === 20 && query?.include?.album) {
                     return [
                         {
-                            id: "track-reconcile-direct",
-                            title: "Direct Similarity Song",
-                            album: { artist: { name: "Artist One" } },
+                            id: "track-reconcile-strategy3",
+                            title: "Fuzzy Third Song",
+                            album: { artist: { name: "Artist Three" } },
                         },
                     ];
                 }
-                if (containsTerm.includes("Containment Seed")) {
-                    return [
-                        {
-                            id: "track-reconcile-containment",
-                            title:
-                                "Containment Seed Song with a very long extended alternate mix version",
-                            album: { artist: { name: "Artist Two" } },
-                        },
-                    ];
-                }
+
                 return [];
-            }
-
-            if (query?.take === 20 && query?.include?.album) {
-                return [
-                    {
-                        id: "track-reconcile-strategy3",
-                        title: "Fuzzy Third Song",
-                        album: { artist: { name: "Artist Three" } },
-                    },
-                ];
-            }
-
-            return [];
-        });
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -3450,24 +3587,25 @@ describe("spotify import runtime behavior", () => {
 
     it("normalizes album and track names during preview MBID resolution and fallback recording lookup", async () => {
         const { musicBrainzService } = setupSpotifyImportMocks();
-        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValueOnce({
-            albumName: "Fallback Recovered Album",
-            albumMbid: "rg-fallback",
-            artistMbid: "artist-fallback",
-        });
+        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValueOnce(
+            {
+                albumName: "Fallback Recovered Album",
+                albumMbid: "rg-fallback",
+                artistMbid: "artist-fallback",
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest
-            .spyOn(spotifyImportService as any, "matchTrack")
-            .mockResolvedValue({
+        jest.spyOn(spotifyImportService as any, "matchTrack").mockResolvedValue(
+            {
                 spotifyTrack: makeSpotifyTrack(),
                 localTrack: null,
                 matchType: "none",
                 matchConfidence: 0,
-            });
-        jest
-            .spyOn(spotifyImportService as any, "findAlbumMbid")
+            },
+        );
+        jest.spyOn(spotifyImportService as any, "findAlbumMbid")
             .mockResolvedValueOnce({
                 artistMbid: "artist-direct",
                 albumMbid: "rg-direct",
@@ -3477,7 +3615,9 @@ describe("spotify import runtime behavior", () => {
                 albumMbid: null,
             });
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const preview = await (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             [
                 makeSpotifyTrack({
                     spotifyId: "sp-direct",
@@ -3502,7 +3642,7 @@ describe("spotify import runtime behavior", () => {
                 imageUrl: null,
                 trackCount: 2,
             },
-            "Spotify"
+            "Spotify",
         );
 
         expect(preview.albumsToDownload).toEqual(
@@ -3515,11 +3655,11 @@ describe("spotify import runtime behavior", () => {
                     albumName: "Fallback Recovered Album",
                     albumMbid: "rg-fallback",
                 }),
-            ])
+            ]),
         );
         expect(musicBrainzService.searchRecording).toHaveBeenCalledWith(
             "Fallback Song",
-            "Fallback Artist"
+            "Fallback Artist",
         );
     });
 
@@ -3528,7 +3668,9 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { __spotifyImportTestables } = require("../spotifyImport");
         const rootMethod = jest.fn(async (value: string) => `root:${value}`);
-        const nestedMethod = jest.fn(async (value: string) => `nested:${value}`);
+        const nestedMethod = jest.fn(
+            async (value: string) => `nested:${value}`,
+        );
         const proxied = __spotifyImportTestables.createPrismaRetryProxy(
             {
                 ping: rootMethod,
@@ -3538,12 +3680,12 @@ describe("spotify import runtime behavior", () => {
                 },
                 version: "1.0.0",
             } as any,
-            "proxyTest"
+            "proxyTest",
         );
 
         await expect(proxied.ping("ok")).resolves.toBe("root:ok");
         await expect(proxied.track.findMany("query")).resolves.toBe(
-            "nested:query"
+            "nested:query",
         );
         expect(proxied.version).toBe("1.0.0");
         expect(proxied.track.modelName).toBe("Track");
@@ -3598,15 +3740,15 @@ describe("spotify import runtime behavior", () => {
             "sp-acquire-default-error",
             "Acquire Default Error",
             ["rg-missing-source"],
-            preview as any
+            preview as any,
         );
         await new Promise((resolve) => setImmediate(resolve));
 
-        const createdLogger = (createPlaylistLogger as jest.Mock).mock.results[0]
-            .value;
+        const createdLogger = (createPlaylistLogger as jest.Mock).mock
+            .results[0].value;
         expect(buildPlaylistSpy).toHaveBeenCalledTimes(1);
         expect(createdLogger.info).toHaveBeenCalledWith(
-            expect.stringContaining("ignored in resolution-only mode")
+            expect.stringContaining("ignored in resolution-only mode"),
         );
         expect(createdLogger.logAlbumFailed).not.toHaveBeenCalled();
     });
@@ -3617,13 +3759,13 @@ describe("spotify import runtime behavior", () => {
             .mockRejectedValueOnce("Connection reset by peer")
             .mockResolvedValueOnce([]);
         (prisma.$connect as jest.Mock).mockRejectedValueOnce(
-            new Error("connect failed")
+            new Error("connect failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.getUserJobs("u-prisma-retry-connect-fail")
+            spotifyImportService.getUserJobs("u-prisma-retry-connect-fail"),
         ).resolves.toEqual([]);
         expect(prisma.spotifyImportJob.findMany).toHaveBeenCalledTimes(2);
         expect(prisma.$connect).toHaveBeenCalledTimes(1);
@@ -3632,7 +3774,7 @@ describe("spotify import runtime behavior", () => {
     it("retries redis operations when retryable redis errors are thrown as strings", async () => {
         const { redisClient, redisRecoveryClient } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockRejectedValueOnce(
-            "Connection is closed"
+            "Connection is closed",
         );
         (redisRecoveryClient.get as jest.Mock).mockResolvedValueOnce(
             JSON.stringify({
@@ -3652,17 +3794,17 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-15T00:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-15T00:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.getJob("job-redis-string-retry")
+            spotifyImportService.getJob("job-redis-string-retry"),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: "job-redis-string-retry",
-            })
+            }),
         );
 
         expect(redisClient.duplicate).toHaveBeenCalledTimes(1);
@@ -3672,24 +3814,26 @@ describe("spotify import runtime behavior", () => {
     it("defaults pendingTracks to empty arrays when DB records contain null", async () => {
         const { prisma, redisClient } = setupSpotifyImportMocks();
         (redisClient.get as jest.Mock).mockResolvedValueOnce(null);
-        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce({
-            id: "job-null-pending",
-            userId: "u1",
-            spotifyPlaylistId: "sp-null-pending",
-            playlistName: "Null Pending",
-            status: "pending",
-            progress: 1,
-            albumsTotal: 1,
-            albumsCompleted: 0,
-            tracksMatched: 0,
-            tracksTotal: 1,
-            tracksDownloadable: 1,
-            createdPlaylistId: null,
-            error: null,
-            createdAt: new Date("2026-01-15T00:00:00.000Z"),
-            updatedAt: new Date("2026-01-15T00:01:00.000Z"),
-            pendingTracks: null,
-        });
+        (prisma.spotifyImportJob.findUnique as jest.Mock).mockResolvedValueOnce(
+            {
+                id: "job-null-pending",
+                userId: "u1",
+                spotifyPlaylistId: "sp-null-pending",
+                playlistName: "Null Pending",
+                status: "pending",
+                progress: 1,
+                albumsTotal: 1,
+                albumsCompleted: 0,
+                tracksMatched: 0,
+                tracksTotal: 1,
+                tracksDownloadable: 1,
+                createdPlaylistId: null,
+                error: null,
+                createdAt: new Date("2026-01-15T00:00:00.000Z"),
+                updatedAt: new Date("2026-01-15T00:01:00.000Z"),
+                pendingTracks: null,
+            },
+        );
         (prisma.spotifyImportJob.findMany as jest.Mock).mockResolvedValueOnce([
             {
                 id: "job-null-pending-many",
@@ -3778,7 +3922,9 @@ describe("spotify import runtime behavior", () => {
                 },
             });
 
-        await spotifyImportService.generatePreviewFromDeezer(deezerPlaylist as any);
+        await spotifyImportService.generatePreviewFromDeezer(
+            deezerPlaylist as any,
+        );
 
         expect(delegate).toHaveBeenCalledWith(
             expect.arrayContaining([
@@ -3800,7 +3946,7 @@ describe("spotify import runtime behavior", () => {
                 imageUrl: "https://img.example/default-cover.jpg",
                 trackCount: 2,
             }),
-            "Deezer"
+            "Deezer",
         );
     });
 
@@ -3882,8 +4028,8 @@ describe("spotify import runtime behavior", () => {
             (spotifyImportService as any).processImport(
                 job,
                 ["sp-unknown-alb"],
-                preview
-            )
+                preview,
+            ),
         ).resolves.toBeUndefined();
         expect(completionSpy).toHaveBeenCalledWith("job-unknown-all-fail");
     });
@@ -3908,7 +4054,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-16T01:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-16T01:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -3957,8 +4103,8 @@ describe("spotify import runtime behavior", () => {
                         downloadable: 1,
                         notFound: 0,
                     },
-                }
-            )
+                },
+            ),
         ).resolves.toBeUndefined();
 
         expect(completionSpy).toHaveBeenCalledWith("job-no-wait-after-check");
@@ -3984,7 +4130,7 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-16T02:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-16T02:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
         (prisma.downloadJob.findMany as jest.Mock).mockResolvedValueOnce([
             {
@@ -3999,7 +4145,9 @@ describe("spotify import runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await spotifyImportService.checkImportCompletion("job-scan-id-fallback");
+        await spotifyImportService.checkImportCompletion(
+            "job-scan-id-fallback",
+        );
 
         expect(scanQueue.add).toHaveBeenCalledTimes(1);
         expect(prisma.spotifyImportJob.upsert).toHaveBeenCalledWith(
@@ -4008,13 +4156,15 @@ describe("spotify import runtime behavior", () => {
                 update: expect.objectContaining({
                     status: "scanning",
                 }),
-            })
+            }),
         );
     });
 
     it("reconcile strategy 4 scores multiple title-only candidates and keeps unmatched tracks pending", async () => {
         const { prisma, notificationService } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 id: "pending-s4-unmatched",
                 playlistId: "playlist-s4",
@@ -4034,26 +4184,30 @@ describe("spotify import runtime behavior", () => {
         });
         (prisma.playlistItem.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.select?.title && query?.take === 5) return [];
-            if (query?.where?.title?.contains && query?.take === 10) return [];
-            if (query?.where?.title?.contains && query?.take === 20) return [];
-            if (query?.where?.title?.equals && query?.take === 10) {
-                return [
-                    {
-                        id: "candidate-artist-a",
-                        title: "Exact Song Name",
-                        album: { artist: { name: "AAA Artist" } },
-                    },
-                    {
-                        id: "candidate-artist-b",
-                        title: "Exact Song Name",
-                        album: { artist: { name: "BBB Artist" } },
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.select?.title && query?.take === 5) return [];
+                if (query?.where?.title?.contains && query?.take === 10)
+                    return [];
+                if (query?.where?.title?.contains && query?.take === 20)
+                    return [];
+                if (query?.where?.title?.equals && query?.take === 10) {
+                    return [
+                        {
+                            id: "candidate-artist-a",
+                            title: "Exact Song Name",
+                            album: { artist: { name: "AAA Artist" } },
+                        },
+                        {
+                            id: "candidate-artist-b",
+                            title: "Exact Song Name",
+                            album: { artist: { name: "BBB Artist" } },
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -4067,7 +4221,9 @@ describe("spotify import runtime behavior", () => {
 
     it("reconcile strategy 4 accepts single candidate but skips adding duplicates already in playlist", async () => {
         const { prisma, notificationService } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 id: "pending-s4-duplicate",
                 playlistId: "playlist-s4-dup",
@@ -4089,21 +4245,27 @@ describe("spotify import runtime behavior", () => {
             { trackId: "existing-dup-track" },
         ]);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.select?.title && query?.take === 5) return [];
-            if (query?.where?.title?.contains && query?.take === 10) return [];
-            if (query?.where?.title?.contains && query?.take === 20) return [];
-            if (query?.where?.title?.equals && query?.take === 10) {
-                return [
-                    {
-                        id: "existing-dup-track",
-                        title: "Single Candidate Song",
-                        album: { artist: { name: "Only Candidate Artist" } },
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.select?.title && query?.take === 5) return [];
+                if (query?.where?.title?.contains && query?.take === 10)
+                    return [];
+                if (query?.where?.title?.contains && query?.take === 20)
+                    return [];
+                if (query?.where?.title?.equals && query?.take === 10) {
+                    return [
+                        {
+                            id: "existing-dup-track",
+                            title: "Single Candidate Song",
+                            album: {
+                                artist: { name: "Only Candidate Artist" },
+                            },
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
@@ -4117,7 +4279,9 @@ describe("spotify import runtime behavior", () => {
 
     it("reconcile strategy 2 can match via title containment and tolerates missing playlist records for notifications", async () => {
         const { prisma, notificationService } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 id: "pending-containment-match",
                 playlistId: "playlist-containment",
@@ -4137,21 +4301,25 @@ describe("spotify import runtime behavior", () => {
         });
         (prisma.playlistItem.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.select?.title && query?.take === 5) return [];
-            if (query?.where?.title?.contains && query?.take === 10) {
-                return [
-                    {
-                        id: "containment-track",
-                        title: "Containment Song",
-                        album: { artist: { name: "Contain Artist" } },
-                    },
-                ];
-            }
-            if (query?.where?.title?.contains && query?.take === 20) return [];
-            if (query?.where?.title?.equals && query?.take === 10) return [];
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.select?.title && query?.take === 5) return [];
+                if (query?.where?.title?.contains && query?.take === 10) {
+                    return [
+                        {
+                            id: "containment-track",
+                            title: "Containment Song",
+                            album: { artist: { name: "Contain Artist" } },
+                        },
+                    ];
+                }
+                if (query?.where?.title?.contains && query?.take === 20)
+                    return [];
+                if (query?.where?.title?.equals && query?.take === 10)
+                    return [];
+                return [];
+            },
+        );
         (prisma.playlist.findUnique as jest.Mock).mockResolvedValueOnce(null);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -4176,18 +4344,27 @@ describe("spotify import runtime behavior", () => {
         const { prisma } = setupSpotifyImportMocks();
         (prisma.track.findUnique as jest.Mock).mockResolvedValueOnce(null);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.where?.album?.artist?.normalizedName?.contains && query?.take === 50) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (
+                    query?.where?.album?.artist?.normalizedName?.contains &&
+                    query?.take === 50
+                ) {
+                    return [];
+                }
+                if (query?.where?.title?.contains && query?.take === 20) {
+                    return [];
+                }
+                if (
+                    query?.where?.title?.contains &&
+                    query?.take === 50 &&
+                    query?.include?.album
+                ) {
+                    return [];
+                }
                 return [];
-            }
-            if (query?.where?.title?.contains && query?.take === 20) {
-                return [];
-            }
-            if (query?.where?.title?.contains && query?.take === 50 && query?.include?.album) {
-                return [];
-            }
-            return [];
-        });
+            },
+        );
         (prisma.playlist.create as jest.Mock).mockResolvedValueOnce({
             id: "playlist-short-unmatched",
         });
@@ -4221,7 +4398,7 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: "missing-track-id",
                     },
                 ],
-            })
+            }),
         ).resolves.toBeUndefined();
 
         expect(prisma.playlist.create).toHaveBeenCalledWith(
@@ -4230,7 +4407,7 @@ describe("spotify import runtime behavior", () => {
                     spotifyPlaylistId: "sp-short-unmatched",
                     items: undefined,
                 }),
-            })
+            }),
         );
         expect(prisma.playlistPendingTrack.createMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -4240,7 +4417,7 @@ describe("spotify import runtime behavior", () => {
                         spotifyArtist: "No Match Artist",
                     }),
                 ]),
-            })
+            }),
         );
     });
 
@@ -4253,24 +4430,28 @@ describe("spotify import runtime behavior", () => {
 
         expect(
             __spotifyImportTestables.isRetryableSpotifyImportPrismaError(
-                new Prisma.PrismaClientUnknownRequestError("")
-            )
+                new Prisma.PrismaClientUnknownRequestError(""),
+            ),
         ).toBe(false);
         expect(
             __spotifyImportTestables.isRetryableSpotifyImportPrismaError(
-                "Connection reset by peer"
-            )
+                "Connection reset by peer",
+            ),
         ).toBe(true);
         expect(
-            __spotifyImportTestables.isRetryableSpotifyImportPrismaError(undefined)
+            __spotifyImportTestables.isRetryableSpotifyImportPrismaError(
+                undefined,
+            ),
         ).toBe(false);
         expect(
             __spotifyImportTestables.isRetryableSpotifyImportRedisError(
-                "Connection is closed"
-            )
+                "Connection is closed",
+            ),
         ).toBe(true);
         expect(
-            __spotifyImportTestables.isRetryableSpotifyImportRedisError(undefined)
+            __spotifyImportTestables.isRetryableSpotifyImportRedisError(
+                undefined,
+            ),
         ).toBe(false);
     });
 
@@ -4300,7 +4481,7 @@ describe("spotify import runtime behavior", () => {
                 artist: "Artist A",
                 title: "Song A",
                 album: "Album Core (Super Deluxe Edition)",
-            })
+            }),
         );
 
         expect(result.matchType).toBe("exact");
@@ -4324,7 +4505,9 @@ describe("spotify import runtime behavior", () => {
                 id: "album-fallthrough",
                 title: "Album",
                 artist: { name: "Artist A" },
-                tracks: [{ id: "track-other", title: "Completely Different Song" }],
+                tracks: [
+                    { id: "track-other", title: "Completely Different Song" },
+                ],
             },
         ]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue([]);
@@ -4336,7 +4519,7 @@ describe("spotify import runtime behavior", () => {
                 artist: "Artist A",
                 title: "Song A",
                 album: "Album Core (Deluxe Edition)",
-            })
+            }),
         );
 
         expect(result).toEqual(
@@ -4344,7 +4527,7 @@ describe("spotify import runtime behavior", () => {
                 matchType: "none",
                 matchConfidence: 0,
                 localTrack: null,
-            })
+            }),
         );
     });
 
@@ -4377,24 +4560,30 @@ describe("spotify import runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        const containmentResult = await (spotifyImportService as any).matchTrack(
+        const containmentResult = await (
+            spotifyImportService as any
+        ).matchTrack(
             makeSpotifyTrack({
                 artist: "Artist A",
                 title: "Song A",
                 album: "Album Deluxe",
-            })
+            }),
         );
         const fallbackResult = await (spotifyImportService as any).matchTrack(
             makeSpotifyTrack({
                 artist: "Artist A",
                 title: "Song A",
                 album: "Unrelated Album",
-            })
+            }),
         );
 
-        expect(containmentResult.localTrack?.id).toBe("track-album-containment");
+        expect(containmentResult.localTrack?.id).toBe(
+            "track-album-containment",
+        );
         expect(containmentResult.matchType).toBe("exact");
-        expect(fallbackResult.localTrack?.id).toBe("track-artist-title-fallback");
+        expect(fallbackResult.localTrack?.id).toBe(
+            "track-artist-title-fallback",
+        );
         expect(fallbackResult.matchType).toBe("exact");
         expect(fallbackResult.matchConfidence).toBe(90);
     });
@@ -4423,7 +4612,7 @@ describe("spotify import runtime behavior", () => {
                 artist: "Artist A",
                 title: "Song A",
                 album: "Unknown Album",
-            })
+            }),
         );
 
         expect(result.matchType).toBe("none");
@@ -4433,7 +4622,9 @@ describe("spotify import runtime behavior", () => {
     it("matchTrack fuzzy full-artist fallback can short-circuit when full-artist first token is too short", async () => {
         const { prisma } = setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { extractPrimaryArtist } = require("../../utils/artistNormalization");
+        const {
+            extractPrimaryArtist,
+        } = require("../../utils/artistNormalization");
         (extractPrimaryArtist as jest.Mock).mockReturnValueOnce("Primary");
         (prisma.track.findFirst as jest.Mock).mockResolvedValueOnce(null);
         (prisma.track.findMany as jest.Mock)
@@ -4448,7 +4639,7 @@ describe("spotify import runtime behavior", () => {
                 artist: "ab feat guest",
                 title: "Short Token Song",
                 album: "Unknown Album",
-            })
+            }),
         );
 
         expect(result.matchType).toBe("none");
@@ -4460,17 +4651,17 @@ describe("spotify import runtime behavior", () => {
             { id: "artist-keep-first", name: "Artist Alias" },
             { id: "artist-second", name: "Other Alias" },
         ]);
-        (musicBrainzService.getReleaseGroups as jest.Mock).mockResolvedValueOnce(
-            undefined
-        );
+        (
+            musicBrainzService.getReleaseGroups as jest.Mock
+        ).mockResolvedValueOnce(undefined);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
             (spotifyImportService as any).findAlbumMbid(
                 "Different Artist Name",
-                "Album Target"
-            )
+                "Album Target",
+            ),
         ).resolves.toEqual({
             artistMbid: "artist-keep-first",
             albumMbid: null,
@@ -4481,12 +4672,12 @@ describe("spotify import runtime behavior", () => {
         setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest
-            .spyOn(spotifyImportService as any, "enrichUnknownAlbumsViaMusicBrainz")
-            .mockRejectedValueOnce("mb enrichment string failure");
-        jest
-            .spyOn(spotifyImportService as any, "matchTrack")
-            .mockResolvedValue({
+        jest.spyOn(
+            spotifyImportService as any,
+            "enrichUnknownAlbumsViaMusicBrainz",
+        ).mockRejectedValueOnce("mb enrichment string failure");
+        jest.spyOn(spotifyImportService as any, "matchTrack").mockResolvedValue(
+            {
                 spotifyTrack: makeSpotifyTrack({
                     spotifyId: "sp-in-library",
                     artist: "Artist In Library",
@@ -4502,9 +4693,12 @@ describe("spotify import runtime behavior", () => {
                 },
                 matchType: "exact",
                 matchConfidence: 100,
-            });
+            },
+        );
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const preview = await (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             [
                 makeSpotifyTrack({
                     spotifyId: "sp-in-library",
@@ -4521,7 +4715,7 @@ describe("spotify import runtime behavior", () => {
                 imageUrl: null,
                 trackCount: 1,
             },
-            "Deezer"
+            "Deezer",
         );
 
         expect(preview.summary.inLibrary).toBe(1);
@@ -4530,21 +4724,24 @@ describe("spotify import runtime behavior", () => {
 
     it("buildPreviewFromTracklist covers pre-resolved and unresolved album metadata fallbacks", async () => {
         const { musicBrainzService } = setupSpotifyImportMocks();
-        (musicBrainzService.searchArtist as jest.Mock).mockResolvedValueOnce([]);
-        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValue(null);
+        (musicBrainzService.searchArtist as jest.Mock).mockResolvedValueOnce(
+            [],
+        );
+        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValue(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest
-            .spyOn(spotifyImportService as any, "matchTrack")
-            .mockResolvedValue({
+        jest.spyOn(spotifyImportService as any, "matchTrack").mockResolvedValue(
+            {
                 spotifyTrack: makeSpotifyTrack(),
                 localTrack: null,
                 matchType: "none",
                 matchConfidence: 0,
-            });
-        jest
-            .spyOn(spotifyImportService as any, "findAlbumMbid")
+            },
+        );
+        jest.spyOn(spotifyImportService as any, "findAlbumMbid")
             .mockResolvedValueOnce({
                 artistMbid: null,
                 albumMbid: "rg-known-without-artist",
@@ -4554,7 +4751,9 @@ describe("spotify import runtime behavior", () => {
                 albumMbid: null,
             });
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const preview = await (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             [
                 makeSpotifyTrack({
                     spotifyId: "sp-pre-resolved",
@@ -4579,7 +4778,7 @@ describe("spotify import runtime behavior", () => {
                 imageUrl: null,
                 trackCount: 2,
             },
-            "Spotify"
+            "Spotify",
         );
 
         expect(preview.albumsToDownload).toEqual(
@@ -4594,7 +4793,7 @@ describe("spotify import runtime behavior", () => {
                     artistMbid: null,
                     spotifyAlbumId: "",
                 }),
-            ])
+            ]),
         );
     });
 
@@ -4602,9 +4801,10 @@ describe("spotify import runtime behavior", () => {
         setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest.spyOn(spotifyImportService as any, "processImport").mockResolvedValue(
-            undefined
-        );
+        jest.spyOn(
+            spotifyImportService as any,
+            "processImport",
+        ).mockResolvedValue(undefined);
 
         const pendingSourceTrack = makeSpotifyTrack({
             spotifyId: "sp-original-id",
@@ -4661,7 +4861,7 @@ describe("spotify import runtime behavior", () => {
                     downloadable: 1,
                     notFound: 0,
                 },
-            } as any
+            } as any,
         );
 
         expect(job.pendingTracks).toEqual([
@@ -4695,13 +4895,13 @@ describe("spotify import runtime behavior", () => {
                 createdAt: new Date("2026-01-16T04:00:00.000Z").toISOString(),
                 updatedAt: new Date("2026-01-16T04:01:00.000Z").toISOString(),
                 pendingTracks: [],
-            })
+            }),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.cancelJob("job-terminal-null-playlist")
+            spotifyImportService.cancelJob("job-terminal-null-playlist"),
         ).resolves.toEqual({
             playlistCreated: false,
             playlistId: null,
@@ -4727,10 +4927,14 @@ describe("spotify import runtime behavior", () => {
                     tracksDownloadable: 0,
                     createdPlaylistId: null,
                     error: null,
-                    createdAt: new Date("2026-01-16T05:00:00.000Z").toISOString(),
-                    updatedAt: new Date("2026-01-16T05:01:00.000Z").toISOString(),
+                    createdAt: new Date(
+                        "2026-01-16T05:00:00.000Z",
+                    ).toISOString(),
+                    updatedAt: new Date(
+                        "2026-01-16T05:01:00.000Z",
+                    ).toISOString(),
                     pendingTracks: [],
-                })
+                }),
             )
             .mockResolvedValueOnce(
                 JSON.stringify({
@@ -4747,10 +4951,14 @@ describe("spotify import runtime behavior", () => {
                     tracksDownloadable: 1,
                     createdPlaylistId: null,
                     error: null,
-                    createdAt: new Date("2026-01-16T05:00:00.000Z").toISOString(),
-                    updatedAt: new Date("2026-01-16T05:01:00.000Z").toISOString(),
+                    createdAt: new Date(
+                        "2026-01-16T05:00:00.000Z",
+                    ).toISOString(),
+                    updatedAt: new Date(
+                        "2026-01-16T05:01:00.000Z",
+                    ).toISOString(),
                     pendingTracks: [],
-                })
+                }),
             );
         (prisma.downloadJob.findMany as jest.Mock)
             .mockResolvedValueOnce([]) // total=0, albumsTotal=0 -> progress ternary false branch
@@ -4765,18 +4973,20 @@ describe("spotify import runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
         await expect(
-            spotifyImportService.checkImportCompletion("job-zero-downloads")
+            spotifyImportService.checkImportCompletion("job-zero-downloads"),
         ).resolves.toBeUndefined();
         await expect(
             spotifyImportService.checkImportCompletion(
-                "job-pending-unknown-status"
-            )
+                "job-pending-unknown-status",
+            ),
         ).resolves.toBeUndefined();
     });
 
     it("reconcile can leave strategy-2/strategy-4 candidates unmatched when containment and title-only candidate checks fail", async () => {
         const { prisma } = setupSpotifyImportMocks();
-        (prisma.playlistPendingTrack.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.playlistPendingTrack.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 id: "pending-unmatched-containment-false",
                 playlistId: "playlist-containment-false",
@@ -4796,27 +5006,31 @@ describe("spotify import runtime behavior", () => {
         });
         (prisma.playlistItem.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.select?.title && query?.take === 5) return [];
-            if (query?.where?.title?.contains && query?.take === 10) {
-                return [
-                    {
-                        id: "candidate-no-containment",
-                        title: "Different Phrase",
-                        album: { artist: { name: "Artist Y" } },
-                    },
-                ];
-            }
-            if (query?.where?.title?.contains && query?.take === 20) return [];
-            if (query?.where?.title?.equals && query?.take === 10) return [];
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.select?.title && query?.take === 5) return [];
+                if (query?.where?.title?.contains && query?.take === 10) {
+                    return [
+                        {
+                            id: "candidate-no-containment",
+                            title: "Different Phrase",
+                            album: { artist: { name: "Artist Y" } },
+                        },
+                    ];
+                }
+                if (query?.where?.title?.contains && query?.take === 20)
+                    return [];
+                if (query?.where?.title?.equals && query?.take === 10)
+                    return [];
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        await expect(spotifyImportService.reconcilePendingTracks()).resolves.toEqual(
-            { playlistsUpdated: 0, tracksAdded: 0 }
-        );
+        await expect(
+            spotifyImportService.reconcilePendingTracks(),
+        ).resolves.toEqual({ playlistsUpdated: 0, tracksAdded: 0 });
         expect(prisma.playlistItem.create).not.toHaveBeenCalled();
         expect(prisma.playlistPendingTrack.deleteMany).not.toHaveBeenCalled();
     });
@@ -4824,12 +5038,14 @@ describe("spotify import runtime behavior", () => {
     it("enrichUnknownAlbumsViaMusicBrainz logs non-Error string failures from recording lookups", async () => {
         const { musicBrainzService } = setupSpotifyImportMocks();
         (musicBrainzService.searchRecording as jest.Mock).mockRejectedValueOnce(
-            "recording string failure"
+            "recording string failure",
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        const stats = await (spotifyImportService as any).enrichUnknownAlbumsViaMusicBrainz(
+        const stats = await (
+            spotifyImportService as any
+        ).enrichUnknownAlbumsViaMusicBrainz(
             [
                 makeSpotifyTrack({
                     spotifyId: "sp-recording-string-fail",
@@ -4838,39 +5054,44 @@ describe("spotify import runtime behavior", () => {
                     album: "Unknown Album",
                 }),
             ],
-            "[UnknownAlbumStringError]"
+            "[UnknownAlbumStringError]",
         );
 
         expect(stats).toEqual(
             expect.objectContaining({
                 resolved: 0,
                 failed: 1,
-            })
+            }),
         );
     });
 
     it("buildPreviewFromTracklist keeps non-unknown albums downloadable when MBIDs cannot be resolved", async () => {
         const { musicBrainzService } = setupSpotifyImportMocks();
-        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValue(null);
+        (musicBrainzService.searchRecording as jest.Mock).mockResolvedValue(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest
-            .spyOn(spotifyImportService as any, "matchTrack")
-            .mockResolvedValue({
+        jest.spyOn(spotifyImportService as any, "matchTrack").mockResolvedValue(
+            {
                 spotifyTrack: makeSpotifyTrack(),
                 localTrack: null,
                 matchType: "none",
                 matchConfidence: 0,
-            });
-        jest
-            .spyOn(spotifyImportService as any, "findAlbumMbid")
-            .mockResolvedValue({
-                artistMbid: null,
-                albumMbid: null,
-            });
+            },
+        );
+        jest.spyOn(
+            spotifyImportService as any,
+            "findAlbumMbid",
+        ).mockResolvedValue({
+            artistMbid: null,
+            albumMbid: null,
+        });
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const preview = await (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             [
                 makeSpotifyTrack({
                     spotifyId: "sp-non-unknown-no-mbid",
@@ -4888,7 +5109,7 @@ describe("spotify import runtime behavior", () => {
                 imageUrl: null,
                 trackCount: 1,
             },
-            "Spotify"
+            "Spotify",
         );
 
         expect(preview.albumsToDownload).toEqual([
@@ -4956,7 +5177,7 @@ describe("spotify import runtime behavior", () => {
             expect.objectContaining({
                 imageUrl: null,
             }),
-            "Deezer"
+            "Deezer",
         );
     });
 
@@ -4964,9 +5185,10 @@ describe("spotify import runtime behavior", () => {
         setupSpotifyImportMocks();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
-        jest.spyOn(spotifyImportService as any, "processImport").mockResolvedValue(
-            undefined
-        );
+        jest.spyOn(
+            spotifyImportService as any,
+            "processImport",
+        ).mockResolvedValue(undefined);
 
         const job = await spotifyImportService.startImport(
             "u-unknown-display-fallback",
@@ -5003,7 +5225,7 @@ describe("spotify import runtime behavior", () => {
                     downloadable: 1,
                     notFound: 0,
                 },
-            } as any
+            } as any,
         );
 
         expect(job.pendingTracks).toEqual([
@@ -5071,7 +5293,7 @@ describe("spotify import runtime behavior", () => {
                     downloadable: 2,
                     notFound: 0,
                 },
-            } as any
+            } as any,
         );
         await new Promise((resolve) => setImmediate(resolve));
 
@@ -5124,14 +5346,14 @@ describe("spotify import runtime behavior", () => {
             "sp-scan-id-present",
             "Scan ID Present",
             ["album-id"],
-            makePreview("sp-scan-id-present")
+            makePreview("sp-scan-id-present"),
         );
         const jobWithoutId = await spotifyImportService.startImport(
             "u1",
             "sp-scan-id-missing",
             "Scan ID Missing",
             ["album-id"],
-            makePreview("sp-scan-id-missing")
+            makePreview("sp-scan-id-missing"),
         );
         expect(processSpy).toHaveBeenCalledTimes(2);
 
@@ -5151,10 +5373,14 @@ describe("spotify import runtime behavior", () => {
                     tracksDownloadable: 1,
                     createdPlaylistId: null,
                     error: null,
-                    createdAt: new Date("2026-01-17T01:00:00.000Z").toISOString(),
-                    updatedAt: new Date("2026-01-17T01:01:00.000Z").toISOString(),
+                    createdAt: new Date(
+                        "2026-01-17T01:00:00.000Z",
+                    ).toISOString(),
+                    updatedAt: new Date(
+                        "2026-01-17T01:01:00.000Z",
+                    ).toISOString(),
                     pendingTracks: [],
-                })
+                }),
             )
             .mockResolvedValueOnce(
                 JSON.stringify({
@@ -5171,10 +5397,14 @@ describe("spotify import runtime behavior", () => {
                     tracksDownloadable: 1,
                     createdPlaylistId: null,
                     error: null,
-                    createdAt: new Date("2026-01-17T01:00:00.000Z").toISOString(),
-                    updatedAt: new Date("2026-01-17T01:01:00.000Z").toISOString(),
+                    createdAt: new Date(
+                        "2026-01-17T01:00:00.000Z",
+                    ).toISOString(),
+                    updatedAt: new Date(
+                        "2026-01-17T01:01:00.000Z",
+                    ).toISOString(),
                     pendingTracks: [],
-                })
+                }),
             );
         (prisma.downloadJob.findMany as jest.Mock)
             .mockResolvedValueOnce([
@@ -5205,24 +5435,29 @@ describe("spotify import runtime behavior", () => {
         const { prisma } = setupSpotifyImportMocks();
         (prisma.track.findUnique as jest.Mock).mockResolvedValue(null);
         (prisma.track.findFirst as jest.Mock).mockResolvedValue(null);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.where?.title?.contains && query?.take === 10) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.where?.title?.contains && query?.take === 10) {
+                    return [];
+                }
+                if (
+                    query?.where?.album?.artist?.normalizedName?.contains &&
+                    query?.take === 50
+                ) {
+                    return [
+                        {
+                            id: "track-low-score-35",
+                            title: "Totally Different Candidate",
+                            album: { artist: { name: "Unrelated Artist" } },
+                        },
+                    ];
+                }
+                if (query?.where?.title?.contains && query?.take === 20) {
+                    return [];
+                }
                 return [];
-            }
-            if (query?.where?.album?.artist?.normalizedName?.contains && query?.take === 50) {
-                return [
-                    {
-                        id: "track-low-score-35",
-                        title: "Totally Different Candidate",
-                        album: { artist: { name: "Unrelated Artist" } },
-                    },
-                ];
-            }
-            if (query?.where?.title?.contains && query?.take === 20) {
-                return [];
-            }
-            return [];
-        });
+            },
+        );
         (prisma.playlist.create as jest.Mock).mockResolvedValueOnce({
             id: "playlist-low-score-35",
         });
@@ -5256,7 +5491,7 @@ describe("spotify import runtime behavior", () => {
                         preMatchedTrackId: null,
                     },
                 ],
-            })
+            }),
         ).resolves.toBeUndefined();
     });
 });

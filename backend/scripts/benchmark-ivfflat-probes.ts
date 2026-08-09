@@ -81,9 +81,13 @@ async function acquireLock(): Promise<void> {
         } catch (err) {
             if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
             if (Date.now() > deadline) {
-                throw new Error(`bench lock ${LOCK_DIR} held > 20 min; aborting`);
+                throw new Error(
+                    `bench lock ${LOCK_DIR} held > 20 min; aborting`,
+                );
             }
-            console.log(`[lock] ${LOCK_DIR} held by another benchmark; polling...`);
+            console.log(
+                `[lock] ${LOCK_DIR} held by another benchmark; polling...`,
+            );
             await sleep(LOCK_POLL_MS);
         }
     }
@@ -91,7 +95,9 @@ async function acquireLock(): Promise<void> {
 
 function treeLabel(): string {
     try {
-        const branch = execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
+        const branch = execSync("git rev-parse --abbrev-ref HEAD")
+            .toString()
+            .trim();
         const sha = execSync("git rev-parse --short HEAD").toString().trim();
         return `${branch}@${sha}`;
     } catch {
@@ -126,7 +132,7 @@ async function main(): Promise<void> {
     `;
     console.log(
         `[mechanism] ivfflat.probes inside runAnnQuery(tx, 7) = ${inTx[0]?.probes} (expect 7); ` +
-        `outside tx = ${outTx[0]?.probes} (expect 1 = pg default) -> set_config is_local scoping confirmed`,
+            `outside tx = ${outTx[0]?.probes} (expect 1 = pg default) -> set_config is_local scoping confirmed`,
     );
 
     // Warm up (connection + plan cache) so the first timed query isn't an outlier.
@@ -140,9 +146,15 @@ async function main(): Promise<void> {
         const neighbors = new Map<number, string[]>();
         for (const p of PROBES) {
             const t0 = performance.now();
-            const rows = await runAnnQuery<{ track_id: string }[]>(annSql(track_id, K), p);
+            const rows = await runAnnQuery<{ track_id: string }[]>(
+                annSql(track_id, K),
+                p,
+            );
             latency.get(p)!.push(performance.now() - t0);
-            neighbors.set(p, rows.map((r) => r.track_id));
+            neighbors.set(
+                p,
+                rows.map((r) => r.track_id),
+            );
         }
 
         const gt = neighbors.get(GROUND_TRUTH_PROBES)!;
@@ -150,14 +162,29 @@ async function main(): Promise<void> {
         const gt50 = gt.slice(0, 50);
         for (const p of PROBES) {
             const got = neighbors.get(p)!;
-            recall10.get(p)!.push(overlap(got.slice(0, 10), gt10) / Math.max(1, gt10.length));
-            recall50.get(p)!.push(overlap(got.slice(0, 50), gt50) / Math.max(1, gt50.length));
+            recall10
+                .get(p)!
+                .push(
+                    overlap(got.slice(0, 10), gt10) / Math.max(1, gt10.length),
+                );
+            recall50
+                .get(p)!
+                .push(
+                    overlap(got.slice(0, 50), gt50) / Math.max(1, gt50.length),
+                );
         }
     }
 
-    const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+    const mean = (xs: number[]) =>
+        xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
 
-    type Row = { probes: number; r10: number; r50: number; p50: number; p95: number };
+    type Row = {
+        probes: number;
+        r10: number;
+        r50: number;
+        p50: number;
+        p95: number;
+    };
     const rows: Row[] = PROBES.map((p) => {
         const lat = [...latency.get(p)!].sort((a, b) => a - b);
         return {
@@ -170,23 +197,37 @@ async function main(): Promise<void> {
     });
 
     // Smallest probes clearing the recall@10 target.
-    const chosen = rows.find((r) => r.r10 >= RECALL_TARGET) ?? rows[rows.length - 1];
+    const chosen =
+        rows.find((r) => r.r10 >= RECALL_TARGET) ?? rows[rows.length - 1];
 
     const lines: string[] = [];
     lines.push("## F14 ivfflat.probes benchmark");
     lines.push("");
     lines.push(`- Tree: \`${tree}\``);
-    lines.push(`- Corpus: ${tracks} Tracks, ${embeddings} track_embeddings; index \`ivfflat lists=224\``);
-    lines.push(`- Sample: ${sample.length} random tracks; ground truth = top-${K} at probes=${GROUND_TRUTH_PROBES} (exhaustive); latency = per-query wall time through runAnnQuery (tx + set_config included)`);
+    lines.push(
+        `- Corpus: ${tracks} Tracks, ${embeddings} track_embeddings; index \`ivfflat lists=224\``,
+    );
+    lines.push(
+        `- Sample: ${sample.length} random tracks; ground truth = top-${K} at probes=${GROUND_TRUTH_PROBES} (exhaustive); latency = per-query wall time through runAnnQuery (tx + set_config included)`,
+    );
     lines.push("");
     lines.push("| probes | recall@10 | recall@50 | p50 ms | p95 ms |");
     lines.push("|-------:|----------:|----------:|-------:|-------:|");
     for (const r of rows) {
-        const mark = r.probes === chosen.probes ? " **<- chosen default**" : r.probes === 1 ? " (before: pg default)" : "";
-        lines.push(`| ${r.probes} | ${r.r10.toFixed(4)} | ${r.r50.toFixed(4)} | ${r.p50} | ${r.p95} |${mark}`);
+        const mark =
+            r.probes === chosen.probes
+                ? " **<- chosen default**"
+                : r.probes === 1
+                  ? " (before: pg default)"
+                  : "";
+        lines.push(
+            `| ${r.probes} | ${r.r10.toFixed(4)} | ${r.r50.toFixed(4)} | ${r.p50} | ${r.p95} |${mark}`,
+        );
     }
     lines.push("");
-    lines.push(`Chosen default: **IVFFLAT_PROBES=${chosen.probes}** — smallest probes with recall@10 >= ${RECALL_TARGET} (recall@10=${chosen.r10.toFixed(4)}, p95=${chosen.p95}ms).`);
+    lines.push(
+        `Chosen default: **IVFFLAT_PROBES=${chosen.probes}** — smallest probes with recall@10 >= ${RECALL_TARGET} (recall@10=${chosen.r10.toFixed(4)}, p95=${chosen.p95}ms).`,
+    );
 
     console.log("\n" + lines.join("\n") + "\n");
 }

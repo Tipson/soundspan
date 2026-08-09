@@ -53,8 +53,14 @@ describe("colorExtractor", () => {
     it("skips transparent pixels when channels include alpha and uses remaining opaque pixels", async () => {
         mockToBuffer.mockResolvedValueOnce({
             data: Buffer.from([
-                0, 0, 0, 0, // transparent -> skipped
-                90, 45, 30, 255, // valid opaque pixel
+                0,
+                0,
+                0,
+                0, // transparent -> skipped
+                90,
+                45,
+                30,
+                255, // valid opaque pixel
             ]),
             info: { channels: 4 },
         });
@@ -110,9 +116,18 @@ describe("colorExtractor", () => {
     it("extracts deterministic palette from image pixel data", async () => {
         mockToBuffer.mockResolvedValueOnce({
             data: Buffer.from([
-                100, 50, 50, 255, // valid
-                0, 0, 0, 255, // too dark
-                255, 255, 255, 255, // too bright
+                100,
+                50,
+                50,
+                255, // valid
+                0,
+                0,
+                0,
+                255, // too dark
+                255,
+                255,
+                255,
+                255, // too bright
             ]),
             info: { channels: 4 },
         });
@@ -136,7 +151,7 @@ describe("colorExtractor", () => {
 
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[ColorExtractor] Failed to extract colors:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(result).toEqual({
             vibrant: "#1db954",

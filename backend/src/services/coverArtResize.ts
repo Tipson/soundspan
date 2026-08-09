@@ -36,9 +36,7 @@ export type CoverArtFormat = "webp" | "original";
  * Returns null when the size is missing or invalid (meaning: serve the
  * original image untouched).
  */
-export function snapCoverArtSize(
-    rawSize: unknown
-): number | null {
+export function snapCoverArtSize(rawSize: unknown): number | null {
     const candidate = Array.isArray(rawSize) ? rawSize[0] : rawSize;
     const parsed =
         typeof candidate === "number"
@@ -63,7 +61,7 @@ export function snapCoverArtSize(
  * Negotiates the cover-art output format from a request Accept header.
  */
 export function negotiateCoverArtFormat(
-    acceptHeader: string | undefined
+    acceptHeader: string | undefined,
 ): CoverArtFormat {
     return acceptHeader && acceptHeader.includes("image/webp")
         ? "webp"

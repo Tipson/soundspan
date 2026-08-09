@@ -117,7 +117,7 @@ export interface YtMusicMixPreview {
  * Accepts both persisted uppercase settings and lowercase request values.
  */
 export const normalizeYtMusicStreamQuality = (
-    quality: string | null | undefined
+    quality: string | null | undefined,
 ): YtMusicStreamQuality | undefined => {
     const normalized = quality?.trim().toLowerCase();
     if (
@@ -153,7 +153,8 @@ function parseDuration(item: any): number {
     }
     if (typeof item.duration === "string" && item.duration.includes(":")) {
         const parts = item.duration.split(":").map(Number);
-        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        if (parts.length === 3)
+            return parts[0] * 3600 + parts[1] * 60 + parts[2];
         if (parts.length === 2) return parts[0] * 60 + parts[1];
     }
     return 0;
@@ -181,7 +182,7 @@ function resolvePrimaryArtist(item: Record<string, unknown>): string {
             }
             if (entry && typeof entry === "object") {
                 const name = normalizeText(
-                    (entry as Record<string, unknown>).name
+                    (entry as Record<string, unknown>).name,
                 );
                 if (name) return name;
             }
@@ -215,7 +216,7 @@ function resolveThumbnailUrl(item: Record<string, unknown>): string | null {
 }
 
 function toCanonicalSearchResultItem(
-    item: unknown
+    item: unknown,
 ): CanonicalMediaSearchResult | null {
     if (!item || typeof item !== "object") {
         return null;
@@ -258,7 +259,7 @@ async function retryWithBackoff<T>(
     fn: () => Promise<T>,
     label: string,
     maxRetries = 3,
-    baseDelayMs = 1000
+    baseDelayMs = 1000,
 ): Promise<T> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -288,7 +289,7 @@ async function retryWithBackoff<T>(
 
             logger.warn(
                 `[YTMusic] ${label} failed (status=${status}, attempt=${attempt + 1}/${maxRetries}), ` +
-                `retrying in ${Math.round(delayMs)}ms`
+                    `retrying in ${Math.round(delayMs)}ms`,
             );
             await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
@@ -299,7 +300,8 @@ async function retryWithBackoff<T>(
 
 class YouTubeMusicService {
     private client: AxiosInstance;
-    private availabilityCache: { value: boolean; expiresAt: number } | null = null;
+    private availabilityCache: { value: boolean; expiresAt: number } | null =
+        null;
     private availabilityInFlight: Promise<boolean> | null = null;
     private static readonly UNDESIRED_MISMATCH_TERMS = [
         "karaoke",
@@ -353,7 +355,9 @@ class YouTubeMusicService {
         this.availabilityInFlight = (async () => {
             let available = false;
             try {
-                const res = await this.client.get("/health", { timeout: 5_000 });
+                const res = await this.client.get("/health", {
+                    timeout: 5_000,
+                });
                 available = res.status === 200;
             } catch {
                 available = false;
@@ -391,7 +395,7 @@ class YouTubeMusicService {
         await this.client.post(
             "/auth/restore",
             { oauth_json: oauthJson },
-            { params: { user_id: userId } }
+            { params: { user_id: userId } },
         );
     }
 
@@ -412,7 +416,7 @@ class YouTubeMusicService {
      */
     async initiateDeviceAuth(
         clientId: string,
-        clientSecret: string
+        clientSecret: string,
     ): Promise<YtMusicDeviceCode> {
         const res = await this.client.post("/auth/device-code", {
             client_id: clientId,
@@ -429,7 +433,7 @@ class YouTubeMusicService {
         userId: string,
         clientId: string,
         clientSecret: string,
-        deviceCode: string
+        deviceCode: string,
     ): Promise<YtMusicDeviceCodePollResult> {
         const res = await this.client.post(
             "/auth/device-code/poll",
@@ -438,7 +442,7 @@ class YouTubeMusicService {
                 client_secret: clientSecret,
                 device_code: deviceCode,
             },
-            { params: { user_id: userId } }
+            { params: { user_id: userId } },
         );
         return res.data;
     }
@@ -451,7 +455,7 @@ class YouTubeMusicService {
         userId: string,
         oauthJson: string,
         clientId?: string,
-        clientSecret?: string
+        clientSecret?: string,
     ): Promise<void> {
         const body: Record<string, string> = { oauth_json: oauthJson };
         if (clientId && clientSecret) {
@@ -468,13 +472,13 @@ class YouTubeMusicService {
     async search(
         userId: string,
         query: string,
-        filter?: "songs" | "albums" | "artists" | "videos"
+        filter?: "songs" | "albums" | "artists" | "videos",
     ): Promise<YtMusicSearchResult> {
         return retryWithBackoff(async () => {
             const res = await this.client.post(
                 "/search",
                 { query, filter },
-                { params: { user_id: userId } }
+                { params: { user_id: userId } },
             );
             return res.data;
         }, `search(${query})`);
@@ -483,14 +487,15 @@ class YouTubeMusicService {
     async searchCanonical(
         userId: string,
         query: string,
-        filter?: "songs" | "albums" | "artists" | "videos"
+        filter?: "songs" | "albums" | "artists" | "videos",
     ): Promise<YtMusicCanonicalSearchResponse> {
         const rawResult = await this.search(userId, query, filter);
         const canonicalResults = Array.isArray(rawResult.results)
             ? rawResult.results
                   .map((item) => toCanonicalSearchResultItem(item))
                   .filter(
-                      (item): item is CanonicalMediaSearchResult => item !== null
+                      (item): item is CanonicalMediaSearchResult =>
+                          item !== null,
                   )
             : [];
 
@@ -539,7 +544,7 @@ class YouTubeMusicService {
     async getStreamInfo(
         userId: string,
         videoId: string,
-        quality?: string
+        quality?: string,
     ): Promise<YtMusicStreamInfo> {
         return retryWithBackoff(async () => {
             const params: Record<string, string> = { user_id: userId };
@@ -557,7 +562,7 @@ class YouTubeMusicService {
         userId: string,
         videoId: string,
         quality?: string,
-        rangeHeader?: string
+        rangeHeader?: string,
     ) {
         const params: Record<string, string> = { user_id: userId };
         if (quality) params.quality = quality;
@@ -596,7 +601,7 @@ class YouTubeMusicService {
     async getLibraryPlaylists(
         userId: string,
         limit = 25,
-        mixesOnly = false
+        mixesOnly = false,
     ): Promise<YtMusicMixPreview[]> {
         const res = await this.client.get("/library/playlists", {
             params: { user_id: userId, limit, mixes_only: mixesOnly },
@@ -613,7 +618,11 @@ class YouTubeMusicService {
      */
     async searchBatch(
         userId: string,
-        queries: Array<{ query: string; filter?: "songs" | "albums" | "artists" | "videos"; limit?: number }>
+        queries: Array<{
+            query: string;
+            filter?: "songs" | "albums" | "artists" | "videos";
+            limit?: number;
+        }>,
     ): Promise<Array<{ results: any[]; total: number; error: string | null }>> {
         return retryWithBackoff(async () => {
             const res = await this.client.post(
@@ -622,7 +631,7 @@ class YouTubeMusicService {
                 {
                     params: { user_id: userId },
                     timeout: 60_000, // Longer timeout for batch
-                }
+                },
             );
             return res.data.results;
         }, `searchBatch(${queries.length} queries)`);
@@ -641,8 +650,10 @@ class YouTubeMusicService {
      */
     async findMatchesForAlbum(
         userId: string,
-        tracks: YtMusicMatchInput[]
-    ): Promise<Array<{ videoId: string; title: string; duration: number } | null>> {
+        tracks: YtMusicMatchInput[],
+    ): Promise<
+        Array<{ videoId: string; title: string; duration: number } | null>
+    > {
         // Step 1: Build filtered "songs" search queries for all tracks
         const queries = tracks.map((t) => {
             const cleanArtist = this.sanitizeQuery(t.artist);
@@ -655,11 +666,18 @@ class YouTubeMusicService {
         });
 
         // Step 2: Execute all queries concurrently in one batch call
-        let batchResults: Array<{ results: any[]; total: number; error: string | null }>;
+        let batchResults: Array<{
+            results: any[];
+            total: number;
+            error: string | null;
+        }>;
         try {
             batchResults = await this.searchBatch(userId, queries);
         } catch (err) {
-            logger.warn("[YTMusic] Batch search failed, falling back to individual:", err);
+            logger.warn(
+                "[YTMusic] Batch search failed, falling back to individual:",
+                err,
+            );
             // Fallback: match each track individually
             return Promise.all(
                 tracks.map((t) =>
@@ -669,14 +687,18 @@ class YouTubeMusicService {
                         t.title,
                         t.albumTitle,
                         t.duration,
-                        t.isrc
-                    )
-                )
+                        t.isrc,
+                    ),
+                ),
             );
         }
 
         // Step 3: Extract matches from batch results
-        const matches: Array<{ videoId: string; title: string; duration: number } | null> = [];
+        const matches: Array<{
+            videoId: string;
+            title: string;
+            duration: number;
+        } | null> = [];
         const unmatchedIndices: number[] = [];
 
         for (let i = 0; i < tracks.length; i++) {
@@ -689,7 +711,10 @@ class YouTubeMusicService {
                     continue;
                 }
 
-                const song = this.selectBestCandidate(sourceTrack, result.results);
+                const song = this.selectBestCandidate(
+                    sourceTrack,
+                    result.results,
+                );
                 if (song) {
                     matches.push(this.toMatchResult(song, sourceTrack.title));
                     continue;
@@ -707,7 +732,9 @@ class YouTubeMusicService {
                 const cleanArtist = this.sanitizeQuery(t.artist);
                 const cleanTitle = this.sanitizeQuery(t.title);
                 // Try with album title for disambiguation
-                const cleanAlbum = t.albumTitle ? this.sanitizeQuery(t.albumTitle) : "";
+                const cleanAlbum = t.albumTitle
+                    ? this.sanitizeQuery(t.albumTitle)
+                    : "";
                 const query = cleanAlbum
                     ? `${cleanArtist} ${cleanTitle} ${cleanAlbum}`
                     : `${cleanArtist} ${cleanTitle}`;
@@ -715,16 +742,25 @@ class YouTubeMusicService {
             });
 
             try {
-                const fallbackResults = await this.searchBatch(userId, fallbackQueries);
+                const fallbackResults = await this.searchBatch(
+                    userId,
+                    fallbackQueries,
+                );
                 for (let j = 0; j < unmatchedIndices.length; j++) {
                     const idx = unmatchedIndices[j];
                     const result = fallbackResults[j];
                     if (result && !result.error && result.results?.length) {
                         const sourceTrack = tracks[idx];
                         if (!sourceTrack) continue;
-                        const song = this.selectBestCandidate(sourceTrack, result.results);
+                        const song = this.selectBestCandidate(
+                            sourceTrack,
+                            result.results,
+                        );
                         if (song) {
-                            matches[idx] = this.toMatchResult(song, sourceTrack.title);
+                            matches[idx] = this.toMatchResult(
+                                song,
+                                sourceTrack.title,
+                            );
                         }
                     }
                 }
@@ -744,10 +780,10 @@ class YouTubeMusicService {
      */
     private sanitizeQuery(text: string): string {
         return text
-            .replace(/\s*\(.*?\)\s*/g, " ")     // Remove (Deluxe Edition), (feat. X), etc.
-            .replace(/\s*\[.*?\]\s*/g, " ")      // Remove [Remastered], [Explicit], etc.
+            .replace(/\s*\(.*?\)\s*/g, " ") // Remove (Deluxe Edition), (feat. X), etc.
+            .replace(/\s*\[.*?\]\s*/g, " ") // Remove [Remastered], [Explicit], etc.
             .replace(/[^\p{L}\p{N}\s'-]/gu, " ") // Keep letters, numbers, spaces, hyphens, apostrophes
-            .replace(/\s+/g, " ")                 // Collapse whitespace
+            .replace(/\s+/g, " ") // Collapse whitespace
             .trim();
     }
 
@@ -788,8 +824,7 @@ class YouTubeMusicService {
         if (lhsCompact === rhsCompact) return 0.98;
 
         const overlap = this.tokenOverlapScore(lhs, rhs);
-        const containsBonus =
-            lhs.includes(rhs) || rhs.includes(lhs) ? 0.1 : 0;
+        const containsBonus = lhs.includes(rhs) || rhs.includes(lhs) ? 0.1 : 0;
         return Math.min(1, overlap * 0.9 + containsBonus);
     }
 
@@ -797,17 +832,26 @@ class YouTubeMusicService {
         return this.normaliseLoose(text).includes(term);
     }
 
-    private mismatchPenalty(expectedTitle: string, candidateTitle: string): number {
+    private mismatchPenalty(
+        expectedTitle: string,
+        candidateTitle: string,
+    ): number {
         let penalty = 0;
 
         for (const term of YouTubeMusicService.UNDESIRED_MISMATCH_TERMS) {
-            if (!this.hasTerm(expectedTitle, term) && this.hasTerm(candidateTitle, term)) {
+            if (
+                !this.hasTerm(expectedTitle, term) &&
+                this.hasTerm(candidateTitle, term)
+            ) {
                 penalty += 0.25;
             }
         }
 
         for (const term of YouTubeMusicService.VERSION_MISMATCH_TERMS) {
-            if (!this.hasTerm(expectedTitle, term) && this.hasTerm(candidateTitle, term)) {
+            if (
+                !this.hasTerm(expectedTitle, term) &&
+                this.hasTerm(candidateTitle, term)
+            ) {
                 penalty += 0.08;
             }
         }
@@ -816,15 +860,23 @@ class YouTubeMusicService {
     }
 
     private normaliseDurationSeconds(value?: number): number | null {
-        if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+        if (
+            typeof value !== "number" ||
+            !Number.isFinite(value) ||
+            value <= 0
+        ) {
             return null;
         }
-        const seconds = value > 10_000 ? Math.round(value / 1000) : Math.round(value);
+        const seconds =
+            value > 10_000 ? Math.round(value / 1000) : Math.round(value);
         if (seconds <= 0 || seconds > 6 * 60 * 60) return null;
         return seconds;
     }
 
-    private durationSimilarity(expected?: number, candidate?: number): number | null {
+    private durationSimilarity(
+        expected?: number,
+        candidate?: number,
+    ): number | null {
         const expectedSeconds = this.normaliseDurationSeconds(expected);
         const candidateSeconds = this.normaliseDurationSeconds(candidate);
         if (expectedSeconds === null || candidateSeconds === null) return null;
@@ -844,53 +896,66 @@ class YouTubeMusicService {
                 : [];
         const fromList = Array.isArray(candidate?.artists)
             ? candidate.artists.filter(
-                (artist: unknown) =>
-                    typeof artist === "string" && artist.trim()
-            )
+                  (artist: unknown) =>
+                      typeof artist === "string" && artist.trim(),
+              )
             : [];
         return Array.from(new Set([...fromPrimary, ...fromList]));
     }
 
     private extractCandidateAlbum(candidate: any): string {
         if (typeof candidate?.album === "string") return candidate.album;
-        if (typeof candidate?.album?.name === "string") return candidate.album.name;
-        if (typeof candidate?.album?.title === "string") return candidate.album.title;
+        if (typeof candidate?.album?.name === "string")
+            return candidate.album.name;
+        if (typeof candidate?.album?.title === "string")
+            return candidate.album.title;
         return "";
     }
 
-    private scoreCandidate(
-        track: YtMusicMatchInput,
-        candidate: any
-    ): number {
-        const titleScore = this.textSimilarity(track.title, candidate?.title || "");
+    private scoreCandidate(track: YtMusicMatchInput, candidate: any): number {
+        const titleScore = this.textSimilarity(
+            track.title,
+            candidate?.title || "",
+        );
         const artistCandidates = this.extractCandidateArtists(candidate);
         const artistScore = artistCandidates.length
             ? Math.max(
-                ...artistCandidates.map((artistName) =>
-                    this.textSimilarity(track.artist, artistName)
-                )
-            )
+                  ...artistCandidates.map((artistName) =>
+                      this.textSimilarity(track.artist, artistName),
+                  ),
+              )
             : this.textSimilarity(track.artist, candidate?.artist || "");
         const albumScore =
             track.albumTitle && this.extractCandidateAlbum(candidate)
-                ? this.textSimilarity(track.albumTitle, this.extractCandidateAlbum(candidate))
+                ? this.textSimilarity(
+                      track.albumTitle,
+                      this.extractCandidateAlbum(candidate),
+                  )
                 : null;
-        const durationScore = this.durationSimilarity(track.duration, parseDuration(candidate));
+        const durationScore = this.durationSimilarity(
+            track.duration,
+            parseDuration(candidate),
+        );
 
         const weightedSignals: Array<{ score: number; weight: number }> = [
             { score: titleScore, weight: 0.56 },
             { score: artistScore, weight: 0.32 },
         ];
-        if (albumScore !== null) weightedSignals.push({ score: albumScore, weight: 0.12 });
-        if (durationScore !== null) weightedSignals.push({ score: durationScore, weight: 0.2 });
+        if (albumScore !== null)
+            weightedSignals.push({ score: albumScore, weight: 0.12 });
+        if (durationScore !== null)
+            weightedSignals.push({ score: durationScore, weight: 0.2 });
 
-        const totalWeight = weightedSignals.reduce((sum, entry) => sum + entry.weight, 0);
+        const totalWeight = weightedSignals.reduce(
+            (sum, entry) => sum + entry.weight,
+            0,
+        );
         let score =
             totalWeight > 0
                 ? weightedSignals.reduce(
-                    (sum, entry) => sum + entry.score * entry.weight,
-                    0
-                ) / totalWeight
+                      (sum, entry) => sum + entry.score * entry.weight,
+                      0,
+                  ) / totalWeight
                 : 0;
         score -= this.mismatchPenalty(track.title, candidate?.title || "");
 
@@ -909,7 +974,7 @@ class YouTubeMusicService {
             artistCandidates.some(
                 (artistName) =>
                     this.normaliseCompact(track.artist) ===
-                    this.normaliseCompact(artistName)
+                    this.normaliseCompact(artistName),
             )
         ) {
             score += 0.05;
@@ -920,7 +985,7 @@ class YouTubeMusicService {
 
     private selectBestCandidate(
         track: YtMusicMatchInput,
-        candidates: any[]
+        candidates: any[],
     ): any | null {
         const viable = candidates.filter((candidate) => !!candidate?.videoId);
         if (!viable.length) return null;
@@ -946,7 +1011,7 @@ class YouTubeMusicService {
 
     private toMatchResult(
         candidate: any,
-        fallbackTitle: string
+        fallbackTitle: string,
     ): { videoId: string; title: string; duration: number } {
         return {
             videoId: candidate.videoId,
@@ -971,7 +1036,7 @@ class YouTubeMusicService {
         title: string,
         albumTitle?: string,
         duration?: number,
-        isrc?: string
+        isrc?: string,
     ): Promise<{ videoId: string; title: string; duration: number } | null> {
         const cleanArtist = this.sanitizeQuery(artist);
         const cleanTitle = this.sanitizeQuery(title);
@@ -990,7 +1055,7 @@ class YouTubeMusicService {
             if (result.results?.length) {
                 const match = this.selectBestCandidate(
                     sourceTrack,
-                    result.results
+                    result.results,
                 );
                 if (match) return this.toMatchResult(match, title);
             }
@@ -1003,7 +1068,7 @@ class YouTubeMusicService {
             const result = await this.search(userId, shortQuery);
             const song = this.selectBestCandidate(
                 sourceTrack,
-                result.results || []
+                result.results || [],
             );
             if (song) return this.toMatchResult(song, title);
         } catch {
@@ -1018,13 +1083,13 @@ class YouTubeMusicService {
                 const result = await this.search(userId, longQuery);
                 const song = this.selectBestCandidate(
                     { ...sourceTrack, albumTitle: cleanAlbum },
-                    result.results || []
+                    result.results || [],
                 );
                 if (song) return this.toMatchResult(song, title);
             } catch (err) {
                 logger.warn(
                     `[YTMusic] All search attempts failed for "${artist} - ${title}":`,
-                    err
+                    err,
                 );
             }
         }
@@ -1034,7 +1099,10 @@ class YouTubeMusicService {
 
     // ── Browse (unauthenticated) ─────────────────────────────────
 
-    async getCharts(country: string = "US", userId?: string): Promise<Record<string, any[]>> {
+    async getCharts(
+        country: string = "US",
+        userId?: string,
+    ): Promise<Record<string, any[]>> {
         const { data } = await this.client.get("/charts", {
             params: { country, ...(userId ? { user_id: userId } : {}) },
             timeout: 15_000,
@@ -1042,8 +1110,13 @@ class YouTubeMusicService {
         return data;
     }
 
-    async getMoodCategories(userId?: string): Promise<
-        Array<{ title: string; items: Array<{ title: string; params: string }> }>
+    async getMoodCategories(
+        userId?: string,
+    ): Promise<
+        Array<{
+            title: string;
+            items: Array<{ title: string; params: string }>;
+        }>
     > {
         const { data } = await this.client.get("/moods-and-genres", {
             params: userId ? { user_id: userId } : {},
@@ -1097,7 +1170,7 @@ class YouTubeMusicService {
     async getBrowsePlaylist(
         playlistId: string,
         limit: number = 100,
-        userId?: string
+        userId?: string,
     ): Promise<{
         id: string;
         title: string;
@@ -1148,10 +1221,9 @@ class YouTubeMusicService {
         }>;
         description: string | null;
     }> {
-        const { data } = await this.client.get(
-            `/browse-album/${browseId}`,
-            { timeout: 15_000 }
-        );
+        const { data } = await this.client.get(`/browse-album/${browseId}`, {
+            timeout: 15_000,
+        });
         return data;
     }
 }

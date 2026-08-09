@@ -16,8 +16,12 @@ describe("health endpoint contract", () => {
         const indexPath = path.resolve(__dirname, "../index.ts");
         const indexSource = fs.readFileSync(indexPath, "utf8");
 
-        expect(indexSource).toContain("!isStartupComplete || getRuntimeDrainState()");
-        expect(indexSource).toContain("createDependencyReadinessTracker(\"api\")");
+        expect(indexSource).toContain(
+            "!isStartupComplete || getRuntimeDrainState()",
+        );
+        expect(indexSource).toContain(
+            'createDependencyReadinessTracker("api")',
+        );
         expect(indexSource).toContain("dependencyReadiness.isHealthy()");
         expect(indexSource).toContain("isStartupComplete = true;");
         expect(indexSource).toContain("setRuntimeDrainState(true);");

@@ -1,7 +1,10 @@
 import express from "express";
 import request from "supertest";
 
-import { createFeatureDisabledHandler, sendFeatureDisabled } from "../featureGate";
+import {
+    createFeatureDisabledHandler,
+    sendFeatureDisabled,
+} from "../featureGate";
 
 describe("createFeatureDisabledHandler", () => {
     const app = express();
@@ -46,7 +49,7 @@ describe("sendFeatureDisabled", () => {
         });
 
         const res = await request(app).post(
-            "/api/enrichment/reset-audio-analysis"
+            "/api/enrichment/reset-audio-analysis",
         );
 
         expect(res.status).toBe(404);

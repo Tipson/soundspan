@@ -67,12 +67,12 @@ describe("imageStorage service", () => {
         const result = await downloadAndStoreImage(
             "https://img.example.com/a.jpg",
             "artist-1",
-            "artist"
+            "artist",
         );
 
         expect(mockMkdirSync).toHaveBeenCalledWith(
             "/tmp/covers/artists",
-            expect.objectContaining({ recursive: true })
+            expect.objectContaining({ recursive: true }),
         );
         expect(fetchMock).toHaveBeenCalledWith(
             "https://img.example.com/a.jpg",
@@ -81,11 +81,11 @@ describe("imageStorage service", () => {
                     "User-Agent": expect.stringContaining("soundspan"),
                 }),
                 signal: "timeout-signal",
-            })
+            }),
         );
         expect(mockWriteFileSync).toHaveBeenCalledWith(
             "/tmp/covers/artists/artist-1.jpg",
-            expect.any(Buffer)
+            expect.any(Buffer),
         );
         expect(result).toBe("native:artists/artist-1.jpg");
     });
@@ -101,7 +101,7 @@ describe("imageStorage service", () => {
         const result = await downloadAndStoreImage(
             "https://img.example.com/missing.jpg",
             "album-1",
-            "album"
+            "album",
         );
 
         expect(result).toBeNull();
@@ -118,7 +118,7 @@ describe("imageStorage service", () => {
         const result = await downloadAndStoreImage(
             "https://img.example.com/not-image",
             "album-2",
-            "album"
+            "album",
         );
 
         expect(result).toBeNull();
@@ -135,7 +135,7 @@ describe("imageStorage service", () => {
         const result = await downloadAndStoreImage(
             "https://img.example.com/tiny.png",
             "album-3",
-            "album"
+            "album",
         );
 
         expect(result).toBeNull();
@@ -147,18 +147,18 @@ describe("imageStorage service", () => {
         const result = await downloadAndStoreImage(
             "https://img.example.com/fail.jpg",
             "album-4",
-            "album"
+            "album",
         );
 
         expect(result).toBeNull();
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ImageStorage] Download failed: network error"
+            "[ImageStorage] Download failed: network error",
         );
     });
 
     it("resolves local image path helpers correctly", () => {
         mockExistsSync.mockImplementation((target: string) =>
-            target.endsWith("/covers/albums/album-5.jpg")
+            target.endsWith("/covers/albums/album-5.jpg"),
         );
 
         expect(localImageExists("https://remote/image.jpg")).toBe(false);
@@ -168,18 +168,20 @@ describe("imageStorage service", () => {
         expect(getLocalImagePath("http://remote")).toBeNull();
         expect(getLocalImagePath("native:albums/missing.jpg")).toBeNull();
         expect(getLocalImagePath("native:albums/album-5.jpg")).toBe(
-            "/tmp/covers/albums/album-5.jpg"
+            "/tmp/covers/albums/album-5.jpg",
         );
     });
 
     it("deletes local image when file exists and handles failure", () => {
         mockExistsSync.mockImplementation((target: string) =>
-            target.endsWith("/covers/albums/album-6.jpg")
+            target.endsWith("/covers/albums/album-6.jpg"),
         );
 
         mockUnlinkSync.mockImplementation(() => undefined);
         expect(deleteLocalImage("native:albums/album-6.jpg")).toBe(true);
-        expect(mockUnlinkSync).toHaveBeenCalledWith("/tmp/covers/albums/album-6.jpg");
+        expect(mockUnlinkSync).toHaveBeenCalledWith(
+            "/tmp/covers/albums/album-6.jpg",
+        );
 
         mockUnlinkSync.mockImplementationOnce(() => {
             throw new Error("permission denied");

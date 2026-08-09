@@ -113,7 +113,9 @@ export class DiscoveryRecommendationsService {
     private async resolveSeedArtistIds(userId: string): Promise<string[]> {
         const seeds = await discoverySeeding.getSeedArtists(userId);
 
-        const mbids = seeds.map((seed) => seed.mbid).filter(Boolean) as string[];
+        const mbids = seeds
+            .map((seed) => seed.mbid)
+            .filter(Boolean) as string[];
         const names = seeds.map((seed) => seed.name).filter(Boolean);
 
         const whereClauses: Array<Record<string, unknown>> = [];
@@ -127,7 +129,7 @@ export class DiscoveryRecommendationsService {
                         equals: name,
                         mode: "insensitive" as const,
                     },
-                }))
+                })),
             );
         }
 
@@ -147,7 +149,7 @@ export class DiscoveryRecommendationsService {
     }
 
     private async buildArtistScoreMap(
-        userId: string
+        userId: string,
     ): Promise<Map<string, number>> {
         const scoreMap = new Map<string, number>();
 
@@ -236,7 +238,7 @@ export class DiscoveryRecommendationsService {
 
     private async getTrackPreferenceScoreMap(
         userId: string,
-        trackIds: string[]
+        trackIds: string[],
     ): Promise<Map<string, number>> {
         if (trackIds.length === 0) {
             return new Map<string, number>();
@@ -294,7 +296,7 @@ export class DiscoveryRecommendationsService {
 
     private async selectTracks(
         userId: string,
-        targetCount: number
+        targetCount: number,
     ): Promise<SelectedTrack[]> {
         const strictArtistCap = getArtistCapForTarget(targetCount);
         const relaxedArtistCap = getRelaxedArtistCapForTarget(targetCount);
@@ -311,7 +313,9 @@ export class DiscoveryRecommendationsService {
         });
         const recentTrackIds = recentPlays
             .map((play) => play.trackId)
-            .filter((trackId): trackId is string => typeof trackId === "string");
+            .filter(
+                (trackId): trackId is string => typeof trackId === "string",
+            );
 
         const activeExclusions = await prisma.discoverExclusion.findMany({
             where: {
@@ -320,7 +324,9 @@ export class DiscoveryRecommendationsService {
             },
             select: { albumMbid: true },
         });
-        const excludedAlbumMbids = activeExclusions.map((entry) => entry.albumMbid);
+        const excludedAlbumMbids = activeExclusions.map(
+            (entry) => entry.albumMbid,
+        );
 
         const candidateTracks = await prisma.track.findMany({
             where: {
@@ -356,18 +362,21 @@ export class DiscoveryRecommendationsService {
         });
         const candidatePreferenceScores = await this.getTrackPreferenceScoreMap(
             userId,
-            candidateTracks.map((track) => track.id)
+            candidateTracks.map((track) => track.id),
         );
 
         const scoredCandidates = candidateTracks
             .map((track) => {
-                const artistScore = artistScores.get(track.album.artistId) ?? 0.35;
-                const baseScore = clampSimilarity(artistScore + randomJitter(0.14));
+                const artistScore =
+                    artistScores.get(track.album.artistId) ?? 0.35;
+                const baseScore = clampSimilarity(
+                    artistScore + randomJitter(0.14),
+                );
                 const score = clampSimilarity(
                     applyTrackPreferenceSimilarityBias(
                         baseScore,
-                        candidatePreferenceScores.get(track.id) ?? 0
-                    )
+                        candidatePreferenceScores.get(track.id) ?? 0,
+                    ),
                 );
                 return {
                     track,
@@ -386,7 +395,10 @@ export class DiscoveryRecommendationsService {
             (selectedArtistCounts.get(artistId) ?? 0) < cap;
 
         const recordSelectedArtist = (artistId: string): void => {
-            selectedArtistCounts.set(artistId, (selectedArtistCounts.get(artistId) ?? 0) + 1);
+            selectedArtistCounts.set(
+                artistId,
+                (selectedArtistCounts.get(artistId) ?? 0) + 1,
+            );
         };
 
         const deferredPrimaryCandidates: typeof scoredCandidates = [];
@@ -395,7 +407,12 @@ export class DiscoveryRecommendationsService {
             if (selected.length >= targetCount) break;
             if (selectedTrackIds.has(candidate.track.id)) continue;
             if (selectedAlbumIds.has(candidate.track.albumId)) continue;
-            if (!canSelectArtist(candidate.track.album.artist.id, strictArtistCap)) {
+            if (
+                !canSelectArtist(
+                    candidate.track.album.artist.id,
+                    strictArtistCap,
+                )
+            ) {
                 deferredPrimaryCandidates.push(candidate);
                 continue;
             }
@@ -429,7 +446,7 @@ export class DiscoveryRecommendationsService {
                 if (
                     !canSelectArtist(
                         candidate.track.album.artist.id,
-                        relaxedArtistCap
+                        relaxedArtistCap,
                     )
                 ) {
                     continue;
@@ -485,10 +502,11 @@ export class DiscoveryRecommendationsService {
                 take: Math.max(targetCount * 10, 180),
                 orderBy: [{ updatedAt: "desc" }],
             });
-            const fallbackPreferenceScores = await this.getTrackPreferenceScoreMap(
-                userId,
-                fallbackTracks.map((track) => track.id)
-            );
+            const fallbackPreferenceScores =
+                await this.getTrackPreferenceScoreMap(
+                    userId,
+                    fallbackTracks.map((track) => track.id),
+                );
 
             const deferredFallbackTracks: typeof fallbackTracks = [];
 
@@ -508,8 +526,8 @@ export class DiscoveryRecommendationsService {
                 const fallbackSimilarity = clampSimilarity(
                     applyTrackPreferenceSimilarityBias(
                         0.34 + randomJitter(0.15),
-                        fallbackPreferenceScores.get(track.id) ?? 0
-                    )
+                        fallbackPreferenceScores.get(track.id) ?? 0,
+                    ),
                 );
                 selected.push({
                     trackId: track.id,
@@ -533,7 +551,12 @@ export class DiscoveryRecommendationsService {
                     if (selected.length >= targetCount) break;
                     if (selectedTrackIds.has(track.id)) continue;
                     if (selectedAlbumIds.has(track.albumId)) continue;
-                    if (!canSelectArtist(track.album.artist.id, relaxedArtistCap)) {
+                    if (
+                        !canSelectArtist(
+                            track.album.artist.id,
+                            relaxedArtistCap,
+                        )
+                    ) {
                         continue;
                     }
 
@@ -544,8 +567,8 @@ export class DiscoveryRecommendationsService {
                     const fallbackSimilarity = clampSimilarity(
                         applyTrackPreferenceSimilarityBias(
                             0.34 + randomJitter(0.15),
-                            fallbackPreferenceScores.get(track.id) ?? 0
-                        )
+                            fallbackPreferenceScores.get(track.id) ?? 0,
+                        ),
                     );
                     selected.push({
                         trackId: track.id,
@@ -568,7 +591,7 @@ export class DiscoveryRecommendationsService {
 
         return separateArtists(
             selected.slice(0, targetCount),
-            (t) => t.artistId
+            (t) => t.artistId,
         );
     }
 
@@ -579,7 +602,10 @@ export class DiscoveryRecommendationsService {
             throw new Error("Discovery Weekly not enabled");
         }
 
-        const targetCount = Math.max(5, Math.min(50, userConfig.playlistSize || 10));
+        const targetCount = Math.max(
+            5,
+            Math.min(50, userConfig.playlistSize || 10),
+        );
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
         const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
         const selectedTracks = await this.selectTracks(userId, targetCount);
@@ -645,7 +671,10 @@ export class DiscoveryRecommendationsService {
                 });
 
                 if (userConfig.exclusionMonths > 0) {
-                    const expiresAt = addMonths(now, userConfig.exclusionMonths);
+                    const expiresAt = addMonths(
+                        now,
+                        userConfig.exclusionMonths,
+                    );
                     await tx.discoverExclusion.upsert({
                         where: {
                             userId_albumMbid: {
@@ -678,7 +707,7 @@ export class DiscoveryRecommendationsService {
         });
 
         logger.info(
-            `[DiscoveryRecommendations] Generated ${selectedTracks.length} recommendation tracks for user ${userId}`
+            `[DiscoveryRecommendations] Generated ${selectedTracks.length} recommendation tracks for user ${userId}`,
         );
 
         return {
@@ -724,7 +753,9 @@ export class DiscoveryRecommendationsService {
               })
             : [];
 
-        const trackById = new Map(libraryTracks.map((track) => [track.id, track]));
+        const trackById = new Map(
+            libraryTracks.map((track) => [track.id, track]),
+        );
 
         const tracks: CurrentPlaylistTrack[] = [];
 
@@ -734,7 +765,9 @@ export class DiscoveryRecommendationsService {
                 const track = trackById.get(discoveryTrack.trackId);
                 if (!track) continue;
 
-                const similarity = clampSimilarity(discoveryAlbum.similarity ?? 0.35);
+                const similarity = clampSimilarity(
+                    discoveryAlbum.similarity ?? 0.35,
+                );
                 const tier =
                     (discoveryAlbum.tier as RecommendationTier | null) ||
                     similarityToTier(similarity);
@@ -767,7 +800,9 @@ export class DiscoveryRecommendationsService {
         };
     }
 
-    async clearCurrentPlaylist(userId: string): Promise<{ clearedCount: number }> {
+    async clearCurrentPlaylist(
+        userId: string,
+    ): Promise<{ clearedCount: number }> {
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
         const existing = await prisma.discoveryAlbum.findMany({

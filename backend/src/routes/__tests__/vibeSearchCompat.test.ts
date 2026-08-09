@@ -60,7 +60,10 @@ jest.mock("../../services/umapProjection", () => ({
 
 jest.mock("../../utils/embedding", () => ({
     parseEmbedding: jest.fn((text: string) => {
-        const values = text.replace(/[\[\]]/g, "").split(",").map(Number);
+        const values = text
+            .replace(/[\[\]]/g, "")
+            .split(",")
+            .map(Number);
         return values;
     }),
 }));
@@ -105,7 +108,7 @@ const mockRerankWithFeatures = rerankWithFeatures as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -115,7 +118,8 @@ function getGetHandler(path: string) {
 
 function getPostHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.post
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.post,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -162,12 +166,16 @@ describe("vibe search transport compatibility", () => {
             computedAt: "2026-03-14T00:00:00.000Z",
         });
         mockGetVocabulary.mockReturnValue(null);
-        mockExpandQueryWithVocabulary.mockImplementation((embedding: number[]) => ({
-            embedding,
-            genreConfidence: 0,
-            matchedTerms: [],
-        }));
-        mockRerankWithFeatures.mockImplementation((tracks: unknown[]) => tracks);
+        mockExpandQueryWithVocabulary.mockImplementation(
+            (embedding: number[]) => ({
+                embedding,
+                genreConfidence: 0,
+                matchedTerms: [],
+            }),
+        );
+        mockRerankWithFeatures.mockImplementation(
+            (tracks: unknown[]) => tracks,
+        );
     });
 
     it("returns vibe map projection data and handles projection errors", async () => {
@@ -209,11 +217,11 @@ describe("vibe search transport compatibility", () => {
                         y: 0.75,
                     }),
                 ],
-            })
+            }),
         );
 
         mockComputeMapProjection.mockRejectedValueOnce(
-            new Error("projection failed")
+            new Error("projection failed"),
         );
         const errRes = createRes();
         await mapHandler(req, errRes);
@@ -276,10 +284,12 @@ describe("vibe search transport compatibility", () => {
                         }),
                     }),
                 ],
-            })
+            }),
         );
 
-        mockFindSimilarTracks.mockRejectedValueOnce(new Error("similar failed"));
+        mockFindSimilarTracks.mockRejectedValueOnce(
+            new Error("similar failed"),
+        );
         const errReq = {
             params: { trackId: "t-1" },
             query: {},
@@ -342,12 +352,12 @@ describe("vibe search transport compatibility", () => {
             expect.objectContaining({
                 id: "track-liked",
                 similarity: expect.any(Number),
-            })
+            }),
         );
         expect(res.body.tracks[1]).toEqual(
             expect.objectContaining({
                 id: "track-disliked",
-            })
+            }),
         );
     });
 
@@ -370,7 +380,9 @@ describe("vibe search transport compatibility", () => {
         const errRes = createRes();
         await statusHandler(req, errRes);
         expect(errRes.statusCode).toBe(500);
-        expect(errRes.body).toEqual({ error: "Failed to get embedding status" });
+        expect(errRes.body).toEqual({
+            error: "Failed to get embedding status",
+        });
     });
 
     it("uses stream request + response list and returns search results", async () => {
@@ -427,7 +439,7 @@ describe("vibe search transport compatibility", () => {
                         title: "Track One",
                     }),
                 ],
-            })
+            }),
         );
         expect(mockRedisXAdd).toHaveBeenCalledWith(
             "audio:text:embed:requests",
@@ -436,13 +448,15 @@ describe("vibe search transport compatibility", () => {
                 requestId: "req-123",
                 text: "upbeat synthwave",
                 responseKey: "audio:text:embed:response:req-123",
-            })
+            }),
         );
         expect(mockRedisBlPop).toHaveBeenCalledWith(
             "audio:text:embed:response:req-123",
-            30
+            30,
         );
-        expect(mockRedisDel).toHaveBeenCalledWith("audio:text:embed:response:req-123");
+        expect(mockRedisDel).toHaveBeenCalledWith(
+            "audio:text:embed:response:req-123",
+        );
     });
 
     it("returns 504 when no embedding response arrives before timeout", async () => {
@@ -469,9 +483,11 @@ describe("vibe search transport compatibility", () => {
                 requestId: "req-123",
                 text: "melancholic piano",
                 responseKey: "audio:text:embed:response:req-123",
-            })
+            }),
         );
-        expect(mockRedisDel).toHaveBeenCalledWith("audio:text:embed:response:req-123");
+        expect(mockRedisDel).toHaveBeenCalledWith(
+            "audio:text:embed:response:req-123",
+        );
         expect(mockRunAnnQuery).not.toHaveBeenCalled();
     });
 
@@ -495,7 +511,9 @@ describe("vibe search transport compatibility", () => {
         const parseRes = createRes();
         await searchHandler(parseReq, parseRes);
         expect(parseRes.statusCode).toBe(500);
-        expect(parseRes.body).toEqual({ error: "Failed to search tracks by vibe" });
+        expect(parseRes.body).toEqual({
+            error: "Failed to search tracks by vibe",
+        });
 
         mockRedisBlPop.mockResolvedValueOnce({
             key: "audio:text:embed:response:req-123",
@@ -514,7 +532,9 @@ describe("vibe search transport compatibility", () => {
         const payloadErrRes = createRes();
         await searchHandler(payloadErrReq, payloadErrRes);
         expect(payloadErrRes.statusCode).toBe(500);
-        expect(payloadErrRes.body).toEqual({ error: "Failed to search tracks by vibe" });
+        expect(payloadErrRes.body).toEqual({
+            error: "Failed to search tracks by vibe",
+        });
 
         mockRedisBlPop.mockResolvedValueOnce({
             key: "audio:text:embed:response:req-123",
@@ -618,7 +638,7 @@ describe("vibe search transport compatibility", () => {
                     matchedTerms: ["energetic"],
                     genreConfidence: 0.8,
                 }),
-            })
+            }),
         );
         expect(mockExpandQueryWithVocabulary).toHaveBeenCalled();
         expect(mockRerankWithFeatures).toHaveBeenCalled();
@@ -635,10 +655,28 @@ describe("vibe search transport compatibility", () => {
             // Per-step nearest-neighbour search routes through the ANN helper
             mockRunAnnQuery
                 .mockResolvedValueOnce([
-                    { id: "mid-1", title: "Mid One", distance: 0.1, albumId: "a-1", albumTitle: "A1", albumCoverUrl: null, artistId: "ar-1", artistName: "Artist 1" },
+                    {
+                        id: "mid-1",
+                        title: "Mid One",
+                        distance: 0.1,
+                        albumId: "a-1",
+                        albumTitle: "A1",
+                        albumCoverUrl: null,
+                        artistId: "ar-1",
+                        artistName: "Artist 1",
+                    },
                 ])
                 .mockResolvedValueOnce([
-                    { id: "mid-2", title: "Mid Two", distance: 0.15, albumId: "a-2", albumTitle: "A2", albumCoverUrl: null, artistId: "ar-2", artistName: "Artist 2" },
+                    {
+                        id: "mid-2",
+                        title: "Mid Two",
+                        distance: 0.15,
+                        albumId: "a-2",
+                        albumTitle: "A2",
+                        albumCoverUrl: null,
+                        artistId: "ar-2",
+                        artistName: "Artist 2",
+                    },
                 ]);
 
             const req = {
@@ -651,12 +689,15 @@ describe("vibe search transport compatibility", () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.steps).toHaveLength(2);
             expect(res.body.steps[0]).toEqual(
-                expect.objectContaining({ id: "mid-1" })
+                expect.objectContaining({ id: "mid-1" }),
             );
         });
 
         it("returns 400 when from or to track IDs are missing", async () => {
-            const req = { query: { from: "track-1" }, user: { id: "user-1" } } as any;
+            const req = {
+                query: { from: "track-1" },
+                user: { id: "user-1" },
+            } as any;
             const res = createRes();
             await pathHandler(req, res);
 
@@ -687,7 +728,16 @@ describe("vibe search transport compatibility", () => {
                 .mockResolvedValueOnce([{ embedding: "[0,1,0]" }]);
             // Nearest-neighbour search from the blended embedding via the ANN helper
             mockRunAnnQuery.mockResolvedValueOnce([
-                { id: "result-1", title: "Blended Hit", distance: 0.2, albumId: "a-1", albumTitle: "A1", albumCoverUrl: null, artistId: "ar-1", artistName: "Artist 1" },
+                {
+                    id: "result-1",
+                    title: "Blended Hit",
+                    distance: 0.2,
+                    albumId: "a-1",
+                    albumTitle: "A1",
+                    albumCoverUrl: null,
+                    artistId: "ar-1",
+                    artistName: "Artist 1",
+                },
             ]);
 
             const req = {
@@ -700,7 +750,7 @@ describe("vibe search transport compatibility", () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.tracks).toHaveLength(1);
             expect(res.body.tracks[0]).toEqual(
-                expect.objectContaining({ id: "result-1" })
+                expect.objectContaining({ id: "result-1" }),
             );
         });
 
@@ -709,11 +759,24 @@ describe("vibe search transport compatibility", () => {
                 .mockResolvedValueOnce([{ embedding: "[1,0,0]" }])
                 .mockResolvedValueOnce([{ embedding: "[0,1,0]" }]);
             mockRunAnnQuery.mockResolvedValueOnce([
-                { id: "result-1", title: "Weighted", distance: 0.1, albumId: "a-1", albumTitle: "A1", albumCoverUrl: null, artistId: "ar-1", artistName: "Artist 1" },
+                {
+                    id: "result-1",
+                    title: "Weighted",
+                    distance: 0.1,
+                    albumId: "a-1",
+                    albumTitle: "A1",
+                    albumCoverUrl: null,
+                    artistId: "ar-1",
+                    artistName: "Artist 1",
+                },
             ]);
 
             const req = {
-                body: { trackIds: ["track-a", "track-b"], weights: [0.8, 0.2], limit: 5 },
+                body: {
+                    trackIds: ["track-a", "track-b"],
+                    weights: [0.8, 0.2],
+                    limit: 5,
+                },
                 user: { id: "user-1" },
             } as any;
             const res = createRes();

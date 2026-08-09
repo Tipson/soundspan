@@ -10,11 +10,13 @@ describe("workers/queues", () => {
     function loadQueues(redisUrl: string) {
         process.env = { ...originalEnv };
 
-        const bullCtor = jest.fn().mockImplementation((name: string, options: unknown) => ({
-            name,
-            options,
-            on: jest.fn(),
-        }));
+        const bullCtor = jest
+            .fn()
+            .mockImplementation((name: string, options: unknown) => ({
+                name,
+                options,
+                on: jest.fn(),
+            }));
 
         const logger = {
             debug: jest.fn(),
@@ -43,7 +45,7 @@ describe("workers/queues", () => {
 
     it("parses rediss URL into Bull redis config including TLS", () => {
         const { bullCtor, queuesModule, logger } = loadQueues(
-            "rediss://user:pass@cache.example:6381/2"
+            "rediss://user:pass@cache.example:6381/2",
         );
 
         expect(bullCtor).toHaveBeenCalledTimes(6);
@@ -59,11 +61,11 @@ describe("workers/queues", () => {
                 password: "pass",
                 db: 2,
                 tls: {},
-            })
+            }),
         );
         expect(queuesModule.queues).toHaveLength(6);
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Redis config resolved")
+            expect.stringContaining("Redis config resolved"),
         );
     });
 
@@ -76,7 +78,7 @@ describe("workers/queues", () => {
             port: 6379,
         });
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Failed to parse REDIS_URL")
+            expect.stringContaining("Failed to parse REDIS_URL"),
         );
     });
 
@@ -84,7 +86,7 @@ describe("workers/queues", () => {
         const { bullCtor } = loadQueues("redis://cache.example:6379/0");
 
         const scanCall = bullCtor.mock.calls.find(
-            (call: any[]) => call[0] === "library-scan"
+            (call: any[]) => call[0] === "library-scan",
         );
         expect(scanCall).toBeDefined();
         // Most scanQueue.add() sites enqueue without per-job retention options,
@@ -102,10 +104,10 @@ describe("workers/queues", () => {
 
         const firstQueueInstance = bullCtor.mock.results[0].value;
         const errorHandler = firstQueueInstance.on.mock.calls.find(
-            (call: any[]) => call[0] === "error"
+            (call: any[]) => call[0] === "error",
         )?.[1];
         const stalledHandler = firstQueueInstance.on.mock.calls.find(
-            (call: any[]) => call[0] === "stalled"
+            (call: any[]) => call[0] === "stalled",
         )?.[1];
 
         const err = new Error("queue exploded");
@@ -117,17 +119,17 @@ describe("workers/queues", () => {
             {
                 message: "queue exploded",
                 stack: expect.any(String),
-            }
+            },
         );
         expect(logger.warn).toHaveBeenCalledWith(
             "Bull job stalled (library-scan):",
             {
                 jobId: "job-1",
                 data: { payload: true },
-            }
+            },
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "Bull queues initialized with stability settings"
+            "Bull queues initialized with stability settings",
         );
     });
 });

@@ -31,15 +31,19 @@ jest.mock("../../utils/db", () => ({ prisma: mockPrisma }));
 jest.mock("../../utils/redis", () => ({ redisClient: mockRedisClient }));
 jest.mock("../../utils/logger", () => ({ logger: mockLogger }));
 jest.mock("fs", () => ({ existsSync: jest.fn() }));
-jest.mock("music-metadata", () => ({
-    parseFile: mockParseFile,
-}), { virtual: true });
+jest.mock(
+    "music-metadata",
+    () => ({
+        parseFile: mockParseFile,
+    }),
+    { virtual: true },
+);
 
 import { getLyrics, clearLyricsCache } from "../lyrics";
 
 const buildAxiosError = (
     status: number,
-    headers: Record<string, unknown> = {}
+    headers: Record<string, unknown> = {},
 ) => {
     const error = new Error(`HTTP ${status}`) as any;
     error.response = { status, headers };
@@ -48,7 +52,9 @@ const buildAxiosError = (
 
 describe("lyrics service", () => {
     const mockAxiosGet = axios.get as jest.MockedFunction<typeof axios.get>;
-    const mockFsExistsSync = fs.existsSync as jest.MockedFunction<typeof fs.existsSync>;
+    const mockFsExistsSync = fs.existsSync as jest.MockedFunction<
+        typeof fs.existsSync
+    >;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -102,7 +108,7 @@ describe("lyrics service", () => {
                 plainLyrics: "cached external",
                 source: "lrclib",
                 synced: false,
-            })
+            }),
         );
 
         const result = await getLyrics("track-missing", lookupContext);
@@ -114,7 +120,7 @@ describe("lyrics service", () => {
             synced: false,
         });
         expect(mockRedisClient.get).toHaveBeenCalledWith(
-            "lyrics:external:artist name:song live:album 1:123"
+            "lyrics:external:artist name:song live:album 1:123",
         );
         expect(mockPrisma.trackLyrics.upsert).not.toHaveBeenCalled();
         expect(mockRedisClient.setEx).not.toHaveBeenCalled();
@@ -269,7 +275,7 @@ describe("lyrics service", () => {
             },
         });
         const getCall = mockAxiosGet.mock.calls.find(([url]) =>
-            String(url).endsWith("/get")
+            String(url).endsWith("/get"),
         );
         expect(getCall).toBeDefined();
     });
@@ -322,7 +328,7 @@ describe("lyrics service", () => {
         });
 
         const getCall = mockAxiosGet.mock.calls.find(([url]) =>
-            String(url).endsWith("/get")
+            String(url).endsWith("/get"),
         );
         expect(getCall).toBeDefined();
         expect(getCall?.[1]).toEqual(
@@ -332,10 +338,12 @@ describe("lyrics service", () => {
                     track_name: "Network Song",
                     duration: 180,
                 }),
-            })
+            }),
         );
         expect(
-            mockAxiosGet.mock.calls.some(([url]) => String(url).endsWith("/search"))
+            mockAxiosGet.mock.calls.some(([url]) =>
+                String(url).endsWith("/search"),
+            ),
         ).toBe(false);
     });
 
@@ -387,7 +395,7 @@ describe("lyrics service", () => {
         expect(mockRedisClient.setEx).toHaveBeenCalledWith(
             missCacheKey,
             30 * 24 * 60 * 60,
-            missPayload
+            missPayload,
         );
     });
 
@@ -462,10 +470,10 @@ describe("lyrics service", () => {
         });
 
         const getCalls = mockAxiosGet.mock.calls.filter(([url]) =>
-            String(url).endsWith("/get")
+            String(url).endsWith("/get"),
         );
         const searchCalls = mockAxiosGet.mock.calls.filter(([url]) =>
-            String(url).endsWith("/search")
+            String(url).endsWith("/search"),
         );
         expect(getCalls.length).toBeGreaterThan(0);
         expect(searchCalls).toHaveLength(1);
@@ -484,7 +492,9 @@ describe("lyrics service", () => {
             },
         });
         mockRedisClient.get.mockResolvedValue(null);
-        mockAxiosGet.mockRejectedValue(buildAxiosError(429, { "retry-after": "12" }));
+        mockAxiosGet.mockRejectedValue(
+            buildAxiosError(429, { "retry-after": "12" }),
+        );
 
         const result = await getLyrics("track-backoff-429");
 
@@ -497,7 +507,7 @@ describe("lyrics service", () => {
         expect(mockRedisClient.setEx).toHaveBeenCalledWith(
             "lyrics:lrclib:backoff_until",
             12,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -544,10 +554,10 @@ describe("lyrics service", () => {
         });
 
         const getCalls = mockAxiosGet.mock.calls.filter(([url]) =>
-            String(url).endsWith("/get")
+            String(url).endsWith("/get"),
         );
         const searchCalls = mockAxiosGet.mock.calls.filter(([url]) =>
-            String(url).endsWith("/search")
+            String(url).endsWith("/search"),
         );
         expect(getCalls).toHaveLength(0);
         expect(searchCalls).toHaveLength(1);
@@ -561,12 +571,14 @@ describe("lyrics service", () => {
             }
             return null;
         });
-        mockRedisClient.setEx.mockImplementation(async (key: string, _ttl: number, value: string) => {
-            if (key === "lyrics:lrclib:backoff_until") {
-                backoffUntil = value;
-            }
-            return "OK";
-        });
+        mockRedisClient.setEx.mockImplementation(
+            async (key: string, _ttl: number, value: string) => {
+                if (key === "lyrics:lrclib:backoff_until") {
+                    backoffUntil = value;
+                }
+                return "OK";
+            },
+        );
         mockPrisma.track.findUnique.mockResolvedValue({
             id: "track-backoff-array",
             filePath: null,
@@ -578,14 +590,16 @@ describe("lyrics service", () => {
                 artist: { name: "Retry After Array Artist" },
             },
         });
-        mockAxiosGet.mockRejectedValue(buildAxiosError(429, { "retry-after": ["12"] }));
+        mockAxiosGet.mockRejectedValue(
+            buildAxiosError(429, { "retry-after": ["12"] }),
+        );
 
         const first = await getLyrics("track-backoff-array");
         expect(first.source).toBe("none");
         expect(mockRedisClient.setEx).toHaveBeenCalledWith(
             "lyrics:lrclib:backoff_until",
             12,
-            expect.any(String)
+            expect.any(String),
         );
 
         mockAxiosGet.mockClear();
@@ -626,14 +640,14 @@ describe("lyrics service", () => {
         mockAxiosGet.mockRejectedValue(
             buildAxiosError(429, {
                 "retry-after": new Date(Date.now() + 15000).toUTCString(),
-            })
+            }),
         );
 
         const result = await getLyrics("track-backoff-date");
 
         expect(result.source).toBe("none");
         const backoffCall = mockRedisClient.setEx.mock.calls.find(
-            ([key]) => key === "lyrics:lrclib:backoff_until"
+            ([key]) => key === "lyrics:lrclib:backoff_until",
         );
         expect(backoffCall).toBeDefined();
         const ttlSeconds = Number(backoffCall?.[1]);
@@ -676,7 +690,7 @@ describe("lyrics service", () => {
         expect(mockRedisClient.setEx).toHaveBeenCalledWith(
             "lyrics:lrclib:backoff_until",
             120,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -721,7 +735,9 @@ describe("lyrics service", () => {
             synced: false,
         });
         expect(mockLogger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("[Lyrics] Failed to read external lyrics cache")
+            expect.stringContaining(
+                "[Lyrics] Failed to read external lyrics cache",
+            ),
         );
     });
 
@@ -738,7 +754,7 @@ describe("lyrics service", () => {
                 syncedLyrics: "[00:00.00] Cached line",
                 plainLyrics: "Cached line",
                 source: "lrclib",
-            })
+            }),
         );
         mockAxiosGet.mockImplementation(async (url: string) => {
             if (url.endsWith("/search")) {
@@ -763,7 +779,10 @@ describe("lyrics service", () => {
             throw new Error(`Unexpected URL: ${url}`);
         });
 
-        const result = await getLyrics("track-invalid-cache-shape", lookupContext);
+        const result = await getLyrics(
+            "track-invalid-cache-shape",
+            lookupContext,
+        );
 
         expect(result).toEqual({
             syncedLyrics: null,
@@ -772,7 +791,9 @@ describe("lyrics service", () => {
             synced: false,
         });
         expect(mockLogger.warn).not.toHaveBeenCalledWith(
-            expect.stringContaining("[Lyrics] Failed to read external lyrics cache")
+            expect.stringContaining(
+                "[Lyrics] Failed to read external lyrics cache",
+            ),
         );
     });
 
@@ -828,15 +849,17 @@ describe("lyrics service", () => {
             synced: false,
         });
         expect(mockLogger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("[Lyrics] Failed to read LRCLIB backoff state")
+            expect.stringContaining(
+                "[Lyrics] Failed to read LRCLIB backoff state",
+            ),
         );
         expect(mockAxiosGet).toHaveBeenCalledWith(
             expect.stringContaining("/get"),
-            expect.anything()
+            expect.anything(),
         );
         expect(mockAxiosGet).toHaveBeenCalledWith(
             expect.stringContaining("/search"),
-            expect.anything()
+            expect.anything(),
         );
     });
 
@@ -878,7 +901,9 @@ describe("lyrics service", () => {
             synced: false,
         });
         expect(mockLogger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("[Lyrics] Failed to set LRCLIB backoff state")
+            expect.stringContaining(
+                "[Lyrics] Failed to set LRCLIB backoff state",
+            ),
         );
         expect(mockPrisma.trackLyrics.upsert).toHaveBeenCalledWith({
             where: { trackId: "track-backoff-write-failure" },
@@ -931,10 +956,10 @@ describe("lyrics service", () => {
             synced: false,
         });
         expect(mockLogger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("[Lyrics] LRCLIB request failed for")
+            expect.stringContaining("[Lyrics] LRCLIB request failed for"),
         );
         expect(mockLogger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("[Lyrics] LRCLIB search failed for")
+            expect.stringContaining("[Lyrics] LRCLIB search failed for"),
         );
     });
 
@@ -946,7 +971,10 @@ describe("lyrics service", () => {
         mockPrisma.track.findUnique.mockResolvedValue(null);
         mockRedisClient.get.mockResolvedValue(null);
 
-        const result = await getLyrics("track-incomplete-external", lookupContext);
+        const result = await getLyrics(
+            "track-incomplete-external",
+            lookupContext,
+        );
 
         expect(result).toEqual({
             syncedLyrics: null,
@@ -1003,15 +1031,15 @@ describe("lyrics service", () => {
             expect.objectContaining({
                 duration: false,
                 skipCovers: true,
-            })
+            }),
         );
         expect(mockAxiosGet).toHaveBeenCalledWith(
             expect.stringContaining("/search"),
-            expect.anything()
+            expect.anything(),
         );
         expect(mockAxiosGet).not.toHaveBeenCalledWith(
             expect.stringContaining("/get"),
-            expect.anything()
+            expect.anything(),
         );
         expect(result).toEqual({
             syncedLyrics: null,
@@ -1070,10 +1098,12 @@ describe("lyrics service", () => {
         expect(mockRedisClient.setEx).toHaveBeenCalledWith(
             "lyrics:lrclib:backoff_until",
             30,
-            expect.any(String)
+            expect.any(String),
         );
         expect(mockLogger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("LRCLIB request failed for \"5xx Song\" by \"5xx Artist\"")
+            expect.stringContaining(
+                'LRCLIB request failed for "5xx Song" by "5xx Artist"',
+            ),
         );
     });
 
@@ -1117,10 +1147,10 @@ describe("lyrics service", () => {
             synced: false,
         });
         const getCalls = mockAxiosGet.mock.calls.filter(([url]) =>
-            String(url).endsWith("/get")
+            String(url).endsWith("/get"),
         );
         const searchCalls = mockAxiosGet.mock.calls.filter(([url]) =>
-            String(url).endsWith("/search")
+            String(url).endsWith("/search"),
         );
         expect(getCalls).toHaveLength(0);
         expect(searchCalls).toHaveLength(1);
@@ -1134,12 +1164,14 @@ describe("lyrics service", () => {
             }
             return null;
         });
-        mockRedisClient.setEx.mockImplementation(async (key: string, ttl: number, value: string) => {
-            if (key === "lyrics:lrclib:backoff_until") {
-                backoffUntil = value;
-            }
-            return "OK";
-        });
+        mockRedisClient.setEx.mockImplementation(
+            async (key: string, ttl: number, value: string) => {
+                if (key === "lyrics:lrclib:backoff_until") {
+                    backoffUntil = value;
+                }
+                return "OK";
+            },
+        );
         mockPrisma.track.findUnique.mockResolvedValue({
             id: "track-backoff-default",
             filePath: null,
@@ -1155,7 +1187,7 @@ describe("lyrics service", () => {
 
         const first = await getLyrics("track-backoff-default");
         const setBackoffCall = mockRedisClient.setEx.mock.calls.find(
-            ([key]) => key === "lyrics:lrclib:backoff_until"
+            ([key]) => key === "lyrics:lrclib:backoff_until",
         );
         expect(setBackoffCall?.[1]).toBe(120);
         expect(first).toEqual({
@@ -1218,11 +1250,11 @@ describe("lyrics service", () => {
         expect(mockParseFile).not.toHaveBeenCalled();
         expect(mockAxiosGet).toHaveBeenCalledWith(
             expect.stringContaining("/search"),
-            expect.anything()
+            expect.anything(),
         );
         expect(mockAxiosGet).not.toHaveBeenCalledWith(
             expect.stringContaining("/get"),
-            expect.anything()
+            expect.anything(),
         );
     });
 

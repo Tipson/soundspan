@@ -64,7 +64,10 @@ jest.mock("../../services/umapProjection", () => ({
 
 jest.mock("../../utils/embedding", () => ({
     parseEmbedding: jest.fn((text: string) => {
-        const values = text.replace(/[\[\]]/g, "").split(",").map(Number);
+        const values = text
+            .replace(/[\[\]]/g, "")
+            .split(",")
+            .map(Number);
         return values;
     }),
 }));
@@ -92,7 +95,7 @@ const mockRunAnnQuery = runAnnQuery as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -102,7 +105,8 @@ function getGetHandler(path: string) {
 
 function getPostHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.post
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.post,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -160,7 +164,11 @@ describe("vibe journey + moods runtime", () => {
     describe("POST /journey", () => {
         it("returns 400 when both toTrackId and mood are given, and when neither is given", async () => {
             const bothReq = {
-                body: { fromTrackId: "from-1", toTrackId: "dest-1", mood: "happy" },
+                body: {
+                    fromTrackId: "from-1",
+                    toTrackId: "dest-1",
+                    mood: "happy",
+                },
                 user: { id: "user-1" },
             } as any;
             const bothRes = createRes();
@@ -258,8 +266,12 @@ describe("vibe journey + moods runtime", () => {
                 },
             });
             mockRunAnnQuery
-                .mockResolvedValueOnce([nearestRow({ id: "mid-1", title: "Mid One" })])
-                .mockResolvedValueOnce([nearestRow({ id: "mid-2", title: "Mid Two" })]);
+                .mockResolvedValueOnce([
+                    nearestRow({ id: "mid-1", title: "Mid One" }),
+                ])
+                .mockResolvedValueOnce([
+                    nearestRow({ id: "mid-2", title: "Mid Two" }),
+                ]);
 
             const req = {
                 body: { fromTrackId: "from-1", toTrackId: "dest-1", steps: 3 },
@@ -270,9 +282,14 @@ describe("vibe journey + moods runtime", () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body.mode).toBe("track");
-            expect(res.body.target).toEqual({ trackId: "dest-1", title: "Destination Song" });
+            expect(res.body.target).toEqual({
+                trackId: "dest-1",
+                title: "Destination Song",
+            });
             expect(res.body.waypoints).toHaveLength(3);
-            expect(res.body.waypoints[res.body.waypoints.length - 1].id).toBe("dest-1");
+            expect(res.body.waypoints[res.body.waypoints.length - 1].id).toBe(
+                "dest-1",
+            );
         });
 
         it("track mode: every waypoint (intermediate and destination) carries nullable audioFeatures", async () => {
@@ -357,13 +374,19 @@ describe("vibe journey + moods runtime", () => {
             await journeyHandler(req, res);
 
             expect(res.statusCode).toBe(400);
-            expect(res.body.error).toBe("Origin and destination are the same track");
+            expect(res.body.error).toBe(
+                "Origin and destination are the same track",
+            );
             expect(mockQueryRaw).not.toHaveBeenCalled();
         });
 
         it("returns 400 when steps is not an integer", async () => {
             const req = {
-                body: { fromTrackId: "from-1", toTrackId: "dest-1", steps: "abc" },
+                body: {
+                    fromTrackId: "from-1",
+                    toTrackId: "dest-1",
+                    steps: "abc",
+                },
                 user: { id: "user-1" },
             } as any;
             const res = createRes();
@@ -389,7 +412,7 @@ describe("vibe journey + moods runtime", () => {
 
             expect(res.statusCode).toBe(400);
             expect(res.body.error).toBe(
-                "excludeTrackIds must contain non-empty strings"
+                "excludeTrackIds must contain non-empty strings",
             );
             expect(mockQueryRaw).not.toHaveBeenCalled();
         });
@@ -408,7 +431,9 @@ describe("vibe journey + moods runtime", () => {
                     artist: { id: "artist-dest", name: "Artist Dest" },
                 },
             });
-            mockRunAnnQuery.mockResolvedValueOnce([nearestRow({ id: "mid-1" })]);
+            mockRunAnnQuery.mockResolvedValueOnce([
+                nearestRow({ id: "mid-1" }),
+            ]);
 
             const req = {
                 body: { fromTrackId: "from-1", toTrackId: "dest-1", steps: 1 },
@@ -440,7 +465,9 @@ describe("vibe journey + moods runtime", () => {
             let call = 0;
             mockRunAnnQuery.mockImplementation(() => {
                 call += 1;
-                return Promise.resolve([nearestRow({ id: `step-${call}`, title: `Step ${call}` })]);
+                return Promise.resolve([
+                    nearestRow({ id: `step-${call}`, title: `Step ${call}` }),
+                ]);
             });
 
             const req = {
@@ -473,8 +500,12 @@ describe("vibe journey + moods runtime", () => {
                 { trackId: "happy-5" },
             ]); // Prisma mood-bucket pool, >=5 qualifying tracks
             mockRunAnnQuery
-                .mockResolvedValueOnce([nearestRow({ id: "way-1", title: "Way One" })])
-                .mockResolvedValueOnce([nearestRow({ id: "way-2", title: "Way Two" })]);
+                .mockResolvedValueOnce([
+                    nearestRow({ id: "way-1", title: "Way One" }),
+                ])
+                .mockResolvedValueOnce([
+                    nearestRow({ id: "way-2", title: "Way Two" }),
+                ]);
 
             const req = {
                 body: { fromTrackId: "from-1", mood: "happy", steps: 2 },
@@ -485,9 +516,14 @@ describe("vibe journey + moods runtime", () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body.mode).toBe("mood");
-            expect(res.body.target).toEqual({ mood: "happy", label: "Happy & Upbeat" });
+            expect(res.body.target).toEqual({
+                mood: "happy",
+                label: "Happy & Upbeat",
+            });
             expect(res.body.waypoints).toHaveLength(2);
-            expect(res.body.waypoints[0]).toEqual(expect.objectContaining({ id: "way-1" }));
+            expect(res.body.waypoints[0]).toEqual(
+                expect.objectContaining({ id: "way-1" }),
+            );
         });
 
         it("never returns an excluded track id as a waypoint", async () => {
@@ -506,10 +542,18 @@ describe("vibe journey + moods runtime", () => {
             });
 
             const candidatePool = [
-                nearestRow({ id: "blocked-1", title: "Blocked", distance: 0.05 }),
+                nearestRow({
+                    id: "blocked-1",
+                    title: "Blocked",
+                    distance: 0.05,
+                }),
                 nearestRow({ id: "cand-1", title: "Cand One", distance: 0.1 }),
                 nearestRow({ id: "cand-2", title: "Cand Two", distance: 0.12 }),
-                nearestRow({ id: "cand-3", title: "Cand Three", distance: 0.14 }),
+                nearestRow({
+                    id: "cand-3",
+                    title: "Cand Three",
+                    distance: 0.14,
+                }),
             ];
 
             // Simulate the real ANN query's `WHERE te.track_id != ALL(excludeIds)`
@@ -521,12 +565,17 @@ describe("vibe journey + moods runtime", () => {
                     (sqlObj.values as unknown[])
                         .filter(
                             (v): v is string[] =>
-                                Array.isArray(v) && (v.length === 0 || typeof v[0] === "string")
+                                Array.isArray(v) &&
+                                (v.length === 0 || typeof v[0] === "string"),
                         )
-                        .flat()
+                        .flat(),
                 );
-                const remaining = candidatePool.filter((c) => !excluded.has(c.id as string));
-                return Promise.resolve(remaining.length > 0 ? [remaining[0]] : []);
+                const remaining = candidatePool.filter(
+                    (c) => !excluded.has(c.id as string),
+                );
+                return Promise.resolve(
+                    remaining.length > 0 ? [remaining[0]] : [],
+                );
             });
 
             const req = {
@@ -574,7 +623,7 @@ describe("vibe journey + moods runtime", () => {
                     { mood: "melancholy", trackCount: 0 },
                     { mood: "aggressive", trackCount: 0 },
                     { mood: "acoustic", trackCount: 0 },
-                ])
+                ]),
             );
         });
     });

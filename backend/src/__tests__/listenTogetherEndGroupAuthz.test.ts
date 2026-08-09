@@ -13,7 +13,9 @@ export {};
 const mockSyncGroupFindUnique = jest.fn();
 const mockSyncGroupUpdate = jest.fn(async () => undefined);
 const mockSyncGroupMemberUpdateMany = jest.fn(async () => undefined);
-const mockTransaction = jest.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[]));
+const mockTransaction = jest.fn(async (ops: unknown[]) =>
+    Promise.all(ops as Promise<unknown>[]),
+);
 
 jest.mock("../utils/db", () => ({
     prisma: {
@@ -77,7 +79,7 @@ describe("endGroup host authorization", () => {
         });
 
         await expect(endGroup(OTHER_ID, GROUP_ID)).rejects.toBeInstanceOf(
-            GroupError
+            GroupError,
         );
         await expect(endGroup(OTHER_ID, GROUP_ID)).rejects.toMatchObject({
             code: "NOT_ALLOWED",

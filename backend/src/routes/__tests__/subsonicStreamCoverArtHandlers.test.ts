@@ -11,8 +11,10 @@ const mockAudioStreamingService = jest.fn().mockImplementation(() => ({
 }));
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -115,7 +117,8 @@ let originalFetch: typeof fetch | undefined;
 
 beforeAll(() => {
     originalFetch = global.fetch;
-    (global as unknown as { fetch: typeof fetch }).fetch = mockFetch as unknown as typeof fetch;
+    (global as unknown as { fetch: typeof fetch }).fetch =
+        mockFetch as unknown as typeof fetch;
 });
 
 afterAll(() => {
@@ -182,9 +185,7 @@ describe("handleStream", () => {
             filePath: "Artist/Track.flac",
             fileModified: new Date("2024-01-01T00:00:00Z"),
         });
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(false);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(false);
 
         await handleStream(
             buildReq({
@@ -326,10 +327,12 @@ describe("handleGetCoverArt", () => {
         mockAlbumFindFirst.mockResolvedValue({
             coverUrl: "native:album/cover.png",
         });
-        jest
-            .spyOn(fs, "existsSync")
-            .mockImplementation((inputPath: fs.PathLike) => inputPath === nativeCoverPath);
-        jest.spyOn(fs, "readFileSync").mockReturnValue(Buffer.from("fake", "utf-8"));
+        jest.spyOn(fs, "existsSync").mockImplementation(
+            (inputPath: fs.PathLike) => inputPath === nativeCoverPath,
+        );
+        jest.spyOn(fs, "readFileSync").mockReturnValue(
+            Buffer.from("fake", "utf-8"),
+        );
 
         const res = buildRes();
 
@@ -356,10 +359,12 @@ describe("handleGetCoverArt", () => {
         mockAlbumFindFirst.mockResolvedValue({
             coverUrl: "native:album/cover.webp",
         });
-        jest
-            .spyOn(fs, "existsSync")
-            .mockImplementation((inputPath: fs.PathLike) => inputPath === nativeCoverPath);
-        jest.spyOn(fs, "readFileSync").mockReturnValue(Buffer.from("fake-webp", "utf-8"));
+        jest.spyOn(fs, "existsSync").mockImplementation(
+            (inputPath: fs.PathLike) => inputPath === nativeCoverPath,
+        );
+        jest.spyOn(fs, "readFileSync").mockReturnValue(
+            Buffer.from("fake-webp", "utf-8"),
+        );
 
         const res = buildRes();
 
@@ -370,7 +375,10 @@ describe("handleGetCoverArt", () => {
             res,
         );
 
-        expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/webp");
+        expect(res.setHeader).toHaveBeenCalledWith(
+            "Content-Type",
+            "image/webp",
+        );
         expect(res.status).toHaveBeenCalledWith(200);
     });
 
@@ -429,7 +437,9 @@ describe("handleGetCoverArt", () => {
         mockFetch.mockResolvedValue({
             ok: true,
             status: 200,
-            arrayBuffer: jest.fn().mockResolvedValue(Buffer.from("artist-cover")),
+            arrayBuffer: jest
+                .fn()
+                .mockResolvedValue(Buffer.from("artist-cover")),
             headers: {
                 get: jest.fn().mockReturnValue("image/jpeg"),
             },
@@ -457,7 +467,9 @@ describe("handleGetCoverArt", () => {
         mockFetch.mockResolvedValue({
             ok: true,
             status: 200,
-            arrayBuffer: jest.fn().mockResolvedValue(Buffer.from("track-cover")),
+            arrayBuffer: jest
+                .fn()
+                .mockResolvedValue(Buffer.from("track-cover")),
             headers: {
                 get: jest.fn().mockReturnValue("image/jpeg"),
             },
@@ -489,7 +501,8 @@ describe("handleGetCoverArt", () => {
                 {
                     track: {
                         album: {
-                            coverUrl: "https://cdn.soundspan.test/covers/playlist.jpg",
+                            coverUrl:
+                                "https://cdn.soundspan.test/covers/playlist.jpg",
                         },
                     },
                 },
@@ -498,7 +511,9 @@ describe("handleGetCoverArt", () => {
         mockFetch.mockResolvedValue({
             ok: true,
             status: 200,
-            arrayBuffer: jest.fn().mockResolvedValue(Buffer.from("playlist-cover")),
+            arrayBuffer: jest
+                .fn()
+                .mockResolvedValue(Buffer.from("playlist-cover")),
             headers: {
                 get: jest.fn().mockReturnValue("image/jpeg"),
             },
@@ -527,7 +542,9 @@ describe("handleGetCoverArt", () => {
         mockFetch.mockResolvedValue({
             ok: true,
             status: 200,
-            arrayBuffer: jest.fn().mockResolvedValue(Buffer.from("fallback-cover")),
+            arrayBuffer: jest
+                .fn()
+                .mockResolvedValue(Buffer.from("fallback-cover")),
             headers: {
                 get: jest.fn().mockReturnValue("image/jpeg"),
             },

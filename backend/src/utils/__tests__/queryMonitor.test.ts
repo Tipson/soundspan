@@ -37,7 +37,7 @@ describe("queryMonitor", () => {
         expect(mockOn).toHaveBeenCalledTimes(1);
         expect(mockOn).toHaveBeenCalledWith("query", expect.any(Function));
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Slow query monitoring enabled (threshold: 100ms)"
+            "Slow query monitoring enabled (threshold: 100ms)",
         );
 
         const handler = mockOn.mock.calls[0][1];
@@ -54,10 +54,10 @@ describe("queryMonitor", () => {
 
         expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            expect.stringContaining("Slow query detected (150ms)")
+            expect.stringContaining("Slow query detected (150ms)"),
         );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            expect.stringContaining("Query: SELECT * FROM artists")
+            expect.stringContaining("Query: SELECT * FROM artists"),
         );
     });
 
@@ -69,7 +69,7 @@ describe("queryMonitor", () => {
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
             "Database Query Stats:",
-            JSON.stringify(stats, null, 2)
+            JSON.stringify(stats, null, 2),
         );
     });
 
@@ -80,8 +80,7 @@ describe("queryMonitor", () => {
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
             "Database Query Stats:",
-            undefined
+            undefined,
         );
     });
 });
-

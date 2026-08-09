@@ -8,7 +8,10 @@ import {
     getEffectiveYear,
     getDecadeFromYear,
 } from "../utils/dateFilters";
-import { applyArtistCap, type ArtistCapTrack } from "./programmaticPlaylistArtistCap";
+import {
+    applyArtistCap,
+    type ArtistCapTrack,
+} from "./programmaticPlaylistArtistCap";
 import {
     allocateTracksWithArtistWeighting,
     createSeededRng,
@@ -143,7 +146,6 @@ function getMixColor(type: string): string {
 // (config-free import chain); re-exported here for existing consumers.
 export { seededShuffle };
 
-
 /**
  * Shared diverse selection for mix generators (GH #46): replaces the raw
  * seededShuffle(...).slice(...) / randomSample(...) pattern with the
@@ -174,7 +176,7 @@ async function selectTracksWithArtistDiversityForMix<
             tracks
                 .filter((track) => !readInlineArtistId(track))
                 .map((track) => track.albumId)
-                .filter((id): id is string => typeof id === "string")
+                .filter((id): id is string => typeof id === "string"),
         ),
     ];
     const albums =
@@ -199,7 +201,7 @@ async function selectTracksWithArtistDiversityForMix<
             alpha: config.generationDiversity.weightAlpha,
             ceilingShare: config.generationDiversity.shareCeiling,
             rng,
-        }
+        },
     );
 }
 
@@ -227,7 +229,7 @@ type TrackWithAlbumCover = {
  */
 async function findTracksByGenrePatterns(
     genrePatterns: string[],
-    limit: number = 100
+    limit: number = 100,
 ): Promise<TrackWithAlbumCover[]> {
     // Strategy 1: Use track's lastfmTags and essentiaGenres (native String[] fields)
     const tagPatterns = genrePatterns.map((g) => g.toLowerCase());
@@ -307,8 +309,10 @@ async function findTracksByGenrePatterns(
 
         for (const track of albumTracks) {
             const albumGenres = track.album.genres as string[] | null;
-            const albumUserGenres = (track.album.userGenres as string[] | null) || [];
-            const artistUserGenres = (track.album.artist?.userGenres as string[] | null) || [];
+            const albumUserGenres =
+                (track.album.userGenres as string[] | null) || [];
+            const artistUserGenres =
+                (track.album.artist?.userGenres as string[] | null) || [];
             const allGenres = [
                 ...(albumGenres || []),
                 ...albumUserGenres,
@@ -320,8 +324,8 @@ async function findTracksByGenrePatterns(
 
             const isMatch = allGenres.some((ag) =>
                 genrePatterns.some((gp) =>
-                    ag.toLowerCase().includes(gp.toLowerCase())
-                )
+                    ag.toLowerCase().includes(gp.toLowerCase()),
+                ),
             );
             if (isMatch) {
                 genreMatched.push(track as TrackWithAlbumCover);
@@ -364,7 +368,7 @@ export class ProgrammaticPlaylistService {
         tracks: T[],
         targetCount: number,
         seedKey: string,
-        preserveInputOrder = false
+        preserveInputOrder = false,
     ): T[] {
         return separateArtists(
             applyArtistCap(tracks, {
@@ -378,14 +382,14 @@ export class ProgrammaticPlaylistService {
                     refillFromExcludedAfterMaxRelaxation: true,
                 },
             }),
-            (t) => t.album?.artist?.id ?? `unknown:${t.id}`
+            (t) => t.album?.artist?.id ?? `unknown:${t.id}`,
         );
     }
 
     private diversifyTracksUniqueFirst<T extends ArtistCapTrack>(
         tracks: T[],
         targetCount: number,
-        seedKey: string
+        seedKey: string,
     ): T[] {
         const firstPass = applyArtistCap(tracks, {
             maxPerArtist: 1,
@@ -397,14 +401,14 @@ export class ProgrammaticPlaylistService {
         if (firstPass.length >= targetCount) {
             return separateArtists(
                 firstPass,
-                (t) => t.album?.artist?.id ?? `unknown:${t.id}`
+                (t) => t.album?.artist?.id ?? `unknown:${t.id}`,
             );
         }
 
         const selectedIds = new Set(firstPass.map((track) => track.id));
         const remainingTracks = seededShuffle(
             tracks.filter((track) => !selectedIds.has(track.id)),
-            `${seedKey}-second-pass`
+            `${seedKey}-second-pass`,
         );
 
         return separateArtists(
@@ -414,11 +418,13 @@ export class ProgrammaticPlaylistService {
                 preserveInputOrder: true,
                 fallback: { enabled: false },
             }),
-            (t) => t.album?.artist?.id ?? `unknown:${t.id}`
+            (t) => t.album?.artist?.id ?? `unknown:${t.id}`,
         );
     }
 
-    private getUniqueArtistCount<T extends ArtistCapTrack>(tracks: T[]): number {
+    private getUniqueArtistCount<T extends ArtistCapTrack>(
+        tracks: T[],
+    ): number {
         const uniqueArtists = new Set<string>();
         for (const track of tracks) {
             const artistId = track.album?.artist?.id;
@@ -429,11 +435,9 @@ export class ProgrammaticPlaylistService {
         return uniqueArtists.size;
     }
 
-    private async backfillFromLibraryForDiversity<T extends TrackWithAlbumCover>(
-        selectedTracks: T[],
-        targetCount: number,
-        seedKey: string
-    ): Promise<T[]> {
+    private async backfillFromLibraryForDiversity<
+        T extends TrackWithAlbumCover,
+    >(selectedTracks: T[], targetCount: number, seedKey: string): Promise<T[]> {
         const minimumUniqueArtists = Math.ceil(targetCount * 0.55);
         const uniqueArtistCount = this.getUniqueArtistCount(selectedTracks);
 
@@ -443,12 +447,12 @@ export class ProgrammaticPlaylistService {
         ) {
             return separateArtists(
                 selectedTracks,
-                (t) => t.album?.artist?.id ?? `unknown:${t.id}`
+                (t) => t.album?.artist?.id ?? `unknown:${t.id}`,
             );
         }
 
         logger.debug(
-            `[DIVERSITY BACKFILL] ${seedKey} needs backfill (${selectedTracks.length}/${targetCount}, unique=${uniqueArtistCount}/${minimumUniqueArtists})`
+            `[DIVERSITY BACKFILL] ${seedKey} needs backfill (${selectedTracks.length}/${targetCount}, unique=${uniqueArtistCount}/${minimumUniqueArtists})`,
         );
 
         const selectedIds = new Set(selectedTracks.map((track) => track.id));
@@ -468,7 +472,7 @@ export class ProgrammaticPlaylistService {
 
         const shuffledFallback = seededShuffle(
             fallbackTracks,
-            `${seedKey}-library-diversity-backfill`
+            `${seedKey}-library-diversity-backfill`,
         );
 
         const needsUniqueRebalance =
@@ -480,10 +484,12 @@ export class ProgrammaticPlaylistService {
                 maxPerArtist: this.MAX_TRACKS_PER_ARTIST,
                 targetCount,
                 preserveInputOrder: !needsUniqueRebalance,
-                rng: createSeededRng(getSeededRandom(`${seedKey}-library-rebalance`)),
+                rng: createSeededRng(
+                    getSeededRandom(`${seedKey}-library-rebalance`),
+                ),
                 fallback: { enabled: false },
             }),
-            (t) => t.album?.artist?.id ?? `unknown:${t.id}`
+            (t) => t.album?.artist?.id ?? `unknown:${t.id}`,
         );
     }
 
@@ -492,7 +498,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateAllMixes(
         userId: string,
-        forceRandom = false
+        forceRandom = false,
     ): Promise<ProgrammaticMix[]> {
         // Get today's date for daily rotation (or random seed if refreshing)
         const today = new Date().toISOString().split("T")[0];
@@ -502,7 +508,7 @@ export class ProgrammaticPlaylistService {
         const dateSeed = getSeededRandom(seedString);
 
         logger.debug(
-            `[MIXES] Generating mixes for user ${userId}, forceRandom: ${forceRandom}, seed: ${dateSeed}`
+            `[MIXES] Generating mixes for user ${userId}, forceRandom: ${forceRandom}, seed: ${dateSeed}`,
         );
 
         // Define all possible mix types
@@ -623,7 +629,7 @@ export class ProgrammaticPlaylistService {
                 fn: () =>
                     this.generateMainCharacterEnergy(
                         userId,
-                        today + seedSuffix
+                        today + seedSuffix,
                     ),
                 weight: 2,
                 name: "Main Character Energy",
@@ -680,7 +686,7 @@ export class ProgrammaticPlaylistService {
                 fn: () =>
                     this.generateRomanticizeYourLife(
                         userId,
-                        today + seedSuffix
+                        today + seedSuffix,
                     ),
                 weight: 2,
                 name: "Romanticize Your Life",
@@ -728,7 +734,7 @@ export class ProgrammaticPlaylistService {
         let seed = dateSeed;
 
         logger.debug(
-            `[MIXES] Selecting ${this.DAILY_MIX_COUNT} mixes from ${mixGenerators.length} types...`
+            `[MIXES] Selecting ${this.DAILY_MIX_COUNT} mixes from ${mixGenerators.length} types...`,
         );
 
         while (selectedIndices.length < this.DAILY_MIX_COUNT) {
@@ -737,13 +743,13 @@ export class ProgrammaticPlaylistService {
             if (!selectedIndices.includes(index)) {
                 selectedIndices.push(index);
                 logger.debug(
-                    `[MIXES] Selected index ${index}: ${mixGenerators[index].name}`
+                    `[MIXES] Selected index ${index}: ${mixGenerators[index].name}`,
                 );
             }
         }
 
         logger.debug(
-            `[MIXES] Final selected indices: [${selectedIndices.join(", ")}]`
+            `[MIXES] Final selected indices: [${selectedIndices.join(", ")}]`,
         );
 
         // Generate selected mixes
@@ -753,33 +759,35 @@ export class ProgrammaticPlaylistService {
         });
         const mixes = await Promise.all(mixPromises);
 
-        logger.debug(`[MIXES] Generated ${mixes.length} mixes before filtering`);
+        logger.debug(
+            `[MIXES] Generated ${mixes.length} mixes before filtering`,
+        );
         mixes.forEach((mix, i) => {
             if (mix === null) {
                 logger.debug(
                     `[MIXES] Mix ${i} (${
                         mixGenerators[selectedIndices[i]].name
-                    }) returned NULL`
+                    }) returned NULL`,
                 );
             } else {
                 logger.debug(
-                    `[MIXES] Mix ${i}: ${mix.name} (${mix.trackCount} tracks)`
+                    `[MIXES] Mix ${i}: ${mix.name} (${mix.trackCount} tracks)`,
                 );
             }
         });
 
         // Filter out null mixes
         let finalMixes = mixes.filter(
-            (mix): mix is ProgrammaticMix => mix !== null
+            (mix): mix is ProgrammaticMix => mix !== null,
         );
         logger.debug(
-            `[MIXES] Returning ${finalMixes.length} mixes after filtering nulls`
+            `[MIXES] Returning ${finalMixes.length} mixes after filtering nulls`,
         );
 
         // If we don't have 5 mixes, try to fill gaps with successful generators
         if (finalMixes.length < this.DAILY_MIX_COUNT) {
             logger.debug(
-                `[MIXES] Only got ${finalMixes.length} mixes, trying to fill gaps...`
+                `[MIXES] Only got ${finalMixes.length} mixes, trying to fill gaps...`,
             );
 
             // Try generating from all types that weren't selected or failed
@@ -794,14 +802,14 @@ export class ProgrammaticPlaylistService {
             ) {
                 if (!attemptedIndices.has(i)) {
                     logger.debug(
-                        `[MIXES] Attempting fallback: ${mixGenerators[i].name}`
+                        `[MIXES] Attempting fallback: ${mixGenerators[i].name}`,
                     );
                     const fallbackMix = await mixGenerators[i].fn();
                     if (fallbackMix && !successfulTypes.has(fallbackMix.type)) {
                         finalMixes.push(fallbackMix);
                         successfulTypes.add(fallbackMix.type);
                         logger.debug(
-                            `[MIXES] Fallback succeeded: ${fallbackMix.name}`
+                            `[MIXES] Fallback succeeded: ${fallbackMix.name}`,
                         );
                     }
                 }
@@ -815,7 +823,7 @@ export class ProgrammaticPlaylistService {
             const savedMoodMix = await moodBucketService.getUserMoodMix(userId);
             if (savedMoodMix) {
                 logger.debug(
-                    `[MIXES] User has saved mood mix: "${savedMoodMix.name}" with ${savedMoodMix.trackCount} tracks`
+                    `[MIXES] User has saved mood mix: "${savedMoodMix.name}" with ${savedMoodMix.trackCount} tracks`,
                 );
                 finalMixes.push(savedMoodMix);
             }
@@ -831,7 +839,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateEraMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // Get all decades
         const albums = await prisma.album.findMany({
@@ -875,12 +883,12 @@ export class ProgrammaticPlaylistService {
         let selectedTracks = this.diversifyTracksUniqueFirst(
             tracks,
             this.TRACK_LIMIT,
-            `era-${today}-tracks-${userId}`
+            `era-${today}-tracks-${userId}`,
         );
         selectedTracks = await this.backfillFromLibraryForDiversity(
             selectedTracks,
             this.TRACK_LIMIT,
-            `era-${today}-tracks-${userId}`
+            `era-${today}-tracks-${userId}`,
         );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
@@ -904,7 +912,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateGenreMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // Get top genres
         const genres = await prisma.genre.findMany({
@@ -920,7 +928,7 @@ export class ProgrammaticPlaylistService {
         logger.debug(`[GENRE MIX] Found ${genres.length} genres total`);
         const validGenres = genres.filter((g) => g._count.trackGenres >= 5);
         logger.debug(
-            `[GENRE MIX] ${validGenres.length} genres have >= 5 tracks`
+            `[GENRE MIX] ${validGenres.length} genres have >= 5 tracks`,
         );
         if (validGenres.length === 0) {
             logger.debug(`[GENRE MIX] FAILED: No genres with enough tracks`);
@@ -949,17 +957,19 @@ export class ProgrammaticPlaylistService {
         });
 
         let tracks: TrackWithAlbumCover[] = trackGenres.map(
-            (tg) => tg.track as TrackWithAlbumCover
+            (tg) => tg.track as TrackWithAlbumCover,
         );
         if (tracks.length < this.TRACK_LIMIT) {
             const genrePatternTracks = await findTracksByGenrePatterns(
                 [selectedGenre.name],
-                this.TRACK_LIMIT * 10
+                this.TRACK_LIMIT * 10,
             );
             const existingIds = new Set(tracks.map((track) => track.id));
             tracks = [
                 ...tracks,
-                ...genrePatternTracks.filter((track) => !existingIds.has(track.id)),
+                ...genrePatternTracks.filter(
+                    (track) => !existingIds.has(track.id),
+                ),
             ];
         }
         if (tracks.length < 5) return null;
@@ -967,12 +977,12 @@ export class ProgrammaticPlaylistService {
         let selectedTracks = this.diversifyTracksUniqueFirst(
             tracks,
             this.TRACK_LIMIT,
-            `genre-${today}-${selectedGenre.id}-${userId}`
+            `genre-${today}-${selectedGenre.id}-${userId}`,
         );
         selectedTracks = await this.backfillFromLibraryForDiversity(
             selectedTracks,
             this.TRACK_LIMIT,
-            `genre-${today}-${selectedGenre.id}-${userId}`
+            `genre-${today}-${selectedGenre.id}-${userId}`,
         );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
@@ -995,7 +1005,7 @@ export class ProgrammaticPlaylistService {
      * Generate "Your Top 20" mix
      */
     async generateTopTracksMix(
-        userId: string
+        userId: string,
     ): Promise<ProgrammaticMix | null> {
         const seedKey = `top-tracks-${userId}`;
         const playStats = await prisma.play.groupBy({
@@ -1007,18 +1017,20 @@ export class ProgrammaticPlaylistService {
         });
 
         logger.debug(
-            `[TOP TRACKS MIX] Found ${playStats.length} unique played tracks`
+            `[TOP TRACKS MIX] Found ${playStats.length} unique played tracks`,
         );
         if (playStats.length < 5) {
             logger.debug(
-                `[TOP TRACKS MIX] FAILED: Only ${playStats.length} tracks (need at least 5)`
+                `[TOP TRACKS MIX] FAILED: Only ${playStats.length} tracks (need at least 5)`,
             );
             return null;
         }
 
         const trackIds = playStats
             .map((play) => play.trackId)
-            .filter((trackId): trackId is string => typeof trackId === "string");
+            .filter(
+                (trackId): trackId is string => typeof trackId === "string",
+            );
         if (trackIds.length < 5) {
             return null;
         }
@@ -1037,7 +1049,9 @@ export class ProgrammaticPlaylistService {
         // Preserve play count order
         const orderedTracks = trackIds
             .map((id) => tracks.find((t) => t.id === id))
-            .filter((track): track is (typeof tracks)[number] => Boolean(track));
+            .filter((track): track is (typeof tracks)[number] =>
+                Boolean(track),
+            );
 
         // Keep ranked top tracks first with a strict cap before any fallback fill.
         const strictTopTracks = separateArtists(
@@ -1047,16 +1061,18 @@ export class ProgrammaticPlaylistService {
                 preserveInputOrder: true,
                 fallback: { enabled: false },
             }),
-            (t) => t.album?.artist?.id ?? `unknown:${t.id}`
+            (t) => t.album?.artist?.id ?? `unknown:${t.id}`,
         );
 
         let selectedTracks = strictTopTracks;
         if (selectedTracks.length < this.TRACK_LIMIT) {
             logger.debug(
-                `[TOP TRACKS MIX] Underfilled after strict top-track cap (${selectedTracks.length}/${this.TRACK_LIMIT}); backfilling from library`
+                `[TOP TRACKS MIX] Underfilled after strict top-track cap (${selectedTracks.length}/${this.TRACK_LIMIT}); backfilling from library`,
             );
 
-            const selectedIds = new Set(selectedTracks.map((track) => track.id));
+            const selectedIds = new Set(
+                selectedTracks.map((track) => track.id),
+            );
             const fallbackTracks = await prisma.track.findMany({
                 where: { id: { notIn: Array.from(selectedIds) } },
                 include: {
@@ -1073,20 +1089,17 @@ export class ProgrammaticPlaylistService {
 
             const shuffledFallback = seededShuffle(
                 fallbackTracks,
-                `${seedKey}-library-fallback`
+                `${seedKey}-library-fallback`,
             );
 
             selectedTracks = separateArtists(
-                applyArtistCap(
-                    [...strictTopTracks, ...shuffledFallback],
-                    {
-                        maxPerArtist: this.MAX_TRACKS_PER_ARTIST,
-                        targetCount: this.TRACK_LIMIT,
-                        preserveInputOrder: true,
-                        fallback: { enabled: false },
-                    }
-                ),
-                (t) => t.album?.artist?.id ?? `unknown:${t.id}`
+                applyArtistCap([...strictTopTracks, ...shuffledFallback], {
+                    maxPerArtist: this.MAX_TRACKS_PER_ARTIST,
+                    targetCount: this.TRACK_LIMIT,
+                    preserveInputOrder: true,
+                    fallback: { enabled: false },
+                }),
+                (t) => t.album?.artist?.id ?? `unknown:${t.id}`,
             );
         }
 
@@ -1112,7 +1125,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateRediscoverMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // Get tracks with low play count (0-2 plays)
         const allTracks = await prisma.track.findMany({
@@ -1138,7 +1151,7 @@ export class ProgrammaticPlaylistService {
         const selectedTracks = this.diversifyTracks(
             underplayedTracks,
             this.TRACK_LIMIT,
-            `rediscover-${today}-${userId}`
+            `rediscover-${today}-${userId}`,
         );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
@@ -1161,7 +1174,7 @@ export class ProgrammaticPlaylistService {
      * Generate "More Like X" mix
      */
     async generateArtistSimilarMix(
-        userId: string
+        userId: string,
     ): Promise<ProgrammaticMix | null> {
         // Get most played artist from last 7 days
         const recentPlays = await prisma.play.findMany({
@@ -1181,10 +1194,12 @@ export class ProgrammaticPlaylistService {
         });
 
         logger.debug(
-            `[ARTIST SIMILAR MIX] Found ${recentPlays.length} plays in last 7 days`
+            `[ARTIST SIMILAR MIX] Found ${recentPlays.length} plays in last 7 days`,
         );
         if (recentPlays.length === 0) {
-            logger.debug(`[ARTIST SIMILAR MIX] FAILED: No plays in last 7 days`);
+            logger.debug(
+                `[ARTIST SIMILAR MIX] FAILED: No plays in last 7 days`,
+            );
             return null;
         }
 
@@ -1197,13 +1212,13 @@ export class ProgrammaticPlaylistService {
             const artistId = play.track.album.artistId;
             artistPlayCounts.set(
                 artistId,
-                (artistPlayCounts.get(artistId) || 0) + 1
+                (artistPlayCounts.get(artistId) || 0) + 1,
             );
         });
 
         // Get top artist
         const topArtistId = Array.from(artistPlayCounts.entries()).sort(
-            (a, b) => b[1] - a[1]
+            (a, b) => b[1] - a[1],
         )[0][0];
 
         const topArtist = await prisma.artist.findUnique({
@@ -1212,7 +1227,7 @@ export class ProgrammaticPlaylistService {
 
         if (!topArtist || !topArtist.name) {
             logger.debug(
-                `[ARTIST SIMILAR MIX] FAILED: Top artist not found or has no name`
+                `[ARTIST SIMILAR MIX] FAILED: Top artist not found or has no name`,
             );
             return null;
         }
@@ -1224,14 +1239,16 @@ export class ProgrammaticPlaylistService {
             const similarArtists = await lastFmService.getSimilarArtists(
                 topArtist.mbid || "",
                 topArtist.name,
-                this.ARTIST_SIMILAR_FETCH_LIMIT
+                this.ARTIST_SIMILAR_FETCH_LIMIT,
             );
 
             logger.debug(
-                `[ARTIST SIMILAR MIX] Last.fm returned ${similarArtists.length} similar artists`
+                `[ARTIST SIMILAR MIX] Last.fm returned ${similarArtists.length} similar artists`,
             );
 
-            const similarArtistNormalized = similarArtists.map((a) => normalizeArtistName(a.name));
+            const similarArtistNormalized = similarArtists.map((a) =>
+                normalizeArtistName(a.name),
+            );
             const artistsInLibrary = await prisma.artist.findMany({
                 where: { normalizedName: { in: similarArtistNormalized } },
                 include: {
@@ -1253,20 +1270,20 @@ export class ProgrammaticPlaylistService {
             });
 
             logger.debug(
-                `[ARTIST SIMILAR MIX] Found ${artistsInLibrary.length} similar artists in library`
+                `[ARTIST SIMILAR MIX] Found ${artistsInLibrary.length} similar artists in library`,
             );
 
             const tracks = artistsInLibrary.flatMap((artist) =>
-                artist.albums.flatMap((album) => album.tracks)
+                artist.albums.flatMap((album) => album.tracks),
             );
 
             logger.debug(
-                `[ARTIST SIMILAR MIX] Total tracks from similar artists: ${tracks.length}`
+                `[ARTIST SIMILAR MIX] Total tracks from similar artists: ${tracks.length}`,
             );
 
             if (tracks.length < 5) {
                 logger.debug(
-                    `[ARTIST SIMILAR MIX] FAILED: Only ${tracks.length} tracks (need at least 5)`
+                    `[ARTIST SIMILAR MIX] FAILED: Only ${tracks.length} tracks (need at least 5)`,
                 );
                 return null;
             }
@@ -1274,7 +1291,7 @@ export class ProgrammaticPlaylistService {
             const selectedTracks = this.diversifyTracks(
                 tracks,
                 this.TRACK_LIMIT,
-                `artist-similar-${userId}-${topArtistId}`
+                `artist-similar-${userId}-${topArtistId}`,
             );
             const coverUrls = selectedTracks
                 .filter((t) => t.album.coverUrl)
@@ -1302,7 +1319,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateRandomDiscoveryMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const totalAlbums = await prisma.album.count({
             where: { tracks: { some: {} } },
@@ -1337,7 +1354,7 @@ export class ProgrammaticPlaylistService {
         const selectedTracks = this.diversifyTracks(
             tracks,
             this.TRACK_LIMIT,
-            `random-discovery-${today}-${userId}`
+            `random-discovery-${today}-${userId}`,
         );
         const coverUrls = randomAlbums
             .filter((a) => a.coverUrl)
@@ -1362,7 +1379,7 @@ export class ProgrammaticPlaylistService {
      */
     async generatePartyMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const partyGenres = [
             "dance",
@@ -1408,14 +1425,14 @@ export class ProgrammaticPlaylistService {
         });
         tracks = genres.flatMap((g) => g.trackGenres.map((tg) => tg.track));
         logger.debug(
-            `[PARTY MIX] Found ${tracks.length} tracks from Genre table`
+            `[PARTY MIX] Found ${tracks.length} tracks from Genre table`,
         );
 
         // Strategy 2: Album genre field (using helper for proper JSON array handling)
         if (tracks.length < 15) {
             const albumGenreTracks = await findTracksByGenrePatterns(
                 partyGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -1423,7 +1440,7 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[PARTY MIX] After album genre fallback: ${tracks.length} tracks`
+                `[PARTY MIX] After album genre fallback: ${tracks.length} tracks`,
             );
         }
 
@@ -1458,13 +1475,13 @@ export class ProgrammaticPlaylistService {
                 ...audioTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[PARTY MIX] After audio analysis fallback: ${tracks.length} tracks`
+                `[PARTY MIX] After audio analysis fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[PARTY MIX] FAILED: Only ${tracks.length} tracks found`
+                `[PARTY MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
@@ -1472,7 +1489,7 @@ export class ProgrammaticPlaylistService {
         const selectedTracks = this.diversifyTracks(
             tracks,
             this.TRACK_LIMIT,
-            `party-${today}-${userId}`
+            `party-${today}-${userId}`,
         );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
@@ -1498,7 +1515,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateChillMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // Strategy 1: Enhanced mode - ML moodRelaxed prediction
         let tracks = await prisma.track.findMany({
@@ -1525,7 +1542,9 @@ export class ProgrammaticPlaylistService {
             take: 100,
         });
 
-        logger.debug(`[CHILL MIX] Enhanced mode: Found ${tracks.length} tracks`);
+        logger.debug(
+            `[CHILL MIX] Enhanced mode: Found ${tracks.length} tracks`,
+        );
 
         // Strategy 2: Standard mode fallback
         if (tracks.length < this.MIN_TRACKS_DAILY) {
@@ -1559,17 +1578,17 @@ export class ProgrammaticPlaylistService {
                 take: 100,
             });
             logger.debug(
-                `[CHILL MIX] Standard mode: Found ${tracks.length} tracks`
+                `[CHILL MIX] Standard mode: Found ${tracks.length} tracks`,
             );
         }
 
         logger.debug(
-            `[CHILL MIX] Total: ${tracks.length} tracks matching criteria`
+            `[CHILL MIX] Total: ${tracks.length} tracks matching criteria`,
         );
 
         if (tracks.length < this.MIN_TRACKS_DAILY) {
             logger.debug(
-                `[CHILL MIX] FAILED: Only ${tracks.length} tracks (need ${this.MIN_TRACKS_DAILY})`
+                `[CHILL MIX] FAILED: Only ${tracks.length} tracks (need ${this.MIN_TRACKS_DAILY})`,
             );
             return null;
         }
@@ -1577,16 +1596,16 @@ export class ProgrammaticPlaylistService {
         let diverseTracks = this.diversifyTracksUniqueFirst(
             tracks,
             this.WEEKLY_TRACK_LIMIT,
-            `chill-${today}-${userId}`
+            `chill-${today}-${userId}`,
         );
         diverseTracks = await this.backfillFromLibraryForDiversity(
             diverseTracks,
             this.WEEKLY_TRACK_LIMIT,
-            `chill-${today}-${userId}`
+            `chill-${today}-${userId}`,
         );
         if (diverseTracks.length < this.MIN_TRACKS_DAILY) {
             logger.debug(
-                `[CHILL MIX] FAILED: Only ${diverseTracks.length} diverse tracks (need ${this.MIN_TRACKS_DAILY})`
+                `[CHILL MIX] FAILED: Only ${diverseTracks.length} diverse tracks (need ${this.MIN_TRACKS_DAILY})`,
             );
             return null;
         }
@@ -1622,7 +1641,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateWorkoutMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const workoutGenres = [
             "rock",
@@ -1676,7 +1695,7 @@ export class ProgrammaticPlaylistService {
         });
         tracks = enhancedTracks;
         logger.debug(
-            `[WORKOUT MIX] Enhanced mode: Found ${tracks.length} tracks`
+            `[WORKOUT MIX] Enhanced mode: Found ${tracks.length} tracks`,
         );
 
         // Strategy 2: Standard mode fallback - audio analysis
@@ -1720,7 +1739,7 @@ export class ProgrammaticPlaylistService {
                 ...audioTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[WORKOUT MIX] Standard mode: Total ${tracks.length} tracks`
+                `[WORKOUT MIX] Standard mode: Total ${tracks.length} tracks`,
             );
         }
 
@@ -1747,7 +1766,7 @@ export class ProgrammaticPlaylistService {
                 },
             });
             const genreTracks = genres.flatMap((g) =>
-                g.trackGenres.map((tg) => tg.track)
+                g.trackGenres.map((tg) => tg.track),
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -1755,7 +1774,7 @@ export class ProgrammaticPlaylistService {
                 ...genreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[WORKOUT MIX] After Genre table: ${tracks.length} tracks`
+                `[WORKOUT MIX] After Genre table: ${tracks.length} tracks`,
             );
         }
 
@@ -1763,7 +1782,7 @@ export class ProgrammaticPlaylistService {
         if (tracks.length < 15) {
             const albumGenreTracks = await findTracksByGenrePatterns(
                 workoutGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -1771,13 +1790,13 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[WORKOUT MIX] After album genre fallback: ${tracks.length} tracks`
+                `[WORKOUT MIX] After album genre fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[WORKOUT MIX] FAILED: Only ${tracks.length} tracks found`
+                `[WORKOUT MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
@@ -1785,7 +1804,7 @@ export class ProgrammaticPlaylistService {
         const selectedTracks = this.diversifyTracks(
             tracks,
             this.TRACK_LIMIT,
-            `workout-${today}-${userId}`
+            `workout-${today}-${userId}`,
         );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
@@ -1810,7 +1829,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateFocusMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const focusGenres = [
             "classical",
@@ -1853,14 +1872,14 @@ export class ProgrammaticPlaylistService {
         });
         tracks = genres.flatMap((g) => g.trackGenres.map((tg) => tg.track));
         logger.debug(
-            `[FOCUS MIX] Found ${tracks.length} tracks from Genre table`
+            `[FOCUS MIX] Found ${tracks.length} tracks from Genre table`,
         );
 
         // Strategy 2: Album genre field (using helper for proper JSON array handling)
         if (tracks.length < 15) {
             const albumGenreTracks = await findTracksByGenrePatterns(
                 focusGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -1868,7 +1887,7 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[FOCUS MIX] After album genre fallback: ${tracks.length} tracks`
+                `[FOCUS MIX] After album genre fallback: ${tracks.length} tracks`,
             );
         }
 
@@ -1896,13 +1915,13 @@ export class ProgrammaticPlaylistService {
                 ...audioTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[FOCUS MIX] After audio analysis fallback: ${tracks.length} tracks`
+                `[FOCUS MIX] After audio analysis fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[FOCUS MIX] FAILED: Only ${tracks.length} tracks found`
+                `[FOCUS MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
@@ -1910,12 +1929,12 @@ export class ProgrammaticPlaylistService {
         let selectedTracks = this.diversifyTracksUniqueFirst(
             tracks,
             this.TRACK_LIMIT,
-            `focus-${today}-${userId}`
+            `focus-${today}-${userId}`,
         );
         selectedTracks = await this.backfillFromLibraryForDiversity(
             selectedTracks,
             this.TRACK_LIMIT,
-            `focus-${today}-${userId}`
+            `focus-${today}-${userId}`,
         );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
@@ -1943,7 +1962,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateHighEnergyMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         let tracks: any[] = [];
 
@@ -1959,7 +1978,7 @@ export class ProgrammaticPlaylistService {
         });
         tracks = audioTracks;
         logger.debug(
-            `[HIGH ENERGY MIX] Found ${tracks.length} tracks from audio analysis`
+            `[HIGH ENERGY MIX] Found ${tracks.length} tracks from audio analysis`,
         );
 
         // Strategy 2: Fallback to energetic genres (using helper for proper JSON array handling)
@@ -1976,7 +1995,7 @@ export class ProgrammaticPlaylistService {
             ];
             const albumGenreTracks = await findTracksByGenrePatterns(
                 energyGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -1984,18 +2003,22 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[HIGH ENERGY MIX] After genre fallback: ${tracks.length} tracks`
+                `[HIGH ENERGY MIX] After genre fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[HIGH ENERGY MIX] FAILED: Only ${tracks.length} tracks found`
+                `[HIGH ENERGY MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT, `high-energy-${today}`);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+            `high-energy-${today}`,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2020,7 +2043,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateLateNightMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // First try Enhanced mode (ML mood predictions)
         let tracks = await prisma.track.findMany({
@@ -2046,7 +2069,7 @@ export class ProgrammaticPlaylistService {
         });
 
         logger.debug(
-            `[LATE NIGHT MIX] Enhanced mode: Found ${tracks.length} tracks`
+            `[LATE NIGHT MIX] Enhanced mode: Found ${tracks.length} tracks`,
         );
 
         // Fallback to Standard mode if not enough Enhanced tracks
@@ -2074,18 +2097,18 @@ export class ProgrammaticPlaylistService {
                 take: 100,
             });
             logger.debug(
-                `[LATE NIGHT MIX] Standard mode: Found ${tracks.length} tracks`
+                `[LATE NIGHT MIX] Standard mode: Found ${tracks.length} tracks`,
             );
         }
 
         logger.debug(
-            `[LATE NIGHT MIX] Total: ${tracks.length} tracks matching criteria`
+            `[LATE NIGHT MIX] Total: ${tracks.length} tracks matching criteria`,
         );
 
         // No fallback padding - if not enough truly mellow tracks, don't generate
         if (tracks.length < this.MIN_TRACKS_DAILY) {
             logger.debug(
-                `[LATE NIGHT MIX] FAILED: Only ${tracks.length} tracks (need ${this.MIN_TRACKS_DAILY})`
+                `[LATE NIGHT MIX] FAILED: Only ${tracks.length} tracks (need ${this.MIN_TRACKS_DAILY})`,
             );
             return null;
         }
@@ -2098,7 +2121,7 @@ export class ProgrammaticPlaylistService {
         const selectedTracks = await selectTracksWithArtistDiversityForMix(
             tracks,
             trackLimit,
-            `late-night-${today}`
+            `late-night-${today}`,
         );
 
         const coverUrls = selectedTracks
@@ -2125,7 +2148,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateHappyMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         let tracks: any[] = [];
 
@@ -2144,7 +2167,9 @@ export class ProgrammaticPlaylistService {
             take: 100,
         });
         tracks = enhancedTracks;
-        logger.debug(`[HAPPY MIX] Enhanced mode: Found ${tracks.length} tracks`);
+        logger.debug(
+            `[HAPPY MIX] Enhanced mode: Found ${tracks.length} tracks`,
+        );
 
         // Strategy 2: Standard mode fallback - valence/energy heuristics
         if (tracks.length < 15) {
@@ -2163,7 +2188,7 @@ export class ProgrammaticPlaylistService {
                 ...standardTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[HAPPY MIX] After Standard fallback: ${tracks.length} tracks`
+                `[HAPPY MIX] After Standard fallback: ${tracks.length} tracks`,
             );
         }
 
@@ -2180,7 +2205,7 @@ export class ProgrammaticPlaylistService {
             ];
             const albumGenreTracks = await findTracksByGenrePatterns(
                 happyGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -2188,18 +2213,22 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[HAPPY MIX] After genre fallback: ${tracks.length} tracks`
+                `[HAPPY MIX] After genre fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[HAPPY MIX] FAILED: Only ${tracks.length} tracks found`
+                `[HAPPY MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT, `happy-${today}`);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+            `happy-${today}`,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2224,7 +2253,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateMelancholyMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         let tracks: any[] = [];
 
@@ -2243,7 +2272,7 @@ export class ProgrammaticPlaylistService {
             take: 150,
         });
         logger.debug(
-            `[MELANCHOLY MIX] Enhanced mode: Found ${enhancedTracks.length} tracks`
+            `[MELANCHOLY MIX] Enhanced mode: Found ${enhancedTracks.length} tracks`,
         );
 
         if (enhancedTracks.length >= 15) {
@@ -2261,7 +2290,7 @@ export class ProgrammaticPlaylistService {
                 take: 150,
             });
             logger.debug(
-                `[MELANCHOLY MIX] Standard mode: Found ${audioTracks.length} low-valence tracks`
+                `[MELANCHOLY MIX] Standard mode: Found ${audioTracks.length} low-valence tracks`,
             );
 
             // Further filter: prefer minor key OR sad mood tags
@@ -2274,7 +2303,7 @@ export class ProgrammaticPlaylistService {
                         "melancholy",
                         "moody",
                         "atmospheric",
-                    ].includes(tag.toLowerCase())
+                    ].includes(tag.toLowerCase()),
                 );
                 const hasLastfmSadTags = t.lastfmTags?.some((tag: string) =>
                     [
@@ -2284,12 +2313,12 @@ export class ProgrammaticPlaylistService {
                         "depressing",
                         "emotional",
                         "heartbreak",
-                    ].includes(tag.toLowerCase())
+                    ].includes(tag.toLowerCase()),
                 );
                 return hasMinorKey || hasSadTags || hasLastfmSadTags;
             });
             logger.debug(
-                `[MELANCHOLY MIX] After tag filter: ${tracks.length} tracks`
+                `[MELANCHOLY MIX] After tag filter: ${tracks.length} tracks`,
             );
         }
 
@@ -2305,7 +2334,7 @@ export class ProgrammaticPlaylistService {
             ];
             const albumGenreTracks = await findTracksByGenrePatterns(
                 sadGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -2313,14 +2342,14 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[MELANCHOLY MIX] After genre fallback: ${tracks.length} tracks`
+                `[MELANCHOLY MIX] After genre fallback: ${tracks.length} tracks`,
             );
         }
 
         // Require minimum 15 tracks for a meaningful playlist
         if (tracks.length < 15) {
             logger.debug(
-                `[MELANCHOLY MIX] FAILED: Only ${tracks.length} tracks found`
+                `[MELANCHOLY MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
@@ -2344,7 +2373,7 @@ export class ProgrammaticPlaylistService {
         const selectedTracks = await selectTracksWithArtistDiversityForMix(
             sortedTracks.slice(0, 50),
             this.TRACK_LIMIT,
-            `melancholy-${today}`
+            `melancholy-${today}`,
         );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
@@ -2370,7 +2399,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateDanceFloorMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         let tracks: any[] = [];
 
@@ -2386,7 +2415,7 @@ export class ProgrammaticPlaylistService {
         });
         tracks = audioTracks;
         logger.debug(
-            `[DANCE FLOOR MIX] Found ${tracks.length} tracks from audio analysis`
+            `[DANCE FLOOR MIX] Found ${tracks.length} tracks from audio analysis`,
         );
 
         // Strategy 2: Fallback to dance genres (using helper for proper JSON array handling)
@@ -2402,7 +2431,7 @@ export class ProgrammaticPlaylistService {
             ];
             const albumGenreTracks = await findTracksByGenrePatterns(
                 danceGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -2410,18 +2439,22 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[DANCE FLOOR MIX] After genre fallback: ${tracks.length} tracks`
+                `[DANCE FLOOR MIX] After genre fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[DANCE FLOOR MIX] FAILED: Only ${tracks.length} tracks found`
+                `[DANCE FLOOR MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT, `dance-floor-${today}`);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+            `dance-floor-${today}`,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2446,7 +2479,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateAcousticMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         let tracks: any[] = [];
 
@@ -2462,7 +2495,7 @@ export class ProgrammaticPlaylistService {
         });
         tracks = audioTracks;
         logger.debug(
-            `[ACOUSTIC MIX] Found ${tracks.length} tracks from audio analysis`
+            `[ACOUSTIC MIX] Found ${tracks.length} tracks from audio analysis`,
         );
 
         // Strategy 2: Fallback to acoustic genres (using helper for proper JSON array handling)
@@ -2476,7 +2509,7 @@ export class ProgrammaticPlaylistService {
             ];
             const albumGenreTracks = await findTracksByGenrePatterns(
                 acousticGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -2484,18 +2517,22 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[ACOUSTIC MIX] After genre fallback: ${tracks.length} tracks`
+                `[ACOUSTIC MIX] After genre fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[ACOUSTIC MIX] FAILED: Only ${tracks.length} tracks found`
+                `[ACOUSTIC MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT, `acoustic-${today}`);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+            `acoustic-${today}`,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2520,7 +2557,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateInstrumentalMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         let tracks: any[] = [];
 
@@ -2536,7 +2573,7 @@ export class ProgrammaticPlaylistService {
         });
         tracks = audioTracks;
         logger.debug(
-            `[INSTRUMENTAL MIX] Found ${tracks.length} tracks from audio analysis`
+            `[INSTRUMENTAL MIX] Found ${tracks.length} tracks from audio analysis`,
         );
 
         // Strategy 2: Fallback to instrumental genres (using helper for proper JSON array handling)
@@ -2551,7 +2588,7 @@ export class ProgrammaticPlaylistService {
             ];
             const albumGenreTracks = await findTracksByGenrePatterns(
                 instrumentalGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -2559,18 +2596,22 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[INSTRUMENTAL MIX] After genre fallback: ${tracks.length} tracks`
+                `[INSTRUMENTAL MIX] After genre fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[INSTRUMENTAL MIX] FAILED: Only ${tracks.length} tracks found`
+                `[INSTRUMENTAL MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT, `instrumental-${today}`);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+            `instrumental-${today}`,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2598,7 +2639,7 @@ export class ProgrammaticPlaylistService {
         today: string,
         moodTag: string,
         mixName: string,
-        mixDescription: string
+        mixDescription: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
             where: {
@@ -2614,7 +2655,11 @@ export class ProgrammaticPlaylistService {
 
         if (tracks.length < 15) return null;
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT, `mood-${moodTag}-${today}`);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+            `mood-${moodTag}-${today}`,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2637,7 +2682,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateRoadTripMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         let tracks: any[] = [];
 
@@ -2681,7 +2726,7 @@ export class ProgrammaticPlaylistService {
                 ...audioTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[ROAD TRIP MIX] After audio fallback: ${tracks.length} tracks`
+                `[ROAD TRIP MIX] After audio fallback: ${tracks.length} tracks`,
             );
         }
 
@@ -2696,7 +2741,7 @@ export class ProgrammaticPlaylistService {
             ];
             const albumGenreTracks = await findTracksByGenrePatterns(
                 roadTripGenres,
-                100
+                100,
             );
             const existingIds = new Set(tracks.map((t) => t.id));
             tracks = [
@@ -2704,18 +2749,22 @@ export class ProgrammaticPlaylistService {
                 ...albumGenreTracks.filter((t) => !existingIds.has(t.id)),
             ];
             logger.debug(
-                `[ROAD TRIP MIX] After genre fallback: ${tracks.length} tracks`
+                `[ROAD TRIP MIX] After genre fallback: ${tracks.length} tracks`,
             );
         }
 
         if (tracks.length < 15) {
             logger.debug(
-                `[ROAD TRIP MIX] FAILED: Only ${tracks.length} tracks found`
+                `[ROAD TRIP MIX] FAILED: Only ${tracks.length} tracks found`,
             );
             return null;
         }
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT, `road-trip-${today}`);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+            `road-trip-${today}`,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2757,7 +2806,7 @@ export class ProgrammaticPlaylistService {
 
     async generateSundayMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
             where: {
@@ -2788,7 +2837,10 @@ export class ProgrammaticPlaylistService {
 
         if (tracks.length < 15) return null;
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2808,7 +2860,7 @@ export class ProgrammaticPlaylistService {
 
     async generateMondayMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
             where: {
@@ -2838,7 +2890,10 @@ export class ProgrammaticPlaylistService {
 
         if (tracks.length < 15) return null;
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2858,7 +2913,7 @@ export class ProgrammaticPlaylistService {
 
     async generateFridayMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
             where: {
@@ -2883,7 +2938,10 @@ export class ProgrammaticPlaylistService {
 
         if (tracks.length < 15) return null;
 
-        const selectedTracks = await selectTracksWithArtistDiversityForMix(tracks, this.TRACK_LIMIT);
+        const selectedTracks = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.TRACK_LIMIT,
+        );
         const coverUrls = selectedTracks
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -2909,7 +2967,7 @@ export class ProgrammaticPlaylistService {
      */
     private async generateCuratedVibeMix(
         today: string,
-        definition: CuratedVibeMixDefinition
+        definition: CuratedVibeMixDefinition,
     ): Promise<ProgrammaticMix | null> {
         if (
             definition.dayOfWeek !== undefined &&
@@ -2929,7 +2987,7 @@ export class ProgrammaticPlaylistService {
 
         const shuffled = await selectTracksWithArtistDiversityForMix(
             tracks,
-            this.DAILY_TRACK_LIMIT
+            this.DAILY_TRACK_LIMIT,
         );
         const coverUrls = shuffled
             .filter((t) => t.album.coverUrl)
@@ -2957,11 +3015,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateSadGirlSundays(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["sad-girl-sundays"]
+            CURATED_VIBE_MIXES_BY_TYPE["sad-girl-sundays"],
         );
     }
 
@@ -2971,11 +3029,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateMainCharacterEnergy(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["main-character"]
+            CURATED_VIBE_MIXES_BY_TYPE["main-character"],
         );
     }
 
@@ -2985,11 +3043,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateVillainEra(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["villain-era"]
+            CURATED_VIBE_MIXES_BY_TYPE["villain-era"],
         );
     }
 
@@ -2999,11 +3057,11 @@ export class ProgrammaticPlaylistService {
      */
     async generate3AMThoughts(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["3am-thoughts"]
+            CURATED_VIBE_MIXES_BY_TYPE["3am-thoughts"],
         );
     }
 
@@ -3013,11 +3071,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateHotGirlWalk(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["hot-girl-walk"]
+            CURATED_VIBE_MIXES_BY_TYPE["hot-girl-walk"],
         );
     }
 
@@ -3027,11 +3085,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateRageCleaning(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["rage-cleaning"]
+            CURATED_VIBE_MIXES_BY_TYPE["rage-cleaning"],
         );
     }
 
@@ -3041,11 +3099,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateGoldenHour(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["golden-hour"]
+            CURATED_VIBE_MIXES_BY_TYPE["golden-hour"],
         );
     }
 
@@ -3055,11 +3113,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateShowerKaraoke(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["shower-karaoke"]
+            CURATED_VIBE_MIXES_BY_TYPE["shower-karaoke"],
         );
     }
 
@@ -3069,11 +3127,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateInMyFeelings(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["in-my-feelings"]
+            CURATED_VIBE_MIXES_BY_TYPE["in-my-feelings"],
         );
     }
 
@@ -3083,11 +3141,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateMidnightDrive(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["midnight-drive"]
+            CURATED_VIBE_MIXES_BY_TYPE["midnight-drive"],
         );
     }
 
@@ -3097,7 +3155,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateCoffeeShopVibes(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // STRICT criteria: cozy, background-appropriate music only
         const tracks = await prisma.track.findMany({
@@ -3164,12 +3222,12 @@ export class ProgrammaticPlaylistService {
         let selectedTracks = this.diversifyTracksUniqueFirst(
             tracks,
             this.DAILY_TRACK_LIMIT,
-            `coffee-shop-${today}-${userId}`
+            `coffee-shop-${today}-${userId}`,
         );
         selectedTracks = await this.backfillFromLibraryForDiversity(
             selectedTracks,
             this.DAILY_TRACK_LIMIT,
-            `coffee-shop-${today}-${userId}`
+            `coffee-shop-${today}-${userId}`,
         );
 
         if (selectedTracks.length < this.MIN_TRACKS_DAILY) {
@@ -3199,11 +3257,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateRomanticizeYourLife(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["romanticize"]
+            CURATED_VIBE_MIXES_BY_TYPE["romanticize"],
         );
     }
 
@@ -3213,11 +3271,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateThatGirlEra(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["that-girl-era"]
+            CURATED_VIBE_MIXES_BY_TYPE["that-girl-era"],
         );
     }
 
@@ -3227,11 +3285,11 @@ export class ProgrammaticPlaylistService {
      */
     async generateUnhinged(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         return this.generateCuratedVibeMix(
             today,
-            CURATED_VIBE_MIXES_BY_TYPE["unhinged"]
+            CURATED_VIBE_MIXES_BY_TYPE["unhinged"],
         );
     }
 
@@ -3243,7 +3301,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateDeepCuts(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // Get tracks that haven't been played much
         const tracks = await prisma.track.findMany({
@@ -3279,7 +3337,10 @@ export class ProgrammaticPlaylistService {
 
             if (filtered.length < 15) return null;
 
-            const shuffled = await selectTracksWithArtistDiversityForMix(filtered, this.WEEKLY_TRACK_LIMIT);
+            const shuffled = await selectTracksWithArtistDiversityForMix(
+                filtered,
+                this.WEEKLY_TRACK_LIMIT,
+            );
             const coverUrls = shuffled
                 .filter((t) => t.album.coverUrl)
                 .slice(0, 4)
@@ -3297,7 +3358,10 @@ export class ProgrammaticPlaylistService {
             };
         }
 
-        const shuffled = await selectTracksWithArtistDiversityForMix(tracks, this.WEEKLY_TRACK_LIMIT);
+        const shuffled = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.WEEKLY_TRACK_LIMIT,
+        );
         const coverUrls = shuffled
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -3321,7 +3385,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateKeyJourney(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // Circle of fifths order
         const keyOrder = [
@@ -3370,7 +3434,7 @@ export class ProgrammaticPlaylistService {
                 const count = Math.min(
                     2,
                     keyTracks.length,
-                    this.WEEKLY_TRACK_LIMIT - journey.length
+                    this.WEEKLY_TRACK_LIMIT - journey.length,
                 );
                 // Include the key in the seed so each key's selection is
                 // independent; a shared accumulator would correlate them.
@@ -3378,8 +3442,8 @@ export class ProgrammaticPlaylistService {
                     ...(await selectTracksWithArtistDiversityForMix(
                         keyTracks,
                         count,
-                        `key-journey-${today}-${key}`
-                    ))
+                        `key-journey-${today}-${key}`,
+                    )),
                 );
             }
         }
@@ -3409,7 +3473,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateTempoFlow(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
             where: {
@@ -3428,7 +3492,7 @@ export class ProgrammaticPlaylistService {
         // Build an arc: slow → fast → slow
         const slow = sorted.filter((t) => (t.bpm || 0) < 100);
         const medium = sorted.filter(
-            (t) => (t.bpm || 0) >= 100 && (t.bpm || 0) < 130
+            (t) => (t.bpm || 0) >= 100 && (t.bpm || 0) < 130,
         );
         const fast = sorted.filter((t) => (t.bpm || 0) >= 130);
 
@@ -3438,36 +3502,36 @@ export class ProgrammaticPlaylistService {
         flow.push(
             ...(await selectTracksWithArtistDiversityForMix(
                 slow,
-                Math.min(4, slow.length)
-            ))
+                Math.min(4, slow.length),
+            )),
         );
         // Build: 4 medium tracks
         flow.push(
             ...(await selectTracksWithArtistDiversityForMix(
                 medium,
-                Math.min(5, medium.length)
-            ))
+                Math.min(5, medium.length),
+            )),
         );
         // Peak: 5 fast tracks
         flow.push(
             ...(await selectTracksWithArtistDiversityForMix(
                 fast,
-                Math.min(6, fast.length)
-            ))
+                Math.min(6, fast.length),
+            )),
         );
         // Cool down: 3 medium tracks
         flow.push(
             ...(await selectTracksWithArtistDiversityForMix(
                 medium.filter((t) => !flow.includes(t)),
-                Math.min(3, medium.length)
-            ))
+                Math.min(3, medium.length),
+            )),
         );
         // Outro: 3 slow tracks
         flow.push(
             ...(await selectTracksWithArtistDiversityForMix(
                 slow.filter((t) => !flow.includes(t)),
-                Math.min(2, slow.length)
-            ))
+                Math.min(2, slow.length),
+            )),
         );
 
         if (flow.length < 15) return null;
@@ -3495,7 +3559,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateVocalDetox(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
             where: {
@@ -3508,7 +3572,10 @@ export class ProgrammaticPlaylistService {
 
         if (tracks.length < 15) return null;
 
-        const shuffled = await selectTracksWithArtistDiversityForMix(tracks, this.WEEKLY_TRACK_LIMIT);
+        const shuffled = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.WEEKLY_TRACK_LIMIT,
+        );
         const coverUrls = shuffled
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -3533,7 +3600,7 @@ export class ProgrammaticPlaylistService {
      */
     async generateMinorKeyMix(
         userId: string,
-        today: string
+        today: string,
     ): Promise<ProgrammaticMix | null> {
         // Only generate on Mondays (day 1)
         const dayOfWeek = new Date().getDay();
@@ -3551,7 +3618,10 @@ export class ProgrammaticPlaylistService {
 
         if (tracks.length < 15) return null;
 
-        const shuffled = await selectTracksWithArtistDiversityForMix(tracks, this.WEEKLY_TRACK_LIMIT);
+        const shuffled = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            this.WEEKLY_TRACK_LIMIT,
+        );
         const coverUrls = shuffled
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)
@@ -3596,7 +3666,7 @@ export class ProgrammaticPlaylistService {
             moodAcoustic?: { min?: number; max?: number };
             moodElectronic?: { min?: number; max?: number };
             limit?: number;
-        }
+        },
     ): Promise<ProgrammaticMix | null> {
         const where: any = {
             analysisStatus: "completed",
@@ -3613,7 +3683,7 @@ export class ProgrammaticPlaylistService {
             "moodElectronic",
         ];
         const usesMLMoods = mlMoodParams.some(
-            (key) => params[key as keyof typeof params] !== undefined
+            (key) => params[key as keyof typeof params] !== undefined,
         );
 
         // First, check how many enhanced tracks we have
@@ -3639,7 +3709,7 @@ export class ProgrammaticPlaylistService {
             } else {
                 // Not enough enhanced tracks - convert ML mood params to basic audio feature equivalents
                 logger.debug(
-                    `[MoodMixer] Only ${enhancedCount} enhanced tracks, falling back to basic features`
+                    `[MoodMixer] Only ${enhancedCount} enhanced tracks, falling back to basic features`,
                 );
 
                 // Map ML moods to basic audio features for fallback
@@ -3649,7 +3719,7 @@ export class ProgrammaticPlaylistService {
                     if (params.moodHappy.min !== undefined)
                         where.valence.gte = Math.max(
                             where.valence.gte || 0,
-                            params.moodHappy.min
+                            params.moodHappy.min,
                         );
                 }
                 if (params.moodSad) {
@@ -3657,7 +3727,7 @@ export class ProgrammaticPlaylistService {
                     if (params.moodSad.min !== undefined)
                         where.valence.lte = Math.min(
                             where.valence.lte || 1,
-                            1 - params.moodSad.min
+                            1 - params.moodSad.min,
                         );
                 }
                 if (params.moodRelaxed) {
@@ -3665,7 +3735,7 @@ export class ProgrammaticPlaylistService {
                     if (params.moodRelaxed.min !== undefined)
                         where.energy.lte = Math.min(
                             where.energy.lte || 1,
-                            1 - params.moodRelaxed.min * 0.5
+                            1 - params.moodRelaxed.min * 0.5,
                         );
                 }
                 if (params.moodAggressive) {
@@ -3673,7 +3743,7 @@ export class ProgrammaticPlaylistService {
                     if (params.moodAggressive.min !== undefined)
                         where.energy.gte = Math.max(
                             where.energy.gte || 0,
-                            params.moodAggressive.min
+                            params.moodAggressive.min,
                         );
                 }
                 if (params.moodParty) {
@@ -3681,7 +3751,7 @@ export class ProgrammaticPlaylistService {
                     if (params.moodParty.min !== undefined)
                         where.danceability.gte = Math.max(
                             where.danceability.gte || 0,
-                            params.moodParty.min
+                            params.moodParty.min,
                         );
                 }
                 // Clear the ML mood params since we're falling back
@@ -3701,12 +3771,12 @@ export class ProgrammaticPlaylistService {
             if (params.valence.min !== undefined)
                 where.valence.gte = Math.max(
                     where.valence.gte || 0,
-                    params.valence.min
+                    params.valence.min,
                 );
             if (params.valence.max !== undefined)
                 where.valence.lte = Math.min(
                     where.valence.lte ?? 1,
-                    params.valence.max
+                    params.valence.max,
                 );
         }
         if (params.energy) {
@@ -3714,12 +3784,12 @@ export class ProgrammaticPlaylistService {
             if (params.energy.min !== undefined)
                 where.energy.gte = Math.max(
                     where.energy.gte || 0,
-                    params.energy.min
+                    params.energy.min,
                 );
             if (params.energy.max !== undefined)
                 where.energy.lte = Math.min(
                     where.energy.lte ?? 1,
-                    params.energy.max
+                    params.energy.max,
                 );
         }
         if (params.danceability) {
@@ -3727,12 +3797,12 @@ export class ProgrammaticPlaylistService {
             if (params.danceability.min !== undefined)
                 where.danceability.gte = Math.max(
                     where.danceability.gte || 0,
-                    params.danceability.min
+                    params.danceability.min,
                 );
             if (params.danceability.max !== undefined)
                 where.danceability.lte = Math.min(
                     where.danceability.lte ?? 1,
-                    params.danceability.max
+                    params.danceability.max,
                 );
         }
         if (params.acousticness) {
@@ -3825,7 +3895,10 @@ export class ProgrammaticPlaylistService {
         const limit = params.limit || 15;
         if (tracks.length < Math.min(limit, 8)) return null;
 
-        const shuffled = await selectTracksWithArtistDiversityForMix(tracks, limit);
+        const shuffled = await selectTracksWithArtistDiversityForMix(
+            tracks,
+            limit,
+        );
         const coverUrls = shuffled
             .filter((t) => t.album.coverUrl)
             .slice(0, 4)

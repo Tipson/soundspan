@@ -23,21 +23,22 @@ const INSECURE_DEFAULT = "default-encryption-key-change-me";
  */
 function getRawEncryptionKey(): string {
     // Support both SETTINGS_ENCRYPTION_KEY (primary) and ENCRYPTION_KEY (compatibility)
-    const key = process.env.SETTINGS_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY;
+    const key =
+        process.env.SETTINGS_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY;
 
     if (!key) {
         throw new Error(
             "CRITICAL: SETTINGS_ENCRYPTION_KEY or ENCRYPTION_KEY environment variable must be set.\n" +
-            "This key is required to encrypt sensitive data (API keys, passwords, 2FA secrets).\n" +
-            "Generate a secure key with: openssl rand -base64 32"
+                "This key is required to encrypt sensitive data (API keys, passwords, 2FA secrets).\n" +
+                "Generate a secure key with: openssl rand -base64 32",
         );
     }
 
     if (key === INSECURE_DEFAULT) {
         throw new Error(
             "CRITICAL: Encryption key is set to the insecure default value.\n" +
-            "You must set a unique SETTINGS_ENCRYPTION_KEY or ENCRYPTION_KEY.\n" +
-            "Generate a secure key with: openssl rand -base64 32"
+                "You must set a unique SETTINGS_ENCRYPTION_KEY or ENCRYPTION_KEY.\n" +
+                "Generate a secure key with: openssl rand -base64 32",
         );
     }
 
@@ -198,7 +199,7 @@ function decryptLegacy(text: string): string {
         const decipher = crypto.createDecipheriv(
             LEGACY_ALGORITHM,
             LEGACY_ENCRYPTION_KEY,
-            iv
+            iv,
         );
         let decrypted = decipher.update(encryptedText);
         decrypted = Buffer.concat([decrypted, decipher.final()]);

@@ -158,7 +158,8 @@ const mockGetState = enrichmentStateService.getState as jest.Mock;
 const mockPause = enrichmentStateService.pause as jest.Mock;
 const mockResume = enrichmentStateService.resume as jest.Mock;
 const mockStop = enrichmentStateService.stop as jest.Mock;
-const mockMusicBrainzSearchArtist = musicBrainzService.searchArtist as jest.Mock;
+const mockMusicBrainzSearchArtist =
+    musicBrainzService.searchArtist as jest.Mock;
 const mockMusicBrainzSearchReleaseGroups =
     musicBrainzService.searchReleaseGroups as jest.Mock;
 
@@ -190,8 +191,8 @@ const mockInvalidateSystemSettingsCache =
 const mockUpdateConcurrencyMultiplier =
     rateLimiter.updateConcurrencyMultiplier as jest.Mock;
 
-    const mockArtistFindUnique = dbPrisma.artist.findUnique as jest.Mock;
-    const mockArtistFindFirst = dbPrisma.artist.findFirst as jest.Mock;
+const mockArtistFindUnique = dbPrisma.artist.findUnique as jest.Mock;
+const mockArtistFindFirst = dbPrisma.artist.findFirst as jest.Mock;
 const mockArtistUpdate = dbPrisma.artist.update as jest.Mock;
 const mockAlbumFindUnique = dbPrisma.album.findUnique as jest.Mock;
 const mockAlbumUpdate = dbPrisma.album.update as jest.Mock;
@@ -199,18 +200,18 @@ const mockOwnedAlbumDeleteMany = dbPrisma.ownedAlbum.deleteMany as jest.Mock;
 const mockOwnedAlbumUpsert = dbPrisma.ownedAlbum.upsert as jest.Mock;
 const mockTrackFindUnique = dbPrisma.track.findUnique as jest.Mock;
 const mockTrackUpdate = dbPrisma.track.update as jest.Mock;
-const mockSystemSettingsFindUnique =
-    dbPrisma.systemSettings.findUnique as jest.Mock;
+const mockSystemSettingsFindUnique = dbPrisma.systemSettings
+    .findUnique as jest.Mock;
 const mockSystemSettingsUpsert = dbPrisma.systemSettings.upsert as jest.Mock;
 const mockRedisDel = redisClient.del as jest.Mock;
 
 function getRouteHandler(
     path: string,
-    method: "get" | "post" | "put" | "delete"
+    method: "get" | "post" | "put" | "delete",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -244,11 +245,11 @@ describe("enrichment route runtime behavior", () => {
     const resetMoodTagsHandler = getRouteHandler("/reset-mood-tags", "post");
     const resetAudioAnalysisHandler = getRouteHandler(
         "/reset-audio-analysis",
-        "post"
+        "post",
     );
     const resetVibeEmbeddingsHandler = getRouteHandler(
         "/reset-vibe-embeddings",
-        "post"
+        "post",
     );
     const fullHandler = getRouteHandler("/full", "post");
     const syncHandler = getRouteHandler("/sync", "post");
@@ -263,22 +264,40 @@ describe("enrichment route runtime behavior", () => {
     const skipHandler = getRouteHandler("/skip", "post");
     const searchArtistsHandler = getRouteHandler(
         "/search/musicbrainz/artists",
-        "get"
+        "get",
     );
     const searchReleaseGroupsHandler = getRouteHandler(
         "/search/musicbrainz/release-groups",
-        "get"
+        "get",
     );
     const failuresClearHandler = getRouteHandler("/failures", "delete");
     const failureDeleteHandler = getRouteHandler("/failures/:id", "delete");
-    const resetArtistMetadataHandler = getRouteHandler("/artists/:id/reset", "post");
-    const updateArtistMetadataHandler = getRouteHandler("/artists/:id/metadata", "put");
-    const updateAlbumMetadataHandler = getRouteHandler("/albums/:id/metadata", "put");
-    const updateTrackMetadataHandler = getRouteHandler("/tracks/:id/metadata", "put");
-    const resetAlbumMetadataHandler = getRouteHandler("/albums/:id/reset", "post");
+    const resetArtistMetadataHandler = getRouteHandler(
+        "/artists/:id/reset",
+        "post",
+    );
+    const updateArtistMetadataHandler = getRouteHandler(
+        "/artists/:id/metadata",
+        "put",
+    );
+    const updateAlbumMetadataHandler = getRouteHandler(
+        "/albums/:id/metadata",
+        "put",
+    );
+    const updateTrackMetadataHandler = getRouteHandler(
+        "/tracks/:id/metadata",
+        "put",
+    );
+    const resetAlbumMetadataHandler = getRouteHandler(
+        "/albums/:id/reset",
+        "post",
+    );
     const concurrencyGetHandler = getRouteHandler("/concurrency", "get");
     const concurrencyPutHandler = getRouteHandler("/concurrency", "put");
-    const resetTrackMetadataHandler = getRouteHandler("/tracks/:id/reset", "post");
+    const resetTrackMetadataHandler = getRouteHandler(
+        "/tracks/:id/reset",
+        "post",
+    );
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -324,7 +343,11 @@ describe("enrichment route runtime behavior", () => {
             autoEnrichMetadata: true,
         });
         mockGetFailures.mockResolvedValue({ items: [], total: 0 });
-        mockGetFailureCounts.mockResolvedValue({ artist: 1, track: 2, audio: 3 });
+        mockGetFailureCounts.mockResolvedValue({
+            artist: 1,
+            track: 2,
+            audio: 3,
+        });
         mockResetRetryCount.mockResolvedValue(undefined);
         mockGetFailure.mockResolvedValue(null);
         mockResolveFailures.mockResolvedValue(undefined);
@@ -349,10 +372,7 @@ describe("enrichment route runtime behavior", () => {
     it("validates musicbrainz artist search query length", async () => {
         const res = createRes();
 
-        await searchArtistsHandler(
-            { query: { q: "a" } } as any,
-            res
-        );
+        await searchArtistsHandler({ query: { q: "a" } } as any, res);
 
         expect(res.statusCode).toBe(400);
         expect(res.body).toEqual({
@@ -381,14 +401,11 @@ describe("enrichment route runtime behavior", () => {
 
         const res = createRes();
 
-        await searchArtistsHandler(
-            { query: { q: "test artist" } } as any,
-            res
-        );
+        await searchArtistsHandler({ query: { q: "test artist" } } as any, res);
 
         expect(mockMusicBrainzSearchArtist).toHaveBeenCalledWith(
             "test artist",
-            10
+            10,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -415,14 +432,14 @@ describe("enrichment route runtime behavior", () => {
 
     it("surfaces musicbrainz artist search failures", async () => {
         mockMusicBrainzSearchArtist.mockRejectedValueOnce(
-            new Error("musicbrainz down")
+            new Error("musicbrainz down"),
         );
 
         const res = createRes();
 
         await searchArtistsHandler(
             { query: { q: "failing query" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
@@ -432,10 +449,7 @@ describe("enrichment route runtime behavior", () => {
     it("validates musicbrainz release-group query length", async () => {
         const res = createRes();
 
-        await searchReleaseGroupsHandler(
-            { query: { q: "r" } } as any,
-            res
-        );
+        await searchReleaseGroupsHandler({ query: { q: "r" } } as any, res);
 
         expect(res.statusCode).toBe(400);
         expect(res.body).toEqual({
@@ -465,13 +479,13 @@ describe("enrichment route runtime behavior", () => {
             {
                 query: { q: "test album", artist: "Alpha" },
             } as any,
-            res
+            res,
         );
 
         expect(mockMusicBrainzSearchReleaseGroups).toHaveBeenCalledWith(
             "test album",
             "Alpha",
-            10
+            10,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -491,14 +505,14 @@ describe("enrichment route runtime behavior", () => {
 
     it("surfaces release-group search failures", async () => {
         mockMusicBrainzSearchReleaseGroups.mockRejectedValueOnce(
-            new Error("release service down")
+            new Error("release service down"),
         );
 
         const res = createRes();
 
         await searchReleaseGroupsHandler(
             { query: { q: "test album" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
@@ -615,7 +629,10 @@ describe("enrichment route runtime behavior", () => {
 
     it("handles reset routes for artists, tags, audio, and vibes", async () => {
         const resetArtistsRes = createRes();
-        await resetArtistsHandler({ user: { id: "admin-1" } } as any, resetArtistsRes);
+        await resetArtistsHandler(
+            { user: { id: "admin-1" } } as any,
+            resetArtistsRes,
+        );
         expect(resetArtistsRes.statusCode).toBe(200);
         expect(resetArtistsRes.body).toEqual({
             message: "Artist enrichment reset",
@@ -624,7 +641,10 @@ describe("enrichment route runtime behavior", () => {
         });
 
         const resetMoodRes = createRes();
-        await resetMoodTagsHandler({ user: { id: "admin-1" } } as any, resetMoodRes);
+        await resetMoodTagsHandler(
+            { user: { id: "admin-1" } } as any,
+            resetMoodRes,
+        );
         expect(resetMoodRes.statusCode).toBe(200);
         expect(resetMoodRes.body).toEqual({
             message: "Mood tags reset",
@@ -635,7 +655,7 @@ describe("enrichment route runtime behavior", () => {
         const resetAudioRes = createRes();
         await resetAudioAnalysisHandler(
             { user: { id: "admin-1" } } as any,
-            resetAudioRes
+            resetAudioRes,
         );
         expect(resetAudioRes.statusCode).toBe(200);
         expect(resetAudioRes.body).toEqual({
@@ -647,7 +667,7 @@ describe("enrichment route runtime behavior", () => {
         const resetVibeRes = createRes();
         await resetVibeEmbeddingsHandler(
             { user: { id: "admin-1" } } as any,
-            resetVibeRes
+            resetVibeRes,
         );
         expect(resetVibeRes.statusCode).toBe(200);
         expect(resetVibeRes.body).toEqual({
@@ -663,7 +683,7 @@ describe("enrichment route runtime behavior", () => {
         const resetAudioRes = createRes();
         await resetAudioAnalysisHandler(
             { user: { id: "admin-1" } } as any,
-            resetAudioRes
+            resetAudioRes,
         );
         expect(resetAudioRes.statusCode).toBe(404);
         expect(resetAudioRes.body).toEqual({
@@ -675,7 +695,7 @@ describe("enrichment route runtime behavior", () => {
         const resetVibeRes = createRes();
         await resetVibeEmbeddingsHandler(
             { user: { id: "admin-1" } } as any,
-            resetVibeRes
+            resetVibeRes,
         );
         expect(resetVibeRes.statusCode).toBe(404);
         expect(resetVibeRes.body).toEqual({
@@ -692,7 +712,9 @@ describe("enrichment route runtime behavior", () => {
         await resetArtistsHandler({ user: { id: "admin-1" } } as any, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to reset artist enrichment" });
+        expect(res.body).toEqual({
+            error: "Failed to reset artist enrichment",
+        });
     });
 
     it("returns 500 from reset route failures", async () => {
@@ -706,15 +728,21 @@ describe("enrichment route runtime behavior", () => {
     });
 
     it("handles full enrichment asynchronous and synchronous startup failures", async () => {
-        mockRunFullEnrichment.mockRejectedValueOnce(new Error("queue rejected"));
+        mockRunFullEnrichment.mockRejectedValueOnce(
+            new Error("queue rejected"),
+        );
         const asyncFailureRes = createRes();
-        await fullHandler({ user: { id: "admin-1" }, body: {} } as any, asyncFailureRes);
+        await fullHandler(
+            { user: { id: "admin-1" }, body: {} } as any,
+            asyncFailureRes,
+        );
         await Promise.resolve();
 
         expect(asyncFailureRes.statusCode).toBe(200);
         expect(asyncFailureRes.body).toEqual({
             message: "Full enrichment started",
-            description: "All artists, track tags, and audio analysis will be re-processed",
+            description:
+                "All artists, track tags, and audio analysis will be re-processed",
             forceVibeRebuild: false,
             forceMoodBucketBackfill: false,
         });
@@ -723,10 +751,15 @@ describe("enrichment route runtime behavior", () => {
             throw new Error("sync fail");
         });
         const syncFailureRes = createRes();
-        await fullHandler({ user: { id: "admin-1" }, body: {} } as any, syncFailureRes);
+        await fullHandler(
+            { user: { id: "admin-1" }, body: {} } as any,
+            syncFailureRes,
+        );
 
         expect(syncFailureRes.statusCode).toBe(500);
-        expect(syncFailureRes.body).toEqual({ error: "Failed to start full enrichment" });
+        expect(syncFailureRes.body).toEqual({
+            error: "Failed to start full enrichment",
+        });
     });
 
     it("starts incremental sync and surfaces error messages", async () => {
@@ -756,7 +789,7 @@ describe("enrichment route runtime behavior", () => {
         const putRes = createRes();
         await settingsPutHandler(
             { user: { id: "user-1" }, body: { enabled: false } } as any,
-            putRes
+            putRes,
         );
         expect(mockUpdateSettings).toHaveBeenCalledWith("user-1", {
             enabled: false,
@@ -771,7 +804,7 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await settingsPutHandler(
             { user: { id: "user-1" }, body: { enabled: false } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
@@ -783,17 +816,19 @@ describe("enrichment route runtime behavior", () => {
         const disabledRes = createRes();
         await enrichArtistHandler(
             { user: { id: "user-1" }, params: { id: "artist-1" } } as any,
-            disabledRes
+            disabledRes,
         );
         expect(disabledRes.statusCode).toBe(400);
-        expect(disabledRes.body).toEqual({ error: "Enrichment is not enabled" });
+        expect(disabledRes.body).toEqual({
+            error: "Enrichment is not enabled",
+        });
 
         mockGetSettings.mockResolvedValueOnce({ enabled: true });
         mockEnrichArtist.mockResolvedValueOnce(null);
         const missingRes = createRes();
         await enrichArtistHandler(
             { user: { id: "user-1" }, params: { id: "artist-1" } } as any,
-            missingRes
+            missingRes,
         );
         expect(missingRes.statusCode).toBe(404);
         expect(missingRes.body).toEqual({ error: "No enrichment data found" });
@@ -803,7 +838,7 @@ describe("enrichment route runtime behavior", () => {
         const lowConfidenceRes = createRes();
         await enrichArtistHandler(
             { user: { id: "user-1" }, params: { id: "artist-low" } } as any,
-            lowConfidenceRes
+            lowConfidenceRes,
         );
         expect(mockApplyArtistEnrichment).not.toHaveBeenCalled();
         expect(lowConfidenceRes.statusCode).toBe(200);
@@ -824,7 +859,7 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await enrichArtistHandler(
             { user: { id: "user-1" }, params: { id: "artist-high" } } as any,
-            res
+            res,
         );
 
         expect(mockApplyArtistEnrichment).toHaveBeenCalledWith("artist-high", {
@@ -841,12 +876,14 @@ describe("enrichment route runtime behavior", () => {
 
     it("returns 500 when single artist enrichment throws", async () => {
         mockGetSettings.mockResolvedValueOnce({ enabled: true });
-        mockEnrichArtist.mockRejectedValueOnce(new Error("enrichment service down"));
+        mockEnrichArtist.mockRejectedValueOnce(
+            new Error("enrichment service down"),
+        );
 
         const res = createRes();
         await enrichArtistHandler(
             { user: { id: "user-1" }, params: { id: "artist-err" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
@@ -860,7 +897,7 @@ describe("enrichment route runtime behavior", () => {
         const highConfidenceRes = createRes();
         await enrichAlbumHandler(
             { user: { id: "user-1" }, params: { id: "album-1" } } as any,
-            highConfidenceRes
+            highConfidenceRes,
         );
         expect(mockApplyAlbumEnrichment).toHaveBeenCalledWith("album-1", {
             confidence: 0.9,
@@ -873,7 +910,7 @@ describe("enrichment route runtime behavior", () => {
         const lowConfidenceRes = createRes();
         await enrichAlbumHandler(
             { user: { id: "user-1" }, params: { id: "album-2" } } as any,
-            lowConfidenceRes
+            lowConfidenceRes,
         );
         expect(lowConfidenceRes.statusCode).toBe(200);
         expect(lowConfidenceRes.body).toEqual({
@@ -885,12 +922,14 @@ describe("enrichment route runtime behavior", () => {
 
     it("returns 500 when single album enrichment throws", async () => {
         mockGetSettings.mockResolvedValueOnce({ enabled: true });
-        mockEnrichAlbum.mockRejectedValueOnce(new Error("album provider timeout"));
+        mockEnrichAlbum.mockRejectedValueOnce(
+            new Error("album provider timeout"),
+        );
 
         const res = createRes();
         await enrichAlbumHandler(
             { user: { id: "user-1" }, params: { id: "album-err" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
@@ -921,7 +960,9 @@ describe("enrichment route runtime behavior", () => {
     });
 
     it("returns 500 when start flow throws unexpectedly", async () => {
-        mockSystemSettingsFindUnique.mockRejectedValueOnce(new Error("db timeout"));
+        mockSystemSettingsFindUnique.mockRejectedValueOnce(
+            new Error("db timeout"),
+        );
 
         const res = createRes();
         await startHandler({ user: { id: "admin-1" } } as any, res);
@@ -970,7 +1011,10 @@ describe("enrichment route runtime behavior", () => {
 
         mockGetFailures.mockRejectedValueOnce(new Error("bad query"));
         const errorRes = createRes();
-        await failuresGetHandler({ query: {}, user: { id: "admin-1" } } as any, errorRes);
+        await failuresGetHandler(
+            { query: {}, user: { id: "admin-1" } } as any,
+            errorRes,
+        );
         expect(errorRes.statusCode).toBe(500);
         expect(errorRes.body).toEqual({ error: "Failed to get failures" });
     });
@@ -983,14 +1027,22 @@ describe("enrichment route runtime behavior", () => {
 
         mockGetFailureCounts.mockRejectedValueOnce(new Error("no counts"));
         const errorRes = createRes();
-        await failureCountsHandler({ user: { id: "admin-1" } } as any, errorRes);
+        await failureCountsHandler(
+            { user: { id: "admin-1" } } as any,
+            errorRes,
+        );
         expect(errorRes.statusCode).toBe(500);
-        expect(errorRes.body).toEqual({ error: "Failed to get failure counts" });
+        expect(errorRes.body).toEqual({
+            error: "Failed to get failure counts",
+        });
     });
 
     it("validates retry ids and requeues existing artist/audio items", async () => {
         const invalidRes = createRes();
-        await retryHandler({ body: {}, user: { id: "admin-1" } } as any, invalidRes);
+        await retryHandler(
+            { body: {}, user: { id: "admin-1" } } as any,
+            invalidRes,
+        );
         expect(invalidRes.statusCode).toBe(400);
         expect(invalidRes.body).toEqual({
             error: "Must provide array of failure IDs",
@@ -1025,7 +1077,7 @@ describe("enrichment route runtime behavior", () => {
                 body: { ids: ["f-artist", "f-track", "f-audio", "f-none"] },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(mockResetRetryCount).toHaveBeenCalledWith([
@@ -1079,11 +1131,15 @@ describe("enrichment route runtime behavior", () => {
         await retryHandler(
             {
                 body: {
-                    ids: ["f-artist-missing", "f-track-present", "f-audio-missing"],
+                    ids: [
+                        "f-artist-missing",
+                        "f-track-present",
+                        "f-audio-missing",
+                    ],
                 },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(mockResolveFailures).toHaveBeenCalledWith(["f-artist-missing"]);
@@ -1107,7 +1163,7 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await retryHandler(
             { body: { ids: ["f-1"] }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
@@ -1116,7 +1172,10 @@ describe("enrichment route runtime behavior", () => {
 
     it("validates skip payload and skips failures by id", async () => {
         const invalidRes = createRes();
-        await skipHandler({ body: { ids: [] }, user: { id: "admin-1" } } as any, invalidRes);
+        await skipHandler(
+            { body: { ids: [] }, user: { id: "admin-1" } } as any,
+            invalidRes,
+        );
         expect(invalidRes.statusCode).toBe(400);
         expect(invalidRes.body).toEqual({
             error: "Must provide array of failure IDs",
@@ -1125,7 +1184,7 @@ describe("enrichment route runtime behavior", () => {
         const successRes = createRes();
         await skipHandler(
             { body: { ids: ["f-1", "f-2"] }, user: { id: "admin-1" } } as any,
-            successRes
+            successRes,
         );
         expect(successRes.statusCode).toBe(200);
         expect(successRes.body).toEqual({
@@ -1141,7 +1200,7 @@ describe("enrichment route runtime behavior", () => {
                 query: { entityType: "playlist" },
                 user: { id: "admin-1" },
             } as any,
-            invalidRes
+            invalidRes,
         );
         expect(invalidRes.statusCode).toBe(400);
         expect(invalidRes.body).toEqual({ error: "Invalid entityType" });
@@ -1153,7 +1212,7 @@ describe("enrichment route runtime behavior", () => {
                 query: { entityType: "artist" },
                 user: { id: "admin-1" },
             } as any,
-            singularRes
+            singularRes,
         );
         expect(mockClearAllFailures).toHaveBeenCalledWith("artist");
         expect(singularRes.statusCode).toBe(200);
@@ -1165,7 +1224,7 @@ describe("enrichment route runtime behavior", () => {
 
     it("returns 500 when clearing failures fails", async () => {
         mockClearAllFailures.mockRejectedValueOnce(
-            new Error("clear failure store offline")
+            new Error("clear failure store offline"),
         );
 
         const res = createRes();
@@ -1174,7 +1233,7 @@ describe("enrichment route runtime behavior", () => {
                 query: {},
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(mockClearAllFailures).toHaveBeenCalledWith(undefined);
@@ -1188,7 +1247,7 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await failureDeleteHandler(
             { params: { id: "failure-123" }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(mockDeleteFailures).toHaveBeenCalledWith(["failure-123"]);
@@ -1202,19 +1261,23 @@ describe("enrichment route runtime behavior", () => {
     it("returns 500 when artist metadata reset fails", async () => {
         mockArtistFindUnique.mockResolvedValueOnce({ id: "artist-1" });
         mockArtistUpdate.mockRejectedValueOnce(
-            new Error("artist reset failed")
+            new Error("artist reset failed"),
         );
 
         const res = createRes();
         await resetArtistMetadataHandler(
-            { params: { id: "artist-1" }, body: {}, user: { id: "admin-1" } } as any,
-            res
+            {
+                params: { id: "artist-1" },
+                body: {},
+                user: { id: "admin-1" },
+            } as any,
+            res,
         );
 
         expect(mockArtistUpdate).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "artist-1" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({ error: "artist reset failed" });
@@ -1226,7 +1289,7 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await failureDeleteHandler(
             { params: { id: "failure-err" }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(mockDeleteFailures).toHaveBeenCalledWith(["failure-err"]);
@@ -1252,7 +1315,7 @@ describe("enrichment route runtime behavior", () => {
         const invalidRes = createRes();
         await concurrencyPutHandler(
             { body: { concurrency: "2" }, user: { id: "admin-1" } } as any,
-            invalidRes
+            invalidRes,
         );
         expect(invalidRes.statusCode).toBe(400);
         expect(invalidRes.body).toEqual({
@@ -1262,7 +1325,7 @@ describe("enrichment route runtime behavior", () => {
         const successRes = createRes();
         await concurrencyPutHandler(
             { body: { concurrency: 5.9 }, user: { id: "admin-1" } } as any,
-            successRes
+            successRes,
         );
         expect(mockSystemSettingsUpsert).toHaveBeenCalledWith({
             where: { id: "default" },
@@ -1291,18 +1354,20 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await concurrencyPutHandler(
             { body: { concurrency: 2 }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to update enrichment settings" });
+        expect(res.body).toEqual({
+            error: "Failed to update enrichment settings",
+        });
     });
 
     it("rejects non-positive concurrency values", async () => {
         const lowRes = createRes();
         await concurrencyPutHandler(
             { body: { concurrency: 0 }, user: { id: "admin-1" } } as any,
-            lowRes
+            lowRes,
         );
 
         expect(mockSystemSettingsUpsert).not.toHaveBeenCalled();
@@ -1335,7 +1400,7 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await resetTrackMetadataHandler(
             { params: { id: "track-1" }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(mockTrackFindUnique).toHaveBeenCalledWith({
@@ -1374,14 +1439,18 @@ describe("enrichment route runtime behavior", () => {
 
         const res = createRes();
         await resetAlbumMetadataHandler(
-            { params: { id: "album-1" }, body: {}, user: { id: "admin-1" } } as any,
-            res
+            {
+                params: { id: "album-1" },
+                body: {},
+                user: { id: "admin-1" },
+            } as any,
+            res,
         );
 
         expect(mockAlbumUpdate).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "album-1" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({ error: "album reset failed" });
@@ -1402,7 +1471,7 @@ describe("enrichment route runtime behavior", () => {
         const res = createRes();
         await resetArtistMetadataHandler(
             { params: { id: "artist-1" }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(mockRedisDel).toHaveBeenCalledWith("hero:artist-1");
@@ -1416,13 +1485,13 @@ describe("enrichment route runtime behavior", () => {
     it("returns 404 on track metadata reset race condition", async () => {
         mockTrackFindUnique.mockResolvedValueOnce({ id: "track-race" });
         mockTrackUpdate.mockRejectedValueOnce(
-            Object.assign(new Error("track deleted"), { code: "P2025" })
+            Object.assign(new Error("track deleted"), { code: "P2025" }),
         );
 
         const res = createRes();
         await resetTrackMetadataHandler(
             { params: { id: "track-race" }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(404);
@@ -1440,7 +1509,7 @@ describe("enrichment route runtime behavior", () => {
                 body: { mbid: 123 },
                 user: { id: "admin-1" },
             } as any,
-            invalidRes
+            invalidRes,
         );
 
         expect(invalidRes.statusCode).toBe(400);
@@ -1470,7 +1539,7 @@ describe("enrichment route runtime behavior", () => {
                 },
                 user: { id: "admin-1" },
             } as any,
-            redisFailureRes
+            redisFailureRes,
         );
 
         expect(redisFailureRes.statusCode).toBe(200);
@@ -1487,7 +1556,7 @@ describe("enrichment route runtime behavior", () => {
                 body: { mbid: "123e4567-e89b-12d3-a456-426614174000" },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(404);
@@ -1522,7 +1591,7 @@ describe("enrichment route runtime behavior", () => {
                 },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(mockAlbumFindUnique).toHaveBeenCalledWith({
@@ -1582,7 +1651,7 @@ describe("enrichment route runtime behavior", () => {
                 body: { title: "Manual title", trackNo: "42" },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(mockTrackUpdate).toHaveBeenCalledWith({
@@ -1613,7 +1682,7 @@ describe("enrichment route runtime behavior", () => {
 
     it("returns 500 when track metadata override fails", async () => {
         mockTrackUpdate.mockRejectedValueOnce(
-            new Error("track metadata failed")
+            new Error("track metadata failed"),
         );
 
         const res = createRes();
@@ -1623,7 +1692,7 @@ describe("enrichment route runtime behavior", () => {
                 body: { title: "Manual title", trackNo: "42" },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(500);
@@ -1645,7 +1714,7 @@ describe("enrichment route runtime behavior", () => {
                 },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(409);
@@ -1663,19 +1732,18 @@ describe("enrichment route runtime behavior", () => {
             entityType: "artist",
             entityId: "artist-1",
         });
-        mockArtistFindUnique.mockRejectedValueOnce(
-            new Error("lookup failed")
-        );
+        mockArtistFindUnique.mockRejectedValueOnce(new Error("lookup failed"));
 
         const res = createRes();
         await retryHandler(
             { body: { ids: ["f-artist"] }, user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
-            message: "Queued 0 items for retry, 0 skipped (entities no longer exist)",
+            message:
+                "Queued 0 items for retry, 0 skipped (entities no longer exist)",
             queued: 0,
             skipped: 0,
         });
@@ -1695,7 +1763,7 @@ describe("enrichment route runtime behavior", () => {
                 body: { ids: ["f-unsupported"] },
                 user: { id: "admin-1" },
             } as any,
-            res
+            res,
         );
 
         expect(mockResetRetryCount).toHaveBeenCalledWith(["f-unsupported"]);
@@ -1705,7 +1773,8 @@ describe("enrichment route runtime behavior", () => {
         expect(mockTrackUpdate).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
-            message: "Queued 0 items for retry, 0 skipped (entities no longer exist)",
+            message:
+                "Queued 0 items for retry, 0 skipped (entities no longer exist)",
             queued: 0,
             skipped: 0,
         });
@@ -1713,14 +1782,16 @@ describe("enrichment route runtime behavior", () => {
 
     it("returns 500 when concurrency settings cannot be read", async () => {
         mockGetSystemSettings.mockRejectedValueOnce(
-            new Error("settings timeout")
+            new Error("settings timeout"),
         );
 
         const res = createRes();
         await concurrencyGetHandler({ user: { id: "admin-1" } } as any, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to get enrichment settings" });
+        expect(res.body).toEqual({
+            error: "Failed to get enrichment settings",
+        });
     });
 
     it("defaults concurrency and speed estimates when settings omit enrichmentConcurrency", async () => {

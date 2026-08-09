@@ -167,7 +167,7 @@ describe("auth middleware", () => {
                     tokenVersion: 9,
                 },
                 "test-jwt-secret",
-                { expiresIn: "24h" }
+                { expiresIn: "24h" },
             );
         });
 
@@ -176,8 +176,10 @@ describe("auth middleware", () => {
             process.env.SESSION_SECRET = "session-secret";
 
             jest.isolateModules(() => {
-                const isolatedAuth = require("../auth") as typeof import("../auth");
-                const isolatedJwt = require("jsonwebtoken").default as typeof jwt;
+                const isolatedAuth =
+                    require("../auth") as typeof import("../auth");
+                const isolatedJwt = require("jsonwebtoken")
+                    .default as typeof jwt;
                 const isolatedSign = isolatedJwt.sign as jest.Mock;
 
                 isolatedAuth.generateToken({
@@ -190,7 +192,7 @@ describe("auth middleware", () => {
                 expect(isolatedSign).toHaveBeenCalledWith(
                     expect.any(Object),
                     "session-secret",
-                    { expiresIn: "24h" }
+                    { expiresIn: "24h" },
                 );
             });
         });
@@ -211,7 +213,7 @@ describe("auth middleware", () => {
                     type: "refresh",
                 },
                 "test-jwt-secret",
-                { expiresIn: "30d" }
+                { expiresIn: "30d" },
             );
         });
     });
@@ -290,9 +292,13 @@ describe("auth middleware", () => {
 
             await requireAuth(asRequest(req), asResponse(res), asNext(next));
 
-            expect(mockJwtVerify).toHaveBeenCalledWith("access-token", "test-jwt-secret", {
-                algorithms: ["HS256"],
-            });
+            expect(mockJwtVerify).toHaveBeenCalledWith(
+                "access-token",
+                "test-jwt-secret",
+                {
+                    algorithms: ["HS256"],
+                },
+            );
             expect(req.user).toEqual({
                 id: "u3",
                 username: "jwt-user",
@@ -339,7 +345,9 @@ describe("auth middleware", () => {
 
     describe("requireAdmin", () => {
         it("rejects non-admin users", async () => {
-            const req = createReq({ user: { id: "u1", username: "alice", role: "user" } });
+            const req = createReq({
+                user: { id: "u1", username: "alice", role: "user" },
+            });
             const res = createRes();
             const next = jest.fn();
 
@@ -351,7 +359,9 @@ describe("auth middleware", () => {
         });
 
         it("allows admin users", async () => {
-            const req = createReq({ user: { id: "u2", username: "root", role: "admin" } });
+            const req = createReq({
+                user: { id: "u2", username: "root", role: "admin" },
+            });
             const res = createRes();
             const next = jest.fn();
 
@@ -363,7 +373,10 @@ describe("auth middleware", () => {
 
     describe("requireAuthOrToken", () => {
         it("accepts query param tokens for streaming routes", async () => {
-            mockJwtVerify.mockReturnValue({ userId: "stream-user", tokenVersion: 5 });
+            mockJwtVerify.mockReturnValue({
+                userId: "stream-user",
+                tokenVersion: 5,
+            });
             mockUserFindUnique.mockResolvedValue({
                 id: "stream-user",
                 username: "streamer",
@@ -375,11 +388,19 @@ describe("auth middleware", () => {
             const res = createRes();
             const next = jest.fn();
 
-            await requireAuthOrToken(asRequest(req), asResponse(res), asNext(next));
+            await requireAuthOrToken(
+                asRequest(req),
+                asResponse(res),
+                asNext(next),
+            );
 
-            expect(mockJwtVerify).toHaveBeenCalledWith("stream-token", "test-jwt-secret", {
-                algorithms: ["HS256"],
-            });
+            expect(mockJwtVerify).toHaveBeenCalledWith(
+                "stream-token",
+                "test-jwt-secret",
+                {
+                    algorithms: ["HS256"],
+                },
+            );
             expect(req.user).toEqual({
                 id: "stream-user",
                 username: "streamer",
@@ -389,7 +410,10 @@ describe("auth middleware", () => {
         });
 
         it("rejects stale query tokens after tokenVersion changes", async () => {
-            mockJwtVerify.mockReturnValue({ userId: "stream-user", tokenVersion: 1 });
+            mockJwtVerify.mockReturnValue({
+                userId: "stream-user",
+                tokenVersion: 1,
+            });
             mockUserFindUnique.mockResolvedValue({
                 id: "stream-user",
                 username: "streamer",
@@ -401,7 +425,11 @@ describe("auth middleware", () => {
             const res = createRes();
             const next = jest.fn();
 
-            await requireAuthOrToken(asRequest(req), asResponse(res), asNext(next));
+            await requireAuthOrToken(
+                asRequest(req),
+                asResponse(res),
+                asNext(next),
+            );
 
             expect(next).not.toHaveBeenCalled();
             expect(req.user).toBeUndefined();
@@ -410,7 +438,10 @@ describe("auth middleware", () => {
         });
 
         it("falls back to bearer tokens when no query token is present", async () => {
-            mockJwtVerify.mockReturnValue({ userId: "fallback-user", tokenVersion: 7 });
+            mockJwtVerify.mockReturnValue({
+                userId: "fallback-user",
+                tokenVersion: 7,
+            });
             mockUserFindUnique.mockResolvedValue({
                 id: "fallback-user",
                 username: "fallback",
@@ -424,7 +455,11 @@ describe("auth middleware", () => {
             const res = createRes();
             const next = jest.fn();
 
-            await requireAuthOrToken(asRequest(req), asResponse(res), asNext(next));
+            await requireAuthOrToken(
+                asRequest(req),
+                asResponse(res),
+                asNext(next),
+            );
 
             expect(req.user).toEqual({
                 id: "fallback-user",
@@ -445,12 +480,14 @@ describe("auth middleware", () => {
                     require("../auth");
                 });
             }).toThrow(
-                "JWT_SECRET or SESSION_SECRET environment variable is required for authentication"
+                "JWT_SECRET or SESSION_SECRET environment variable is required for authentication",
             );
         });
 
         it("logs and rejects API key lookup errors", async () => {
-            mockApiKeyFindUnique.mockRejectedValueOnce(new Error("api-key db outage"));
+            mockApiKeyFindUnique.mockRejectedValueOnce(
+                new Error("api-key db outage"),
+            );
 
             const req = createReq({ headers: { "x-api-key": "broken-key" } });
             const res = createRes();
@@ -460,7 +497,7 @@ describe("auth middleware", () => {
 
             expect(logger.error).toHaveBeenCalledWith(
                 "API key auth error:",
-                expect.any(Error)
+                expect.any(Error),
             );
             expect(next).not.toHaveBeenCalled();
             expect(res.statusCode).toBe(401);

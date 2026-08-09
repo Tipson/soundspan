@@ -57,7 +57,7 @@ export class AppError extends Error {
         public category: ErrorCategory,
         message: string,
         public details?: any,
-        public httpStatus?: number
+        public httpStatus?: number,
     ) {
         super(message);
         this.name = "AppError";
@@ -104,7 +104,7 @@ export function wrapNodeError(err: any, context: string): AppError {
             ErrorCode.FILE_NOT_FOUND,
             ErrorCategory.RECOVERABLE,
             `File not found: ${context}`,
-            { originalError: err.message }
+            { originalError: err.message },
         );
     }
 
@@ -113,7 +113,7 @@ export function wrapNodeError(err: any, context: string): AppError {
             ErrorCode.PERMISSION_DENIED,
             ErrorCategory.FATAL,
             `Permission denied: ${context}`,
-            { originalError: err.message }
+            { originalError: err.message },
         );
     }
 
@@ -122,7 +122,7 @@ export function wrapNodeError(err: any, context: string): AppError {
             ErrorCode.DISK_FULL,
             ErrorCategory.TRANSIENT,
             `Disk full: ${context}`,
-            { originalError: err.message }
+            { originalError: err.message },
         );
     }
 
@@ -131,6 +131,6 @@ export function wrapNodeError(err: any, context: string): AppError {
         ErrorCode.FILE_READ_ERROR,
         ErrorCategory.RECOVERABLE,
         `Failed to read file: ${context}`,
-        { originalError: err.message }
+        { originalError: err.message },
     );
 }

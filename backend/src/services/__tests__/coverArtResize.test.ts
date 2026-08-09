@@ -19,7 +19,7 @@ import {
 async function makeImage(
     width: number,
     height: number,
-    format: "jpeg" | "png" = "jpeg"
+    format: "jpeg" | "png" = "jpeg",
 ): Promise<Buffer> {
     const pipeline = sharp({
         create: {
@@ -44,7 +44,7 @@ describe("snapCoverArtSize", () => {
 
     it("caps oversized requests at the largest allowed size", () => {
         expect(snapCoverArtSize("3000")).toBe(
-            COVER_ART_SIZES[COVER_ART_SIZES.length - 1]
+            COVER_ART_SIZES[COVER_ART_SIZES.length - 1],
         );
     });
 
@@ -64,13 +64,13 @@ describe("snapCoverArtSize", () => {
 describe("negotiateCoverArtFormat", () => {
     it("selects webp when the Accept header allows it", () => {
         expect(
-            negotiateCoverArtFormat("image/avif,image/webp,image/*,*/*;q=0.8")
+            negotiateCoverArtFormat("image/avif,image/webp,image/*,*/*;q=0.8"),
         ).toBe("webp");
     });
 
     it("keeps the original format otherwise", () => {
         expect(negotiateCoverArtFormat("image/png,image/*;q=0.8")).toBe(
-            "original"
+            "original",
         );
         expect(negotiateCoverArtFormat(undefined)).toBe("original");
     });

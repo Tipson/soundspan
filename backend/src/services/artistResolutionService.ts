@@ -37,7 +37,7 @@ export interface ArtistResolutionResult {
  * 7. Create new lightweight Artist entity
  */
 export async function resolveArtistForRemoteTrack(
-    rawArtistName: string
+    rawArtistName: string,
 ): Promise<ArtistResolutionResult> {
     // 1. Guard empty/null
     if (!rawArtistName || rawArtistName.trim() === "") {
@@ -81,9 +81,18 @@ export async function resolveArtistForRemoteTrack(
         });
 
         for (const candidate of candidates) {
-            if (areArtistNamesSimilar(normalizedName, candidate.normalizedName, 95)) {
+            if (
+                areArtistNamesSimilar(
+                    normalizedName,
+                    candidate.normalizedName,
+                    95,
+                )
+            ) {
                 // Update name if incoming has diacritics (prefer accented form)
-                const preferred = getPreferredArtistName(candidate.name, primaryArtist);
+                const preferred = getPreferredArtistName(
+                    candidate.name,
+                    primaryArtist,
+                );
                 if (preferred !== candidate.name) {
                     await prisma.artist.update({
                         where: { id: candidate.id },
@@ -141,7 +150,7 @@ async function resolveVariousArtists(): Promise<ArtistResolutionResult> {
  * Resolve or create an artist by display name (used for "Unknown Artist" fallback).
  */
 async function resolveOrCreateByName(
-    displayName: string
+    displayName: string,
 ): Promise<ArtistResolutionResult> {
     const normalized = normalizeArtistName(displayName);
     const existing = await prisma.artist.findFirst({
@@ -162,7 +171,7 @@ async function resolveOrCreateByName(
  */
 async function createNewArtist(
     name: string,
-    normalizedName: string
+    normalizedName: string,
 ): Promise<ArtistResolutionResult> {
     const tempMbid = `temp-remote-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 

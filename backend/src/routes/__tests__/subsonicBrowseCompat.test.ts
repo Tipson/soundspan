@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -853,7 +855,7 @@ describe("subsonic browse compatibility handlers", () => {
 
         await handleSearch2(
             buildReq({
-                query: "\"\"",
+                query: '""',
                 artistCount: "0",
                 albumCount: "0",
                 songCount: "0",
@@ -971,7 +973,7 @@ describe("subsonic browse compatibility handlers", () => {
 
         await handleSearch3(
             buildReq({
-                query: "\"\"",
+                query: '""',
                 artistCount: "0",
                 albumCount: "0",
                 songCount: "0",
@@ -1015,7 +1017,7 @@ describe("subsonic browse compatibility handlers", () => {
 
         await handleSearch3(
             buildReq({
-                query: "\"\"",
+                query: '""',
                 artistCount: "100",
                 albumCount: "100",
                 songCount: "1000",
@@ -1073,7 +1075,7 @@ describe("subsonic browse compatibility handlers", () => {
             {
                 trackId: "track-4",
                 _count: {
-                _all: 1,
+                    _all: 1,
                 },
             },
         ]);
@@ -1256,11 +1258,46 @@ describe("subsonic browse compatibility handlers", () => {
 
         mockTrackFindMany.mockResolvedValue([
             buildTrack("track-z", "artist-primary", "album-beta", "Beta", 1, 1),
-            buildTrack("track-a", "artist-secondary", "album-alpha", "Alpha", 2, 1),
-            buildTrack("track-b", "artist-secondary", "album-alpha", "Alpha", 2, 1),
-            buildTrack("track-c", "artist-secondary", "album-alpha", "Alpha", 3, 1),
-            buildTrack("track-d", "artist-secondary", "album-alpha", "Alpha", 1, 2),
-            buildTrack("track-e", "artist-secondary", "album-beta", "Beta", 5, 1),
+            buildTrack(
+                "track-a",
+                "artist-secondary",
+                "album-alpha",
+                "Alpha",
+                2,
+                1,
+            ),
+            buildTrack(
+                "track-b",
+                "artist-secondary",
+                "album-alpha",
+                "Alpha",
+                2,
+                1,
+            ),
+            buildTrack(
+                "track-c",
+                "artist-secondary",
+                "album-alpha",
+                "Alpha",
+                3,
+                1,
+            ),
+            buildTrack(
+                "track-d",
+                "artist-secondary",
+                "album-alpha",
+                "Alpha",
+                1,
+                2,
+            ),
+            buildTrack(
+                "track-e",
+                "artist-secondary",
+                "album-beta",
+                "Beta",
+                5,
+                1,
+            ),
         ]);
 
         await handleGetSimilarSongs(

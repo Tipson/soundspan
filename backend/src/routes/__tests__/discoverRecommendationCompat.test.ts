@@ -75,11 +75,11 @@ const mockClearCurrentPlaylist =
 
 function getRouteHandler(
     path: string,
-    method: "get" | "post" | "delete" | "patch"
+    method: "get" | "post" | "delete" | "patch",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -112,7 +112,10 @@ describe("discover recommendation-mode compatibility", () => {
     const unlikeHandler = getRouteHandler("/unlike", "delete");
     const cleanupLidarrHandler = getRouteHandler("/cleanup-lidarr", "post");
     const fixTaggingHandler = getRouteHandler("/fix-tagging", "post");
-    const generateStatusHandler = getRouteHandler("/generate/status/:jobId", "get");
+    const generateStatusHandler = getRouteHandler(
+        "/generate/status/:jobId",
+        "get",
+    );
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -129,7 +132,7 @@ describe("discover recommendation-mode compatibility", () => {
         expect(mockDiscoverQueueGetJobs).toHaveBeenCalledWith(
             ["active", "waiting", "delayed"],
             0,
-            200
+            200,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -164,7 +167,7 @@ describe("discover recommendation-mode compatibility", () => {
                 failed: 0,
                 total: 100,
                 queueState: "active",
-            })
+            }),
         );
     });
 
@@ -250,7 +253,7 @@ describe("discover recommendation-mode compatibility", () => {
         expect(mockDiscoverQueueAdd).toHaveBeenCalledWith(
             "discover-recommendation",
             { userId: "user-1" },
-            { jobId: "discover:manual:user-1" }
+            { jobId: "discover:manual:user-1" },
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -277,7 +280,7 @@ describe("discover recommendation-mode compatibility", () => {
         expect(mockDiscoverQueueAdd).toHaveBeenCalledWith(
             "discover-recommendation",
             { userId: "user-1" },
-            { jobId: "discover:manual:user-1" }
+            { jobId: "discover:manual:user-1" },
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -294,7 +297,9 @@ describe("discover recommendation-mode compatibility", () => {
             remove: jest.fn().mockRejectedValue(new Error("remove failed")),
         };
         mockDiscoverQueueGetJob.mockResolvedValueOnce(staleJob);
-        mockDiscoverQueueAdd.mockResolvedValueOnce({ id: "job-after-remove-fail" });
+        mockDiscoverQueueAdd.mockResolvedValueOnce({
+            id: "job-after-remove-fail",
+        });
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -355,7 +360,9 @@ describe("discover recommendation-mode compatibility", () => {
     });
 
     it("returns 500 when generation status lookup throws", async () => {
-        mockDiscoverQueueGetJob.mockRejectedValueOnce(new Error("lookup failed"));
+        mockDiscoverQueueGetJob.mockRejectedValueOnce(
+            new Error("lookup failed"),
+        );
 
         const req = { params: { jobId: "job-err" } } as any;
         const res = createRes();
@@ -428,7 +435,9 @@ describe("discover recommendation-mode compatibility", () => {
     });
 
     it("returns 500 when recommendation clear fails", async () => {
-        mockClearCurrentPlaylist.mockRejectedValueOnce(new Error("clear failed"));
+        mockClearCurrentPlaylist.mockRejectedValueOnce(
+            new Error("clear failed"),
+        );
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();

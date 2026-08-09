@@ -36,7 +36,9 @@ jest.mock("../../utils/logger", () => ({
 
 import { findSimilarTracks, type SimilarTrack } from "../hybridSimilarity";
 
-function buildSimilarTrack(overrides: Partial<SimilarTrack> = {}): SimilarTrack {
+function buildSimilarTrack(
+    overrides: Partial<SimilarTrack> = {},
+): SimilarTrack {
     return {
         id: "track-2",
         title: "Candidate Track",
@@ -79,10 +81,12 @@ describe("hybridSimilarity service", () => {
         });
         mockRunAnnQuery.mockResolvedValueOnce(expected);
 
-        await expect(findSimilarTracks(sourceTrackId, limit)).resolves.toEqual(expected);
+        await expect(findSimilarTracks(sourceTrackId, limit)).resolves.toEqual(
+            expected,
+        );
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            `[HYBRID-SIMILARITY] Using hybrid mode for track ${sourceTrackId}`
+            `[HYBRID-SIMILARITY] Using hybrid mode for track ${sourceTrackId}`,
         );
         // Hybrid mode is ANN: it goes through the probes-applying helper, once,
         // and never through the bare prisma.$queryRaw path.
@@ -92,10 +96,13 @@ describe("hybridSimilarity service", () => {
         // The right values reached the query: the Prisma.Sql passed to the
         // helper binds the source trackId and the 5x candidate limit (which
         // appears twice — the candidate CTE's LIMIT and the outer LIMIT).
-        const sqlArg = mockRunAnnQuery.mock.calls[0]?.[0] as { values: unknown[] };
+        const sqlArg = mockRunAnnQuery.mock.calls[0]?.[0] as {
+            values: unknown[];
+        };
         expect(sqlArg.values).toContain(sourceTrackId);
         expect(
-            sqlArg.values.filter((value: unknown) => value === limit * 5).length
+            sqlArg.values.filter((value: unknown) => value === limit * 5)
+                .length,
         ).toBeGreaterThanOrEqual(2);
         expect(mockLoggerWarn).not.toHaveBeenCalled();
     });
@@ -117,19 +124,25 @@ describe("hybridSimilarity service", () => {
         mockRunAnnQuery.mockResolvedValueOnce(expected);
 
         // No explicit limit -> default of 20 flows through to a returned result.
-        await expect(findSimilarTracks(sourceTrackId)).resolves.toEqual(expected);
+        await expect(findSimilarTracks(sourceTrackId)).resolves.toEqual(
+            expected,
+        );
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            `[HYBRID-SIMILARITY] Using CLAP-only mode for track ${sourceTrackId}`
+            `[HYBRID-SIMILARITY] Using CLAP-only mode for track ${sourceTrackId}`,
         );
         expect(mockRunAnnQuery).toHaveBeenCalledTimes(1);
         expect(mockQueryRaw).not.toHaveBeenCalled();
 
         // Default limit 20 -> candidate limit 100, bound exactly once (the
         // LIMIT), alongside the source trackId.
-        const sqlArg = mockRunAnnQuery.mock.calls[0]?.[0] as { values: unknown[] };
+        const sqlArg = mockRunAnnQuery.mock.calls[0]?.[0] as {
+            values: unknown[];
+        };
         expect(sqlArg.values).toContain(sourceTrackId);
-        expect(sqlArg.values.filter((value: unknown) => value === 100)).toHaveLength(1);
+        expect(
+            sqlArg.values.filter((value: unknown) => value === 100),
+        ).toHaveLength(1);
     });
 
     it("uses features-only mode (non-ANN, direct query) when CLAP embeddings are unavailable", async () => {
@@ -149,10 +162,12 @@ describe("hybridSimilarity service", () => {
         });
         mockQueryRaw.mockResolvedValueOnce(expected);
 
-        await expect(findSimilarTracks(sourceTrackId, limit)).resolves.toEqual(expected);
+        await expect(findSimilarTracks(sourceTrackId, limit)).resolves.toEqual(
+            expected,
+        );
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            `[HYBRID-SIMILARITY] Using features-only mode for track ${sourceTrackId}`
+            `[HYBRID-SIMILARITY] Using features-only mode for track ${sourceTrackId}`,
         );
         // features-only has no ANN, so it must NOT go through the probes helper.
         expect(mockQueryRaw).toHaveBeenCalledTimes(1);
@@ -171,12 +186,14 @@ describe("hybridSimilarity service", () => {
             musicCNN: false,
         });
 
-        await expect(findSimilarTracks("source-track-4", 9)).resolves.toEqual([]);
+        await expect(findSimilarTracks("source-track-4", 9)).resolves.toEqual(
+            [],
+        );
 
         expect(mockRunAnnQuery).not.toHaveBeenCalled();
         expect(mockQueryRaw).not.toHaveBeenCalled();
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "[HYBRID-SIMILARITY] No similarity features available"
+            "[HYBRID-SIMILARITY] No similarity features available",
         );
         expect(mockLoggerDebug).not.toHaveBeenCalled();
     });
@@ -186,7 +203,7 @@ describe("hybridSimilarity service", () => {
         mockGetFeatures.mockRejectedValueOnce(failure);
 
         await expect(findSimilarTracks("source-track-5", 6)).rejects.toThrow(
-            "feature detection unavailable"
+            "feature detection unavailable",
         );
 
         expect(mockRunAnnQuery).not.toHaveBeenCalled();
@@ -204,11 +221,11 @@ describe("hybridSimilarity service", () => {
         mockRunAnnQuery.mockRejectedValueOnce(new Error("hybrid query failed"));
 
         await expect(findSimilarTracks(sourceTrackId, 4)).rejects.toThrow(
-            "hybrid query failed"
+            "hybrid query failed",
         );
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            `[HYBRID-SIMILARITY] Using hybrid mode for track ${sourceTrackId}`
+            `[HYBRID-SIMILARITY] Using hybrid mode for track ${sourceTrackId}`,
         );
         expect(mockRunAnnQuery).toHaveBeenCalledTimes(1);
     });
@@ -222,11 +239,11 @@ describe("hybridSimilarity service", () => {
         mockRunAnnQuery.mockRejectedValueOnce(new Error("clap query failed"));
 
         await expect(findSimilarTracks(sourceTrackId, 10)).rejects.toThrow(
-            "clap query failed"
+            "clap query failed",
         );
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            `[HYBRID-SIMILARITY] Using CLAP-only mode for track ${sourceTrackId}`
+            `[HYBRID-SIMILARITY] Using CLAP-only mode for track ${sourceTrackId}`,
         );
         expect(mockRunAnnQuery).toHaveBeenCalledTimes(1);
     });
@@ -240,11 +257,11 @@ describe("hybridSimilarity service", () => {
         mockQueryRaw.mockRejectedValueOnce(new Error("features query failed"));
 
         await expect(findSimilarTracks(sourceTrackId, 11)).rejects.toThrow(
-            "features query failed"
+            "features query failed",
         );
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            `[HYBRID-SIMILARITY] Using features-only mode for track ${sourceTrackId}`
+            `[HYBRID-SIMILARITY] Using features-only mode for track ${sourceTrackId}`,
         );
         expect(mockQueryRaw).toHaveBeenCalledTimes(1);
     });
@@ -257,22 +274,61 @@ describe("hybridSimilarity service", () => {
             musicCNN: true,
         });
         mockRunAnnQuery.mockResolvedValueOnce([
-            buildSimilarTrack({ id: "a-1", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "a-2", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "a-3", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "a-4", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "a-5", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "b-1", artistId: "artist-b", artistName: "Artist B" }),
-            buildSimilarTrack({ id: "b-2", artistId: "artist-b", artistName: "Artist B" }),
-            buildSimilarTrack({ id: "c-1", artistId: "artist-c", artistName: "Artist C" }),
-            buildSimilarTrack({ id: "d-1", artistId: "artist-d", artistName: "Artist D" }),
+            buildSimilarTrack({
+                id: "a-1",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "a-2",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "a-3",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "a-4",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "a-5",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "b-1",
+                artistId: "artist-b",
+                artistName: "Artist B",
+            }),
+            buildSimilarTrack({
+                id: "b-2",
+                artistId: "artist-b",
+                artistName: "Artist B",
+            }),
+            buildSimilarTrack({
+                id: "c-1",
+                artistId: "artist-c",
+                artistName: "Artist C",
+            }),
+            buildSimilarTrack({
+                id: "d-1",
+                artistId: "artist-d",
+                artistName: "Artist D",
+            }),
         ]);
 
         const result = await findSimilarTracks(sourceTrackId, limit);
-        const artistCounts = result.reduce<Record<string, number>>((acc, track) => {
-            acc[track.artistId] = (acc[track.artistId] || 0) + 1;
-            return acc;
-        }, {});
+        const artistCounts = result.reduce<Record<string, number>>(
+            (acc, track) => {
+                acc[track.artistId] = (acc[track.artistId] || 0) + 1;
+                return acc;
+            },
+            {},
+        );
 
         expect(result).toHaveLength(limit);
         expect(Math.max(...Object.values(artistCounts))).toBeLessThanOrEqual(2);
@@ -321,21 +377,43 @@ describe("hybridSimilarity service", () => {
             musicCNN: true,
         });
         mockRunAnnQuery.mockResolvedValueOnce([
-            buildSimilarTrack({ id: "artist-a-1", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "artist-a-2", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "artist-a-3", artistId: "artist-a", artistName: "Artist A" }),
-            buildSimilarTrack({ id: "artist-a-4", artistId: "artist-a", artistName: "Artist A" }),
+            buildSimilarTrack({
+                id: "artist-a-1",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "artist-a-2",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "artist-a-3",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
+            buildSimilarTrack({
+                id: "artist-a-4",
+                artistId: "artist-a",
+                artistName: "Artist A",
+            }),
             buildSimilarTrack({
                 id: "missing-artist-overflow",
                 artistId: "" as unknown as string,
                 artistName: "Unknown Artist",
             }),
-            buildSimilarTrack({ id: "artist-b-1", artistId: "artist-b", artistName: "Artist B" }),
+            buildSimilarTrack({
+                id: "artist-b-1",
+                artistId: "artist-b",
+                artistName: "Artist B",
+            }),
         ]);
 
         const result = await findSimilarTracks(sourceTrackId, limit);
 
         expect(result).toHaveLength(limit);
-        expect(result.map((track) => track.id)).toContain("missing-artist-overflow");
+        expect(result.map((track) => track.id)).toContain(
+            "missing-artist-overflow",
+        );
     });
 });

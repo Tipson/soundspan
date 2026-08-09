@@ -18,7 +18,10 @@ describe("listen together external snapshot freshness", () => {
     const createdGroupIds: string[] = [];
 
     afterEach(() => {
-        for (const groupId of createdGroupIds.splice(0, createdGroupIds.length)) {
+        for (const groupId of createdGroupIds.splice(
+            0,
+            createdGroupIds.length,
+        )) {
             groupManager.remove(groupId);
         }
     });
@@ -156,4 +159,3 @@ describe("listen together external snapshot freshness", () => {
         expect(group!.syncState).toBe("playing");
     });
 });
-

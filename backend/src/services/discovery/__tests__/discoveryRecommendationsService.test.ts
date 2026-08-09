@@ -83,7 +83,9 @@ const EXPIRES_AT = new Date("2025-09-19T12:00:00.000Z");
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockLogger = logger as jest.Mocked<typeof logger>;
-const mockDiscoverySeeding = discoverySeeding as jest.Mocked<typeof discoverySeeding>;
+const mockDiscoverySeeding = discoverySeeding as jest.Mocked<
+    typeof discoverySeeding
+>;
 const mockAddMonths = addMonths as jest.MockedFunction<typeof addMonths>;
 const mockEndOfWeek = endOfWeek as jest.MockedFunction<typeof endOfWeek>;
 const mockStartOfWeek = startOfWeek as jest.MockedFunction<typeof startOfWeek>;
@@ -100,8 +102,9 @@ describe("DiscoveryRecommendationsService", () => {
 
         mockStartOfWeek.mockReturnValue(WEEK_START);
         mockEndOfWeek.mockReturnValue(WEEK_END);
-        mockSubDays.mockImplementation((_date: Parameters<typeof subDays>[0], amount: number) =>
-            amount === 120 ? SUB_120 : SUB_14
+        mockSubDays.mockImplementation(
+            (_date: Parameters<typeof subDays>[0], amount: number) =>
+                amount === 120 ? SUB_120 : SUB_14,
         );
         mockAddMonths.mockReturnValue(EXPIRES_AT);
 
@@ -129,13 +132,17 @@ describe("DiscoveryRecommendationsService", () => {
                 downloadRatio: 1.3,
                 enabled: true,
             };
-            (mockPrisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValue(
-                existing
+            (
+                mockPrisma.userDiscoverConfig.findUnique as jest.Mock
+            ).mockResolvedValue(existing);
+
+            const result = await (service as any).getOrCreateUserConfig(
+                "user-1",
             );
 
-            const result = await (service as any).getOrCreateUserConfig("user-1");
-
-            expect(mockPrisma.userDiscoverConfig.findUnique).toHaveBeenCalledWith({
+            expect(
+                mockPrisma.userDiscoverConfig.findUnique,
+            ).toHaveBeenCalledWith({
                 where: { userId: "user-1" },
             });
             expect(mockPrisma.userDiscoverConfig.create).not.toHaveBeenCalled();
@@ -143,8 +150,12 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("creates default config when user config does not exist", async () => {
-            (mockPrisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.userDiscoverConfig.create as jest.Mock).mockResolvedValue({
+            (
+                mockPrisma.userDiscoverConfig.findUnique as jest.Mock
+            ).mockResolvedValue(null);
+            (
+                mockPrisma.userDiscoverConfig.create as jest.Mock
+            ).mockResolvedValue({
                 userId: "user-1",
                 enabled: true,
             });
@@ -166,7 +177,9 @@ describe("DiscoveryRecommendationsService", () => {
 
     describe("resolveSeedArtistIds", () => {
         it("resolves seed artist IDs from mixed MBID and name inputs", async () => {
-            (mockDiscoverySeeding.getSeedArtists as jest.Mock).mockResolvedValue([
+            (
+                mockDiscoverySeeding.getSeedArtists as jest.Mock
+            ).mockResolvedValue([
                 { mbid: "mbid-1", name: "Artist One" },
                 { mbid: null, name: "Artist Two" },
                 { mbid: "", name: "" },
@@ -176,9 +189,13 @@ describe("DiscoveryRecommendationsService", () => {
                 { id: "artist-2" },
             ]);
 
-            const result = await (service as any).resolveSeedArtistIds("user-1");
+            const result = await (service as any).resolveSeedArtistIds(
+                "user-1",
+            );
 
-            expect(mockDiscoverySeeding.getSeedArtists).toHaveBeenCalledWith("user-1");
+            expect(mockDiscoverySeeding.getSeedArtists).toHaveBeenCalledWith(
+                "user-1",
+            );
             expect(mockPrisma.artist.findMany).toHaveBeenCalledWith({
                 where: {
                     OR: [
@@ -204,12 +221,16 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("returns empty list without querying artists when seeds are empty", async () => {
-            (mockDiscoverySeeding.getSeedArtists as jest.Mock).mockResolvedValue([
+            (
+                mockDiscoverySeeding.getSeedArtists as jest.Mock
+            ).mockResolvedValue([
                 { mbid: null, name: null },
                 { mbid: "", name: "" },
             ]);
 
-            const result = await (service as any).resolveSeedArtistIds("user-1");
+            const result = await (service as any).resolveSeedArtistIds(
+                "user-1",
+            );
 
             expect(result).toEqual([]);
             expect(mockPrisma.artist.findMany).not.toHaveBeenCalled();
@@ -218,9 +239,10 @@ describe("DiscoveryRecommendationsService", () => {
 
     describe("buildArtistScoreMap", () => {
         it("prioritizes seeded artists and enriches with similar artist edges", async () => {
-            jest
-                .spyOn(service as any, "resolveSeedArtistIds")
-                .mockResolvedValue(["seed-artist"]);
+            jest.spyOn(
+                service as any,
+                "resolveSeedArtistIds",
+            ).mockResolvedValue(["seed-artist"]);
             (mockPrisma.similarArtist.findMany as jest.Mock).mockResolvedValue([
                 { toArtistId: "seed-artist", weight: 0.3 },
                 { toArtistId: "related-artist", weight: 0.88 },
@@ -247,7 +269,10 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("falls back to recent plays when no seed artists resolve", async () => {
-            jest.spyOn(service as any, "resolveSeedArtistIds").mockResolvedValue([]);
+            jest.spyOn(
+                service as any,
+                "resolveSeedArtistIds",
+            ).mockResolvedValue([]);
             (mockPrisma.play.findMany as jest.Mock).mockResolvedValue([
                 { track: { album: { artistId: "artist-1" } } },
                 { track: { album: { artistId: "artist-1" } } },
@@ -284,7 +309,10 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("uses artist catalog fallback when seeds and plays produce no scores", async () => {
-            jest.spyOn(service as any, "resolveSeedArtistIds").mockResolvedValue([]);
+            jest.spyOn(
+                service as any,
+                "resolveSeedArtistIds",
+            ).mockResolvedValue([]);
             (mockPrisma.play.findMany as jest.Mock).mockResolvedValue([]);
             (mockPrisma.artist.findMany as jest.Mock).mockResolvedValue([
                 { id: "fallback-1" },
@@ -314,15 +342,15 @@ describe("DiscoveryRecommendationsService", () => {
 
     describe("selectTracks", () => {
         it("filters recent plays/exclusions, de-duplicates albums, and assigns tiers", async () => {
-            jest
-                .spyOn(service as any, "buildArtistScoreMap")
-                .mockResolvedValue(new Map([["artist-priority", 0.72]]));
+            jest.spyOn(service as any, "buildArtistScoreMap").mockResolvedValue(
+                new Map([["artist-priority", 0.72]]),
+            );
             (mockPrisma.play.findMany as jest.Mock).mockResolvedValue([
                 { trackId: "recent-track" },
             ]);
-            (mockPrisma.discoverExclusion.findMany as jest.Mock).mockResolvedValue([
-                { albumMbid: "excluded-rg" },
-            ]);
+            (
+                mockPrisma.discoverExclusion.findMany as jest.Mock
+            ).mockResolvedValue([{ albumMbid: "excluded-rg" }]);
 
             const candidateTracks = [
                 {
@@ -390,7 +418,9 @@ describe("DiscoveryRecommendationsService", () => {
             const result = await (service as any).selectTracks("user-1", 2);
 
             expect(mockPrisma.track.findMany).toHaveBeenCalledTimes(2);
-            expect((mockPrisma.track.findMany as jest.Mock).mock.calls[0][0]).toEqual({
+            expect(
+                (mockPrisma.track.findMany as jest.Mock).mock.calls[0][0],
+            ).toEqual({
                 where: {
                     duration: { gt: 0 },
                     id: { notIn: ["recent-track"] },
@@ -416,7 +446,9 @@ describe("DiscoveryRecommendationsService", () => {
                 take: 220,
                 orderBy: [{ updatedAt: "desc" }],
             });
-            expect((mockPrisma.track.findMany as jest.Mock).mock.calls[1][0]).toEqual({
+            expect(
+                (mockPrisma.track.findMany as jest.Mock).mock.calls[1][0],
+            ).toEqual({
                 where: {
                     duration: { gt: 0 },
                     id: { notIn: ["track-priority"] },
@@ -477,11 +509,13 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("assigns wildcard tier when similarity clamps below explore threshold", async () => {
-            jest
-                .spyOn(service as any, "buildArtistScoreMap")
-                .mockResolvedValue(new Map([["artist-low", -1]]));
+            jest.spyOn(service as any, "buildArtistScoreMap").mockResolvedValue(
+                new Map([["artist-low", -1]]),
+            );
             (mockPrisma.play.findMany as jest.Mock).mockResolvedValue([]);
-            (mockPrisma.discoverExclusion.findMany as jest.Mock).mockResolvedValue([]);
+            (
+                mockPrisma.discoverExclusion.findMany as jest.Mock
+            ).mockResolvedValue([]);
             (mockPrisma.track.findMany as jest.Mock).mockResolvedValue([
                 {
                     id: "track-low",
@@ -516,28 +550,30 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("applies light thumbs weighting when ranking discovery candidates", async () => {
-            jest
-                .spyOn(service as any, "buildArtistScoreMap")
-                .mockResolvedValue(
-                    new Map([
-                        ["artist-disliked", 0.6],
-                        ["artist-liked", 0.6],
-                    ])
-                );
+            jest.spyOn(service as any, "buildArtistScoreMap").mockResolvedValue(
+                new Map([
+                    ["artist-disliked", 0.6],
+                    ["artist-liked", 0.6],
+                ]),
+            );
             (mockPrisma.play.findMany as jest.Mock).mockResolvedValue([]);
-            (mockPrisma.discoverExclusion.findMany as jest.Mock).mockResolvedValue([]);
+            (
+                mockPrisma.discoverExclusion.findMany as jest.Mock
+            ).mockResolvedValue([]);
             (mockPrisma.likedTrack.findMany as jest.Mock).mockResolvedValue([
                 {
                     trackId: "track-liked",
                     likedAt: new Date("2026-02-19T12:00:00.000Z"),
                 },
             ]);
-            (mockPrisma.dislikedEntity.findMany as jest.Mock).mockResolvedValue([
-                {
-                    entityId: "track-disliked",
-                    dislikedAt: new Date("2026-02-19T12:00:00.000Z"),
-                },
-            ]);
+            (mockPrisma.dislikedEntity.findMany as jest.Mock).mockResolvedValue(
+                [
+                    {
+                        entityId: "track-disliked",
+                        dislikedAt: new Date("2026-02-19T12:00:00.000Z"),
+                    },
+                ],
+            );
             (mockPrisma.track.findMany as jest.Mock).mockResolvedValue([
                 {
                     id: "track-disliked",
@@ -585,17 +621,17 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("limits repeated artists and uses relaxed caps only when needed to hit target size", async () => {
-            jest
-                .spyOn(service as any, "buildArtistScoreMap")
-                .mockResolvedValue(
-                    new Map([
-                        ["artist-a", 0.82],
-                        ["artist-b", 0.77],
-                        ["artist-c", 0.73],
-                    ])
-                );
+            jest.spyOn(service as any, "buildArtistScoreMap").mockResolvedValue(
+                new Map([
+                    ["artist-a", 0.82],
+                    ["artist-b", 0.77],
+                    ["artist-c", 0.73],
+                ]),
+            );
             (mockPrisma.play.findMany as jest.Mock).mockResolvedValue([]);
-            (mockPrisma.discoverExclusion.findMany as jest.Mock).mockResolvedValue([]);
+            (
+                mockPrisma.discoverExclusion.findMany as jest.Mock
+            ).mockResolvedValue([]);
             (mockPrisma.track.findMany as jest.Mock).mockResolvedValue([
                 {
                     id: "a-1",
@@ -725,14 +761,20 @@ describe("DiscoveryRecommendationsService", () => {
                 },
             ]);
 
-            const result = (await (service as any).selectTracks("user-1", 6)) as Array<{
+            const result = (await (service as any).selectTracks(
+                "user-1",
+                6,
+            )) as Array<{
                 artistId: string;
             }>;
             const artistCounts: Record<string, number> = {};
             for (const item of result) {
-                artistCounts[item.artistId] = (artistCounts[item.artistId] || 0) + 1;
+                artistCounts[item.artistId] =
+                    (artistCounts[item.artistId] || 0) + 1;
             }
-            const maxCount = Math.max(...(Object.values(artistCounts) as number[]));
+            const maxCount = Math.max(
+                ...(Object.values(artistCounts) as number[]),
+            );
 
             expect(mockPrisma.track.findMany).toHaveBeenCalledTimes(1);
             expect(result).toHaveLength(6);
@@ -778,21 +820,24 @@ describe("DiscoveryRecommendationsService", () => {
                 },
             ];
 
-            jest
-                .spyOn(service as any, "getOrCreateUserConfig")
-                .mockResolvedValue({
-                    userId: "user-1",
-                    playlistSize: 4,
-                    enabled: true,
-                    exclusionMonths: 6,
-                });
+            jest.spyOn(
+                service as any,
+                "getOrCreateUserConfig",
+            ).mockResolvedValue({
+                userId: "user-1",
+                playlistSize: 4,
+                enabled: true,
+                exclusionMonths: 6,
+            });
             const selectTracksSpy = jest
                 .spyOn(service as any, "selectTracks")
                 .mockResolvedValue(selectedTracks);
 
             const tx = {
                 discoveryAlbum: {
-                    findMany: jest.fn().mockResolvedValue([{ id: "old-album" }]),
+                    findMany: jest
+                        .fn()
+                        .mockResolvedValue([{ id: "old-album" }]),
                     deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
                     create: jest
                         .fn()
@@ -815,8 +860,11 @@ describe("DiscoveryRecommendationsService", () => {
             };
 
             (mockPrisma.$transaction as jest.Mock).mockImplementation(
-                async (callback: (transactionClient: typeof tx) => Promise<unknown>) =>
-                    callback(tx)
+                async (
+                    callback: (
+                        transactionClient: typeof tx,
+                    ) => Promise<unknown>,
+                ) => callback(tx),
             );
 
             const result = await service.generatePlaylist("user-1");
@@ -903,7 +951,7 @@ describe("DiscoveryRecommendationsService", () => {
             });
 
             expect(mockLogger.info).toHaveBeenCalledWith(
-                "[DiscoveryRecommendations] Generated 2 recommendation tracks for user user-1"
+                "[DiscoveryRecommendations] Generated 2 recommendation tracks for user user-1",
             );
             expect(result).toEqual({
                 success: true,
@@ -915,12 +963,13 @@ describe("DiscoveryRecommendationsService", () => {
         it("throws when discovery recommendations are disabled", async () => {
             mathRandomSpy?.mockRestore();
             mathRandomSpy = null;
-            jest
-                .spyOn(service as any, "getOrCreateUserConfig")
-                .mockResolvedValue({ enabled: false, playlistSize: 10 });
+            jest.spyOn(
+                service as any,
+                "getOrCreateUserConfig",
+            ).mockResolvedValue({ enabled: false, playlistSize: 10 });
 
             await expect(service.generatePlaylist("user-1")).rejects.toThrow(
-                "Discovery Weekly not enabled"
+                "Discovery Weekly not enabled",
             );
             expect(mockPrisma.$transaction).not.toHaveBeenCalled();
         });
@@ -928,20 +977,21 @@ describe("DiscoveryRecommendationsService", () => {
         it("surfaces transaction failures and skips success logging", async () => {
             mathRandomSpy?.mockRestore();
             mathRandomSpy = null;
-            jest
-                .spyOn(service as any, "getOrCreateUserConfig")
-                .mockResolvedValue({
-                    enabled: true,
-                    playlistSize: 10,
-                    exclusionMonths: 0,
-                });
+            jest.spyOn(
+                service as any,
+                "getOrCreateUserConfig",
+            ).mockResolvedValue({
+                enabled: true,
+                playlistSize: 10,
+                exclusionMonths: 0,
+            });
             jest.spyOn(service as any, "selectTracks").mockResolvedValue([]);
             (mockPrisma.$transaction as jest.Mock).mockRejectedValue(
-                new Error("transaction failed")
+                new Error("transaction failed"),
             );
 
             await expect(service.generatePlaylist("user-1")).rejects.toThrow(
-                "transaction failed"
+                "transaction failed",
             );
             expect(mockLogger.info).not.toHaveBeenCalled();
         });
@@ -949,28 +999,27 @@ describe("DiscoveryRecommendationsService", () => {
 
     describe("getCurrentPlaylist", () => {
         it("returns playlist shape and derives default tier from similarity when missing", async () => {
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([
-                {
-                    id: "discovery-1",
-                    rgMbid: "rg-1",
-                    similarity: null,
-                    tier: null,
-                    tracks: [
-                        { trackId: "track-1" },
-                        { trackId: null },
-                    ],
-                },
-                {
-                    id: "discovery-2",
-                    rgMbid: "rg-2",
-                    similarity: 0.82,
-                    tier: "medium",
-                    tracks: [
-                        { trackId: "track-2" },
-                        { trackId: "missing-track" },
-                    ],
-                },
-            ]);
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                [
+                    {
+                        id: "discovery-1",
+                        rgMbid: "rg-1",
+                        similarity: null,
+                        tier: null,
+                        tracks: [{ trackId: "track-1" }, { trackId: null }],
+                    },
+                    {
+                        id: "discovery-2",
+                        rgMbid: "rg-2",
+                        similarity: 0.82,
+                        tier: "medium",
+                        tracks: [
+                            { trackId: "track-2" },
+                            { trackId: "missing-track" },
+                        ],
+                    },
+                ],
+            );
             (mockPrisma.track.findMany as jest.Mock).mockResolvedValue([
                 {
                     id: "track-1",
@@ -1065,15 +1114,17 @@ describe("DiscoveryRecommendationsService", () => {
         });
 
         it("returns empty track list without querying library tracks when no IDs exist", async () => {
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([
-                {
-                    id: "discovery-1",
-                    rgMbid: "rg-1",
-                    similarity: 0.45,
-                    tier: "explore",
-                    tracks: [{ trackId: null }],
-                },
-            ]);
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                [
+                    {
+                        id: "discovery-1",
+                        rgMbid: "rg-1",
+                        similarity: 0.45,
+                        tier: "explore",
+                        tracks: [{ trackId: null }],
+                    },
+                ],
+            );
 
             const result = await service.getCurrentPlaylist("user-1");
 
@@ -1085,17 +1136,22 @@ describe("DiscoveryRecommendationsService", () => {
 
     describe("clearCurrentPlaylist (clearForUser equivalent)", () => {
         it("removes weekly discovery tracks/albums and clears unavailable entries", async () => {
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([
-                { id: "album-1" },
-                { id: "album-2" },
-            ]);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                [{ id: "album-1" }, { id: "album-2" }],
+            );
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({
                 count: 2,
             });
-            (mockPrisma.discoveryAlbum.deleteMany as jest.Mock).mockResolvedValue({
+            (
+                mockPrisma.discoveryAlbum.deleteMany as jest.Mock
+            ).mockResolvedValue({
                 count: 2,
             });
-            (mockPrisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({
+            (
+                mockPrisma.unavailableAlbum.deleteMany as jest.Mock
+            ).mockResolvedValue({
                 count: 1,
             });
 
@@ -1111,18 +1167,24 @@ describe("DiscoveryRecommendationsService", () => {
                     id: { in: ["album-1", "album-2"] },
                 },
             });
-            expect(mockPrisma.unavailableAlbum.deleteMany).toHaveBeenCalledWith({
-                where: {
-                    userId: "user-1",
-                    weekStartDate: WEEK_START,
+            expect(mockPrisma.unavailableAlbum.deleteMany).toHaveBeenCalledWith(
+                {
+                    where: {
+                        userId: "user-1",
+                        weekStartDate: WEEK_START,
+                    },
                 },
-            });
+            );
             expect(result).toEqual({ clearedCount: 2 });
         });
 
         it("still clears unavailable albums when nothing is in the current playlist", async () => {
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
-            (mockPrisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                [],
+            );
+            (
+                mockPrisma.unavailableAlbum.deleteMany as jest.Mock
+            ).mockResolvedValue({
                 count: 0,
             });
 
@@ -1130,12 +1192,14 @@ describe("DiscoveryRecommendationsService", () => {
 
             expect(mockPrisma.discoveryTrack.deleteMany).not.toHaveBeenCalled();
             expect(mockPrisma.discoveryAlbum.deleteMany).not.toHaveBeenCalled();
-            expect(mockPrisma.unavailableAlbum.deleteMany).toHaveBeenCalledWith({
-                where: {
-                    userId: "user-1",
-                    weekStartDate: WEEK_START,
+            expect(mockPrisma.unavailableAlbum.deleteMany).toHaveBeenCalledWith(
+                {
+                    where: {
+                        userId: "user-1",
+                        weekStartDate: WEEK_START,
+                    },
                 },
-            });
+            );
             expect(result).toEqual({ clearedCount: 0 });
         });
     });

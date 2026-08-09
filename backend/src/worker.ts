@@ -8,7 +8,9 @@ import { createDependencyReadinessTracker } from "./utils/dependencyReadiness";
 type WorkerProcessRole = "worker" | "all";
 
 function resolveWorkerProcessRole(): WorkerProcessRole {
-    const raw = (process.env.BACKEND_PROCESS_ROLE || "worker").trim().toLowerCase();
+    const raw = (process.env.BACKEND_PROCESS_ROLE || "worker")
+        .trim()
+        .toLowerCase();
 
     if (raw === "worker" || raw === "all") {
         return raw;
@@ -16,13 +18,13 @@ function resolveWorkerProcessRole(): WorkerProcessRole {
 
     if (raw === "api") {
         logger.error(
-            '[Worker Startup] BACKEND_PROCESS_ROLE="api" is invalid for worker entrypoint.'
+            '[Worker Startup] BACKEND_PROCESS_ROLE="api" is invalid for worker entrypoint.',
         );
         process.exit(1);
     }
 
     logger.warn(
-        `[Worker Startup] Invalid BACKEND_PROCESS_ROLE="${process.env.BACKEND_PROCESS_ROLE}", defaulting to "worker"`
+        `[Worker Startup] Invalid BACKEND_PROCESS_ROLE="${process.env.BACKEND_PROCESS_ROLE}", defaulting to "worker"`,
     );
     return "worker";
 }
@@ -38,7 +40,7 @@ const dependencyReadiness = createDependencyReadinessTracker("worker");
 const DEFAULT_WORKER_HEALTH_PORT = 3010;
 const parsedWorkerHealthPort = Number.parseInt(
     process.env.WORKER_HEALTH_PORT || `${DEFAULT_WORKER_HEALTH_PORT}`,
-    10
+    10,
 );
 const workerHealthPort =
     Number.isFinite(parsedWorkerHealthPort) && parsedWorkerHealthPort > 0
@@ -47,7 +49,7 @@ const workerHealthPort =
 
 if (workerHealthPort !== parsedWorkerHealthPort) {
     logger.warn(
-        `[Worker Startup] Invalid WORKER_HEALTH_PORT="${process.env.WORKER_HEALTH_PORT}", defaulting to ${DEFAULT_WORKER_HEALTH_PORT}`
+        `[Worker Startup] Invalid WORKER_HEALTH_PORT="${process.env.WORKER_HEALTH_PORT}", defaulting to ${DEFAULT_WORKER_HEALTH_PORT}`,
     );
 }
 
@@ -63,7 +65,10 @@ function buildHealthPayload() {
 
 function sendHealth(
     res: {
-        writeHead: (statusCode: number, headers: Record<string, string>) => void;
+        writeHead: (
+            statusCode: number,
+            headers: Record<string, string>,
+        ) => void;
         end: (data?: string) => void;
     },
     statusCode: number,
@@ -113,7 +118,7 @@ function startHealthServer() {
 
     healthServer.listen(workerHealthPort, "0.0.0.0", () => {
         logger.debug(
-            `[Worker Startup] Health server listening on port ${workerHealthPort}`
+            `[Worker Startup] Health server listening on port ${workerHealthPort}`,
         );
     });
 }
@@ -140,7 +145,9 @@ async function checkPostgresConnection() {
             databaseUrl: config.databaseUrl?.replace(/:[^:@]+@/, ":***@"),
         });
         logger.error("Unable to connect to PostgreSQL. Please ensure:");
-        logger.error("  1. PostgreSQL is running on the correct port (default: 5433)");
+        logger.error(
+            "  1. PostgreSQL is running on the correct port (default: 5433)",
+        );
         logger.error("  2. DATABASE_URL in .env is correct");
         logger.error("  3. Database credentials are valid");
         process.exit(1);
@@ -156,7 +163,7 @@ async function checkRedisConnection() {
         try {
             if (!redisClient.isReady) {
                 throw new Error(
-                    "Redis client is not ready - connection failed or still connecting"
+                    "Redis client is not ready - connection failed or still connecting",
                 );
             }
 
@@ -164,12 +171,16 @@ async function checkRedisConnection() {
             logger.debug("✓ Redis connection verified");
             return;
         } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorMsg =
+                error instanceof Error ? error.message : String(error);
 
             if (attempt < MAX_RETRIES) {
-                const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS);
+                const delay = Math.min(
+                    BASE_DELAY_MS * Math.pow(2, attempt - 1),
+                    MAX_DELAY_MS,
+                );
                 logger.warn(
-                    `Redis connection attempt ${attempt}/${MAX_RETRIES} failed: ${errorMsg} – retrying in ${delay}ms`
+                    `Redis connection attempt ${attempt}/${MAX_RETRIES} failed: ${errorMsg} – retrying in ${delay}ms`,
                 );
                 await new Promise((resolve) => setTimeout(resolve, delay));
             } else {
@@ -178,7 +189,9 @@ async function checkRedisConnection() {
                     redisUrl: config.redisUrl?.replace(/:[^:@]+@/, ":***@"),
                 });
                 logger.error("Unable to connect to Redis. Please ensure:");
-                logger.error("  1. Redis is running on the correct port (default: 6379)");
+                logger.error(
+                    "  1. Redis is running on the correct port (default: 6379)",
+                );
                 logger.error("  2. REDIS_URL in .env is correct");
                 process.exit(1);
             }
@@ -192,7 +205,7 @@ async function startWorkerRuntime() {
     await dependencyReadiness.probe(true);
 
     logger.info(
-        `[Worker Startup] BACKEND_PROCESS_ROLE=${workerProcessRole} (api=false, worker=true)`
+        `[Worker Startup] BACKEND_PROCESS_ROLE=${workerProcessRole} (api=false, worker=true)`,
     );
 
     const { initializeMusicConfig } = await import("./config");
@@ -203,17 +216,16 @@ async function startWorkerRuntime() {
 
     // Event-loop stall watchdog: attributes liveness-probe-visible stalls
     // to the Bull jobs running at the time (issue #43)
-    const { startWorkerEventLoopMonitor } = await import(
-        "./services/workerEventLoopMonitor"
-    );
+    const { startWorkerEventLoopMonitor } =
+        await import("./services/workerEventLoopMonitor");
     const { config } = await import("./config");
     startWorkerEventLoopMonitor(config.workerEventLoop);
 
     logger.debug(
-        "Background enrichment enabled for owned content (genres, MBIDs, etc.)"
+        "Background enrichment enabled for owned content (genres, MBIDs, etc.)",
     );
     logger.debug(
-        "Startup maintenance jobs are queue-claimed (cache warmup, podcast cleanup, audiobook sync, download reconciliation, backfills)"
+        "Startup maintenance jobs are queue-claimed (cache warmup, podcast cleanup, audiobook sync, download reconciliation, backfills)",
     );
 
     logger.info("[Worker Startup] Worker runtime initialized");
@@ -291,7 +303,7 @@ setInterval(async () => {
                 } catch (reconnectError) {
                     logger.error(
                         "Worker failed to recover database connection:",
-                        reconnectError
+                        reconnectError,
                     );
                 }
             }

@@ -1,5 +1,11 @@
-import { CURATED_VIBE_MIXES, CuratedVibeMixDefinition } from "../curatedVibeMixDefinitions";
-import { ProgrammaticMix, ProgrammaticPlaylistService } from "../programmaticPlaylists";
+import {
+    CURATED_VIBE_MIXES,
+    CuratedVibeMixDefinition,
+} from "../curatedVibeMixDefinitions";
+import {
+    ProgrammaticMix,
+    ProgrammaticPlaylistService,
+} from "../programmaticPlaylists";
 import { prisma } from "../../utils/db";
 
 jest.mock("../../config", () => ({
@@ -119,26 +125,29 @@ describe("ProgrammaticPlaylistService data-driven curated vibe mixes", () => {
     });
 
     it("catalog contains exactly the 13 known curated vibe mix types", () => {
-        expect(new Set(CURATED_VIBE_MIXES.map((definition) => definition.type))).toEqual(
-            new Set(KNOWN_CURATED_VIBE_MIX_TYPES)
-        );
+        expect(
+            new Set(CURATED_VIBE_MIXES.map((definition) => definition.type)),
+        ).toEqual(new Set(KNOWN_CURATED_VIBE_MIX_TYPES));
         expect(CURATED_VIBE_MIXES.length).toBe(13);
     });
 
     it("every definition is well-formed", () => {
         for (const definition of CURATED_VIBE_MIXES) {
-            expect(typeof definition.type === "string" && definition.type.length > 0).toBe(
-                true
-            );
-            expect(typeof definition.name === "string" && definition.name.length > 0).toBe(
-                true
-            );
             expect(
-                typeof definition.description === "string" &&
-                    definition.description.length > 0
+                typeof definition.type === "string" &&
+                    definition.type.length > 0,
             ).toBe(true);
             expect(
-                typeof definition.colorKey === "string" && definition.colorKey.length > 0
+                typeof definition.name === "string" &&
+                    definition.name.length > 0,
+            ).toBe(true);
+            expect(
+                typeof definition.description === "string" &&
+                    definition.description.length > 0,
+            ).toBe(true);
+            expect(
+                typeof definition.colorKey === "string" &&
+                    definition.colorKey.length > 0,
             ).toBe(true);
             expect(definition.take).toBeGreaterThanOrEqual(50);
             expect(typeof definition.where).toBe("object");
@@ -152,13 +161,13 @@ describe("ProgrammaticPlaylistService data-driven curated vibe mixes", () => {
         for (const definition of CURATED_VIBE_MIXES) {
             (mockPrisma.track.findMany as jest.Mock).mockReset();
             (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
-                makeTracks(30, definition.type)
+                makeTracks(30, definition.type),
             );
 
             const methodName = GENERATOR_METHOD_BY_TYPE[definition.type];
             const mix: ProgrammaticMix | null = await service[methodName](
                 "user-1",
-                "2026-02-17"
+                "2026-02-17",
             );
 
             expect(mix).not.toBeNull();
@@ -167,7 +176,9 @@ describe("ProgrammaticPlaylistService data-driven curated vibe mixes", () => {
             expect(mix!.description).toBe(definition.description);
             expect(mix!.id).toBe(`${definition.type}-2026-02-17`);
             expect(mix!.trackCount).toBe(10);
-            expect(typeof mix!.color === "string" && mix!.color.length > 0).toBe(true);
+            expect(
+                typeof mix!.color === "string" && mix!.color.length > 0,
+            ).toBe(true);
 
             const calls = (mockPrisma.track.findMany as jest.Mock).mock.calls;
             const mostRecentCall = calls[calls.length - 1];
@@ -191,15 +202,15 @@ describe("ProgrammaticPlaylistService data-driven curated vibe mixes", () => {
     it("sad-girl-sundays is gated to Sunday", async () => {
         jest.useFakeTimers().setSystemTime(new Date("2026-02-24T12:00:00Z"));
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
-            makeTracks(30, "sad-girl-sundays")
+            makeTracks(30, "sad-girl-sundays"),
         );
 
         await expect(
-            service.generateSadGirlSundays("user-1", "2026-02-17")
+            service.generateSadGirlSundays("user-1", "2026-02-17"),
         ).resolves.toBeNull();
 
         const sadGirlSundays = CURATED_VIBE_MIXES.find(
-            (definition) => definition.type === "sad-girl-sundays"
+            (definition) => definition.type === "sad-girl-sundays",
         );
         expect(sadGirlSundays?.dayOfWeek).toBe(0);
     });

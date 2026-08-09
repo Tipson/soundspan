@@ -55,7 +55,10 @@ jest.mock("../../services/umapProjection", () => ({
 
 jest.mock("../../utils/embedding", () => ({
     parseEmbedding: jest.fn((text: string) => {
-        const values = text.replace(/[\[\]]/g, "").split(",").map(Number);
+        const values = text
+            .replace(/[\[\]]/g, "")
+            .split(",")
+            .map(Number);
         return values;
     }),
 }));
@@ -82,7 +85,7 @@ const mockFindSimilarTracks = findSimilarTracks as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -92,7 +95,8 @@ function getGetHandler(path: string) {
 
 function getPostHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.post
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.post,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);

@@ -14,9 +14,14 @@ import { downloadAndStoreImage } from "./imageStorage";
 const ALBUM_COVER_CACHE_TTL_SECONDS = 365 * 24 * 60 * 60; // 1 year
 export const NATIVE_COVER_HEAL_TIMEOUT_MS = 5000;
 
-export const nativeCoverHealInFlight = new Map<string, Promise<string | null>>();
+export const nativeCoverHealInFlight = new Map<
+    string,
+    Promise<string | null>
+>();
 
-export const getAlbumIdFromNativeCoverPath = (nativePath: string): string | null => {
+export const getAlbumIdFromNativeCoverPath = (
+    nativePath: string,
+): string | null => {
     const parsed = path.parse(nativePath);
     return parsed.name || null;
 };
@@ -39,7 +44,7 @@ export const getNativeCoverPathCandidates = (nativePath: string): string[] => {
 };
 
 export const resolveNativeCoverCacheHit = (
-    nativePath: string
+    nativePath: string,
 ): { resolvedNativePath: string; cachePath: string } | null => {
     const coversDir = coversBaseDir();
     const candidates = getNativeCoverPathCandidates(nativePath);
@@ -55,12 +60,13 @@ export const resolveNativeCoverCacheHit = (
     return null;
 };
 
-export const buildNativeCoverProxyRedirectPath = (nativeCoverUrl: string): string =>
-    `/api/library/cover-art?url=${encodeURIComponent(nativeCoverUrl)}`;
+export const buildNativeCoverProxyRedirectPath = (
+    nativeCoverUrl: string,
+): string => `/api/library/cover-art?url=${encodeURIComponent(nativeCoverUrl)}`;
 
 export const persistHealedAlbumCover = async (
     albumId: string,
-    coverUrl: string
+    coverUrl: string,
 ): Promise<void> => {
     await prisma.album.update({
         where: { id: albumId },
@@ -71,18 +77,18 @@ export const persistHealedAlbumCover = async (
         await redisClient.setEx(
             `album-cover:${albumId}`,
             ALBUM_COVER_CACHE_TTL_SECONDS,
-            coverUrl
+            coverUrl,
         );
     } catch (cacheError) {
         logger.warn(
             `[COVER-ART] Failed to refresh album cover cache for ${albumId}:`,
-            cacheError
+            cacheError,
         );
     }
 };
 
 export const tryHealMissingNativeAlbumCover = async (
-    nativePath: string
+    nativePath: string,
 ): Promise<string | null> => {
     const albumId = getAlbumIdFromNativeCoverPath(nativePath);
     if (!albumId) return null;
@@ -117,16 +123,22 @@ export const tryHealMissingNativeAlbumCover = async (
             typeof existingNativeCover === "string" &&
             existingNativeCover.startsWith("native:")
         ) {
-            const existingNativePath = existingNativeCover.replace("native:", "");
-            const nativeCacheHit = resolveNativeCoverCacheHit(existingNativePath);
+            const existingNativePath = existingNativeCover.replace(
+                "native:",
+                "",
+            );
+            const nativeCacheHit =
+                resolveNativeCoverCacheHit(existingNativePath);
             if (nativeCacheHit) {
-                const canonicalNativeCoverUrl =
-                    `native:${nativeCacheHit.resolvedNativePath}`;
+                const canonicalNativeCoverUrl = `native:${nativeCacheHit.resolvedNativePath}`;
                 if (canonicalNativeCoverUrl !== existingNativeCover) {
-                    await persistHealedAlbumCover(album.id, canonicalNativeCoverUrl);
+                    await persistHealedAlbumCover(
+                        album.id,
+                        canonicalNativeCoverUrl,
+                    );
                 }
                 return buildNativeCoverProxyRedirectPath(
-                    canonicalNativeCoverUrl
+                    canonicalNativeCoverUrl,
                 );
             }
         }
@@ -163,7 +175,7 @@ export const tryHealMissingNativeAlbumCover = async (
             } catch (error) {
                 logger.warn(
                     `[COVER-ART] Cover Art Archive recovery failed for ${validRgMbid}:`,
-                    error
+                    error,
                 );
             }
         }
@@ -173,26 +185,26 @@ export const tryHealMissingNativeAlbumCover = async (
                 album.artist.name,
                 album.title,
                 validRgMbid ?? undefined,
-                { timeout: NATIVE_COVER_HEAL_TIMEOUT_MS }
+                { timeout: NATIVE_COVER_HEAL_TIMEOUT_MS },
             );
             addCandidateUrl(providerCover?.url);
         } catch (error) {
             logger.warn(
                 `[COVER-ART] Provider-chain recovery failed for ${album.artist.name} - ${album.title}:`,
-                error
+                error,
             );
         }
 
         try {
             const deezerCover = await deezerService.getAlbumCover(
                 album.artist.name,
-                album.title
+                album.title,
             );
             addCandidateUrl(deezerCover);
         } catch (error) {
             logger.warn(
                 `[COVER-ART] Deezer recovery failed for ${album.artist.name} - ${album.title}:`,
-                error
+                error,
             );
         }
 
@@ -201,7 +213,7 @@ export const tryHealMissingNativeAlbumCover = async (
             const localCoverPath = await downloadAndStoreImage(
                 candidateUrl,
                 album.id,
-                "album"
+                "album",
             );
 
             if (!localCoverPath) {
@@ -219,10 +231,9 @@ export const tryHealMissingNativeAlbumCover = async (
         }
 
         return null;
-    })()
-        .finally(() => {
-            nativeCoverHealInFlight.delete(albumId);
-        });
+    })().finally(() => {
+        nativeCoverHealInFlight.delete(albumId);
+    });
 
     nativeCoverHealInFlight.set(albumId, healPromise);
     return healPromise;

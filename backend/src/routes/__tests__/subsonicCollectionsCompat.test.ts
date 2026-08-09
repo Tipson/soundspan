@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -104,7 +106,8 @@ describe("subsonic collections/core compatibility handlers", () => {
     const mockPlaylistFindFirst = prisma.playlist.findFirst as jest.Mock;
     const mockPlaylistDelete = prisma.playlist.delete as jest.Mock;
     const mockArtistFindFirst = prisma.artist.findFirst as jest.Mock;
-    const mockPlaybackStateFindMany = prisma.playbackState.findMany as jest.Mock;
+    const mockPlaybackStateFindMany = prisma.playbackState
+        .findMany as jest.Mock;
     const mockTrackFindMany = prisma.track.findMany as jest.Mock;
     const mockTrackFindFirst = prisma.track.findFirst as jest.Mock;
     const mockSendError = sendSubsonicError as jest.Mock;
@@ -360,7 +363,9 @@ describe("subsonic collections/core compatibility handlers", () => {
     });
 
     it("returns generic error when getPlaylist query fails", async () => {
-        mockPlaylistFindFirst.mockRejectedValueOnce(new Error("playlist query failed"));
+        mockPlaylistFindFirst.mockRejectedValueOnce(
+            new Error("playlist query failed"),
+        );
 
         await handleGetPlaylist(
             buildReq({
@@ -533,7 +538,9 @@ describe("subsonic collections/core compatibility handlers", () => {
     });
 
     it("returns generic error when getNowPlaying fails", async () => {
-        mockPlaybackStateFindMany.mockRejectedValueOnce(new Error("db unavailable"));
+        mockPlaybackStateFindMany.mockRejectedValueOnce(
+            new Error("db unavailable"),
+        );
 
         await handleGetNowPlaying(buildReq({}), buildRes());
 

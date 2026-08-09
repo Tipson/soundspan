@@ -24,7 +24,10 @@ const prisma = {
     },
     podcast: {
         findUnique: jest.fn(async () => null),
-        create: jest.fn(async () => ({ id: "podcast-new", title: "Podcast New" })),
+        create: jest.fn(async () => ({
+            id: "podcast-new",
+            title: "Podcast New",
+        })),
         update: jest.fn(async () => ({})),
     },
     podcastEpisode: {
@@ -102,14 +105,18 @@ jest.mock("axios", () => ({
     },
 }));
 
-import router, { refreshPodcastFeed, refreshAllPodcastFeeds } from "../podcasts";
+import router, {
+    refreshPodcastFeed,
+    refreshAllPodcastFeeds,
+} from "../podcasts";
 
 function getHandler(path: string, method: "get" | "post" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
-    if (!layer) throw new Error(`${method.toUpperCase()} route not found: ${path}`);
+    if (!layer)
+        throw new Error(`${method.toUpperCase()} route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -157,19 +164,21 @@ describe("podcasts core runtime behavior", () => {
     });
 
     function mockImmediateTimers() {
-        return jest
-            .spyOn(global, "setTimeout")
-            .mockImplementation(((handler: (...args: any[]) => void) => {
-                if (typeof handler === "function") {
-                    handler();
-                }
-                return 0 as unknown as ReturnType<typeof setTimeout>;
-            }) as typeof setTimeout);
+        return jest.spyOn(global, "setTimeout").mockImplementation(((
+            handler: (...args: any[]) => void,
+        ) => {
+            if (typeof handler === "function") {
+                handler();
+            }
+            return 0 as unknown as ReturnType<typeof setTimeout>;
+        }) as typeof setTimeout);
     }
 
     it("syncs podcast covers and emits a system notification", async () => {
         podcastCacheService.syncAllCovers.mockResolvedValueOnce({ synced: 4 });
-        podcastCacheService.syncEpisodeCovers.mockResolvedValueOnce({ synced: 9 });
+        podcastCacheService.syncEpisodeCovers.mockResolvedValueOnce({
+            synced: 9,
+        });
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -178,7 +187,7 @@ describe("podcasts core runtime behavior", () => {
         expect(notificationService.notifySystem).toHaveBeenCalledWith(
             "user-1",
             "Podcast Covers Synced",
-            "Synced 4 podcast covers and 9 episode covers"
+            "Synced 4 podcast covers and 9 episode covers",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -190,7 +199,7 @@ describe("podcasts core runtime behavior", () => {
 
     it("returns 500 when sync-covers fails", async () => {
         podcastCacheService.syncAllCovers.mockRejectedValueOnce(
-            new Error("cache service unavailable")
+            new Error("cache service unavailable"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -204,7 +213,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("maps subscribed podcasts list with episode progress and cover fallbacks", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 subscribedAt: new Date("2026-01-01T00:00:00.000Z"),
                 podcast: {
@@ -229,7 +240,9 @@ describe("podcasts core runtime behavior", () => {
                                     currentTime: 250,
                                     duration: 1000,
                                     isFinished: false,
-                                    lastPlayedAt: new Date("2026-01-02T00:00:00.000Z"),
+                                    lastPlayedAt: new Date(
+                                        "2026-01-02T00:00:00.000Z",
+                                    ),
                                 },
                             ],
                         },
@@ -272,7 +285,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("maps subscribed podcasts list when episodes have no progress and no local covers", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 subscribedAt: new Date("2026-01-02T00:00:00.000Z"),
                 podcast: {
@@ -329,9 +344,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns 500 when subscribed podcast listing fails", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockRejectedValueOnce(
-            new Error("db read failed")
-        );
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockRejectedValueOnce(new Error("db read failed"));
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -344,11 +359,14 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns 404 for podcast detail requests when user is not subscribed", async () => {
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce(
-            null
-        );
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce(null);
 
-        const req = { params: { id: "pod-missing" }, user: { id: "user-1" } } as any;
+        const req = {
+            params: { id: "pod-missing" },
+            user: { id: "user-1" },
+        } as any;
         const res = createRes();
         await byIdHandler(req, res);
 
@@ -359,7 +377,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns full podcast details for subscribed users", async () => {
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-1",
             podcastId: "pod-2",
         });
@@ -410,12 +430,14 @@ describe("podcasts core runtime behavior", () => {
                         progress: expect.objectContaining({ progress: 50 }),
                     }),
                 ],
-            })
+            }),
         );
     });
 
     it("returns no-progress and not-downloaded flags for episodes without playback/download state", async () => {
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-1",
             podcastId: "pod-3",
         });
@@ -475,7 +497,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns 404 when subscription exists but podcast details are missing", async () => {
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-1",
             podcastId: "pod-ghost",
         });
@@ -493,11 +517,14 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns 500 when podcast detail lookup fails unexpectedly", async () => {
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockRejectedValueOnce(
-            new Error("db error")
-        );
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockRejectedValueOnce(new Error("db error"));
 
-        const req = { params: { id: "pod-err" }, user: { id: "user-1" } } as any;
+        const req = {
+            params: { id: "pod-err" },
+            user: { id: "user-1" },
+        } as any;
         const res = createRes();
         await byIdHandler(req, res);
 
@@ -508,7 +535,10 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("validates subscribe payload requires feedUrl or itunesId", async () => {
-        const req = { body: {}, user: { id: "user-1", username: "alice" } } as any;
+        const req = {
+            body: {},
+            user: { id: "user-1", username: "alice" },
+        } as any;
         const res = createRes();
 
         await subscribeHandler(req, res);
@@ -523,7 +553,9 @@ describe("podcasts core runtime behavior", () => {
             title: "Known Podcast",
             feedUrl: "https://feed/known.xml",
         });
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-1",
             podcastId: "pod-1",
         });
@@ -554,9 +586,9 @@ describe("podcasts core runtime behavior", () => {
             title: "Existing Podcast",
             feedUrl: "https://feed/existing.xml",
         });
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce(
-            null
-        );
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce(null);
 
         const req = {
             body: { feedUrl: "https://feed/existing.xml" },
@@ -586,7 +618,7 @@ describe("podcasts core runtime behavior", () => {
     it("returns 500 when direct feed parsing fails during subscribe", async () => {
         (prisma.podcast.findUnique as jest.Mock).mockResolvedValueOnce(null);
         rssParserService.parseFeed.mockRejectedValueOnce(
-            new Error("invalid rss")
+            new Error("invalid rss"),
         );
 
         const req = {
@@ -676,7 +708,7 @@ describe("podcasts core runtime behavior", () => {
             "https://itunes.apple.com/lookup",
             expect.objectContaining({
                 params: { id: "4455", entity: "podcast" },
-            })
+            }),
         );
         expect(prisma.podcast.create).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -685,13 +717,13 @@ describe("podcasts core runtime behavior", () => {
                     title: "Parsed Podcast",
                     episodeCount: 1,
                 }),
-            })
+            }),
         );
         expect(prisma.podcastEpisode.createMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: [expect.objectContaining({ guid: "ep-1" })],
                 skipDuplicates: true,
-            })
+            }),
         );
         expect(prisma.podcastSubscription.create).toHaveBeenCalledWith({
             data: {
@@ -746,7 +778,7 @@ describe("podcasts core runtime behavior", () => {
                     feedEtag: '"feed-etag-1"',
                     feedLastModified: "Mon, 02 Feb 2026 00:00:00 GMT",
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });
@@ -771,7 +803,7 @@ describe("podcasts core runtime behavior", () => {
             "https://itunes.apple.com/lookup",
             expect.objectContaining({
                 params: { id: "6677", entity: "podcast" },
-            })
+            }),
         );
         expect(prisma.podcast.findUnique).not.toHaveBeenCalled();
         expect(rssParserService.parseFeed).not.toHaveBeenCalled();
@@ -821,7 +853,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns 404 when unsubscribe is requested without an active subscription", async () => {
-        (prisma.podcastSubscription.deleteMany as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.deleteMany as jest.Mock
+        ).mockResolvedValueOnce({
             count: 0,
         });
 
@@ -838,7 +872,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("removes subscription, progress, and downloads on successful unsubscribe", async () => {
-        (prisma.podcastSubscription.deleteMany as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.deleteMany as jest.Mock
+        ).mockResolvedValueOnce({
             count: 1,
         });
 
@@ -874,9 +910,9 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns 500 when unsubscribe cleanup fails", async () => {
-        (prisma.podcastSubscription.deleteMany as jest.Mock).mockRejectedValueOnce(
-            new Error("unsubscribe failed")
-        );
+        (
+            prisma.podcastSubscription.deleteMany as jest.Mock
+        ).mockRejectedValueOnce(new Error("unsubscribe failed"));
 
         const req = {
             params: { id: "pod-err" },
@@ -956,13 +992,13 @@ describe("podcasts core runtime behavior", () => {
                     title: "Refresh Show",
                     episodeCount: 1,
                 }),
-            })
+            }),
         );
         expect(prisma.podcastEpisode.createMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: [expect.objectContaining({ guid: "refresh-ep-1" })],
                 skipDuplicates: true,
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -974,10 +1010,12 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("returns 500 from refresh route when refresh processing fails unexpectedly", async () => {
-        (prisma.podcast.findUnique as jest.Mock).mockReset().mockResolvedValueOnce({
-            id: "pod-refresh-fail",
-            feedUrl: "https://feed/refresh-fail.xml",
-        });
+        (prisma.podcast.findUnique as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                id: "pod-refresh-fail",
+                feedUrl: "https://feed/refresh-fail.xml",
+            });
         (rssParserService.parseFeed as jest.Mock)
             .mockReset()
             .mockRejectedValueOnce(new Error("refresh parse failed"));
@@ -997,21 +1035,25 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("refreshes successfully with empty feed episodes and skips createMany", async () => {
-        (prisma.podcast.findUnique as jest.Mock).mockReset().mockResolvedValueOnce({
-            id: "pod-refresh-empty",
-            feedUrl: "https://feed/refresh-empty.xml",
-        });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            podcast: {
-                title: "Refresh Empty",
-                author: "Refresh Host",
-                description: "Updated Desc",
-                imageUrl: "https://img/refresh-empty.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [],
-        });
+        (prisma.podcast.findUnique as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                id: "pod-refresh-empty",
+                feedUrl: "https://feed/refresh-empty.xml",
+            });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                podcast: {
+                    title: "Refresh Empty",
+                    author: "Refresh Host",
+                    description: "Updated Desc",
+                    imageUrl: "https://img/refresh-empty.jpg",
+                    language: "en",
+                    explicit: false,
+                },
+                episodes: [],
+            });
 
         const req = {
             params: { id: "pod-refresh-empty" },
@@ -1032,25 +1074,29 @@ describe("podcasts core runtime behavior", () => {
     });
 
     it("sends conditional refresh metadata and updates stored metadata on success", async () => {
-        (prisma.podcast.findUnique as jest.Mock).mockReset().mockResolvedValueOnce({
-            id: "pod-refresh-conditional",
-            feedUrl: "https://feed/conditional.xml",
-            feedEtag: '"stored-etag"',
-            feedLastModified: "Mon, 02 Feb 2026 00:00:00 GMT",
-        });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            podcast: {
-                title: "Conditional Show",
-                author: "Host",
-                description: "Desc",
-                imageUrl: "https://img/conditional.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [],
-            etag: '"new-etag"',
-            lastModified: "Tue, 03 Feb 2026 00:00:00 GMT",
-        });
+        (prisma.podcast.findUnique as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                id: "pod-refresh-conditional",
+                feedUrl: "https://feed/conditional.xml",
+                feedEtag: '"stored-etag"',
+                feedLastModified: "Mon, 02 Feb 2026 00:00:00 GMT",
+            });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                podcast: {
+                    title: "Conditional Show",
+                    author: "Host",
+                    description: "Desc",
+                    imageUrl: "https://img/conditional.jpg",
+                    language: "en",
+                    explicit: false,
+                },
+                episodes: [],
+                etag: '"new-etag"',
+                lastModified: "Tue, 03 Feb 2026 00:00:00 GMT",
+            });
 
         await refreshPodcastFeed("pod-refresh-conditional");
 
@@ -1061,7 +1107,7 @@ describe("podcasts core runtime behavior", () => {
                     "if-none-match": '"stored-etag"',
                     "if-modified-since": "Mon, 02 Feb 2026 00:00:00 GMT",
                 }),
-            })
+            }),
         );
         expect(prisma.podcast.update).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1070,43 +1116,47 @@ describe("podcasts core runtime behavior", () => {
                     feedEtag: '"new-etag"',
                     feedLastModified: "Tue, 03 Feb 2026 00:00:00 GMT",
                 }),
-            })
+            }),
         );
     });
 
     it("handles not-modified refreshes without creating episodes and still updates lastRefreshed", async () => {
-        (prisma.podcast.findUnique as jest.Mock).mockReset().mockResolvedValueOnce({
-            id: "pod-refresh-not-modified",
-            feedUrl: "https://feed/not-modified.xml",
-            feedEtag: '"stored-etag"',
-            feedLastModified: "Mon, 02 Feb 2026 00:00:00 GMT",
-        });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            notModified: true,
-            podcast: {
-                title: "Not Modified Show",
-                author: "Host",
-                description: "Desc",
-                imageUrl: "https://img/not-modified.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [
-                {
-                    guid: "not-modified-ep-1",
-                    title: "Should Not Be Inserted",
+        (prisma.podcast.findUnique as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                id: "pod-refresh-not-modified",
+                feedUrl: "https://feed/not-modified.xml",
+                feedEtag: '"stored-etag"',
+                feedLastModified: "Mon, 02 Feb 2026 00:00:00 GMT",
+            });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                notModified: true,
+                podcast: {
+                    title: "Not Modified Show",
+                    author: "Host",
                     description: "Desc",
-                    audioUrl: "https://audio/not-modified-1.mp3",
-                    duration: 210,
-                    publishedAt: new Date("2026-02-04T00:00:00.000Z"),
-                    episodeNumber: 1,
-                    season: 1,
-                    imageUrl: "https://img/not-modified-1.jpg",
-                    fileSize: 512,
-                    mimeType: "audio/mpeg",
+                    imageUrl: "https://img/not-modified.jpg",
+                    language: "en",
+                    explicit: false,
                 },
-            ],
-        });
+                episodes: [
+                    {
+                        guid: "not-modified-ep-1",
+                        title: "Should Not Be Inserted",
+                        description: "Desc",
+                        audioUrl: "https://audio/not-modified-1.mp3",
+                        duration: 210,
+                        publishedAt: new Date("2026-02-04T00:00:00.000Z"),
+                        episodeNumber: 1,
+                        season: 1,
+                        imageUrl: "https://img/not-modified-1.jpg",
+                        fileSize: 512,
+                        mimeType: "audio/mpeg",
+                    },
+                ],
+            });
 
         await refreshPodcastFeed("pod-refresh-not-modified");
 
@@ -1117,30 +1167,34 @@ describe("podcasts core runtime behavior", () => {
                 data: expect.objectContaining({
                     lastRefreshed: expect.any(Date),
                 }),
-            })
+            }),
         );
     });
 
     it("keeps refresh route success payload stable for metadata-aware refreshes", async () => {
-        (prisma.podcast.findUnique as jest.Mock).mockReset().mockResolvedValueOnce({
-            id: "pod-refresh-stable-payload",
-            feedUrl: "https://feed/stable.xml",
-            feedEtag: '"stored-etag"',
-            feedLastModified: "Mon, 02 Feb 2026 00:00:00 GMT",
-        });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            podcast: {
-                title: "Stable Payload Show",
-                author: "Host",
-                description: "Desc",
-                imageUrl: "https://img/stable.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [],
-            etag: '"new-etag"',
-            lastModified: "Tue, 03 Feb 2026 00:00:00 GMT",
-        });
+        (prisma.podcast.findUnique as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                id: "pod-refresh-stable-payload",
+                feedUrl: "https://feed/stable.xml",
+                feedEtag: '"stored-etag"',
+                feedLastModified: "Mon, 02 Feb 2026 00:00:00 GMT",
+            });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                podcast: {
+                    title: "Stable Payload Show",
+                    author: "Host",
+                    description: "Desc",
+                    imageUrl: "https://img/stable.jpg",
+                    language: "en",
+                    explicit: false,
+                },
+                episodes: [],
+                etag: '"new-etag"',
+                lastModified: "Tue, 03 Feb 2026 00:00:00 GMT",
+            });
 
         const req = {
             params: { id: "pod-refresh-stable-payload" },
@@ -1172,17 +1226,19 @@ describe("podcasts core runtime behavior", () => {
                 id: "pod-refresh-rust",
                 feedUrl: "https://feed/refresh-rust.xml",
             });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            podcast: {
-                title: "Refresh Rust",
-                author: "Host",
-                description: "Desc",
-                imageUrl: "https://img/refresh-rust.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [],
-        });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                podcast: {
+                    title: "Refresh Rust",
+                    author: "Host",
+                    description: "Desc",
+                    imageUrl: "https://img/refresh-rust.jpg",
+                    language: "en",
+                    explicit: false,
+                },
+                episodes: [],
+            });
 
         await expect(refreshPodcastFeed("pod-refresh-rust")).resolves.toEqual({
             newEpisodesCount: 0,
@@ -1197,7 +1253,7 @@ describe("podcasts core runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("../../utils/db");
         const unknownTransient = new Prisma.PrismaClientUnknownRequestError(
-            "Engine has already exited"
+            "Engine has already exited",
         );
 
         (prisma.podcast.findUnique as jest.Mock)
@@ -1207,19 +1263,23 @@ describe("podcasts core runtime behavior", () => {
                 id: "pod-refresh-unknown",
                 feedUrl: "https://feed/refresh-unknown.xml",
             });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            podcast: {
-                title: "Refresh Unknown",
-                author: "Host",
-                description: "Desc",
-                imageUrl: "https://img/refresh-unknown.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [],
-        });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                podcast: {
+                    title: "Refresh Unknown",
+                    author: "Host",
+                    description: "Desc",
+                    imageUrl: "https://img/refresh-unknown.jpg",
+                    language: "en",
+                    explicit: false,
+                },
+                episodes: [],
+            });
 
-        await expect(refreshPodcastFeed("pod-refresh-unknown")).resolves.toEqual({
+        await expect(
+            refreshPodcastFeed("pod-refresh-unknown"),
+        ).resolves.toEqual({
             newEpisodesCount: 0,
             totalEpisodes: 0,
         });
@@ -1233,7 +1293,7 @@ describe("podcasts core runtime behavior", () => {
         const { Prisma } = require("../../utils/db");
         const transientKnownError = new Prisma.PrismaClientKnownRequestError(
             "database temporarily unavailable",
-            "P1001"
+            "P1001",
         );
 
         (prisma.podcast.findUnique as jest.Mock)
@@ -1258,7 +1318,7 @@ describe("podcasts core runtime behavior", () => {
         const { Prisma } = require("../../utils/db");
         const transientKnownError = new Prisma.PrismaClientKnownRequestError(
             "database still unavailable",
-            "P1002"
+            "P1002",
         );
 
         (prisma.podcast.findUnique as jest.Mock)
@@ -1267,9 +1327,9 @@ describe("podcasts core runtime behavior", () => {
             .mockRejectedValueOnce(transientKnownError)
             .mockRejectedValueOnce(transientKnownError);
 
-        await expect(
-            refreshPodcastFeed("pod-refresh-giveup")
-        ).rejects.toThrow("database still unavailable");
+        await expect(refreshPodcastFeed("pod-refresh-giveup")).rejects.toThrow(
+            "database still unavailable",
+        );
         expect(prisma.$connect).toHaveBeenCalledTimes(2);
         expect(prisma.podcast.findUnique).toHaveBeenCalledTimes(3);
         setTimeoutSpy.mockRestore();
@@ -1284,19 +1344,23 @@ describe("podcasts core runtime behavior", () => {
                 id: "pod-refresh-generic",
                 feedUrl: "https://feed/refresh-generic.xml",
             });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            podcast: {
-                title: "Refresh Generic",
-                author: "Host",
-                description: "Desc",
-                imageUrl: "https://img/refresh-generic.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [],
-        });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                podcast: {
+                    title: "Refresh Generic",
+                    author: "Host",
+                    description: "Desc",
+                    imageUrl: "https://img/refresh-generic.jpg",
+                    language: "en",
+                    explicit: false,
+                },
+                episodes: [],
+            });
 
-        await expect(refreshPodcastFeed("pod-refresh-generic")).resolves.toEqual({
+        await expect(
+            refreshPodcastFeed("pod-refresh-generic"),
+        ).resolves.toEqual({
             newEpisodesCount: 0,
             totalEpisodes: 0,
         });
@@ -1313,17 +1377,19 @@ describe("podcasts core runtime behavior", () => {
                 id: "pod-refresh-db",
                 feedUrl: "https://feed/refresh-db.xml",
             });
-        (rssParserService.parseFeed as jest.Mock).mockReset().mockResolvedValueOnce({
-            podcast: {
-                title: "Refresh DB",
-                author: "Host",
-                description: "Desc",
-                imageUrl: "https://img/refresh-db.jpg",
-                language: "en",
-                explicit: false,
-            },
-            episodes: [],
-        });
+        (rssParserService.parseFeed as jest.Mock)
+            .mockReset()
+            .mockResolvedValueOnce({
+                podcast: {
+                    title: "Refresh DB",
+                    author: "Host",
+                    description: "Desc",
+                    imageUrl: "https://img/refresh-db.jpg",
+                    language: "en",
+                    explicit: false,
+                },
+                episodes: [],
+            });
 
         await expect(refreshPodcastFeed("pod-refresh-db")).resolves.toEqual({
             newEpisodesCount: 0,
@@ -1338,20 +1404,22 @@ describe("podcasts core runtime behavior", () => {
         const { Prisma } = require("../../utils/db");
         const nonRetryable = new Prisma.PrismaClientKnownRequestError(
             "constraint",
-            "P2002"
+            "P2002",
         );
         (prisma.podcast.findUnique as jest.Mock)
             .mockReset()
             .mockRejectedValueOnce(nonRetryable);
 
-        await expect(refreshPodcastFeed("pod-refresh-nonretry")).rejects.toThrow(
-            "constraint"
-        );
+        await expect(
+            refreshPodcastFeed("pod-refresh-nonretry"),
+        ).rejects.toThrow("constraint");
         expect(prisma.$connect).not.toHaveBeenCalled();
     });
 
     it("refreshes all subscribed podcasts and reports per-feed results", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             { podcastId: "pod-a" },
             { podcastId: "pod-b" },
         ]);
@@ -1388,8 +1456,16 @@ describe("podcasts core runtime behavior", () => {
                     explicit: false,
                 },
                 episodes: [
-                    { guid: "ep-a1", title: "A-1", audioUrl: "https://audio/a1.mp3" },
-                    { guid: "ep-a2", title: "A-2", audioUrl: "https://audio/a2.mp3" },
+                    {
+                        guid: "ep-a1",
+                        title: "A-1",
+                        audioUrl: "https://audio/a1.mp3",
+                    },
+                    {
+                        guid: "ep-a2",
+                        title: "A-2",
+                        audioUrl: "https://audio/a2.mp3",
+                    },
                 ],
                 feedMetadata: {},
             })
@@ -1416,15 +1492,25 @@ describe("podcasts core runtime behavior", () => {
         expect(result.total).toBe(2);
         expect(result.results).toHaveLength(2);
         expect(result.results[0]).toEqual(
-            expect.objectContaining({ podcastId: "pod-a", success: true, newEpisodesCount: 2 })
+            expect.objectContaining({
+                podcastId: "pod-a",
+                success: true,
+                newEpisodesCount: 2,
+            }),
         );
         expect(result.results[1]).toEqual(
-            expect.objectContaining({ podcastId: "pod-b", success: true, newEpisodesCount: 0 })
+            expect.objectContaining({
+                podcastId: "pod-b",
+                success: true,
+                newEpisodesCount: 0,
+            }),
         );
     });
 
     it("reports per-feed failures without aborting other refreshes", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             { podcastId: "pod-ok" },
             { podcastId: "pod-broken" },
         ]);
@@ -1460,19 +1546,21 @@ describe("podcasts core runtime behavior", () => {
 
         expect(result.total).toBe(2);
         expect(result.results[0]).toEqual(
-            expect.objectContaining({ podcastId: "pod-ok", success: true })
+            expect.objectContaining({ podcastId: "pod-ok", success: true }),
         );
         expect(result.results[1]).toEqual(
             expect.objectContaining({
                 podcastId: "pod-broken",
                 success: false,
                 error: expect.stringMatching(/not found/),
-            })
+            }),
         );
     });
 
     it("returns empty results when user has no subscriptions", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([]);
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([]);
 
         const result = await refreshAllPodcastFeeds("user-1");
 

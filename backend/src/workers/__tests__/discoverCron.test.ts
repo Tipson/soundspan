@@ -40,7 +40,9 @@ describe("discoverCron worker", () => {
     }
 
     it("queues weekly discover jobs for all enabled users with dedupe job ids", async () => {
-        jest.useFakeTimers().setSystemTime(new Date("2026-02-16T12:00:00.000Z"));
+        jest.useFakeTimers().setSystemTime(
+            new Date("2026-02-16T12:00:00.000Z"),
+        );
         const { module, prisma, discoverQueue } = loadDiscoverCron();
 
         prisma.userDiscoverConfig.findMany.mockResolvedValueOnce([
@@ -56,7 +58,9 @@ describe("discoverCron worker", () => {
             select: { userId: true, playlistSize: true },
         });
         expect(discoverQueue.add).toHaveBeenCalledTimes(2);
-        expect(discoverQueue.add.mock.calls[0][0]).toBe("discover-recommendation");
+        expect(discoverQueue.add.mock.calls[0][0]).toBe(
+            "discover-recommendation",
+        );
         expect(discoverQueue.add.mock.calls[0][1]).toEqual({ userId: "u1" });
         expect(discoverQueue.add.mock.calls[0][2]).toEqual({
             jobId: "discover:cron:2026-02-16:u1",
@@ -79,10 +83,10 @@ describe("discoverCron worker", () => {
                 repeat: { cron: "0 20 * * 0" },
                 removeOnComplete: true,
                 removeOnFail: 10,
-            })
+            }),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "Discover Weekly repeatable scheduler registered"
+            "Discover Weekly repeatable scheduler registered",
         );
 
         discoverQueue.removeRepeatable.mockResolvedValueOnce(undefined);
@@ -93,7 +97,7 @@ describe("discoverCron worker", () => {
         // jobId used at registration or the persisted schedule survives.
         expect(discoverQueue.removeRepeatable).toHaveBeenCalledWith(
             "discover-cron-tick",
-            { cron: "0 20 * * 0", jobId: "discover:cron:tick" }
+            { cron: "0 20 * * 0", jobId: "discover:cron:tick" },
         );
 
         discoverQueue.add.mockRejectedValueOnce(new Error("add-failed"));
@@ -102,18 +106,18 @@ describe("discoverCron worker", () => {
         await Promise.resolve();
         expect(logger.error).toHaveBeenCalledWith(
             "Discover Weekly repeatable scheduler registration failed:",
-            "add-failed"
+            "add-failed",
         );
 
         discoverQueue.removeRepeatable.mockRejectedValueOnce(
-            new Error("remove-failed")
+            new Error("remove-failed"),
         );
         module.stopDiscoverWeeklyCron();
         await Promise.resolve();
         await Promise.resolve();
         expect(logger.warn).toHaveBeenCalledWith(
             "Discover Weekly repeatable scheduler remove failed:",
-            "remove-failed"
+            "remove-failed",
         );
     });
 });

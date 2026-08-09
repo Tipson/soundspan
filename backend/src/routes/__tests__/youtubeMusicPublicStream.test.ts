@@ -73,14 +73,14 @@ describe("YouTube Music public stream routes", () => {
             const result = await ytMusicService.getStreamInfo(
                 "__public__",
                 "testVideoId123",
-                "HIGH"
+                "HIGH",
             );
 
             expect(result).toEqual(mockInfo);
             expect(mockGetStreamInfo).toHaveBeenCalledWith(
                 "__public__",
                 "testVideoId123",
-                "HIGH"
+                "HIGH",
             );
         });
 
@@ -97,13 +97,13 @@ describe("YouTube Music public stream routes", () => {
             await ytMusicService.getStreamInfo(
                 "user_123",
                 "testVideoId123",
-                "HIGH"
+                "HIGH",
             );
 
             expect(mockGetStreamInfo).toHaveBeenCalledWith(
                 "user_123",
                 "testVideoId123",
-                "HIGH"
+                "HIGH",
             );
         });
     });
@@ -124,7 +124,7 @@ describe("YouTube Music public stream routes", () => {
                 "__public__",
                 "testVideoId123",
                 "HIGH",
-                undefined
+                undefined,
             );
 
             expect(result).toEqual(mockProxyRes);
@@ -132,7 +132,7 @@ describe("YouTube Music public stream routes", () => {
                 "__public__",
                 "testVideoId123",
                 "HIGH",
-                undefined
+                undefined,
             );
         });
 
@@ -152,13 +152,11 @@ describe("YouTube Music public stream routes", () => {
                 "__public__",
                 "testVideoId123",
                 "HIGH",
-                "bytes=0-1023"
+                "bytes=0-1023",
             );
 
             expect(result.status).toBe(206);
-            expect(result.headers["content-range"]).toBe(
-                "bytes 0-1023/10240"
-            );
+            expect(result.headers["content-range"]).toBe("bytes 0-1023/10240");
         });
 
         it("handles 404 from sidecar", async () => {
@@ -171,8 +169,8 @@ describe("YouTube Music public stream routes", () => {
                     "__public__",
                     "nonexistentVideoId",
                     "HIGH",
-                    undefined
-                )
+                    undefined,
+                ),
             ).rejects.toEqual({
                 response: { status: 404 },
             });

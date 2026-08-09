@@ -136,7 +136,10 @@ function normalizeToken(value: string): string {
     return value.trim().toLowerCase();
 }
 
-function getValueAtPath(root: unknown, pathSegments: ReadonlyArray<string>): unknown {
+function getValueAtPath(
+    root: unknown,
+    pathSegments: ReadonlyArray<string>,
+): unknown {
     let current: unknown = root;
     for (const segment of pathSegments) {
         if (!isRecord(current)) return undefined;
@@ -201,7 +204,11 @@ function findFirstByKeys(
     return undefined;
 }
 
-function pickString(root: unknown, paths: ReadonlyArray<ReadonlyArray<string>>, fallbackKeys: string[]): string | undefined {
+function pickString(
+    root: unknown,
+    paths: ReadonlyArray<ReadonlyArray<string>>,
+    fallbackKeys: string[],
+): string | undefined {
     for (const pathSegments of paths) {
         const candidate = coerceString(getValueAtPath(root, pathSegments));
         if (candidate !== undefined) return candidate;
@@ -214,7 +221,11 @@ function pickString(root: unknown, paths: ReadonlyArray<ReadonlyArray<string>>, 
     ) as string | undefined;
 }
 
-function pickNumber(root: unknown, paths: ReadonlyArray<ReadonlyArray<string>>, fallbackKeys: string[]): number | undefined {
+function pickNumber(
+    root: unknown,
+    paths: ReadonlyArray<ReadonlyArray<string>>,
+    fallbackKeys: string[],
+): number | undefined {
     for (const pathSegments of paths) {
         const candidate = coerceNumber(getValueAtPath(root, pathSegments));
         if (candidate !== undefined) return candidate;
@@ -361,7 +372,10 @@ function computeDelta(baseline: number, wave: number): Delta {
     };
 }
 
-function formatLatencyDelta(baseline: number | null, wave: number | null): string {
+function formatLatencyDelta(
+    baseline: number | null,
+    wave: number | null,
+): string {
     if (baseline === null || wave === null) {
         return "n/a (missing latency samples)";
     }
@@ -389,11 +403,16 @@ function summarizeMetrics(metrics: Metrics): ReliabilitySummary {
         p50Ms: quantile(metrics.latencyValuesMs, 0.5),
         p95Ms: quantile(metrics.latencyValuesMs, 0.95),
         startupTimeoutRate: total > 0 ? metrics.startupTimeoutCount / total : 0,
-        retryExhaustionRate: total > 0 ? metrics.retryExhaustionCount / total : 0,
+        retryExhaustionRate:
+            total > 0 ? metrics.retryExhaustionCount / total : 0,
     };
 }
 
-function appendReliabilitySummaryLines(lines: string[], metrics: Metrics, summary: ReliabilitySummary): void {
+function appendReliabilitySummaryLines(
+    lines: string[],
+    metrics: Metrics,
+    summary: ReliabilitySummary,
+): void {
     const total = summary.totalStartupTimelineSamples;
     lines.push(`- Total startup timeline samples: ${total}`);
     lines.push(
@@ -441,12 +460,20 @@ function collectMetrics(contents: string): Metrics {
         }
 
         const eventName = normalizeToken(
-            pickString(parsed, EVENT_PATHS, ["event", "eventName", "type"]) ?? "",
+            pickString(parsed, EVENT_PATHS, ["event", "eventName", "type"]) ??
+                "",
         );
         const outcome = normalizeToken(
-            pickString(parsed, OUTCOME_PATHS, ["outcome", "status", "startupOutcome"]) ?? "",
+            pickString(parsed, OUTCOME_PATHS, [
+                "outcome",
+                "status",
+                "startupOutcome",
+            ]) ?? "",
         );
-        const totalToAudibleMs = pickNumber(parsed, LATENCY_PATHS, ["totalToAudibleMs", "total_to_audible_ms"]);
+        const totalToAudibleMs = pickNumber(parsed, LATENCY_PATHS, [
+            "totalToAudibleMs",
+            "total_to_audible_ms",
+        ]);
 
         if (eventName === EVENT_RETRY_EXHAUSTED) {
             retryExhaustionCount += 1;
@@ -495,9 +522,15 @@ function buildReport(params: {
     lines.push(`- Label: ${label}`);
     lines.push(`- Generated at: ${new Date().toISOString()}`);
     lines.push(`- Input: \`${inputPath}\``);
-    lines.push(`- Parsed NDJSON entries: ${metrics.parseStats.parsedLineCount}`);
-    lines.push(`- Invalid JSON lines skipped: ${metrics.parseStats.invalidJsonLineCount}`);
-    lines.push(`- Non-object lines skipped: ${metrics.parseStats.nonObjectLineCount}`);
+    lines.push(
+        `- Parsed NDJSON entries: ${metrics.parseStats.parsedLineCount}`,
+    );
+    lines.push(
+        `- Invalid JSON lines skipped: ${metrics.parseStats.invalidJsonLineCount}`,
+    );
+    lines.push(
+        `- Non-object lines skipped: ${metrics.parseStats.nonObjectLineCount}`,
+    );
     lines.push("");
     lines.push("## Reliability Summary");
     lines.push("");
@@ -505,8 +538,12 @@ function buildReport(params: {
     lines.push("");
     lines.push("## Confidence Caveat");
     lines.push("");
-    lines.push("- Confidence rule: <200 samples = low confidence; >=200 samples = baseline confidence.");
-    lines.push(`- ${label}: ${describeConfidence(summary.totalStartupTimelineSamples)}.`);
+    lines.push(
+        "- Confidence rule: <200 samples = low confidence; >=200 samples = baseline confidence.",
+    );
+    lines.push(
+        `- ${label}: ${describeConfidence(summary.totalStartupTimelineSamples)}.`,
+    );
 
     return `${lines.join("\n")}\n`;
 }
@@ -546,13 +583,19 @@ function buildComparisonReport(params: {
     lines.push("");
     lines.push(`## Reliability Summary (${params.baseline.label})`);
     lines.push("");
-    appendReliabilitySummaryLines(lines, params.baseline.metrics, baselineSummary);
+    appendReliabilitySummaryLines(
+        lines,
+        params.baseline.metrics,
+        baselineSummary,
+    );
     lines.push("");
     lines.push(`## Reliability Summary (${params.wave.label})`);
     lines.push("");
     appendReliabilitySummaryLines(lines, params.wave.metrics, waveSummary);
     lines.push("");
-    lines.push(`## Delta Summary (${params.wave.label} - ${params.baseline.label})`);
+    lines.push(
+        `## Delta Summary (${params.wave.label} - ${params.baseline.label})`,
+    );
     lines.push("");
     lines.push(
         `- First-audible latency p50 (\`totalToAudibleMs\`): ${formatLatencyDelta(baselineSummary.p50Ms, waveSummary.p50Ms)}`,
@@ -569,14 +612,22 @@ function buildComparisonReport(params: {
     lines.push("");
     lines.push("## Confidence Caveat");
     lines.push("");
-    lines.push("- Confidence rule: <200 samples = low confidence; >=200 samples = baseline confidence.");
-    lines.push(`- ${params.baseline.label}: ${describeConfidence(baselineSummary.totalStartupTimelineSamples)}.`);
-    lines.push(`- ${params.wave.label}: ${describeConfidence(waveSummary.totalStartupTimelineSamples)}.`);
+    lines.push(
+        "- Confidence rule: <200 samples = low confidence; >=200 samples = baseline confidence.",
+    );
+    lines.push(
+        `- ${params.baseline.label}: ${describeConfidence(baselineSummary.totalStartupTimelineSamples)}.`,
+    );
+    lines.push(
+        `- ${params.wave.label}: ${describeConfidence(waveSummary.totalStartupTimelineSamples)}.`,
+    );
     if (
         baselineSummary.totalStartupTimelineSamples < 200 ||
         waveSummary.totalStartupTimelineSamples < 200
     ) {
-        lines.push("- Treat deltas as directional until both captures reach at least 200 samples.");
+        lines.push(
+            "- Treat deltas as directional until both captures reach at least 200 samples.",
+        );
     }
 
     return `${lines.join("\n")}\n`;
@@ -601,7 +652,9 @@ function main(): void {
               wave: {
                   label: options.compareLabel,
                   inputPath: absoluteCompareInputPath,
-                  metrics: collectMetrics(fs.readFileSync(absoluteCompareInputPath, "utf8")),
+                  metrics: collectMetrics(
+                      fs.readFileSync(absoluteCompareInputPath, "utf8"),
+                  ),
               },
           })
         : buildReport({
@@ -613,7 +666,10 @@ function main(): void {
     process.stdout.write(report);
 
     if (options.outputPath) {
-        const absoluteOutputPath = path.resolve(process.cwd(), options.outputPath);
+        const absoluteOutputPath = path.resolve(
+            process.cwd(),
+            options.outputPath,
+        );
         fs.mkdirSync(path.dirname(absoluteOutputPath), { recursive: true });
         fs.writeFileSync(absoluteOutputPath, report, "utf8");
     }

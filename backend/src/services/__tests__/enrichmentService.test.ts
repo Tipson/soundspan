@@ -58,7 +58,8 @@ jest.mock("../imageProvider", () => ({
 const mockDownloadAndStoreImage = jest.fn();
 const mockIsNativePath = jest.fn();
 jest.mock("../imageStorage", () => ({
-    downloadAndStoreImage: (...args: any[]) => mockDownloadAndStoreImage(...args),
+    downloadAndStoreImage: (...args: any[]) =>
+        mockDownloadAndStoreImage(...args),
     isNativePath: (...args: any[]) => mockIsNativePath(...args),
 }));
 
@@ -144,7 +145,7 @@ describe("enrichment service behavior", () => {
                 rateLimit: expect.objectContaining({
                     respectApiLimits: false,
                 }),
-            })
+            }),
         );
         expect(prisma.user.update).toHaveBeenCalledWith({
             where: { id: "user-1" },
@@ -208,7 +209,7 @@ describe("enrichment service behavior", () => {
                 genres: ["rock", "alternative", "indie"],
                 similarArtists: ["Similar 1", "Similar 2"],
                 heroUrl: "https://images/artist-a.jpg",
-            })
+            }),
         );
         expect(result?.confidence).toBeCloseTo(0.9, 5);
     });
@@ -234,7 +235,7 @@ describe("enrichment service behavior", () => {
                 },
                 overwriteExisting: false,
                 matchingConfidence: "moderate",
-            })
+            }),
         ).rejects.toThrow("Artist missing-artist not found");
     });
 
@@ -245,9 +246,11 @@ describe("enrichment service behavior", () => {
             name: "Artist B",
             mbid: "mbid-existing",
         });
-        lastFmService.getArtistInfo.mockRejectedValueOnce(new Error("lastfm down"));
+        lastFmService.getArtistInfo.mockRejectedValueOnce(
+            new Error("lastfm down"),
+        );
         imageProviderService.getArtistImage.mockRejectedValueOnce(
-            new Error("image down")
+            new Error("image down"),
         );
 
         await expect(
@@ -265,7 +268,7 @@ describe("enrichment service behavior", () => {
                 },
                 overwriteExisting: false,
                 matchingConfidence: "moderate",
-            })
+            }),
         ).resolves.toEqual({ confidence: 0 });
     });
 
@@ -352,7 +355,7 @@ describe("enrichment service behavior", () => {
                 },
                 overwriteExisting: false,
                 matchingConfidence: "moderate",
-            })
+            }),
         ).rejects.toThrow("Album missing-album not found");
     });
 

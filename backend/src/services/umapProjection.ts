@@ -77,7 +77,7 @@ export interface UmapWorkerOptions {
 export function umapWorkerOptions(
     workerPath: string,
     embeddings: number[][],
-    nNeighbors: number
+    nNeighbors: number,
 ): UmapWorkerOptions {
     const workerData = { embeddings, nNeighbors };
     return workerPath.endsWith(".ts")
@@ -91,12 +91,16 @@ function resolveUmapWorkerPath(): string {
         path.join(__dirname, "../workers/umapWorker.ts"),
     ];
 
-    return candidatePaths.find((candidatePath) => existsSync(candidatePath)) ?? candidatePaths[0];
+    return (
+        candidatePaths.find((candidatePath) => existsSync(candidatePath)) ??
+        candidatePaths[0]
+    );
 }
 
-function getDominantMood(
-    track: Record<string, unknown>
-): { mood: string; score: number } {
+function getDominantMood(track: Record<string, unknown>): {
+    mood: string;
+    score: number;
+} {
     let best = { mood: "neutral", score: 0 };
 
     for (const field of MOOD_FIELDS) {
@@ -124,7 +128,7 @@ function getMoodScores(track: Record<string, unknown>): Record<string, number> {
 
 async function cacheResult(
     result: VibeMapResponse,
-    trackIds: string[]
+    trackIds: string[],
 ): Promise<void> {
     try {
         const pipeline = redisClient.multi();
@@ -138,16 +142,12 @@ async function cacheResult(
     } catch (error) {
         logger.warn(
             "[VIBE-MAP] Failed to cache projection:",
-            error instanceof Error ? error.message : String(error)
+            error instanceof Error ? error.message : String(error),
         );
     }
 }
 
-function buildMapTrack(
-    row: TrackRow,
-    x: number,
-    y: number
-): VibeMapTrack {
+function buildMapTrack(row: TrackRow, x: number, y: number): VibeMapTrack {
     const dominant = getDominantMood(row as Record<string, unknown>);
 
     return {
@@ -167,14 +167,16 @@ function buildMapTrack(
     };
 }
 
-async function buildCircularLayout(rows: Array<TrackRow & { embedding: string }>): Promise<VibeMapResponse> {
+async function buildCircularLayout(
+    rows: Array<TrackRow & { embedding: string }>,
+): Promise<VibeMapResponse> {
     const result: VibeMapResponse = {
         tracks: rows.map((row, index) => {
             const angle = (2 * Math.PI * index) / rows.length;
             return buildMapTrack(
                 row,
                 0.5 + 0.3 * Math.cos(angle),
-                0.5 + 0.3 * Math.sin(angle)
+                0.5 + 0.3 * Math.sin(angle),
             );
         }),
         trackCount: rows.length,
@@ -183,23 +185,36 @@ async function buildCircularLayout(rows: Array<TrackRow & { embedding: string }>
 
     await cacheResult(
         result,
-        rows.map((row) => row.track_id)
+        rows.map((row) => row.track_id),
     );
 
     return result;
 }
 
-function monitorUmapWorker(worker: Worker, trackCount: number,
-    resolve: (value: number[][]) => void, reject: (reason: Error) => void): void {
+function monitorUmapWorker(
+    worker: Worker,
+    trackCount: number,
+    resolve: (value: number[][]) => void,
+    reject: (reason: Error) => void,
+): void {
     let settled = false;
-    const warnTimer = setTimeout(() => logger.warn(
-        `[VIBE-MAP] UMAP worker running for 5+ minutes (${trackCount} tracks)`), UMAP_WARN_MS);
+    const warnTimer = setTimeout(
+        () =>
+            logger.warn(
+                `[VIBE-MAP] UMAP worker running for 5+ minutes (${trackCount} tracks)`,
+            ),
+        UMAP_WARN_MS,
+    );
     const timeoutTimer = setTimeout(() => {
         if (settled) return;
         settled = true;
         clearTimeout(warnTimer);
         void worker.terminate();
-        reject(new Error(`UMAP worker timed out after ${UMAP_TIMEOUT_MS / 60000} minutes`));
+        reject(
+            new Error(
+                `UMAP worker timed out after ${UMAP_TIMEOUT_MS / 60000} minutes`,
+            ),
+        );
     }, UMAP_TIMEOUT_MS);
     const clearTimers = () => {
         clearTimeout(warnTimer);
@@ -210,7 +225,8 @@ function monitorUmapWorker(worker: Worker, trackCount: number,
         settled = true;
         clearTimers();
         const payload = result as { error?: string } | number[][];
-        if (!Array.isArray(payload) && payload?.error) reject(new Error(payload.error));
+        if (!Array.isArray(payload) && payload?.error)
+            reject(new Error(payload.error));
         else resolve(payload as number[][]);
     });
     worker.on("error", (error) => {
@@ -227,10 +243,16 @@ function monitorUmapWorker(worker: Worker, trackCount: number,
     });
 }
 
-function runUmapInWorker(embeddings: number[][], nNeighbors: number): Promise<number[][]> {
+function runUmapInWorker(
+    embeddings: number[][],
+    nNeighbors: number,
+): Promise<number[][]> {
     return new Promise((resolve, reject) => {
         const workerPath = resolveUmapWorkerPath();
-        const worker = new Worker(workerPath, umapWorkerOptions(workerPath, embeddings, nNeighbors));
+        const worker = new Worker(
+            workerPath,
+            umapWorkerOptions(workerPath, embeddings, nNeighbors),
+        );
         monitorUmapWorker(worker, embeddings.length, resolve, reject);
     });
 }
@@ -238,7 +260,9 @@ function runUmapInWorker(embeddings: number[][], nNeighbors: number): Promise<nu
 async function doCompute(): Promise<VibeMapResponse> {
     const startedAt = Date.now();
 
-    const rows = await prisma.$queryRaw<Array<TrackRow & { embedding: string }>>`
+    const rows = await prisma.$queryRaw<
+        Array<TrackRow & { embedding: string }>
+    >`
         SELECT
             te.track_id,
             t.title,
@@ -278,7 +302,7 @@ async function doCompute(): Promise<VibeMapResponse> {
 
     const sampled = rows.length === MAX_EMBEDDINGS;
     logger.info(
-        `[VIBE-MAP] Computing UMAP projection for ${rows.length} tracks${sampled ? " (sampled)" : ""}`
+        `[VIBE-MAP] Computing UMAP projection for ${rows.length} tracks${sampled ? " (sampled)" : ""}`,
     );
 
     const embeddings = rows.map((row) => parseEmbedding(row.embedding));
@@ -304,8 +328,8 @@ async function doCompute(): Promise<VibeMapResponse> {
         buildMapTrack(
             row,
             (projection[index][0] - minX) / rangeX,
-            (projection[index][1] - minY) / rangeY
-        )
+            (projection[index][1] - minY) / rangeY,
+        ),
     );
 
     const result: VibeMapResponse = {
@@ -317,11 +341,11 @@ async function doCompute(): Promise<VibeMapResponse> {
 
     await cacheResult(
         result,
-        rows.map((row) => row.track_id)
+        rows.map((row) => row.track_id),
     );
 
     logger.info(
-        `[VIBE-MAP] UMAP projection computed in ${Date.now() - startedAt}ms for ${tracks.length} tracks`
+        `[VIBE-MAP] UMAP projection computed in ${Date.now() - startedAt}ms for ${tracks.length} tracks`,
     );
 
     return result;

@@ -30,7 +30,7 @@ const DEFAULT_MOOD_BUCKET_CLAIM_TTL_MS = 2 * 60 * 1000;
 const parsedMoodBucketClaimTtlMs = Number.parseInt(
     process.env.MOOD_BUCKET_CLAIM_TTL_MS ||
         `${DEFAULT_MOOD_BUCKET_CLAIM_TTL_MS}`,
-    10
+    10,
 );
 const MOOD_BUCKET_CLAIM_TTL_MS =
     Number.isFinite(parsedMoodBucketClaimTtlMs) &&
@@ -46,7 +46,8 @@ function getMoodBucketClaimRedis() {
 }
 
 function isRetryableMoodBucketClaimError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error ?? "");
+    const message =
+        error instanceof Error ? error.message : String(error ?? "");
     return (
         message.includes("Connection is closed") ||
         message.includes("Connection is in closing state") ||
@@ -69,7 +70,7 @@ function recreateMoodBucketClaimRedisClient(): void {
 
 async function withMoodBucketClaimRedisRetry<T>(
     operationName: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
 ): Promise<T> {
     try {
         return await operation();
@@ -80,7 +81,7 @@ async function withMoodBucketClaimRedisRetry<T>(
 
         logger.warn(
             `[Mood Bucket] ${operationName} failed due to Redis connection closure; recreating client and retrying once`,
-            error
+            error,
         );
         recreateMoodBucketClaimRedisClient();
         return await operation();
@@ -88,7 +89,7 @@ async function withMoodBucketClaimRedisRetry<T>(
 }
 
 async function processNewlyAnalyzedTracksClaimed(
-    operationName: string
+    operationName: string,
 ): Promise<number> {
     const claimToken = `${MOOD_BUCKET_CLAIM_OWNER_ID}:${Date.now()}:${Math.random()}`;
     const ttlSeconds = Math.max(1, Math.ceil(MOOD_BUCKET_CLAIM_TTL_MS / 1000));
@@ -102,20 +103,20 @@ async function processNewlyAnalyzedTracksClaimed(
                     claimToken,
                     "EX",
                     ttlSeconds,
-                    "NX"
-                )
+                    "NX",
+                ),
         );
 
         if (acquired !== "OK") {
             logger.debug(
-                `[Mood Bucket] Skipping ${operationName}; cycle claim is held by another worker`
+                `[Mood Bucket] Skipping ${operationName}; cycle claim is held by another worker`,
             );
             return 0;
         }
     } catch (error) {
         logger.error(
             `[Mood Bucket] Failed to claim ${operationName}; skipping cycle`,
-            error
+            error,
         );
         return 0;
     }
@@ -131,13 +132,13 @@ async function processNewlyAnalyzedTracksClaimed(
                         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
                         1,
                         MOOD_BUCKET_CLAIM_KEY,
-                        claimToken
-                    )
+                        claimToken,
+                    ),
             );
         } catch (error) {
             logger.warn(
                 `[Mood Bucket] Failed to release cycle claim for ${operationName}`,
-                error
+                error,
             );
         }
     }
@@ -210,28 +211,26 @@ async function processNewlyAnalyzedTracks(): Promise<number> {
         }
 
         logger.debug(
-            `[Mood Bucket] Processing ${tracksNeedingBuckets.length} tracks needing mood bucket reconciliation...`
+            `[Mood Bucket] Processing ${tracksNeedingBuckets.length} tracks needing mood bucket reconciliation...`,
         );
 
         let assigned = 0;
         for (const track of tracksNeedingBuckets) {
             try {
                 const moods = await moodBucketService.assignTrackToMoods(
-                    track.id
+                    track.id,
                 );
                 if (moods.length > 0) {
                     assigned++;
                     logger.debug(` ${track.title}: [${moods.join(", ")}]`);
                 }
             } catch (error: any) {
-                logger.error(
-                    `   ✗ ${track.title}: ${error?.message || error}`
-                );
+                logger.error(`   ✗ ${track.title}: ${error?.message || error}`);
             }
         }
 
         logger.debug(
-            `[Mood Bucket] Assigned ${assigned}/${tracksNeedingBuckets.length} tracks to mood buckets`
+            `[Mood Bucket] Assigned ${assigned}/${tracksNeedingBuckets.length} tracks to mood buckets`,
         );
 
         return assigned;

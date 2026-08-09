@@ -41,7 +41,8 @@ describe("deezerService.getArtistImageStrict", () => {
                     },
                     {
                         name: "The Ghost Inside",
-                        picture_xl: "https://images.example/the-ghost-inside.jpg",
+                        picture_xl:
+                            "https://images.example/the-ghost-inside.jpg",
                     },
                 ],
             },
@@ -54,7 +55,7 @@ describe("deezerService.getArtistImageStrict", () => {
             "https://api.deezer.com/search/artist",
             expect.objectContaining({
                 params: { q: "GHOST", limit: 5 },
-            })
+            }),
         );
     });
 
@@ -68,7 +69,8 @@ describe("deezerService.getArtistImageStrict", () => {
                     },
                     {
                         name: "The Ghost Inside",
-                        picture_xl: "https://images.example/the-ghost-inside.jpg",
+                        picture_xl:
+                            "https://images.example/the-ghost-inside.jpg",
                     },
                 ],
             },
@@ -80,7 +82,7 @@ describe("deezerService.getArtistImageStrict", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             expect.stringContaining("deezer:artist-strict:"),
             86400,
-            "null"
+            "null",
         );
     });
 });

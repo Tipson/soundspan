@@ -1,8 +1,8 @@
 /**
  * DataCacheService - Unified data access with consistent caching pattern
- * 
+ *
  * Pattern: DB first -> Redis fallback -> API fetch -> save to both
- * 
+ *
  * This ensures:
  * - DB is the source of truth
  * - Redis provides fast reads
@@ -32,7 +32,7 @@ class DataCacheService {
     async getArtistImage(
         artistId: string,
         artistName: string,
-        mbid?: string | null
+        mbid?: string | null,
     ): Promise<string | null> {
         const cacheKey = `hero:${artistId}`;
 
@@ -86,7 +86,7 @@ class DataCacheService {
      */
     async getAlbumCover(
         albumId: string,
-        rgMbid: string
+        rgMbid: string,
     ): Promise<string | null> {
         const cacheKey = `album-cover:${albumId}`;
 
@@ -136,7 +136,7 @@ class DataCacheService {
     async getTrackCover(
         trackId: string,
         albumId: string,
-        rgMbid?: string | null
+        rgMbid?: string | null,
     ): Promise<string | null> {
         if (!rgMbid) {
             // Try to get album's rgMbid from DB
@@ -158,7 +158,11 @@ class DataCacheService {
      * Only returns what's already cached, doesn't make API calls
      */
     async getArtistImagesBatch(
-        artists: Array<{ id: string; heroUrl?: string | null; userHeroUrl?: string | null }>
+        artists: Array<{
+            id: string;
+            heroUrl?: string | null;
+            userHeroUrl?: string | null;
+        }>,
     ): Promise<Map<string, string | null>> {
         const results = new Map<string, string | null>();
 
@@ -198,7 +202,7 @@ class DataCacheService {
      * Batch get album covers - for list views
      */
     async getAlbumCoversBatch(
-        albums: Array<{ id: string; coverUrl?: string | null }>
+        albums: Array<{ id: string; coverUrl?: string | null }>,
     ): Promise<Map<string, string | null>> {
         const results = new Map<string, string | null>();
 
@@ -239,7 +243,7 @@ class DataCacheService {
     private async fetchArtistImage(
         artistId: string,
         artistName: string,
-        mbid?: string | null
+        mbid?: string | null,
     ): Promise<string | null> {
         let externalUrl: string | null = null;
         let source = "";
@@ -271,18 +275,29 @@ class DataCacheService {
         // Try Last.fm
         if (!externalUrl) {
             try {
-                const validMbid = mbid && !mbid.startsWith("temp-") ? mbid : undefined;
-                const lastfmInfo = await lastFmService.getArtistInfo(artistName, validMbid);
+                const validMbid =
+                    mbid && !mbid.startsWith("temp-") ? mbid : undefined;
+                const lastfmInfo = await lastFmService.getArtistInfo(
+                    artistName,
+                    validMbid,
+                );
 
                 if (lastfmInfo?.image && Array.isArray(lastfmInfo.image)) {
                     const largestImage =
-                        lastfmInfo.image.find((img: any) => img.size === "extralarge" || img.size === "mega") ||
-                        lastfmInfo.image[lastfmInfo.image.length - 1];
+                        lastfmInfo.image.find(
+                            (img: any) =>
+                                img.size === "extralarge" ||
+                                img.size === "mega",
+                        ) || lastfmInfo.image[lastfmInfo.image.length - 1];
 
                     if (largestImage && largestImage["#text"]) {
                         const imageUrl = largestImage["#text"];
                         // Filter out Last.fm placeholder images
-                        if (!imageUrl.includes("2a96cbd8b46e442fc41c2b86b821562f")) {
+                        if (
+                            !imageUrl.includes(
+                                "2a96cbd8b46e442fc41c2b86b821562f",
+                            )
+                        ) {
                             externalUrl = imageUrl;
                             source = "Last.fm";
                         }
@@ -299,23 +314,36 @@ class DataCacheService {
         }
 
         // Download and store locally
-        logger.debug(`[DataCache] Got image from ${source} for ${artistName}, downloading...`);
-        const localPath = await downloadAndStoreImage(externalUrl, artistId, "artist");
+        logger.debug(
+            `[DataCache] Got image from ${source} for ${artistName}, downloading...`,
+        );
+        const localPath = await downloadAndStoreImage(
+            externalUrl,
+            artistId,
+            "artist",
+        );
 
         if (localPath) {
-            logger.debug(`[DataCache] Stored image locally for ${artistName}: ${localPath}`);
+            logger.debug(
+                `[DataCache] Stored image locally for ${artistName}: ${localPath}`,
+            );
             return localPath;
         }
 
         // Fallback to external URL if download fails
-        logger.debug(`[DataCache] Download failed, using external URL for ${artistName}`);
+        logger.debug(
+            `[DataCache] Download failed, using external URL for ${artistName}`,
+        );
         return externalUrl;
     }
 
     /**
      * Update artist heroUrl in database
      */
-    private async updateArtistHeroUrl(artistId: string, heroUrl: string): Promise<void> {
+    private async updateArtistHeroUrl(
+        artistId: string,
+        heroUrl: string,
+    ): Promise<void> {
         try {
             await prisma.artist.update({
                 where: { id: artistId },
@@ -329,7 +357,10 @@ class DataCacheService {
     /**
      * Update album coverUrl in database
      */
-    private async updateAlbumCoverUrl(albumId: string, coverUrl: string): Promise<void> {
+    private async updateAlbumCoverUrl(
+        albumId: string,
+        coverUrl: string,
+    ): Promise<void> {
         try {
             await prisma.album.update({
                 where: { id: albumId },
@@ -343,7 +374,11 @@ class DataCacheService {
     /**
      * Set Redis cache with error handling
      */
-    private async setRedisCache(key: string, value: string, ttl: number): Promise<void> {
+    private async setRedisCache(
+        key: string,
+        value: string,
+        ttl: number,
+    ): Promise<void> {
         try {
             await redisClient.setEx(key, ttl, value);
         } catch (err) {
@@ -356,7 +391,7 @@ class DataCacheService {
      * Uses MULTI/EXEC for atomic batch writes
      */
     private async setRedisCacheBatch(
-        entries: Array<{ key: string; value: string; ttl: number }>
+        entries: Array<{ key: string; value: string; ttl: number }>,
     ): Promise<void> {
         if (entries.length === 0) return;
 
@@ -394,7 +429,9 @@ class DataCacheService {
                 }));
 
             await this.setRedisCacheBatch(artistEntries);
-            logger.debug(`[DataCache] Cached ${artistEntries.length} artist images`);
+            logger.debug(
+                `[DataCache] Cached ${artistEntries.length} artist images`,
+            );
 
             // Warm up album covers
             const albums = await prisma.album.findMany({
@@ -411,7 +448,9 @@ class DataCacheService {
                 }));
 
             await this.setRedisCacheBatch(albumEntries);
-            logger.debug(`[DataCache] Cached ${albumEntries.length} album covers`);
+            logger.debug(
+                `[DataCache] Cached ${albumEntries.length} album covers`,
+            );
 
             logger.debug("[DataCache] Cache warmup complete");
         } catch (err) {
@@ -421,17 +460,3 @@ class DataCacheService {
 }
 
 export const dataCacheService = new DataCacheService();
-
-
-
-
-
-
-
-
-
-
-
-
-
-

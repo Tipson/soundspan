@@ -78,16 +78,19 @@ const mockRedisPublish = redisClient.publish as jest.Mock;
 
 const mockGetSystemSettings = getSystemSettings as jest.Mock;
 const mockRecordFailure = enrichmentFailureService.recordFailure as jest.Mock;
-const mockClearAllFailures = enrichmentFailureService.clearAllFailures as jest.Mock;
+const mockClearAllFailures =
+    enrichmentFailureService.clearAllFailures as jest.Mock;
 const mockClearFailure = enrichmentFailureService.clearFailure as jest.Mock;
 const mockGetFailures = enrichmentFailureService.getFailures as jest.Mock;
-const mockResetRetryCount = enrichmentFailureService.resetRetryCount as jest.Mock;
-const mockResolveByEntity = enrichmentFailureService.resolveByEntity as jest.Mock;
+const mockResetRetryCount =
+    enrichmentFailureService.resetRetryCount as jest.Mock;
+const mockResolveByEntity =
+    enrichmentFailureService.resolveByEntity as jest.Mock;
 
 function findRouteLayer(
     stack: any[],
     method: "get" | "post" | "put",
-    path: string
+    path: string,
 ): any {
     for (const entry of stack) {
         if (entry.route?.path === path && entry.route?.methods?.[method]) {
@@ -105,7 +108,8 @@ function findRouteLayer(
 
 function getHandler(method: "get" | "post" | "put", path: string) {
     const layer = findRouteLayer((router as any).stack, method, path);
-    if (!layer) throw new Error(`${method.toUpperCase()} route not found: ${path}`);
+    if (!layer)
+        throw new Error(`${method.toUpperCase()} route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -228,7 +232,7 @@ describe("analysis routes runtime", () => {
                     withEmbeddings: 4,
                     embeddingProgress: 27,
                 }),
-            })
+            }),
         );
     });
 
@@ -277,7 +281,7 @@ describe("analysis routes runtime", () => {
             expect.objectContaining({
                 take: 1000,
                 orderBy: { fileModified: "desc" },
-            })
+            }),
         );
         expect(pipeline.rPush).toHaveBeenCalledTimes(2);
         expect(pipeline.exec).toHaveBeenCalled();
@@ -324,7 +328,7 @@ describe("analysis routes runtime", () => {
                 trackId: "t100",
                 filePath: "/music/t100.mp3",
                 duration: 222,
-            })
+            }),
         );
         expect(mockTrackUpdate).toHaveBeenCalledWith({
             where: { id: "t100" },
@@ -353,7 +357,7 @@ describe("analysis routes runtime", () => {
         await getTrack(req, res);
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
-            expect.objectContaining({ id: "t2", title: "Track Two" })
+            expect.objectContaining({ id: "t2", title: "Track Two" }),
         );
     });
 
@@ -373,9 +377,27 @@ describe("analysis routes runtime", () => {
 
     it("calculates feature averages and distributions", async () => {
         mockTrackFindMany.mockResolvedValue([
-            { bpm: 80, energy: 0.2, danceability: 0.3, valence: 0.4, keyScale: "minor" },
-            { bpm: 100, energy: 0.5, danceability: 0.6, valence: 0.7, keyScale: "major" },
-            { bpm: 140, energy: 0.9, danceability: 0.8, valence: 0.6, keyScale: "major" },
+            {
+                bpm: 80,
+                energy: 0.2,
+                danceability: 0.3,
+                valence: 0.4,
+                keyScale: "minor",
+            },
+            {
+                bpm: 100,
+                energy: 0.5,
+                danceability: 0.6,
+                valence: 0.7,
+                keyScale: "major",
+            },
+            {
+                bpm: 140,
+                energy: 0.9,
+                danceability: 0.8,
+                valence: 0.6,
+                keyScale: "major",
+            },
         ]);
 
         const req = {} as any;
@@ -395,7 +417,7 @@ describe("analysis routes runtime", () => {
                     key: { major: 2, minor: 1 },
                     bpm: { slow: 1, moderate: 1, upbeat: 1, fast: 0 },
                 }),
-            })
+            }),
         );
     });
 
@@ -411,7 +433,7 @@ describe("analysis routes runtime", () => {
                 workers: 4,
                 cpuCores: 8,
                 recommended: 4,
-            })
+            }),
         );
 
         const badReq = { body: { workers: 0 } } as any;
@@ -428,7 +450,7 @@ describe("analysis routes runtime", () => {
         });
         expect(mockRedisPublish).toHaveBeenCalledWith(
             "audio:analysis:control",
-            JSON.stringify({ command: "set_workers", count: 3 })
+            JSON.stringify({ command: "set_workers", count: 3 }),
         );
         expect(okRes.statusCode).toBe(200);
     });
@@ -443,7 +465,7 @@ describe("analysis routes runtime", () => {
                 workers: 5,
                 cpuCores: 8,
                 recommended: 4,
-            })
+            }),
         );
 
         const badReq = { body: { workers: 9 } } as any;
@@ -460,7 +482,7 @@ describe("analysis routes runtime", () => {
         });
         expect(mockRedisPublish).toHaveBeenCalledWith(
             "audio:clap:control",
-            JSON.stringify({ command: "set_workers", count: 2 })
+            JSON.stringify({ command: "set_workers", count: 2 }),
         );
         expect(okRes.statusCode).toBe(200);
     });
@@ -494,7 +516,7 @@ describe("analysis routes runtime", () => {
                 entityId: "t1",
                 entityName: "Track",
                 errorMessage: "bad",
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });
@@ -667,7 +689,9 @@ describe("analysis routes runtime", () => {
         await postAnalyzeTrack(req, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to queue track for analysis" });
+        expect(res.body).toEqual({
+            error: "Failed to queue track for analysis",
+        });
     });
 
     it("returns 500 when get track analysis catch branch is hit", async () => {
@@ -693,47 +717,63 @@ describe("analysis routes runtime", () => {
     });
 
     it("returns 500 when getting worker configuration fails", async () => {
-        mockGetSystemSettings.mockRejectedValue(new Error("workers read failed"));
+        mockGetSystemSettings.mockRejectedValue(
+            new Error("workers read failed"),
+        );
         const getReq = {} as any;
         const getRes = createRes();
 
         await getWorkers(getReq, getRes);
 
         expect(getRes.statusCode).toBe(500);
-        expect(getRes.body).toEqual({ error: "Failed to get worker configuration" });
+        expect(getRes.body).toEqual({
+            error: "Failed to get worker configuration",
+        });
     });
 
     it("returns 500 when updating worker configuration fails", async () => {
-        mockSystemSettingsUpdate.mockRejectedValue(new Error("workers update failed"));
+        mockSystemSettingsUpdate.mockRejectedValue(
+            new Error("workers update failed"),
+        );
         const req = { body: { workers: 3 } } as any;
         const res = createRes();
 
         await putWorkers(req, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to update worker configuration" });
+        expect(res.body).toEqual({
+            error: "Failed to update worker configuration",
+        });
     });
 
     it("returns 500 when getting CLAP worker configuration fails", async () => {
-        mockGetSystemSettings.mockRejectedValue(new Error("clap workers read failed"));
+        mockGetSystemSettings.mockRejectedValue(
+            new Error("clap workers read failed"),
+        );
         const getReq = {} as any;
         const getRes = createRes();
 
         await getClapWorkers(getReq, getRes);
 
         expect(getRes.statusCode).toBe(500);
-        expect(getRes.body).toEqual({ error: "Failed to get CLAP worker configuration" });
+        expect(getRes.body).toEqual({
+            error: "Failed to get CLAP worker configuration",
+        });
     });
 
     it("returns 500 when updating CLAP worker configuration fails", async () => {
-        mockSystemSettingsUpdate.mockRejectedValue(new Error("clap workers update failed"));
+        mockSystemSettingsUpdate.mockRejectedValue(
+            new Error("clap workers update failed"),
+        );
         const req = { body: { workers: 2 } } as any;
         const res = createRes();
 
         await putClapWorkers(req, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to update CLAP worker configuration" });
+        expect(res.body).toEqual({
+            error: "Failed to update CLAP worker configuration",
+        });
     });
 
     it("returns 500 when recording vibe failure catch branch is hit", async () => {

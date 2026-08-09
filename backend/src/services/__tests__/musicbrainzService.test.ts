@@ -19,7 +19,7 @@ jest.mock("../rateLimiter", () => ({
     rateLimiter: {
         execute: jest.fn(
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
-                requestFn()
+                requestFn(),
         ),
     },
 }));
@@ -61,7 +61,7 @@ describe("musicBrainzService", () => {
         mockRedisKeys.mockResolvedValue([]);
         mockRateLimiterExecute.mockImplementation(
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
-                requestFn()
+                requestFn(),
         );
     });
 
@@ -69,7 +69,10 @@ describe("musicBrainzService", () => {
         const cached = [{ id: "artist-1", name: "Cached Artist" }];
         mockRedisGet.mockResolvedValueOnce(JSON.stringify(cached));
 
-        const result = await musicBrainzService.searchArtist("Cached Artist", 3);
+        const result = await musicBrainzService.searchArtist(
+            "Cached Artist",
+            3,
+        );
 
         expect(result).toEqual(cached);
         expect(mockRateLimiterExecute).not.toHaveBeenCalled();
@@ -85,7 +88,7 @@ describe("musicBrainzService", () => {
         expect(result).toEqual(artists);
         expect(mockRateLimiterExecute).toHaveBeenCalledWith(
             "musicbrainz",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(mockHttpGet).toHaveBeenCalledWith("/artist", {
             params: {
@@ -97,23 +100,28 @@ describe("musicBrainzService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:artist:Radiohead:5",
             2592000,
-            JSON.stringify(artists)
+            JSON.stringify(artists),
         );
     });
 
     it("returns fallback [] on non-404 artist lookup failures and short-caches fallback", async () => {
-        mockRateLimiterExecute.mockRejectedValueOnce(new Error("upstream timeout"));
+        mockRateLimiterExecute.mockRejectedValueOnce(
+            new Error("upstream timeout"),
+        );
 
-        const result = await musicBrainzService.searchArtist("Broken Artist", 8);
+        const result = await musicBrainzService.searchArtist(
+            "Broken Artist",
+            8,
+        );
 
         expect(result).toEqual([]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            '[MusicBrainz] Request failed for key "mb:search:artist:Broken Artist:8": upstream timeout'
+            '[MusicBrainz] Request failed for key "mb:search:artist:Broken Artist:8": upstream timeout',
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:artist:Broken Artist:8",
             120,
-            JSON.stringify([])
+            JSON.stringify([]),
         );
     });
 
@@ -124,10 +132,10 @@ describe("musicBrainzService", () => {
         mockRateLimiterExecute.mockRejectedValueOnce(notFoundError);
 
         await expect(
-            musicBrainzService.searchArtist("Missing Artist", 5)
+            musicBrainzService.searchArtist("Missing Artist", 5),
         ).rejects.toBe(notFoundError);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            '[MusicBrainz] Request failed for key "mb:search:artist:Missing Artist:5": not found'
+            '[MusicBrainz] Request failed for key "mb:search:artist:Missing Artist:5": not found',
         );
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
@@ -143,7 +151,7 @@ describe("musicBrainzService", () => {
         expect(result).toEqual([{ id: "artist-3", name: "Fresh Artist" }]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -156,7 +164,7 @@ describe("musicBrainzService", () => {
         const result = await musicBrainzService.searchReleaseGroups(
             "  A+B  ",
             "  AC/DC  ",
-            5
+            5,
         );
 
         expect(result).toEqual(releaseGroups);
@@ -170,7 +178,7 @@ describe("musicBrainzService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:release-group:A+B:AC/DC:5",
             2592000,
-            JSON.stringify(releaseGroups)
+            JSON.stringify(releaseGroups),
         );
     });
 
@@ -183,7 +191,7 @@ describe("musicBrainzService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:artist:artist-null:url-rels,tags",
             3600,
-            "null"
+            "null",
         );
     });
 
@@ -196,7 +204,7 @@ describe("musicBrainzService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:artist:artist-broken:url-rels,tags",
             120,
-            "null"
+            "null",
         );
     });
 
@@ -207,7 +215,7 @@ describe("musicBrainzService", () => {
         mockRateLimiterExecute.mockRejectedValueOnce(notFoundError);
 
         await expect(musicBrainzService.getArtist("artist-404")).rejects.toBe(
-            notFoundError
+            notFoundError,
         );
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
@@ -221,21 +229,21 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchArtist(
             "Erroring Artist",
-            4
+            4,
         );
 
         expect(result).toEqual([]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            '[MusicBrainz] Request failed for key "mb:search:artist:Erroring Artist:4": upstream timeout'
+            '[MusicBrainz] Request failed for key "mb:search:artist:Erroring Artist:4": upstream timeout',
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:artist:Erroring Artist:4",
             120,
-            JSON.stringify([])
+            JSON.stringify([]),
         );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set fallback error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -244,14 +252,16 @@ describe("musicBrainzService", () => {
         mockRateLimiterExecute.mockRejectedValueOnce(upstreamError);
 
         await expect(
-            musicBrainzService.searchAlbum("Uncached Album", "Some Artist")
+            musicBrainzService.searchAlbum("Uncached Album", "Some Artist"),
         ).rejects.toBe(upstreamError);
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 
     it("maps release-group/release wrapper methods to expected API params", async () => {
         mockHttpGet
-            .mockResolvedValueOnce({ data: { "release-groups": [{ id: "rg-a" }] } })
+            .mockResolvedValueOnce({
+                data: { "release-groups": [{ id: "rg-a" }] },
+            })
             .mockResolvedValueOnce({ data: { id: "rg-detail" } })
             .mockResolvedValueOnce({ data: { id: "rg-details" } })
             .mockResolvedValueOnce({ data: { id: "release-detail" } });
@@ -259,7 +269,7 @@ describe("musicBrainzService", () => {
         const groups = await musicBrainzService.getReleaseGroups(
             "artist-mbid",
             ["album", "single"],
-            25
+            25,
         );
         const group = await musicBrainzService.getReleaseGroup("rg-1");
         const details = await musicBrainzService.getReleaseGroupDetails("rg-1");
@@ -304,7 +314,10 @@ describe("musicBrainzService", () => {
             },
         });
 
-        const result = await musicBrainzService.searchAlbum("Kid A", "Radiohead");
+        const result = await musicBrainzService.searchAlbum(
+            "Kid A",
+            "Radiohead",
+        );
 
         expect(result).toEqual({ id: "rg-first", title: "Kid A" });
         expect(mockHttpGet).toHaveBeenCalledTimes(1);
@@ -328,7 +341,7 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchAlbum(
             "Album - 2011 Remaster",
-            "The Artist"
+            "The Artist",
         );
 
         expect(result).toEqual({ id: "rg-norm", title: "Album" });
@@ -366,14 +379,14 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchAlbum(
             "Album - 2011 Remaster",
-            "Some Artist"
+            "Some Artist",
         );
 
         expect(result).toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:album:Some Artist:Album - 2011 Remaster",
             3600,
-            "null"
+            "null",
         );
     });
 
@@ -417,7 +430,7 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchRecording(
             "Song A",
-            "Artist One"
+            "Artist One",
         );
 
         expect(result).toEqual({
@@ -448,7 +461,10 @@ describe("musicBrainzService", () => {
                             "artist-credit": [
                                 {
                                     name: "Alpha",
-                                    artist: { id: "artist-2", name: "Alpha Beta" },
+                                    artist: {
+                                        id: "artist-2",
+                                        name: "Alpha Beta",
+                                    },
                                 },
                             ],
                             releases: [
@@ -469,7 +485,7 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchRecording(
             "Rare Song",
-            "Alpha Beta"
+            "Alpha Beta",
         );
 
         expect(result).toEqual({
@@ -527,7 +543,7 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchRecording(
             "Do You Realize??",
-            "The Flaming Lips"
+            "The Flaming Lips",
         );
 
         expect(result).toEqual({
@@ -576,7 +592,7 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchRecording(
             "Single Song",
-            "Solo Artist"
+            "Solo Artist",
         );
 
         expect(result).toEqual({
@@ -592,32 +608,32 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchRecording(
             "Broken Song",
-            "Broken Artist"
+            "Broken Artist",
         );
 
         expect(result).toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "MusicBrainz recording search error:",
-            "recording lookup failed"
+            "recording lookup failed",
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:recording:Broken Artist:Broken Song",
             3600,
-            "null"
+            "null",
         );
     });
 
     it("extractPrimaryArtist handles missing, name, and nested artist name paths", () => {
         expect(musicBrainzService.extractPrimaryArtist([])).toBe(
-            "Unknown Artist"
+            "Unknown Artist",
         );
         expect(
-            musicBrainzService.extractPrimaryArtist([{ name: "Top Name" }])
+            musicBrainzService.extractPrimaryArtist([{ name: "Top Name" }]),
         ).toBe("Top Name");
         expect(
             musicBrainzService.extractPrimaryArtist([
                 { artist: { name: "Nested Name" } },
-            ])
+            ]),
         ).toBe("Nested Name");
     });
 
@@ -673,7 +689,9 @@ describe("musicBrainzService", () => {
 
         const result = service.extractAlbumFromRecording({
             id: "track-secondary-penalty",
-            "artist-credit": [{ artist: { id: "artist-2", name: "Artist Name" } }],
+            "artist-credit": [
+                { artist: { id: "artist-2", name: "Artist Name" } },
+            ],
             releases: [
                 {
                     status: "Official",
@@ -695,7 +713,9 @@ describe("musicBrainzService", () => {
 
         const result = service.extractAlbumFromRecording({
             id: "track-title-penalty",
-            "artist-credit": [{ artist: { id: "artist-3", name: "Artist Name" } }],
+            "artist-credit": [
+                { artist: { id: "artist-3", name: "Artist Name" } },
+            ],
             releases: [
                 {
                     status: "Official",
@@ -782,34 +802,36 @@ describe("musicBrainzService", () => {
 
         const result = await musicBrainzService.searchRecording(
             "Some Track",
-            "Artist Name"
+            "Artist Name",
         );
 
         expect(result).toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:recording:Artist Name:Some Track",
             3600,
-            "null"
+            "null",
         );
     });
 
     it("clears single recording cache entries and handles Redis failures", async () => {
         const success = await musicBrainzService.clearRecordingCache(
             "Track",
-            "Artist"
+            "Artist",
         );
         expect(success).toBe(true);
-        expect(mockRedisDel).toHaveBeenCalledWith("mb:search:recording:Artist:Track");
+        expect(mockRedisDel).toHaveBeenCalledWith(
+            "mb:search:recording:Artist:Track",
+        );
 
         mockRedisDel.mockRejectedValueOnce(new Error("redis del failed"));
         const failed = await musicBrainzService.clearRecordingCache(
             "Track 2",
-            "Artist 2"
+            "Artist 2",
         );
         expect(failed).toBe(false);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis del error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -828,8 +850,14 @@ describe("musicBrainzService", () => {
 
         expect(cleared).toBe(2);
         expect(mockRedisDel).toHaveBeenCalledTimes(2);
-        expect(mockRedisDel).toHaveBeenNthCalledWith(1, "mb:search:recording:a");
-        expect(mockRedisDel).toHaveBeenNthCalledWith(2, "mb:search:recording:c");
+        expect(mockRedisDel).toHaveBeenNthCalledWith(
+            1,
+            "mb:search:recording:a",
+        );
+        expect(mockRedisDel).toHaveBeenNthCalledWith(
+            2,
+            "mb:search:recording:c",
+        );
     });
 
     it("returns 0 when clearing stale recording caches fails", async () => {
@@ -840,7 +868,7 @@ describe("musicBrainzService", () => {
         expect(cleared).toBe(0);
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Error clearing stale caches:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -891,7 +919,7 @@ describe("musicBrainzService", () => {
                     inc: "releases",
                     fmt: "json",
                 },
-            }
+            },
         );
         expect(mockHttpGet).toHaveBeenNthCalledWith(2, "/release/official-1", {
             params: {
@@ -904,16 +932,15 @@ describe("musicBrainzService", () => {
     it("returns [] for albums with no releases and on getAlbumTracks errors", async () => {
         mockHttpGet.mockResolvedValueOnce({ data: { releases: [] } });
 
-        const noReleaseTracks = await musicBrainzService.getAlbumTracks(
-            "rg-empty"
-        );
+        const noReleaseTracks =
+            await musicBrainzService.getAlbumTracks("rg-empty");
         expect(noReleaseTracks).toEqual([]);
 
         mockHttpGet.mockRejectedValueOnce(new Error("album tracks failed"));
         const errorTracks = await musicBrainzService.getAlbumTracks("rg-error");
         expect(errorTracks).toEqual([]);
         expect(mockLoggerError).toHaveBeenCalledWith(
-            "MusicBrainz getAlbumTracks error: album tracks failed"
+            "MusicBrainz getAlbumTracks error: album tracks failed",
         );
     });
 
@@ -928,11 +955,11 @@ describe("musicBrainzService", () => {
         expect(result).toEqual([{ id: "artist-4", name: "Sanitized Artist" }]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mockRateLimiterExecute).toHaveBeenCalledWith(
             "musicbrainz",
-            expect.any(Function)
+            expect.any(Function),
         );
     });
 
@@ -944,12 +971,12 @@ describe("musicBrainzService", () => {
                 "mb:no-fallback:unit",
                 async () => {
                     throw noFallbackError;
-                }
-            )
+                },
+            ),
         ).rejects.toBe(noFallbackError);
 
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            `[MusicBrainz] Request failed for key "mb:no-fallback:unit": ${noFallbackError.message}`
+            `[MusicBrainz] Request failed for key "mb:no-fallback:unit": ${noFallbackError.message}`,
         );
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });

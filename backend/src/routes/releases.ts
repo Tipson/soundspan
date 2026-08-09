@@ -71,30 +71,35 @@ router.get("/radar", async (req, res) => {
         // Calculate date range
         const startDate = new Date(now);
         startDate.setDate(startDate.getDate() - daysBack);
-        
+
         const endDate = new Date(now);
         endDate.setDate(endDate.getDate() + daysAhead);
 
-        logger.debug(`[Releases] Fetching radar: ${daysBack} days back, ${daysAhead} days ahead`);
+        logger.debug(
+            `[Releases] Fetching radar: ${daysBack} days back, ${daysAhead} days ahead`,
+        );
 
         // 1. Get releases from Lidarr calendar (monitored artists)
-        const lidarrReleases = await lidarrService.getCalendar(startDate, endDate);
-        
+        const lidarrReleases = await lidarrService.getCalendar(
+            startDate,
+            endDate,
+        );
+
         // 2. Get monitored artists from Lidarr
         const monitoredArtists = await lidarrService.getMonitoredArtists();
-        const monitoredMbids = new Set(monitoredArtists.map(a => a.mbid));
+        const monitoredMbids = new Set(monitoredArtists.map((a) => a.mbid));
 
         // 3. Get similar artists from user's library that aren't monitored
         const similarArtists = await prisma.similarArtist.findMany({
             where: {
                 // Source artist is in the library (has albums)
                 fromArtist: {
-                    albums: { some: {} }
+                    albums: { some: {} },
                 },
                 // Target artist is NOT in library (no albums)
                 toArtist: {
-                    albums: { none: {} }
-                }
+                    albums: { none: {} },
+                },
             },
             select: {
                 toArtist: {
@@ -102,42 +107,48 @@ router.get("/radar", async (req, res) => {
                         id: true,
                         name: true,
                         mbid: true,
-                    }
+                    },
                 },
                 weight: true,
             },
-            orderBy: { weight: 'desc' },
+            orderBy: { weight: "desc" },
             take: 50, // Top 50 similar artists
         });
 
         // Filter out any that are already monitored in Lidarr
         const unmonitoredSimilar = similarArtists.filter(
-            sa => sa.toArtist.mbid && !monitoredMbids.has(sa.toArtist.mbid)
+            (sa) => sa.toArtist.mbid && !monitoredMbids.has(sa.toArtist.mbid),
         );
 
-        logger.debug(`[Releases] Found ${lidarrReleases.length} Lidarr releases`);
-        logger.debug(`[Releases] Found ${unmonitoredSimilar.length} unmonitored similar artists`);
+        logger.debug(
+            `[Releases] Found ${lidarrReleases.length} Lidarr releases`,
+        );
+        logger.debug(
+            `[Releases] Found ${unmonitoredSimilar.length} unmonitored similar artists`,
+        );
 
         // 4. Get albums in library to check what user already has
         const libraryAlbums = await prisma.album.findMany({
             select: {
                 rgMbid: true,
-            }
+            },
         });
-        const libraryAlbumMbids = new Set(libraryAlbums.map(a => a.rgMbid).filter(Boolean));
+        const libraryAlbumMbids = new Set(
+            libraryAlbums.map((a) => a.rgMbid).filter(Boolean),
+        );
 
         // 5. Transform Lidarr releases
         const releases = lidarrReleases.map((release) =>
-            mapCalendarReleaseToRadarItem(release, now, libraryAlbumMbids)
+            mapCalendarReleaseToRadarItem(release, now, libraryAlbumMbids),
         );
 
         // 6. Split into upcoming and recent
         const upcoming = sortByReleaseDateAsc(
-            releases.filter((release) => release.status === "upcoming")
+            releases.filter((release) => release.status === "upcoming"),
         );
 
         const recent = sortByReleaseDateDesc(
-            releases.filter((release) => release.status !== "upcoming")
+            releases.filter((release) => release.status !== "upcoming"),
         );
 
         const response: ReleaseRadarResponse = {
@@ -179,13 +190,13 @@ router.get("/radar", async (req, res) => {
 router.get("/upcoming", async (req, res) => {
     try {
         const daysAhead = parseInt(req.query.days as string) || 90;
-        
+
         const now = new Date();
         const endDate = new Date(now);
         endDate.setDate(endDate.getDate() + daysAhead);
 
         const releases = await lidarrService.getCalendar(now, endDate);
-        
+
         // Sort by release date (soonest first)
         const sorted = sortByReleaseDateAsc(releases);
 
@@ -225,24 +236,27 @@ router.get("/upcoming", async (req, res) => {
 router.get("/recent", async (req, res) => {
     try {
         const daysBack = parseInt(req.query.days as string) || 30;
-        
+
         const now = new Date();
         const startDate = new Date(now);
         startDate.setDate(startDate.getDate() - daysBack);
 
         const releases = await lidarrService.getCalendar(startDate, now);
-        
+
         // Get library albums to mark what's already downloaded
         const libraryAlbums = await prisma.album.findMany({
-            select: { rgMbid: true }
+            select: { rgMbid: true },
         });
-        const libraryMbids = new Set(libraryAlbums.map(a => a.rgMbid).filter(Boolean));
+        const libraryMbids = new Set(
+            libraryAlbums.map((a) => a.rgMbid).filter(Boolean),
+        );
 
         // Filter to releases not in library and sort (newest first)
         const notInLibrary = sortByReleaseDateDesc(
-            releases.filter((release) =>
-                !release.hasFile && !libraryMbids.has(release.albumMbid)
-            )
+            releases.filter(
+                (release) =>
+                    !release.hasFile && !libraryMbids.has(release.albumMbid),
+            ),
         );
 
         res.json({
@@ -295,7 +309,7 @@ router.post("/download/:albumMbid", async (req, res) => {
         // Release-radar downloads are intentionally unimplemented; this endpoint
         // returns 501 until that feature is built.
         res.status(501).json({
-            error: "Download feature not yet implemented for release radar"
+            error: "Download feature not yet implemented for release radar",
         });
     } catch (error: any) {
         logger.error("[Releases] Download error:", error.message);

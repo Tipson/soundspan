@@ -1,11 +1,8 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/auth", () => ({
-    requireAuthOrToken: (
-        _req: Request,
-        _res: Response,
-        next: () => void
-    ) => next(),
+    requireAuthOrToken: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../middleware/rateLimiter", () => ({
@@ -76,7 +73,7 @@ import router from "../audiobooks";
 function getHandler(path: string, method: "get" | "post") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -124,7 +121,9 @@ describe("audiobooks route runtime", () => {
     });
 
     it("returns an empty continue-listening response when audiobookshelf is disabled", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -138,7 +137,11 @@ describe("audiobooks route runtime", () => {
     it("transforms continue-listening cover paths and preserves absolute URLs", async () => {
         prisma.audiobookProgress.findMany.mockResolvedValueOnce([
             { id: "p1", coverUrl: "items/cover-1.jpg", currentTime: 20 },
-            { id: "p2", coverUrl: "https://cdn.example/cover-2.jpg", currentTime: 40 },
+            {
+                id: "p2",
+                coverUrl: "https://cdn.example/cover-2.jpg",
+                currentTime: 40,
+            },
             { id: "p3", coverUrl: null, currentTime: 60 },
         ]);
 
@@ -174,7 +177,7 @@ describe("audiobooks route runtime", () => {
 
     it("returns 500 when continue-listening query fails", async () => {
         prisma.audiobookProgress.findMany.mockRejectedValueOnce(
-            new Error("progress read failed")
+            new Error("progress read failed"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -188,7 +191,9 @@ describe("audiobooks route runtime", () => {
     });
 
     it("rejects sync when audiobookshelf is disabled", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -215,7 +220,7 @@ describe("audiobooks route runtime", () => {
         expect(notificationService.notifySystem).toHaveBeenCalledWith(
             "user-42",
             "Audiobook Sync Complete",
-            "Synced 7 audiobooks (3 with series)"
+            "Synced 7 audiobooks (3 with series)",
         );
     });
 
@@ -237,7 +242,7 @@ describe("audiobooks route runtime", () => {
 
     it("returns 500 when sync fails", async () => {
         audiobookCacheService.syncAll.mockRejectedValueOnce(
-            new Error("sync service down")
+            new Error("sync service down"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -269,14 +274,16 @@ describe("audiobooks route runtime", () => {
         await searchHandler(req, res);
 
         expect(audiobookshelfService.searchAudiobooks).toHaveBeenCalledWith(
-            "dune"
+            "dune",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(results);
     });
 
     it("returns configured=false payload for list endpoint when disabled", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -422,7 +429,9 @@ describe("audiobooks route runtime", () => {
     });
 
     it("returns an empty series list when audiobookshelf is disabled", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
 
         const req = {
             user: { id: "user-1" },

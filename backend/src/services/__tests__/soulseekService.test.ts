@@ -57,13 +57,12 @@ const setIntervalSpy = jest
     .spyOn(global, "setInterval")
     .mockImplementation((() => 0 as unknown as NodeJS.Timeout) as any);
 
-const { soulseekService } = require("../soulseek") as typeof import("../soulseek");
+const { soulseekService } =
+    require("../soulseek") as typeof import("../soulseek");
 
 const ONE_MB = 1024 * 1024;
 
-function makeSearchResult(
-    overrides: Partial<SearchResult> = {}
-): SearchResult {
+function makeSearchResult(overrides: Partial<SearchResult> = {}): SearchResult {
     return {
         user: "user-1",
         file: "/music/Artist - Track.mp3",
@@ -174,7 +173,7 @@ describe("soulseek service", () => {
             });
 
             await expect(soulseekService.connect()).rejects.toThrow(
-                "Soulseek credentials not configured"
+                "Soulseek credentials not configured",
             );
             expect(service.client).toBeNull();
         });
@@ -188,8 +187,8 @@ describe("soulseek service", () => {
             mockSlskConnect.mockImplementation(
                 (
                     _options: unknown,
-                    cb: (err: Error | null, client: unknown) => void
-                ) => cb(null, connectClient as unknown as never)
+                    cb: (err: Error | null, client: unknown) => void,
+                ) => cb(null, connectClient as unknown as never),
             );
 
             await expect(soulseekService.connect()).resolves.toBeUndefined();
@@ -198,7 +197,7 @@ describe("soulseek service", () => {
             expect(service.consecutiveEmptySearches).toBe(0);
             expect(clientOnSpy).toHaveBeenCalledWith(
                 "error",
-                expect.any(Function)
+                expect.any(Function),
             );
         });
 
@@ -209,12 +208,16 @@ describe("soulseek service", () => {
             mockSlskConnect.mockImplementation(
                 (
                     _options: unknown,
-                    cb: (err: Error | null, client: unknown) => void
-                ) => cb(new Error("connection refused"), null as unknown as never)
+                    cb: (err: Error | null, client: unknown) => void,
+                ) =>
+                    cb(
+                        new Error("connection refused"),
+                        null as unknown as never,
+                    ),
             );
 
             await expect(soulseekService.connect()).rejects.toThrow(
-                "connection refused"
+                "connection refused",
             );
             expect(service.client).toBeNull();
         });
@@ -237,7 +240,9 @@ describe("soulseek service", () => {
                 .mockResolvedValue(undefined);
             service.client = { search: jest.fn(), download: jest.fn() };
 
-            await expect(service.ensureConnected(true)).resolves.toBeUndefined();
+            await expect(
+                service.ensureConnected(true),
+            ).resolves.toBeUndefined();
             expect(connectSpy).toHaveBeenCalledTimes(1);
         });
 
@@ -246,13 +251,13 @@ describe("soulseek service", () => {
 
             service.lastConnectAttempt = Date.now();
             await expect(service.ensureConnected()).rejects.toThrow(
-                "Connection cooldown - please wait before retrying"
+                "Connection cooldown - please wait before retrying",
             );
 
             service.lastConnectAttempt = 0;
             service.lastFailedAttempt = Date.now();
             await expect(service.ensureConnected()).rejects.toThrow(
-                "Connection recently failed - please wait before retrying"
+                "Connection recently failed - please wait before retrying",
             );
         });
 
@@ -284,7 +289,7 @@ describe("soulseek service", () => {
             expect(mockSessionLog).toHaveBeenCalledWith(
                 "SOULSEEK",
                 expect.stringContaining("Force disconnecting"),
-                "WARN"
+                "WARN",
             );
         });
     });
@@ -302,14 +307,13 @@ describe("soulseek service", () => {
 
         jest.resetModules();
 
-        const {
-            soulseekService: reloadedSoulseekService,
-        } = require("../soulseek") as typeof import("../soulseek");
+        const { soulseekService: reloadedSoulseekService } =
+            require("../soulseek") as typeof import("../soulseek");
         const service = reloadedSoulseekService as any;
 
         expect(setIntervalSpy).toHaveBeenCalledWith(
             expect.any(Function),
-            5 * 60 * 1000
+            5 * 60 * 1000,
         );
 
         service.failedUsers.set("stale-user", {
@@ -328,7 +332,7 @@ describe("soulseek service", () => {
         expect(service.failedUsers.has("active-user")).toBe(true);
         expect(mockSessionLog).toHaveBeenCalledWith(
             "SOULSEEK",
-            "Cleaned up 1 expired user failure records"
+            "Cleaned up 1 expired user failure records",
         );
 
         setIntervalSpy.mockRestore();
@@ -346,12 +350,12 @@ describe("soulseek service", () => {
 
     it("normalizes track titles and keeps original when normalization removes too much", () => {
         const normalized = (soulseekService as any).normalizeTrackTitle(
-            "Santa Claus Is Comin' to Town (Live at C.W. Post College, NY - Dec 1975)"
+            "Santa Claus Is Comin' to Town (Live at C.W. Post College, NY - Dec 1975)",
         );
         expect(normalized).toBe("Santa Claus Is Comin' to Town");
 
         const bracketNormalized = (soulseekService as any).normalizeTrackTitle(
-            "Song / Name [Radio Edit]"
+            "Song / Name [Radio Edit]",
         );
         expect(bracketNormalized).toBe("Song Name");
 
@@ -365,18 +369,15 @@ describe("soulseek service", () => {
         ["Connection refused by peer", "connection", true],
         ["No such file", "file_not_found", true],
         ["Unexpected failure", "unknown", false],
-    ])(
-        "categorizes '%s' errors",
-        (message, expectedType, expectedSkipUser) => {
-            const categorized = (soulseekService as any).categorizeError(
-                new Error(message)
-            );
-            expect(categorized).toEqual({
-                type: expectedType,
-                skipUser: expectedSkipUser,
-            });
-        }
-    );
+    ])("categorizes '%s' errors", (message, expectedType, expectedSkipUser) => {
+        const categorized = (soulseekService as any).categorizeError(
+            new Error(message),
+        );
+        expect(categorized).toEqual({
+            type: expectedType,
+            skipUser: expectedSkipUser,
+        });
+    });
 
     it("ranks results, filters blocked users, and removes low-score entries", () => {
         const service = soulseekService as any;
@@ -416,7 +417,7 @@ describe("soulseek service", () => {
                 }),
             ],
             "The Artist",
-            "01 - Great Song"
+            "01 - Great Song",
         ) as TrackMatch[];
 
         expect(ranked).toHaveLength(2);
@@ -446,17 +447,17 @@ describe("soulseek service", () => {
             expect(
                 (soulseekService as any).getQualityFromFilename(
                     filename,
-                    bitrate || undefined
-                )
+                    bitrate || undefined,
+                ),
             ).toBe(expectedQuality);
-        }
+        },
     );
 
     it("searchTrack returns ranked matches on successful callback results", async () => {
         const search = jest.fn(
             (
                 _opts: { req: string; timeout: number },
-                cb: (err: Error | null, results: SearchResult[]) => void
+                cb: (err: Error | null, results: SearchResult[]) => void,
             ) => {
                 cb(null, [
                     makeSearchResult({
@@ -477,19 +478,22 @@ describe("soulseek service", () => {
                         file: "/music/not-a-track.txt",
                     }),
                 ]);
-            }
+            },
         );
 
         jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValue(
-            undefined
+            undefined,
         );
         (soulseekService as any).client = { search, download: jest.fn() };
 
-        const result = await soulseekService.searchTrack("The Artist", "The Song");
+        const result = await soulseekService.searchTrack(
+            "The Artist",
+            "The Song",
+        );
 
         expect(search).toHaveBeenCalledWith(
             { req: "The Artist The Song", timeout: 45000 },
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(result.found).toBe(true);
         expect(result.bestMatch?.username).toBe("best-user");
@@ -503,19 +507,19 @@ describe("soulseek service", () => {
         const search = jest.fn(
             (
                 _opts: { req: string; timeout: number },
-                cb: (err: Error | null, results: SearchResult[]) => void
+                cb: (err: Error | null, results: SearchResult[]) => void,
             ) => {
                 cb(null, []);
-            }
+            },
         );
 
         jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValue(
-            undefined
+            undefined,
         );
         (soulseekService as any).client = { search, download: jest.fn() };
 
         await expect(
-            soulseekService.searchTrack("Artist", "Missing Song")
+            soulseekService.searchTrack("Artist", "Missing Song"),
         ).resolves.toEqual({
             found: false,
             bestMatch: null,
@@ -527,31 +531,29 @@ describe("soulseek service", () => {
         const search = jest.fn(
             (
                 _opts: { req: string; timeout: number },
-                cb: (err: Error | null, results: SearchResult[]) => void
+                cb: (err: Error | null, results: SearchResult[]) => void,
             ) => {
                 cb(new Error("Timed out"), []);
-            }
+            },
         );
 
         jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValue(
-            undefined
+            undefined,
         );
         (soulseekService as any).client = { search, download: jest.fn() };
 
-        await expect(soulseekService.searchTrack("Artist", "Any Song")).resolves.toEqual(
-            {
-                found: false,
-                bestMatch: null,
-                allMatches: [],
-            }
-        );
+        await expect(
+            soulseekService.searchTrack("Artist", "Any Song"),
+        ).resolves.toEqual({
+            found: false,
+            bestMatch: null,
+            allMatches: [],
+        });
     });
 
     it("searchTrack handles synchronous search API failures", async () => {
         const service = soulseekService as any;
-        jest.spyOn(service, "ensureConnected").mockResolvedValueOnce(
-            undefined
-        );
+        jest.spyOn(service, "ensureConnected").mockResolvedValueOnce(undefined);
         service.client = {
             search: jest.fn(() => {
                 throw new Error("Search API sync failure");
@@ -559,20 +561,20 @@ describe("soulseek service", () => {
             download: jest.fn(),
         };
 
-        await expect(soulseekService.searchTrack("Artist", "Any Song")).resolves.toEqual(
-            {
-                found: false,
-                bestMatch: null,
-                allMatches: [],
-            }
-        );
+        await expect(
+            soulseekService.searchTrack("Artist", "Any Song"),
+        ).resolves.toEqual({
+            found: false,
+            bestMatch: null,
+            allMatches: [],
+        });
     });
 
     it("searchTrack ignores non-audio results", async () => {
         const search = jest.fn(
             (
                 _opts: { req: string; timeout: number },
-                cb: (err: Error | null, results: SearchResult[]) => void
+                cb: (err: Error | null, results: SearchResult[]) => void,
             ) => {
                 cb(null, [
                     makeSearchResult({
@@ -584,28 +586,28 @@ describe("soulseek service", () => {
                         speed: 100_000,
                     }),
                 ]);
-            }
+            },
         );
 
         jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValue(
-            undefined
+            undefined,
         );
         (soulseekService as any).client = { search, download: jest.fn() };
 
-        await expect(soulseekService.searchTrack("Artist", "Song")).resolves.toEqual(
-            {
-                found: false,
-                bestMatch: null,
-                allMatches: [],
-            }
-        );
+        await expect(
+            soulseekService.searchTrack("Artist", "Song"),
+        ).resolves.toEqual({
+            found: false,
+            bestMatch: null,
+            allMatches: [],
+        });
     });
 
     it("searchTrack drops low-scoring ranked matches", async () => {
         const search = jest.fn(
             (
                 _opts: { req: string; timeout: number },
-                cb: (err: Error | null, results: SearchResult[]) => void
+                cb: (err: Error | null, results: SearchResult[]) => void,
             ) => {
                 cb(null, [
                     makeSearchResult({
@@ -617,40 +619,42 @@ describe("soulseek service", () => {
                         size: 100,
                     }),
                 ]);
-            }
+            },
         );
 
         jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValue(
-            undefined
+            undefined,
         );
         (soulseekService as any).client = { search, download: jest.fn() };
 
-        await expect(soulseekService.searchTrack("Completely", "Different")).resolves.toEqual(
-            {
-                found: false,
-                bestMatch: null,
-                allMatches: [],
-            }
-        );
+        await expect(
+            soulseekService.searchTrack("Completely", "Different"),
+        ).resolves.toEqual({
+            found: false,
+            bestMatch: null,
+            allMatches: [],
+        });
     });
 
     it("searchTrack treats null results as no matches", async () => {
-        jest
-            .spyOn(soulseekService as any, "ensureConnected")
-            .mockResolvedValue(undefined);
+        jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValue(
+            undefined,
+        );
         (soulseekService as any).client = {
             search: jest.fn(
                 (
-                _opts: { req: string; timeout: number },
-                cb: (err: Error | null, results: SearchResult[]) => void
-            ) => {
-                    cb(null, (null as unknown) as SearchResult[]);
-            }
-        ),
+                    _opts: { req: string; timeout: number },
+                    cb: (err: Error | null, results: SearchResult[]) => void,
+                ) => {
+                    cb(null, null as unknown as SearchResult[]);
+                },
+            ),
             download: jest.fn(),
         };
 
-        await expect(soulseekService.searchTrack("Artist", "Song")).resolves.toEqual({
+        await expect(
+            soulseekService.searchTrack("Artist", "Song"),
+        ).resolves.toEqual({
             found: false,
             bestMatch: null,
             allMatches: [],
@@ -664,13 +668,13 @@ describe("soulseek service", () => {
             .mockImplementationOnce(
                 (
                     _opts: { req: string; timeout: number },
-                    cb: (err: Error | null, results: SearchResult[]) => void
-                ) => cb(null, [])
+                    cb: (err: Error | null, results: SearchResult[]) => void,
+                ) => cb(null, []),
             )
             .mockImplementationOnce(
                 (
                     _opts: { req: string; timeout: number },
-                    cb: (err: Error | null, results: SearchResult[]) => void
+                    cb: (err: Error | null, results: SearchResult[]) => void,
                 ) => {
                     cb(null, [
                         makeSearchResult({
@@ -682,7 +686,7 @@ describe("soulseek service", () => {
                             slots: true,
                         }),
                     ]);
-                }
+                },
             );
 
         jest.spyOn(service, "ensureConnected").mockImplementation(async () => {
@@ -693,7 +697,10 @@ describe("soulseek service", () => {
         service.client = { search, download: jest.fn() };
         service.consecutiveEmptySearches = 2;
 
-        const result = await soulseekService.searchTrack("The Artist", "The Song");
+        const result = await soulseekService.searchTrack(
+            "The Artist",
+            "The Song",
+        );
 
         expect(search).toHaveBeenCalledTimes(2);
         expect(result.found).toBe(true);
@@ -707,13 +714,13 @@ describe("soulseek service", () => {
             .mockImplementationOnce(
                 (
                     _opts: { req: string; timeout: number },
-                    cb: (err: Error | null, results: SearchResult[]) => void
-                ) => cb(new Error("Timed out"), [])
+                    cb: (err: Error | null, results: SearchResult[]) => void,
+                ) => cb(new Error("Timed out"), []),
             )
             .mockImplementationOnce(
                 (
                     _opts: { req: string; timeout: number },
-                    cb: (err: Error | null, results: SearchResult[]) => void
+                    cb: (err: Error | null, results: SearchResult[]) => void,
                 ) =>
                     cb(null, [
                         makeSearchResult({
@@ -724,7 +731,7 @@ describe("soulseek service", () => {
                             speed: 600_000,
                             slots: true,
                         }),
-                    ])
+                    ]),
             );
 
         jest.spyOn(service, "ensureConnected").mockImplementation(async () => {
@@ -737,7 +744,7 @@ describe("soulseek service", () => {
 
         const result = await soulseekService.searchTrack(
             "The Artist",
-            "The Song"
+            "The Song",
         );
 
         expect(search).toHaveBeenCalledTimes(2);
@@ -768,14 +775,20 @@ describe("soulseek service", () => {
             "Track",
             "Album:One",
             [first, second],
-            "/library"
+            "/library",
         );
 
         expect(downloadTrackSpy).toHaveBeenCalledTimes(2);
         expect(downloadTrackSpy).toHaveBeenNthCalledWith(
             1,
             first,
-            path.join("/library", "Singles", "Artist_One", "Album_One", "Bad_.mp3")
+            path.join(
+                "/library",
+                "Singles",
+                "Artist_One",
+                "Album_One",
+                "Bad_.mp3",
+            ),
         );
         expect(downloadTrackSpy).toHaveBeenNthCalledWith(
             2,
@@ -785,8 +798,8 @@ describe("soulseek service", () => {
                 "Singles",
                 "Artist_One",
                 "Album_One",
-                "Good_.flac"
-            )
+                "Good_.flac",
+            ),
         );
         expect(result).toEqual({
             success: true,
@@ -795,7 +808,7 @@ describe("soulseek service", () => {
                 "Singles",
                 "Artist_One",
                 "Album_One",
-                "Good_.flac"
+                "Good_.flac",
             ),
         });
     });
@@ -807,8 +820,8 @@ describe("soulseek service", () => {
                 "Track",
                 "Album",
                 [],
-                "/library"
-            )
+                "/library",
+            ),
         ).resolves.toEqual({
             success: false,
             error: "No matches provided",
@@ -834,9 +847,12 @@ describe("soulseek service", () => {
             .mockImplementation(
                 async (
                     artistName: string,
-                    trackTitle: string
+                    trackTitle: string,
                 ): Promise<SearchTrackResult> => {
-                    if (artistName === "Artist/One" && trackTitle === "Retry Track") {
+                    if (
+                        artistName === "Artist/One" &&
+                        trackTitle === "Retry Track"
+                    ) {
                         return {
                             found: true,
                             bestMatch: first,
@@ -848,7 +864,7 @@ describe("soulseek service", () => {
                         bestMatch: null,
                         allMatches: [],
                     };
-                }
+                },
             );
 
         const downloadTrackSpy = jest
@@ -858,11 +874,19 @@ describe("soulseek service", () => {
 
         const result = await soulseekService.searchAndDownloadBatch(
             [
-                { artist: "Artist/One", title: "Retry Track", album: "Album:One" },
-                { artist: "Artist Two", title: "Missing Track", album: "Album Two" },
+                {
+                    artist: "Artist/One",
+                    title: "Retry Track",
+                    album: "Album:One",
+                },
+                {
+                    artist: "Artist Two",
+                    title: "Missing Track",
+                    album: "Album Two",
+                },
             ],
             "/music",
-            1
+            1,
         );
 
         expect(searchTrackSpy).toHaveBeenCalledTimes(2);
@@ -878,7 +902,7 @@ describe("soulseek service", () => {
                     "Singles",
                     "Artist_One",
                     "Album_One",
-                    "Recovered_.flac"
+                    "Recovered_.flac",
                 ),
             ],
             errors: ["Artist Two - Missing Track: No match found on Soulseek"],
@@ -905,15 +929,14 @@ describe("soulseek service", () => {
             allMatches: [primary, fallback],
         });
 
-        jest
-            .spyOn(soulseekService, "downloadTrack")
+        jest.spyOn(soulseekService, "downloadTrack")
             .mockResolvedValueOnce({ success: false, error: "timeout" })
             .mockResolvedValueOnce({ success: false, error: "user offline" });
 
         const result = await soulseekService.searchAndDownloadBatch(
             [{ artist: "Artist", title: "Track", album: "Album" }],
             "/music",
-            1
+            1,
         );
 
         expect(result).toEqual({
@@ -934,8 +957,7 @@ describe("soulseek service", () => {
             quality: "FLAC",
         });
 
-        jest
-            .spyOn(soulseekService, "searchTrack")
+        jest.spyOn(soulseekService, "searchTrack")
             .mockResolvedValueOnce({
                 found: false,
                 bestMatch: null,
@@ -947,17 +969,26 @@ describe("soulseek service", () => {
                 allMatches: [match],
             });
 
-        jest
-            .spyOn(soulseekService, "downloadTrack")
-            .mockResolvedValue({ success: false, error: "timeout" });
+        jest.spyOn(soulseekService, "downloadTrack").mockResolvedValue({
+            success: false,
+            error: "timeout",
+        });
 
         const result = await soulseekService.searchAndDownloadBatch(
             [
-                { artist: "Ghost Artist", title: "Missing", album: "Ghost Album" },
-                { artist: "Fallback Artist", title: "Slow Song", album: "Fallback Album" },
+                {
+                    artist: "Ghost Artist",
+                    title: "Missing",
+                    album: "Ghost Album",
+                },
+                {
+                    artist: "Fallback Artist",
+                    title: "Slow Song",
+                    album: "Fallback Album",
+                },
             ],
             "/music",
-            1
+            1,
         );
 
         expect(result).toEqual({
@@ -972,21 +1003,19 @@ describe("soulseek service", () => {
     });
 
     it("searchAndDownload returns no match when search returns nothing", async () => {
-        jest
-            .spyOn(soulseekService, "searchTrack")
-            .mockResolvedValueOnce({
-                found: false,
-                bestMatch: null,
-                allMatches: [],
-            });
+        jest.spyOn(soulseekService, "searchTrack").mockResolvedValueOnce({
+            found: false,
+            bestMatch: null,
+            allMatches: [],
+        });
 
         await expect(
             soulseekService.searchAndDownload(
                 "Artist",
                 "Track",
                 "Album",
-                "/music"
-            )
+                "/music",
+            ),
         ).resolves.toEqual({
             success: false,
             error: "No suitable match found",
@@ -1019,7 +1048,7 @@ describe("soulseek service", () => {
             "Edge Artist",
             "Edge Song",
             "Edge Album",
-            "/music"
+            "/music",
         );
 
         expect(downloadTrackSpy).toHaveBeenCalledTimes(2);
@@ -1057,7 +1086,7 @@ describe("soulseek service", () => {
             "Artist/One",
             "Song",
             "Album:One",
-            "/music"
+            "/music",
         );
 
         expect(downloadTrackSpy).toHaveBeenCalledTimes(2);
@@ -1068,20 +1097,21 @@ describe("soulseek service", () => {
                 "Singles",
                 "Artist_One",
                 "Album_One",
-                "Recovered_.flac"
+                "Recovered_.flac",
             ),
         });
     });
 
     describe("downloadTrack", () => {
         it("returns connection error when ensureConnected rejects", async () => {
-            jest.spyOn(soulseekService as any, "ensureConnected").mockRejectedValueOnce(
-                new Error("Connection cooldown")
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockRejectedValueOnce(new Error("Connection cooldown"));
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch(),
-                "/music/out.flac"
+                "/music/out.flac",
             );
 
             expect(result).toEqual({
@@ -1091,23 +1121,25 @@ describe("soulseek service", () => {
         });
 
         it("returns not connected when client is still null after ensureConnected", async () => {
-            jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
-                undefined
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockResolvedValueOnce(undefined);
             (soulseekService as any).client = null;
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch(),
-                "/music/out.flac"
+                "/music/out.flac",
             );
 
             expect(result).toEqual({ success: false, error: "Not connected" });
         });
 
         it("returns directory creation error when mkdir fails", async () => {
-            jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
-                undefined
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockResolvedValueOnce(undefined);
             (soulseekService as any).client = {
                 search: jest.fn(),
                 download: jest.fn(),
@@ -1116,7 +1148,7 @@ describe("soulseek service", () => {
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch(),
-                "/music/folder/out.flac"
+                "/music/folder/out.flac",
             );
 
             expect(result).toEqual({
@@ -1127,9 +1159,10 @@ describe("soulseek service", () => {
 
         it("times out download attempts and records cleanup for partial files", async () => {
             jest.useFakeTimers();
-            jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
-                undefined
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockResolvedValueOnce(undefined);
             (soulseekService as any).client = {
                 search: jest.fn(),
                 download: jest.fn(),
@@ -1138,51 +1171,59 @@ describe("soulseek service", () => {
 
             const promise = soulseekService.downloadTrack(
                 makeTrackMatch({ username: "timeout-user" }),
-                "/music/timeout.flac"
+                "/music/timeout.flac",
             );
 
             await jest.advanceTimersByTimeAsync(60000);
             const result = await promise;
 
-            expect(result).toEqual({ success: false, error: "Download timed out" });
+            expect(result).toEqual({
+                success: false,
+                error: "Download timed out",
+            });
             expect(mockRm).toHaveBeenCalledWith("/music/timeout.flac", {
                 force: true,
             });
-            expect((soulseekService as any).failedUsers.get("timeout-user")).toEqual(
-                expect.objectContaining({ failures: 1 })
-            );
+            expect(
+                (soulseekService as any).failedUsers.get("timeout-user"),
+            ).toEqual(expect.objectContaining({ failures: 1 }));
             jest.useRealTimers();
         });
 
         it("returns callback error and increments failure counter for user problems", async () => {
-            jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
-                undefined
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockResolvedValueOnce(undefined);
             (soulseekService as any).client = {
                 search: jest.fn(),
                 download: jest.fn(
                     (
                         _opts: unknown,
-                        cb: (err: Error | null, data?: { buffer: Buffer }) => void
-                    ) => cb(new Error("user offline"))
+                        cb: (
+                            err: Error | null,
+                            data?: { buffer: Buffer },
+                        ) => void,
+                    ) => cb(new Error("user offline")),
                 ),
             };
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch({ username: "offline-user" }),
-                "/music/offline.flac"
+                "/music/offline.flac",
             );
 
             expect(result).toEqual({ success: false, error: "user offline" });
-            expect((soulseekService as any).failedUsers.get("offline-user")).toEqual(
-                expect.objectContaining({ failures: 1 })
-            );
+            expect(
+                (soulseekService as any).failedUsers.get("offline-user"),
+            ).toEqual(expect.objectContaining({ failures: 1 }));
         });
 
         it("returns synchronous download errors when the client throws", async () => {
-            jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
-                undefined
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockResolvedValueOnce(undefined);
             (soulseekService as any).client = {
                 search: jest.fn(),
                 download: jest.fn(() => {
@@ -1192,7 +1233,7 @@ describe("soulseek service", () => {
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch(),
-                "/music/sync.flac"
+                "/music/sync.flac",
             );
 
             expect(result).toEqual({
@@ -1202,9 +1243,10 @@ describe("soulseek service", () => {
         });
 
         it("returns error when downloaded file is not written to disk", async () => {
-            jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
-                undefined
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockResolvedValueOnce(undefined);
             // The post-download check is `await stat(destPath)`, which REJECTS
             // when the file is missing — that is the real "not written" path.
             // (Previously this test only set existsSync=false and left mockStat
@@ -1223,41 +1265,48 @@ describe("soulseek service", () => {
                         _opts: unknown,
                         cb: (
                             err: Error | null,
-                            data?: { buffer: Buffer }
-                        ) => void
-                    ) => cb(null, { buffer: Buffer.from("ok") })
+                            data?: { buffer: Buffer },
+                        ) => void,
+                    ) => cb(null, { buffer: Buffer.from("ok") }),
                 ),
             };
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch(),
-                "/music/missing.flac"
+                "/music/missing.flac",
             );
 
             // The error comes from stat() rejecting on the missing file, not
             // from an incidental TypeError — assert the verification ran.
             expect(mockStat).toHaveBeenCalledWith("/music/missing.flac");
-            expect(result).toEqual({ success: false, error: "File not written" });
+            expect(result).toEqual({
+                success: false,
+                error: "File not written",
+            });
         });
 
         it("returns success when callback completes and file exists", async () => {
-            jest.spyOn(soulseekService as any, "ensureConnected").mockResolvedValueOnce(
-                undefined
-            );
+            jest.spyOn(
+                soulseekService as any,
+                "ensureConnected",
+            ).mockResolvedValueOnce(undefined);
             (soulseekService as any).client = {
                 search: jest.fn(),
                 download: jest.fn(
                     (
                         _opts: unknown,
-                        cb: (err: Error | null, data?: { buffer: Buffer }) => void
-                    ) => cb(null, { buffer: Buffer.from("ok") })
+                        cb: (
+                            err: Error | null,
+                            data?: { buffer: Buffer },
+                        ) => void,
+                    ) => cb(null, { buffer: Buffer.from("ok") }),
                 ),
             };
             mockStat.mockResolvedValue({ size: 4096 });
 
             const result = await soulseekService.downloadTrack(
                 makeTrackMatch(),
-                "/music/success.flac"
+                "/music/success.flac",
             );
 
             expect(result).toEqual({ success: true });

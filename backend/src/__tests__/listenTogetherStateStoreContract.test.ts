@@ -6,19 +6,19 @@ describe("listen together state store contract", () => {
         __dirname,
         "..",
         "services",
-        "listenTogetherSocket.ts"
+        "listenTogetherSocket.ts",
     );
     const listenTogetherServicePath = path.join(
         __dirname,
         "..",
         "services",
-        "listenTogether.ts"
+        "listenTogether.ts",
     );
     const stateStorePath = path.join(
         __dirname,
         "..",
         "services",
-        "listenTogetherStateStore.ts"
+        "listenTogetherStateStore.ts",
     );
 
     const socketSource = fs.readFileSync(socketServicePath, "utf8");
@@ -27,41 +27,41 @@ describe("listen together state store contract", () => {
 
     it("loads authoritative snapshot from redis store before locked mutations", () => {
         expect(socketSource).toContain(
-            "await listenTogetherStateStore.getSnapshot(groupId)"
+            "await listenTogetherStateStore.getSnapshot(groupId)",
         );
         expect(socketSource).toContain(
-            "groupManager.applyExternalSnapshot(authoritativeSnapshot)"
+            "groupManager.applyExternalSnapshot(authoritativeSnapshot)",
         );
     });
 
     it("persists and deletes snapshots through callbacks and shutdown", () => {
         expect(socketSource).toContain(
-            "await listenTogetherStateStore.setSnapshot(groupId, resolvedSnapshot)"
+            "await listenTogetherStateStore.setSnapshot(groupId, resolvedSnapshot)",
         );
         expect(socketSource).toContain(
-            "await listenTogetherStateStore.deleteSnapshot(groupId)"
+            "await listenTogetherStateStore.deleteSnapshot(groupId)",
         );
         expect(socketSource).toContain("listenTogetherStateStore.stop();");
     });
 
     it("hydrates cold-path memory from state store before database fallback", () => {
         expect(serviceSource).toContain(
-            "const storedSnapshot = await listenTogetherStateStore.getSnapshot(groupId);"
+            "const storedSnapshot = await listenTogetherStateStore.getSnapshot(groupId);",
         );
         expect(serviceSource).toContain(
-            "groupManager.applyExternalSnapshot(storedSnapshot);"
+            "groupManager.applyExternalSnapshot(storedSnapshot);",
         );
     });
 
     it("defines env-driven controls for authoritative store", () => {
         expect(stateStoreSource).toContain(
-            "LISTEN_TOGETHER_STATE_STORE_ENABLED"
+            "LISTEN_TOGETHER_STATE_STORE_ENABLED",
         );
         expect(stateStoreSource).toContain(
-            "LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS"
+            "LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS",
         );
         expect(stateStoreSource).toContain(
-            "LISTEN_TOGETHER_STATE_STORE_KEY_PREFIX"
+            "LISTEN_TOGETHER_STATE_STORE_KEY_PREFIX",
         );
     });
 });

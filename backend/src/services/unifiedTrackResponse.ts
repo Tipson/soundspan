@@ -102,7 +102,7 @@ export interface UnifiedPlaylistTrackItemResponse {
  * Normalize a local library track row into the canonical unified track contract.
  */
 export function normalizeLocalTrack(
-    track: UnifiedLocalTrackRecord
+    track: UnifiedLocalTrackRecord,
 ): UnifiedTrackResponse {
     return {
         id: track.id,
@@ -112,8 +112,8 @@ export function normalizeLocalTrack(
             typeof track.trackNo === "number"
                 ? track.trackNo
                 : typeof track.trackNumber === "number"
-                ? track.trackNumber
-                : null,
+                  ? track.trackNumber
+                  : null,
         artist: {
             id:
                 typeof track.album.artist.id === "string"
@@ -143,10 +143,11 @@ export function normalizeLocalTrack(
  * Normalize a materialized TIDAL track row into the canonical unified track contract.
  */
 export function normalizeTidalTrack(
-    tidal: UnifiedTrackTidalRecord
+    tidal: UnifiedTrackTidalRecord,
 ): UnifiedTrackResponse {
     const tidalTrackId = Number(tidal.tidalId);
-    const hasValidTidalTrackId = Number.isFinite(tidalTrackId) && tidalTrackId > 0;
+    const hasValidTidalTrackId =
+        Number.isFinite(tidalTrackId) && tidalTrackId > 0;
 
     return {
         id: hasValidTidalTrackId
@@ -176,7 +177,7 @@ export function normalizeTidalTrack(
  * Normalize a materialized YouTube Music track row into the canonical unified track contract.
  */
 export function normalizeYtMusicTrack(
-    yt: UnifiedTrackYtMusicRecord
+    yt: UnifiedTrackYtMusicRecord,
 ): UnifiedTrackResponse {
     const youtubeVideoId =
         typeof yt.videoId === "string" ? yt.videoId.trim() : "";
@@ -205,7 +206,7 @@ export function normalizeYtMusicTrack(
 }
 
 function toLegacyCompatibleTrackShape(
-    normalized: UnifiedTrackResponse
+    normalized: UnifiedTrackResponse,
 ): Record<string, unknown> {
     return {
         ...normalized,
@@ -226,7 +227,7 @@ function toLegacyCompatibleTrackShape(
 }
 
 function buildBaseTrackItem(
-    item: UnifiedPlaylistItemRecord
+    item: UnifiedPlaylistItemRecord,
 ): Omit<UnifiedPlaylistTrackItemResponse, "provider" | "playback" | "track"> {
     return {
         id: item.id,
@@ -240,7 +241,7 @@ function buildBaseTrackItem(
 }
 
 function normalizeUnknownTrackItem(
-    item: UnifiedPlaylistItemRecord
+    item: UnifiedPlaylistItemRecord,
 ): UnifiedPlaylistTrackItemResponse {
     return {
         ...buildBaseTrackItem(item),
@@ -265,7 +266,7 @@ function normalizeUnknownTrackItem(
  * emitting normalized track content from canonical local/tidal/youtube normalizers.
  */
 export function formatUnifiedTrackItem(
-    item: UnifiedPlaylistItemRecord
+    item: UnifiedPlaylistItemRecord,
 ): UnifiedPlaylistTrackItemResponse {
     if (item.track) {
         const normalizedTrack = normalizeLocalTrack(item.track);

@@ -14,7 +14,7 @@ export function normalizeQuotes(str: string): string {
 export function normalizeFullwidth(str: string): string {
     return str
         .replace(/[\uFF01-\uFF5E]/g, (char) =>
-            String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
+            String.fromCharCode(char.charCodeAt(0) - 0xfee0),
         )
         .replace(/\u3000/g, " ")
         .trim();

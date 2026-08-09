@@ -171,7 +171,10 @@ const resolveAssetBuildFailedStartupHintProfile = (
               retryAfterMs: null,
           };
 
-const SEGMENTED_STARTUP_HINT_BY_CODE: Record<string, SegmentedStartupHintProfile> = {
+const SEGMENTED_STARTUP_HINT_BY_CODE: Record<
+    string,
+    SegmentedStartupHintProfile
+> = {
     STREAMING_DRAINING: {
         state: "waiting",
         transient: true,
@@ -216,7 +219,10 @@ const SEGMENTED_STARTUP_HINT_BY_CODE: Record<string, SegmentedStartupHintProfile
     },
 };
 
-const SEGMENTED_STARTUP_HINT_BY_REASON: Record<string, SegmentedStartupHintProfile> = {
+const SEGMENTED_STARTUP_HINT_BY_REASON: Record<
+    string,
+    SegmentedStartupHintProfile
+> = {
     unauthorized: {
         state: "blocked",
         transient: false,
@@ -475,13 +481,18 @@ const authorizeSegmentedSessionRequest = async ({
             tokenValidationOptions,
         );
     } else {
-        segmentedStreamingSessionService.validateSessionToken(session, sessionToken);
+        segmentedStreamingSessionService.validateSessionToken(
+            session,
+            sessionToken,
+        );
     }
 
     return session;
 };
 
-const toSegmentedSessionError = (error: unknown): SegmentedSessionError | null => {
+const toSegmentedSessionError = (
+    error: unknown,
+): SegmentedSessionError | null => {
     if (error instanceof SegmentedSessionError) {
         return error;
     }
@@ -527,7 +538,9 @@ const getSegmentedMetricErrorFields = (
     const errorCode =
         typeof maybeErrorCode === "string" ? maybeErrorCode : "UNKNOWN_ERROR";
     const errorMessage =
-        error instanceof Error ? error.message : String(error ?? "Unknown error");
+        error instanceof Error
+            ? error.message
+            : String(error ?? "Unknown error");
 
     return {
         errorCode,
@@ -593,7 +606,12 @@ const handleSegmentedSendFileError = ({
     }
     logSegmentedStreamingTrace(
         stage === "manifest" ? "route.manifest.error" : "route.segment.error",
-        buildSegmentedRouteTraceErrorFields(req, startedAtMs, errorFields, traceFields),
+        buildSegmentedRouteTraceErrorFields(
+            req,
+            startedAtMs,
+            errorFields,
+            traceFields,
+        ),
     );
 
     if (res.headersSent) {
@@ -640,7 +658,8 @@ const handleSegmentFetch = async (
     res: express.Response,
 ): Promise<express.Response> => {
     const startedAtMs = Date.now();
-    const startupCorrelationFields = resolveSegmentedStartupCorrelationFields(req);
+    const startupCorrelationFields =
+        resolveSegmentedStartupCorrelationFields(req);
     let sourceType: string | undefined;
     try {
         const session = await authorizeSegmentedSessionRequest({
@@ -675,10 +694,11 @@ const handleSegmentFetch = async (
             return res;
         }
 
-        const segmentPath = await segmentedStreamingSessionService.waitForSegmentReady(
-            session,
-            req.params.segmentName,
-        );
+        const segmentPath =
+            await segmentedStreamingSessionService.waitForSegmentReady(
+                session,
+                req.params.segmentName,
+            );
         res.setHeader("Cache-Control", "private, max-age=30");
         const segmentNameLower = req.params.segmentName.toLowerCase();
         res.type(
@@ -823,7 +843,8 @@ const handleSegmentFetch = async (
  */
 router.post("/v1/sessions", requireAuth, async (req, res) => {
     const startedAtMs = Date.now();
-    const startupCorrelationFields = resolveSegmentedStartupCorrelationFields(req);
+    const startupCorrelationFields =
+        resolveSegmentedStartupCorrelationFields(req);
     try {
         if (getRuntimeDrainState()) {
             logSegmentedStreamingMetric("session.create", {
@@ -878,12 +899,13 @@ router.post("/v1/sessions", requireAuth, async (req, res) => {
         }
 
         const sourceType = parsedBody.data.sourceType ?? "local";
-        const session = await segmentedStreamingSessionService.createLocalSession({
-            userId,
-            trackId: parsedBody.data.trackId,
-            desiredQuality: parsedBody.data.desiredQuality,
-            manifestProfile: parsedBody.data.manifestProfile,
-        });
+        const session =
+            await segmentedStreamingSessionService.createLocalSession({
+                userId,
+                trackId: parsedBody.data.trackId,
+                desiredQuality: parsedBody.data.desiredQuality,
+                manifestProfile: parsedBody.data.manifestProfile,
+            });
 
         logSegmentedStreamingMetric("session.create", {
             status: "success",
@@ -967,122 +989,140 @@ router.post("/v1/sessions", requireAuth, async (req, res) => {
  *       404:
  *         description: Session or manifest not found
  */
-router.get("/v1/sessions/:sessionId/manifest.mpd", requireAuth, async (req: express.Request<SegmentedSessionRouteParams>, res) => {
-    const startedAtMs = Date.now();
-    const startupCorrelationFields = resolveSegmentedStartupCorrelationFields(req);
-    let sourceType: string | undefined;
-    try {
-        const session = await authorizeSegmentedSessionRequest({
-            req,
-            res,
-            metricEvent: "manifest.fetch",
-            startedAtMs,
-            metricFields: {
-                ...startupCorrelationFields,
-            },
-            tokenValidationOptions: {
-                allowSessionIdMismatch: true,
-            },
-            startupHintStage: "manifest",
-            onSessionResolved: (authorizedSession) => {
-                sourceType = authorizedSession.sourceType;
-            },
-        });
-        if (!session) {
-            return res;
-        }
-
-        await segmentedStreamingSessionService.waitForManifestReady(session);
-        res.setHeader("Cache-Control", "private, no-cache, must-revalidate");
-        res.type("application/dash+xml");
-        res.sendFile(session.manifestPath, (error) => {
-            if (error) {
-                handleSegmentedSendFileError({
-                    req,
-                    res,
-                    error,
-                    stage: "manifest",
-                    metricEvent: "manifest.fetch",
-                    startedAtMs,
-                    sessionId: session.sessionId,
-                    sourceType: session.sourceType,
-                    startupCorrelationFields,
-                    responseProfile: {
-                        notFoundError: "Manifest not found",
-                        notFoundReason: "manifest_not_found",
-                        loadFailedError: "Failed to load manifest",
-                        loadFailedReason: "manifest_load_failed",
-                    },
-                });
-                return;
+router.get(
+    "/v1/sessions/:sessionId/manifest.mpd",
+    requireAuth,
+    async (req: express.Request<SegmentedSessionRouteParams>, res) => {
+        const startedAtMs = Date.now();
+        const startupCorrelationFields =
+            resolveSegmentedStartupCorrelationFields(req);
+        let sourceType: string | undefined;
+        try {
+            const session = await authorizeSegmentedSessionRequest({
+                req,
+                res,
+                metricEvent: "manifest.fetch",
+                startedAtMs,
+                metricFields: {
+                    ...startupCorrelationFields,
+                },
+                tokenValidationOptions: {
+                    allowSessionIdMismatch: true,
+                },
+                startupHintStage: "manifest",
+                onSessionResolved: (authorizedSession) => {
+                    sourceType = authorizedSession.sourceType;
+                },
+            });
+            if (!session) {
+                return res;
             }
 
-            logSegmentedStreamingMetric("manifest.fetch", {
-                status: "success",
-                sessionId: session.sessionId,
-                sourceType: session.sourceType,
-                ...startupCorrelationFields,
-                latencyMs: segmentedMetricDurationMs(startedAtMs),
-            });
-            logSegmentedStreamingTrace(
-                "route.manifest.success",
-                buildSegmentedRouteTraceFields(req, startedAtMs, {
+            await segmentedStreamingSessionService.waitForManifestReady(
+                session,
+            );
+            res.setHeader(
+                "Cache-Control",
+                "private, no-cache, must-revalidate",
+            );
+            res.type("application/dash+xml");
+            res.sendFile(session.manifestPath, (error) => {
+                if (error) {
+                    handleSegmentedSendFileError({
+                        req,
+                        res,
+                        error,
+                        stage: "manifest",
+                        metricEvent: "manifest.fetch",
+                        startedAtMs,
+                        sessionId: session.sessionId,
+                        sourceType: session.sourceType,
+                        startupCorrelationFields,
+                        responseProfile: {
+                            notFoundError: "Manifest not found",
+                            notFoundReason: "manifest_not_found",
+                            loadFailedError: "Failed to load manifest",
+                            loadFailedReason: "manifest_load_failed",
+                        },
+                    });
+                    return;
+                }
+
+                logSegmentedStreamingMetric("manifest.fetch", {
+                    status: "success",
                     sessionId: session.sessionId,
                     sourceType: session.sourceType,
                     ...startupCorrelationFields,
-                }),
-            );
-        });
-        return res;
-    } catch (error) {
-        const errorFields = getSegmentedMetricErrorFields(error);
-        logSegmentedStreamingMetric("manifest.fetch", {
-            status: "error",
-            sessionId: req.params.sessionId,
-            sourceType,
-            ...startupCorrelationFields,
-            ...errorFields,
-            latencyMs: segmentedMetricDurationMs(startedAtMs),
-        });
-        logSegmentedStreamingTrace(
-            "route.manifest.error",
-            buildSegmentedRouteTraceErrorFields(req, startedAtMs, errorFields, {
+                    latencyMs: segmentedMetricDurationMs(startedAtMs),
+                });
+                logSegmentedStreamingTrace(
+                    "route.manifest.success",
+                    buildSegmentedRouteTraceFields(req, startedAtMs, {
+                        sessionId: session.sessionId,
+                        sourceType: session.sourceType,
+                        ...startupCorrelationFields,
+                    }),
+                );
+            });
+            return res;
+        } catch (error) {
+            const errorFields = getSegmentedMetricErrorFields(error);
+            logSegmentedStreamingMetric("manifest.fetch", {
+                status: "error",
                 sessionId: req.params.sessionId,
                 sourceType,
                 ...startupCorrelationFields,
-            }),
-        );
-        const segmentedError = toSegmentedSessionError(error);
-        if (segmentedError) {
+                ...errorFields,
+                latencyMs: segmentedMetricDurationMs(startedAtMs),
+            });
+            logSegmentedStreamingTrace(
+                "route.manifest.error",
+                buildSegmentedRouteTraceErrorFields(
+                    req,
+                    startedAtMs,
+                    errorFields,
+                    {
+                        sessionId: req.params.sessionId,
+                        sourceType,
+                        ...startupCorrelationFields,
+                    },
+                ),
+            );
+            const segmentedError = toSegmentedSessionError(error);
+            if (segmentedError) {
+                return respondWithSegmentedStartupError({
+                    res,
+                    stage: "manifest",
+                    statusCode: segmentedError.statusCode,
+                    error: segmentedError.message,
+                    code: segmentedError.code,
+                });
+            }
+
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                return respondWithSegmentedStartupError({
+                    res,
+                    stage: "manifest",
+                    statusCode: 404,
+                    error: "Manifest not found",
+                    reason: "manifest_not_found",
+                });
+            }
+
+            logger.error(
+                "[SegmentedStreaming] Failed to load manifest:",
+                error,
+            );
             return respondWithSegmentedStartupError({
                 res,
                 stage: "manifest",
-                statusCode: segmentedError.statusCode,
-                error: segmentedError.message,
-                code: segmentedError.code,
+                statusCode: 500,
+                error: "Failed to load manifest",
+                reason: "manifest_load_failed",
             });
         }
-
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-            return respondWithSegmentedStartupError({
-                res,
-                stage: "manifest",
-                statusCode: 404,
-                error: "Manifest not found",
-                reason: "manifest_not_found",
-            });
-        }
-
-        logger.error("[SegmentedStreaming] Failed to load manifest:", error);
-        return respondWithSegmentedStartupError({
-            res,
-            stage: "manifest",
-            statusCode: 500,
-            error: "Failed to load manifest",
-            reason: "manifest_load_failed",
-        });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -1221,79 +1261,91 @@ router.get(
  *       404:
  *         description: Session not found
  */
-router.post("/v1/sessions/:sessionId/heartbeat", requireAuth, async (req: express.Request<SegmentedSessionRouteParams>, res) => {
-    const startedAtMs = Date.now();
-    let sourceType: string | undefined;
-    try {
-        const userId = req.user?.id;
-        if (!userId) {
+router.post(
+    "/v1/sessions/:sessionId/heartbeat",
+    requireAuth,
+    async (req: express.Request<SegmentedSessionRouteParams>, res) => {
+        const startedAtMs = Date.now();
+        let sourceType: string | undefined;
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                logSegmentedStreamingMetric("session.heartbeat", {
+                    status: "reject",
+                    reason: "unauthorized",
+                    sessionId: req.params.sessionId,
+                    latencyMs: segmentedMetricDurationMs(startedAtMs),
+                });
+                return res.status(401).json({ error: "Unauthorized" });
+            }
+
+            const parsedBody = continuitySnapshotSchema.safeParse(
+                req.body ?? {},
+            );
+            if (!parsedBody.success) {
+                logSegmentedStreamingMetric("session.heartbeat", {
+                    status: "reject",
+                    reason: "invalid_request",
+                    sessionId: req.params.sessionId,
+                    latencyMs: segmentedMetricDurationMs(startedAtMs),
+                });
+                return res.status(400).json({
+                    error: "Invalid request body",
+                    details: parsedBody.error.flatten(),
+                });
+            }
+
+            const session = await authorizeSegmentedSessionRequest({
+                req,
+                res,
+                metricEvent: "session.heartbeat",
+                startedAtMs,
+                onSessionResolved: (authorizedSession) => {
+                    sourceType = authorizedSession.sourceType;
+                },
+            });
+            if (!session) {
+                return res;
+            }
+
+            const heartbeat =
+                await segmentedStreamingSessionService.heartbeatSession(
+                    session,
+                    parsedBody.data,
+                );
             logSegmentedStreamingMetric("session.heartbeat", {
-                status: "reject",
-                reason: "unauthorized",
-                sessionId: req.params.sessionId,
+                status: "success",
+                sessionId: session.sessionId,
+                sourceType: session.sourceType,
                 latencyMs: segmentedMetricDurationMs(startedAtMs),
             });
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-
-        const parsedBody = continuitySnapshotSchema.safeParse(req.body ?? {});
-        if (!parsedBody.success) {
+            return res.status(200).json(heartbeat);
+        } catch (error) {
             logSegmentedStreamingMetric("session.heartbeat", {
-                status: "reject",
-                reason: "invalid_request",
+                status: "error",
                 sessionId: req.params.sessionId,
+                sourceType,
+                ...getSegmentedMetricErrorFields(error),
                 latencyMs: segmentedMetricDurationMs(startedAtMs),
             });
-            return res.status(400).json({
-                error: "Invalid request body",
-                details: parsedBody.error.flatten(),
-            });
-        }
+            const segmentedError = toSegmentedSessionError(error);
+            if (segmentedError) {
+                return res.status(segmentedError.statusCode).json({
+                    error: segmentedError.message,
+                    code: segmentedError.code,
+                });
+            }
 
-        const session = await authorizeSegmentedSessionRequest({
-            req,
-            res,
-            metricEvent: "session.heartbeat",
-            startedAtMs,
-            onSessionResolved: (authorizedSession) => {
-                sourceType = authorizedSession.sourceType;
-            },
-        });
-        if (!session) {
-            return res;
+            logger.error(
+                "[SegmentedStreaming] Failed to process heartbeat:",
+                error,
+            );
+            return res
+                .status(500)
+                .json({ error: "Failed to process streaming heartbeat" });
         }
-
-        const heartbeat = await segmentedStreamingSessionService.heartbeatSession(
-            session,
-            parsedBody.data,
-        );
-        logSegmentedStreamingMetric("session.heartbeat", {
-            status: "success",
-            sessionId: session.sessionId,
-            sourceType: session.sourceType,
-            latencyMs: segmentedMetricDurationMs(startedAtMs),
-        });
-        return res.status(200).json(heartbeat);
-    } catch (error) {
-        logSegmentedStreamingMetric("session.heartbeat", {
-            status: "error",
-            sessionId: req.params.sessionId,
-            sourceType,
-            ...getSegmentedMetricErrorFields(error),
-            latencyMs: segmentedMetricDurationMs(startedAtMs),
-        });
-        const segmentedError = toSegmentedSessionError(error);
-        if (segmentedError) {
-            return res.status(segmentedError.statusCode).json({
-                error: segmentedError.message,
-                code: segmentedError.code,
-            });
-        }
-
-        logger.error("[SegmentedStreaming] Failed to process heartbeat:", error);
-        return res.status(500).json({ error: "Failed to process streaming heartbeat" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -1332,87 +1384,99 @@ router.post("/v1/sessions/:sessionId/heartbeat", requireAuth, async (req: expres
  *       404:
  *         description: Session not found
  */
-router.post("/v1/sessions/:sessionId/handoff", requireAuth, async (req: express.Request<SegmentedSessionRouteParams>, res) => {
-    const startedAtMs = Date.now();
-    let sourceType: string | undefined;
-    logSegmentedStreamingMetric("session.handoff", {
-        status: "start",
-        sessionId: req.params.sessionId,
-        latencyMs: segmentedMetricDurationMs(startedAtMs),
-    });
-    try {
-        const userId = req.user?.id;
-        if (!userId) {
-            logSegmentedStreamingMetric("session.handoff", {
-                status: "reject",
-                reason: "unauthorized",
-                sessionId: req.params.sessionId,
-                latencyMs: segmentedMetricDurationMs(startedAtMs),
-            });
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-
-        const parsedBody = continuitySnapshotSchema.safeParse(req.body ?? {});
-        if (!parsedBody.success) {
-            logSegmentedStreamingMetric("session.handoff", {
-                status: "reject",
-                reason: "invalid_request",
-                sessionId: req.params.sessionId,
-                latencyMs: segmentedMetricDurationMs(startedAtMs),
-            });
-            return res.status(400).json({
-                error: "Invalid request body",
-                details: parsedBody.error.flatten(),
-            });
-        }
-
-        const session = await authorizeSegmentedSessionRequest({
-            req,
-            res,
-            metricEvent: "session.handoff",
-            startedAtMs,
-            onSessionResolved: (authorizedSession) => {
-                sourceType = authorizedSession.sourceType;
-            },
-        });
-        if (!session) {
-            return res;
-        }
-
-        const handoff = await segmentedStreamingSessionService.createHandoffSession(
-            session,
-            parsedBody.data,
-        );
+router.post(
+    "/v1/sessions/:sessionId/handoff",
+    requireAuth,
+    async (req: express.Request<SegmentedSessionRouteParams>, res) => {
+        const startedAtMs = Date.now();
+        let sourceType: string | undefined;
         logSegmentedStreamingMetric("session.handoff", {
-            status: "success",
-            sessionId: handoff.sessionId,
-            previousSessionId: handoff.previousSessionId,
-            sourceType: handoff.playbackProfile?.sourceType ?? sourceType,
-            resumeAtSec: handoff.resumeAtSec,
-            shouldPlay: handoff.shouldPlay,
-            latencyMs: segmentedMetricDurationMs(startedAtMs),
-        });
-        return res.status(201).json(handoff);
-    } catch (error) {
-        logSegmentedStreamingMetric("session.handoff", {
-            status: "error",
+            status: "start",
             sessionId: req.params.sessionId,
-            sourceType,
-            ...getSegmentedMetricErrorFields(error),
             latencyMs: segmentedMetricDurationMs(startedAtMs),
         });
-        const segmentedError = toSegmentedSessionError(error);
-        if (segmentedError) {
-            return res.status(segmentedError.statusCode).json({
-                error: segmentedError.message,
-                code: segmentedError.code,
-            });
-        }
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                logSegmentedStreamingMetric("session.handoff", {
+                    status: "reject",
+                    reason: "unauthorized",
+                    sessionId: req.params.sessionId,
+                    latencyMs: segmentedMetricDurationMs(startedAtMs),
+                });
+                return res.status(401).json({ error: "Unauthorized" });
+            }
 
-        logger.error("[SegmentedStreaming] Failed to process handoff:", error);
-        return res.status(500).json({ error: "Failed to process streaming handoff" });
-    }
-});
+            const parsedBody = continuitySnapshotSchema.safeParse(
+                req.body ?? {},
+            );
+            if (!parsedBody.success) {
+                logSegmentedStreamingMetric("session.handoff", {
+                    status: "reject",
+                    reason: "invalid_request",
+                    sessionId: req.params.sessionId,
+                    latencyMs: segmentedMetricDurationMs(startedAtMs),
+                });
+                return res.status(400).json({
+                    error: "Invalid request body",
+                    details: parsedBody.error.flatten(),
+                });
+            }
+
+            const session = await authorizeSegmentedSessionRequest({
+                req,
+                res,
+                metricEvent: "session.handoff",
+                startedAtMs,
+                onSessionResolved: (authorizedSession) => {
+                    sourceType = authorizedSession.sourceType;
+                },
+            });
+            if (!session) {
+                return res;
+            }
+
+            const handoff =
+                await segmentedStreamingSessionService.createHandoffSession(
+                    session,
+                    parsedBody.data,
+                );
+            logSegmentedStreamingMetric("session.handoff", {
+                status: "success",
+                sessionId: handoff.sessionId,
+                previousSessionId: handoff.previousSessionId,
+                sourceType: handoff.playbackProfile?.sourceType ?? sourceType,
+                resumeAtSec: handoff.resumeAtSec,
+                shouldPlay: handoff.shouldPlay,
+                latencyMs: segmentedMetricDurationMs(startedAtMs),
+            });
+            return res.status(201).json(handoff);
+        } catch (error) {
+            logSegmentedStreamingMetric("session.handoff", {
+                status: "error",
+                sessionId: req.params.sessionId,
+                sourceType,
+                ...getSegmentedMetricErrorFields(error),
+                latencyMs: segmentedMetricDurationMs(startedAtMs),
+            });
+            const segmentedError = toSegmentedSessionError(error);
+            if (segmentedError) {
+                return res.status(segmentedError.statusCode).json({
+                    error: segmentedError.message,
+                    code: segmentedError.code,
+                });
+            }
+
+            logger.error(
+                "[SegmentedStreaming] Failed to process handoff:",
+                error,
+            );
+            return res
+                .status(500)
+                .json({ error: "Failed to process streaming handoff" });
+        }
+    },
+);
 
 /**
  * @openapi
@@ -1475,7 +1539,9 @@ router.post("/v1/client-metrics", requireAuth, async (req, res) => {
         const sessionId =
             typeof fields.sessionId === "string" ? fields.sessionId : undefined;
         const sourceType =
-            typeof fields.sourceType === "string" ? fields.sourceType : undefined;
+            typeof fields.sourceType === "string"
+                ? fields.sourceType
+                : undefined;
         const trackId =
             typeof fields.trackId === "string" ? fields.trackId : undefined;
         const startupTimelineFields: Record<string, unknown> = {};
@@ -1558,8 +1624,13 @@ router.post("/v1/client-metrics", requireAuth, async (req, res) => {
             ...getSegmentedMetricErrorFields(error),
             latencyMs: segmentedMetricDurationMs(startedAtMs),
         });
-        logger.error("[SegmentedStreaming] Failed to ingest client signal:", error);
-        return res.status(500).json({ error: "Failed to ingest client signal" });
+        logger.error(
+            "[SegmentedStreaming] Failed to ingest client signal:",
+            error,
+        );
+        return res
+            .status(500)
+            .json({ error: "Failed to ingest client signal" });
     }
 });
 

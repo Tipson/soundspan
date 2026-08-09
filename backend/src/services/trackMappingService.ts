@@ -86,7 +86,7 @@ const DEFAULT_PLACEHOLDER_DURATION = 180;
  */
 function shouldPreserveField(
     incoming: string,
-    existing: string | null | undefined
+    existing: string | null | undefined,
 ): boolean {
     if (!existing) return false;
     return PLACEHOLDER_TITLES.has(incoming.toLowerCase().trim());
@@ -97,20 +97,27 @@ function shouldPreserveField(
  */
 function shouldPreserveDuration(
     incoming: number,
-    existing: number | null | undefined
+    existing: number | null | undefined,
 ): boolean {
     if (existing == null || existing <= 0) return false;
-    return incoming === DEFAULT_PLACEHOLDER_DURATION && existing !== DEFAULT_PLACEHOLDER_DURATION;
+    return (
+        incoming === DEFAULT_PLACEHOLDER_DURATION &&
+        existing !== DEFAULT_PLACEHOLDER_DURATION
+    );
 }
 
 class TrackMappingService {
     private requireNonEmptyString(value: unknown, fieldName: string): string {
         if (typeof value !== "string") {
-            throw new Error(`ensureRemoteTrack requires non-empty ${fieldName}`);
+            throw new Error(
+                `ensureRemoteTrack requires non-empty ${fieldName}`,
+            );
         }
         const normalized = value.trim();
         if (normalized.length === 0) {
-            throw new Error(`ensureRemoteTrack requires non-empty ${fieldName}`);
+            throw new Error(
+                `ensureRemoteTrack requires non-empty ${fieldName}`,
+            );
         }
         return normalized;
     }
@@ -137,15 +144,23 @@ class TrackMappingService {
     }
 
     private assertLinkage(linkage: MappingLinkage): void {
-        if (!linkage.trackId && !linkage.trackTidalId && !linkage.trackYtMusicId) {
+        if (
+            !linkage.trackId &&
+            !linkage.trackTidalId &&
+            !linkage.trackYtMusicId
+        ) {
             throw new Error(
-                "TrackMapping requires at least one linkage key: trackId, trackTidalId, or trackYtMusicId"
+                "TrackMapping requires at least one linkage key: trackId, trackTidalId, or trackYtMusicId",
             );
         }
     }
 
-    private compareMappingPreference(a: MappingCandidate, b: MappingCandidate): number {
-        const sourceDiff = this.sourcePriority(b.source) - this.sourcePriority(a.source);
+    private compareMappingPreference(
+        a: MappingCandidate,
+        b: MappingCandidate,
+    ): number {
+        const sourceDiff =
+            this.sourcePriority(b.source) - this.sourcePriority(a.source);
         if (sourceDiff !== 0) return sourceDiff;
 
         const confidenceA =
@@ -159,8 +174,10 @@ class TrackMappingService {
         const confidenceDiff = confidenceB - confidenceA;
         if (confidenceDiff !== 0) return confidenceDiff;
 
-        const createdAtA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
-        const createdAtB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+        const createdAtA =
+            a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+        const createdAtB =
+            b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
         const createdAtDiff = createdAtB - createdAtA;
         if (createdAtDiff !== 0) return createdAtDiff;
 
@@ -169,10 +186,11 @@ class TrackMappingService {
 
     private isIncomingPreferred(
         incoming: Pick<CreateMappingData, "source" | "confidence">,
-        existing: Pick<MappingCandidate, "source" | "confidence">
+        existing: Pick<MappingCandidate, "source" | "confidence">,
     ): boolean {
         const sourceDiff =
-            this.sourcePriority(incoming.source) - this.sourcePriority(existing.source);
+            this.sourcePriority(incoming.source) -
+            this.sourcePriority(existing.source);
         if (sourceDiff !== 0) return sourceDiff > 0;
 
         const confidenceDiff = incoming.confidence - existing.confidence;
@@ -196,7 +214,11 @@ class TrackMappingService {
         if (!mapping.trackId && mapping.trackYtMusicId) {
             keys.push(`remote:ytmusic:${mapping.trackYtMusicId}`);
         }
-        if (mapping.trackId && !mapping.trackTidalId && !mapping.trackYtMusicId) {
+        if (
+            mapping.trackId &&
+            !mapping.trackTidalId &&
+            !mapping.trackYtMusicId
+        ) {
             keys.push(`track:${mapping.trackId}:local-only`);
         }
 
@@ -207,9 +229,11 @@ class TrackMappingService {
         return keys;
     }
 
-    private selectDeterministicMappings<T extends MappingCandidate>(mappings: T[]): T[] {
+    private selectDeterministicMappings<T extends MappingCandidate>(
+        mappings: T[],
+    ): T[] {
         const ranked = [...mappings].sort((a, b) =>
-            this.compareMappingPreference(a, b)
+            this.compareMappingPreference(a, b),
         );
 
         const preferredByKey = new Map<string, T>();
@@ -246,13 +270,31 @@ class TrackMappingService {
         try {
             const existing = await prisma.trackTidal.findUnique({
                 where: { tidalId: data.tidalId },
-                select: { title: true, artist: true, album: true, duration: true },
+                select: {
+                    title: true,
+                    artist: true,
+                    album: true,
+                    duration: true,
+                },
             });
 
-            const updateTitle = existing && shouldPreserveField(data.title, existing.title) ? existing.title : data.title;
-            const updateArtist = existing && shouldPreserveField(data.artist, existing.artist) ? existing.artist : data.artist;
-            const updateAlbum = existing && shouldPreserveField(data.album, existing.album) ? existing.album : data.album;
-            const updateDuration = existing && shouldPreserveDuration(data.duration, existing.duration) ? existing.duration : data.duration;
+            const updateTitle =
+                existing && shouldPreserveField(data.title, existing.title)
+                    ? existing.title
+                    : data.title;
+            const updateArtist =
+                existing && shouldPreserveField(data.artist, existing.artist)
+                    ? existing.artist
+                    : data.artist;
+            const updateAlbum =
+                existing && shouldPreserveField(data.album, existing.album)
+                    ? existing.album
+                    : data.album;
+            const updateDuration =
+                existing &&
+                shouldPreserveDuration(data.duration, existing.duration)
+                    ? existing.duration
+                    : data.duration;
 
             const result = await prisma.trackTidal.upsert({
                 where: { tidalId: data.tidalId },
@@ -279,15 +321,26 @@ class TrackMappingService {
             log.debug(`Upserted TrackTidal tidalId=${data.tidalId}`);
 
             // Resolve artist/album entity linkage if not yet populated
-            if ((result.artistId === null || result.albumId === null) && data.artist) {
+            if (
+                (result.artistId === null || result.albumId === null) &&
+                data.artist
+            ) {
                 try {
                     const artistResult = result.artistId
-                        ? { id: result.artistId, name: data.artist, created: false }
+                        ? {
+                              id: result.artistId,
+                              name: data.artist,
+                              created: false,
+                          }
                         : await resolveArtistForRemoteTrack(data.artist);
                     const albumResult = result.albumId
                         ? null
                         : data.album
-                          ? await resolveAlbumForRemoteTrack(data.album, artistResult.id, "tidal")
+                          ? await resolveAlbumForRemoteTrack(
+                                data.album,
+                                artistResult.id,
+                                "tidal",
+                            )
                           : null;
 
                     await prisma.trackTidal.update({
@@ -300,17 +353,28 @@ class TrackMappingService {
 
                     // Fire-and-forget count refresh
                     updateArtistCounts(artistResult.id).catch((err) => {
-                        log.warn(`Count refresh failed for artist=${artistResult.id}`, err);
+                        log.warn(
+                            `Count refresh failed for artist=${artistResult.id}`,
+                            err,
+                        );
                     });
-                    log.debug(`Resolved artist="${artistResult.name}" for TrackTidal tidalId=${data.tidalId}`);
+                    log.debug(
+                        `Resolved artist="${artistResult.name}" for TrackTidal tidalId=${data.tidalId}`,
+                    );
                 } catch (resolutionError) {
-                    log.warn(`Artist/album resolution failed for TrackTidal tidalId=${data.tidalId}`, resolutionError);
+                    log.warn(
+                        `Artist/album resolution failed for TrackTidal tidalId=${data.tidalId}`,
+                        resolutionError,
+                    );
                 }
             }
 
             return result;
         } catch (error) {
-            log.error(`Failed to upsert TrackTidal tidalId=${data.tidalId}`, error);
+            log.error(
+                `Failed to upsert TrackTidal tidalId=${data.tidalId}`,
+                error,
+            );
             throw error;
         }
     }
@@ -323,13 +387,31 @@ class TrackMappingService {
         try {
             const existing = await prisma.trackYtMusic.findUnique({
                 where: { videoId: data.videoId },
-                select: { title: true, artist: true, album: true, duration: true },
+                select: {
+                    title: true,
+                    artist: true,
+                    album: true,
+                    duration: true,
+                },
             });
 
-            const updateTitle = existing && shouldPreserveField(data.title, existing.title) ? existing.title : data.title;
-            const updateArtist = existing && shouldPreserveField(data.artist, existing.artist) ? existing.artist : data.artist;
-            const updateAlbum = existing && shouldPreserveField(data.album, existing.album) ? existing.album : data.album;
-            const updateDuration = existing && shouldPreserveDuration(data.duration, existing.duration) ? existing.duration : data.duration;
+            const updateTitle =
+                existing && shouldPreserveField(data.title, existing.title)
+                    ? existing.title
+                    : data.title;
+            const updateArtist =
+                existing && shouldPreserveField(data.artist, existing.artist)
+                    ? existing.artist
+                    : data.artist;
+            const updateAlbum =
+                existing && shouldPreserveField(data.album, existing.album)
+                    ? existing.album
+                    : data.album;
+            const updateDuration =
+                existing &&
+                shouldPreserveDuration(data.duration, existing.duration)
+                    ? existing.duration
+                    : data.duration;
 
             const result = await prisma.trackYtMusic.upsert({
                 where: { videoId: data.videoId },
@@ -352,15 +434,26 @@ class TrackMappingService {
             log.debug(`Upserted TrackYtMusic videoId=${data.videoId}`);
 
             // Resolve artist/album entity linkage if not yet populated
-            if ((result.artistId === null || result.albumId === null) && data.artist) {
+            if (
+                (result.artistId === null || result.albumId === null) &&
+                data.artist
+            ) {
                 try {
                     const artistResult = result.artistId
-                        ? { id: result.artistId, name: data.artist, created: false }
+                        ? {
+                              id: result.artistId,
+                              name: data.artist,
+                              created: false,
+                          }
                         : await resolveArtistForRemoteTrack(data.artist);
                     const albumResult = result.albumId
                         ? null
                         : data.album
-                          ? await resolveAlbumForRemoteTrack(data.album, artistResult.id, "youtube")
+                          ? await resolveAlbumForRemoteTrack(
+                                data.album,
+                                artistResult.id,
+                                "youtube",
+                            )
                           : null;
 
                     await prisma.trackYtMusic.update({
@@ -373,17 +466,28 @@ class TrackMappingService {
 
                     // Fire-and-forget count refresh
                     updateArtistCounts(artistResult.id).catch((err) => {
-                        log.warn(`Count refresh failed for artist=${artistResult.id}`, err);
+                        log.warn(
+                            `Count refresh failed for artist=${artistResult.id}`,
+                            err,
+                        );
                     });
-                    log.debug(`Resolved artist="${artistResult.name}" for TrackYtMusic videoId=${data.videoId}`);
+                    log.debug(
+                        `Resolved artist="${artistResult.name}" for TrackYtMusic videoId=${data.videoId}`,
+                    );
                 } catch (resolutionError) {
-                    log.warn(`Artist/album resolution failed for TrackYtMusic videoId=${data.videoId}`, resolutionError);
+                    log.warn(
+                        `Artist/album resolution failed for TrackYtMusic videoId=${data.videoId}`,
+                        resolutionError,
+                    );
                 }
             }
 
             return result;
         } catch (error) {
-            log.error(`Failed to upsert TrackYtMusic videoId=${data.videoId}`, error);
+            log.error(
+                `Failed to upsert TrackYtMusic videoId=${data.videoId}`,
+                error,
+            );
             throw error;
         }
     }
@@ -393,7 +497,7 @@ class TrackMappingService {
      * Provider and identifier coupling is strict and deterministic.
      */
     async ensureRemoteTrack(
-        data: EnsureRemoteTrackData
+        data: EnsureRemoteTrackData,
     ): Promise<EnsuredRemoteTrackResult> {
         const title = this.requireNonEmptyString(data.title, "title");
         const artist = this.requireNonEmptyString(data.artist, "artist");
@@ -406,7 +510,7 @@ class TrackMappingService {
         if (data.provider === "tidal") {
             if (data.videoId !== undefined) {
                 throw new Error(
-                    "ensureRemoteTrack requires videoId to be omitted for tidal provider"
+                    "ensureRemoteTrack requires videoId to be omitted for tidal provider",
                 );
             }
 
@@ -443,11 +547,13 @@ class TrackMappingService {
         }
 
         if (data.provider !== "youtube") {
-            throw new Error("ensureRemoteTrack requires provider to be tidal or youtube");
+            throw new Error(
+                "ensureRemoteTrack requires provider to be tidal or youtube",
+            );
         }
         if (data.tidalId !== undefined) {
             throw new Error(
-                "ensureRemoteTrack requires tidalId to be omitted for youtube provider"
+                "ensureRemoteTrack requires tidalId to be omitted for youtube provider",
             );
         }
         const videoId = this.requireNonEmptyString(data.videoId, "videoId");
@@ -479,7 +585,7 @@ class TrackMappingService {
      */
     private async ensureMapping(
         provider: "tidal" | "youtube",
-        providerRowId: string
+        providerRowId: string,
     ): Promise<void> {
         try {
             const existingMapping = await prisma.trackMapping.findFirst({
@@ -502,7 +608,7 @@ class TrackMappingService {
         } catch (err) {
             log.warn(
                 `Failed to ensure TrackMapping for ${provider} row ${providerRowId}`,
-                err
+                err,
             );
         }
     }
@@ -543,11 +649,14 @@ class TrackMappingService {
                 const preferredExisting = [...existingActive].sort((a, b) =>
                     this.compareMappingPreference(
                         a as MappingCandidate,
-                        b as MappingCandidate
-                    )
+                        b as MappingCandidate,
+                    ),
                 )[0];
 
-                const selected = this.isIncomingPreferred(data, preferredExisting)
+                const selected = this.isIncomingPreferred(
+                    data,
+                    preferredExisting,
+                )
                     ? await tx.trackMapping.update({
                           where: { id: preferredExisting.id },
                           data: {
@@ -572,7 +681,7 @@ class TrackMappingService {
                         `Deduplicated ${duplicateIds.length} TrackMapping rows for linkage tuple ` +
                             `trackId=${linkage.trackId || "null"} ` +
                             `tidalId=${linkage.trackTidalId || "null"} ` +
-                            `ytId=${linkage.trackYtMusicId || "null"}`
+                            `ytId=${linkage.trackYtMusicId || "null"}`,
                     );
                 }
 
@@ -583,14 +692,14 @@ class TrackMappingService {
                 `Created TrackMapping id=${result.id} ` +
                     `trackId=${linkage.trackId || "null"} ` +
                     `tidalId=${linkage.trackTidalId || "null"} ` +
-                    `ytId=${linkage.trackYtMusicId || "null"}`
+                    `ytId=${linkage.trackYtMusicId || "null"}`,
             );
             return result;
         } catch (error) {
             log.error(
                 `Failed to create TrackMapping trackId=${linkage.trackId || "null"} ` +
                     `tidalId=${linkage.trackTidalId || "null"} ytId=${linkage.trackYtMusicId || "null"}`,
-                error
+                error,
             );
             throw error;
         }
@@ -609,7 +718,9 @@ class TrackMappingService {
                 },
             });
 
-            return this.selectDeterministicMappings(mappings as MappingCandidate[]);
+            return this.selectDeterministicMappings(
+                mappings as MappingCandidate[],
+            );
         } catch (error) {
             log.error(`Failed to find mappings for trackId=${trackId}`, error);
             return [];
@@ -642,12 +753,11 @@ class TrackMappingService {
                 },
             });
 
-            return this.selectDeterministicMappings(mappings as MappingCandidate[]);
-        } catch (error) {
-            log.error(
-                `Failed to get mappings for albumId=${albumId}`,
-                error
+            return this.selectDeterministicMappings(
+                mappings as MappingCandidate[],
             );
+        } catch (error) {
+            log.error(`Failed to get mappings for albumId=${albumId}`, error);
             return [];
         }
     }

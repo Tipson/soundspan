@@ -77,14 +77,15 @@ const mockGetArtistCorrection = lastFmService.getArtistCorrection as jest.Mock;
 const mockSearchArtists = lastFmService.searchArtists as jest.Mock;
 const mockSearchTracks = lastFmService.searchTracks as jest.Mock;
 const mockGetSimilarArtists = lastFmService.getSimilarArtists as jest.Mock;
-const mockEnrichSimilarArtists = lastFmService.enrichSimilarArtists as jest.Mock;
+const mockEnrichSimilarArtists =
+    lastFmService.enrichSimilarArtists as jest.Mock;
 const mockSearchAll = searchService.searchAll as jest.Mock;
 const mockSearchByType = searchService.searchByType as jest.Mock;
 const mockAxiosGet = (axios as any).get as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -195,7 +196,12 @@ describe("search route runtime behavior", () => {
         });
 
         const req = {
-            query: { q: "  radiohead ", type: "all", limit: "999", genre: "alt" },
+            query: {
+                q: "  radiohead ",
+                type: "all",
+                limit: "999",
+                genre: "alt",
+            },
         } as any;
         const res = createRes();
 
@@ -209,7 +215,9 @@ describe("search route runtime behavior", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
             expect.objectContaining({
-                artists: [{ id: "artist-1", name: "Radiohead", mbid: "mbid-1" }],
+                artists: [
+                    { id: "artist-1", name: "Radiohead", mbid: "mbid-1" },
+                ],
                 albums: [
                     expect.objectContaining({
                         id: "album-1",
@@ -240,7 +248,7 @@ describe("search route runtime behavior", () => {
                 audiobooks: [{ id: "book-1" }],
                 podcasts: [{ id: "pod-1" }],
                 episodes: [{ id: "ep-1" }],
-            })
+            }),
         );
     });
 
@@ -333,7 +341,9 @@ describe("search route runtime behavior", () => {
         };
         mockRedisGet.mockResolvedValueOnce(JSON.stringify(cached));
 
-        const req = { query: { q: "cached", type: "music", limit: "5" } } as any;
+        const req = {
+            query: { q: "cached", type: "music", limit: "5" },
+        } as any;
         const res = createRes();
 
         await discoverHandler(req, res);
@@ -397,7 +407,7 @@ describe("search route runtime behavior", () => {
                     limit: 50,
                 },
                 timeout: 5000,
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body.aliasInfo).toEqual({
@@ -415,25 +425,31 @@ describe("search route runtime behavior", () => {
                     name: "Podcast A",
                     coverUrl: "large.jpg",
                 }),
-            ])
+            ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "search:discover:all:rh:50",
             900,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
     it("handles discover partial failures and redis write errors", async () => {
         mockRedisGet.mockRejectedValueOnce(new Error("redis read fail"));
-        mockGetArtistCorrection.mockRejectedValueOnce(new Error("lastfm correction fail"));
-        mockSearchArtists.mockRejectedValueOnce(new Error("artist search fail"));
+        mockGetArtistCorrection.mockRejectedValueOnce(
+            new Error("lastfm correction fail"),
+        );
+        mockSearchArtists.mockRejectedValueOnce(
+            new Error("artist search fail"),
+        );
         mockSearchTracks.mockResolvedValueOnce([
             { type: "track", id: "track-2", name: "Song B" },
         ]);
         mockRedisSetEx.mockRejectedValueOnce(new Error("redis write fail"));
 
-        const req = { query: { q: "radiohead", type: "music", limit: "2" } } as any;
+        const req = {
+            query: { q: "radiohead", type: "music", limit: "2" },
+        } as any;
         const res = createRes();
 
         await discoverHandler(req, res);
@@ -446,7 +462,9 @@ describe("search route runtime behavior", () => {
     });
 
     it("skips library lookup when discovered artists have no usable names", async () => {
-        mockSearchArtists.mockResolvedValueOnce([{ type: "music", id: "x", name: 42 }]);
+        mockSearchArtists.mockResolvedValueOnce([
+            { type: "music", id: "x", name: 42 },
+        ]);
         const req = { query: { q: "odd", type: "music", limit: "3" } } as any;
         const res = createRes();
 
@@ -454,7 +472,9 @@ describe("search route runtime behavior", () => {
 
         expect(mockArtistFindMany).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(200);
-        expect(res.body.results).toEqual([{ type: "music", id: "x", name: 42 }]);
+        expect(res.body.results).toEqual([
+            { type: "music", id: "x", name: 42 },
+        ]);
     });
 
     it("falls back to live discover fetch when cached payload is malformed", async () => {
@@ -462,7 +482,9 @@ describe("search route runtime behavior", () => {
         mockSearchTracks.mockResolvedValueOnce([
             { type: "track", id: "track-live", name: "Live Result" },
         ]);
-        const req = { query: { q: "broken", type: "music", limit: "5" } } as any;
+        const req = {
+            query: { q: "broken", type: "music", limit: "5" },
+        } as any;
         const res = createRes();
 
         await discoverHandler(req, res);
@@ -500,7 +522,9 @@ describe("search route runtime behavior", () => {
     });
 
     it("returns cached similar artists payload", async () => {
-        const cached = { similarArtists: [{ id: "cached-1", name: "Cached Similar" }] };
+        const cached = {
+            similarArtists: [{ id: "cached-1", name: "Cached Similar" }],
+        };
         mockRedisGet.mockResolvedValueOnce(JSON.stringify(cached));
 
         const req = {
@@ -534,13 +558,17 @@ describe("search route runtime behavior", () => {
 
         await discoverSimilarHandler(req, res);
 
-        expect(mockGetSimilarArtists).toHaveBeenCalledWith("mbid-r", "Radiohead", 100);
+        expect(mockGetSimilarArtists).toHaveBeenCalledWith(
+            "mbid-r",
+            "Radiohead",
+            100,
+        );
         expect(mockEnrichSimilarArtists).toHaveBeenCalledWith(
             [
                 { name: "Thom Yorke", match: 0.92 },
                 { name: "Atoms for Peace", match: 0.74 },
             ],
-            50
+            50,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -589,10 +617,14 @@ describe("search route runtime behavior", () => {
 
         await discoverSimilarHandler(req, res);
 
-        expect(mockGetSimilarArtists).toHaveBeenCalledWith("mbid-r", "Radiohead", 10);
+        expect(mockGetSimilarArtists).toHaveBeenCalledWith(
+            "mbid-r",
+            "Radiohead",
+            10,
+        );
         expect(mockEnrichSimilarArtists).toHaveBeenCalledWith(
             [{ name: "Sparse Similar", match: 0.64 }],
-            2
+            2,
         );
         expect(mockArtistFindFirst).toHaveBeenCalledWith({
             where: {
@@ -651,7 +683,7 @@ describe("search route runtime behavior", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "search:discover:similar:radiohead:mbid-r:2",
             3600,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -680,7 +712,9 @@ describe("search route runtime behavior", () => {
     });
 
     it("returns 500 when similar artist search throws", async () => {
-        mockGetSimilarArtists.mockRejectedValueOnce(new Error("lastfm unavailable"));
+        mockGetSimilarArtists.mockRejectedValueOnce(
+            new Error("lastfm unavailable"),
+        );
         const req = {
             query: { artist: "Radiohead", mbid: "mbid", limit: "6" },
         } as any;

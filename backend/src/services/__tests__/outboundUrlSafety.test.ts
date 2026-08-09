@@ -21,14 +21,14 @@ describe("outboundUrlSafety", () => {
                 { address: "93.184.216.34", family: 4 },
             ]);
             expect(
-                await resolveSafeOutboundUrl("https://example.com/feed.xml")
+                await resolveSafeOutboundUrl("https://example.com/feed.xml"),
             ).toBe("https://example.com/feed.xml");
         });
 
         it("rejects a host that resolves to a private/loopback address", async () => {
             mockLookup.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
             expect(
-                await resolveSafeOutboundUrl("https://internal.example.com")
+                await resolveSafeOutboundUrl("https://internal.example.com"),
             ).toBeNull();
         });
 
@@ -38,7 +38,7 @@ describe("outboundUrlSafety", () => {
                 { address: "127.0.0.1", family: 4 },
             ]);
             expect(
-                await resolveSafeOutboundUrl("https://example.com")
+                await resolveSafeOutboundUrl("https://example.com"),
             ).toBeNull();
         });
 
@@ -46,15 +46,17 @@ describe("outboundUrlSafety", () => {
             // getaddrinfo normalizes 2130706433 to 127.0.0.1 at runtime; here the
             // mock simulates that, and the resolved IP is range-checked.
             mockLookup.mockResolvedValue([{ address: "127.0.0.1", family: 4 }]);
-            expect(await resolveSafeOutboundUrl("http://2130706433/")).toBeNull();
+            expect(
+                await resolveSafeOutboundUrl("http://2130706433/"),
+            ).toBeNull();
         });
 
         it("rejects an unresolvable host (and never resolves blocked literals)", async () => {
             mockLookup.mockRejectedValue(
-                Object.assign(new Error("ENOTFOUND"), { code: "ENOTFOUND" })
+                Object.assign(new Error("ENOTFOUND"), { code: "ENOTFOUND" }),
             );
             expect(
-                await resolveSafeOutboundUrl("https://does-not-exist.invalid")
+                await resolveSafeOutboundUrl("https://does-not-exist.invalid"),
             ).toBeNull();
 
             // A host blocked by the sync pre-check never reaches DNS resolution.
@@ -64,7 +66,9 @@ describe("outboundUrlSafety", () => {
 
         it("rejects when DNS returns no addresses", async () => {
             mockLookup.mockResolvedValue([]);
-            expect(await resolveSafeOutboundUrl("https://example.com")).toBeNull();
+            expect(
+                await resolveSafeOutboundUrl("https://example.com"),
+            ).toBeNull();
         });
 
         it("blocks ALL of 127.0.0.0/8 and 0.0.0.0/8, not just the canonical literals", async () => {
@@ -82,17 +86,17 @@ describe("outboundUrlSafety", () => {
                 { address: "127.0.0.53", family: 4 },
             ]);
             expect(
-                await resolveSafeOutboundUrl("https://rebind.example.com/")
+                await resolveSafeOutboundUrl("https://rebind.example.com/"),
             ).toBeNull();
         });
 
         it("still allows public IPs that merely contain a blocked octet elsewhere", () => {
             // Prefix checks must anchor at the start of the address.
             expect(normalizeSafeOutboundUrl("http://8.127.0.1/")).toBe(
-                "http://8.127.0.1/"
+                "http://8.127.0.1/",
             );
             expect(normalizeSafeOutboundUrl("http://110.1.2.3/")).toBe(
-                "http://110.1.2.3/"
+                "http://110.1.2.3/",
             );
         });
     });
@@ -103,8 +107,8 @@ describe("outboundUrlSafety", () => {
             expect(
                 await resolveSafeOutboundRedirectTarget(
                     "/internal",
-                    "https://evil.example.com/start"
-                )
+                    "https://evil.example.com/start",
+                ),
             ).toBeNull();
         });
     });
@@ -112,10 +116,10 @@ describe("outboundUrlSafety", () => {
     describe("normalizeSafeOutboundUrl", () => {
         it("allows public http and https urls", () => {
             expect(
-                normalizeSafeOutboundUrl("https://example.com/feed.xml")
+                normalizeSafeOutboundUrl("https://example.com/feed.xml"),
             ).toBe("https://example.com/feed.xml");
             expect(normalizeSafeOutboundUrl("http://example.com/api")).toBe(
-                "http://example.com/api"
+                "http://example.com/api",
             );
         });
 
@@ -125,23 +129,41 @@ describe("outboundUrlSafety", () => {
         });
 
         it("rejects loopback and private ipv4 destinations", () => {
-            expect(normalizeSafeOutboundUrl("http://127.0.0.1/feed")).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://127.0.0.1/feed"),
+            ).toBeNull();
             expect(normalizeSafeOutboundUrl("http://10.0.0.8/feed")).toBeNull();
-            expect(normalizeSafeOutboundUrl("http://172.16.0.5/feed")).toBeNull();
-            expect(normalizeSafeOutboundUrl("http://192.168.1.9/feed")).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://172.16.0.5/feed"),
+            ).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://192.168.1.9/feed"),
+            ).toBeNull();
         });
 
         it("rejects link-local and ipv6 local destinations", () => {
-            expect(normalizeSafeOutboundUrl("http://169.254.1.5/feed")).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://169.254.1.5/feed"),
+            ).toBeNull();
             expect(normalizeSafeOutboundUrl("http://[::1]/feed")).toBeNull();
-            expect(normalizeSafeOutboundUrl("http://[fe80::1]/feed")).toBeNull();
-            expect(normalizeSafeOutboundUrl("http://[fd00::1]/feed")).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://[fe80::1]/feed"),
+            ).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://[fd00::1]/feed"),
+            ).toBeNull();
         });
 
         it("rejects localhost and internal hostnames", () => {
-            expect(normalizeSafeOutboundUrl("http://localhost/feed")).toBeNull();
-            expect(normalizeSafeOutboundUrl("http://service.local/feed")).toBeNull();
-            expect(normalizeSafeOutboundUrl("http://api.internal/feed")).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://localhost/feed"),
+            ).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://service.local/feed"),
+            ).toBeNull();
+            expect(
+                normalizeSafeOutboundUrl("http://api.internal/feed"),
+            ).toBeNull();
         });
     });
 
@@ -150,8 +172,8 @@ describe("outboundUrlSafety", () => {
             expect(
                 normalizeSafeOutboundRedirectTarget(
                     "/next/feed.xml",
-                    "https://example.com/start/feed.xml"
-                )
+                    "https://example.com/start/feed.xml",
+                ),
             ).toBe("https://example.com/next/feed.xml");
         });
 
@@ -159,8 +181,8 @@ describe("outboundUrlSafety", () => {
             expect(
                 normalizeSafeOutboundRedirectTarget(
                     "http://127.0.0.1/private",
-                    "https://example.com/start/feed.xml"
-                )
+                    "https://example.com/start/feed.xml",
+                ),
             ).toBeNull();
         });
     });

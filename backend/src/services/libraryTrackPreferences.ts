@@ -9,14 +9,16 @@ import type { UnifiedTrackResponse } from "./unifiedTrackResponse";
 
 export const formatTrackPreferenceResponse = (
     trackId: string,
-    preference: ResolvedTrackPreference
+    preference: ResolvedTrackPreference,
 ) => ({
     trackId,
     signal: preference.signal,
     state: preference.state,
     score: preference.score,
     likedAt: preference.likedAt ? preference.likedAt.toISOString() : null,
-    dislikedAt: preference.dislikedAt ? preference.dislikedAt.toISOString() : null,
+    dislikedAt: preference.dislikedAt
+        ? preference.dislikedAt.toISOString()
+        : null,
     updatedAt: preference.updatedAt ? preference.updatedAt.toISOString() : null,
 });
 
@@ -28,7 +30,7 @@ export type NormalizedTrackPreferenceSignal = Exclude<
 export const formatAlbumPreferenceResponse = (
     albumId: string,
     trackCount: number,
-    preference: ResolvedTrackPreference
+    preference: ResolvedTrackPreference,
 ) => ({
     albumId,
     trackCount,
@@ -36,16 +38,19 @@ export const formatAlbumPreferenceResponse = (
     state: preference.state,
     score: preference.score,
     likedAt: preference.likedAt ? preference.likedAt.toISOString() : null,
-    dislikedAt: preference.dislikedAt ? preference.dislikedAt.toISOString() : null,
+    dislikedAt: preference.dislikedAt
+        ? preference.dislikedAt.toISOString()
+        : null,
     updatedAt: preference.updatedAt ? preference.updatedAt.toISOString() : null,
 });
 
-export const hasConnectedProviderToken = (value: string | null | undefined): boolean =>
-    typeof value === "string" && value.trim().length > 0;
+export const hasConnectedProviderToken = (
+    value: string | null | undefined,
+): boolean => typeof value === "string" && value.trim().length > 0;
 
 export const toLikedResponseTrack = (
     normalized: UnifiedTrackResponse,
-    likedAt: Date
+    likedAt: Date,
 ) => {
     const likedAtIso = likedAt.toISOString();
     const base = {
@@ -94,7 +99,7 @@ export const applyTrackPreferenceSignalToTrackIds = async (
     userId: string,
     trackIds: string[],
     signal: NormalizedTrackPreferenceSignal,
-    now: Date
+    now: Date,
 ) => {
     if (trackIds.length === 0) {
         return;
@@ -168,7 +173,7 @@ export const applyTrackPreferenceSignalToTrackIds = async (
 
 export const buildTrackPreferenceScoreMapForUser = async (
     userId: string | undefined,
-    trackIds: string[]
+    trackIds: string[],
 ): Promise<Map<string, number>> => {
     if (!userId || trackIds.length === 0) {
         return new Map<string, number>();
@@ -178,9 +183,9 @@ export const buildTrackPreferenceScoreMapForUser = async (
         new Set(
             trackIds.filter(
                 (trackId): trackId is string =>
-                    typeof trackId === "string" && trackId.length > 0
-            )
-        )
+                    typeof trackId === "string" && trackId.length > 0,
+            ),
+        ),
     );
     if (uniqueTrackIds.length === 0) {
         return new Map<string, number>();

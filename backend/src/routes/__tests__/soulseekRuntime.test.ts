@@ -54,7 +54,7 @@ const mockRandomUUID = randomUUID as unknown as jest.Mock;
 function getRouteLayer(path: string, method: HttpMethod) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -98,10 +98,8 @@ describe("soulseek runtime routes", () => {
     const searchByIdHandler = getLastHandler("/search/:searchId", "get");
     const downloadHandler = getLastHandler("/download", "post");
     const disconnectHandler = getLastHandler("/disconnect", "post");
-    const requireConfiguredMiddleware = getRouteLayer(
-        "/connect",
-        "post"
-    ).route.stack[1].handle;
+    const requireConfiguredMiddleware = getRouteLayer("/connect", "post").route
+        .stack[1].handle;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -136,7 +134,7 @@ describe("soulseek runtime routes", () => {
 
     it("requires admin authorization for direct downloads", () => {
         const middlewares = getRouteLayer("/download", "post").route.stack.map(
-            (entry: { handle: unknown }) => entry.handle
+            (entry: { handle: unknown }) => entry.handle,
         );
 
         expect(middlewares).toContain(requireAdmin);
@@ -168,7 +166,7 @@ describe("soulseek runtime routes", () => {
 
     it("returns status 500 when status lookup throws", async () => {
         mockSoulseekService.getStatus.mockRejectedValueOnce(
-            new Error("status failed")
+            new Error("status failed"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -196,7 +194,7 @@ describe("soulseek runtime routes", () => {
         expect(next).not.toHaveBeenCalled();
 
         mockSoulseekService.isAvailable.mockRejectedValueOnce(
-            new Error("availability failed")
+            new Error("availability failed"),
         );
         const errorRes = createRes();
         await requireConfiguredMiddleware(req, errorRes, next);
@@ -224,7 +222,7 @@ describe("soulseek runtime routes", () => {
         expect(mockSoulseekService.connect).toHaveBeenCalled();
 
         mockSoulseekService.connect.mockRejectedValueOnce(
-            new Error("connect failed")
+            new Error("connect failed"),
         );
         const errorRes = createRes();
         await connectHandler(req, errorRes);
@@ -257,7 +255,7 @@ describe("soulseek runtime routes", () => {
         });
         expect(mockSoulseekService.searchTrack).toHaveBeenCalledWith(
             "Daft Punk",
-            ""
+            "",
         );
 
         mockRandomUUID.mockReturnValueOnce("search-track-id");
@@ -272,7 +270,7 @@ describe("soulseek runtime routes", () => {
         });
         expect(mockSoulseekService.searchTrack).toHaveBeenCalledWith(
             "Artist Track",
-            ""
+            "",
         );
     });
 
@@ -296,7 +294,8 @@ describe("soulseek runtime routes", () => {
                 {
                     username: "peer-1",
                     filename: "01 - My Song.flac",
-                    fullPath: "/library/Artist Name/Album Name/01 - My Song.flac",
+                    fullPath:
+                        "/library/Artist Name/Album Name/01 - My Song.flac",
                     size: 123456,
                     bitRate: 990,
                     quality: "lossless",
@@ -332,7 +331,9 @@ describe("soulseek runtime routes", () => {
             count: 1,
         });
 
-        const missingReq = { params: { searchId: "missing-session-id" } } as any;
+        const missingReq = {
+            params: { searchId: "missing-session-id" },
+        } as any;
         const missingRes = createRes();
         await searchByIdHandler(missingReq, missingRes);
 
@@ -367,7 +368,9 @@ describe("soulseek runtime routes", () => {
         await searchHandler(searchReq, searchRes);
         await flushPromises();
 
-        const resultsReq = { params: { searchId: "search-bad-file-id" } } as any;
+        const resultsReq = {
+            params: { searchId: "search-bad-file-id" },
+        } as any;
         const resultsRes = createRes();
         await searchByIdHandler(resultsReq, resultsRes);
 
@@ -381,7 +384,7 @@ describe("soulseek runtime routes", () => {
     it("logs async search exceptions without failing the request", async () => {
         mockRandomUUID.mockReturnValueOnce("search-reject-id");
         mockSoulseekService.searchTrack.mockRejectedValueOnce(
-            new Error("search exploded")
+            new Error("search exploded"),
         );
 
         const req = { body: { query: "broken query" } } as any;
@@ -396,7 +399,7 @@ describe("soulseek runtime routes", () => {
         });
         expect(mockLogger.error).toHaveBeenCalledWith(
             "[Soulseek] Search search-reject-id failed:",
-            "search exploded"
+            "search exploded",
         );
     });
 
@@ -416,7 +419,7 @@ describe("soulseek runtime routes", () => {
             "Artist",
             "Track",
             "Album",
-            "/music"
+            "/music",
         );
 
         mockGetSystemSettings.mockResolvedValueOnce({ musicPath: null });
@@ -429,7 +432,7 @@ describe("soulseek runtime routes", () => {
         });
 
         mockSoulseekService.searchAndDownload.mockRejectedValueOnce(
-            new Error("download exploded")
+            new Error("download exploded"),
         );
         const errorRes = createRes();
         await downloadHandler(req, errorRes);
@@ -473,7 +476,7 @@ describe("soulseek runtime routes", () => {
             "Unknown",
             "Example Track",
             "Unknown Album",
-            "/music"
+            "/music",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({

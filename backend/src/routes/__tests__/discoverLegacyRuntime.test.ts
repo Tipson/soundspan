@@ -84,7 +84,9 @@ const prisma = {
             downloadRatio: 1.3,
             enabled: true,
         })),
-        upsert: jest.fn(async (args: any) => args?.create ?? args?.update ?? {}),
+        upsert: jest.fn(
+            async (args: any) => args?.create ?? args?.update ?? {},
+        ),
     },
 };
 
@@ -114,7 +116,10 @@ jest.mock("../../services/lidarr", () => ({
         removeDiscoveryTagByMbid: jest.fn(async () => undefined),
         getArtists: jest.fn(async () => []),
         getDiscoveryArtists: jest.fn(async () => []),
-        deleteArtistById: jest.fn(async () => ({ success: true, message: "ok" })),
+        deleteArtistById: jest.fn(async () => ({
+            success: true,
+            message: "ok",
+        })),
         getOrCreateDiscoveryTag: jest.fn(async () => 999),
         removeTagsFromArtist: jest.fn(async () => undefined),
     },
@@ -153,11 +158,11 @@ const mockGetSystemSettings = getSystemSettings as jest.Mock;
 
 function getRouteHandler(
     path: string,
-    method: "get" | "post" | "delete" | "patch"
+    method: "get" | "post" | "delete" | "patch",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -206,7 +211,9 @@ describe("discover legacy-mode runtime behavior", () => {
     });
 
     it("returns inactive legacy batch status when no active batch exists", async () => {
-        (prisma.discoveryBatch.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryBatch.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -291,7 +298,7 @@ describe("discover legacy-mode runtime behavior", () => {
 
     it("returns 500 when legacy generation lookup fails before queueing", async () => {
         (prisma.discoveryBatch.findFirst as jest.Mock).mockRejectedValueOnce(
-            new Error("discovery unavailable")
+            new Error("discovery unavailable"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -305,7 +312,9 @@ describe("discover legacy-mode runtime behavior", () => {
     });
 
     it("queues legacy generation when no active batch exists", async () => {
-        (prisma.discoveryBatch.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryBatch.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         discoverQueue.add.mockResolvedValueOnce({ id: "job-legacy-77" });
 
         const req = { user: { id: "user-1" } } as any;
@@ -322,7 +331,9 @@ describe("discover legacy-mode runtime behavior", () => {
 
     it("returns empty current-week legacy playlist when no discovery data exists", async () => {
         (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValueOnce([]);
+        (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValueOnce(
+            [],
+        );
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -335,13 +346,13 @@ describe("discover legacy-mode runtime behavior", () => {
                 unavailable: [],
                 totalCount: 0,
                 unavailableCount: 0,
-            })
+            }),
         );
     });
 
     it("returns 500 for legacy current route failures", async () => {
         (prisma.discoveryAlbum.findMany as jest.Mock).mockRejectedValueOnce(
-            new Error("db boom")
+            new Error("db boom"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -431,21 +442,26 @@ describe("discover legacy-mode runtime behavior", () => {
                 originalAlbumId: "orig-3",
             },
         ]);
-        (prisma.album.findFirst as jest.Mock).mockImplementation(async (query: any) => {
-            // Fallback lookup for discovery album #2 -> unresolved, becomes pending
-            if (query?.where?.title === "Album Two" && query?.where?.artist) {
-                return null;
-            }
-            // Unavailable filter lookups
-            if (query?.where?.OR) {
-                const contains = query.where.OR?.[1]?.title?.contains;
-                if (contains === "owned album") {
-                    return { id: "album-owned" };
+        (prisma.album.findFirst as jest.Mock).mockImplementation(
+            async (query: any) => {
+                // Fallback lookup for discovery album #2 -> unresolved, becomes pending
+                if (
+                    query?.where?.title === "Album Two" &&
+                    query?.where?.artist
+                ) {
+                    return null;
+                }
+                // Unavailable filter lookups
+                if (query?.where?.OR) {
+                    const contains = query.where.OR?.[1]?.title?.contains;
+                    if (contains === "owned album") {
+                        return { id: "album-owned" };
+                    }
+                    return null;
                 }
                 return null;
-            }
-            return null;
-        });
+            },
+        );
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -459,21 +475,21 @@ describe("discover legacy-mode runtime behavior", () => {
                 id: "track-1",
                 title: "Song One",
                 available: true,
-            })
+            }),
         );
         expect(res.body.tracks[1]).toEqual(
             expect.objectContaining({
                 id: "pending-da-2",
                 isPending: true,
                 available: false,
-            })
+            }),
         );
         expect(res.body.unavailable[0]).toEqual(
             expect.objectContaining({
                 albumId: "rg-unavailable",
                 title: "Missing Album",
                 artist: "Missing Artist",
-            })
+            }),
         );
     });
 
@@ -511,10 +527,10 @@ describe("discover legacy-mode runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "LIKED",
                 }),
-            })
+            }),
         );
         expect(lidarrService.removeDiscoveryTagByMbid).toHaveBeenCalledWith(
-            "artist-mbid-1"
+            "artist-mbid-1",
         );
         expect(prisma.album.update).toHaveBeenCalledWith({
             where: { id: "album-1" },
@@ -528,7 +544,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     trackId: { in: ["track-1", "track-2"] },
                 }),
                 data: { source: "DISCOVERY_KEPT" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ success: true });
@@ -545,7 +561,9 @@ describe("discover legacy-mode runtime behavior", () => {
     });
 
     it("returns 404 when liking an album not in active discovery", async () => {
-        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         const req = {
             user: { id: "user-1" },
@@ -573,9 +591,9 @@ describe("discover legacy-mode runtime behavior", () => {
         (lidarrService.getArtists as jest.Mock).mockResolvedValueOnce([
             { id: 42, artistName: "Lookup Artist", tags: [999] },
         ]);
-        (lidarrService.getOrCreateDiscoveryTag as jest.Mock).mockResolvedValueOnce(
-            999
-        );
+        (
+            lidarrService.getOrCreateDiscoveryTag as jest.Mock
+        ).mockResolvedValueOnce(999);
 
         const req = {
             user: { id: "user-1" },
@@ -586,7 +604,10 @@ describe("discover legacy-mode runtime behavior", () => {
         await likeHandler(req, res);
 
         expect(lidarrService.removeDiscoveryTagByMbid).not.toHaveBeenCalled();
-        expect(lidarrService.removeTagsFromArtist).toHaveBeenCalledWith(42, [999]);
+        expect(lidarrService.removeTagsFromArtist).toHaveBeenCalledWith(
+            42,
+            [999],
+        );
         expect(prisma.play.updateMany).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ success: true });
@@ -613,7 +634,7 @@ describe("discover legacy-mode runtime behavior", () => {
             expect.objectContaining({
                 where: { id: "discovery-liked" },
                 data: { status: "ACTIVE", likedAt: null },
-            })
+            }),
         );
         expect(prisma.ownedAlbum.deleteMany).toHaveBeenCalledWith({
             where: { rgMbid: "rg-liked-2", source: "discovery_liked" },
@@ -625,7 +646,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     trackId: { in: ["track-a"] },
                 }),
                 data: { source: "DISCOVERY" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ success: true });
@@ -642,7 +663,9 @@ describe("discover legacy-mode runtime behavior", () => {
     });
 
     it("returns 404 when unliking an album that is not liked", async () => {
-        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         const req = {
             user: { id: "user-1" },
@@ -680,9 +703,9 @@ describe("discover legacy-mode runtime behavior", () => {
     });
 
     it("creates default discover config when none exists and validates patch bounds", async () => {
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce(
-            null
-        );
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce(null);
         const getReq = { user: { id: "user-1" } } as any;
         const getRes = createRes();
         await configGetHandler(getReq, getRes);
@@ -694,7 +717,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     playlistSize: 10,
                     enabled: true,
                 }),
-            })
+            }),
         );
         expect(getRes.statusCode).toBe(200);
 
@@ -739,32 +762,34 @@ describe("discover legacy-mode runtime behavior", () => {
                 lidarrAlbumId: 22,
             },
         ]);
-        (prisma.album.findFirst as jest.Mock).mockImplementation(async (args: any) => {
-            if (
-                args?.where?.title === "Liked Album" &&
-                args?.where?.artist?.name === "Liked Artist"
-            ) {
-                return {
-                    id: "album-liked",
-                    artistId: "artist-liked",
-                    rgMbid: "rg-liked",
-                    artist: { id: "artist-liked", name: "Liked Artist" },
-                };
-            }
-            if (
-                args?.where?.title === "Active Album" &&
-                args?.where?.location === "DISCOVER"
-            ) {
-                return {
-                    id: "album-active",
-                    artistId: "artist-active",
-                    rgMbid: "rg-active",
-                    tracks: [{ id: "track-active-1" }],
-                    artist: { id: "artist-active", name: "Active Artist" },
-                };
-            }
-            return null;
-        });
+        (prisma.album.findFirst as jest.Mock).mockImplementation(
+            async (args: any) => {
+                if (
+                    args?.where?.title === "Liked Album" &&
+                    args?.where?.artist?.name === "Liked Artist"
+                ) {
+                    return {
+                        id: "album-liked",
+                        artistId: "artist-liked",
+                        rgMbid: "rg-liked",
+                        artist: { id: "artist-liked", name: "Liked Artist" },
+                    };
+                }
+                if (
+                    args?.where?.title === "Active Album" &&
+                    args?.where?.location === "DISCOVER"
+                ) {
+                    return {
+                        id: "album-active",
+                        artistId: "artist-active",
+                        rgMbid: "rg-active",
+                        tracks: [{ id: "track-active-1" }],
+                        artist: { id: "artist-active", name: "Active Artist" },
+                    };
+                }
+                return null;
+            },
+        );
         (prisma.discoveryTrack.deleteMany as jest.Mock)
             .mockResolvedValueOnce({ count: 1 })
             .mockResolvedValueOnce({ count: 2 });
@@ -785,9 +810,11 @@ describe("discover legacy-mode runtime behavior", () => {
         (prisma.discoveryAlbum.deleteMany as jest.Mock).mockResolvedValueOnce({
             count: 1,
         });
-        (prisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValueOnce({
-            count: 3,
-        });
+        (prisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValueOnce(
+            {
+                count: 3,
+            },
+        );
         scanQueue.add.mockResolvedValueOnce(undefined);
 
         const req = { user: { id: "user-1" } } as any;
@@ -805,7 +832,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     rgMbid: "rg-liked",
                     source: "discover_liked",
                 }),
-            })
+            }),
         );
         expect(prisma.track.deleteMany).toHaveBeenCalledWith({
             where: { albumId: "album-active" },
@@ -821,7 +848,7 @@ describe("discover legacy-mode runtime behavior", () => {
                         { toArtistId: { in: ["artist-orphan"] } },
                     ],
                 },
-            })
+            }),
         );
         expect(scanQueue.add).toHaveBeenCalledWith("scan", {
             userId: "user-1",
@@ -856,7 +883,7 @@ describe("discover legacy-mode runtime behavior", () => {
 
     it("returns 500 when legacy clear processing throws", async () => {
         (prisma.discoveryAlbum.findMany as jest.Mock).mockRejectedValueOnce(
-            new Error("clear boom")
+            new Error("clear boom"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -944,42 +971,48 @@ describe("discover legacy-mode runtime behavior", () => {
                 },
             ]);
 
-        (prisma.album.findFirst as jest.Mock).mockImplementation(async (args: any) => {
-            if (
-                args?.where?.title === "Liked Album" &&
-                args?.where?.artist?.name === "Liked Artist"
-            ) {
-                return {
-                    id: "album-liked",
-                    artistId: "artist-liked",
-                    rgMbid: "rg-liked",
-                    artist: { id: "artist-liked", name: "Liked Artist" },
-                };
-            }
-            if (
-                args?.where?.title === "Active Album" &&
-                args?.where?.location === "DISCOVER"
-            ) {
-                return {
-                    id: "album-active",
-                    artistId: "artist-active",
-                    rgMbid: "rg-active",
-                    tracks: [{ id: "track-active-1" }],
-                    artist: { id: "artist-active", name: "Active Artist" },
-                };
-            }
-            return null;
-        });
+        (prisma.album.findFirst as jest.Mock).mockImplementation(
+            async (args: any) => {
+                if (
+                    args?.where?.title === "Liked Album" &&
+                    args?.where?.artist?.name === "Liked Artist"
+                ) {
+                    return {
+                        id: "album-liked",
+                        artistId: "artist-liked",
+                        rgMbid: "rg-liked",
+                        artist: { id: "artist-liked", name: "Liked Artist" },
+                    };
+                }
+                if (
+                    args?.where?.title === "Active Album" &&
+                    args?.where?.location === "DISCOVER"
+                ) {
+                    return {
+                        id: "album-active",
+                        artistId: "artist-active",
+                        rgMbid: "rg-active",
+                        tracks: [{ id: "track-active-1" }],
+                        artist: { id: "artist-active", name: "Active Artist" },
+                    };
+                }
+                return null;
+            },
+        );
         (prisma.album.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
 
-        (prisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+        (prisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({
+            count: 1,
+        });
         (prisma.discoveryAlbum.deleteMany as jest.Mock).mockResolvedValueOnce({
             count: 0,
         });
-        (prisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValueOnce({
-            count: 0,
-        });
+        (prisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValueOnce(
+            {
+                count: 0,
+            },
+        );
         (prisma.downloadJob.deleteMany as jest.Mock).mockResolvedValueOnce({
             count: 1,
         });
@@ -994,7 +1027,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     return { id: "kept-artist" };
                 }
                 return null;
-            }
+            },
         );
 
         (lidarrService.getDiscoveryArtists as jest.Mock).mockResolvedValueOnce([
@@ -1054,7 +1087,7 @@ describe("discover legacy-mode runtime behavior", () => {
         const existsSpy = jest
             .spyOn(fs, "existsSync")
             .mockImplementation((targetPath: fs.PathLike) =>
-                String(targetPath).includes("Active Artist")
+                String(targetPath).includes("Active Artist"),
             );
         const rmSpy = jest
             .spyOn(fs, "rmSync")
@@ -1072,30 +1105,30 @@ describe("discover legacy-mode runtime behavior", () => {
                 path: "/music/Liked Artist",
                 moveFiles: true,
             }),
-            expect.any(Object)
+            expect.any(Object),
         );
         expect(mockAxiosDelete).toHaveBeenCalledWith(
             "http://lidarr.local/api/v1/album/22",
-            expect.any(Object)
+            expect.any(Object),
         );
         expect(mockAxiosDelete).toHaveBeenCalledWith(
             "http://lidarr.local/api/v1/artist/202",
-            expect.any(Object)
+            expect.any(Object),
         );
         expect(mockAxiosDelete).toHaveBeenCalledWith(
             "http://lidarr.local/api/v1/album/33",
-            expect.any(Object)
+            expect.any(Object),
         );
         expect(mockAxiosDelete).toHaveBeenCalledWith(
             "http://lidarr.local/api/v1/artist/303",
-            expect.any(Object)
+            expect.any(Object),
         );
         expect(mockAxiosDelete).toHaveBeenCalledWith(
             "http://lidarr.local/api/v1/artist/404",
-            expect.any(Object)
+            expect.any(Object),
         );
         expect(lidarrService.removeDiscoveryTagByMbid).toHaveBeenCalledWith(
-            "mbid-keep"
+            "mbid-keep",
         );
         expect(lidarrService.deleteArtistById).toHaveBeenCalledWith(2, true);
         expect(res.statusCode).toBe(200);
@@ -1105,7 +1138,7 @@ describe("discover legacy-mode runtime behavior", () => {
                 likedMoved: 1,
                 activeDeleted: 1,
                 lidarrArtistsRemoved: 1,
-            })
+            }),
         );
 
         existsSpy.mockRestore();
@@ -1165,7 +1198,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     return { id: "owned-1", source: "native_scan" };
                 }
                 return null;
-            }
+            },
         );
 
         (prisma.discoveryAlbum.findFirst as jest.Mock).mockImplementation(
@@ -1185,7 +1218,7 @@ describe("discover legacy-mode runtime behavior", () => {
                 }
 
                 return null;
-            }
+            },
         );
 
         mockAxiosDelete.mockImplementation(async (url: string) => {
@@ -1204,14 +1237,14 @@ describe("discover legacy-mode runtime behavior", () => {
             expect.objectContaining({
                 params: { deleteFiles: true },
                 headers: { "X-Api-Key": "lidarr-key" },
-            })
+            }),
         );
         expect(mockAxiosDelete).toHaveBeenCalledWith(
             "http://lidarr.local/api/v1/artist/5",
             expect.objectContaining({
                 params: { deleteFiles: true },
                 headers: { "X-Api-Key": "lidarr-key" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -1259,7 +1292,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     return { source: "native_scan" };
                 }
                 return null;
-            }
+            },
         );
 
         (prisma.discoveryAlbum.findFirst as jest.Mock).mockImplementation(
@@ -1271,7 +1304,7 @@ describe("discover legacy-mode runtime behavior", () => {
                     return { id: "liked-kept" };
                 }
                 return null;
-            }
+            },
         );
 
         (prisma.album.findMany as jest.Mock).mockImplementation(
@@ -1280,9 +1313,11 @@ describe("discover legacy-mode runtime behavior", () => {
                     return [{ id: "album-1" }, { id: "album-2" }];
                 }
                 return [];
-            }
+            },
         );
-        (prisma.album.updateMany as jest.Mock).mockResolvedValueOnce({ count: 2 });
+        (prisma.album.updateMany as jest.Mock).mockResolvedValueOnce({
+            count: 2,
+        });
         (prisma.ownedAlbum.deleteMany as jest.Mock).mockResolvedValueOnce({
             count: 1,
         });
@@ -1315,7 +1350,7 @@ describe("discover legacy-mode runtime behavior", () => {
 
     it("returns 500 when fix-tagging fails", async () => {
         (prisma.discoveryAlbum.findMany as jest.Mock).mockRejectedValueOnce(
-            new Error("discover table unavailable")
+            new Error("discover table unavailable"),
         );
 
         const req = { user: { id: "user-1" } } as any;

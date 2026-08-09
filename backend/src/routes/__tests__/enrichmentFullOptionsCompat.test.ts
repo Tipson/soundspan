@@ -125,7 +125,8 @@ const mockRunFullEnrichment = runFullEnrichment as jest.Mock;
 
 function getPostHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.post
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.post,
     );
 
     if (!layer) {
@@ -185,7 +186,7 @@ describe("enrichment full options compatibility", () => {
             expect.objectContaining({
                 forceVibeRebuild: true,
                 forceMoodBucketBackfill: true,
-            })
+            }),
         );
     });
 
@@ -207,7 +208,7 @@ describe("enrichment full options compatibility", () => {
             expect.objectContaining({
                 forceVibeRebuild: false,
                 forceMoodBucketBackfill: false,
-            })
+            }),
         );
     });
 
@@ -229,7 +230,7 @@ describe("enrichment full options compatibility", () => {
             expect.objectContaining({
                 forceVibeRebuild: false,
                 forceMoodBucketBackfill: false,
-            })
+            }),
         );
     });
 });

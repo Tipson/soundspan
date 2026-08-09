@@ -30,20 +30,29 @@ describe("config/featureProfiles", () => {
         }
     });
 
-    test.each(["genre", "mood", "vibe", "descriptor"] as const)("has valid %s entries", (termType) => {
-        const entries = Object.entries(VOCAB_DEFINITIONS).filter(([, definition]) => definition.type === termType);
+    test.each(["genre", "mood", "vibe", "descriptor"] as const)(
+        "has valid %s entries",
+        (termType) => {
+            const entries = Object.entries(VOCAB_DEFINITIONS).filter(
+                ([, definition]) => definition.type === termType,
+            );
 
-        expect(entries.length).toBeGreaterThan(0);
-        for (const [term, definition] of entries) {
-            expect(definition.type).toBe(termType);
-            expect(term).toEqual(expect.any(String));
-            expect(Object.keys(definition.featureProfile).length).toBeGreaterThan(0);
-        }
-    });
+            expect(entries.length).toBeGreaterThan(0);
+            for (const [term, definition] of entries) {
+                expect(definition.type).toBe(termType);
+                expect(term).toEqual(expect.any(String));
+                expect(
+                    Object.keys(definition.featureProfile).length,
+                ).toBeGreaterThan(0);
+            }
+        },
+    );
 
     test("feature profile values stay within 0-1", () => {
         for (const [term, definition] of Object.entries(VOCAB_DEFINITIONS)) {
-            for (const [property, value] of Object.entries(definition.featureProfile)) {
+            for (const [property, value] of Object.entries(
+                definition.featureProfile,
+            )) {
                 expect(typeof value).toBe("number");
                 expect(value).toBeGreaterThanOrEqual(0);
                 expect(value).toBeLessThanOrEqual(1);

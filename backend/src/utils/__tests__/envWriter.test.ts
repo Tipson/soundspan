@@ -47,10 +47,10 @@ describe("envWriter", () => {
             expect.objectContaining({
                 name: "EnvFileSyncSkippedError",
                 message: "disabled by ENABLE_ENV_FILE_SYNC=false",
-            })
+            }),
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ENV] Skipping .env sync: disabled by ENABLE_ENV_FILE_SYNC=false"
+            "[ENV] Skipping .env sync: disabled by ENABLE_ENV_FILE_SYNC=false",
         );
         expect(mockWriteFileSync).not.toHaveBeenCalled();
         expect(mockChmodSync).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe("envWriter", () => {
                 name: "EnvFileSyncSkippedError",
                 message:
                     "running in Kubernetes without explicit ENABLE_ENV_FILE_SYNC=true",
-            })
+            }),
         );
         expect(mockWriteFileSync).not.toHaveBeenCalled();
         expect(mockChmodSync).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe("envWriter", () => {
         process.env.ENV_FILE_PATH = "/.env";
 
         await expect(writeEnvFile({ PORT: "3006" })).rejects.toBeInstanceOf(
-            EnvFileSyncSkippedError
+            EnvFileSyncSkippedError,
         );
         expect(mockWriteFileSync).not.toHaveBeenCalled();
         expect(mockChmodSync).not.toHaveBeenCalled();
@@ -85,7 +85,9 @@ describe("envWriter", () => {
     });
 
     it("uses default path based on cwd when ENV_FILE_PATH is not set", async () => {
-        const cwdSpy = jest.spyOn(process, "cwd").mockReturnValue("/srv/backend");
+        const cwdSpy = jest
+            .spyOn(process, "cwd")
+            .mockReturnValue("/srv/backend");
         mockReadFileSync.mockImplementation(() => {
             throw new Error("ENOENT");
         });
@@ -98,7 +100,7 @@ describe("envWriter", () => {
         expect(mockWriteFileSync).toHaveBeenCalledWith(
             tempPath,
             expect.any(String),
-            { encoding: "utf-8", mode: 0o600 }
+            { encoding: "utf-8", mode: 0o600 },
         );
         expect(mockChmodSync).toHaveBeenCalledWith(tempPath, 0o600);
         expect(mockRenameSync).toHaveBeenCalledWith(tempPath, "/srv/.env");
@@ -111,10 +113,13 @@ describe("envWriter", () => {
             throw new Error("ENOENT");
         });
 
-        await writeEnvFile({ PORT: "3006", EXTERNAL_API_URL: "https://api.example" });
+        await writeEnvFile({
+            PORT: "3006",
+            EXTERNAL_API_URL: "https://api.example",
+        });
 
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "No existing .env file, creating new one"
+            "No existing .env file, creating new one",
         );
         expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
 
@@ -135,7 +140,7 @@ describe("envWriter", () => {
                 "=missing-key-value-should-be-ignored",
                 "CUSTOM_KEY=keep-me",
                 "",
-            ].join("\n")
+            ].join("\n"),
         );
 
         await writeEnvFile({
@@ -169,23 +174,23 @@ describe("envWriter", () => {
 
         const tempPath = String(mockWriteFileSync.mock.calls[0][0]);
         expect(tempPath).toEqual(
-            expect.stringContaining("/tmp/soundspan.env.tmp-")
+            expect.stringContaining("/tmp/soundspan.env.tmp-"),
         );
         expect(mockWriteFileSync).toHaveBeenCalledWith(
             tempPath,
             expect.any(String),
-            { encoding: "utf-8", mode: 0o600 }
+            { encoding: "utf-8", mode: 0o600 },
         );
         expect(mockChmodSync).toHaveBeenCalledWith(tempPath, 0o600);
         expect(mockRenameSync).toHaveBeenCalledWith(
             tempPath,
-            "/tmp/soundspan.env"
+            "/tmp/soundspan.env",
         );
         expect(mockUnlinkSync).toHaveBeenCalledWith(tempPath);
         expect(mockWriteFileSync).not.toHaveBeenCalledWith(
             "/tmp/soundspan.env",
             expect.anything(),
-            expect.anything()
+            expect.anything(),
         );
     });
 });

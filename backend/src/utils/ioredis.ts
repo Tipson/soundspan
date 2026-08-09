@@ -15,7 +15,7 @@ import { logger } from "./logger";
 import { config } from "../config";
 
 const MAX_RETRY_DELAY_MS = 30_000; // 30 seconds
-const BASE_RETRY_DELAY_MS = 250;   // Start at 250ms
+const BASE_RETRY_DELAY_MS = 250; // Start at 250ms
 
 /**
  * Create an ioredis client with built-in retry logic.
@@ -40,10 +40,10 @@ export function createIORedisClient(
             return delay;
         },
 
-        maxRetriesPerRequest: 3,       // Fail individual commands after 3 retries
-        connectTimeout: 10_000,        // 10s connect timeout
-        enableReadyCheck: true,        // Wait for Redis INFO before emitting "ready"
-        lazyConnect: false,            // Connect immediately
+        maxRetriesPerRequest: 3, // Fail individual commands after 3 retries
+        connectTimeout: 10_000, // 10s connect timeout
+        enableReadyCheck: true, // Wait for Redis INFO before emitting "ready"
+        lazyConnect: false, // Connect immediately
 
         ...overrides,
     });

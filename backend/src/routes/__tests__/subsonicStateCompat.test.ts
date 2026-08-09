@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -71,7 +73,10 @@ jest.mock("../../config", () => ({
 
 import { prisma } from "../../utils/db";
 import { scanQueue } from "../../workers/queues";
-import { sendSubsonicError, sendSubsonicSuccess } from "../../utils/subsonicResponse";
+import {
+    sendSubsonicError,
+    sendSubsonicSuccess,
+} from "../../utils/subsonicResponse";
 import {
     handleCreateBookmark,
     handleDeleteBookmark,
@@ -350,7 +355,10 @@ describe("subsonic state/admin compatibility handlers", () => {
             id: "track-1",
         });
 
-        await handleCreateBookmark(buildReq({ id: "tr-track-1", position: "12345" }), buildRes());
+        await handleCreateBookmark(
+            buildReq({ id: "tr-track-1", position: "12345" }),
+            buildRes(),
+        );
 
         expect(mockTrackFindUnique).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -401,7 +409,10 @@ describe("subsonic state/admin compatibility handlers", () => {
     });
 
     it("returns not-found for bookmark requests when track does not exist", async () => {
-        await handleCreateBookmark(buildReq({ id: "tr-track-missing", position: "1000" }), buildRes());
+        await handleCreateBookmark(
+            buildReq({ id: "tr-track-missing", position: "1000" }),
+            buildRes(),
+        );
 
         expect(mockSendError).toHaveBeenCalledWith(
             expect.anything(),

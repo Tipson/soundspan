@@ -198,7 +198,9 @@ describe("browse tidal routes", () => {
         mockGetSystemSettings.mockResolvedValue({ ytMusicEnabled: true });
         tidalStreamingService.isEnabled.mockResolvedValue(true);
         tidalStreamingService.isAvailable.mockResolvedValue(true);
-        tidalStreamingService.getAuthStatus.mockResolvedValue({ authenticated: true });
+        tidalStreamingService.getAuthStatus.mockResolvedValue({
+            authenticated: true,
+        });
         tidalStreamingService.getUserPreferredQuality.mockResolvedValue("HIGH");
     });
 
@@ -210,7 +212,7 @@ describe("browse tidal routes", () => {
                 require("../../services/browseImageCache") as any;
             const filePath = path.join(
                 os.tmpdir(),
-                `browse-tidal-test-${Date.now()}.img`
+                `browse-tidal-test-${Date.now()}.img`,
             );
             fs.writeFileSync(filePath, Buffer.from([0xff, 0xd8, 0xff]));
             fetchAndCacheBrowseImage.mockResolvedValueOnce({
@@ -221,7 +223,7 @@ describe("browse tidal routes", () => {
             try {
                 const res = await request(app)
                     .get(
-                        "/api/browse/tidal/image?url=https://resources.tidal.com/images/abc.jpg"
+                        "/api/browse/tidal/image?url=https://resources.tidal.com/images/abc.jpg",
                     )
                     .set(AUTH_HEADER, AUTH_VALUE);
 
@@ -234,13 +236,15 @@ describe("browse tidal routes", () => {
         it("blocks disallowed hosts with 400", async () => {
             const res = await request(app)
                 .get(
-                    "/api/browse/tidal/image?url=https://evil.example.com/bad.jpg"
+                    "/api/browse/tidal/image?url=https://evil.example.com/bad.jpg",
                 )
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(400);
             expect(res.body).toEqual(
-                expect.objectContaining({ error: expect.stringContaining("not allowed") })
+                expect.objectContaining({
+                    error: expect.stringContaining("not allowed"),
+                }),
             );
         });
 
@@ -251,7 +255,7 @@ describe("browse tidal routes", () => {
 
             expect(res.status).toBe(400);
             expect(res.body).toEqual(
-                expect.objectContaining({ error: expect.any(String) })
+                expect.objectContaining({ error: expect.any(String) }),
             );
         });
     });
@@ -284,7 +288,7 @@ describe("browse tidal routes", () => {
                 expect(res.body).toEqual(
                     expect.objectContaining({
                         error: expect.stringContaining("TIDAL"),
-                    })
+                    }),
                 );
             });
         }
@@ -295,7 +299,7 @@ describe("browse tidal routes", () => {
     describe("GET /api/browse/tidal/home", () => {
         it("returns shelves with source tidal", async () => {
             tidalStreamingService.getHomeShelves.mockResolvedValueOnce(
-                SHELF_FIXTURE
+                SHELF_FIXTURE,
             );
 
             const res = await request(app)
@@ -308,7 +312,8 @@ describe("browse tidal routes", () => {
                 source: "tidal",
             });
             expect(tidalStreamingService.getHomeShelves).toHaveBeenCalledWith(
-                "user-1", "HIGH"
+                "user-1",
+                "HIGH",
             );
         });
     });
@@ -316,7 +321,7 @@ describe("browse tidal routes", () => {
     describe("GET /api/browse/tidal/explore", () => {
         it("returns shelves with source tidal", async () => {
             tidalStreamingService.getExploreShelves.mockResolvedValueOnce(
-                SHELF_FIXTURE
+                SHELF_FIXTURE,
             );
 
             const res = await request(app)
@@ -329,7 +334,7 @@ describe("browse tidal routes", () => {
                 source: "tidal",
             });
             expect(
-                tidalStreamingService.getExploreShelves
+                tidalStreamingService.getExploreShelves,
             ).toHaveBeenCalledWith("user-1", "HIGH");
         });
     });
@@ -337,7 +342,7 @@ describe("browse tidal routes", () => {
     describe("GET /api/browse/tidal/genres", () => {
         it("returns genres with source tidal", async () => {
             tidalStreamingService.getGenres.mockResolvedValueOnce(
-                GENRE_FIXTURE
+                GENRE_FIXTURE,
             );
 
             const res = await request(app)
@@ -350,7 +355,8 @@ describe("browse tidal routes", () => {
                 source: "tidal",
             });
             expect(tidalStreamingService.getGenres).toHaveBeenCalledWith(
-                "user-1", "HIGH"
+                "user-1",
+                "HIGH",
             );
         });
     });
@@ -369,7 +375,8 @@ describe("browse tidal routes", () => {
                 source: "tidal",
             });
             expect(tidalStreamingService.getMoods).toHaveBeenCalledWith(
-                "user-1", "HIGH"
+                "user-1",
+                "HIGH",
             );
         });
     });
@@ -388,7 +395,8 @@ describe("browse tidal routes", () => {
                 source: "tidal",
             });
             expect(tidalStreamingService.getMixes).toHaveBeenCalledWith(
-                "user-1", "HIGH"
+                "user-1",
+                "HIGH",
             );
         });
     });
@@ -396,7 +404,7 @@ describe("browse tidal routes", () => {
     describe("GET /api/browse/tidal/genre-playlists", () => {
         it("returns playlists for a given genre path", async () => {
             tidalStreamingService.getGenrePlaylists.mockResolvedValueOnce(
-                GENRE_PLAYLISTS_FIXTURE
+                GENRE_PLAYLISTS_FIXTURE,
             );
 
             const res = await request(app)
@@ -409,7 +417,7 @@ describe("browse tidal routes", () => {
                 source: "tidal",
             });
             expect(
-                tidalStreamingService.getGenrePlaylists
+                tidalStreamingService.getGenrePlaylists,
             ).toHaveBeenCalledWith("user-1", "Pop", "HIGH");
         });
 
@@ -420,7 +428,7 @@ describe("browse tidal routes", () => {
 
             expect(res.status).toBe(400);
             expect(res.body).toEqual(
-                expect.objectContaining({ error: expect.any(String) })
+                expect.objectContaining({ error: expect.any(String) }),
             );
         });
     });
@@ -428,7 +436,7 @@ describe("browse tidal routes", () => {
     describe("GET /api/browse/tidal/playlist/:id", () => {
         it("returns playlist detail with tracks", async () => {
             tidalStreamingService.getBrowsePlaylist.mockResolvedValueOnce(
-                PLAYLIST_DETAIL_FIXTURE
+                PLAYLIST_DETAIL_FIXTURE,
             );
 
             const res = await request(app)
@@ -441,13 +449,13 @@ describe("browse tidal routes", () => {
                 source: "tidal",
             });
             expect(
-                tidalStreamingService.getBrowsePlaylist
+                tidalStreamingService.getBrowsePlaylist,
             ).toHaveBeenCalledWith("user-1", "pl-001", "HIGH", undefined);
         });
 
         it("forwards optional limit parameter", async () => {
             tidalStreamingService.getBrowsePlaylist.mockResolvedValueOnce(
-                PLAYLIST_DETAIL_FIXTURE
+                PLAYLIST_DETAIL_FIXTURE,
             );
 
             const res = await request(app)
@@ -456,7 +464,7 @@ describe("browse tidal routes", () => {
 
             expect(res.status).toBe(200);
             expect(
-                tidalStreamingService.getBrowsePlaylist
+                tidalStreamingService.getBrowsePlaylist,
             ).toHaveBeenCalledWith("user-1", "pl-001", "HIGH", 50);
         });
     });
@@ -464,7 +472,7 @@ describe("browse tidal routes", () => {
     describe("GET /api/browse/tidal/mix/:id", () => {
         it("returns mix detail with tracks", async () => {
             tidalStreamingService.getBrowseMix.mockResolvedValueOnce(
-                MIX_DETAIL_FIXTURE
+                MIX_DETAIL_FIXTURE,
             );
 
             const res = await request(app)
@@ -479,7 +487,7 @@ describe("browse tidal routes", () => {
             expect(tidalStreamingService.getBrowseMix).toHaveBeenCalledWith(
                 "user-1",
                 "mix-001",
-                "HIGH"
+                "HIGH",
             );
         });
     });
@@ -489,7 +497,7 @@ describe("browse tidal routes", () => {
     describe("caching", () => {
         it("second call to /tidal/home returns cached data (service called once)", async () => {
             tidalStreamingService.getHomeShelves.mockResolvedValue(
-                SHELF_FIXTURE
+                SHELF_FIXTURE,
             );
 
             const first = await request(app)
@@ -504,7 +512,7 @@ describe("browse tidal routes", () => {
             expect(second.status).toBe(200);
             expect(first.body).toEqual(second.body);
             expect(tidalStreamingService.getHomeShelves).toHaveBeenCalledTimes(
-                1
+                1,
             );
         });
 
@@ -527,7 +535,7 @@ describe("browse tidal routes", () => {
 
         it("second call to /tidal/playlist/:id returns cached data (service called once)", async () => {
             tidalStreamingService.getBrowsePlaylist.mockResolvedValue(
-                PLAYLIST_DETAIL_FIXTURE
+                PLAYLIST_DETAIL_FIXTURE,
             );
 
             const first = await request(app)
@@ -542,13 +550,13 @@ describe("browse tidal routes", () => {
             expect(second.status).toBe(200);
             expect(first.body).toEqual(second.body);
             expect(
-                tidalStreamingService.getBrowsePlaylist
+                tidalStreamingService.getBrowsePlaylist,
             ).toHaveBeenCalledTimes(1);
         });
 
         it("second call to /tidal/mix/:id returns cached data (service called once)", async () => {
             tidalStreamingService.getBrowseMix.mockResolvedValue(
-                MIX_DETAIL_FIXTURE
+                MIX_DETAIL_FIXTURE,
             );
 
             const first = await request(app)
@@ -574,7 +582,7 @@ describe("browse tidal routes", () => {
 
             expect(res.status).toBe(401);
             expect(res.body).toEqual(
-                expect.objectContaining({ error: expect.any(String) })
+                expect.objectContaining({ error: expect.any(String) }),
             );
         });
     });
@@ -584,7 +592,7 @@ describe("browse tidal routes", () => {
     describe("500 on service errors", () => {
         it("returns 500 when getHomeShelves throws", async () => {
             tidalStreamingService.getHomeShelves.mockRejectedValueOnce(
-                new Error("sidecar down")
+                new Error("sidecar down"),
             );
 
             const res = await request(app)
@@ -593,13 +601,13 @@ describe("browse tidal routes", () => {
 
             expect(res.status).toBe(500);
             expect(res.body).toEqual(
-                expect.objectContaining({ error: expect.any(String) })
+                expect.objectContaining({ error: expect.any(String) }),
             );
         });
 
         it("returns 500 when getBrowsePlaylist throws", async () => {
             tidalStreamingService.getBrowsePlaylist.mockRejectedValueOnce(
-                new Error("sidecar down")
+                new Error("sidecar down"),
             );
 
             const res = await request(app)
@@ -608,7 +616,7 @@ describe("browse tidal routes", () => {
 
             expect(res.status).toBe(500);
             expect(res.body).toEqual(
-                expect.objectContaining({ error: expect.any(String) })
+                expect.objectContaining({ error: expect.any(String) }),
             );
         });
     });

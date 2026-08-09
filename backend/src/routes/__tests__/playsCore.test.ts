@@ -137,7 +137,7 @@ describe("plays routes integration", () => {
             expect.objectContaining({
                 error: "Invalid request",
                 details: expect.any(Array),
-            })
+            }),
         );
         expect(mockTrackFindUnique).not.toHaveBeenCalled();
         expect(mockPlayCreate).not.toHaveBeenCalled();
@@ -432,7 +432,9 @@ describe("plays routes integration", () => {
             .set(AUTH_HEADER, AUTH_VALUE);
 
         expect(summaryRes.status).toBe(500);
-        expect(summaryRes.body).toEqual({ error: "Failed to get play history summary" });
+        expect(summaryRes.body).toEqual({
+            error: "Failed to get play history summary",
+        });
 
         mockPlayDeleteMany.mockRejectedValueOnce(new Error("delete failed"));
 
@@ -441,7 +443,9 @@ describe("plays routes integration", () => {
             .set(AUTH_HEADER, AUTH_VALUE);
 
         expect(historyRes.status).toBe(500);
-        expect(historyRes.body).toEqual({ error: "Failed to clear play history" });
+        expect(historyRes.body).toEqual({
+            error: "Failed to clear play history",
+        });
         expect(mockLoggerError).toHaveBeenCalledTimes(4);
     });
 });

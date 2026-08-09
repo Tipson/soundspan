@@ -8,7 +8,7 @@ import {
 } from "../releaseContracts";
 
 function makeLidarrRelease(
-    overrides: Partial<LidarrRelease & { infoUrl?: string | null }> = {}
+    overrides: Partial<LidarrRelease & { infoUrl?: string | null }> = {},
 ): LidarrRelease & { infoUrl?: string | null } {
     return {
         guid: overrides.guid ?? "guid-1",
@@ -28,7 +28,7 @@ function makeLidarrRelease(
 }
 
 function makeCalendarRelease(
-    overrides: Partial<CalendarRelease> = {}
+    overrides: Partial<CalendarRelease> = {},
 ): CalendarRelease {
     return {
         id: overrides.id ?? 1,
@@ -78,7 +78,7 @@ describe("releaseContracts", () => {
                     rejections: undefined,
                     approved: false,
                     rejected: true,
-                })
+                }),
             );
 
             expect(mapped).toEqual({
@@ -111,7 +111,7 @@ describe("releaseContracts", () => {
                     infoUrl: "https://example.com/release",
                     quality: { quality: { name: "FLAC" } },
                     rejections: ["seeders-too-low"],
-                })
+                }),
             );
 
             expect(mapped.seeders).toBe(42);
@@ -134,7 +134,7 @@ describe("releaseContracts", () => {
                     hasFile: false,
                 }),
                 now,
-                new Set()
+                new Set(),
             );
 
             expect(mapped.status).toBe("upcoming");
@@ -152,7 +152,7 @@ describe("releaseContracts", () => {
                     hasFile: true,
                 }),
                 now,
-                new Set()
+                new Set(),
             );
             const viaLibrarySet = mapCalendarReleaseToRadarItem(
                 makeCalendarRelease({
@@ -162,7 +162,7 @@ describe("releaseContracts", () => {
                     hasFile: false,
                 }),
                 now,
-                new Set(["album-b"])
+                new Set(["album-b"]),
             );
 
             expect(viaHasFile.status).toBe("available");
@@ -183,7 +183,7 @@ describe("releaseContracts", () => {
                     hasFile: false,
                 }),
                 now,
-                new Set()
+                new Set(),
             );
 
             expect(mapped.status).toBe("released");
@@ -202,15 +202,31 @@ describe("releaseContracts", () => {
         it("sorts ascending without mutating the source array", () => {
             const sorted = sortByReleaseDateAsc(input);
 
-            expect(sorted.map((item) => item.id)).toEqual(["early", "middle", "late"]);
-            expect(input.map((item) => item.id)).toEqual(["middle", "early", "late"]);
+            expect(sorted.map((item) => item.id)).toEqual([
+                "early",
+                "middle",
+                "late",
+            ]);
+            expect(input.map((item) => item.id)).toEqual([
+                "middle",
+                "early",
+                "late",
+            ]);
         });
 
         it("sorts descending without mutating the source array", () => {
             const sorted = sortByReleaseDateDesc(input);
 
-            expect(sorted.map((item) => item.id)).toEqual(["late", "middle", "early"]);
-            expect(input.map((item) => item.id)).toEqual(["middle", "early", "late"]);
+            expect(sorted.map((item) => item.id)).toEqual([
+                "late",
+                "middle",
+                "early",
+            ]);
+            expect(input.map((item) => item.id)).toEqual([
+                "middle",
+                "early",
+                "late",
+            ]);
         });
     });
 });

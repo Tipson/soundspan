@@ -56,7 +56,9 @@ describe("artistEnrichment runtime", () => {
         jest.doMock("../../services/lastfm", () => ({ lastFmService }));
         jest.doMock("../../services/fanart", () => ({ fanartService }));
         jest.doMock("../../services/deezer", () => ({ deezerService }));
-        jest.doMock("../../services/musicbrainz", () => ({ musicBrainzService }));
+        jest.doMock("../../services/musicbrainz", () => ({
+            musicBrainzService,
+        }));
         jest.doMock("../../services/coverArt", () => ({ coverArtService }));
         jest.doMock("../../utils/redis", () => ({ redisClient }));
         jest.doMock("../../services/imageStorage", () => imageStorage);
@@ -64,7 +66,9 @@ describe("artistEnrichment runtime", () => {
         const { enrichSimilarArtist } = require("../artistEnrichment");
 
         return {
-            enrichSimilarArtist: enrichSimilarArtist as (artist: any) => Promise<void>,
+            enrichSimilarArtist: enrichSimilarArtist as (
+                artist: any,
+            ) => Promise<void>,
             prisma,
             logger,
             wikidataService,
@@ -94,7 +98,7 @@ describe("artistEnrichment runtime", () => {
                 if (where?.mbid === "real-mbid-1") return null;
                 if (where?.mbid === "sim-mbid-1") return { id: "sim-artist-1" };
                 return null;
-            }
+            },
         );
         runtime.prisma.artist.findFirst.mockResolvedValueOnce({
             id: "sim-artist-2",
@@ -117,7 +121,7 @@ describe("artistEnrichment runtime", () => {
 
         runtime.imageStorage.isNativePath.mockReturnValue(false);
         runtime.imageStorage.downloadAndStoreImage.mockResolvedValueOnce(
-            "/images/artists/a1.jpg"
+            "/images/artists/a1.jpg",
         );
 
         runtime.prisma.album.findMany.mockResolvedValueOnce([
@@ -125,14 +129,18 @@ describe("artistEnrichment runtime", () => {
             { id: "album-2", rgMbid: null, title: "Album Two" },
         ]);
         runtime.coverArtService.getCoverArt.mockResolvedValueOnce(
-            "https://covers/rg-1.jpg"
+            "https://covers/rg-1.jpg",
         );
 
-        const artist = { id: "a1", name: "Artist One", mbid: "temp-123" } as any;
+        const artist = {
+            id: "a1",
+            name: "Artist One",
+            mbid: "temp-123",
+        } as any;
         await runtime.enrichSimilarArtist(artist);
 
         const updateCalls = runtime.prisma.artist.update.mock.calls.map(
-            (call: any[]) => call[0]
+            (call: any[]) => call[0],
         );
         expect(updateCalls).toEqual(
             expect.arrayContaining([
@@ -144,11 +152,11 @@ describe("artistEnrichment runtime", () => {
                     where: { id: "a1" },
                     data: { mbid: "real-mbid-1" },
                 }),
-            ])
+            ]),
         );
 
         const completedUpdate = updateCalls.find(
-            (entry: any) => entry?.data?.enrichmentStatus === "completed"
+            (entry: any) => entry?.data?.enrichmentStatus === "completed",
         );
         expect(completedUpdate).toBeDefined();
         expect(completedUpdate.data).toEqual(
@@ -157,10 +165,13 @@ describe("artistEnrichment runtime", () => {
                 heroUrl: "/images/artists/a1.jpg",
                 genres: ["rock", "indie"],
                 enrichmentStatus: "completed",
-            })
+            }),
         );
         expect(completedUpdate.data.similarArtistsJson).toEqual([
-            expect.objectContaining({ name: "Similar Artist 1", mbid: "sim-mbid-1" }),
+            expect.objectContaining({
+                name: "Similar Artist 1",
+                mbid: "sim-mbid-1",
+            }),
             expect.objectContaining({ name: "Similar Artist 2", mbid: null }),
         ]);
 
@@ -168,7 +179,9 @@ describe("artistEnrichment runtime", () => {
             where: { fromArtistId: "a1" },
         });
         expect(runtime.prisma.similarArtist.upsert).toHaveBeenCalledTimes(2);
-        expect(runtime.coverArtService.getCoverArt).toHaveBeenCalledWith("rg-1");
+        expect(runtime.coverArtService.getCoverArt).toHaveBeenCalledWith(
+            "rg-1",
+        );
         expect(runtime.prisma.album.update).toHaveBeenCalledWith({
             where: { id: "album-1" },
             data: { coverUrl: "https://covers/rg-1.jpg" },
@@ -176,7 +189,7 @@ describe("artistEnrichment runtime", () => {
         expect(runtime.redisClient.setEx).toHaveBeenCalledWith(
             "hero:a1",
             7 * 24 * 60 * 60,
-            "/images/artists/a1.jpg"
+            "/images/artists/a1.jpg",
         );
     });
 
@@ -200,9 +213,11 @@ describe("artistEnrichment runtime", () => {
         await runtime.enrichSimilarArtist(artist);
 
         expect(runtime.imageStorage.isNativePath).toHaveBeenCalledWith(
-            "/assets/artist/native-cover.jpg"
+            "/assets/artist/native-cover.jpg",
         );
-        expect(runtime.imageStorage.downloadAndStoreImage).not.toHaveBeenCalled();
+        expect(
+            runtime.imageStorage.downloadAndStoreImage,
+        ).not.toHaveBeenCalled();
 
         const completed = runtime.prisma.artist.update.mock.calls
             .map((call: any[]) => call[0] as any)
@@ -214,12 +229,12 @@ describe("artistEnrichment runtime", () => {
                 heroUrl: "/assets/artist/native-cover.jpg",
                 genres: ["ambient"],
                 enrichmentStatus: "completed",
-            })
+            }),
         );
         expect(runtime.redisClient.setEx).toHaveBeenCalledWith(
             "hero:a8",
             7 * 24 * 60 * 60,
-            "/assets/artist/native-cover.jpg"
+            "/assets/artist/native-cover.jpg",
         );
     });
 
@@ -230,20 +245,30 @@ describe("artistEnrichment runtime", () => {
             { id: "real-mbid-2" },
         ]);
         runtime.prisma.artist.findUnique.mockResolvedValueOnce(null);
-        runtime.prisma.artist.update.mockImplementation(async ({ data }: any) => {
-            if (data?.mbid === "real-mbid-2") {
-                const error: any = new Error("Unique constraint failed on `mbid`");
-                error.code = "P2002";
-                throw error;
-            }
-            return {};
-        });
+        runtime.prisma.artist.update.mockImplementation(
+            async ({ data }: any) => {
+                if (data?.mbid === "real-mbid-2") {
+                    const error: any = new Error(
+                        "Unique constraint failed on `mbid`",
+                    );
+                    error.code = "P2002";
+                    throw error;
+                }
+                return {};
+            },
+        );
 
-        const artist = { id: "a2", name: "Artist Two", mbid: "temp-456" } as any;
-        await expect(runtime.enrichSimilarArtist(artist)).resolves.toBeUndefined();
+        const artist = {
+            id: "a2",
+            name: "Artist Two",
+            mbid: "temp-456",
+        } as any;
+        await expect(
+            runtime.enrichSimilarArtist(artist),
+        ).resolves.toBeUndefined();
 
         const completedCall = runtime.prisma.artist.update.mock.calls.find(
-            (call: any[]) => call?.[0]?.data?.enrichmentStatus === "completed"
+            (call: any[]) => call?.[0]?.data?.enrichmentStatus === "completed",
         );
         expect(completedCall).toBeDefined();
     });
@@ -307,7 +332,7 @@ describe("artistEnrichment runtime", () => {
         });
         runtime.fanartService.getArtistImage.mockResolvedValueOnce(null);
         runtime.deezerService.getArtistImage.mockResolvedValueOnce(
-            "https://deezer/images/artist.jpg"
+            "https://deezer/images/artist.jpg",
         );
         runtime.imageStorage.isNativePath.mockReturnValue(false);
         runtime.imageStorage.downloadAndStoreImage.mockResolvedValueOnce(null);
@@ -320,26 +345,28 @@ describe("artistEnrichment runtime", () => {
         await runtime.enrichSimilarArtist(artist);
 
         expect(runtime.fanartService.getArtistImage).toHaveBeenCalledWith(
-            "real-artist-mbid"
+            "real-artist-mbid",
         );
         expect(runtime.deezerService.getArtistImage).toHaveBeenCalledWith(
-            "Artist Three"
+            "Artist Three",
         );
         expect(runtime.imageStorage.downloadAndStoreImage).toHaveBeenCalledWith(
             "https://deezer/images/artist.jpg",
             "a3",
-            "artist"
+            "artist",
         );
 
         const completedCall = runtime.prisma.artist.update.mock.calls
             .map((c: any[]) => c[0])
-            .find((entry: any) => entry?.data?.enrichmentStatus === "completed");
+            .find(
+                (entry: any) => entry?.data?.enrichmentStatus === "completed",
+            );
         expect(completedCall.data).toEqual(
             expect.objectContaining({
                 summary: "Last.fm summary",
                 heroUrl: "https://deezer/images/artist.jpg",
                 genres: ["electronic"],
-            })
+            }),
         );
     });
 
@@ -349,12 +376,14 @@ describe("artistEnrichment runtime", () => {
         runtime.musicBrainzService.searchArtist.mockResolvedValueOnce([
             { id: "already-taken-mbid" },
         ]);
-        runtime.prisma.artist.findUnique.mockImplementation(async ({ where }: any) => {
-            if (where?.mbid === "already-taken-mbid") {
-                return { id: "other-artist-id" };
-            }
-            return null;
-        });
+        runtime.prisma.artist.findUnique.mockImplementation(
+            async ({ where }: any) => {
+                if (where?.mbid === "already-taken-mbid") {
+                    return { id: "other-artist-id" };
+                }
+                return null;
+            },
+        );
 
         const artist = {
             id: "a5",
@@ -382,7 +411,7 @@ describe("artistEnrichment runtime", () => {
 
         expect(runtime.lastFmService.getArtistInfo).toHaveBeenCalledWith(
             "Shared Mbid Artist",
-            "already-taken-mbid"
+            "already-taken-mbid",
         );
     });
 
@@ -391,11 +420,13 @@ describe("artistEnrichment runtime", () => {
 
         runtime.lastFmService.getArtistInfo.mockResolvedValueOnce({
             bio: { summary: "Artist bio summary" },
-            image: [{ size: "extralarge", "#text": "https://lastfm/artist.jpg" }],
+            image: [
+                { size: "extralarge", "#text": "https://lastfm/artist.jpg" },
+            ],
             tags: { tag: [{ name: "rock" }, { name: "metal" }] },
         });
         runtime.lastFmService.getSimilarArtists.mockRejectedValueOnce(
-            new Error("similar lookup failed")
+            new Error("similar lookup failed"),
         );
 
         const artist = {
@@ -420,7 +451,9 @@ describe("artistEnrichment runtime", () => {
 
         runtime.lastFmService.getArtistInfo.mockResolvedValueOnce({
             bio: { summary: "Bio summary with genres" },
-            image: [{ size: "extralarge", "#text": "https://lastfm/artist.jpg" }],
+            image: [
+                { size: "extralarge", "#text": "https://lastfm/artist.jpg" },
+            ],
             tags: { tag: [{ name: "rock" }] },
         });
         runtime.prisma.album.findMany.mockResolvedValueOnce([
@@ -431,7 +464,7 @@ describe("artistEnrichment runtime", () => {
             },
         ]);
         runtime.coverArtService.getCoverArt.mockRejectedValueOnce(
-            new Error("cover lookup failed")
+            new Error("cover lookup failed"),
         );
 
         const artist = {
@@ -441,7 +474,9 @@ describe("artistEnrichment runtime", () => {
         } as any;
         await runtime.enrichSimilarArtist(artist);
 
-        expect(runtime.coverArtService.getCoverArt).toHaveBeenCalledWith("rg-cover-miss");
+        expect(runtime.coverArtService.getCoverArt).toHaveBeenCalledWith(
+            "rg-cover-miss",
+        );
         expect(runtime.prisma.album.update).not.toHaveBeenCalled();
         const completed = runtime.prisma.artist.update.mock.calls
             .map((call: any[]) => call[0] as any)
@@ -461,10 +496,10 @@ describe("artistEnrichment runtime", () => {
         runtime.lastFmService.getArtistInfo.mockResolvedValueOnce(null);
         runtime.imageStorage.isNativePath.mockReturnValue(false);
         runtime.imageStorage.downloadAndStoreImage.mockResolvedValueOnce(
-            "/images/artists/a10.jpg"
+            "/images/artists/a10.jpg",
         );
         runtime.redisClient.setEx.mockRejectedValueOnce(
-            new Error("redis unavailable")
+            new Error("redis unavailable"),
         );
 
         const artist = {
@@ -483,24 +518,26 @@ describe("artistEnrichment runtime", () => {
         expect(runtime.redisClient.setEx).toHaveBeenCalledWith(
             "hero:a10",
             7 * 24 * 60 * 60,
-            "/images/artists/a10.jpg"
+            "/images/artists/a10.jpg",
         );
     });
 
     it("marks enrichment failed and rethrows when completion write fails", async () => {
         const runtime = setupRuntime();
 
-        runtime.prisma.artist.update.mockImplementation(async ({ data }: any) => {
-            if (data?.enrichmentStatus === "completed") {
-                throw new Error("final write failed");
-            }
-            return {};
-        });
+        runtime.prisma.artist.update.mockImplementation(
+            async ({ data }: any) => {
+                if (data?.enrichmentStatus === "completed") {
+                    throw new Error("final write failed");
+                }
+                return {};
+            },
+        );
 
         const artist = { id: "a4", name: "Artist Four", mbid: "real-4" } as any;
 
         await expect(runtime.enrichSimilarArtist(artist)).rejects.toThrow(
-            "final write failed"
+            "final write failed",
         );
 
         expect(runtime.prisma.artist.update).toHaveBeenCalledWith({
@@ -509,7 +546,7 @@ describe("artistEnrichment runtime", () => {
         });
         expect(runtime.logger.error).toHaveBeenCalledWith(
             "[ENRICH Artist Four] ENRICHMENT FAILED:",
-            "final write failed"
+            "final write failed",
         );
     });
 });

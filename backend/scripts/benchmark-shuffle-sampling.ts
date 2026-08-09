@@ -30,20 +30,36 @@ const LIMITS = [100, 1000];
 const UNIFORMITY_DRAWS = 2000;
 const UNIFORMITY_BUCKETS = 20;
 
-type Stats = { p50: number; p95: number; min: number; max: number; mean: number };
+type Stats = {
+    p50: number;
+    p95: number;
+    min: number;
+    max: number;
+    mean: number;
+};
 
 function stats(durationsMs: number[]): Stats {
     const sorted = [...durationsMs].sort((a, b) => a - b);
-    const at = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+    const at = (p: number) =>
+        sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
     const mean = sorted.reduce((a, b) => a + b, 0) / sorted.length;
-    return { p50: at(0.5), p95: at(0.95), min: sorted[0], max: sorted[sorted.length - 1], mean };
+    return {
+        p50: at(0.5),
+        p95: at(0.95),
+        min: sorted[0],
+        max: sorted[sorted.length - 1],
+        mean,
+    };
 }
 
 function fmt(s: Stats): string {
     return `p50=${s.p50.toFixed(2)}ms p95=${s.p95.toFixed(2)}ms min=${s.min.toFixed(2)}ms max=${s.max.toFixed(2)}ms mean=${s.mean.toFixed(2)}ms`;
 }
 
-async function timeRuns(runs: number, fn: () => Promise<unknown>): Promise<Stats> {
+async function timeRuns(
+    runs: number,
+    fn: () => Promise<unknown>,
+): Promise<Stats> {
     const durations: number[] = [];
     for (let i = 0; i < runs; i++) {
         const start = performance.now();
@@ -85,7 +101,10 @@ async function afterQuery(limit: number) {
 }
 
 /** Single-row draw used only by the uniformity check (needs the random value too). */
-async function afterQuerySingleWithValue(): Promise<{ id: string; random: number }> {
+async function afterQuerySingleWithValue(): Promise<{
+    id: string;
+    random: number;
+}> {
     const pivot = Math.random();
     const page = await prisma.track.findMany({
         where: { random: { gte: pivot } },
@@ -112,9 +131,13 @@ async function acquireLock(): Promise<void> {
         } catch (err) {
             if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
             if (Date.now() > deadline) {
-                throw new Error(`Timed out after 20min waiting for benchmark lock at ${LOCK_DIR}`);
+                throw new Error(
+                    `Timed out after 20min waiting for benchmark lock at ${LOCK_DIR}`,
+                );
             }
-            console.log(`  (benchmark lock held by another process, waiting ${LOCK_POLL_MS}ms...)`);
+            console.log(
+                `  (benchmark lock held by another process, waiting ${LOCK_POLL_MS}ms...)`,
+            );
             await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MS));
         }
     }
@@ -124,14 +147,23 @@ function releaseLock(): void {
     try {
         fs.rmdirSync(LOCK_DIR);
     } catch (err) {
-        console.error(`Warning: failed to release benchmark lock at ${LOCK_DIR}:`, err);
+        console.error(
+            `Warning: failed to release benchmark lock at ${LOCK_DIR}:`,
+            err,
+        );
     }
 }
 
 function gitInfo(): string {
     try {
-        const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: __dirname }).toString().trim();
-        const sha = execSync("git rev-parse --short HEAD", { cwd: __dirname }).toString().trim();
+        const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+            cwd: __dirname,
+        })
+            .toString()
+            .trim();
+        const sha = execSync("git rev-parse --short HEAD", { cwd: __dirname })
+            .toString()
+            .trim();
         return `${branch}@${sha}`;
     } catch {
         return "unknown (git unavailable)";
@@ -151,26 +183,33 @@ async function main() {
     console.log(`Lock acquired: ${LOCK_DIR}`);
 
     try {
-        console.log("\n--- BEFORE: SELECT id FROM \"Track\" ORDER BY RANDOM() LIMIT n ---");
+        console.log(
+            '\n--- BEFORE: SELECT id FROM "Track" ORDER BY RANDOM() LIMIT n ---',
+        );
         for (const limit of LIMITS) {
             const s = await timeRuns(RUNS_PER_QUERY, () => beforeQuery(limit));
             console.log(`  LIMIT ${limit}: ${fmt(s)}  (n=${RUNS_PER_QUERY})`);
         }
 
-        console.log("\n--- AFTER: indexed random-pivot query pair (gte pivot + lt-pivot top-up) ---");
+        console.log(
+            "\n--- AFTER: indexed random-pivot query pair (gte pivot + lt-pivot top-up) ---",
+        );
         for (const limit of LIMITS) {
             const s = await timeRuns(RUNS_PER_QUERY, () => afterQuery(limit));
             console.log(`  LIMIT ${limit}: ${fmt(s)}  (n=${RUNS_PER_QUERY})`);
         }
 
         console.log(
-            `\n--- Uniformity sanity check: ${UNIFORMITY_DRAWS} single-row draws, bucketed into ${UNIFORMITY_BUCKETS} equal-width random-value buckets ---`
+            `\n--- Uniformity sanity check: ${UNIFORMITY_DRAWS} single-row draws, bucketed into ${UNIFORMITY_BUCKETS} equal-width random-value buckets ---`,
         );
         const buckets = new Array(UNIFORMITY_BUCKETS).fill(0);
         const idCounts = new Map<string, number>();
         for (let i = 0; i < UNIFORMITY_DRAWS; i++) {
             const row = await afterQuerySingleWithValue();
-            const bucket = Math.min(UNIFORMITY_BUCKETS - 1, Math.floor(row.random * UNIFORMITY_BUCKETS));
+            const bucket = Math.min(
+                UNIFORMITY_BUCKETS - 1,
+                Math.floor(row.random * UNIFORMITY_BUCKETS),
+            );
             buckets[bucket]++;
             idCounts.set(row.id, (idCounts.get(row.id) ?? 0) + 1);
         }
@@ -180,17 +219,17 @@ async function main() {
         console.log(`  bucket counts: [${buckets.join(", ")}]`);
         console.log(`  expected/bucket: ${expectedPerBucket.toFixed(1)}`);
         console.log(
-            `  max-bucket/expected ratio: ${(maxBucket / expectedPerBucket).toFixed(2)}  min-bucket/expected ratio: ${(minBucket / expectedPerBucket).toFixed(2)}`
+            `  max-bucket/expected ratio: ${(maxBucket / expectedPerBucket).toFixed(2)}  min-bucket/expected ratio: ${(minBucket / expectedPerBucket).toFixed(2)}`,
         );
         const distinctIds = idCounts.size;
         const maxRepeat = Math.max(...idCounts.values());
         console.log(
-            `  distinct track ids drawn: ${distinctIds} / ${UNIFORMITY_DRAWS} draws; max single-id repeat count: ${maxRepeat}`
+            `  distinct track ids drawn: ${distinctIds} / ${UNIFORMITY_DRAWS} draws; max single-id repeat count: ${maxRepeat}`,
         );
         console.log(
-            "  (cheap statistical honesty, not a proof: with a uniform DB-side random() and no bias in the pivot/top-up split, no bucket should dominate; a healthy run stays within roughly ±30% of the expected/bucket value and shows no single track id repeating drastically more than the ~"
-            + (UNIFORMITY_DRAWS / corpusSize).toFixed(2)
-            + " expected average.)"
+            "  (cheap statistical honesty, not a proof: with a uniform DB-side random() and no bias in the pivot/top-up split, no bucket should dominate; a healthy run stays within roughly ±30% of the expected/bucket value and shows no single track id repeating drastically more than the ~" +
+                (UNIFORMITY_DRAWS / corpusSize).toFixed(2) +
+                " expected average.)",
         );
     } finally {
         releaseLock();

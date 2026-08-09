@@ -60,17 +60,17 @@ describe("createIORedisClient", () => {
                 connectTimeout: 5000,
                 enableReadyCheck: true,
                 lazyConnect: false,
-            })
+            }),
         );
 
         expect(options.retryStrategy(1)).toBe(250);
         expect(options.retryStrategy(2)).toBe(500);
         expect(options.retryStrategy(9)).toBe(30000);
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ioredis:sync] Reconnect attempt 1 – retrying in 250ms"
+            "[ioredis:sync] Reconnect attempt 1 – retrying in 250ms",
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ioredis:sync] Reconnect attempt 9 – retrying in 30000ms"
+            "[ioredis:sync] Reconnect attempt 9 – retrying in 30000ms",
         );
     });
 
@@ -82,7 +82,7 @@ describe("createIORedisClient", () => {
         expect(client.on).toHaveBeenCalledWith("close", expect.any(Function));
         expect(client.on).toHaveBeenCalledWith(
             "reconnecting",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(client.on).toHaveBeenCalledWith("ready", expect.any(Function));
 
@@ -91,12 +91,14 @@ describe("createIORedisClient", () => {
         handlers.reconnecting(1500);
         handlers.ready();
 
-        expect(mockLoggerError).toHaveBeenCalledWith("[ioredis:events] Error: boom");
-        expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ioredis:events] Connection closed"
+        expect(mockLoggerError).toHaveBeenCalledWith(
+            "[ioredis:events] Error: boom",
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ioredis:events] Reconnecting in 1500ms..."
+            "[ioredis:events] Connection closed",
+        );
+        expect(mockLoggerDebug).toHaveBeenCalledWith(
+            "[ioredis:events] Reconnecting in 1500ms...",
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith("[ioredis:events] Ready");
     });

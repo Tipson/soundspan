@@ -37,13 +37,10 @@ router.get(
                 await trackMappingService.getMappingsForAlbum(albumId);
             res.json({ mappings });
         } catch (err) {
-            logger.error(
-                "[TrackMappings] Failed to get album mappings:",
-                err
-            );
+            logger.error("[TrackMappings] Failed to get album mappings:", err);
             res.status(500).json({ error: "Failed to get album mappings" });
         }
-    }
+    },
 );
 
 const mappingPayloadSchema = z
@@ -57,12 +54,14 @@ const mappingPayloadSchema = z
     .refine(
         (mapping) =>
             Boolean(
-                mapping.trackId || mapping.trackTidalId || mapping.trackYtMusicId
+                mapping.trackId ||
+                mapping.trackTidalId ||
+                mapping.trackYtMusicId,
             ),
         {
             message:
                 "At least one linkage key is required: trackId, trackTidalId, or trackYtMusicId",
-        }
+        },
     );
 
 const batchCreateSchema = z.object({
@@ -132,7 +131,10 @@ router.post(
             if (!parsed.success) {
                 return res
                     .status(400)
-                    .json({ error: "Invalid mappings array", details: parsed.error.issues });
+                    .json({
+                        error: "Invalid mappings array",
+                        details: parsed.error.issues,
+                    });
             }
 
             const linkageKeys = new Set<string>();
@@ -148,23 +150,24 @@ router.post(
 
             const results = [];
             for (const mapping of parsed.data.mappings) {
-                const created = await trackMappingService.createMapping(mapping);
+                const created =
+                    await trackMappingService.createMapping(mapping);
                 results.push(created);
             }
 
             logger.info(
-                `[TrackMappings] Admin user ${req.user?.id ?? "unknown"} created ${results.length} mapping(s)`
+                `[TrackMappings] Admin user ${req.user?.id ?? "unknown"} created ${results.length} mapping(s)`,
             );
 
             res.json({ mappings: results });
         } catch (err) {
             logger.error(
                 "[TrackMappings] Failed to batch create mappings:",
-                err
+                err,
             );
             res.status(500).json({ error: "Failed to create mappings" });
         }
-    }
+    },
 );
 
 export default router;

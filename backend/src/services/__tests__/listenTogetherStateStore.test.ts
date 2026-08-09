@@ -73,7 +73,9 @@ describe("listenTogetherStateStore", () => {
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { listenTogetherStateStore } = require("../listenTogetherStateStore");
+        const {
+            listenTogetherStateStore,
+        } = require("../listenTogetherStateStore");
 
         return {
             listenTogetherStateStore,
@@ -84,23 +86,24 @@ describe("listenTogetherStateStore", () => {
     }
 
     it("does not access redis when state store is disabled", async () => {
-        const { listenTogetherStateStore, createIORedisClient } = loadStateStore({
-            enabled: false,
-        });
+        const { listenTogetherStateStore, createIORedisClient } =
+            loadStateStore({
+                enabled: false,
+            });
 
         expect(listenTogetherStateStore.isEnabled()).toBe(false);
         await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
+            listenTogetherStateStore.getSnapshot("group-1"),
         ).resolves.toBeNull();
         await expect(
             listenTogetherStateStore.setSnapshot("group-1", {
                 id: "group-1",
                 playback: {},
                 members: [],
-            })
+            }),
         ).resolves.toBeUndefined();
         await expect(
-            listenTogetherStateStore.deleteSnapshot("group-1")
+            listenTogetherStateStore.deleteSnapshot("group-1"),
         ).resolves.toBeUndefined();
         expect(createIORedisClient).not.toHaveBeenCalled();
     });
@@ -118,7 +121,7 @@ describe("listenTogetherStateStore", () => {
         });
 
         await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
+            listenTogetherStateStore.getSnapshot("group-1"),
         ).resolves.toEqual(snapshot);
         await listenTogetherStateStore.setSnapshot("group-1", snapshot);
 
@@ -130,32 +133,33 @@ describe("listenTogetherStateStore", () => {
             JSON.stringify(snapshot),
             "123",
             "12",
-            "34567"
+            "34567",
         );
     });
 
     it("ignores malformed or mismatched snapshots and logs warnings", async () => {
-        const { listenTogetherStateStore, logger, redisClient } = loadStateStore({
-            getValue: JSON.stringify({
-                id: "other-group",
-                playback: {},
-                members: [],
-            }),
-        });
+        const { listenTogetherStateStore, logger, redisClient } =
+            loadStateStore({
+                getValue: JSON.stringify({
+                    id: "other-group",
+                    playback: {},
+                    members: [],
+                }),
+            });
 
         await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
+            listenTogetherStateStore.getSnapshot("group-1"),
         ).resolves.toBeNull();
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("mismatched id")
+            expect.stringContaining("mismatched id"),
         );
 
         redisClient.get.mockResolvedValueOnce(JSON.stringify({ foo: "bar" }));
         await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
+            listenTogetherStateStore.getSnapshot("group-1"),
         ).resolves.toBeNull();
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("malformed snapshot")
+            expect.stringContaining("malformed snapshot"),
         );
     });
 
@@ -168,26 +172,26 @@ describe("listenTogetherStateStore", () => {
         const snapshot = { id: "group-1", playback: {}, members: [] };
 
         await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
+            listenTogetherStateStore.getSnapshot("group-1"),
         ).resolves.toBeNull();
         await expect(
-            listenTogetherStateStore.setSnapshot("group-1", snapshot)
+            listenTogetherStateStore.setSnapshot("group-1", snapshot),
         ).resolves.toBeUndefined();
         await expect(
-            listenTogetherStateStore.deleteSnapshot("group-1")
+            listenTogetherStateStore.deleteSnapshot("group-1"),
         ).resolves.toBeUndefined();
 
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining("Failed to fetch snapshot"),
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining("Failed to persist snapshot"),
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining("Failed to delete snapshot"),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -214,7 +218,7 @@ describe("listenTogetherStateStore", () => {
             JSON.stringify(snapshot),
             "42",
             "99",
-            "123456789"
+            "123456789",
         );
     });
 
@@ -235,19 +239,21 @@ describe("listenTogetherStateStore", () => {
         });
 
         await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
-        ).resolves.toBeNull();
-
-        redisClient.get.mockResolvedValueOnce(JSON.stringify({ id: "group-1" }));
-        await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
+            listenTogetherStateStore.getSnapshot("group-1"),
         ).resolves.toBeNull();
 
         redisClient.get.mockResolvedValueOnce(
-            JSON.stringify({ id: "group-1", playback: {}, members: {} })
+            JSON.stringify({ id: "group-1" }),
         );
         await expect(
-            listenTogetherStateStore.getSnapshot("group-1")
+            listenTogetherStateStore.getSnapshot("group-1"),
+        ).resolves.toBeNull();
+
+        redisClient.get.mockResolvedValueOnce(
+            JSON.stringify({ id: "group-1", playback: {}, members: {} }),
+        );
+        await expect(
+            listenTogetherStateStore.getSnapshot("group-1"),
         ).resolves.toBeNull();
     });
 

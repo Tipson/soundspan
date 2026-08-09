@@ -57,9 +57,8 @@ async function createTrackFixture(): Promise<FixtureHandle> {
         "DATABASE_URL is required to create smoke fixtures",
     );
 
-    const { createPrismaClient } = await import(
-        "../src/utils/prismaClientFactory"
-    );
+    const { createPrismaClient } =
+        await import("../src/utils/prismaClientFactory");
     const prisma = createPrismaClient();
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 
@@ -130,7 +129,10 @@ async function createTrackFixture(): Promise<FixtureHandle> {
     }
 }
 
-async function fetchJson(path: string, params?: URLSearchParams): Promise<JsonRecord> {
+async function fetchJson(
+    path: string,
+    params?: URLSearchParams,
+): Promise<JsonRecord> {
     const url = new URL(path, baseUrl);
     if (params) {
         url.search = params.toString();
@@ -161,7 +163,10 @@ async function fetchRaw(
 }
 
 function buildSubsonicParams(clientId: string): URLSearchParams {
-    assertCondition(subsonicUser, "SMOKE_SUBSONIC_USER is required for Subsonic smoke checks");
+    assertCondition(
+        subsonicUser,
+        "SMOKE_SUBSONIC_USER is required for Subsonic smoke checks",
+    );
     assertCondition(
         subsonicPassword,
         "SMOKE_SUBSONIC_PASSWORD is required for Subsonic smoke checks",
@@ -237,11 +242,17 @@ function buildTrackContext(searchEnvelope: JsonRecord): TrackContext | null {
 
 async function runHealthCheck(): Promise<void> {
     const payload = await fetchJson("/health");
-    assertCondition(payload.status === "ok", `Unexpected /health payload: ${JSON.stringify(payload)}`);
+    assertCondition(
+        payload.status === "ok",
+        `Unexpected /health payload: ${JSON.stringify(payload)}`,
+    );
     console.log("smoke: health check passed");
 }
 
-async function runSubsonicMatrix(): Promise<{ track: TrackContext | null; username: string }> {
+async function runSubsonicMatrix(): Promise<{
+    track: TrackContext | null;
+    username: string;
+}> {
     const ping = await callSubsonicJson("ping.view", "symfonium");
     ensureOk(ping, "ping.view");
 
@@ -251,7 +262,10 @@ async function runSubsonicMatrix(): Promise<{ track: TrackContext | null; userna
     ensureOk(userPayload, "getUser.view");
     const user = asRecord(userPayload.user);
     const username = asString(user?.username) ?? subsonicUser!;
-    assertCondition(username.length > 0, "getUser.view did not return username");
+    assertCondition(
+        username.length > 0,
+        "getUser.view did not return username",
+    );
 
     const tokenInfo = await callSubsonicJson("tokenInfo.view", "symfonium");
     ensureOk(tokenInfo, "tokenInfo.view");
@@ -261,7 +275,10 @@ async function runSubsonicMatrix(): Promise<{ track: TrackContext | null; userna
         `Expected password authType, got ${JSON.stringify(tokenInfo)}`,
     );
 
-    const extensions = await callSubsonicJson("getOpenSubsonicExtensions.view", "symfonium");
+    const extensions = await callSubsonicJson(
+        "getOpenSubsonicExtensions.view",
+        "symfonium",
+    );
     ensureOk(extensions, "getOpenSubsonicExtensions.view");
 
     const license = await callSubsonicJson("getLicense.view", "symfonium");
@@ -280,29 +297,44 @@ async function runSubsonicMatrix(): Promise<{ track: TrackContext | null; userna
     assertCondition(indexPayload, "Missing indexes payload");
     const indexGroups = readArrayLength(indexPayload.index);
     const lastModified = indexPayload.lastModified;
-    assertCondition(typeof lastModified === "number", "Missing indexes.lastModified");
+    assertCondition(
+        typeof lastModified === "number",
+        "Missing indexes.lastModified",
+    );
 
-    const indexesIfModified = await callSubsonicJson("getIndexes.view", "ultrasonic", {
-        ifModifiedSince: String(lastModified),
-    });
+    const indexesIfModified = await callSubsonicJson(
+        "getIndexes.view",
+        "ultrasonic",
+        {
+            ifModifiedSince: String(lastModified),
+        },
+    );
     ensureOk(indexesIfModified, "getIndexes.view ifModifiedSince");
     assertCondition(
         readArrayLength(asRecord(indexesIfModified.indexes)?.index) === 0,
         "Expected empty indexes for current ifModifiedSince",
     );
 
-    const indexesBadFolder = await callSubsonicJson("getIndexes.view", "ultrasonic", {
-        musicFolderId: "99",
-    });
+    const indexesBadFolder = await callSubsonicJson(
+        "getIndexes.view",
+        "ultrasonic",
+        {
+            musicFolderId: "99",
+        },
+    );
     ensureOk(indexesBadFolder, "getIndexes.view musicFolderId");
     assertCondition(
         readArrayLength(asRecord(indexesBadFolder.indexes)?.index) === 0,
         "Expected empty indexes for unsupported musicFolderId",
     );
 
-    const artistsBadFolder = await callSubsonicJson("getArtists.view", "amperfy", {
-        musicFolderId: "99",
-    });
+    const artistsBadFolder = await callSubsonicJson(
+        "getArtists.view",
+        "amperfy",
+        {
+            musicFolderId: "99",
+        },
+    );
     ensureOk(artistsBadFolder, "getArtists.view musicFolderId");
     assertCondition(
         readArrayLength(asRecord(artistsBadFolder.artists)?.index) === 0,
@@ -310,7 +342,7 @@ async function runSubsonicMatrix(): Promise<{ track: TrackContext | null; userna
     );
 
     const search3 = await callSubsonicJson("search3.view", "symfonium", {
-        query: "\"\"",
+        query: '""',
         artistCount: 0,
         albumCount: 0,
         songCount: 0,
@@ -328,7 +360,7 @@ async function runSubsonicMatrix(): Promise<{ track: TrackContext | null; userna
     );
 
     const search2 = await callSubsonicJson("search2.view", "dsub", {
-        query: "\"\"",
+        query: '""',
         artistCount: 0,
         albumCount: 0,
         songCount: 0,
@@ -356,20 +388,31 @@ async function runSubsonicMatrix(): Promise<{ track: TrackContext | null; userna
     };
 }
 
-async function runSubsonicFullEmulation(track: TrackContext | null, username: string): Promise<void> {
+async function runSubsonicFullEmulation(
+    track: TrackContext | null,
+    username: string,
+): Promise<void> {
     const genres = await callSubsonicJson("getGenres.view", "symfonium");
     ensureOk(genres, "getGenres.view");
 
-    const albumList2 = await callSubsonicJson("getAlbumList2.view", "symfonium", {
-        type: "alphabeticalByName",
-        size: 5,
-        offset: 0,
-    });
+    const albumList2 = await callSubsonicJson(
+        "getAlbumList2.view",
+        "symfonium",
+        {
+            type: "alphabeticalByName",
+            size: 5,
+            offset: 0,
+        },
+    );
     ensureOk(albumList2, "getAlbumList2.view");
 
-    const musicDirectoryRoot = await callSubsonicJson("getMusicDirectory.view", "symfonium", {
-        id: 1,
-    });
+    const musicDirectoryRoot = await callSubsonicJson(
+        "getMusicDirectory.view",
+        "symfonium",
+        {
+            id: 1,
+        },
+    );
     ensureOk(musicDirectoryRoot, "getMusicDirectory.view root");
 
     const avatarResponse = await fetchRaw(
@@ -380,29 +423,51 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
             return params;
         })(),
     );
-    assertCondition(avatarResponse.status === 200, "getAvatar.view did not return HTTP 200");
+    assertCondition(
+        avatarResponse.status === 200,
+        "getAvatar.view did not return HTTP 200",
+    );
 
     const scanStart = await callSubsonicJson("startScan.view", "ultrasonic");
     ensureOk(scanStart, "startScan.view");
-    const scanStatus = await callSubsonicJson("getScanStatus.view", "ultrasonic");
+    const scanStatus = await callSubsonicJson(
+        "getScanStatus.view",
+        "ultrasonic",
+    );
     ensureOk(scanStatus, "getScanStatus.view");
 
-    const queueReadBaseline = await callSubsonicJson("getPlayQueue.view", "symfonium");
+    const queueReadBaseline = await callSubsonicJson(
+        "getPlayQueue.view",
+        "symfonium",
+    );
     ensureOk(queueReadBaseline, "getPlayQueue.view baseline");
 
-    const queueByIndexReadBaseline = await callSubsonicJson("getPlayQueueByIndex.view", "substreamer", {
-        index: 2,
-    });
+    const queueByIndexReadBaseline = await callSubsonicJson(
+        "getPlayQueueByIndex.view",
+        "substreamer",
+        {
+            index: 2,
+        },
+    );
     ensureOk(queueByIndexReadBaseline, "getPlayQueueByIndex.view baseline");
 
     const emptyPlaylistName = `smoke-empty-playlist-${Date.now()}`;
-    const createEmptyPlaylist = await callSubsonicJson("createPlaylist.view", "symfonium", {
-        name: emptyPlaylistName,
-    });
+    const createEmptyPlaylist = await callSubsonicJson(
+        "createPlaylist.view",
+        "symfonium",
+        {
+            name: emptyPlaylistName,
+        },
+    );
     ensureOk(createEmptyPlaylist, "createPlaylist.view (empty)");
-    const playlistsAfterEmptyCreate = await callSubsonicJson("getPlaylists.view", "symfonium");
+    const playlistsAfterEmptyCreate = await callSubsonicJson(
+        "getPlaylists.view",
+        "symfonium",
+    );
     ensureOk(playlistsAfterEmptyCreate, "getPlaylists.view after empty create");
-    const emptyPlaylistId = readArray(asRecord(playlistsAfterEmptyCreate.playlists)?.playlist)
+    const emptyPlaylistId = readArray(
+        asRecord(playlistsAfterEmptyCreate.playlists)?.playlist,
+    )
         .map((entry) => asRecord(entry))
         .find((entry) => asString(entry?.name) === emptyPlaylistName)?.id;
     assertCondition(
@@ -410,17 +475,28 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
         "createPlaylist.view (empty) did not return playlist id",
     );
 
-    const readEmptyPlaylist = await callSubsonicJson("getPlaylist.view", "symfonium", {
-        id: emptyPlaylistId!,
-    });
+    const readEmptyPlaylist = await callSubsonicJson(
+        "getPlaylist.view",
+        "symfonium",
+        {
+            id: emptyPlaylistId!,
+        },
+    );
     ensureOk(readEmptyPlaylist, "getPlaylist.view (empty)");
 
-    const deleteEmptyPlaylist = await callSubsonicJson("deletePlaylist.view", "symfonium", {
-        id: emptyPlaylistId!,
-    });
+    const deleteEmptyPlaylist = await callSubsonicJson(
+        "deletePlaylist.view",
+        "symfonium",
+        {
+            id: emptyPlaylistId!,
+        },
+    );
     ensureOk(deleteEmptyPlaylist, "deletePlaylist.view (empty)");
 
-    const nowPlayingBaseline = await callSubsonicJson("getNowPlaying.view", "symfonium");
+    const nowPlayingBaseline = await callSubsonicJson(
+        "getNowPlaying.view",
+        "symfonium",
+    );
     ensureOk(nowPlayingBaseline, "getNowPlaying.view baseline");
 
     const starred = await callSubsonicJson("getStarred.view", "symfonium");
@@ -434,28 +510,44 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
                 "Track-dependent emulation required but no library songs were returned by search3",
             );
         }
-        console.log("smoke: full emulation skipped track-dependent checks (library has no songs)");
+        console.log(
+            "smoke: full emulation skipped track-dependent checks (library has no songs)",
+        );
         return;
     }
 
-    const song = await callSubsonicJson("getSong.view", "symfonium", { id: track.id });
+    const song = await callSubsonicJson("getSong.view", "symfonium", {
+        id: track.id,
+    });
     ensureOk(song, "getSong.view");
 
-    const album = await callSubsonicJson("getAlbum.view", "symfonium", { id: track.albumId });
+    const album = await callSubsonicJson("getAlbum.view", "symfonium", {
+        id: track.albumId,
+    });
     ensureOk(album, "getAlbum.view");
     const albumPayload = asRecord(album.album);
 
-    const artist = await callSubsonicJson("getArtist.view", "symfonium", { id: track.artistId });
-    ensureOk(artist, "getArtist.view");
-
-    const artistInfo = await callSubsonicJson("getArtistInfo2.view", "symfonium", {
+    const artist = await callSubsonicJson("getArtist.view", "symfonium", {
         id: track.artistId,
     });
+    ensureOk(artist, "getArtist.view");
+
+    const artistInfo = await callSubsonicJson(
+        "getArtistInfo2.view",
+        "symfonium",
+        {
+            id: track.artistId,
+        },
+    );
     ensureOk(artistInfo, "getArtistInfo2.view");
 
-    const albumInfo = await callSubsonicJson("getAlbumInfo2.view", "symfonium", {
-        id: track.albumId,
-    });
+    const albumInfo = await callSubsonicJson(
+        "getAlbumInfo2.view",
+        "symfonium",
+        {
+            id: track.albumId,
+        },
+    );
     ensureOk(albumInfo, "getAlbumInfo2.view");
 
     const topSongs = await callSubsonicJson("getTopSongs.view", "symfonium", {
@@ -463,16 +555,24 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
     });
     ensureOk(topSongs, "getTopSongs.view");
 
-    const songByGenre = await callSubsonicJson("getSongsByGenre.view", "symfonium", {
-        genre: "rock",
-        count: 1,
-        offset: 0,
-    });
+    const songByGenre = await callSubsonicJson(
+        "getSongsByGenre.view",
+        "symfonium",
+        {
+            genre: "rock",
+            count: 1,
+            offset: 0,
+        },
+    );
     ensureOk(songByGenre, "getSongsByGenre.view");
 
-    const randomSongs = await callSubsonicJson("getRandomSongs.view", "symfonium", {
-        size: 2,
-    });
+    const randomSongs = await callSubsonicJson(
+        "getRandomSongs.view",
+        "symfonium",
+        {
+            size: 2,
+        },
+    );
     ensureOk(randomSongs, "getRandomSongs.view");
 
     const searchLegacy = await callSubsonicJson("search.view", "dsub", {
@@ -483,9 +583,13 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
     });
     ensureOk(searchLegacy, "search.view");
 
-    const lyricsBySong = await callSubsonicJson("getLyricsBySongId.view", "symfonium", {
-        id: track.id,
-    });
+    const lyricsBySong = await callSubsonicJson(
+        "getLyricsBySongId.view",
+        "symfonium",
+        {
+            id: track.id,
+        },
+    );
     ensureOk(lyricsBySong, "getLyricsBySongId.view");
 
     const lyricsLegacy = await callSubsonicJson("getLyrics.view", "dsub", {
@@ -500,9 +604,14 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
     });
     ensureOk(ratingLike, "setRating.view like");
 
-    const star = await callSubsonicJson("star.view", "symfonium", { id: track.id });
+    const star = await callSubsonicJson("star.view", "symfonium", {
+        id: track.id,
+    });
     ensureOk(star, "star.view");
-    const starred2Track = await callSubsonicJson("getStarred2.view", "symfonium");
+    const starred2Track = await callSubsonicJson(
+        "getStarred2.view",
+        "symfonium",
+    );
     ensureOk(starred2Track, "getStarred2.view track");
 
     const scrobble = await callSubsonicJson("scrobble.view", "symfonium", {
@@ -511,60 +620,98 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
     });
     ensureOk(scrobble, "scrobble.view");
 
-    const queueSave = await callSubsonicJson("savePlayQueue.view", "symfonium", {
-        id: track.id,
-        current: 0,
-        position: 900,
-    });
+    const queueSave = await callSubsonicJson(
+        "savePlayQueue.view",
+        "symfonium",
+        {
+            id: track.id,
+            current: 0,
+            position: 900,
+        },
+    );
     ensureOk(queueSave, "savePlayQueue.view");
     const queueRead = await callSubsonicJson("getPlayQueue.view", "symfonium");
     ensureOk(queueRead, "getPlayQueue.view");
 
-    const queueByIndexSave = await callSubsonicJson("savePlayQueueByIndex.view", "substreamer", {
-        index: 2,
-        id: track.id,
-        current: 0,
-        position: 1234,
-    });
+    const queueByIndexSave = await callSubsonicJson(
+        "savePlayQueueByIndex.view",
+        "substreamer",
+        {
+            index: 2,
+            id: track.id,
+            current: 0,
+            position: 1234,
+        },
+    );
     ensureOk(queueByIndexSave, "savePlayQueueByIndex.view");
-    const queueByIndexRead = await callSubsonicJson("getPlayQueueByIndex.view", "substreamer", {
-        index: 2,
-    });
+    const queueByIndexRead = await callSubsonicJson(
+        "getPlayQueueByIndex.view",
+        "substreamer",
+        {
+            index: 2,
+        },
+    );
     ensureOk(queueByIndexRead, "getPlayQueueByIndex.view");
 
     const playlistName = `smoke-playlist-${Date.now()}`;
-    const createPlaylist = await callSubsonicJson("createPlaylist.view", "symfonium", {
-        name: playlistName,
-        songId: track.id,
-    });
+    const createPlaylist = await callSubsonicJson(
+        "createPlaylist.view",
+        "symfonium",
+        {
+            name: playlistName,
+            songId: track.id,
+        },
+    );
     ensureOk(createPlaylist, "createPlaylist.view");
-    const playlistsAfterCreate = await callSubsonicJson("getPlaylists.view", "symfonium");
+    const playlistsAfterCreate = await callSubsonicJson(
+        "getPlaylists.view",
+        "symfonium",
+    );
     ensureOk(playlistsAfterCreate, "getPlaylists.view after create");
-    const playlistId = readArray(asRecord(playlistsAfterCreate.playlists)?.playlist)
+    const playlistId = readArray(
+        asRecord(playlistsAfterCreate.playlists)?.playlist,
+    )
         .map((entry) => asRecord(entry))
         .find((entry) => asString(entry?.name) === playlistName)?.id;
-    assertCondition(playlistId, "createPlaylist.view did not return playlist id");
+    assertCondition(
+        playlistId,
+        "createPlaylist.view did not return playlist id",
+    );
 
-    const playlistRead = await callSubsonicJson("getPlaylist.view", "symfonium", {
-        id: playlistId!,
-    });
+    const playlistRead = await callSubsonicJson(
+        "getPlaylist.view",
+        "symfonium",
+        {
+            id: playlistId!,
+        },
+    );
     ensureOk(playlistRead, "getPlaylist.view");
 
-    const playlistUpdate = await callSubsonicJson("updatePlaylist.view", "symfonium", {
-        playlistId: playlistId!,
-        name: `${playlistName}-updated`,
-    });
+    const playlistUpdate = await callSubsonicJson(
+        "updatePlaylist.view",
+        "symfonium",
+        {
+            playlistId: playlistId!,
+            name: `${playlistName}-updated`,
+        },
+    );
     ensureOk(playlistUpdate, "updatePlaylist.view");
 
     const playlists = await callSubsonicJson("getPlaylists.view", "symfonium");
     ensureOk(playlists, "getPlaylists.view");
 
-    const playlistDelete = await callSubsonicJson("deletePlaylist.view", "symfonium", {
-        id: playlistId!,
-    });
+    const playlistDelete = await callSubsonicJson(
+        "deletePlaylist.view",
+        "symfonium",
+        {
+            id: playlistId!,
+        },
+    );
     ensureOk(playlistDelete, "deletePlaylist.view");
 
-    const unstar = await callSubsonicJson("unstar.view", "symfonium", { id: track.id });
+    const unstar = await callSubsonicJson("unstar.view", "symfonium", {
+        id: track.id,
+    });
     ensureOk(unstar, "unstar.view");
 
     const ratingReset = await callSubsonicJson("setRating.view", "symfonium", {
@@ -573,7 +720,10 @@ async function runSubsonicFullEmulation(track: TrackContext | null, username: st
     });
     ensureOk(ratingReset, "setRating.view reset");
 
-    const nowPlaying = await callSubsonicJson("getNowPlaying.view", "symfonium");
+    const nowPlaying = await callSubsonicJson(
+        "getNowPlaying.view",
+        "symfonium",
+    );
     ensureOk(nowPlaying, "getNowPlaying.view");
 
     const albumIdFromPayload = asString(albumPayload?.id);
@@ -638,12 +788,16 @@ async function main(): Promise<void> {
 
                 fixtureHandle = await createTrackFixture();
                 track = fixtureHandle.track;
-                console.log("smoke: created temporary track fixture for full emulation");
+                console.log(
+                    "smoke: created temporary track fixture for full emulation",
+                );
             }
 
             await runSubsonicFullEmulation(track, matrix.username);
         } else {
-            console.log(`smoke: mode=${smokeMode} (set SMOKE_MODE=full for extended emulation)`);
+            console.log(
+                `smoke: mode=${smokeMode} (set SMOKE_MODE=full for extended emulation)`,
+            );
         }
     } finally {
         if (fixtureHandle && cleanupFixtures) {

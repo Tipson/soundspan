@@ -68,7 +68,7 @@ describe("search stop-word fallback", () => {
             },
         ]);
         expect(logger.debug).toHaveBeenCalledWith(
-            '[SEARCH] FTS returned 0 results for "the", falling back to ILIKE'
+            '[SEARCH] FTS returned 0 results for "the", falling back to ILIKE',
         );
         expect(prisma.artist.findMany).toHaveBeenCalled();
     });

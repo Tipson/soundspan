@@ -22,7 +22,7 @@ function loadSocialPresenceEvents(): SocialPresenceEventsModule {
 }
 
 function createEvent(
-    overrides: Partial<SocialPresenceUpdatedEvent> = {}
+    overrides: Partial<SocialPresenceUpdatedEvent> = {},
 ): SocialPresenceUpdatedEvent {
     return {
         userId: "user-1",
@@ -52,7 +52,7 @@ describe("socialPresenceEvents", () => {
                     reason,
                     timestampMs: index + 1,
                     deviceId: index === 2 ? undefined : `device-${index + 1}`,
-                })
+                }),
         );
 
         expect(events.map((event) => event.reason)).toEqual(reasons);
@@ -60,7 +60,7 @@ describe("socialPresenceEvents", () => {
             expect.objectContaining({
                 userId: "user-1",
                 deviceId: "device-1",
-            })
+            }),
         );
         expect(events[2].deviceId).toBeUndefined();
     });
@@ -137,7 +137,7 @@ describe("socialPresenceEvents", () => {
         expect(warn).toHaveBeenCalledTimes(1);
         expect(warn).toHaveBeenCalledWith(
             "[Social] Presence update listener failed:",
-            error
+            error,
         );
     });
 
@@ -172,7 +172,8 @@ describe("socialPresenceEvents", () => {
         const activeListener = jest.fn();
         const event = createEvent();
 
-        const unsubscribe = subscribeSocialPresenceUpdates(unsubscribedListener);
+        const unsubscribe =
+            subscribeSocialPresenceUpdates(unsubscribedListener);
         subscribeSocialPresenceUpdates(activeListener);
 
         unsubscribe();

@@ -82,7 +82,8 @@ describe("browse ytmusic routes integration", () => {
     const mockGetMoodPlaylists = ytMusicService.getMoodPlaylists as jest.Mock;
     const mockGetBrowsePlaylist = ytMusicService.getBrowsePlaylist as jest.Mock;
     const mockGetBrowseAlbum = ytMusicService.getBrowseAlbum as jest.Mock;
-    const mockGetLibraryPlaylists = ytMusicService.getLibraryPlaylists as jest.Mock;
+    const mockGetLibraryPlaylists =
+        ytMusicService.getLibraryPlaylists as jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -94,7 +95,9 @@ describe("browse ytmusic routes integration", () => {
         const res = await request(app).get("/api/browse/ytmusic/charts");
 
         expect(res.status).toBe(401);
-        expect(res.body).toEqual(expect.objectContaining({ error: expect.any(String) }));
+        expect(res.body).toEqual(
+            expect.objectContaining({ error: expect.any(String) }),
+        );
     });
 
     it("returns charts payload with source metadata", async () => {
@@ -158,7 +161,12 @@ describe("browse ytmusic routes integration", () => {
 
     it("validates mood params and returns payload", async () => {
         mockGetMoodPlaylists.mockResolvedValueOnce([
-            { playlistId: "pl-1", title: "Focus", thumbnailUrl: null, author: "YT Music" },
+            {
+                playlistId: "pl-1",
+                title: "Focus",
+                thumbnailUrl: null,
+                author: "YT Music",
+            },
         ]);
 
         const okRes = await request(app)
@@ -179,7 +187,7 @@ describe("browse ytmusic routes integration", () => {
         });
         expect(mockGetMoodPlaylists).toHaveBeenCalledWith(
             "focus_vibes",
-            "user-1"
+            "user-1",
         );
 
         const invalidRes = await request(app)
@@ -192,7 +200,10 @@ describe("browse ytmusic routes integration", () => {
 
     it("maps sidecar 4xx mood-playlists responses to route 4xx", async () => {
         mockGetMoodPlaylists.mockRejectedValueOnce({
-            response: { status: 422, data: { detail: "Invalid mood category params" } },
+            response: {
+                status: 422,
+                data: { detail: "Invalid mood category params" },
+            },
         });
 
         const res = await request(app)
@@ -219,7 +230,7 @@ describe("browse ytmusic routes integration", () => {
             expect.objectContaining({
                 id: "playlist-1",
                 source: "ytmusic",
-            })
+            }),
         );
         expect(mockGetBrowsePlaylist).toHaveBeenCalledWith("playlist-1", 500);
     });
@@ -279,7 +290,7 @@ describe("browse ytmusic routes integration", () => {
                 type: "album",
                 trackCount: 2,
                 thumbnailUrl: "http://img/large",
-            })
+            }),
         );
         expect(res.body.tracks).toHaveLength(1);
         expect(res.body.tracks[0]).toEqual(
@@ -289,7 +300,7 @@ describe("browse ytmusic routes integration", () => {
                 artist: "Test Artist",
                 album: "Test Album",
                 duration: 225,
-            })
+            }),
         );
         expect(mockGetBrowseAlbum).toHaveBeenCalledWith("MPREb_abc123");
     });
@@ -312,13 +323,23 @@ describe("browse ytmusic routes integration", () => {
             {
                 title: "Listen again",
                 contents: [
-                    { title: "Chill Vibes", playlistId: "PL1", thumbnailUrl: "http://img/1", subtitle: "Lo-Fi Radio" },
+                    {
+                        title: "Chill Vibes",
+                        playlistId: "PL1",
+                        thumbnailUrl: "http://img/1",
+                        subtitle: "Lo-Fi Radio",
+                    },
                 ],
             },
             {
                 title: "Trending",
                 contents: [
-                    { title: "Hot Album", browseId: "BR1", thumbnailUrl: null, subtitle: "New release" },
+                    {
+                        title: "Hot Album",
+                        browseId: "BR1",
+                        thumbnailUrl: null,
+                        subtitle: "New release",
+                    },
                 ],
             },
         ];
@@ -357,7 +378,11 @@ describe("browse ytmusic routes integration", () => {
             mixes,
             source: "ytmusic",
         });
-        expect(mockGetLibraryPlaylists).toHaveBeenCalledWith("user-1", 25, true);
+        expect(mockGetLibraryPlaylists).toHaveBeenCalledWith(
+            "user-1",
+            25,
+            true,
+        );
     });
 
     it("returns empty mixes array when user has no YT Music OAuth", async () => {

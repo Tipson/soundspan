@@ -120,7 +120,8 @@ describe("validateMusicConfig", () => {
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { validateMusicConfig } = require("../configValidator") as ValidatorModule;
+        const { validateMusicConfig } =
+            require("../configValidator") as ValidatorModule;
 
         return {
             validateMusicConfig,
@@ -135,11 +136,15 @@ describe("validateMusicConfig", () => {
     }
 
     it("prefers MUSIC_PATH env over database settings path", async () => {
-        const { validateMusicConfig, getSystemSettings, logger } = loadValidator({
-            env: { MUSIC_PATH: "/env/music" },
-            settings: { musicPath: "/settings/music", transcodeCacheMaxGb: 8 },
-            existingPaths: ["/env/music"],
-        });
+        const { validateMusicConfig, getSystemSettings, logger } =
+            loadValidator({
+                env: { MUSIC_PATH: "/env/music" },
+                settings: {
+                    musicPath: "/settings/music",
+                    transcodeCacheMaxGb: 8,
+                },
+                existingPaths: ["/env/music"],
+            });
 
         const result = await validateMusicConfig();
 
@@ -147,7 +152,7 @@ describe("validateMusicConfig", () => {
         expect(result.musicPath).toBe("/env/music");
         expect(result.transcodeCacheMaxGb).toBe(8);
         expect(logger.debug).toHaveBeenCalledWith(
-            "Database has musicPath=/settings/music, using /env/music from env/default"
+            "Database has musicPath=/settings/music, using /env/music from env/default",
         );
     });
 
@@ -163,7 +168,7 @@ describe("validateMusicConfig", () => {
 
         expect(result.musicPath).toBe("/music");
         expect(logger.warn).toHaveBeenCalledWith(
-            "MUSIC_PATH=/host/music not found in container, using /music (Docker mount point)"
+            "MUSIC_PATH=/host/music not found in container, using /music (Docker mount point)",
         );
     });
 
@@ -178,7 +183,7 @@ describe("validateMusicConfig", () => {
             code: ErrorCode.MUSIC_PATH_NOT_ACCESSIBLE,
             category: ErrorCategory.FATAL,
             message: expect.stringContaining(
-                "Music path does not exist: /missing/music"
+                "Music path does not exist: /missing/music",
             ),
         });
     });
@@ -194,7 +199,8 @@ describe("validateMusicConfig", () => {
             name: "AppError",
             code: ErrorCode.MUSIC_PATH_NOT_ACCESSIBLE,
             category: ErrorCategory.FATAL,
-            message: "Music path not readable: /restricted/music. Check file permissions.",
+            message:
+                "Music path not readable: /restricted/music. Check file permissions.",
         });
     });
 
@@ -213,7 +219,7 @@ describe("validateMusicConfig", () => {
             recursive: true,
         });
         expect(logger.debug).toHaveBeenCalledWith(
-            "Created transcode cache directory: /cache/new-transcodes"
+            "Created transcode cache directory: /cache/new-transcodes",
         );
         expect(result.transcodeCachePath).toBe("/cache/new-transcodes");
     });
@@ -232,7 +238,8 @@ describe("validateMusicConfig", () => {
             name: "AppError",
             code: ErrorCode.TRANSCODE_CACHE_NOT_WRITABLE,
             category: ErrorCategory.FATAL,
-            message: "Cannot create transcode cache directory: /cache/create-fails",
+            message:
+                "Cannot create transcode cache directory: /cache/create-fails",
             details: {
                 originalError: "mkdir denied",
             },
@@ -253,7 +260,8 @@ describe("validateMusicConfig", () => {
             name: "AppError",
             code: ErrorCode.TRANSCODE_CACHE_NOT_WRITABLE,
             category: ErrorCategory.FATAL,
-            message: "Transcode cache not writable: /cache/unwritable. Check file permissions.",
+            message:
+                "Transcode cache not writable: /cache/unwritable. Check file permissions.",
         });
     });
 
@@ -270,7 +278,8 @@ describe("validateMusicConfig", () => {
             name: "AppError",
             code: ErrorCode.INVALID_CONFIG,
             category: ErrorCategory.FATAL,
-            message: "Invalid transcode cache size: must be a positive integer. Got: 0",
+            message:
+                "Invalid transcode cache size: must be a positive integer. Got: 0",
         });
     });
 
@@ -287,26 +296,27 @@ describe("validateMusicConfig", () => {
             expect.objectContaining({
                 musicPath: "/env/music",
                 transcodeCacheMaxGb: 10,
-            })
+            }),
         );
     });
 
     it("logs warning and continues when bundled ffmpeg is missing", async () => {
-        const { validateMusicConfig, execSync, logger, ffmpegPath } = loadValidator({
-            env: { MUSIC_PATH: "/env/music" },
-            existingPaths: ["/env/music"],
-            missingPaths: ["/bin/ffmpeg"],
-        });
+        const { validateMusicConfig, execSync, logger, ffmpegPath } =
+            loadValidator({
+                env: { MUSIC_PATH: "/env/music" },
+                existingPaths: ["/env/music"],
+                missingPaths: ["/bin/ffmpeg"],
+            });
 
         const result = await validateMusicConfig();
 
         expect(result.musicPath).toBe("/env/music");
         expect(execSync).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
-            "  Bundled FFmpeg not available. Transcoding will not be available."
+            "  Bundled FFmpeg not available. Transcoding will not be available.",
         );
         expect(logger.warn).toHaveBeenCalledWith(
-            `   Error: Bundled FFmpeg not found at: ${ffmpegPath}`
+            `   Error: Bundled FFmpeg not found at: ${ffmpegPath}`,
         );
     });
 
@@ -324,9 +334,11 @@ describe("validateMusicConfig", () => {
             encoding: "utf8",
         });
         expect(logger.warn).toHaveBeenCalledWith(
-            "  Bundled FFmpeg not available. Transcoding will not be available."
+            "  Bundled FFmpeg not available. Transcoding will not be available.",
         );
-        expect(logger.warn).toHaveBeenCalledWith("   Error: Invalid ffmpeg output");
+        expect(logger.warn).toHaveBeenCalledWith(
+            "   Error: Invalid ffmpeg output",
+        );
     });
 
     it("returns validated configuration when all checks pass", async () => {
@@ -344,7 +356,7 @@ describe("validateMusicConfig", () => {
         });
         expect(logger.warn).not.toHaveBeenCalled();
         expect(logger.debug).toHaveBeenCalledWith(
-            "Music configuration validated successfully"
+            "Music configuration validated successfully",
         );
     });
 });

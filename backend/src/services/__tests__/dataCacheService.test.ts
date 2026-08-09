@@ -132,14 +132,14 @@ describe("dataCacheService", () => {
         const result = await dataCacheService.getArtistImage(
             "artist-1",
             "Artist Name",
-            "mbid-1"
+            "mbid-1",
         );
 
         expect(result).toBe("native:artists/custom.jpg");
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "hero:artist-1",
             ONE_YEAR_SECONDS,
-            "native:artists/custom.jpg"
+            "native:artists/custom.jpg",
         );
         expect(mockRedisGet).not.toHaveBeenCalled();
         expect(mockFanartGetArtistImage).not.toHaveBeenCalled();
@@ -150,7 +150,7 @@ describe("dataCacheService", () => {
 
         const result = await dataCacheService.getArtistImage(
             "artist-2",
-            "Artist Two"
+            "Artist Two",
         );
 
         expect(result).toBe("native:artists/from-redis.jpg");
@@ -166,7 +166,7 @@ describe("dataCacheService", () => {
 
         const result = await dataCacheService.getArtistImage(
             "artist-3",
-            "Artist Three"
+            "Artist Three",
         );
 
         expect(result).toBeNull();
@@ -182,7 +182,7 @@ describe("dataCacheService", () => {
         const result = await dataCacheService.getArtistImage(
             "artist-4",
             "Artist Four",
-            "mbid-4"
+            "mbid-4",
         );
 
         expect(result).toBe("native:artists/a1.jpg");
@@ -193,7 +193,7 @@ describe("dataCacheService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "hero:artist-4",
             ONE_YEAR_SECONDS,
-            "native:artists/a1.jpg"
+            "native:artists/a1.jpg",
         );
     });
 
@@ -204,7 +204,7 @@ describe("dataCacheService", () => {
         const result = await dataCacheService.getArtistImage(
             "artist-5",
             "Artist Five",
-            "temp-artist-5"
+            "temp-artist-5",
         );
 
         expect(result).toBe("https://deezer/image.jpg");
@@ -229,14 +229,14 @@ describe("dataCacheService", () => {
         const result = await dataCacheService.getArtistImage(
             "artist-6",
             "Artist Six",
-            "mbid-6"
+            "mbid-6",
         );
 
         expect(result).toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "hero:artist-6",
             NEGATIVE_CACHE_SECONDS,
-            "NOT_FOUND"
+            "NOT_FOUND",
         );
     });
 
@@ -245,13 +245,13 @@ describe("dataCacheService", () => {
 
         const result = await dataCacheService.getArtistImage(
             "artist-7",
-            "Artist Seven"
+            "Artist Seven",
         );
 
         expect(result).toBeNull();
         expect(mockWarn).toHaveBeenCalledWith(
             "[DataCache] DB lookup failed for artist:",
-            "artist-7"
+            "artist-7",
         );
     });
 
@@ -266,7 +266,7 @@ describe("dataCacheService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "album-cover:album-1",
             ONE_YEAR_SECONDS,
-            "native:albums/from-db.jpg"
+            "native:albums/from-db.jpg",
         );
     });
 
@@ -303,7 +303,7 @@ describe("dataCacheService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "album-cover:album-4",
             NEGATIVE_CACHE_SECONDS,
-            "NOT_FOUND"
+            "NOT_FOUND",
         );
     });
 
@@ -316,7 +316,7 @@ describe("dataCacheService", () => {
         const result = await dataCacheService.getTrackCover(
             "track-1",
             "album-5",
-            undefined
+            undefined,
         );
 
         expect(result).toBe("native:albums/existing.jpg");
@@ -333,7 +333,7 @@ describe("dataCacheService", () => {
         const result = await dataCacheService.getTrackCover(
             "track-2",
             "album-6",
-            undefined
+            undefined,
         );
 
         expect(result).toBe("https://cover.art/from-rg.jpg");
@@ -349,14 +349,17 @@ describe("dataCacheService", () => {
         const result = await dataCacheService.getTrackCover(
             "track-3",
             "album-7",
-            null
+            null,
         );
 
         expect(result).toBeNull();
     });
 
     it("returns artist batch images from direct fields and Redis cache", async () => {
-        mockRedisMGet.mockResolvedValue(["native:artists/cached.jpg", "NOT_FOUND"]);
+        mockRedisMGet.mockResolvedValue([
+            "native:artists/cached.jpg",
+            "NOT_FOUND",
+        ]);
 
         const result = await dataCacheService.getArtistImagesBatch([
             {
@@ -407,13 +410,13 @@ describe("dataCacheService", () => {
         expect(firstMulti.setEx).toHaveBeenCalledWith(
             "hero:artist-1",
             ONE_YEAR_SECONDS,
-            "native:artists/1.jpg"
+            "native:artists/1.jpg",
         );
         expect(firstMulti.exec).toHaveBeenCalled();
         expect(secondMulti.setEx).toHaveBeenCalledWith(
             "album-cover:album-1",
             ONE_YEAR_SECONDS,
-            "native:albums/1.jpg"
+            "native:albums/1.jpg",
         );
         expect(secondMulti.exec).toHaveBeenCalled();
     });
@@ -424,7 +427,7 @@ describe("dataCacheService", () => {
         await expect(dataCacheService.warmupCache()).resolves.toBeUndefined();
         expect(mockError).toHaveBeenCalledWith(
             "[DataCache] Cache warmup failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

@@ -36,23 +36,23 @@ jest.mock("../../utils/db", () => ({
 }));
 
 jest.mock("../../services/remoteTrackMetadataResolver", () => ({
-    resolveRemoteTrackMetadataForRequest: jest.fn(async ({ metadata }: any) => ({
-        title: metadata.title ?? "Unknown",
-        artist: metadata.artist ?? "Unknown",
-        album: metadata.album ?? "Unknown",
-        duration: metadata.duration ?? 180,
-        thumbnailUrl: metadata.thumbnailUrl,
-        isrc: metadata.isrc,
-        explicit: metadata.explicit,
-        quality: metadata.quality,
-    })),
+    resolveRemoteTrackMetadataForRequest: jest.fn(
+        async ({ metadata }: any) => ({
+            title: metadata.title ?? "Unknown",
+            artist: metadata.artist ?? "Unknown",
+            album: metadata.album ?? "Unknown",
+            duration: metadata.duration ?? 180,
+            thumbnailUrl: metadata.thumbnailUrl,
+            isrc: metadata.isrc,
+            explicit: metadata.explicit,
+            quality: metadata.quality,
+        }),
+    ),
 }));
 
 import router from "../plays";
 import { prisma } from "../../utils/db";
-import {
-    resolveRemoteTrackMetadataForRequest,
-} from "../../services/remoteTrackMetadataResolver";
+import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";
 
 const mockTrackFindUnique = prisma.track.findUnique as jest.Mock;
 const mockTrackTidalFindUnique = prisma.trackTidal.findUnique as jest.Mock;
@@ -68,7 +68,7 @@ const mockResolveRemoteTrackMetadataForRequest =
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) throw new Error(`GET route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -77,7 +77,7 @@ function getGetHandler(path: string) {
 function getDeleteHandler(path: string) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.delete
+            entry.route?.path === path && entry.route?.methods?.delete,
     );
     if (!layer) throw new Error(`DELETE route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -85,7 +85,8 @@ function getDeleteHandler(path: string) {
 
 function getPostHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.post
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.post,
     );
     if (!layer) throw new Error(`POST route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -119,9 +120,13 @@ describe("plays history compatibility", () => {
         mockTrackTidalFindUnique.mockResolvedValue(null);
         mockTrackTidalUpsert.mockResolvedValue({ id: "tt-1", tidalId: 123 });
         mockTrackYtMusicFindUnique.mockResolvedValue(null);
-        mockTrackYtMusicUpsert.mockResolvedValue({ id: "yt-1", videoId: "abc123" });
-        mockResolveRemoteTrackMetadataForRequest.mockReset().mockImplementation(
-            async ({ metadata }: any) => ({
+        mockTrackYtMusicUpsert.mockResolvedValue({
+            id: "yt-1",
+            videoId: "abc123",
+        });
+        mockResolveRemoteTrackMetadataForRequest
+            .mockReset()
+            .mockImplementation(async ({ metadata }: any) => ({
                 title: metadata.title ?? "Unknown",
                 artist: metadata.artist ?? "Unknown",
                 album: metadata.album ?? "Unknown",
@@ -130,8 +135,7 @@ describe("plays history compatibility", () => {
                 isrc: metadata.isrc,
                 explicit: metadata.explicit,
                 quality: metadata.quality,
-            })
-        );
+            }));
         mockPlayCreate.mockResolvedValue({
             id: "play-1",
             userId: "user-1",
@@ -148,7 +152,8 @@ describe("plays history compatibility", () => {
             .mockResolvedValueOnce(87); // 365d
 
         const req = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: {},
         } as any;
         const res = createRes();
@@ -167,20 +172,27 @@ describe("plays history compatibility", () => {
 
     it("returns 500 when summary query fails", async () => {
         mockPlayCount.mockRejectedValueOnce(new Error("summary failed"));
-        const req = { session: { userId: "user-1" }, user: { id: "user-1" }, query: {} } as any;
+        const req = {
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
+            query: {},
+        } as any;
         const res = createRes();
 
         await summaryHandler(req, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to get play history summary" });
+        expect(res.body).toEqual({
+            error: "Failed to get play history summary",
+        });
     });
 
     it("clears all history when range=all", async () => {
         mockPlayDeleteMany.mockResolvedValue({ count: 55 });
 
         const req = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: { range: "all" },
         } as any;
         const res = createRes();
@@ -202,7 +214,8 @@ describe("plays history compatibility", () => {
         mockPlayDeleteMany.mockResolvedValue({ count: 22 });
 
         const req = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: { range: "30d" },
         } as any;
         const res = createRes();
@@ -217,7 +230,7 @@ describe("plays history compatibility", () => {
                     gte: expect.any(Date),
                     lte: expect.any(Date),
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -229,7 +242,8 @@ describe("plays history compatibility", () => {
 
     it("returns 400 for invalid range", async () => {
         const req = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: { range: "bad-range" },
         } as any;
         const res = createRes();
@@ -246,7 +260,8 @@ describe("plays history compatibility", () => {
     it("returns 500 when history clear fails", async () => {
         mockPlayDeleteMany.mockRejectedValueOnce(new Error("delete failed"));
         const req = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: { range: "all" },
         } as any;
         const res = createRes();
@@ -259,7 +274,8 @@ describe("plays history compatibility", () => {
 
     it("validates, creates, and fails play-logging requests", async () => {
         const invalidReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             body: {},
         } as any;
         const invalidRes = createRes();
@@ -269,7 +285,8 @@ describe("plays history compatibility", () => {
 
         mockTrackFindUnique.mockResolvedValueOnce(null);
         const missingReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             body: { trackId: "missing-track" },
         } as any;
         const missingRes = createRes();
@@ -278,7 +295,8 @@ describe("plays history compatibility", () => {
         expect(missingRes.body).toEqual({ error: "Track not found" });
 
         const okReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             body: { trackId: "track-1" },
         } as any;
         const okRes = createRes();
@@ -290,7 +308,8 @@ describe("plays history compatibility", () => {
 
         mockTrackFindUnique.mockRejectedValueOnce(new Error("create failed"));
         const errReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             body: { trackId: "track-1" },
         } as any;
         const errRes = createRes();
@@ -315,7 +334,8 @@ describe("plays history compatibility", () => {
             });
 
         const tidalReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             body: {
                 tidalTrackId: 123,
                 title: "Remote Tidal",
@@ -336,7 +356,8 @@ describe("plays history compatibility", () => {
         });
 
         const ytReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             body: {
                 youtubeVideoId: "abc123",
                 title: "Remote YT",
@@ -379,7 +400,8 @@ describe("plays history compatibility", () => {
         });
 
         const req = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             body: {
                 tidalTrackId: 69778330,
                 title: "Unknown",
@@ -397,7 +419,7 @@ describe("plays history compatibility", () => {
                 provider: "tidal",
                 userId: "user-1",
                 tidalId: 69778330,
-            })
+            }),
         );
         expect(mockTrackTidalUpsert).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -417,13 +439,14 @@ describe("plays history compatibility", () => {
                     isrc: "USWB10800347",
                     explicit: false,
                 }),
-            })
+            }),
         );
     });
 
     it("lists recent plays with default/custom limits and handles failures", async () => {
         const defaultReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: {},
         } as any;
         const defaultRes = createRes();
@@ -433,11 +456,12 @@ describe("plays history compatibility", () => {
             expect.objectContaining({
                 where: { userId: "user-1" },
                 take: 50,
-            })
+            }),
         );
 
         const customReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: { limit: "12" },
         } as any;
         const customRes = createRes();
@@ -447,12 +471,13 @@ describe("plays history compatibility", () => {
             expect.objectContaining({
                 where: { userId: "user-1" },
                 take: 12,
-            })
+            }),
         );
 
         mockPlayFindMany.mockRejectedValueOnce(new Error("find failed"));
         const errReq = {
-            session: { userId: "user-1" }, user: { id: "user-1" },
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
             query: {},
         } as any;
         const errRes = createRes();

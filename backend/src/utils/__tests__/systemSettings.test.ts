@@ -76,7 +76,7 @@ describe("systemSettings utilities", () => {
                 audiobookshelfApiKey: "abs",
                 soulseekPassword: "soulseek",
                 ytMusicClientSecret: "yt",
-            })
+            }),
         );
         const { getSystemSettings } = await loadModule();
 
@@ -91,7 +91,9 @@ describe("systemSettings utilities", () => {
     });
 
     it("bypasses cache when forceRefresh is true", async () => {
-        mockFindUnique.mockResolvedValue(makeSettings({ lidarrApiKey: "secret" }));
+        mockFindUnique.mockResolvedValue(
+            makeSettings({ lidarrApiKey: "secret" }),
+        );
         const { getSystemSettings } = await loadModule();
 
         await getSystemSettings();
@@ -110,7 +112,7 @@ describe("systemSettings utilities", () => {
         mockFindUnique.mockResolvedValue(
             makeSettings({
                 lidarrApiKey: "bad-value",
-            })
+            }),
         );
         const { getSystemSettings } = await loadModule();
 
@@ -121,7 +123,7 @@ describe("systemSettings utilities", () => {
         expect(second.lidarrApiKey).toBeNull();
         expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            expect.stringContaining("Failed to decrypt lidarrApiKey")
+            expect.stringContaining("Failed to decrypt lidarrApiKey"),
         );
     });
 

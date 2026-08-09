@@ -45,7 +45,7 @@ export function trackJobStart(
     queue: string,
     jobId: string,
     jobName: string,
-    startedAtMs: number = Date.now()
+    startedAtMs: number = Date.now(),
 ): void {
     activeJobs.set(jobKey(queue, jobId), {
         queue,
@@ -75,7 +75,7 @@ export function evaluateEventLoopSample(
     sample: EventLoopSampleMs,
     jobs: ActiveJobRecord[],
     warnThresholdMs: number,
-    nowMs: number
+    nowMs: number,
 ): StallWarning | null {
     if (sample.maxMs < warnThresholdMs) return null;
 
@@ -86,7 +86,7 @@ export function evaluateEventLoopSample(
                   .map((job) => {
                       const ageSeconds = Math.max(
                           0,
-                          Math.round((nowMs - job.startedAtMs) / 1000)
+                          Math.round((nowMs - job.startedAtMs) / 1000),
                       );
                       return `${job.queue}/${job.jobName}#${job.jobId} age=${ageSeconds}s`;
                   })
@@ -116,7 +116,7 @@ const NS_PER_MS = 1e6;
 export function runMonitorTick(
     histogram: HistogramLike,
     warnThresholdMs: number,
-    now: () => number = Date.now
+    now: () => number = Date.now,
 ): void {
     const sample: EventLoopSampleMs = {
         maxMs: histogram.max / NS_PER_MS,
@@ -128,7 +128,7 @@ export function runMonitorTick(
         sample,
         getActiveJobs(),
         warnThresholdMs,
-        now()
+        now(),
     );
     if (warning) {
         logger.warn(warning.message);
@@ -151,7 +151,7 @@ export interface WorkerEventLoopMonitorOptions {
  * config import chain so it can be unit-tested without a database.
  */
 export function startWorkerEventLoopMonitor(
-    options?: Partial<WorkerEventLoopMonitorOptions>
+    options?: Partial<WorkerEventLoopMonitorOptions>,
 ): () => void {
     if (stopMonitor) return stopMonitor;
 
@@ -167,7 +167,7 @@ export function startWorkerEventLoopMonitor(
     interval.unref();
 
     logger.info(
-        `[WorkerEventLoop] stall watchdog started (warn>=${warnThresholdMs}ms, sample every ${sampleIntervalMs}ms)`
+        `[WorkerEventLoop] stall watchdog started (warn>=${warnThresholdMs}ms, sample every ${sampleIntervalMs}ms)`,
     );
 
     stopMonitor = () => {

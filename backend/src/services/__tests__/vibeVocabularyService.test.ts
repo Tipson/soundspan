@@ -20,7 +20,8 @@ describe("vibe vocabulary service behavior", () => {
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = require("../vibeVocabulary") as typeof import("../vibeVocabulary");
+        const mod =
+            require("../vibeVocabulary") as typeof import("../vibeVocabulary");
         return { mod, existsSync, readFileSync, logger };
     }
 
@@ -44,7 +45,7 @@ describe("vibe vocabulary service behavior", () => {
                 },
                 version: "v1",
                 generatedAt: "2026-01-01T00:00:00.000Z",
-            })
+            }),
         );
 
         const loaded = mod.loadVocabulary();
@@ -53,7 +54,7 @@ describe("vibe vocabulary service behavior", () => {
         expect(loaded).toEqual(cached);
         expect(readFileSync).toHaveBeenCalledTimes(1);
         expect(logger.info).toHaveBeenCalledWith(
-            "[VIBE-VOCAB] Loaded 1 vocabulary terms"
+            "[VIBE-VOCAB] Loaded 1 vocabulary terms",
         );
     });
 
@@ -62,7 +63,7 @@ describe("vibe vocabulary service behavior", () => {
         missingCase.existsSync.mockReturnValue(false);
         expect(missingCase.mod.loadVocabulary()).toBeNull();
         expect(missingCase.logger.warn).toHaveBeenCalledWith(
-            "[VIBE-VOCAB] Vocabulary file not found. Run generateVibeVocabulary script."
+            "[VIBE-VOCAB] Vocabulary file not found. Run generateVibeVocabulary script.",
         );
 
         const parseErrorCase = loadModule();
@@ -71,7 +72,7 @@ describe("vibe vocabulary service behavior", () => {
         expect(parseErrorCase.mod.loadVocabulary()).toBeNull();
         expect(parseErrorCase.logger.error).toHaveBeenCalledWith(
             "[VIBE-VOCAB] Failed to load vocabulary:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -91,7 +92,7 @@ describe("vibe vocabulary service behavior", () => {
             mod.blendEmbeddings([
                 { embedding: [1, 0], weight: 1 },
                 { embedding: [0, 1], weight: 3 },
-            ])
+            ]),
         ).toEqual([0.25, 0.75]);
     });
 
@@ -158,9 +159,13 @@ describe("vibe vocabulary service behavior", () => {
             originalQuery: "query",
         });
 
-        const expanded = mod.expandQueryWithVocabulary([1, 0], "chill mix", vocab);
+        const expanded = mod.expandQueryWithVocabulary(
+            [1, 0],
+            "chill mix",
+            vocab,
+        );
         expect(expanded.matchedTerms.map((t) => t.name)).toEqual(
-            expect.arrayContaining(["chill", "calm"])
+            expect.arrayContaining(["chill", "calm"]),
         );
         expect(expanded.genreConfidence).toBeGreaterThan(0.5);
         expect(expanded.embedding).toHaveLength(2);
@@ -189,8 +194,8 @@ describe("vibe vocabulary service behavior", () => {
         expect(
             mod.calculateFeatureMatch(
                 { energy: 0.3, valence: null },
-                { energy: 0.2, valence: 0.7 }
-            )
+                { energy: 0.2, valence: 0.7 },
+            ),
         ).toBeGreaterThan(0.7);
 
         expect(mod.calculateFeatureMatch({}, {})).toBe(0.5);
@@ -207,8 +212,8 @@ describe("vibe vocabulary service behavior", () => {
         expect(
             mod.calculateFeatureMatch(
                 { energy: 0.8, valence: 0.1 },
-                malformedTarget
-            )
+                malformedTarget,
+            ),
         ).toBe(1);
     });
 
@@ -240,7 +245,7 @@ describe("vibe vocabulary service behavior", () => {
                 },
             ],
             matchedTerms,
-            0.8
+            0.8,
         );
 
         expect(ranked[0].id).toBe("t1");
@@ -249,16 +254,16 @@ describe("vibe vocabulary service behavior", () => {
                 finalScore: expect.any(Number),
                 clapScore: expect.any(Number),
                 featureScore: expect.any(Number),
-            })
+            }),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("[VIBE-RERANK] Genre confidence:")
+            expect.stringContaining("[VIBE-RERANK] Genre confidence:"),
         );
 
         const fallbackFeature = mod.rerankWithFeatures(
             [{ id: "t3", distance: 0.1 }],
             [],
-            0.1
+            0.1,
         );
         expect(fallbackFeature[0].featureScore).toBe(0.5);
     });

@@ -10,7 +10,9 @@ class VibeAnalysisCleanupService {
      * Returns number of tracks reset
      */
     async cleanupStaleProcessing(): Promise<{ reset: number }> {
-        const cutoff = new Date(Date.now() - STALE_THRESHOLD_MINUTES * 60 * 1000);
+        const cutoff = new Date(
+            Date.now() - STALE_THRESHOLD_MINUTES * 60 * 1000,
+        );
 
         // Find tracks stuck in processing
         const staleTracks = await prisma.track.findMany({
@@ -38,7 +40,7 @@ class VibeAnalysisCleanupService {
         }
 
         logger.debug(
-            `[VibeAnalysisCleanup] Found ${staleTracks.length} stale vibe tracks (processing > ${STALE_THRESHOLD_MINUTES} min)`
+            `[VibeAnalysisCleanup] Found ${staleTracks.length} stale vibe tracks (processing > ${STALE_THRESHOLD_MINUTES} min)`,
         );
 
         let resetCount: number = 0;
@@ -55,9 +57,7 @@ class VibeAnalysisCleanupService {
                 },
             });
 
-            logger.debug(
-                `[VibeAnalysisCleanup] Reset for retry: ${trackName}`
-            );
+            logger.debug(`[VibeAnalysisCleanup] Reset for retry: ${trackName}`);
             resetCount++;
         }
 

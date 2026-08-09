@@ -14,7 +14,11 @@ export function resolveSubsonicStreamQuality(
     const requestedFormat =
         typeof targetFormat === "string" ? targetFormat.toLowerCase() : "";
 
-    if (!maxBitRate || requestedFormat === "raw" || requestedFormat === "original") {
+    if (
+        !maxBitRate ||
+        requestedFormat === "raw" ||
+        requestedFormat === "original"
+    ) {
         return "original";
     }
 

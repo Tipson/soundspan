@@ -8,21 +8,21 @@
  *   npx ts-node scripts/testAlbumScraper.ts 37i9dQZF1DXcBWIGoYBM5M
  */
 
-import { spotifyService } from '../services/spotify';
+import { spotifyService } from "../services/spotify";
 
 async function testScraper() {
-    const testPlaylistId = process.argv[2] || '37i9dQZF1DXcBWIGoYBM5M';
+    const testPlaylistId = process.argv[2] || "37i9dQZF1DXcBWIGoYBM5M";
     console.log(`\n=== Spotify Album Scraper Test ===`);
     console.log(`Playlist ID: ${testPlaylistId}`);
     console.log(`Timestamp: ${new Date().toISOString()}\n`);
 
-    console.log('Fetching playlist...');
+    console.log("Fetching playlist...");
     const startTime = Date.now();
     const playlist = await spotifyService.getPlaylist(testPlaylistId);
     const elapsed = Date.now() - startTime;
 
     if (!playlist) {
-        console.error('FAILED: Could not fetch playlist');
+        console.error("FAILED: Could not fetch playlist");
         process.exit(1);
     }
 
@@ -32,13 +32,21 @@ async function testScraper() {
     console.log(`Track Count: ${playlist.trackCount}`);
     console.log(`Fetch Time: ${elapsed}ms\n`);
 
-    const unknownAlbumTracks = playlist.tracks.filter(t => t.album === 'Unknown Album');
-    const knownAlbumTracks = playlist.tracks.filter(t => t.album !== 'Unknown Album');
+    const unknownAlbumTracks = playlist.tracks.filter(
+        (t) => t.album === "Unknown Album",
+    );
+    const knownAlbumTracks = playlist.tracks.filter(
+        (t) => t.album !== "Unknown Album",
+    );
 
     console.log(`--- Album Resolution Stats ---`);
     console.log(`Total tracks: ${playlist.tracks.length}`);
-    console.log(`Known albums: ${knownAlbumTracks.length} (${((knownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%)`);
-    console.log(`Unknown albums: ${unknownAlbumTracks.length} (${((unknownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%)\n`);
+    console.log(
+        `Known albums: ${knownAlbumTracks.length} (${((knownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%)`,
+    );
+    console.log(
+        `Unknown albums: ${unknownAlbumTracks.length} (${((unknownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%)\n`,
+    );
 
     if (unknownAlbumTracks.length > 0) {
         console.log(`--- Tracks with Unknown Album (first 10) ---`);
@@ -63,15 +71,19 @@ async function testScraper() {
     // Summary
     console.log(`\n--- Summary ---`);
     if (unknownAlbumTracks.length === 0) {
-        console.log('SUCCESS: All tracks have album data resolved');
+        console.log("SUCCESS: All tracks have album data resolved");
     } else if (unknownAlbumTracks.length < playlist.tracks.length * 0.1) {
-        console.log(`PARTIAL SUCCESS: ${unknownAlbumTracks.length} tracks (${((unknownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%) still have unknown albums`);
+        console.log(
+            `PARTIAL SUCCESS: ${unknownAlbumTracks.length} tracks (${((unknownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%) still have unknown albums`,
+        );
     } else {
-        console.log(`WARNING: ${unknownAlbumTracks.length} tracks (${((unknownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%) have unknown albums - scraper may need updating`);
+        console.log(
+            `WARNING: ${unknownAlbumTracks.length} tracks (${((unknownAlbumTracks.length / playlist.tracks.length) * 100).toFixed(1)}%) have unknown albums - scraper may need updating`,
+        );
     }
 }
 
-testScraper().catch(error => {
-    console.error('Test script error:', error);
+testScraper().catch((error) => {
+    console.error("Test script error:", error);
     process.exit(1);
 });

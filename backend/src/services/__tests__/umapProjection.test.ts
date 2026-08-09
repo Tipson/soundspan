@@ -42,13 +42,20 @@ let pipeline: MockPipeline;
 let workerBehavior: ((worker: MockWorker) => void) | null = null;
 let workers: MockWorker[] = [];
 let lastWorkerFilename: string | null = null;
-let lastWorkerOptions: { workerData?: { embeddings: number[][]; nNeighbors: number } } | null = null;
+let lastWorkerOptions: {
+    workerData?: { embeddings: number[][]; nNeighbors: number };
+} | null = null;
 
 class MockWorker {
     listeners = new Map<string, Array<(payload?: unknown) => void>>();
     terminate = jest.fn(async () => 0);
 
-    constructor(filename: string, options: { workerData?: { embeddings: number[][]; nNeighbors: number } }) {
+    constructor(
+        filename: string,
+        options: {
+            workerData?: { embeddings: number[][]; nNeighbors: number };
+        },
+    ) {
         lastWorkerFilename = filename;
         lastWorkerOptions = options;
         workers.push(this);
@@ -161,19 +168,29 @@ describe("computeMapProjection", () => {
         lastWorkerOptions = null;
 
         pipeline = {
-            setEx: jest.fn<(...args: unknown[]) => MockPipeline>(() => pipeline),
+            setEx: jest.fn<(...args: unknown[]) => MockPipeline>(
+                () => pipeline,
+            ),
             del: jest.fn<(...args: unknown[]) => MockPipeline>(() => pipeline),
             sAdd: jest.fn<(...args: unknown[]) => MockPipeline>(() => pipeline),
-            expire: jest.fn<(...args: unknown[]) => MockPipeline>(() => pipeline),
+            expire: jest.fn<(...args: unknown[]) => MockPipeline>(
+                () => pipeline,
+            ),
             exec: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
         };
 
         mockRedisGet.mockResolvedValue(null);
         mockRedisMulti.mockReturnValue(pipeline);
         mockQueryRaw.mockResolvedValue([]);
-        mockExistsSync.mockImplementation((candidatePath: string) => candidatePath.endsWith("umapWorker.ts"));
-        mockPathJoin.mockImplementation((...parts: string[]) => parts.join("/").replace(/\/+/g, "/"));
-        mockParseEmbedding.mockImplementation((embedding: string) => JSON.parse(embedding) as number[]);
+        mockExistsSync.mockImplementation((candidatePath: string) =>
+            candidatePath.endsWith("umapWorker.ts"),
+        );
+        mockPathJoin.mockImplementation((...parts: string[]) =>
+            parts.join("/").replace(/\/+/g, "/"),
+        );
+        mockParseEmbedding.mockImplementation(
+            (embedding: string) => JSON.parse(embedding) as number[],
+        );
     });
 
     it("returns cached projection data without querying the database", async () => {
@@ -189,7 +206,9 @@ describe("computeMapProjection", () => {
         await expect(computeMapProjection()).resolves.toEqual(cached);
         expect(mockQueryRaw).not.toHaveBeenCalled();
         expect(mockRedisMulti).not.toHaveBeenCalled();
-        expect(mockUmapLoggerDebug).toHaveBeenCalledWith("[VIBE-MAP] Cache hit (stable key)");
+        expect(mockUmapLoggerDebug).toHaveBeenCalledWith(
+            "[VIBE-MAP] Cache hit (stable key)",
+        );
     });
 
     it("deduplicates concurrent computations while one projection is already in progress", async () => {
@@ -203,7 +222,9 @@ describe("computeMapProjection", () => {
 
         expect(mockQueryRaw).toHaveBeenCalledTimes(1);
         expect(workers).toHaveLength(1);
-        expect(mockUmapLoggerInfo).toHaveBeenCalledWith("[VIBE-MAP] Waiting for in-progress computation");
+        expect(mockUmapLoggerInfo).toHaveBeenCalledWith(
+            "[VIBE-MAP] Waiting for in-progress computation",
+        );
 
         workers[0].emit("message", [
             [0, 0],
@@ -213,7 +234,10 @@ describe("computeMapProjection", () => {
             [4, 4],
         ]);
 
-        const [firstResult, secondResult] = await Promise.all([firstPromise, secondPromise]);
+        const [firstResult, secondResult] = await Promise.all([
+            firstPromise,
+            secondPromise,
+        ]);
 
         expect(firstResult).toEqual(secondResult);
         expect(firstResult.trackCount).toBe(5);
@@ -290,7 +314,7 @@ describe("computeMapProjection", () => {
         expect(pipeline.setEx).toHaveBeenCalledWith(
             "vibe:map:v3:projection",
             86400,
-            expect.any(String)
+            expect.any(String),
         );
         expect(pipeline.del).toHaveBeenCalledWith("vibe:map:v3:track_ids");
         expect(pipeline.sAdd).toHaveBeenCalledWith("vibe:map:v3:track_ids", [
@@ -299,7 +323,10 @@ describe("computeMapProjection", () => {
             "track-3",
             "track-4",
         ]);
-        expect(pipeline.expire).toHaveBeenCalledWith("vibe:map:v3:track_ids", 86400);
+        expect(pipeline.expire).toHaveBeenCalledWith(
+            "vibe:map:v3:track_ids",
+            86400,
+        );
         expect(pipeline.exec).toHaveBeenCalledTimes(1);
     });
 
@@ -315,7 +342,7 @@ describe("computeMapProjection", () => {
         expect(result.trackCount).toBe(4);
         expect(mockUmapLoggerWarn).toHaveBeenCalledWith(
             "[VIBE-MAP] Failed to cache projection:",
-            "redis down"
+            "redis down",
         );
     });
 
@@ -359,9 +386,17 @@ describe("computeMapProjection", () => {
                     id: "track-5",
                     dominantMood: "moodElectronic",
                 }),
-            ])
+            ]),
         );
-        expect(result.tracks.every((track) => track.x >= 0 && track.x <= 1 && track.y >= 0 && track.y <= 1)).toBe(true);
+        expect(
+            result.tracks.every(
+                (track) =>
+                    track.x >= 0 &&
+                    track.x <= 1 &&
+                    track.y >= 0 &&
+                    track.y <= 1,
+            ),
+        ).toBe(true);
         expect(mockParseEmbedding).toHaveBeenCalledTimes(5);
         expect(lastWorkerFilename).toMatch(/umapWorker\.ts$/);
         expect(lastWorkerOptions).toEqual({
@@ -380,9 +415,12 @@ describe("computeMapProjection", () => {
         expect(pipeline.setEx).toHaveBeenCalledWith(
             "vibe:map:v3:projection",
             86400,
-            expect.any(String)
+            expect.any(String),
         );
-        expect(pipeline.expire).toHaveBeenCalledWith("vibe:map:v3:track_ids", 86400);
+        expect(pipeline.expire).toHaveBeenCalledWith(
+            "vibe:map:v3:track_ids",
+            86400,
+        );
         expect(pipeline.exec).toHaveBeenCalledTimes(1);
     });
 
@@ -392,14 +430,16 @@ describe("computeMapProjection", () => {
 
         const { computeMapProjection } = loadModule();
         const projectionPromise = computeMapProjection();
-        const rejection = expect(projectionPromise).rejects.toThrow("UMAP worker timed out after 15 minutes");
+        const rejection = expect(projectionPromise).rejects.toThrow(
+            "UMAP worker timed out after 15 minutes",
+        );
 
         await flushMicrotasks();
         expect(workers).toHaveLength(1);
 
         await jest.advanceTimersByTimeAsync(5 * 60 * 1000);
         expect(mockUmapLoggerWarn).toHaveBeenCalledWith(
-            "[VIBE-MAP] UMAP worker running for 5+ minutes (5 tracks)"
+            "[VIBE-MAP] UMAP worker running for 5+ minutes (5 tracks)",
         );
 
         await jest.advanceTimersByTimeAsync(10 * 60 * 1000);
@@ -417,7 +457,9 @@ describe("computeMapProjection", () => {
 
         const { computeMapProjection } = loadModule();
 
-        await expect(computeMapProjection()).rejects.toThrow("projection failed");
+        await expect(computeMapProjection()).rejects.toThrow(
+            "projection failed",
+        );
         expect(pipeline.exec).not.toHaveBeenCalled();
     });
 
@@ -441,7 +483,9 @@ describe("computeMapProjection", () => {
 
         const { computeMapProjection } = loadModule();
 
-        await expect(computeMapProjection()).rejects.toThrow("UMAP worker exited with code 2");
+        await expect(computeMapProjection()).rejects.toThrow(
+            "UMAP worker exited with code 2",
+        );
         expect(pipeline.exec).not.toHaveBeenCalled();
     });
 });
@@ -451,11 +495,15 @@ describe("umapWorkerOptions", () => {
         const { umapWorkerOptions } = loadModule();
         const embeddings = [[1, 2, 3]];
 
-        expect(umapWorkerOptions("/workers/umapWorker.ts", embeddings, 2)).toEqual({
+        expect(
+            umapWorkerOptions("/workers/umapWorker.ts", embeddings, 2),
+        ).toEqual({
             workerData: { embeddings, nNeighbors: 2 },
             execArgv: ["--import", "tsx"],
         });
-        expect(umapWorkerOptions("/workers/umapWorker.js", embeddings, 2)).toEqual({
+        expect(
+            umapWorkerOptions("/workers/umapWorker.js", embeddings, 2),
+        ).toEqual({
             workerData: { embeddings, nNeighbors: 2 },
         });
     });

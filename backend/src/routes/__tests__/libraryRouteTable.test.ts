@@ -4,21 +4,21 @@ jest.mock("../../middleware/auth", () => ({
     requireAuth: function requireAuth(
         _req: Request,
         _res: Response,
-        next: NextFunction
+        next: NextFunction,
     ) {
         next();
     },
     requireAdmin: function requireAdmin(
         _req: Request,
         _res: Response,
-        next: NextFunction
+        next: NextFunction,
     ) {
         next();
     },
     requireAuthOrToken: function requireAuthOrToken(
         _req: Request,
         _res: Response,
-        next: NextFunction
+        next: NextFunction,
     ) {
         next();
     },
@@ -28,14 +28,14 @@ jest.mock("../../middleware/rateLimiter", () => ({
     apiLimiter: function apiLimiter(
         _req: Request,
         _res: Response,
-        next: NextFunction
+        next: NextFunction,
     ) {
         next();
     },
     imageLimiter: function imageLimiter(
         _req: Request,
         _res: Response,
-        next: NextFunction
+        next: NextFunction,
     ) {
         next();
     },
@@ -137,8 +137,12 @@ const buildRouteTable = (): Array<RouteTableEntry | RouterMiddlewareEntry> => {
             path: "(router-level)" as const,
         }));
     const routes = stack
-        .filter((layer): layer is RouteLayer & { route: NonNullable<RouteLayer["route"]> } =>
-            Boolean(layer.route)
+        .filter(
+            (
+                layer,
+            ): layer is RouteLayer & {
+                route: NonNullable<RouteLayer["route"]>;
+            } => Boolean(layer.route),
         )
         .flatMap((layer) =>
             Object.keys(layer.route.methods)
@@ -149,11 +153,12 @@ const buildRouteTable = (): Array<RouteTableEntry | RouterMiddlewareEntry> => {
                     middleware: layer.route.stack
                         .map((routeLayer) => routeLayer.handle?.name)
                         .filter(isNamedFunction),
-                }))
+                })),
         )
-        .sort((left, right) =>
-            left.path.localeCompare(right.path) ||
-            left.method.localeCompare(right.method)
+        .sort(
+            (left, right) =>
+                left.path.localeCompare(right.path) ||
+                left.method.localeCompare(right.method),
         );
 
     return [...routerMiddleware, ...routes];

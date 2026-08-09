@@ -2,7 +2,10 @@ import path from "path";
 import fs from "fs";
 import { Request, Response, Router } from "express";
 import { Prisma } from "@prisma/client";
-import { requireSubsonicAuth, subsonicRateLimiter } from "../middleware/subsonicAuth";
+import {
+    requireSubsonicAuth,
+    subsonicRateLimiter,
+} from "../middleware/subsonicAuth";
 import { prisma } from "../utils/db";
 import { seededShuffle } from "../services/artistSlotAllocation";
 import {
@@ -103,7 +106,9 @@ router.use(subsonicRateLimiter);
 router.use(requireSubsonicAuth);
 
 function getCallback(req: Request): string | undefined {
-    return typeof req.query.callback === "string" ? req.query.callback : undefined;
+    return typeof req.query.callback === "string"
+        ? req.query.callback
+        : undefined;
 }
 
 function getRequestContext(req: Request): {
@@ -129,7 +134,11 @@ function parseCountParam(value: unknown, fallback: number, max = 200): number {
     return Math.max(0, Math.min(parsed, max));
 }
 
-function parseSearchCountParam(value: unknown, fallback: number, max: number): number {
+function parseSearchCountParam(
+    value: unknown,
+    fallback: number,
+    max: number,
+): number {
     if (typeof value !== "string") {
         return fallback;
     }
@@ -204,7 +213,9 @@ function parseMusicFolderId(value: unknown): string {
 
 function isUnsupportedMusicFolderId(value: unknown): boolean {
     const musicFolderId = parseMusicFolderId(value);
-    return musicFolderId.length > 0 && musicFolderId !== SUBSONIC_MUSIC_FOLDER_ID;
+    return (
+        musicFolderId.length > 0 && musicFolderId !== SUBSONIC_MUSIC_FOLDER_ID
+    );
 }
 
 function normalizeSearchQuery(rawQuery: string): string {
@@ -212,7 +223,10 @@ function normalizeSearchQuery(rawQuery: string): string {
     if (trimmed.length >= 2) {
         const firstChar = trimmed.charAt(0);
         const lastChar = trimmed.charAt(trimmed.length - 1);
-        if ((firstChar === `"` || firstChar === "'") && firstChar === lastChar) {
+        if (
+            (firstChar === `"` || firstChar === "'") &&
+            firstChar === lastChar
+        ) {
             return trimmed.slice(1, -1).trim();
         }
     }
@@ -240,7 +254,9 @@ const albumListSelect = Prisma.validator<Prisma.AlbumSelect>()({
     },
 });
 
-type AlbumListRecord = Prisma.AlbumGetPayload<{ select: typeof albumListSelect }>;
+type AlbumListRecord = Prisma.AlbumGetPayload<{
+    select: typeof albumListSelect;
+}>;
 
 function parseAlbumListType(value: unknown): AlbumListType | null {
     if (typeof value !== "string") {
@@ -263,7 +279,9 @@ function parseYearParam(value: unknown): number | null {
     return parsed;
 }
 
-function mapAlbumsForSubsonic(albums: AlbumListRecord[]): Record<string, unknown>[] {
+function mapAlbumsForSubsonic(
+    albums: AlbumListRecord[],
+): Record<string, unknown>[] {
     return albums.map((album) =>
         formatAlbumForSubsonic({
             id: album.id,
@@ -294,7 +312,9 @@ type AlbumPlayStat = {
     lastPlayed: Date | null;
 };
 
-async function buildAlbumPlayStats(userId: string): Promise<Map<string, AlbumPlayStat>> {
+async function buildAlbumPlayStats(
+    userId: string,
+): Promise<Map<string, AlbumPlayStat>> {
     const groupedPlays = await prisma.play.groupBy({
         by: ["trackId"],
         where: {
@@ -366,7 +386,10 @@ async function buildAlbumPlayStats(userId: string): Promise<Map<string, AlbumPla
         }
 
         currentStat.playCount += playCount;
-        if (lastPlayed && (!currentStat.lastPlayed || lastPlayed > currentStat.lastPlayed)) {
+        if (
+            lastPlayed &&
+            (!currentStat.lastPlayed || lastPlayed > currentStat.lastPlayed)
+        ) {
             currentStat.lastPlayed = lastPlayed;
         }
     }
@@ -376,7 +399,9 @@ async function buildAlbumPlayStats(userId: string): Promise<Map<string, AlbumPla
 
 function getQueryValues(value: unknown): string[] {
     if (Array.isArray(value)) {
-        return value.filter((entry): entry is string => typeof entry === "string");
+        return value.filter(
+            (entry): entry is string => typeof entry === "string",
+        );
     }
 
     if (typeof value === "string") {
@@ -468,7 +493,13 @@ function parseBookmarkPositionOrError(
     format: ResponseFormat,
     callback?: string,
 ): number | null {
-    const rawPosition = getRequiredQueryString(req, res, "position", format, callback);
+    const rawPosition = getRequiredQueryString(
+        req,
+        res,
+        "position",
+        format,
+        callback,
+    );
     if (!rawPosition) {
         return null;
     }
@@ -566,7 +597,9 @@ async function fetchCoverArtBuffer(
 }
 
 function resolveNativeCoverPath(nativeCoverPath: string): string | null {
-    const coverRoot = path.resolve(path.join(config.music.transcodeCachePath, "../covers"));
+    const coverRoot = path.resolve(
+        path.join(config.music.transcodeCachePath, "../covers"),
+    );
     return safeResolvePath(coverRoot, nativeCoverPath);
 }
 
@@ -821,7 +854,8 @@ export function handleGetOpenSubsonicExtensions(
  */
 export function handleTokenInfo(req: Request, res: Response): void {
     const { format, callback } = getRequestContext(req);
-    const hasApiKey = typeof req.query.apiKey === "string" && req.query.apiKey.length > 0;
+    const hasApiKey =
+        typeof req.query.apiKey === "string" && req.query.apiKey.length > 0;
     const hasToken = typeof req.query.t === "string" && req.query.t.length > 0;
 
     sendSubsonicSuccess(
@@ -830,7 +864,11 @@ export function handleTokenInfo(req: Request, res: Response): void {
             tokenInfo: {
                 valid: true,
                 username: req.user?.username,
-                authType: hasApiKey ? "apiKey" : hasToken ? "token" : "password",
+                authType: hasApiKey
+                    ? "apiKey"
+                    : hasToken
+                      ? "token"
+                      : "password",
             },
         },
         format,
@@ -863,7 +901,10 @@ export function handleGetMusicFolders(req: Request, res: Response): void {
 /**
  * Executes handleGetIndexes.
  */
-export async function handleGetIndexes(req: Request, res: Response): Promise<void> {
+export async function handleGetIndexes(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     if (isUnsupportedMusicFolderId(req.query.musicFolderId)) {
@@ -901,10 +942,11 @@ export async function handleGetIndexes(req: Request, res: Response): Promise<voi
             orderBy: { name: "asc" },
         });
 
-        const lastModified = artists.reduce((latest, artist) => {
-            const syncedAt = artist.lastSynced?.getTime() ?? 0;
-            return Math.max(latest, syncedAt);
-        }, 0) || Date.now();
+        const lastModified =
+            artists.reduce((latest, artist) => {
+                const syncedAt = artist.lastSynced?.getTime() ?? 0;
+                return Math.max(latest, syncedAt);
+            }, 0) || Date.now();
         const ifModifiedSince = parseTimestampParam(req.query.ifModifiedSince);
 
         if (ifModifiedSince !== null && ifModifiedSince >= lastModified) {
@@ -924,7 +966,9 @@ export async function handleGetIndexes(req: Request, res: Response): Promise<voi
                 id: artist.id,
                 name: artist.name,
                 albumCount: artist._count.albums,
-                coverArtId: artist.heroUrl ? toSubsonicId("artist", artist.id) : undefined,
+                coverArtId: artist.heroUrl
+                    ? toSubsonicId("artist", artist.id)
+                    : undefined,
             })),
             { lastModified },
         );
@@ -951,7 +995,10 @@ export async function handleGetIndexes(req: Request, res: Response): Promise<voi
 /**
  * Executes handleGetArtists.
  */
-export async function handleGetArtists(req: Request, res: Response): Promise<void> {
+export async function handleGetArtists(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     if (isUnsupportedMusicFolderId(req.query.musicFolderId)) {
@@ -996,7 +1043,9 @@ export async function handleGetArtists(req: Request, res: Response): Promise<voi
                 id: artist.id,
                 name: artist.name,
                 albumCount: artist._count.albums,
-                coverArtId: artist.heroUrl ? toSubsonicId("artist", artist.id) : undefined,
+                coverArtId: artist.heroUrl
+                    ? toSubsonicId("artist", artist.id)
+                    : undefined,
             })),
         );
 
@@ -1025,7 +1074,10 @@ export async function handleGetArtists(req: Request, res: Response): Promise<voi
 /**
  * Executes handleGetArtist.
  */
-export async function handleGetArtist(req: Request, res: Response): Promise<void> {
+export async function handleGetArtist(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -1147,7 +1199,10 @@ export async function handleGetArtist(req: Request, res: Response): Promise<void
 /**
  * Executes handleGetAlbum.
  */
-export async function handleGetAlbum(req: Request, res: Response): Promise<void> {
+export async function handleGetAlbum(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -1266,7 +1321,10 @@ export async function handleGetAlbum(req: Request, res: Response): Promise<void>
 /**
  * Executes handleGetSong.
  */
-export async function handleGetSong(req: Request, res: Response): Promise<void> {
+export async function handleGetSong(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -1355,7 +1413,10 @@ export async function handleGetSong(req: Request, res: Response): Promise<void> 
 /**
  * Executes handleSearch3.
  */
-export async function handleSearch3(req: Request, res: Response): Promise<void> {
+export async function handleSearch3(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawQuery = getRequiredQueryValue(req, res, "query", format, callback);
     if (rawQuery === null) {
@@ -1411,11 +1472,11 @@ export async function handleSearch3(req: Request, res: Response): Promise<void> 
                     },
                     ...(query
                         ? {
-                            name: {
-                                contains: query,
-                                mode: "insensitive" as const,
-                            },
-                        }
+                              name: {
+                                  contains: query,
+                                  mode: "insensitive" as const,
+                              },
+                          }
                         : {}),
                 },
                 select: {
@@ -1439,23 +1500,23 @@ export async function handleSearch3(req: Request, res: Response): Promise<void> 
                     location: LIBRARY_LOCATION,
                     ...(query
                         ? {
-                            OR: [
-                                {
-                                    title: {
-                                        contains: query,
-                                        mode: "insensitive" as const,
-                                    },
-                                },
-                                {
-                                    artist: {
-                                        name: {
-                                            contains: query,
-                                            mode: "insensitive" as const,
-                                        },
-                                    },
-                                },
-                            ],
-                        }
+                              OR: [
+                                  {
+                                      title: {
+                                          contains: query,
+                                          mode: "insensitive" as const,
+                                      },
+                                  },
+                                  {
+                                      artist: {
+                                          name: {
+                                              contains: query,
+                                              mode: "insensitive" as const,
+                                          },
+                                      },
+                                  },
+                              ],
+                          }
                         : {}),
                 },
                 select: {
@@ -1495,33 +1556,33 @@ export async function handleSearch3(req: Request, res: Response): Promise<void> 
                     },
                     ...(query
                         ? {
-                            OR: [
-                                {
-                                    title: {
-                                        contains: query,
-                                        mode: "insensitive" as const,
-                                    },
-                                },
-                                {
-                                    album: {
-                                        title: {
-                                            contains: query,
-                                            mode: "insensitive" as const,
-                                        },
-                                    },
-                                },
-                                {
-                                    album: {
-                                        artist: {
-                                            name: {
-                                                contains: query,
-                                                mode: "insensitive" as const,
-                                            },
-                                        },
-                                    },
-                                },
-                            ],
-                        }
+                              OR: [
+                                  {
+                                      title: {
+                                          contains: query,
+                                          mode: "insensitive" as const,
+                                      },
+                                  },
+                                  {
+                                      album: {
+                                          title: {
+                                              contains: query,
+                                              mode: "insensitive" as const,
+                                          },
+                                      },
+                                  },
+                                  {
+                                      album: {
+                                          artist: {
+                                              name: {
+                                                  contains: query,
+                                                  mode: "insensitive" as const,
+                                              },
+                                          },
+                                      },
+                                  },
+                              ],
+                          }
                         : {}),
                 },
                 select: {
@@ -1796,9 +1857,7 @@ export async function handleGetAlbumInfo2(
     }
 }
 
-async function findSimilarArtistIds(
-    artistId: string,
-): Promise<string[]> {
+async function findSimilarArtistIds(artistId: string): Promise<string[]> {
     const artist = await prisma.artist.findFirst({
         where: {
             id: artistId,
@@ -1999,7 +2058,9 @@ export async function handleGetSimilarSongs(
 
     const count = parseCountParam(req.query.count, 50, 500);
     const musicFolderId =
-        typeof req.query.musicFolderId === "string" ? req.query.musicFolderId : "";
+        typeof req.query.musicFolderId === "string"
+            ? req.query.musicFolderId
+            : "";
 
     if (musicFolderId && musicFolderId !== SUBSONIC_MUSIC_FOLDER_ID) {
         sendSubsonicSuccess(
@@ -2083,9 +2144,11 @@ export async function handleGetSimilarSongs(
         const songs = tracks
             .sort((left, right) => {
                 const leftRank =
-                    similarArtistRank.get(left.album.artist.id) ?? Number.MAX_SAFE_INTEGER;
+                    similarArtistRank.get(left.album.artist.id) ??
+                    Number.MAX_SAFE_INTEGER;
                 const rightRank =
-                    similarArtistRank.get(right.album.artist.id) ?? Number.MAX_SAFE_INTEGER;
+                    similarArtistRank.get(right.album.artist.id) ??
+                    Number.MAX_SAFE_INTEGER;
                 if (leftRank !== rightRank) {
                     return leftRank - rightRank;
                 }
@@ -2156,7 +2219,9 @@ export async function handleGetSimilarSongs2(
 
     const count = parseCountParam(req.query.count, 50, 500);
     const musicFolderId =
-        typeof req.query.musicFolderId === "string" ? req.query.musicFolderId : "";
+        typeof req.query.musicFolderId === "string"
+            ? req.query.musicFolderId
+            : "";
 
     if (musicFolderId && musicFolderId !== SUBSONIC_MUSIC_FOLDER_ID) {
         sendSubsonicSuccess(
@@ -2224,45 +2289,45 @@ export async function handleGetSimilarSongs2(
         const similarArtistTracks =
             similarArtistIds.length > 0
                 ? await prisma.track.findMany({
-                    where: {
-                        id: {
-                            not: trackId,
-                        },
-                        album: {
-                            location: LIBRARY_LOCATION,
-                            artistId: {
-                                in: similarArtistIds,
-                            },
-                        },
-                    },
-                    select: similarSongTrackSelect,
-                    orderBy: [
-                        { album: { artist: { name: "asc" } } },
-                        { album: { title: "asc" } },
-                        { discNo: "asc" },
-                        { trackNo: "asc" },
-                        { id: "asc" },
-                    ],
-                    take: Math.max(count, Math.min(5000, count * 6)),
-                })
+                      where: {
+                          id: {
+                              not: trackId,
+                          },
+                          album: {
+                              location: LIBRARY_LOCATION,
+                              artistId: {
+                                  in: similarArtistIds,
+                              },
+                          },
+                      },
+                      select: similarSongTrackSelect,
+                      orderBy: [
+                          { album: { artist: { name: "asc" } } },
+                          { album: { title: "asc" } },
+                          { discNo: "asc" },
+                          { trackNo: "asc" },
+                          { id: "asc" },
+                      ],
+                      take: Math.max(count, Math.min(5000, count * 6)),
+                  })
                 : [];
 
         const genreTracks =
             genreFilter !== null
                 ? await prisma.track.findMany({
-                    where: {
-                        id: {
-                            not: trackId,
-                        },
-                        album: {
-                            location: LIBRARY_LOCATION,
-                        },
-                        ...genreFilter,
-                    },
-                    select: similarSongTrackSelect,
-                    orderBy: [{ title: "asc" }, { id: "asc" }],
-                    take: Math.max(count, Math.min(5000, count * 6)),
-                })
+                      where: {
+                          id: {
+                              not: trackId,
+                          },
+                          album: {
+                              location: LIBRARY_LOCATION,
+                          },
+                          ...genreFilter,
+                      },
+                      select: similarSongTrackSelect,
+                      orderBy: [{ title: "asc" }, { id: "asc" }],
+                      take: Math.max(count, Math.min(5000, count * 6)),
+                  })
                 : [];
 
         const sameArtistTracks = await prisma.track.findMany({
@@ -2369,9 +2434,18 @@ async function resolveArtistIdForTopSongs(
 /**
  * Executes handleGetTopSongs.
  */
-export async function handleGetTopSongs(req: Request, res: Response): Promise<void> {
+export async function handleGetTopSongs(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
-    const artistParam = getRequiredQueryString(req, res, "artist", format, callback);
+    const artistParam = getRequiredQueryString(
+        req,
+        res,
+        "artist",
+        format,
+        callback,
+    );
     if (!artistParam) {
         return;
     }
@@ -2501,12 +2575,7 @@ async function handleSearchLike(
             song: [],
         };
 
-        sendSubsonicSuccess(
-            res,
-            payload,
-            format,
-            callback,
-        );
+        sendSubsonicSuccess(res, payload, format, callback);
         return;
     }
 
@@ -2543,11 +2612,11 @@ async function handleSearchLike(
                     },
                     ...(query
                         ? {
-                            name: {
-                                contains: query,
-                                mode: "insensitive" as const,
-                            },
-                        }
+                              name: {
+                                  contains: query,
+                                  mode: "insensitive" as const,
+                              },
+                          }
                         : {}),
                 },
                 select: {
@@ -2571,23 +2640,23 @@ async function handleSearchLike(
                     location: LIBRARY_LOCATION,
                     ...(query
                         ? {
-                            OR: [
-                                {
-                                    title: {
-                                        contains: query,
-                                        mode: "insensitive" as const,
-                                    },
-                                },
-                                {
-                                    artist: {
-                                        name: {
-                                            contains: query,
-                                            mode: "insensitive" as const,
-                                        },
-                                    },
-                                },
-                            ],
-                        }
+                              OR: [
+                                  {
+                                      title: {
+                                          contains: query,
+                                          mode: "insensitive" as const,
+                                      },
+                                  },
+                                  {
+                                      artist: {
+                                          name: {
+                                              contains: query,
+                                              mode: "insensitive" as const,
+                                          },
+                                      },
+                                  },
+                              ],
+                          }
                         : {}),
                 },
                 select: {
@@ -2627,33 +2696,33 @@ async function handleSearchLike(
                     },
                     ...(query
                         ? {
-                            OR: [
-                                {
-                                    title: {
-                                        contains: query,
-                                        mode: "insensitive" as const,
-                                    },
-                                },
-                                {
-                                    album: {
-                                        title: {
-                                            contains: query,
-                                            mode: "insensitive" as const,
-                                        },
-                                    },
-                                },
-                                {
-                                    album: {
-                                        artist: {
-                                            name: {
-                                                contains: query,
-                                                mode: "insensitive" as const,
-                                            },
-                                        },
-                                    },
-                                },
-                            ],
-                        }
+                              OR: [
+                                  {
+                                      title: {
+                                          contains: query,
+                                          mode: "insensitive" as const,
+                                      },
+                                  },
+                                  {
+                                      album: {
+                                          title: {
+                                              contains: query,
+                                              mode: "insensitive" as const,
+                                          },
+                                      },
+                                  },
+                                  {
+                                      album: {
+                                          artist: {
+                                              name: {
+                                                  contains: query,
+                                                  mode: "insensitive" as const,
+                                              },
+                                          },
+                                      },
+                                  },
+                              ],
+                          }
                         : {}),
                 },
                 select: {
@@ -2719,12 +2788,7 @@ async function handleSearchLike(
         const payload: Record<string, unknown> = {};
         payload[responseKey] = searchResultPayload;
 
-        sendSubsonicSuccess(
-            res,
-            payload,
-            format,
-            callback,
-        );
+        sendSubsonicSuccess(res, payload, format, callback);
     } catch {
         sendSubsonicError(
             res,
@@ -2746,7 +2810,10 @@ export async function handleSearch(req: Request, res: Response): Promise<void> {
 /**
  * Executes handleSearch2.
  */
-export async function handleSearch2(req: Request, res: Response): Promise<void> {
+export async function handleSearch2(
+    req: Request,
+    res: Response,
+): Promise<void> {
     await handleSearchLike(req, res, "searchResult2");
 }
 
@@ -2773,7 +2840,9 @@ async function handleGetAlbumListLike(
     const size = parseCountParam(req.query.size, 10, 500);
     const offset = parseOffsetParam(req.query.offset);
     const musicFolderId =
-        typeof req.query.musicFolderId === "string" ? req.query.musicFolderId : "";
+        typeof req.query.musicFolderId === "string"
+            ? req.query.musicFolderId
+            : "";
 
     if (musicFolderId && musicFolderId !== SUBSONIC_MUSIC_FOLDER_ID) {
         const payload: Record<string, unknown> = {};
@@ -2781,12 +2850,7 @@ async function handleGetAlbumListLike(
             album: [],
         };
 
-        sendSubsonicSuccess(
-            res,
-            payload,
-            format,
-            callback,
-        );
+        sendSubsonicSuccess(res, payload, format, callback);
         return;
     }
 
@@ -2808,7 +2872,11 @@ async function handleGetAlbumListLike(
             });
             shuffleInPlace(candidates);
             albums = candidates.slice(offset, offset + size);
-        } else if (type === "frequent" || type === "highest" || type === "recent") {
+        } else if (
+            type === "frequent" ||
+            type === "highest" ||
+            type === "recent"
+        ) {
             const albumStats = await buildAlbumPlayStats(req.user!.id);
             const sortedAlbumIds = Array.from(albumStats.entries())
                 .sort(([leftId, left], [rightId, right]) => {
@@ -2856,7 +2924,9 @@ async function handleGetAlbumListLike(
                 );
                 albums = pagedAlbumIds
                     .map((albumId) => albumById.get(albumId))
-                    .filter((album): album is AlbumListRecord => Boolean(album));
+                    .filter((album): album is AlbumListRecord =>
+                        Boolean(album),
+                    );
             }
         } else {
             const where: Prisma.AlbumWhereInput = {
@@ -2868,9 +2938,17 @@ async function handleGetAlbumListLike(
             ];
 
             if (type === "newest") {
-                orderBy = [{ lastSynced: "desc" }, { title: "asc" }, { id: "asc" }];
+                orderBy = [
+                    { lastSynced: "desc" },
+                    { title: "asc" },
+                    { id: "asc" },
+                ];
             } else if (type === "alphabeticalByArtist") {
-                orderBy = [{ artist: { name: "asc" } }, { title: "asc" }, { id: "asc" }];
+                orderBy = [
+                    { artist: { name: "asc" } },
+                    { title: "asc" },
+                    { id: "asc" },
+                ];
             } else if (type === "byYear") {
                 const fromYear = parseYearParam(req.query.fromYear);
                 const toYear = parseYearParam(req.query.toYear);
@@ -2896,7 +2974,9 @@ async function handleGetAlbumListLike(
                 ];
             } else if (type === "byGenre") {
                 const genre =
-                    typeof req.query.genre === "string" ? req.query.genre.trim() : "";
+                    typeof req.query.genre === "string"
+                        ? req.query.genre.trim()
+                        : "";
                 if (!genre) {
                     sendSubsonicError(
                         res,
@@ -2938,12 +3018,7 @@ async function handleGetAlbumListLike(
             album: mapAlbumsForSubsonic(albums),
         };
 
-        sendSubsonicSuccess(
-            res,
-            payload,
-            format,
-            callback,
-        );
+        sendSubsonicSuccess(res, payload, format, callback);
     } catch {
         sendSubsonicError(
             res,
@@ -2958,18 +3033,26 @@ async function handleGetAlbumListLike(
 /**
  * Executes handleGetAlbumList.
  */
-export async function handleGetAlbumList(req: Request, res: Response): Promise<void> {
+export async function handleGetAlbumList(
+    req: Request,
+    res: Response,
+): Promise<void> {
     await handleGetAlbumListLike(req, res, "albumList");
 }
 
 /**
  * Executes handleGetAlbumList2.
  */
-export async function handleGetAlbumList2(req: Request, res: Response): Promise<void> {
+export async function handleGetAlbumList2(
+    req: Request,
+    res: Response,
+): Promise<void> {
     await handleGetAlbumListLike(req, res, "albumList2");
 }
 
-async function getRootMusicDirectoryChildren(): Promise<Record<string, unknown>[]> {
+async function getRootMusicDirectoryChildren(): Promise<
+    Record<string, unknown>[]
+> {
     const artists = await prisma.artist.findMany({
         where: {
             albums: {
@@ -3237,7 +3320,10 @@ export async function handleGetMusicDirectory(
 /**
  * Executes handleGetGenres.
  */
-export async function handleGetGenres(req: Request, res: Response): Promise<void> {
+export async function handleGetGenres(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     try {
@@ -3285,7 +3371,9 @@ export async function handleGetGenres(req: Request, res: Response): Promise<void
                         value: genre.name,
                         songCount: genre.trackGenres.length,
                         albumCount: new Set(
-                            genre.trackGenres.map((entry) => entry.track.albumId),
+                            genre.trackGenres.map(
+                                (entry) => entry.track.albumId,
+                            ),
                         ).size,
                     })),
                 },
@@ -3329,7 +3417,9 @@ export async function handleGetSongsByGenre(
     const count = parseCountParam(req.query.count, 50, 500);
     const offset = parseOffsetParam(req.query.offset);
     const musicFolderId =
-        typeof req.query.musicFolderId === "string" ? req.query.musicFolderId : "";
+        typeof req.query.musicFolderId === "string"
+            ? req.query.musicFolderId
+            : "";
 
     if (musicFolderId && musicFolderId !== SUBSONIC_MUSIC_FOLDER_ID) {
         sendSubsonicSuccess(
@@ -3375,7 +3465,7 @@ export async function handleGetSongsByGenre(
         const dayKey = new Date().toISOString().slice(0, 10);
         const orderedIds = seededShuffle(
             matchingTracks.map((t) => t.id),
-            `subsonic-songs-by-genre-${genre.toLowerCase()}-${dayKey}`
+            `subsonic-songs-by-genre-${genre.toLowerCase()}-${dayKey}`,
         );
         const pageIds = orderedIds.slice(offset, offset + count);
         const trackRows =
@@ -3451,7 +3541,9 @@ export async function handleGetRandomSongs(
     const { format, callback } = getRequestContext(req);
     const size = parseCountParam(req.query.size, 10, 500);
     const musicFolderId =
-        typeof req.query.musicFolderId === "string" ? req.query.musicFolderId : "";
+        typeof req.query.musicFolderId === "string"
+            ? req.query.musicFolderId
+            : "";
     const genre =
         typeof req.query.genre === "string" ? req.query.genre.trim() : "";
     const fromYear = parseYearParam(req.query.fromYear);
@@ -3538,14 +3630,12 @@ export async function handleGetRandomSongs(
         });
 
         shuffleInPlace(candidates);
-        const songs = candidates
-            .slice(0, size)
-            .map((track) =>
-                formatSongForSubsonic({
-                    ...track,
-                    genre: genre || undefined,
-                }),
-            );
+        const songs = candidates.slice(0, size).map((track) =>
+            formatSongForSubsonic({
+                ...track,
+                genre: genre || undefined,
+            }),
+        );
 
         sendSubsonicSuccess(
             res,
@@ -3653,7 +3743,10 @@ export function resetSubsonicScanStartCooldownForTests(): void {
 /**
  * Executes handleGetPlayQueue.
  */
-export async function handleGetPlayQueue(req: Request, res: Response): Promise<void> {
+export async function handleGetPlayQueue(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const playbackIndex = parsePlaybackDeviceIndex(req.query.index);
     const deviceId = getLegacyPlaybackDeviceId(playbackIndex);
@@ -3668,9 +3761,7 @@ export async function handleGetPlayQueue(req: Request, res: Response): Promise<v
             },
         });
 
-        const queueItems = Array.isArray(state?.queue)
-            ? state.queue
-            : [];
+        const queueItems = Array.isArray(state?.queue) ? state.queue : [];
 
         const queueTrackIds = queueItems
             .map((item) =>
@@ -3691,49 +3782,52 @@ export async function handleGetPlayQueue(req: Request, res: Response): Promise<v
             });
 
         const uniqueTrackIds = Array.from(new Set(queueTrackIds));
-        const tracks = uniqueTrackIds.length > 0
-            ? await prisma.track.findMany({
-                where: {
-                    id: {
-                        in: uniqueTrackIds,
-                    },
-                    album: {
-                        location: LIBRARY_LOCATION,
-                    },
-                },
-                select: {
-                    id: true,
-                    title: true,
-                    trackNo: true,
-                    discNo: true,
-                    duration: true,
-                    fileSize: true,
-                    mime: true,
-                    filePath: true,
-                    album: {
-                        select: {
-                            id: true,
-                            title: true,
-                            year: true,
-                            coverUrl: true,
-                            genres: true,
-                            userGenres: true,
-                            artist: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                },
-                            },
-                        },
-                    },
-                },
-            })
-            : [];
+        const tracks =
+            uniqueTrackIds.length > 0
+                ? await prisma.track.findMany({
+                      where: {
+                          id: {
+                              in: uniqueTrackIds,
+                          },
+                          album: {
+                              location: LIBRARY_LOCATION,
+                          },
+                      },
+                      select: {
+                          id: true,
+                          title: true,
+                          trackNo: true,
+                          discNo: true,
+                          duration: true,
+                          fileSize: true,
+                          mime: true,
+                          filePath: true,
+                          album: {
+                              select: {
+                                  id: true,
+                                  title: true,
+                                  year: true,
+                                  coverUrl: true,
+                                  genres: true,
+                                  userGenres: true,
+                                  artist: {
+                                      select: {
+                                          id: true,
+                                          name: true,
+                                      },
+                                  },
+                              },
+                          },
+                      },
+                  })
+                : [];
 
         const trackById = new Map(tracks.map((track) => [track.id, track]));
         const entry = queueTrackIds
             .map((trackId) => trackById.get(trackId))
-            .filter((track): track is NonNullable<typeof track> => Boolean(track))
+            .filter((track): track is NonNullable<typeof track> =>
+                Boolean(track),
+            )
             .map((track) => formatSongForSubsonic(track));
 
         const current = Math.min(
@@ -3773,7 +3867,10 @@ export async function handleGetPlayQueue(req: Request, res: Response): Promise<v
 /**
  * Executes handleSavePlayQueue.
  */
-export async function handleSavePlayQueue(req: Request, res: Response): Promise<void> {
+export async function handleSavePlayQueue(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const playbackIndex = parsePlaybackDeviceIndex(req.query.index);
     const deviceId = getLegacyPlaybackDeviceId(playbackIndex);
@@ -3809,43 +3906,46 @@ export async function handleSavePlayQueue(req: Request, res: Response): Promise<
             return;
         }
 
-        const tracks = uniqueTrackIds.length > 0
-            ? await prisma.track.findMany({
-                where: {
-                    id: {
-                        in: uniqueTrackIds,
-                    },
-                    album: {
-                        location: LIBRARY_LOCATION,
-                    },
-                },
-                select: {
-                    id: true,
-                    title: true,
-                    duration: true,
-                    album: {
-                        select: {
-                            id: true,
-                            title: true,
-                            coverUrl: true,
-                            genres: true,
-                            userGenres: true,
-                            artist: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                },
-                            },
-                        },
-                    },
-                },
-            })
-            : [];
+        const tracks =
+            uniqueTrackIds.length > 0
+                ? await prisma.track.findMany({
+                      where: {
+                          id: {
+                              in: uniqueTrackIds,
+                          },
+                          album: {
+                              location: LIBRARY_LOCATION,
+                          },
+                      },
+                      select: {
+                          id: true,
+                          title: true,
+                          duration: true,
+                          album: {
+                              select: {
+                                  id: true,
+                                  title: true,
+                                  coverUrl: true,
+                                  genres: true,
+                                  userGenres: true,
+                                  artist: {
+                                      select: {
+                                          id: true,
+                                          name: true,
+                                      },
+                                  },
+                              },
+                          },
+                      },
+                  })
+                : [];
 
         const trackById = new Map(tracks.map((track) => [track.id, track]));
         const queue = trackIds
             .map((trackId) => trackById.get(trackId))
-            .filter((track): track is NonNullable<typeof track> => Boolean(track))
+            .filter((track): track is NonNullable<typeof track> =>
+                Boolean(track),
+            )
             .map((track) => ({
                 id: toSubsonicId("track", track.id),
                 title: track.title,
@@ -3867,9 +3967,10 @@ export async function handleSavePlayQueue(req: Request, res: Response): Promise<
             requestedCurrent,
             queue.length > 0 ? queue.length - 1 : 0,
         );
-        const currentTrackId = queue.length > 0
-            ? parseSubsonicId(queue[currentIndex].id, "track").id
-            : null;
+        const currentTrackId =
+            queue.length > 0
+                ? parseSubsonicId(queue[currentIndex].id, "track").id
+                : null;
 
         await prisma.playbackState.upsert({
             where: {
@@ -3933,7 +4034,10 @@ export async function handleSavePlayQueueByIndex(
 /**
  * Executes handleGetBookmarks.
  */
-export async function handleGetBookmarks(req: Request, res: Response): Promise<void> {
+export async function handleGetBookmarks(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     try {
         const bookmarks = await prisma.bookmark.findMany({
@@ -3978,7 +4082,10 @@ export async function handleGetBookmarks(req: Request, res: Response): Promise<v
 /**
  * Executes handleCreateBookmark.
  */
-export async function handleCreateBookmark(req: Request, res: Response): Promise<void> {
+export async function handleCreateBookmark(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -3998,7 +4105,12 @@ export async function handleCreateBookmark(req: Request, res: Response): Promise
         return;
     }
 
-    const positionSeconds = parseBookmarkPositionOrError(req, res, format, callback);
+    const positionSeconds = parseBookmarkPositionOrError(
+        req,
+        res,
+        format,
+        callback,
+    );
     if (positionSeconds === null) {
         return;
     }
@@ -4056,7 +4168,10 @@ export async function handleCreateBookmark(req: Request, res: Response): Promise
 /**
  * Executes handleDeleteBookmark.
  */
-export async function handleDeleteBookmark(req: Request, res: Response): Promise<void> {
+export async function handleDeleteBookmark(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -4099,7 +4214,10 @@ export async function handleDeleteBookmark(req: Request, res: Response): Promise
 /**
  * Executes handleGetScanStatus.
  */
-export async function handleGetScanStatus(req: Request, res: Response): Promise<void> {
+export async function handleGetScanStatus(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     try {
@@ -4134,7 +4252,10 @@ export async function handleGetScanStatus(req: Request, res: Response): Promise<
 /**
  * Executes handleStartScan.
  */
-export async function handleStartScan(req: Request, res: Response): Promise<void> {
+export async function handleStartScan(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     try {
@@ -4166,7 +4287,9 @@ export async function handleStartScan(req: Request, res: Response): Promise<void
             lastSubsonicScanStartRequestAt = nowMs;
         }
 
-        const activeCount = parseScanProgressCount(activeJobs[0] as ScanQueueJobLike);
+        const activeCount = parseScanProgressCount(
+            activeJobs[0] as ScanQueueJobLike,
+        );
         sendSubsonicSuccess(
             res,
             {
@@ -4399,7 +4522,10 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         return;
     }
 
-    const quality = resolveSubsonicStreamQuality(req.query.maxBitRate, req.query.format);
+    const quality = resolveSubsonicStreamQuality(
+        req.query.maxBitRate,
+        req.query.format,
+    );
 
     let streamingService: AudioStreamingService | null = null;
 
@@ -4505,7 +4631,10 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
 /**
  * Executes handleDownload.
  */
-export async function handleDownload(req: Request, res: Response): Promise<void> {
+export async function handleDownload(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -4580,7 +4709,10 @@ export async function handleDownload(req: Request, res: Response): Promise<void>
 /**
  * Executes handleGetLyrics.
  */
-export async function handleGetLyrics(req: Request, res: Response): Promise<void> {
+export async function handleGetLyrics(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawArtist =
         typeof req.query.artist === "string" ? req.query.artist.trim() : "";
@@ -4603,19 +4735,19 @@ export async function handleGetLyrics(req: Request, res: Response): Promise<void
             where: {
                 title: rawTitle
                     ? {
-                        contains: rawTitle,
-                        mode: "insensitive",
-                    }
+                          contains: rawTitle,
+                          mode: "insensitive",
+                      }
                     : undefined,
                 album: {
                     location: LIBRARY_LOCATION,
                     artist: rawArtist
                         ? {
-                            name: {
-                                contains: rawArtist,
-                                mode: "insensitive",
-                            },
-                        }
+                              name: {
+                                  contains: rawArtist,
+                                  mode: "insensitive",
+                              },
+                          }
                         : undefined,
                 },
             },
@@ -4654,9 +4786,9 @@ export async function handleGetLyrics(req: Request, res: Response): Promise<void
         const lyrics = await getLyrics(track.id);
         const syncedAsPlain = lyrics.syncedLyrics
             ? parseSyncedLyricsLines(lyrics.syncedLyrics)
-                .map((line) => line.value)
-                .filter((line) => line.length > 0)
-                .join("\n")
+                  .map((line) => line.value)
+                  .filter((line) => line.length > 0)
+                  .join("\n")
             : "";
         const lyricsValue = lyrics.plainLyrics ?? syncedAsPlain;
 
@@ -4760,11 +4892,11 @@ export async function handleGetLyricsBySongId(
         const line = lyrics.syncedLyrics
             ? parseSyncedLyricsLines(lyrics.syncedLyrics)
             : [
-                {
-                    value: lyrics.plainLyrics ?? "",
-                    start: 0,
-                },
-            ];
+                  {
+                      value: lyrics.plainLyrics ?? "",
+                      start: 0,
+                  },
+              ];
 
         sendSubsonicSuccess(
             res,
@@ -4799,7 +4931,10 @@ export async function handleGetLyricsBySongId(
 /**
  * Executes handleGetCoverArt.
  */
-export async function handleGetCoverArt(req: Request, res: Response): Promise<void> {
+export async function handleGetCoverArt(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -4990,7 +5125,9 @@ async function ensureLibraryAlbumsExist(albumIds: string[]): Promise<boolean> {
     return albums.length === albumIds.length;
 }
 
-async function ensureLibraryArtistsExist(artistIds: string[]): Promise<boolean> {
+async function ensureLibraryArtistsExist(
+    artistIds: string[],
+): Promise<boolean> {
     if (artistIds.length === 0) {
         return true;
     }
@@ -5068,7 +5205,10 @@ async function resolveStarMutationTrackIds(input: {
 /**
  * Executes handleGetPlaylists.
  */
-export async function handleGetPlaylists(req: Request, res: Response): Promise<void> {
+export async function handleGetPlaylists(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     try {
@@ -5152,7 +5292,10 @@ export async function handleGetPlaylists(req: Request, res: Response): Promise<v
 /**
  * Executes handleGetPlaylist.
  */
-export async function handleGetPlaylist(req: Request, res: Response): Promise<void> {
+export async function handleGetPlaylist(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -5276,11 +5419,15 @@ export async function handleGetPlaylist(req: Request, res: Response): Promise<vo
 /**
  * Executes handleCreatePlaylist.
  */
-export async function handleCreatePlaylist(req: Request, res: Response): Promise<void> {
+export async function handleCreatePlaylist(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawPlaylistId =
         typeof req.query.playlistId === "string" ? req.query.playlistId : "";
-    const rawName = typeof req.query.name === "string" ? req.query.name.trim() : "";
+    const rawName =
+        typeof req.query.name === "string" ? req.query.name.trim() : "";
     const rawSongIds = getQueryValues(req.query.songId);
 
     if (!rawPlaylistId && !rawName) {
@@ -5409,7 +5556,10 @@ export async function handleCreatePlaylist(req: Request, res: Response): Promise
 /**
  * Executes handleUpdatePlaylist.
  */
-export async function handleUpdatePlaylist(req: Request, res: Response): Promise<void> {
+export async function handleUpdatePlaylist(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawPlaylistId = getRequiredQueryString(
         req,
@@ -5422,7 +5572,8 @@ export async function handleUpdatePlaylist(req: Request, res: Response): Promise
         return;
     }
 
-    const rawName = typeof req.query.name === "string" ? req.query.name.trim() : "";
+    const rawName =
+        typeof req.query.name === "string" ? req.query.name.trim() : "";
     const rawSongIdsToAdd = getQueryValues(req.query.songIdToAdd);
     const rawSongIndexesToRemove = getQueryValues(req.query.songIndexToRemove);
 
@@ -5478,7 +5629,9 @@ export async function handleUpdatePlaylist(req: Request, res: Response): Promise
                 new Set(
                     rawSongIndexesToRemove
                         .map((value) => Number.parseInt(value, 10))
-                        .filter((value) => Number.isInteger(value) && value >= 0),
+                        .filter(
+                            (value) => Number.isInteger(value) && value >= 0,
+                        ),
                 ),
             );
 
@@ -5555,7 +5708,9 @@ export async function handleUpdatePlaylist(req: Request, res: Response): Promise
                 }),
             ]);
 
-            const existingTrackIds = new Set(existingItems.map((item) => item.trackId));
+            const existingTrackIds = new Set(
+                existingItems.map((item) => item.trackId),
+            );
             const filteredTrackIds = trackIdsToAdd.filter(
                 (trackId) => !existingTrackIds.has(trackId),
             );
@@ -5615,7 +5770,10 @@ export async function handleUpdatePlaylist(req: Request, res: Response): Promise
 /**
  * Executes handleDeletePlaylist.
  */
-export async function handleDeletePlaylist(req: Request, res: Response): Promise<void> {
+export async function handleDeletePlaylist(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
@@ -5679,7 +5837,10 @@ export async function handleDeletePlaylist(req: Request, res: Response): Promise
 /**
  * Executes handleScrobble.
  */
-export async function handleScrobble(req: Request, res: Response): Promise<void> {
+export async function handleScrobble(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawIds = getQueryValues(req.query.id);
     if (rawIds.length === 0) {
@@ -5698,7 +5859,9 @@ export async function handleScrobble(req: Request, res: Response): Promise<void>
 
     let parsedTrackIds: string[] = [];
     try {
-        parsedTrackIds = rawIds.map((rawId) => parseSubsonicId(rawId, "track").id);
+        parsedTrackIds = rawIds.map(
+            (rawId) => parseSubsonicId(rawId, "track").id,
+        );
     } catch {
         sendSubsonicError(
             res,
@@ -5727,7 +5890,9 @@ export async function handleScrobble(req: Request, res: Response): Promise<void>
         const playRows = parsedTrackIds.flatMap((trackId, index) => {
             const submissionValue =
                 rawSubmissionValues.length > 0
-                    ? rawSubmissionValues[Math.min(index, rawSubmissionValues.length - 1)]
+                    ? rawSubmissionValues[
+                          Math.min(index, rawSubmissionValues.length - 1)
+                      ]
                     : undefined;
             const shouldSubmit = submissionValue
                 ? !["false", "0"].includes(submissionValue.toLowerCase())
@@ -5741,7 +5906,9 @@ export async function handleScrobble(req: Request, res: Response): Promise<void>
                 rawTimes.length > 0
                     ? rawTimes[Math.min(index, rawTimes.length - 1)]
                     : undefined;
-            const parsedTime = rawTime ? Number.parseInt(rawTime, 10) : Number.NaN;
+            const parsedTime = rawTime
+                ? Number.parseInt(rawTime, 10)
+                : Number.NaN;
             const playedAt =
                 Number.isFinite(parsedTime) && parsedTime > 0
                     ? new Date(parsedTime * 1000)
@@ -5777,7 +5944,10 @@ export async function handleScrobble(req: Request, res: Response): Promise<void>
 /**
  * Executes handleGetNowPlaying.
  */
-export async function handleGetNowPlaying(req: Request, res: Response): Promise<void> {
+export async function handleGetNowPlaying(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     try {
@@ -5876,11 +6046,15 @@ export async function handleGetNowPlaying(req: Request, res: Response): Promise<
                     playerId: state.deviceId,
                     minutesAgo: Math.max(
                         0,
-                        Math.floor((Date.now() - state.updatedAt.getTime()) / 60000),
+                        Math.floor(
+                            (Date.now() - state.updatedAt.getTime()) / 60000,
+                        ),
                     ),
                 };
             })
-            .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+            .filter(
+                (entry): entry is NonNullable<typeof entry> => entry !== null,
+            );
 
         sendSubsonicSuccess(
             res,
@@ -5906,14 +6080,21 @@ export async function handleGetNowPlaying(req: Request, res: Response): Promise<
 /**
  * Executes handleGetUser.
  */
-export async function handleGetUser(req: Request, res: Response): Promise<void> {
+export async function handleGetUser(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const requestedUsername =
-        typeof req.query.username === "string" && req.query.username.trim().length > 0
+        typeof req.query.username === "string" &&
+        req.query.username.trim().length > 0
             ? req.query.username.trim()
             : req.user!.username;
 
-    if (requestedUsername !== req.user!.username && req.user!.role !== "admin") {
+    if (
+        requestedUsername !== req.user!.username &&
+        req.user!.role !== "admin"
+    ) {
         sendSubsonicError(
             res,
             SubsonicErrorCode.NOT_AUTHORIZED,
@@ -5982,14 +6163,21 @@ export async function handleGetUser(req: Request, res: Response): Promise<void> 
 /**
  * Executes handleGetAvatar.
  */
-export async function handleGetAvatar(req: Request, res: Response): Promise<void> {
+export async function handleGetAvatar(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const requestedUsername =
-        typeof req.query.username === "string" && req.query.username.trim().length > 0
+        typeof req.query.username === "string" &&
+        req.query.username.trim().length > 0
             ? req.query.username.trim()
             : req.user!.username;
 
-    if (requestedUsername !== req.user!.username && req.user!.role !== "admin") {
+    if (
+        requestedUsername !== req.user!.username &&
+        req.user!.role !== "admin"
+    ) {
         sendSubsonicError(
             res,
             SubsonicErrorCode.NOT_AUTHORIZED,
@@ -6038,14 +6226,23 @@ export async function handleGetAvatar(req: Request, res: Response): Promise<void
 /**
  * Executes handleSetRating.
  */
-export async function handleSetRating(req: Request, res: Response): Promise<void> {
+export async function handleSetRating(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
     const rawId = getRequiredQueryString(req, res, "id", format, callback);
     if (!rawId) {
         return;
     }
 
-    const rawRating = getRequiredQueryString(req, res, "rating", format, callback);
+    const rawRating = getRequiredQueryString(
+        req,
+        res,
+        "rating",
+        format,
+        callback,
+    );
     if (!rawRating) {
         return;
     }
@@ -6199,59 +6396,59 @@ async function buildStarredPayload(userId: string): Promise<{
     const [albums, artists] = await Promise.all([
         albumStarredAt.size > 0
             ? prisma.album.findMany({
-                where: {
-                    id: {
-                        in: Array.from(albumStarredAt.keys()),
-                    },
-                    location: LIBRARY_LOCATION,
-                },
-                select: {
-                    id: true,
-                    title: true,
-                    year: true,
-                    coverUrl: true,
-                    genres: true,
-                    userGenres: true,
-                    artist: {
-                        select: {
-                            id: true,
-                            name: true,
-                        },
-                    },
-                    tracks: {
-                        select: {
-                            duration: true,
-                        },
-                    },
-                },
-            })
+                  where: {
+                      id: {
+                          in: Array.from(albumStarredAt.keys()),
+                      },
+                      location: LIBRARY_LOCATION,
+                  },
+                  select: {
+                      id: true,
+                      title: true,
+                      year: true,
+                      coverUrl: true,
+                      genres: true,
+                      userGenres: true,
+                      artist: {
+                          select: {
+                              id: true,
+                              name: true,
+                          },
+                      },
+                      tracks: {
+                          select: {
+                              duration: true,
+                          },
+                      },
+                  },
+              })
             : Promise.resolve([]),
         artistStarredAt.size > 0
             ? prisma.artist.findMany({
-                where: {
-                    id: {
-                        in: Array.from(artistStarredAt.keys()),
-                    },
-                    albums: {
-                        some: {
-                            location: LIBRARY_LOCATION,
-                        },
-                    },
-                },
-                select: {
-                    id: true,
-                    name: true,
-                    heroUrl: true,
-                    albums: {
-                        where: {
-                            location: LIBRARY_LOCATION,
-                        },
-                        select: {
-                            id: true,
-                        },
-                    },
-                },
-            })
+                  where: {
+                      id: {
+                          in: Array.from(artistStarredAt.keys()),
+                      },
+                      albums: {
+                          some: {
+                              location: LIBRARY_LOCATION,
+                          },
+                      },
+                  },
+                  select: {
+                      id: true,
+                      name: true,
+                      heroUrl: true,
+                      albums: {
+                          where: {
+                              location: LIBRARY_LOCATION,
+                          },
+                          select: {
+                              id: true,
+                          },
+                      },
+                  },
+              })
             : Promise.resolve([]),
     ]);
 
@@ -6274,7 +6471,9 @@ async function buildStarredPayload(userId: string): Promise<{
             starred: albumStarredAt.get(album.id)?.toISOString(),
         }))
         .sort((left, right) =>
-            String(right.starred ?? "").localeCompare(String(left.starred ?? "")),
+            String(right.starred ?? "").localeCompare(
+                String(left.starred ?? ""),
+            ),
         );
 
     const artistEntries = artists
@@ -6288,7 +6487,9 @@ async function buildStarredPayload(userId: string): Promise<{
             starred: artistStarredAt.get(artist.id)?.toISOString(),
         }))
         .sort((left, right) =>
-            String(right.starred ?? "").localeCompare(String(left.starred ?? "")),
+            String(right.starred ?? "").localeCompare(
+                String(left.starred ?? ""),
+            ),
         );
 
     return {
@@ -6301,7 +6502,10 @@ async function buildStarredPayload(userId: string): Promise<{
 /**
  * Executes handleGetStarred2.
  */
-export async function handleGetStarred2(req: Request, res: Response): Promise<void> {
+export async function handleGetStarred2(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     try {
@@ -6329,7 +6533,10 @@ export async function handleGetStarred2(req: Request, res: Response): Promise<vo
 /**
  * Executes handleGetStarred.
  */
-export async function handleGetStarred(req: Request, res: Response): Promise<void> {
+export async function handleGetStarred(
+    req: Request,
+    res: Response,
+): Promise<void> {
     const { format, callback } = getRequestContext(req);
 
     try {
@@ -6362,7 +6569,11 @@ export async function handleStar(req: Request, res: Response): Promise<void> {
     const rawAlbumIds = getQueryValues(req.query.albumId);
     const rawArtistIds = getQueryValues(req.query.artistId);
 
-    if (rawSongIds.length === 0 && rawAlbumIds.length === 0 && rawArtistIds.length === 0) {
+    if (
+        rawSongIds.length === 0 &&
+        rawAlbumIds.length === 0 &&
+        rawArtistIds.length === 0
+    ) {
         sendSubsonicError(
             res,
             SubsonicErrorCode.MISSING_PARAMETER,
@@ -6472,7 +6683,11 @@ export async function handleUnstar(req: Request, res: Response): Promise<void> {
     const rawAlbumIds = getQueryValues(req.query.albumId);
     const rawArtistIds = getQueryValues(req.query.artistId);
 
-    if (rawSongIds.length === 0 && rawAlbumIds.length === 0 && rawArtistIds.length === 0) {
+    if (
+        rawSongIds.length === 0 &&
+        rawAlbumIds.length === 0 &&
+        rawArtistIds.length === 0
+    ) {
         sendSubsonicError(
             res,
             SubsonicErrorCode.MISSING_PARAMETER,
@@ -6622,7 +6837,10 @@ router.get(endpointAliases("getPlayQueue"), handleGetPlayQueue);
 router.post(endpointAliases("savePlayQueue"), handleSavePlayQueue);
 router.get(endpointAliases("savePlayQueue"), handleSavePlayQueue);
 router.get(endpointAliases("getPlayQueueByIndex"), handleGetPlayQueueByIndex);
-router.post(endpointAliases("savePlayQueueByIndex"), handleSavePlayQueueByIndex);
+router.post(
+    endpointAliases("savePlayQueueByIndex"),
+    handleSavePlayQueueByIndex,
+);
 router.get(endpointAliases("savePlayQueueByIndex"), handleSavePlayQueueByIndex);
 router.get(endpointAliases("getBookmarks"), handleGetBookmarks);
 router.get(endpointAliases("createBookmark"), handleCreateBookmark);

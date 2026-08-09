@@ -21,7 +21,7 @@ jest.mock("../rateLimiter", () => ({
     rateLimiter: {
         execute: jest.fn(
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
-                requestFn()
+                requestFn(),
         ),
     },
 }));
@@ -89,7 +89,7 @@ describe("lastFmService", () => {
         mockRedisSetEx.mockResolvedValue("OK");
         mockRateLimiterExecute.mockImplementation(
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
-                requestFn()
+                requestFn(),
         );
         mockFanartGetArtistImage.mockResolvedValue(null);
         mockDeezerGetArtistImage.mockResolvedValue(null);
@@ -111,7 +111,7 @@ describe("lastFmService", () => {
         const result = await lastFmService.getSimilarArtists(
             "artist-mbid-1",
             "Artist One",
-            10
+            10,
         );
 
         expect(result).toEqual(cached);
@@ -147,7 +147,7 @@ describe("lastFmService", () => {
         const result = await lastFmService.getSimilarArtists(
             "missing-mbid",
             "Fallback Name",
-            5
+            5,
         );
 
         expect(result).toEqual([
@@ -177,7 +177,7 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:similar:name:fallback name:limit:5",
             604800,
-            JSON.stringify(result)
+            JSON.stringify(result),
         );
     });
 
@@ -201,7 +201,7 @@ describe("lastFmService", () => {
         const result = await lastFmService.getSimilarArtists(
             "",
             "Name Only Artist",
-            7
+            7,
         );
 
         expect(result).toEqual([
@@ -223,7 +223,7 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:similar:name:name only artist:limit:7",
             604800,
-            JSON.stringify(result)
+            JSON.stringify(result),
         );
     });
 
@@ -234,7 +234,7 @@ describe("lastFmService", () => {
         const result = await lastFmService.getSimilarArtists(
             "artist-mbid-2",
             "Broken Artist",
-            4
+            4,
         );
 
         expect(result).toEqual([]);
@@ -250,25 +250,23 @@ describe("lastFmService", () => {
             },
         });
 
-        mockHttpGet
-            .mockRejectedValueOnce(notFoundError)
-            .mockResolvedValueOnce({
-                data: {
-                    album: {
-                        name: "In A Time Lapse",
-                        image: {
-                            "#text": "https://images.example/album.jpg",
-                            size: "large",
-                        },
-                        tags: { tag: { name: "post-rock" } },
-                        tracks: { track: { name: "Song A" } },
+        mockHttpGet.mockRejectedValueOnce(notFoundError).mockResolvedValueOnce({
+            data: {
+                album: {
+                    name: "In A Time Lapse",
+                    image: {
+                        "#text": "https://images.example/album.jpg",
+                        size: "large",
                     },
+                    tags: { tag: { name: "post-rock" } },
+                    tracks: { track: { name: "Song A" } },
                 },
-            });
+            },
+        });
 
         const album = await lastFmService.getAlbumInfo(
             "Ludovico Einaudi",
-            "In A Time Lapse (Deluxe Edition)"
+            "In A Time Lapse (Deluxe Edition)",
         );
 
         expect(album).toMatchObject({
@@ -293,7 +291,7 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:album:Ludovico Einaudi:In A Time Lapse (Deluxe Edition)",
             2592000,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -303,7 +301,7 @@ describe("lastFmService", () => {
 
         const album = await lastFmService.getAlbumInfo(
             "Artist",
-            "Album (Deluxe Edition)"
+            "Album (Deluxe Edition)",
         );
 
         expect(album).toBeNull();
@@ -335,15 +333,13 @@ describe("lastFmService", () => {
                 data: { error: 6 },
             },
         });
-        mockHttpGet
-            .mockRejectedValueOnce(notFoundError)
-            .mockResolvedValueOnce({
-                data: {},
-            });
+        mockHttpGet.mockRejectedValueOnce(notFoundError).mockResolvedValueOnce({
+            data: {},
+        });
 
         const album = await lastFmService.getAlbumInfo(
             "Ludovico Einaudi",
-            "In A Time Lapse (Deluxe Edition)"
+            "In A Time Lapse (Deluxe Edition)",
         );
 
         expect(album).toBeNull();
@@ -373,17 +369,19 @@ describe("lastFmService", () => {
 
         const album = await lastFmService.getAlbumInfo(
             "Ludovico Einaudi",
-            "In A Time Lapse (Deluxe Edition)"
+            "In A Time Lapse (Deluxe Edition)",
         );
 
         expect(album).toBeNull();
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            expect.stringContaining("also not found")
+            expect.stringContaining("also not found"),
         );
     });
 
     it("falls back to default API key when system settings lookup fails", async () => {
-        mockGetSystemSettings.mockRejectedValueOnce(new Error("db unavailable"));
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("db unavailable"),
+        );
         mockRedisGet.mockResolvedValueOnce(null);
         mockHttpGet.mockResolvedValueOnce({
             data: {
@@ -403,7 +401,7 @@ describe("lastFmService", () => {
         const similar = await lastFmService.getSimilarArtists(
             "artist-mbid-fallback",
             "Recovered",
-            3
+            3,
         );
 
         expect(similar).toEqual([
@@ -415,7 +413,7 @@ describe("lastFmService", () => {
             },
         ]);
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Last.fm configured from env"
+            "Last.fm configured from env",
         );
     });
 
@@ -440,7 +438,10 @@ describe("lastFmService", () => {
             },
         });
 
-        const similar = await lastFmService.getSimilarArtists("artist-settings", "Settings");
+        const similar = await lastFmService.getSimilarArtists(
+            "artist-settings",
+            "Settings",
+        );
 
         expect(similar).toEqual([
             {
@@ -456,10 +457,10 @@ describe("lastFmService", () => {
                 params: expect.objectContaining({
                     api_key: "settings-key",
                 }),
-            })
+            }),
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Last.fm configured from user settings"
+            "Last.fm configured from user settings",
         );
     });
 
@@ -472,7 +473,7 @@ describe("lastFmService", () => {
                     "#text":
                         "https://userserve-ak.last.fm/serve/34s/2a96cbd8b46e442fc41c2b86b821562f.png",
                 },
-            ])
+            ]),
         ).toBeNull();
     });
 
@@ -531,7 +532,7 @@ describe("lastFmService", () => {
             });
 
         mockDeezerGetArtistImage.mockResolvedValueOnce(
-            "https://images.example/artist-one.jpg"
+            "https://images.example/artist-one.jpg",
         );
 
         const tracks = await lastFmService.searchTracks("song", 20);
@@ -631,7 +632,7 @@ describe("lastFmService", () => {
 
         const artists = await lastFmService.searchArtists("Muse", 6);
         const enrichFlags = buildArtistSearchResultSpy.mock.calls.map(
-            (call) => call[1]
+            (call) => call[1],
         );
 
         expect(artists).toHaveLength(6);
@@ -673,7 +674,7 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:correction:bjork",
             2592000,
-            JSON.stringify(correction)
+            JSON.stringify(correction),
         );
     });
 
@@ -685,15 +686,14 @@ describe("lastFmService", () => {
             },
         });
 
-        const correction = await lastFmService.getArtistCorrection(
-            "missing artist"
-        );
+        const correction =
+            await lastFmService.getArtistCorrection("missing artist");
 
         expect(correction).toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:correction:missing artist",
             2592000,
-            "null"
+            "null",
         );
     });
 
@@ -733,7 +733,8 @@ describe("lastFmService", () => {
                             image: [
                                 {
                                     size: "extralarge",
-                                    "#text": "https://images.example/from-lastfm.jpg",
+                                    "#text":
+                                        "https://images.example/from-lastfm.jpg",
                                 },
                             ],
                         },
@@ -746,7 +747,8 @@ describe("lastFmService", () => {
                             image: [
                                 {
                                     size: "large",
-                                    "#text": "https://lastfm-cdn/2a96cbd8b46e442fc41c2b86b821562f.png",
+                                    "#text":
+                                        "https://lastfm-cdn/2a96cbd8b46e442fc41c2b86b821562f.png",
                                 },
                             ],
                         },
@@ -755,11 +757,14 @@ describe("lastFmService", () => {
             },
         });
 
-        mockFanartGetArtistImage.mockRejectedValueOnce(new Error("fanart down"));
-        mockDeezerGetArtistImage.mockImplementation(async (artistName: string) =>
-            artistName === "Artist One"
-                ? "https://images.example/from-deezer.jpg"
-                : null
+        mockFanartGetArtistImage.mockRejectedValueOnce(
+            new Error("fanart down"),
+        );
+        mockDeezerGetArtistImage.mockImplementation(
+            async (artistName: string) =>
+                artistName === "Artist One"
+                    ? "https://images.example/from-deezer.jpg"
+                    : null,
         );
 
         const artists = await lastFmService.getTopChartArtists(3);
@@ -781,7 +786,7 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:chart:artists:3",
             21600,
-            JSON.stringify(artists)
+            JSON.stringify(artists),
         );
     });
 
@@ -806,7 +811,7 @@ describe("lastFmService", () => {
         });
 
         mockFanartGetArtistImage.mockResolvedValueOnce(
-            "https://images.example/from-fanart.jpg"
+            "https://images.example/from-fanart.jpg",
         );
 
         const artists = await lastFmService.getTopChartArtists(1);
@@ -817,7 +822,9 @@ describe("lastFmService", () => {
                 image: "https://images.example/from-fanart.jpg",
             }),
         ]);
-        expect(mockFanartGetArtistImage).toHaveBeenCalledWith("fan-artist-mbid");
+        expect(mockFanartGetArtistImage).toHaveBeenCalledWith(
+            "fan-artist-mbid",
+        );
         expect(mockDeezerGetArtistImage).not.toHaveBeenCalledWith("Artist Fan");
     });
 
@@ -847,7 +854,7 @@ describe("lastFmService", () => {
         await service.ensureInitialized();
 
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "Last.fm API key not available"
+            "Last.fm API key not available",
         );
     });
 
@@ -860,7 +867,7 @@ describe("lastFmService", () => {
         const artists = await lastFmService.getSimilarArtists(
             "missing-key-mbid",
             "Missing Key Artist",
-            3
+            3,
         );
 
         expect(artists).toEqual([]);
@@ -895,7 +902,7 @@ describe("lastFmService", () => {
         expect(albums).toEqual(fetchedAlbums);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -906,13 +913,13 @@ describe("lastFmService", () => {
         const tracks = await lastFmService.getSimilarTracks(
             "Artist",
             "Track",
-            8
+            8,
         );
 
         expect(tracks).toEqual([]);
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Last.fm similar tracks error for Track:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -930,7 +937,7 @@ describe("lastFmService", () => {
         const tracks = await lastFmService.getArtistTopTracks(
             "mbid-artist",
             "Artist Name",
-            3
+            3,
         );
 
         expect(tracks).toEqual(topTracks);
@@ -954,7 +961,11 @@ describe("lastFmService", () => {
             },
         });
 
-        const albums = await lastFmService.getArtistTopAlbums("", "Name Only", 2);
+        const albums = await lastFmService.getArtistTopAlbums(
+            "",
+            "Name Only",
+            2,
+        );
 
         expect(albums).toEqual(topAlbums);
         expect(mockHttpGet).toHaveBeenCalledWith("/", {
@@ -985,7 +996,7 @@ describe("lastFmService", () => {
                 image: [{ "#text": "https://img/artist.jpg", size: "large" }],
                 tags: { tag: [{ name: "ambient" }] },
                 similar: { artist: [{ name: "Similar Artist" }] },
-            })
+            }),
         );
     });
 
@@ -1012,15 +1023,16 @@ describe("lastFmService", () => {
         expect(
             lastFmService.getBestImage([
                 { size: "medium", "#text": "https://img/medium.jpg" },
-            ])
+            ]),
         ).toBe("https://img/medium.jpg");
         expect(
             lastFmService.getBestImage([
                 {
                     size: "small",
-                    "#text": "https://lastfm-cdn/2a96cbd8b46e442fc41c2b86b821562f.png",
+                    "#text":
+                        "https://lastfm-cdn/2a96cbd8b46e442fc41c2b86b821562f.png",
                 },
-            ])
+            ]),
         ).toBeNull();
     });
 
@@ -1044,12 +1056,12 @@ describe("lastFmService", () => {
                 { name: "Drop", mbid: "d", match: 1, url: "u-d" },
                 { name: "E", mbid: "e", match: 1, url: "u-e" },
             ],
-            5
+            5,
         );
 
         expect(buildArtistSearchResultSpy).toHaveBeenCalledTimes(5);
         expect(
-            buildArtistSearchResultSpy.mock.calls.map((call) => call[1])
+            buildArtistSearchResultSpy.mock.calls.map((call) => call[1]),
         ).toEqual([true, true, true, true, true]);
         expect(results).toEqual([
             { id: "A", enrich: true },
@@ -1060,7 +1072,9 @@ describe("lastFmService", () => {
     });
 
     it("returns null from track builder for invalid artists and standalone singles", async () => {
-        const invalidTrack = await (lastFmService as any).buildTrackSearchResult(
+        const invalidTrack = await (
+            lastFmService as any
+        ).buildTrackSearchResult(
             {
                 name: "Song",
                 artist: "Unknown",
@@ -1068,7 +1082,7 @@ describe("lastFmService", () => {
                 image: [],
                 url: "https://last.fm/music/unknown-song",
             },
-            true
+            true,
         );
 
         jest.spyOn(lastFmService, "getTrackInfo").mockResolvedValueOnce({
@@ -1078,7 +1092,9 @@ describe("lastFmService", () => {
             },
         } as any);
 
-        const standaloneTrack = await (lastFmService as any).buildTrackSearchResult(
+        const standaloneTrack = await (
+            lastFmService as any
+        ).buildTrackSearchResult(
             {
                 name: "Song",
                 artist: "Known Artist",
@@ -1086,7 +1102,7 @@ describe("lastFmService", () => {
                 image: [],
                 url: "https://last.fm/music/known-song",
             },
-            true
+            true,
         );
 
         expect(invalidTrack).toBeNull();
@@ -1121,7 +1137,7 @@ describe("lastFmService", () => {
         expect(artists).toEqual([{ id: "Ed", name: "Ed" }]);
         expect(buildArtistSearchResultSpy).toHaveBeenCalledWith(
             expect.objectContaining({ name: "Ed" }),
-            true
+            true,
         );
     });
 
@@ -1130,12 +1146,12 @@ describe("lastFmService", () => {
             .mockRejectedValueOnce(new Error("artist search down"))
             .mockRejectedValueOnce(new Error("track search down"));
 
-        await expect(lastFmService.searchArtists("failure case", 3)).resolves.toEqual(
-            []
-        );
-        await expect(lastFmService.searchTracks("failure case", 3)).resolves.toEqual(
-            []
-        );
+        await expect(
+            lastFmService.searchArtists("failure case", 3),
+        ).resolves.toEqual([]);
+        await expect(
+            lastFmService.searchTracks("failure case", 3),
+        ).resolves.toEqual([]);
     });
 
     it("returns a base track result when enrichment is disabled", async () => {
@@ -1158,7 +1174,7 @@ describe("lastFmService", () => {
                 ],
                 album: "Album Name",
             },
-            false
+            false,
         );
 
         expect(track).toEqual({
@@ -1202,7 +1218,7 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:tag:albums:jazz",
             604800,
-            JSON.stringify(albums)
+            JSON.stringify(albums),
         );
     });
 
@@ -1227,7 +1243,7 @@ describe("lastFmService", () => {
         const tracks = await lastFmService.getSimilarTracks(
             "Artist",
             "Track",
-            2
+            2,
         );
 
         expect(tracks).toEqual([
@@ -1242,14 +1258,12 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:similar:track:Artist:Track",
             604800,
-            JSON.stringify(tracks)
+            JSON.stringify(tracks),
         );
     });
 
     it("uses artist name parameters for top artists lookups when MBID is missing", async () => {
-        mockRedisGet
-            .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce(null);
+        mockRedisGet.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
         mockHttpGet
             .mockResolvedValueOnce({
                 data: {
@@ -1269,12 +1283,12 @@ describe("lastFmService", () => {
         const topTracks = await lastFmService.getArtistTopTracks(
             "",
             "Unknown Artist",
-            4
+            4,
         );
         const topAlbums = await lastFmService.getArtistTopAlbums(
             "",
             "Unknown Artist",
-            4
+            4,
         );
 
         expect(topTracks).toEqual([{ name: "Top Track 1" }]);
@@ -1282,12 +1296,12 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:toptracks:Unknown Artist",
             604800,
-            JSON.stringify(topTracks)
+            JSON.stringify(topTracks),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:topalbums:Unknown Artist",
             604800,
-            JSON.stringify(topAlbums)
+            JSON.stringify(topAlbums),
         );
     });
 
@@ -1308,7 +1322,10 @@ describe("lastFmService", () => {
                     name: "Test Track",
                     album: {
                         title: "Test Album",
-                        image: { "#text": "https://img/album.jpg", size: "large" },
+                        image: {
+                            "#text": "https://img/album.jpg",
+                            size: "large",
+                        },
                     },
                     toptags: {
                         tag: { name: "ambient", count: "42" },
@@ -1338,7 +1355,7 @@ describe("lastFmService", () => {
                 response: {
                     data: { error: 6 },
                 },
-            })
+            }),
         );
 
         const album = await lastFmService.getAlbumInfo("Artist", "A");
@@ -1380,13 +1397,14 @@ describe("lastFmService", () => {
             },
         });
 
-        const correction = await lastFmService.getArtistCorrection("Unknown Name");
+        const correction =
+            await lastFmService.getArtistCorrection("Unknown Name");
 
         expect(correction).toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:correction:unknown name",
             2592000,
-            "null"
+            "null",
         );
     });
 
@@ -1404,7 +1422,7 @@ describe("lastFmService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "lastfm:correction:no artist",
             2592000,
-            "null"
+            "null",
         );
     });
 
@@ -1418,12 +1436,13 @@ describe("lastFmService", () => {
             },
         });
 
-        const correction = await lastFmService.getArtistCorrection("Bad Artist");
+        const correction =
+            await lastFmService.getArtistCorrection("Bad Artist");
 
         expect(correction).toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Last.fm correction error for Bad Artist:",
-            expect.anything()
+            expect.anything(),
         );
     });
 
@@ -1452,17 +1471,17 @@ describe("lastFmService", () => {
         expect(artists).toEqual([]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Last.fm chart artists error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("falls back to deezer image when enriched track result lacks album art", async () => {
         mockDeezerGetArtistImage.mockResolvedValueOnce(
-            "https://images.example/from-deezer.jpg"
+            "https://images.example/from-deezer.jpg",
         );
         const getTrackInfoSpy = jest
             .spyOn(lastFmService as any, "getTrackInfo")
@@ -1481,7 +1500,7 @@ describe("lastFmService", () => {
                 image: [{ size: "small", "#text": "" }],
                 url: "https://last.fm/music/lost-track",
             },
-            true
+            true,
         );
 
         expect(track).toEqual(
@@ -1490,7 +1509,7 @@ describe("lastFmService", () => {
                 name: "Lost Track",
                 artist: "Artist One",
                 image: "https://images.example/from-deezer.jpg",
-            })
+            }),
         );
         expect(mockDeezerGetArtistImage).toHaveBeenCalledWith("Artist One");
         getTrackInfoSpy.mockRestore();
@@ -1507,12 +1526,16 @@ describe("lastFmService", () => {
             },
         });
 
-        const tracks = await lastFmService.getSimilarTracks("Artist", "Track", 4);
+        const tracks = await lastFmService.getSimilarTracks(
+            "Artist",
+            "Track",
+            4,
+        );
 
         expect(tracks).toEqual([{ name: "Related Track" }]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1530,17 +1553,17 @@ describe("lastFmService", () => {
         const tracks = await lastFmService.getArtistTopTracks(
             "mbid-artist",
             "Artist Name",
-            3
+            3,
         );
 
         expect(tracks).toEqual([{ name: "Top Track" }]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1551,13 +1574,13 @@ describe("lastFmService", () => {
         const tracks = await lastFmService.getArtistTopTracks(
             "mbid-artist",
             "Artist Name",
-            3
+            3,
         );
 
         expect(tracks).toEqual([]);
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Last.fm top tracks error for Artist Name:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1565,19 +1588,23 @@ describe("lastFmService", () => {
         mockRedisGet.mockResolvedValueOnce(null);
         mockHttpGet.mockRejectedValueOnce(new Error("top albums failed"));
 
-        const albums = await lastFmService.getArtistTopAlbums("", "Artist Name", 3);
+        const albums = await lastFmService.getArtistTopAlbums(
+            "",
+            "Artist Name",
+            3,
+        );
 
         expect(albums).toEqual([]);
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Last.fm top albums error for Artist Name:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("handles artist enrichment fallbacks and maps tag names", async () => {
         (lastFmService as any).buildArtistSearchResult?.mockRestore?.();
         mockFanartGetArtistImage.mockRejectedValueOnce(
-            new Error("fanart failed")
+            new Error("fanart failed"),
         );
         const getArtistInfoSpy = jest
             .spyOn(lastFmService as any, "getArtistInfo")
@@ -1586,7 +1613,7 @@ describe("lastFmService", () => {
                 tags: { tag: [{ name: "ambient" }, { name: "instrumental" }] },
             } as any);
         mockDeezerGetArtistImageStrict.mockRejectedValueOnce(
-            new Error("deezer strict failed")
+            new Error("deezer strict failed"),
         );
 
         const enriched = await (lastFmService as any).buildArtistSearchResult(
@@ -1597,7 +1624,7 @@ describe("lastFmService", () => {
                 url: "https://last.fm/music/test",
                 image: [],
             },
-            true
+            true,
         );
 
         expect(enriched).toEqual(
@@ -1605,10 +1632,12 @@ describe("lastFmService", () => {
                 name: "Test Artist",
                 image: null,
                 tags: ["ambient", "instrumental"],
-            })
+            }),
         );
         expect(mockFanartGetArtistImage).toHaveBeenCalledWith("artist-mbid");
-        expect(mockDeezerGetArtistImageStrict).toHaveBeenCalledWith("Test Artist");
+        expect(mockDeezerGetArtistImageStrict).toHaveBeenCalledWith(
+            "Test Artist",
+        );
         getArtistInfoSpy.mockRestore();
     });
 
@@ -1647,7 +1676,7 @@ describe("lastFmService", () => {
                 artist: "Artist 9",
                 album: null,
                 image: null,
-            })
+            }),
         );
         getTrackInfoSpy.mockRestore();
     });
@@ -1686,7 +1715,10 @@ describe("lastFmService", () => {
 
         const correction = await lastFmService.getArtistCorrection("canon");
         const charts = await lastFmService.getTopChartArtists(3);
-        const artistInfo = await lastFmService.getArtistInfo("Unknown", "missing-mbid");
+        const artistInfo = await lastFmService.getArtistInfo(
+            "Unknown",
+            "missing-mbid",
+        );
 
         expect(correction).toEqual({
             corrected: true,
@@ -1695,14 +1727,16 @@ describe("lastFmService", () => {
         });
         expect(charts).toEqual([]);
         expect(artistInfo).toBeUndefined();
-        expect((lastFmService as any).isDuplicateArtist([], { name: "" })).toBe(true);
+        expect((lastFmService as any).isDuplicateArtist([], { name: "" })).toBe(
+            true,
+        );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
     it("falls back to the env key when system settings have no Last.fm key during initialization", async () => {
@@ -1728,7 +1762,7 @@ describe("lastFmService", () => {
         const artists = await lastFmService.getSimilarArtists(
             "env-artist-mbid",
             "Env Artist",
-            1
+            1,
         );
 
         expect(artists).toEqual([
@@ -1740,7 +1774,7 @@ describe("lastFmService", () => {
             },
         ]);
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Last.fm configured from env"
+            "Last.fm configured from env",
         );
     });
 
@@ -1756,13 +1790,13 @@ describe("lastFmService", () => {
         await (lastFmService as any).ensureInitialized();
         expect(service.apiKey).toBe("test-lastfm-key");
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Last.fm configured from env"
+            "Last.fm configured from env",
         );
 
         await (lastFmService as any).refreshApiKey();
         expect(service.apiKey).toBe("test-lastfm-key");
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Last.fm configured from env"
+            "Last.fm configured from env",
         );
 
         mockRedisGet.mockResolvedValue(null);
@@ -1784,7 +1818,7 @@ describe("lastFmService", () => {
         const artists = await lastFmService.getSimilarArtists(
             "artist-mbid-refresh",
             "Post-Refresh Artist",
-            1
+            1,
         );
 
         expect(artists[0]?.name).toEqual("Post-Refresh Artist");
@@ -1794,7 +1828,7 @@ describe("lastFmService", () => {
                 params: expect.objectContaining({
                     api_key: "test-lastfm-key",
                 }),
-            })
+            }),
         );
         expect(mockGetSystemSettings).toHaveBeenCalledTimes(2);
     });
@@ -1813,7 +1847,7 @@ describe("lastFmService", () => {
 
         expect(service.apiKey).toBe("");
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "Last.fm API key not available"
+            "Last.fm API key not available",
         );
     });
 
@@ -1830,14 +1864,14 @@ describe("lastFmService", () => {
         const artists = await lastFmService.getSimilarArtists(
             "artist-mbid-disabled",
             "Disabled Artist",
-            3
+            3,
         );
 
         expect(artists).toEqual([]);
         expect(mockRateLimiterExecute).not.toHaveBeenCalled();
         expect(mockHttpGet).not.toHaveBeenCalled();
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "Last.fm API key not available"
+            "Last.fm API key not available",
         );
     });
 
@@ -1862,7 +1896,7 @@ describe("lastFmService", () => {
         const artists = await lastFmService.getSimilarArtists(
             "cache-resilient-mbid",
             "Cache Artist",
-            1
+            1,
         );
 
         expect(artists).toEqual([
@@ -1875,11 +1909,11 @@ describe("lastFmService", () => {
         ]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1936,7 +1970,7 @@ describe("lastFmService", () => {
         expect(buildArtistSearchResultSpy).toHaveBeenNthCalledWith(
             1,
             expect.objectContaining({ name: "Daft Punk" }),
-            true
+            true,
         );
         buildArtistSearchResultSpy.mockRestore();
     });
@@ -1962,7 +1996,7 @@ describe("lastFmService", () => {
         const similar = await lastFmService.getSimilarArtists(
             "artist-mbid-malformed",
             "Malformed Artist",
-            3
+            3,
         );
 
         expect(similar).toEqual([
@@ -1975,17 +2009,15 @@ describe("lastFmService", () => {
         ]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("continues to return name-based similar artists when name cache write fails", async () => {
-        mockRedisGet
-            .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce(null);
+        mockRedisGet.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
         mockRedisSetEx.mockRejectedValueOnce(
-            new Error("similar by name cache set failed")
+            new Error("similar by name cache set failed"),
         );
 
         mockHttpGet
@@ -2013,7 +2045,7 @@ describe("lastFmService", () => {
         const similar = await lastFmService.getSimilarArtists(
             "artist-mbid-fallback-fail",
             "Fallback Fail",
-            4
+            4,
         );
 
         expect(similar).toEqual([
@@ -2026,7 +2058,7 @@ describe("lastFmService", () => {
         ]);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -2037,7 +2069,7 @@ describe("lastFmService", () => {
 
         mockRedisGet.mockResolvedValueOnce("not-json");
         mockFanartGetArtistImage.mockRejectedValueOnce(
-            new Error("fanart unavailable")
+            new Error("fanart unavailable"),
         );
 
         mockHttpGet.mockResolvedValueOnce({
@@ -2067,7 +2099,7 @@ describe("lastFmService", () => {
 
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(artists).toEqual([
             {
@@ -2112,7 +2144,7 @@ describe("lastFmService", () => {
         });
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -2239,7 +2271,7 @@ describe("lastFmService", () => {
             });
 
         mockDeezerGetArtistImage.mockRejectedValueOnce(
-            new Error("artist image lookup failed")
+            new Error("artist image lookup failed"),
         );
 
         const tracks = await lastFmService.searchTracks("image fail", 5);

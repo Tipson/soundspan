@@ -18,7 +18,10 @@ import { BRAND_NAME } from "../config/brand";
 import { timingSafeCompare } from "../utils/timingSafe";
 import { runDummyBcrypt } from "../utils/dummyCredential";
 
-async function verifyTotpToken(secret: string, token: string): Promise<boolean> {
+async function verifyTotpToken(
+    secret: string,
+    token: string,
+): Promise<boolean> {
     if (
         typeof secret !== "string" ||
         typeof token !== "string" ||
@@ -49,21 +52,26 @@ const inviteCodeSchema = z.object({
     maxUses: z.number().int().min(1).max(100).default(1),
 });
 
-const registerSchema = z.object({
-    inviteCode: z.string().min(1),
-    username: z
-        .string()
-        .min(3)
-        .max(32)
-        .regex(/^[a-zA-Z0-9_]+$/, "Username must be alphanumeric (underscores allowed)"),
-    displayName: z.string().min(1).max(64),
-    password: z.string().min(6).max(128),
-    confirmPassword: z.string(),
-    email: z.string().email(),
-}).refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-});
+const registerSchema = z
+    .object({
+        inviteCode: z.string().min(1),
+        username: z
+            .string()
+            .min(3)
+            .max(32)
+            .regex(
+                /^[a-zA-Z0-9_]+$/,
+                "Username must be alphanumeric (underscores allowed)",
+            ),
+        displayName: z.string().min(1).max(64),
+        password: z.string().min(6).max(128),
+        confirmPassword: z.string(),
+        email: z.string().email(),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+        message: "Passwords do not match",
+        path: ["confirmPassword"],
+    });
 
 // Unambiguous character set for invite codes (no 0/O/1/I/L)
 const INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -208,7 +216,7 @@ router.post("/login", async (req, res) => {
                     where: { id: user.id },
                     data: {
                         twoFactorRecoveryCodes: encrypt2FASecret(
-                            hashedCodes.join(",")
+                            hashedCodes.join(","),
                         ),
                     },
                 });
@@ -718,87 +726,99 @@ router.post("/create-user", requireAuth, requireAdmin, async (req, res) => {
  *         description: User not found
  */
 // PATCH /auth/users/:id (Admin only) - Edit user's username, email, or password
-router.patch<{ id: string }>("/users/:id", requireAuth, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updateSchema = z.object({
-            username: z
-                .string()
-                .min(3)
-                .max(32)
-                .regex(/^[a-zA-Z0-9_]+$/, "Username must be alphanumeric (underscores allowed)")
-                .optional(),
-            email: z.string().email().optional().nullable(),
-            password: z.string().min(6).max(128).optional(),
-        });
-
-        const data = updateSchema.parse(req.body);
-
-        // Check the target user exists
-        const targetUser = await prisma.user.findUnique({ where: { id } });
-        if (!targetUser) {
-            return res.status(404).json({ error: "User not found" });
-        }
-
-        // Check username uniqueness if changing
-        if (data.username && data.username !== targetUser.username) {
-            const existing = await prisma.user.findUnique({
-                where: { username: data.username },
+router.patch<{ id: string }>(
+    "/users/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+        try {
+            const { id } = req.params;
+            const updateSchema = z.object({
+                username: z
+                    .string()
+                    .min(3)
+                    .max(32)
+                    .regex(
+                        /^[a-zA-Z0-9_]+$/,
+                        "Username must be alphanumeric (underscores allowed)",
+                    )
+                    .optional(),
+                email: z.string().email().optional().nullable(),
+                password: z.string().min(6).max(128).optional(),
             });
-            if (existing) {
-                return res.status(400).json({ error: "Username already taken" });
+
+            const data = updateSchema.parse(req.body);
+
+            // Check the target user exists
+            const targetUser = await prisma.user.findUnique({ where: { id } });
+            if (!targetUser) {
+                return res.status(404).json({ error: "User not found" });
             }
-        }
 
-        // Check email uniqueness if changing
-        if (data.email && data.email !== targetUser.email) {
-            const existing = await prisma.user.findUnique({
-                where: { email: data.email },
-            });
-            if (existing) {
-                return res.status(400).json({ error: "Email already in use" });
+            // Check username uniqueness if changing
+            if (data.username && data.username !== targetUser.username) {
+                const existing = await prisma.user.findUnique({
+                    where: { username: data.username },
+                });
+                if (existing) {
+                    return res
+                        .status(400)
+                        .json({ error: "Username already taken" });
+                }
             }
-        }
 
-        // Build update payload
-        const updateData: Record<string, unknown> = {};
-        if (data.username) updateData.username = data.username;
-        if (data.email !== undefined) updateData.email = data.email;
-        if (data.password) {
-            updateData.passwordHash = await bcrypt.hash(data.password, 10);
-            updateData.tokenVersion = { increment: 1 };
-            updateData.subsonicPassword = null;
-        }
+            // Check email uniqueness if changing
+            if (data.email && data.email !== targetUser.email) {
+                const existing = await prisma.user.findUnique({
+                    where: { email: data.email },
+                });
+                if (existing) {
+                    return res
+                        .status(400)
+                        .json({ error: "Email already in use" });
+                }
+            }
 
-        if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({ error: "No fields to update" });
-        }
+            // Build update payload
+            const updateData: Record<string, unknown> = {};
+            if (data.username) updateData.username = data.username;
+            if (data.email !== undefined) updateData.email = data.email;
+            if (data.password) {
+                updateData.passwordHash = await bcrypt.hash(data.password, 10);
+                updateData.tokenVersion = { increment: 1 };
+                updateData.subsonicPassword = null;
+            }
 
-        const updated = await prisma.user.update({
-            where: { id },
-            data: updateData,
-            select: {
-                id: true,
-                username: true,
-                email: true,
-                role: true,
-                createdAt: true,
-            },
-        });
+            if (Object.keys(updateData).length === 0) {
+                return res.status(400).json({ error: "No fields to update" });
+            }
 
-        res.json(updated);
-    } catch (err) {
-        if (err instanceof z.ZodError) {
-            const firstError = err.issues[0];
-            return res.status(400).json({
-                error: firstError.message,
-                details: err.issues,
+            const updated = await prisma.user.update({
+                where: { id },
+                data: updateData,
+                select: {
+                    id: true,
+                    username: true,
+                    email: true,
+                    role: true,
+                    createdAt: true,
+                },
             });
+
+            res.json(updated);
+        } catch (err) {
+            if (err instanceof z.ZodError) {
+                const firstError = err.issues[0];
+                return res.status(400).json({
+                    error: firstError.message,
+                    details: err.issues,
+                });
+            }
+            logger.error("Update user error:", err);
+            res.status(500).json({ error: "Failed to update user" });
         }
-        logger.error("Update user error:", err);
-        res.status(500).json({ error: "Failed to update user" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -829,31 +849,36 @@ router.patch<{ id: string }>("/users/:id", requireAuth, requireAdmin, async (req
  *         description: User not found
  */
 // DELETE /auth/users/:id (Admin only)
-router.delete<{ id: string }>("/users/:id", requireAuth, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
+router.delete<{ id: string }>(
+    "/users/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+        try {
+            const { id } = req.params;
 
-        // Prevent deleting yourself
-        if (id === req.user!.id) {
-            return res
-                .status(400)
-                .json({ error: "Cannot delete your own account" });
+            // Prevent deleting yourself
+            if (id === req.user!.id) {
+                return res
+                    .status(400)
+                    .json({ error: "Cannot delete your own account" });
+            }
+
+            // Delete user (cascade will handle related data)
+            await prisma.user.delete({
+                where: { id },
+            });
+
+            res.json({ message: "User deleted successfully" });
+        } catch (error: any) {
+            logger.error("Delete user error:", error);
+            if (error.code === "P2025") {
+                return res.status(404).json({ error: "User not found" });
+            }
+            res.status(500).json({ error: "Failed to delete user" });
         }
-
-        // Delete user (cascade will handle related data)
-        await prisma.user.delete({
-            where: { id },
-        });
-
-        res.json({ message: "User deleted successfully" });
-    } catch (error: any) {
-        logger.error("Delete user error:", error);
-        if (error.code === "P2025") {
-            return res.status(404).json({ error: "User not found" });
-        }
-        res.status(500).json({ error: "Failed to delete user" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -892,60 +917,55 @@ router.delete<{ id: string }>("/users/:id", requireAuth, requireAdmin, async (re
  *         description: Admin access required
  */
 // POST /auth/invite-codes - Generate a new invite code (admin only)
-router.post(
-    "/invite-codes",
-    requireAuth,
-    requireAdmin,
-    async (req, res) => {
-        try {
-            const { ttl, maxUses } = inviteCodeSchema.parse(req.body);
-            const expiresAt = ttlToExpiresAt(ttl);
+router.post("/invite-codes", requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { ttl, maxUses } = inviteCodeSchema.parse(req.body);
+        const expiresAt = ttlToExpiresAt(ttl);
 
-            // Retry loop for uniqueness
-            let code: string;
-            let attempts = 0;
-            do {
-                code = generateInviteCode();
-                const existing = await prisma.inviteCode.findUnique({
-                    where: { code },
-                });
-                if (!existing) break;
-                attempts++;
-            } while (attempts < 10);
-
-            if (attempts >= 10) {
-                return res
-                    .status(500)
-                    .json({ error: "Failed to generate unique code" });
-            }
-
-            const inviteCode = await prisma.inviteCode.create({
-                data: {
-                    code,
-                    createdBy: req.user!.id,
-                    expiresAt,
-                    maxUses,
-                },
+        // Retry loop for uniqueness
+        let code: string;
+        let attempts = 0;
+        do {
+            code = generateInviteCode();
+            const existing = await prisma.inviteCode.findUnique({
+                where: { code },
             });
+            if (!existing) break;
+            attempts++;
+        } while (attempts < 10);
 
-            res.json({
-                id: inviteCode.id,
-                code: inviteCode.code,
-                expiresAt: inviteCode.expiresAt,
-                maxUses: inviteCode.maxUses,
-                createdAt: inviteCode.createdAt,
-            });
-        } catch (err) {
-            if (err instanceof z.ZodError) {
-                return res
-                    .status(400)
-                    .json({ error: "Invalid request", details: err.issues });
-            }
-            logger.error("Create invite code error:", err);
-            res.status(500).json({ error: "Failed to create invite code" });
+        if (attempts >= 10) {
+            return res
+                .status(500)
+                .json({ error: "Failed to generate unique code" });
         }
+
+        const inviteCode = await prisma.inviteCode.create({
+            data: {
+                code,
+                createdBy: req.user!.id,
+                expiresAt,
+                maxUses,
+            },
+        });
+
+        res.json({
+            id: inviteCode.id,
+            code: inviteCode.code,
+            expiresAt: inviteCode.expiresAt,
+            maxUses: inviteCode.maxUses,
+            createdAt: inviteCode.createdAt,
+        });
+    } catch (err) {
+        if (err instanceof z.ZodError) {
+            return res
+                .status(400)
+                .json({ error: "Invalid request", details: err.issues });
+        }
+        logger.error("Create invite code error:", err);
+        res.status(500).json({ error: "Failed to create invite code" });
     }
-);
+});
 
 /**
  * @openapi
@@ -965,52 +985,47 @@ router.post(
  *         description: Admin access required
  */
 // GET /auth/invite-codes - List all invite codes (admin only)
-router.get(
-    "/invite-codes",
-    requireAuth,
-    requireAdmin,
-    async (_req, res) => {
-        try {
-            const codes = await prisma.inviteCode.findMany({
-                orderBy: { createdAt: "desc" },
-                include: {
-                    creator: {
-                        select: { username: true },
-                    },
+router.get("/invite-codes", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+        const codes = await prisma.inviteCode.findMany({
+            orderBy: { createdAt: "desc" },
+            include: {
+                creator: {
+                    select: { username: true },
                 },
-            });
+            },
+        });
 
-            const now = new Date();
-            const codesWithStatus = codes.map((c) => {
-                let status: string;
-                if (c.revoked) {
-                    status = "revoked";
-                } else if (c.useCount >= c.maxUses) {
-                    status = "exhausted";
-                } else if (c.expiresAt && c.expiresAt < now) {
-                    status = "expired";
-                } else {
-                    status = "active";
-                }
-                return {
-                    id: c.id,
-                    code: c.code,
-                    status,
-                    maxUses: c.maxUses,
-                    useCount: c.useCount,
-                    expiresAt: c.expiresAt,
-                    createdAt: c.createdAt,
-                    createdBy: c.creator.username,
-                };
-            });
+        const now = new Date();
+        const codesWithStatus = codes.map((c) => {
+            let status: string;
+            if (c.revoked) {
+                status = "revoked";
+            } else if (c.useCount >= c.maxUses) {
+                status = "exhausted";
+            } else if (c.expiresAt && c.expiresAt < now) {
+                status = "expired";
+            } else {
+                status = "active";
+            }
+            return {
+                id: c.id,
+                code: c.code,
+                status,
+                maxUses: c.maxUses,
+                useCount: c.useCount,
+                expiresAt: c.expiresAt,
+                createdAt: c.createdAt,
+                createdBy: c.creator.username,
+            };
+        });
 
-            res.json(codesWithStatus);
-        } catch (err) {
-            logger.error("List invite codes error:", err);
-            res.status(500).json({ error: "Failed to list invite codes" });
-        }
+        res.json(codesWithStatus);
+    } catch (err) {
+        logger.error("List invite codes error:", err);
+        res.status(500).json({ error: "Failed to list invite codes" });
     }
-);
+});
 
 /**
  * @openapi
@@ -1057,7 +1072,7 @@ router.delete<{ id: string }>(
             logger.error("Revoke invite code error:", err);
             res.status(500).json({ error: "Failed to revoke invite code" });
         }
-    }
+    },
 );
 
 /**
@@ -1120,13 +1135,19 @@ router.post("/register", async (req, res) => {
             return res.status(400).json({ error: "Invalid invite code" });
         }
         if (invite.revoked) {
-            return res.status(400).json({ error: "This invite code has been revoked" });
+            return res
+                .status(400)
+                .json({ error: "This invite code has been revoked" });
         }
         if (invite.useCount >= invite.maxUses) {
-            return res.status(400).json({ error: "This invite code has been fully used" });
+            return res
+                .status(400)
+                .json({ error: "This invite code has been fully used" });
         }
         if (invite.expiresAt && invite.expiresAt < new Date()) {
-            return res.status(400).json({ error: "This invite code has expired" });
+            return res
+                .status(400)
+                .json({ error: "This invite code has expired" });
         }
 
         // Check username uniqueness
@@ -1356,13 +1377,13 @@ router.post("/2fa/enable", requireAuth, async (req, res) => {
             recoveryCodes.push(code);
             // Hash the code before storing
             hashedRecoveryCodes.push(
-                crypto.createHash("sha256").update(code).digest("hex")
+                crypto.createHash("sha256").update(code).digest("hex"),
             );
         }
 
         // Encrypt the hashed codes for storage
         const encryptedRecoveryCodes = encrypt2FASecret(
-            hashedRecoveryCodes.join(",")
+            hashedRecoveryCodes.join(","),
         );
 
         // Encrypt and save the secret
@@ -1599,7 +1620,9 @@ router.post("/subsonic-password", requireAuth, async (req, res) => {
             });
         }
         logger.error("Set Subsonic password error:", error);
-        return res.status(500).json({ error: "Failed to set Subsonic password" });
+        return res
+            .status(500)
+            .json({ error: "Failed to set Subsonic password" });
     }
 });
 

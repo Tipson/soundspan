@@ -1,7 +1,8 @@
 // API-key hashing needs a pepper (API_KEY_PEPPER → SETTINGS_ENCRYPTION_KEY →
 // SESSION_SECRET); provide one for the real apiKeyHash util used here.
 process.env.SETTINGS_ENCRYPTION_KEY =
-    process.env.SETTINGS_ENCRYPTION_KEY || "subsonic-test-pepper-1234567890123456";
+    process.env.SETTINGS_ENCRYPTION_KEY ||
+    "subsonic-test-pepper-1234567890123456";
 
 import { NextFunction, Request, Response } from "express";
 import { createHash } from "crypto";
@@ -260,7 +261,9 @@ describe("requireSubsonicAuth", () => {
     it("authenticates token mode using stored subsonic password", async () => {
         const salt = "abc123";
         const plain = "secret";
-        const token = createHash("md5").update(plain + salt).digest("hex");
+        const token = createHash("md5")
+            .update(plain + salt)
+            .digest("hex");
 
         mockFindUnique.mockResolvedValue({
             id: "u1",
@@ -295,7 +298,10 @@ describe("requireSubsonicAuth", () => {
     it("accepts token auth with case-insensitive hashes", async () => {
         const salt = "salt";
         const plain = "secret";
-        const token = createHash("md5").update(plain + salt).digest("hex").toUpperCase();
+        const token = createHash("md5")
+            .update(plain + salt)
+            .digest("hex")
+            .toUpperCase();
 
         mockFindUnique.mockResolvedValue({
             id: "u1",
@@ -314,11 +320,7 @@ describe("requireSubsonicAuth", () => {
             s: salt,
         });
 
-        await requireSubsonicAuth(
-            req,
-            buildRes(),
-            next,
-        );
+        await requireSubsonicAuth(req, buildRes(), next);
 
         expect(mockDecrypt).toHaveBeenCalledWith("cipher");
         expect(mockCompare).not.toHaveBeenCalled();
@@ -332,7 +334,10 @@ describe("requireSubsonicAuth", () => {
 
     it("falls back to wrong-credentials when token decryption fails and password is not provided", async () => {
         const salt = "abc";
-        const token = createHash("md5").update("secret").update(salt).digest("hex");
+        const token = createHash("md5")
+            .update("secret")
+            .update(salt)
+            .digest("hex");
 
         mockFindUnique.mockResolvedValue({
             id: "u1",

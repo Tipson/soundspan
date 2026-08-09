@@ -28,9 +28,9 @@ const ENCRYPTED_MODEL_QUERIERS: Record<
 function isPrismaRecordNotFound(error: unknown): error is { code: string } {
     return Boolean(
         error &&
-            typeof error === "object" &&
-            "code" in error &&
-            error.code === "P2025"
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "P2025",
     );
 }
 
@@ -83,7 +83,9 @@ router.get("/library-health", async (_req, res) => {
         res.json({ records, total });
     } catch (error) {
         logger.error("Get library health error:", error);
-        res.status(500).json({ error: "Failed to load library health records" });
+        res.status(500).json({
+            error: "Failed to load library health records",
+        });
     }
 });
 
@@ -123,11 +125,15 @@ router.delete("/library-health/:recordId", async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         if (isPrismaRecordNotFound(error)) {
-            return res.status(404).json({ error: "Library health record not found" });
+            return res
+                .status(404)
+                .json({ error: "Library health record not found" });
         }
 
         logger.error("Dismiss library health record error:", error);
-        res.status(500).json({ error: "Failed to dismiss library health record" });
+        res.status(500).json({
+            error: "Failed to dismiss library health record",
+        });
     }
 });
 
@@ -163,14 +169,15 @@ router.get("/secrets-status", async (_req, res) => {
         let legacy = 0;
 
         for (const [modelName, columns] of Object.entries(
-            ENCRYPTED_SETTINGS_COLUMNS
+            ENCRYPTED_SETTINGS_COLUMNS,
         )) {
             const select: Record<string, boolean> = {};
             for (const column of columns) select[column] = true;
 
-            const rows = await ENCRYPTED_MODEL_QUERIERS[
-                modelName as EncryptedModelName
-            ](select);
+            const rows =
+                await ENCRYPTED_MODEL_QUERIERS[modelName as EncryptedModelName](
+                    select,
+                );
 
             let modelV2 = 0;
             let modelLegacy = 0;

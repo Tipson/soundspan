@@ -47,7 +47,8 @@ describe("playlist logger utilities", () => {
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = require("../playlistLogger") as typeof import("../playlistLogger");
+        const mod =
+            require("../playlistLogger") as typeof import("../playlistLogger");
 
         return {
             mod,
@@ -60,7 +61,10 @@ describe("playlist logger utilities", () => {
         };
     }
 
-    function getAppendedContent(appendFileSync: jest.Mock, filePath: string): string {
+    function getAppendedContent(
+        appendFileSync: jest.Mock,
+        filePath: string,
+    ): string {
         return appendFileSync.mock.calls
             .filter((call: unknown[]) => call[0] === filePath)
             .map((call: unknown[]) => String(call[1]))
@@ -72,7 +76,7 @@ describe("playlist logger utilities", () => {
         const custom = loadPlaylistLoggerModule({ playlistLogDir: customDir });
 
         expect(custom.mod.getSessionLogPath()).toBe(
-            path.join(path.resolve(customDir), "session.log")
+            path.join(path.resolve(customDir), "session.log"),
         );
         expect(custom.mkdirSync).toHaveBeenCalledWith(path.resolve(customDir), {
             recursive: true,
@@ -80,7 +84,7 @@ describe("playlist logger utilities", () => {
 
         const fallback = loadPlaylistLoggerModule({ playlistLogDir: null });
         expect(fallback.mod.getSessionLogPath()).toBe(
-            path.join(process.cwd(), "logs", "playlists", "session.log")
+            path.join(process.cwd(), "logs", "playlists", "session.log"),
         );
     });
 
@@ -91,7 +95,10 @@ describe("playlist logger utilities", () => {
 
         const sessionPath = existing.mod.getSessionLogPath();
         expect(existing.mod.readSessionLog()).toBe("session log text");
-        expect(existing.readFileSync).toHaveBeenCalledWith(sessionPath, "utf-8");
+        expect(existing.readFileSync).toHaveBeenCalledWith(
+            sessionPath,
+            "utf-8",
+        );
 
         const missing = loadPlaylistLoggerModule();
         missing.existsSync.mockReturnValue(false);
@@ -121,22 +128,23 @@ describe("playlist logger utilities", () => {
         expect(writeFileSync).toHaveBeenCalledTimes(1);
         expect(writeFileSync).toHaveBeenCalledWith(
             sessionPath,
-            expect.stringContaining("SPOTIFY IMPORT SESSION LOG")
+            expect.stringContaining("SPOTIFY IMPORT SESSION LOG"),
         );
         expect(appendFileSync).toHaveBeenCalledWith(
             sessionPath,
-            expect.stringContaining("[SLSKD] [INFO] ready")
+            expect.stringContaining("[SLSKD] [INFO] ready"),
         );
         expect(appendFileSync).toHaveBeenCalledWith(
             sessionPath,
-            expect.stringContaining("[IMPORT] [ERROR] failed")
+            expect.stringContaining("[IMPORT] [ERROR] failed"),
         );
         expect(logger.debug).toHaveBeenCalledWith("[SLSKD]", "ready");
         expect(logger.error).toHaveBeenCalledWith("[IMPORT]", "failed");
     });
 
     it("logs session header initialization failures and swallows append failures", () => {
-        const { mod, writeFileSync, appendFileSync, logger } = loadPlaylistLoggerModule();
+        const { mod, writeFileSync, appendFileSync, logger } =
+            loadPlaylistLoggerModule();
 
         const initError = new Error("read-only filesystem");
         writeFileSync.mockImplementation(() => {
@@ -149,7 +157,7 @@ describe("playlist logger utilities", () => {
         expect(() => mod.sessionLog("IMPORT", "startup")).not.toThrow();
         expect(logger.error).toHaveBeenCalledWith(
             "Failed to initialize session log:",
-            initError
+            initError,
         );
         expect(logger.debug).toHaveBeenCalledWith("[IMPORT]", "startup");
     });
@@ -164,7 +172,14 @@ describe("playlist logger utilities", () => {
 
         playlistLogger.logJobStart("Road Trip", 2, "user-1");
         playlistLogger.logTrackMatchingStart();
-        playlistLogger.logTrackMatch(1, 2, "Song A", "Artist A", true, "track-1");
+        playlistLogger.logTrackMatch(
+            1,
+            2,
+            "Song A",
+            "Artist A",
+            true,
+            "track-1",
+        );
         playlistLogger.logTrackMatch(2, 2, "Song B", "Artist B", false);
         playlistLogger.logAlbumDownloadStart(2);
         playlistLogger.logAlbumQueued("Album A", "Artist A", "mbid-1", 123);
@@ -203,9 +218,10 @@ describe("playlist logger utilities", () => {
 
     it("logs directory and append failures for job and events files", () => {
         const logDir = "/tmp/playlist-logger-errors";
-        const { mod, mkdirSync, appendFileSync, logger } = loadPlaylistLoggerModule({
-            playlistLogDir: logDir,
-        });
+        const { mod, mkdirSync, appendFileSync, logger } =
+            loadPlaylistLoggerModule({
+                playlistLogDir: logDir,
+            });
 
         const mkdirError = new Error("permission denied");
         mkdirSync.mockImplementation(() => {
@@ -217,7 +233,7 @@ describe("playlist logger utilities", () => {
             expect.objectContaining({
                 logsDir: path.resolve(logDir),
                 error: mkdirError,
-            })
+            }),
         );
 
         appendFileSync.mockReset();
@@ -233,7 +249,7 @@ describe("playlist logger utilities", () => {
         playlistLogger.info("this write should fail");
         expect(logger.error).toHaveBeenCalledWith(
             `[Playlist Logger] Failed to write to ${logFile}:`,
-            fileWriteError
+            fileWriteError,
         );
 
         const eventsFile = path.join(path.resolve(logDir), "events.log");
@@ -248,7 +264,7 @@ describe("playlist logger utilities", () => {
         expect(logger.debug).toHaveBeenCalledWith("[Playlist] one-off event");
         expect(logger.error).toHaveBeenCalledWith(
             "Failed to write to events log:",
-            eventsWriteError
+            eventsWriteError,
         );
     });
 
@@ -263,7 +279,7 @@ describe("playlist logger utilities", () => {
 
         expect(appendFileSync).toHaveBeenCalledWith(
             eventsFile,
-            expect.stringContaining("[INFO] queued import")
+            expect.stringContaining("[INFO] queued import"),
         );
         expect(logger.debug).toHaveBeenCalledWith("[Playlist] queued import");
     });

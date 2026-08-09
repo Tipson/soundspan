@@ -108,7 +108,11 @@ describe("workers runtime behavior", () => {
         };
         const trackReconciliationService = {
             reconcileOrphans: jest.fn(async () => ({ created: 0 })),
-            reconcile: jest.fn(async () => ({ processed: 0, linked: 0, skipped: 0 })),
+            reconcile: jest.fn(async () => ({
+                processed: 0,
+                linked: 0,
+                skipped: 0,
+            })),
             reconcileYoutubeToTidal: jest.fn(async () => ({
                 processed: 0,
                 upgraded: 0,
@@ -131,17 +135,28 @@ describe("workers runtime behavior", () => {
             schedulerQueue,
         }));
         jest.doMock("../processors/scanProcessor", () => ({
-            processScan: jest.fn(async () => ({ tracksAdded: 0, tracksUpdated: 0, tracksRemoved: 0 })),
+            processScan: jest.fn(async () => ({
+                tracksAdded: 0,
+                tracksUpdated: 0,
+                tracksRemoved: 0,
+            })),
         }));
         jest.doMock("../processors/discoverProcessor", () => ({
-            processDiscoverWeekly: jest.fn(async () => ({ success: true, playlistName: "Discover", songCount: 0 })),
+            processDiscoverWeekly: jest.fn(async () => ({
+                success: true,
+                playlistName: "Discover",
+                songCount: 0,
+            })),
             shutdownDiscoverProcessor,
         }));
         jest.doMock("../processors/imageProcessor", () => ({
             processImageOptimization: jest.fn(async () => ({ success: true })),
         }));
         jest.doMock("../processors/validationProcessor", () => ({
-            processValidation: jest.fn(async () => ({ tracksChecked: 0, tracksRemoved: 0 })),
+            processValidation: jest.fn(async () => ({
+                tracksChecked: 0,
+                tracksRemoved: 0,
+            })),
         }));
         jest.doMock("../unifiedEnrichment", () => ({
             startUnifiedEnrichmentWorker,
@@ -151,7 +166,9 @@ describe("workers runtime behavior", () => {
             startMoodBucketWorker,
             stopMoodBucketWorker,
         }));
-        jest.doMock("../../services/downloadQueue", () => ({ downloadQueueManager }));
+        jest.doMock("../../services/downloadQueue", () => ({
+            downloadQueueManager,
+        }));
         jest.doMock("../../utils/db", () => ({ prisma }));
         jest.doMock("../discoverCron", () => ({
             startDiscoverWeeklyCron,
@@ -169,15 +186,21 @@ describe("workers runtime behavior", () => {
             },
         }));
         jest.doMock("../dataIntegrity", () => ({ runDataIntegrityCheck }));
-        jest.doMock("../../services/simpleDownloadManager", () => ({ simpleDownloadManager }));
+        jest.doMock("../../services/simpleDownloadManager", () => ({
+            simpleDownloadManager,
+        }));
         jest.doMock("../../jobs/queueCleaner", () => ({ queueCleaner }));
-        jest.doMock("../../services/enrichmentState", () => ({ enrichmentStateService }));
+        jest.doMock("../../services/enrichmentState", () => ({
+            enrichmentStateService,
+        }));
         jest.doMock("../../utils/ioredis", () => ({ createIORedisClient }));
         jest.doMock("../../services/lidarr", () => ({ lidarrService }));
         jest.doMock("../../services/podcastDownload", () => ({
             cleanupExpiredCache,
         }));
-        jest.doMock("../../utils/systemSettings", () => ({ getSystemSettings }));
+        jest.doMock("../../utils/systemSettings", () => ({
+            getSystemSettings,
+        }));
         jest.doMock("../../services/audiobookCache", () => ({
             audiobookCacheService,
         }));
@@ -247,19 +270,19 @@ describe("workers runtime behavior", () => {
 
         expect(mocks.createIORedisClient).toHaveBeenCalledWith(
             "worker-scheduler-locks",
-            expect.objectContaining({ lazyConnect: true })
+            expect.objectContaining({ lazyConnect: true }),
         );
         expect(mocks.scanQueue.process).toHaveBeenCalledWith(
             "scan",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(mocks.discoverQueue.process).toHaveBeenCalledWith(
             "discover-recommendation",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(mocks.schedulerQueue.process).toHaveBeenCalledWith(
             "*",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(mocks.startUnifiedEnrichmentWorker).toHaveBeenCalledTimes(1);
         expect(mocks.startMoodBucketWorker).toHaveBeenCalledTimes(1);
@@ -286,12 +309,12 @@ describe("workers runtime behavior", () => {
 
         expect(mocks.discoverQueue.process).not.toHaveBeenCalledWith(
             "discover-recommendation",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(mocks.startDiscoverWeeklyCron).not.toHaveBeenCalled();
         expect(mocks.stopDiscoverWeeklyCron).toHaveBeenCalledTimes(1);
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("3 discover job(s)")
+            expect.stringContaining("3 discover job(s)"),
         );
     });
 
@@ -299,7 +322,7 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks({ discovery: false });
         mocks.discoverQueue.getJobCounts.mockRejectedValueOnce(
-            new Error("redis gone")
+            new Error("redis gone"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -309,7 +332,7 @@ describe("workers runtime behavior", () => {
         expect(mocks.stopDiscoverWeeklyCron).toHaveBeenCalledTimes(1);
         expect(mocks.logger.warn).toHaveBeenCalledWith(
             expect.stringContaining("discover queue backlog"),
-            "redis gone"
+            "redis gone",
         );
     });
 
@@ -329,7 +352,10 @@ describe("workers runtime behavior", () => {
             queue.on.mock.calls.find(([name]: [string]) => name === event)?.[1];
 
         const schedulerActive = findHandler(mocks.schedulerQueue, "active");
-        const schedulerCompleted = findHandler(mocks.schedulerQueue, "completed");
+        const schedulerCompleted = findHandler(
+            mocks.schedulerQueue,
+            "completed",
+        );
         expect(schedulerActive).toBeDefined();
         expect(schedulerCompleted).toBeDefined();
 
@@ -346,8 +372,8 @@ describe("workers runtime behavior", () => {
         // so this must be the last log line naming the culprit.
         expect(mocks.logger.info).toHaveBeenCalledWith(
             expect.stringContaining(
-                "job-start queue=worker-scheduler jobId=r1 jobName=download-reconciliation-cycle"
-            )
+                "job-start queue=worker-scheduler jobId=r1 jobName=download-reconciliation-cycle",
+            ),
         );
 
         schedulerCompleted({ id: "r1", name: "download-reconciliation-cycle" });
@@ -358,7 +384,10 @@ describe("workers runtime behavior", () => {
         expect(imageActive).toBeDefined();
         imageActive({ id: "i1", name: "optimize" });
         expect(monitor.getActiveJobs()).toEqual([
-            expect.objectContaining({ queue: "image-optimization", jobId: "i1" }),
+            expect.objectContaining({
+                queue: "image-optimization",
+                jobId: "i1",
+            }),
         ]);
         monitor.clearActiveJobsForTest();
     });
@@ -393,7 +422,9 @@ describe("workers runtime behavior", () => {
         expect(mocks.downloadQueueManager.shutdown).toHaveBeenCalledTimes(1);
         expect(mocks.scanQueue.removeAllListeners).toHaveBeenCalledTimes(1);
         expect(mocks.schedulerQueue.close).toHaveBeenCalledTimes(1);
-        expect(mocks.enrichmentStateService.disconnect).toHaveBeenCalledTimes(1);
+        expect(mocks.enrichmentStateService.disconnect).toHaveBeenCalledTimes(
+            1,
+        );
         expect(mocks.shutdownDiscoverProcessor).toHaveBeenCalledTimes(1);
         expect(mocks.schedulerLockRedis.quit).toHaveBeenCalledTimes(1);
     });
@@ -406,9 +437,10 @@ describe("workers runtime behavior", () => {
         require("../index");
         await flushPromises();
 
-        const schedulerProcessCall = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
-        );
+        const schedulerProcessCall =
+            mocks.schedulerQueue.process.mock.calls.find(
+                (call) => call[0] === "*",
+            );
         expect(schedulerProcessCall).toBeTruthy();
         const schedulerHandler = schedulerProcessCall[1];
 
@@ -427,16 +459,17 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.schedulerLockRedis.set.mockResolvedValueOnce(
-            null as unknown as string
+            null as unknown as string,
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         require("../index");
         await flushPromises();
 
-        const schedulerProcessCall = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
-        );
+        const schedulerProcessCall =
+            mocks.schedulerQueue.process.mock.calls.find(
+                (call) => call[0] === "*",
+            );
         const schedulerHandler = schedulerProcessCall[1];
 
         await schedulerHandler({
@@ -455,14 +488,16 @@ describe("workers runtime behavior", () => {
             SCHEDULER_CLAIM_SKIP_WARN_THRESHOLD: "0",
         };
         const mocks = setupWorkerModuleMocks();
-        mocks.schedulerLockRedis.set.mockResolvedValue(null as unknown as string);
+        mocks.schedulerLockRedis.set.mockResolvedValue(
+            null as unknown as string,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         require("../index");
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
         expect(schedulerHandler).toBeTruthy();
 
@@ -478,7 +513,7 @@ describe("workers runtime behavior", () => {
         });
 
         expect(mocks.logger.warn).not.toHaveBeenCalledWith(
-            expect.stringContaining("[SchedulerClaim/SLO]")
+            expect.stringContaining("[SchedulerClaim/SLO]"),
         );
     });
 
@@ -490,7 +525,8 @@ describe("workers runtime behavior", () => {
         require("../index");
         await flushPromises();
 
-        const callback = mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
+        const callback =
+            mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
         await callback({
             userId: undefined,
             artistName: "Artist",
@@ -501,7 +537,9 @@ describe("workers runtime behavior", () => {
             tier: "high",
         });
 
-        expect(mocks.downloadQueueManager.onUnavailableAlbum).toHaveBeenCalledTimes(1);
+        expect(
+            mocks.downloadQueueManager.onUnavailableAlbum,
+        ).toHaveBeenCalledTimes(1);
         expect(mocks.schedulerQueue.process).toHaveBeenCalled();
     });
 
@@ -515,7 +553,8 @@ describe("workers runtime behavior", () => {
         require("../index");
         await flushPromises();
 
-        const callback = mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
+        const callback =
+            mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
         const prisma = require("../../utils/db").prisma;
         prisma.unavailableAlbum.create.mockRejectedValueOnce(duplicateError);
 
@@ -528,7 +567,7 @@ describe("workers runtime behavior", () => {
                 artistMbid: "a-1",
                 similarity: 0.5,
                 tier: "high",
-            })
+            }),
         ).resolves.toBeUndefined();
     });
 
@@ -559,28 +598,58 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
         expect(schedulerHandler).toBeTruthy();
 
         await schedulerHandler({ id: "p1", name: "podcast-cleanup", data: {} });
-        await schedulerHandler({ id: "p2", name: "podcast-cache-cleanup", data: {} });
-        await schedulerHandler({ id: "a1", name: "audiobook-auto-sync", data: {} });
-        await schedulerHandler({ id: "a2", name: "audiobook-auto-sync-startup", data: {} });
-        await schedulerHandler({ id: "d1", name: "download-queue-reconcile", data: {} });
-        await schedulerHandler({ id: "d2", name: "download-queue-reconcile-startup", data: {} });
-        await schedulerHandler({ id: "ac1", name: "artist-counts-backfill", data: {} });
+        await schedulerHandler({
+            id: "p2",
+            name: "podcast-cache-cleanup",
+            data: {},
+        });
+        await schedulerHandler({
+            id: "a1",
+            name: "audiobook-auto-sync",
+            data: {},
+        });
+        await schedulerHandler({
+            id: "a2",
+            name: "audiobook-auto-sync-startup",
+            data: {},
+        });
+        await schedulerHandler({
+            id: "d1",
+            name: "download-queue-reconcile",
+            data: {},
+        });
+        await schedulerHandler({
+            id: "d2",
+            name: "download-queue-reconcile-startup",
+            data: {},
+        });
+        await schedulerHandler({
+            id: "ac1",
+            name: "artist-counts-backfill",
+            data: {},
+        });
         await schedulerHandler({
             id: "ac2",
             name: "artist-counts-backfill-startup",
             data: {},
         });
         await schedulerHandler({ id: "i1", name: "image-backfill", data: {} });
-        await schedulerHandler({ id: "i2", name: "image-backfill-startup", data: {} });
+        await schedulerHandler({
+            id: "i2",
+            name: "image-backfill-startup",
+            data: {},
+        });
 
         expect(mocks.cleanupExpiredCache).toHaveBeenCalled();
         expect(mocks.audiobookCacheService.syncAll).toHaveBeenCalled();
-        expect(mocks.downloadQueueManager.reconcileOnStartup).toHaveBeenCalled();
+        expect(
+            mocks.downloadQueueManager.reconcileOnStartup,
+        ).toHaveBeenCalled();
         expect(mocks.backfillAllArtistCounts).toHaveBeenCalled();
         expect(mocks.backfillAllImages).toHaveBeenCalled();
     });
@@ -588,9 +657,11 @@ describe("workers runtime behavior", () => {
     it("runs track-mapping reconcile job including YT->TIDAL upgrade pass", async () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
-        mocks.trackReconciliationService.reconcileOrphans.mockResolvedValueOnce({
-            created: 1,
-        });
+        mocks.trackReconciliationService.reconcileOrphans.mockResolvedValueOnce(
+            {
+                created: 1,
+            },
+        );
         mocks.trackReconciliationService.reconcile.mockResolvedValueOnce({
             processed: 2,
             linked: 1,
@@ -601,7 +672,7 @@ describe("workers runtime behavior", () => {
                 processed: 3,
                 upgraded: 2,
                 skipped: 1,
-            }
+            },
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -609,7 +680,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
         expect(schedulerHandler).toBeTruthy();
 
@@ -619,15 +690,17 @@ describe("workers runtime behavior", () => {
             data: { mode: "repeat" },
         });
 
-        expect(mocks.trackReconciliationService.reconcileOrphans).toHaveBeenCalledTimes(
-            1
-        );
-        expect(mocks.trackReconciliationService.reconcile).toHaveBeenCalledTimes(1);
         expect(
-            mocks.trackReconciliationService.reconcileYoutubeToTidal
+            mocks.trackReconciliationService.reconcileOrphans,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            mocks.trackReconciliationService.reconcile,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            mocks.trackReconciliationService.reconcileYoutubeToTidal,
         ).toHaveBeenCalledTimes(1);
         expect(mocks.logger.info).toHaveBeenCalledWith(
-            expect.stringContaining("Upgraded 2 YT mappings to TIDAL")
+            expect.stringContaining("Upgraded 2 YT mappings to TIDAL"),
         );
     });
 
@@ -640,7 +713,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
         expect(schedulerHandler).toBeTruthy();
 
@@ -651,7 +724,7 @@ describe("workers runtime behavior", () => {
         });
 
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "[STARTUP] Audiobookshelf is disabled or unconfigured - skipping auto-sync"
+            "[STARTUP] Audiobookshelf is disabled or unconfigured - skipping auto-sync",
         );
         expect(mocks.audiobookCacheService.syncAll).not.toHaveBeenCalled();
     });
@@ -672,7 +745,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
         expect(schedulerHandler).toBeTruthy();
 
@@ -683,7 +756,7 @@ describe("workers runtime behavior", () => {
         });
 
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "[STARTUP] Audiobook cache has 3 entries - skipping auto-sync"
+            "[STARTUP] Audiobook cache has 3 entries - skipping auto-sync",
         );
         expect(mocks.audiobookCacheService.syncAll).not.toHaveBeenCalled();
     });
@@ -703,7 +776,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
         expect(schedulerHandler).toBeTruthy();
 
@@ -719,10 +792,10 @@ describe("workers runtime behavior", () => {
         });
 
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "[STARTUP] Artist counts already populated"
+            "[STARTUP] Artist counts already populated",
         );
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "[STARTUP] All images already stored locally"
+            "[STARTUP] All images already stored locally",
         );
         expect(mocks.backfillAllArtistCounts).not.toHaveBeenCalled();
         expect(mocks.backfillAllImages).not.toHaveBeenCalled();
@@ -731,14 +804,16 @@ describe("workers runtime behavior", () => {
     it("propagates timeout-wrapped operation failures from scheduler maintenance jobs", async () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
-        mocks.cleanupExpiredCache.mockRejectedValueOnce(new Error("podcast cleanup failed"));
+        mocks.cleanupExpiredCache.mockRejectedValueOnce(
+            new Error("podcast cleanup failed"),
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         require("../index");
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
         expect(schedulerHandler).toBeTruthy();
 
@@ -747,7 +822,7 @@ describe("workers runtime behavior", () => {
                 id: "podcast-cleanup-fail",
                 name: "podcast-cache-cleanup",
                 data: {},
-            })
+            }),
         ).rejects.toThrow("podcast cleanup failed");
     });
 
@@ -760,7 +835,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -771,8 +846,8 @@ describe("workers runtime behavior", () => {
 
         expect(mocks.logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                'Scheduler wildcard received unknown job type "unknown-job-type"'
-            )
+                'Scheduler wildcard received unknown job type "unknown-job-type"',
+            ),
         );
     });
 
@@ -780,7 +855,7 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.schedulerLockRedis.set.mockRejectedValue(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
         const setTimeoutSpy = jest
             .spyOn(global, "setTimeout")
@@ -794,7 +869,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         const handlerPromise = schedulerHandler({
@@ -809,9 +884,9 @@ describe("workers runtime behavior", () => {
         expect(mocks.schedulerLockRedis.disconnect).toHaveBeenCalled();
         expect(mocks.logger.error).toHaveBeenCalledWith(
             expect.stringContaining(
-                "[SchedulerClaim] Failed to claim data integrity check"
+                "[SchedulerClaim] Failed to claim data integrity check",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -819,7 +894,7 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.schedulerLockRedis.eval.mockRejectedValue(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
         const setTimeoutSpy = jest
             .spyOn(global, "setTimeout")
@@ -833,7 +908,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         const handlerPromise = schedulerHandler({
@@ -847,9 +922,9 @@ describe("workers runtime behavior", () => {
         expect(mocks.runDataIntegrityCheck).toHaveBeenCalled();
         expect(mocks.logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "[SchedulerClaim] Failed to release claim for data integrity check"
+                "[SchedulerClaim] Failed to release claim for data integrity check",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -878,7 +953,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -905,8 +980,10 @@ describe("workers runtime behavior", () => {
 
         expect(mocks.runDataIntegrityCheck).toHaveBeenCalledTimes(4);
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("[SchedulerClaim] claim acquire for data integrity check"),
-            expect.anything()
+            expect.stringContaining(
+                "[SchedulerClaim] claim acquire for data integrity check",
+            ),
+            expect.anything(),
         );
     });
 
@@ -940,7 +1017,10 @@ describe("workers runtime behavior", () => {
             success: false,
             error: "discover-failed",
         });
-        getHandler(mocks.discoverQueue, "failed")(job, new Error("discover-failed"));
+        getHandler(mocks.discoverQueue, "failed")(
+            job,
+            new Error("discover-failed"),
+        );
         getHandler(mocks.discoverQueue, "active")(job);
 
         getHandler(mocks.imageQueue, "completed")(job, {
@@ -953,24 +1033,30 @@ describe("workers runtime behavior", () => {
             tracksChecked: 100,
             tracksRemoved: 2,
         });
-        getHandler(mocks.validationQueue, "failed")(job, new Error("val-failed"));
+        getHandler(mocks.validationQueue, "failed")(
+            job,
+            new Error("val-failed"),
+        );
         getHandler(mocks.validationQueue, "active")(job);
 
-        getHandler(mocks.schedulerQueue, "completed")({
+        getHandler(
+            mocks.schedulerQueue,
+            "completed",
+        )({
             ...job,
             name: "data-integrity-check",
         });
         getHandler(mocks.schedulerQueue, "failed")(
             { ...job, name: "data-integrity-check" },
-            new Error("sched-failed")
+            new Error("sched-failed"),
         );
 
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Scan job job-1 completed")
+            expect.stringContaining("Scan job job-1 completed"),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             expect.stringContaining("Scheduler job job-1 failed"),
-            "sched-failed"
+            "sched-failed",
         );
     });
 
@@ -983,10 +1069,10 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerCompleted = mocks.schedulerQueue.on.mock.calls.find(
-            (call) => call[0] === "completed"
+            (call) => call[0] === "completed",
         )?.[1];
         const schedulerFailed = mocks.schedulerQueue.on.mock.calls.find(
-            (call) => call[0] === "failed"
+            (call) => call[0] === "failed",
         )?.[1];
         expect(schedulerCompleted).toBeTruthy();
         expect(schedulerFailed).toBeTruthy();
@@ -997,7 +1083,7 @@ describe("workers runtime behavior", () => {
 
         expect(mocks.logger.error).toHaveBeenCalledWith(
             expect.stringContaining("Scheduler job unknown failed (unknown)"),
-            "unknown scheduler failure"
+            "unknown scheduler failure",
         );
     });
 
@@ -1005,13 +1091,13 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.startUnifiedEnrichmentWorker.mockRejectedValueOnce(
-            new Error("enrichment-startup-fail")
+            new Error("enrichment-startup-fail"),
         );
         mocks.startMoodBucketWorker.mockRejectedValueOnce(
-            new Error("mood-startup-fail")
+            new Error("mood-startup-fail"),
         );
         mocks.schedulerQueue.isReady.mockRejectedValueOnce(
-            new Error("scheduler-not-ready")
+            new Error("scheduler-not-ready"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1020,22 +1106,24 @@ describe("workers runtime behavior", () => {
 
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Failed to start unified enrichment worker:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Failed to start mood bucket worker:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Failed to register scheduler queue jobs:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("runs reconciliation scheduler cycles and logs activity counts", async () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
-        mocks.simpleDownloadManager.markStaleJobsAsFailed.mockResolvedValueOnce(2);
+        mocks.simpleDownloadManager.markStaleJobsAsFailed.mockResolvedValueOnce(
+            2,
+        );
         mocks.simpleDownloadManager.reconcileWithLidarr.mockResolvedValueOnce({
             reconciled: 3,
         });
@@ -1051,7 +1139,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -1060,20 +1148,32 @@ describe("workers runtime behavior", () => {
             data: { mode: "repeat" },
         });
 
-        expect(mocks.lidarrService.getReconciliationSnapshot).toHaveBeenCalled();
-        expect(mocks.simpleDownloadManager.markStaleJobsAsFailed).toHaveBeenCalled();
-        expect(mocks.simpleDownloadManager.reconcileWithLidarr).toHaveBeenCalled();
+        expect(
+            mocks.lidarrService.getReconciliationSnapshot,
+        ).toHaveBeenCalled();
+        expect(
+            mocks.simpleDownloadManager.markStaleJobsAsFailed,
+        ).toHaveBeenCalled();
+        expect(
+            mocks.simpleDownloadManager.reconcileWithLidarr,
+        ).toHaveBeenCalled();
         expect(mocks.queueCleaner.reconcileWithLocalLibrary).toHaveBeenCalled();
-        expect(mocks.simpleDownloadManager.syncWithLidarrQueue).toHaveBeenCalled();
+        expect(
+            mocks.simpleDownloadManager.syncWithLidarrQueue,
+        ).toHaveBeenCalled();
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Periodic reconcile: 3 job(s) matched in Lidarr")
+            expect.stringContaining(
+                "Periodic reconcile: 3 job(s) matched in Lidarr",
+            ),
         );
     });
 
     it("handles reconciliation cycles with zero deltas without positive-count logs", async () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
-        mocks.simpleDownloadManager.markStaleJobsAsFailed.mockResolvedValueOnce(0);
+        mocks.simpleDownloadManager.markStaleJobsAsFailed.mockResolvedValueOnce(
+            0,
+        );
         mocks.simpleDownloadManager.reconcileWithLidarr.mockResolvedValueOnce({
             reconciled: 0,
         });
@@ -1089,7 +1189,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -1099,13 +1199,17 @@ describe("workers runtime behavior", () => {
         });
 
         expect(mocks.logger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("Periodic cleanup: marked")
+            expect.stringContaining("Periodic cleanup: marked"),
         );
         expect(mocks.logger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("Periodic reconcile: 0 job(s) matched in Lidarr")
+            expect.stringContaining(
+                "Periodic reconcile: 0 job(s) matched in Lidarr",
+            ),
         );
         expect(mocks.logger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("Periodic sync: 0 job(s) synced with Lidarr queue")
+            expect.stringContaining(
+                "Periodic sync: 0 job(s) synced with Lidarr queue",
+            ),
         );
     });
 
@@ -1122,7 +1226,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -1146,16 +1250,18 @@ describe("workers runtime behavior", () => {
             data: { mode: "startup" },
         });
 
-        expect(mocks.simpleDownloadManager.clearLidarrQueue).toHaveBeenCalledTimes(3);
+        expect(
+            mocks.simpleDownloadManager.clearLidarrQueue,
+        ).toHaveBeenCalledTimes(3);
         expect(mocks.dataCacheService.warmupCache).toHaveBeenCalledTimes(1);
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "Running initial Lidarr queue cleanup..."
+            "Running initial Lidarr queue cleanup...",
         );
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "Initial cleanup: queue is clean"
+            "Initial cleanup: queue is clean",
         );
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "Periodic Lidarr cleanup: removed 1 stuck download(s)"
+            "Periodic Lidarr cleanup: removed 1 stuck download(s)",
         );
     });
 
@@ -1171,7 +1277,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -1181,10 +1287,10 @@ describe("workers runtime behavior", () => {
         });
 
         expect(mocks.logger.debug).not.toHaveBeenCalledWith(
-            "Initial cleanup: queue is clean"
+            "Initial cleanup: queue is clean",
         );
         expect(mocks.logger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("Periodic Lidarr cleanup: removed")
+            expect.stringContaining("Periodic Lidarr cleanup: removed"),
         );
     });
 
@@ -1192,12 +1298,14 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         const prisma = require("../../utils/db").prisma;
-        const neverSyncAll = () => new Promise<{ synced: number }>(() => undefined);
+        const neverSyncAll = () =>
+            new Promise<{ synced: number }>(() => undefined);
         const neverReconcileOnStartup = () =>
             new Promise<{ loaded: number; failed: number }>(() => undefined);
         const neverBackfillArtistCounts = () =>
             new Promise<{ processed: number; errors: number }>(() => undefined);
-        const neverBackfillImages = () => new Promise<undefined>(() => undefined);
+        const neverBackfillImages = () =>
+            new Promise<undefined>(() => undefined);
         const setTimeoutSpy = jest
             .spyOn(global, "setTimeout")
             .mockImplementation(((cb: (...args: any[]) => void) => {
@@ -1210,13 +1318,15 @@ describe("workers runtime behavior", () => {
             audiobookshelfUrl: "http://audiobookshelf",
         });
         prisma.audiobook.count.mockResolvedValueOnce(0);
-        mocks.audiobookCacheService.syncAll.mockImplementationOnce(neverSyncAll);
+        mocks.audiobookCacheService.syncAll.mockImplementationOnce(
+            neverSyncAll,
+        );
         mocks.downloadQueueManager.reconcileOnStartup.mockImplementationOnce(
-            neverReconcileOnStartup
+            neverReconcileOnStartup,
         );
         mocks.isBackfillNeeded.mockResolvedValueOnce(true);
         mocks.backfillAllArtistCounts.mockImplementationOnce(
-            neverBackfillArtistCounts
+            neverBackfillArtistCounts,
         );
         mocks.isImageBackfillNeeded.mockResolvedValueOnce({
             needed: true,
@@ -1230,7 +1340,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -1261,16 +1371,16 @@ describe("workers runtime behavior", () => {
         setTimeoutSpy.mockRestore();
 
         expect(mocks.logger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("[STARTUP] Audiobook auto-sync complete:")
+            expect.stringContaining("[STARTUP] Audiobook auto-sync complete:"),
         );
         expect(mocks.logger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("Download queue reconciled:")
+            expect.stringContaining("Download queue reconciled:"),
         );
         expect(mocks.logger.info).not.toHaveBeenCalledWith(
-            expect.stringContaining("Artist counts backfill complete:")
+            expect.stringContaining("Artist counts backfill complete:"),
         );
         expect(mocks.logger.info).not.toHaveBeenCalledWith(
-            "[STARTUP] Image backfill complete"
+            "[STARTUP] Image backfill complete",
         );
     });
 
@@ -1280,14 +1390,16 @@ describe("workers runtime behavior", () => {
             SCHEDULER_CLAIM_SKIP_WARN_THRESHOLD: "1",
         };
         const mocks = setupWorkerModuleMocks();
-        mocks.schedulerLockRedis.set.mockResolvedValue(null as unknown as string);
+        mocks.schedulerLockRedis.set.mockResolvedValue(
+            null as unknown as string,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         require("../index");
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         for (let i = 0; i < 25; i += 1) {
@@ -1299,10 +1411,12 @@ describe("workers runtime behavior", () => {
         }
 
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("[SchedulerClaim/SLO] data integrity check skipped")
+            expect.stringContaining(
+                "[SchedulerClaim/SLO] data integrity check skipped",
+            ),
         );
         expect(mocks.logger.info).toHaveBeenCalledWith(
-            expect.stringContaining("[SchedulerClaim/Observability]")
+            expect.stringContaining("[SchedulerClaim/Observability]"),
         );
     });
 
@@ -1310,7 +1424,7 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.simpleDownloadManager.clearLidarrQueue.mockImplementation(
-            () => new Promise(() => undefined)
+            () => new Promise(() => undefined),
         );
         const setTimeoutSpy = jest
             .spyOn(global, "setTimeout")
@@ -1324,7 +1438,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await schedulerHandler({
@@ -1335,7 +1449,7 @@ describe("workers runtime behavior", () => {
         setTimeoutSpy.mockRestore();
 
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Operation timed out after 180000ms")
+            expect.stringContaining("Operation timed out after 180000ms"),
         );
     });
 
@@ -1343,7 +1457,7 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.runDataIntegrityCheck.mockRejectedValueOnce(
-            new Error("integrity failed")
+            new Error("integrity failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1351,7 +1465,7 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
-            (call) => call[0] === "*"
+            (call) => call[0] === "*",
         )?.[1];
 
         await expect(
@@ -1359,11 +1473,11 @@ describe("workers runtime behavior", () => {
                 id: "scheduler-err-1",
                 name: "data-integrity-check",
                 data: { mode: "repeat" },
-            })
+            }),
         ).rejects.toThrow("integrity failed");
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Scheduler processor failed (data-integrity-check):",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1375,10 +1489,11 @@ describe("workers runtime behavior", () => {
         require("../index");
         await flushPromises();
 
-        const callback = mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
+        const callback =
+            mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
         const prisma = require("../../utils/db").prisma;
         prisma.unavailableAlbum.create.mockRejectedValueOnce(
-            new Error("db write failed")
+            new Error("db write failed"),
         );
 
         await expect(
@@ -1390,12 +1505,12 @@ describe("workers runtime behavior", () => {
                 artistMbid: "a-x",
                 similarity: 0.4,
                 tier: "medium",
-            })
+            }),
         ).resolves.toBeUndefined();
 
         expect(mocks.logger.error).toHaveBeenCalledWith(
             " Failed to record unavailable album:",
-            "db write failed"
+            "db write failed",
         );
     });
 
@@ -1407,7 +1522,8 @@ describe("workers runtime behavior", () => {
         require("../index");
         await flushPromises();
 
-        const callback = mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
+        const callback =
+            mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
 
         await expect(
             callback({
@@ -1418,10 +1534,12 @@ describe("workers runtime behavior", () => {
                 artistMbid: "artist-success",
                 similarity: 0.88,
                 tier: "high",
-            })
+            }),
         ).resolves.toBeUndefined();
 
-        expect(mocks.logger.debug).toHaveBeenCalledWith("   Recorded in database");
+        expect(mocks.logger.debug).toHaveBeenCalledWith(
+            "   Recorded in database",
+        );
     });
 
     it("applies unavailable-album fallback defaults for similarity and tier", async () => {
@@ -1433,7 +1551,8 @@ describe("workers runtime behavior", () => {
         require("../index");
         await flushPromises();
 
-        const callback = mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
+        const callback =
+            mocks.downloadQueueManager.onUnavailableAlbum.mock.calls[0][0];
         await callback({
             userId: "user-defaults",
             artistName: "Artist Defaults",
@@ -1450,7 +1569,7 @@ describe("workers runtime behavior", () => {
                     similarity: 0,
                     tier: "unknown",
                 }),
-            })
+            }),
         );
     });
 
@@ -1463,17 +1582,17 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         const imageCompleted = mocks.imageQueue.on.mock.calls.find(
-            (call) => call[0] === "completed"
+            (call) => call[0] === "completed",
         )?.[1];
         expect(imageCompleted).toBeTruthy();
 
-        imageCompleted(
-            { id: "img-success", data: {}, name: "image" } as any,
-            { success: true, error: "n/a" }
-        );
+        imageCompleted({ id: "img-success", data: {}, name: "image" } as any, {
+            success: true,
+            error: "n/a",
+        });
 
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Image job img-success completed: success")
+            expect.stringContaining("Image job img-success completed: success"),
         );
     });
 
@@ -1481,13 +1600,13 @@ describe("workers runtime behavior", () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.enrichmentStateService.disconnect.mockRejectedValueOnce(
-            new Error("enrichment disconnect failed")
+            new Error("enrichment disconnect failed"),
         );
         mocks.shutdownDiscoverProcessor.mockRejectedValueOnce(
-            new Error("discover disconnect failed")
+            new Error("discover disconnect failed"),
         );
         mocks.schedulerLockRedis.quit.mockRejectedValueOnce(
-            new Error("redis quit failed")
+            new Error("redis quit failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1497,15 +1616,15 @@ describe("workers runtime behavior", () => {
         await expect(workers.shutdownWorkers()).resolves.toBeUndefined();
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Failed to disconnect enrichment state service:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Failed to disconnect discover processor Redis:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Failed to disconnect worker scheduler lock Redis:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

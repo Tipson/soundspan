@@ -12,12 +12,7 @@ const DEFAULT_REMOTE_DURATION = 180;
 
 const TITLE_PLACEHOLDERS = new Set(["", "unknown", "unknown track"]);
 const ARTIST_PLACEHOLDERS = new Set(["", "unknown", "unknown artist"]);
-const ALBUM_PLACEHOLDERS = new Set([
-    "",
-    "single",
-    "unknown",
-    "unknown album",
-]);
+const ALBUM_PLACEHOLDERS = new Set(["", "single", "unknown", "unknown album"]);
 
 /**
  * Remote metadata supplied by clients or fetched from provider APIs.
@@ -68,7 +63,7 @@ function normalizeOptionalString(value: unknown): string | undefined {
 
 function isPlaceholderValue(
     field: "title" | "artist" | "album",
-    value: string | undefined
+    value: string | undefined,
 ): boolean {
     if (!value) {
         return true;
@@ -100,7 +95,7 @@ function pickBestThumbnailUrl(thumbnails: unknown): string | undefined {
         .map((thumbnail) =>
             typeof thumbnail === "object" && thumbnail !== null
                 ? normalizeOptionalString((thumbnail as { url?: string }).url)
-                : undefined
+                : undefined,
         )
         .filter((url): url is string => typeof url === "string");
 
@@ -108,22 +103,22 @@ function pickBestThumbnailUrl(thumbnails: unknown): string | undefined {
 }
 
 function normalizeResolvedMetadata(
-    metadata: RemoteTrackMetadataInput
+    metadata: RemoteTrackMetadataInput,
 ): ResolvedRemoteTrackMetadata {
     return {
-        title:
-            normalizeOptionalString(metadata.title) ?? DEFAULT_REMOTE_TITLE,
+        title: normalizeOptionalString(metadata.title) ?? DEFAULT_REMOTE_TITLE,
         artist:
             normalizeOptionalString(metadata.artist) ?? DEFAULT_REMOTE_ARTIST,
-        album:
-            normalizeOptionalString(metadata.album) ?? DEFAULT_REMOTE_ALBUM,
+        album: normalizeOptionalString(metadata.album) ?? DEFAULT_REMOTE_ALBUM,
         duration:
             normalizeDuration(metadata.duration) ?? DEFAULT_REMOTE_DURATION,
         thumbnailUrl: normalizeOptionalString(metadata.thumbnailUrl),
         isrc: normalizeOptionalString(metadata.isrc),
         quality: normalizeOptionalString(metadata.quality),
         explicit:
-            typeof metadata.explicit === "boolean" ? metadata.explicit : undefined,
+            typeof metadata.explicit === "boolean"
+                ? metadata.explicit
+                : undefined,
     };
 }
 
@@ -132,7 +127,7 @@ function normalizeResolvedMetadata(
  * that should be repaired from the provider API.
  */
 export function hasPlaceholderRemoteTrackMetadata(
-    metadata: RemoteTrackMetadataInput
+    metadata: RemoteTrackMetadataInput,
 ): boolean {
     const title = normalizeOptionalString(metadata.title);
     const artist = normalizeOptionalString(metadata.artist);
@@ -150,7 +145,7 @@ export function hasPlaceholderRemoteTrackMetadata(
  * provider details inline when the request only carries placeholder values.
  */
 export async function resolveRemoteTrackMetadataForRequest(
-    lookup: RemoteTrackLookup
+    lookup: RemoteTrackLookup,
 ): Promise<ResolvedRemoteTrackMetadata> {
     const resolved = normalizeResolvedMetadata(lookup.metadata);
 
@@ -174,7 +169,7 @@ export async function resolveRemoteTrackMetadataForRequest(
             const { tidalStreamingService } = await import("./tidalStreaming");
             const detail = await tidalStreamingService.getTrack(
                 lookup.userId,
-                tidalId
+                tidalId,
             );
             if (!detail) {
                 return resolved;
@@ -222,7 +217,7 @@ export async function resolveRemoteTrackMetadataForRequest(
         } catch (error) {
             log.debug(
                 `Falling back to __public__ YT metadata lookup for videoId=${videoId}`,
-                error
+                error,
             );
         }
 
@@ -265,7 +260,7 @@ export async function resolveRemoteTrackMetadataForRequest(
     } catch (error) {
         log.warn(
             `Failed to resolve inline metadata for ${lookup.provider} track`,
-            error
+            error,
         );
         return resolved;
     }

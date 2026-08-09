@@ -2,8 +2,10 @@ import fs from "fs";
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -57,10 +59,7 @@ import {
     sendSubsonicError,
     sendSubsonicSuccess,
 } from "../../utils/subsonicResponse";
-import {
-    handleDownload,
-    handleGetLyricsBySongId,
-} from "../subsonic";
+import { handleDownload, handleGetLyricsBySongId } from "../subsonic";
 
 function buildReq(query: Record<string, unknown>): Request {
     return {
@@ -106,7 +105,9 @@ describe("subsonic media compatibility handlers", () => {
         expect((res.download as jest.Mock).mock.calls[0][0]).toContain(
             "/music/Artist One/Album One/01 Song One.mp3",
         );
-        expect((res.download as jest.Mock).mock.calls[0][1]).toBe("01 Song One.mp3");
+        expect((res.download as jest.Mock).mock.calls[0][1]).toBe(
+            "01 Song One.mp3",
+        );
         jest.restoreAllMocks();
     });
 

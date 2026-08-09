@@ -36,7 +36,7 @@ export async function processBatched<T, R>(
     items: T[],
     batchSize: number,
     processor: (batch: T[]) => Promise<R[]>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
 ): Promise<R[]> {
     const results: R[] = [];
     const chunks = chunkArray(items, batchSize);

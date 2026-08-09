@@ -1,4 +1,7 @@
-import { ProgrammaticMix, ProgrammaticPlaylistService } from "../programmaticPlaylists";
+import {
+    ProgrammaticMix,
+    ProgrammaticPlaylistService,
+} from "../programmaticPlaylists";
 import { prisma } from "../../utils/db";
 
 jest.mock("../../config", () => ({
@@ -84,23 +87,34 @@ const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 function makeTracks(
     count: number,
     prefix: string,
-    overrides?: (index: number) => Partial<MockTrack>
+    overrides?: (index: number) => Partial<MockTrack>,
 ): MockTrack[] {
     return Array.from({ length: count }, (_, idx) => {
         const i = idx + 1;
         const base: MockTrack = {
             id: `${prefix}-${i}`,
-            key: ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"][
-                idx % 12
-            ],
+            key: [
+                "C",
+                "G",
+                "D",
+                "A",
+                "E",
+                "B",
+                "F#",
+                "Db",
+                "Ab",
+                "Eb",
+                "Bb",
+                "F",
+            ][idx % 12],
             keyScale: idx % 2 === 0 ? "major" : "minor",
             bpm: 85 + (idx % 80),
-            valence: 0.45 + ((idx % 4) * 0.1),
-            energy: 0.45 + ((idx % 5) * 0.1),
-            danceability: 0.4 + ((idx % 6) * 0.1),
-            acousticness: 0.2 + ((idx % 5) * 0.1),
-            instrumentalness: 0.1 + ((idx % 6) * 0.1),
-            arousal: 0.3 + ((idx % 5) * 0.1),
+            valence: 0.45 + (idx % 4) * 0.1,
+            energy: 0.45 + (idx % 5) * 0.1,
+            danceability: 0.4 + (idx % 6) * 0.1,
+            acousticness: 0.2 + (idx % 5) * 0.1,
+            instrumentalness: 0.1 + (idx % 6) * 0.1,
+            arousal: 0.3 + (idx % 5) * 0.1,
             moodTags: idx % 3 === 0 ? ["energetic"] : ["relaxed"],
             lastfmTags: idx % 4 === 0 ? ["dreamy"] : ["party"],
             analysisStatus: "completed",
@@ -163,11 +177,11 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
 
         const highEnergy = await service.generateHighEnergyMix(
             "user-1",
-            "2026-02-17"
+            "2026-02-17",
         );
         const lateNight = await service.generateLateNightMix(
             "user-1",
-            "2026-02-17"
+            "2026-02-17",
         );
 
         expect(highEnergy).not.toBeNull();
@@ -182,21 +196,27 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
             moodSad: 0.1,
         }));
         const happyStandard = makeTracks(16, "happy-standard");
-        const melancholyStandard = makeTracks(18, "melancholy-standard", (idx) => ({
-            keyScale: idx % 2 === 0 ? "minor" : "major",
-            moodTags: idx % 3 === 0 ? ["melancholy"] : null,
-            lastfmTags: idx % 4 === 0 ? ["emotional"] : null,
-            valence: 0.2,
-            energy: 0.3,
-        }));
+        const melancholyStandard = makeTracks(
+            18,
+            "melancholy-standard",
+            (idx) => ({
+                keyScale: idx % 2 === 0 ? "minor" : "major",
+                moodTags: idx % 3 === 0 ? ["melancholy"] : null,
+                lastfmTags: idx % 4 === 0 ? ["emotional"] : null,
+                valence: 0.2,
+                energy: 0.3,
+            }),
+        );
 
         (mockPrisma.track.findMany as jest.Mock)
             .mockResolvedValueOnce(happyEnhanced)
             .mockResolvedValueOnce(happyStandard)
-            .mockResolvedValueOnce(makeTracks(30, "melancholy-enhanced", () => ({
-                moodSad: 0.75,
-                moodHappy: 0.1,
-            })))
+            .mockResolvedValueOnce(
+                makeTracks(30, "melancholy-enhanced", () => ({
+                    moodSad: 0.75,
+                    moodHappy: 0.1,
+                })),
+            )
             .mockResolvedValueOnce(makeTracks(22, "dance-floor"))
             .mockResolvedValueOnce(makeTracks(21, "acoustic"))
             .mockResolvedValueOnce(makeTracks(20, "instrumental"));
@@ -204,19 +224,19 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
         const happy = await service.generateHappyMix("user-1", "2026-02-17");
         const melancholy = await service.generateMelancholyMix(
             "user-1",
-            "2026-02-17"
+            "2026-02-17",
         );
         const danceFloor = await service.generateDanceFloorMix(
             "user-1",
-            "2026-02-17"
+            "2026-02-17",
         );
         const acoustic = await service.generateAcousticMix(
             "user-1",
-            "2026-02-17"
+            "2026-02-17",
         );
         const instrumental = await service.generateInstrumentalMix(
             "user-1",
-            "2026-02-17"
+            "2026-02-17",
         );
 
         expect(happy?.trackCount).toBe(20);
@@ -229,11 +249,13 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
     it("falls back to genre seed tracks when melancholy enhanced candidates are insufficient", async () => {
         (mockPrisma.track.findMany as jest.Mock)
             .mockResolvedValueOnce(makeTracks(10, "melancholy-enhanced-short"))
-            .mockResolvedValueOnce(makeTracks(10, "melancholy-standard", () => ({
-                moodTags: ["sad"],
-                valence: 0.2,
-                energy: 0.4,
-            })))
+            .mockResolvedValueOnce(
+                makeTracks(10, "melancholy-standard", () => ({
+                    moodTags: ["sad"],
+                    valence: 0.2,
+                    energy: 0.4,
+                })),
+            )
             .mockResolvedValueOnce(makeTracks(10, "melancholy-genre-fallback"));
 
         const mix = await service.generateMelancholyMix("user-1", "2026-02-17");
@@ -253,14 +275,14 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
             "2026-02-17",
             "dreamy",
             "Dreamy Mix",
-            "Dreamy tracks"
+            "Dreamy tracks",
         );
         const enough = await service.generateMoodTagMix(
             "user-1",
             "2026-02-17",
             "dreamy",
             "Dreamy Mix",
-            "Dreamy tracks"
+            "Dreamy tracks",
         );
 
         expect(tooSmall).toBeNull();
@@ -327,7 +349,7 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
 
     it("returns null for day-of-week mixes when tracks are below minimum", async () => {
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
-            makeTracks(10, "weekday-low")
+            makeTracks(10, "weekday-low"),
         );
 
         const sunday = await service.generateSundayMix("user-1", "2026-02-22");
@@ -356,14 +378,16 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
         ];
 
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
-            makeTracks(30, "daily-vibes")
+            makeTracks(30, "daily-vibes"),
         );
 
         for (const method of dailyMethods) {
-            const result = await (service[method] as unknown as (
-                userId: string,
-                today: string
-            ) => Promise<ProgrammaticMix | null>)("user-1", "2026-02-17");
+            const result = await (
+                service[method] as unknown as (
+                    userId: string,
+                    today: string,
+                ) => Promise<ProgrammaticMix | null>
+            )("user-1", "2026-02-17");
             expect(result).not.toBeNull();
             expect(result!.trackCount).toBe(10);
         }
@@ -372,7 +396,7 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
     it("returns null for curated daily vibe mixes when candidate pool is under minimum size", async () => {
         jest.useFakeTimers().setSystemTime(new Date("2026-02-22T12:00:00Z"));
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
-            makeTracks(7, "daily-under-min")
+            makeTracks(7, "daily-under-min"),
         );
 
         const underMinimumMethods: Array<
@@ -397,27 +421,32 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
             makeTracks(24, "weekday-gated", (idx) => ({
                 keyScale: idx % 2 === 0 ? "minor" : "major",
-            }))
+            })),
         );
 
         jest.setSystemTime(new Date("2026-02-22T12:00:00Z")); // Sunday
         const sunday = await service.generateSadGirlSundays(
             "user-1",
-            "2026-02-22"
+            "2026-02-22",
         );
         expect(sunday).not.toBeNull();
         expect(sunday!.trackCount).toBe(10);
 
         jest.setSystemTime(new Date("2026-02-23T12:00:00Z")); // Monday
-        const monday = await service.generateMinorKeyMix("user-1", "2026-02-23");
+        const monday = await service.generateMinorKeyMix(
+            "user-1",
+            "2026-02-23",
+        );
         expect(monday).not.toBeNull();
         expect(monday!.trackCount).toBe(20);
 
         jest.setSystemTime(new Date("2026-02-24T12:00:00Z")); // Tuesday
         expect(
-            await service.generateSadGirlSundays("user-1", "2026-02-24")
+            await service.generateSadGirlSundays("user-1", "2026-02-24"),
         ).toBeNull();
-        expect(await service.generateMinorKeyMix("user-1", "2026-02-24")).toBeNull();
+        expect(
+            await service.generateMinorKeyMix("user-1", "2026-02-24"),
+        ).toBeNull();
     });
 
     it("generates weekly deep cuts, key journey, tempo flow, and vocal detox mixes", async () => {
@@ -430,14 +459,25 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
             .mockResolvedValueOnce(makeTracks(28, "deep-cuts"))
             .mockResolvedValueOnce(keyJourneyTracks)
             .mockResolvedValueOnce(tempoTracks)
-            .mockResolvedValueOnce(makeTracks(25, "vocal-detox", () => ({
-                instrumentalness: 0.9,
-            })));
+            .mockResolvedValueOnce(
+                makeTracks(25, "vocal-detox", () => ({
+                    instrumentalness: 0.9,
+                })),
+            );
 
         const deepCuts = await service.generateDeepCuts("user-1", "2026-02-17");
-        const keyJourney = await service.generateKeyJourney("user-1", "2026-02-17");
-        const tempoFlow = await service.generateTempoFlow("user-1", "2026-02-17");
-        const vocalDetox = await service.generateVocalDetox("user-1", "2026-02-17");
+        const keyJourney = await service.generateKeyJourney(
+            "user-1",
+            "2026-02-17",
+        );
+        const tempoFlow = await service.generateTempoFlow(
+            "user-1",
+            "2026-02-17",
+        );
+        const vocalDetox = await service.generateVocalDetox(
+            "user-1",
+            "2026-02-17",
+        );
 
         expect(deepCuts?.trackCount).toBe(20);
         expect(keyJourney?.trackCount).toBeGreaterThanOrEqual(15);
@@ -449,7 +489,7 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValueOnce(
             makeTracks(12, "tempo-flow-sparse", (idx) => ({
                 bpm: idx < 4 ? 92 : idx < 8 ? 100 : 155,
-            }))
+            })),
         );
 
         const mix = await service.generateTempoFlow("user-1", "2026-02-17");
@@ -474,7 +514,7 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
     it("builds mood-on-demand query using fallback mapping when enhanced coverage is insufficient", async () => {
         (mockPrisma.track.count as jest.Mock).mockResolvedValue(6);
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
-            makeTracks(12, "mood-fallback")
+            makeTracks(12, "mood-fallback"),
         );
 
         const mix = await service.generateMoodOnDemand("user-1", {
@@ -495,7 +535,7 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
                     danceability: expect.objectContaining({ gte: 0.6 }),
                 }),
                 take: 100,
-            })
+            }),
         );
     });
 
@@ -507,7 +547,7 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
                 analysisVersion: "2.1b6-enhanced-v3.2",
                 moodHappy: 0.8,
                 moodElectronic: 0.7,
-            }))
+            })),
         );
 
         const mix = await service.generateMoodOnDemand("user-1", {
@@ -532,14 +572,14 @@ describe("ProgrammaticPlaylistService curated and mood-on-demand methods", () =>
                     energy: expect.objectContaining({ gte: 0.4, lte: 0.9 }),
                     keyScale: "minor",
                 }),
-            })
+            }),
         );
     });
 
     it("returns null for mood-on-demand when result set is below minimum threshold", async () => {
         (mockPrisma.track.count as jest.Mock).mockResolvedValue(0);
         (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
-            makeTracks(5, "mood-too-small")
+            makeTracks(5, "mood-too-small"),
         );
 
         const mix = await service.generateMoodOnDemand("user-1", {

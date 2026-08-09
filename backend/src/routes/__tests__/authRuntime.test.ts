@@ -9,8 +9,12 @@ jest.mock("../../utils/logger", () => ({
     },
 }));
 
-const mockRequireAuth = jest.fn((_req: any, _res: any, next: () => void) => next());
-const mockRequireAdmin = jest.fn((_req: any, _res: any, next: () => void) => next());
+const mockRequireAuth = jest.fn((_req: any, _res: any, next: () => void) =>
+    next(),
+);
+const mockRequireAdmin = jest.fn((_req: any, _res: any, next: () => void) =>
+    next(),
+);
 const mockGenerateToken = jest.fn();
 const mockGenerateRefreshToken = jest.fn();
 const mockVerifyAuthToken = jest.fn();
@@ -94,13 +98,10 @@ jest.mock("../../utils/encryption", () => ({
 
 import router from "../auth";
 
-function getHandler(
-    path: string,
-    method: "get" | "post" | "put" | "delete"
-) {
+function getHandler(path: string, method: "get" | "post" | "put" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -178,7 +179,7 @@ describe("auth routes runtime", () => {
         mockOtplibVerify.mockResolvedValue({ valid: true });
         mockOtplibGenerateSecret.mockReturnValue("BASE32SECRET");
         mockOtplibGenerateURI.mockReturnValue(
-            "otpauth://totp/soundspan:alice?secret=BASE32SECRET&issuer=soundspan"
+            "otpauth://totp/soundspan:alice?secret=BASE32SECRET&issuer=soundspan",
         );
         mockQrCodeToDataUrl.mockResolvedValue("data:image/png;base64,abc");
         mockVerifyAuthToken.mockReturnValue({
@@ -194,7 +195,9 @@ describe("auth routes runtime", () => {
         await login(invalidReq, invalidRes);
         expect(invalidRes.statusCode).toBe(400);
 
-        prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+        prisma.user.findUnique
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null);
         const missingReq = { body: { username: "bob", password: "pw" } } as any;
         const missingRes = createRes();
         await login(missingReq, missingRes);
@@ -211,7 +214,9 @@ describe("auth routes runtime", () => {
             twoFactorRecoveryCodes: null,
         });
         mockBcryptCompare.mockResolvedValueOnce(false);
-        const badPwReq = { body: { username: "bob", password: "wrong" } } as any;
+        const badPwReq = {
+            body: { username: "bob", password: "wrong" },
+        } as any;
         const badPwRes = createRes();
         await login(badPwReq, badPwRes);
         expect(badPwRes.statusCode).toBe(401);
@@ -318,9 +323,10 @@ describe("auth routes runtime", () => {
             expect.objectContaining({
                 where: { id: "u1" },
                 data: {
-                    twoFactorRecoveryCodes: expect.stringContaining("other-hash"),
+                    twoFactorRecoveryCodes:
+                        expect.stringContaining("other-hash"),
                 },
-            })
+            }),
         );
     });
 
@@ -335,7 +341,10 @@ describe("auth routes runtime", () => {
         await refresh(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(400);
 
-        mockVerifyAuthToken.mockReturnValueOnce({ type: "access", userId: "u1" });
+        mockVerifyAuthToken.mockReturnValueOnce({
+            type: "access",
+            userId: "u1",
+        });
         const wrongTypeReq = { body: { refreshToken: "rt" } } as any;
         const wrongTypeRes = createRes();
         await refresh(wrongTypeReq, wrongTypeRes);
@@ -489,7 +498,9 @@ describe("auth routes runtime", () => {
         expect(listRes.statusCode).toBe(200);
         expect(listRes.body).toHaveLength(1);
 
-        const missingFieldsReq = { body: { username: "", password: "" } } as any;
+        const missingFieldsReq = {
+            body: { username: "", password: "" },
+        } as any;
         const missingFieldsRes = createRes();
         await createUser(missingFieldsReq, missingFieldsRes);
         expect(missingFieldsRes.statusCode).toBe(400);
@@ -706,7 +717,9 @@ describe("auth routes runtime", () => {
         await twoFaStatus(statusMissingReq, statusMissingRes);
         expect(statusMissingRes.statusCode).toBe(404);
 
-        prisma.user.findUnique.mockResolvedValueOnce({ twoFactorEnabled: true });
+        prisma.user.findUnique.mockResolvedValueOnce({
+            twoFactorEnabled: true,
+        });
         const statusReq = { user: { id: "u1" } } as any;
         const statusRes = createRes();
         await twoFaStatus(statusReq, statusRes);
@@ -785,14 +798,19 @@ describe("auth routes runtime", () => {
         await getSubsonicPassword(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(404);
 
-        prisma.user.findUnique.mockResolvedValueOnce({ subsonicPassword: "enc(x)" });
+        prisma.user.findUnique.mockResolvedValueOnce({
+            subsonicPassword: "enc(x)",
+        });
         const statusReq = { user: { id: "u1" } } as any;
         const statusRes = createRes();
         await getSubsonicPassword(statusReq, statusRes);
         expect(statusRes.statusCode).toBe(200);
         expect(statusRes.body).toEqual({ hasPassword: true });
 
-        const invalidSetReq = { user: { id: "u1" }, body: { password: "123" } } as any;
+        const invalidSetReq = {
+            user: { id: "u1" },
+            body: { password: "123" },
+        } as any;
         const invalidSetRes = createRes();
         await setSubsonicPassword(invalidSetReq, invalidSetRes);
         expect(invalidSetRes.statusCode).toBe(400);
@@ -853,7 +871,10 @@ describe("auth routes runtime", () => {
     it("handles change-email validation, uniqueness, success, and failure paths", async () => {
         const changeEmail = getHandler("/change-email", "post");
 
-        const invalidReq = { user: { id: "u1" }, body: { email: "not-an-email" } } as any;
+        const invalidReq = {
+            user: { id: "u1" },
+            body: { email: "not-an-email" },
+        } as any;
         const invalidRes = createRes();
         await changeEmail(invalidReq, invalidRes);
         expect(invalidRes.statusCode).toBe(400);
@@ -896,19 +917,27 @@ describe("auth routes runtime", () => {
     it("covers patch /users/:id branches for validation, conflicts, and success", async () => {
         const patchLayer = (router as any).stack.find(
             (entry: any) =>
-                entry.route?.path === "/users/:id" && entry.route?.methods?.patch
+                entry.route?.path === "/users/:id" &&
+                entry.route?.methods?.patch,
         );
-        const updateUser = patchLayer.route.stack[patchLayer.route.stack.length - 1]
-            .handle;
+        const updateUser =
+            patchLayer.route.stack[patchLayer.route.stack.length - 1].handle;
 
         prisma.user.findUnique.mockResolvedValueOnce(null);
-        const missingReq = { params: { id: "u404" }, body: { username: "bob" } } as any;
+        const missingReq = {
+            params: { id: "u404" },
+            body: { username: "bob" },
+        } as any;
         const missingRes = createRes();
         await updateUser(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(404);
 
         prisma.user.findUnique
-            .mockResolvedValueOnce({ id: "u2", username: "bob", email: "b@example.com" })
+            .mockResolvedValueOnce({
+                id: "u2",
+                username: "bob",
+                email: "b@example.com",
+            })
             .mockResolvedValueOnce({ id: "u3" });
         const usernameTakenReq = {
             params: { id: "u2" },
@@ -917,10 +946,16 @@ describe("auth routes runtime", () => {
         const usernameTakenRes = createRes();
         await updateUser(usernameTakenReq, usernameTakenRes);
         expect(usernameTakenRes.statusCode).toBe(400);
-        expect(usernameTakenRes.body).toEqual({ error: "Username already taken" });
+        expect(usernameTakenRes.body).toEqual({
+            error: "Username already taken",
+        });
 
         prisma.user.findUnique
-            .mockResolvedValueOnce({ id: "u2", username: "bob", email: "b@example.com" })
+            .mockResolvedValueOnce({
+                id: "u2",
+                username: "bob",
+                email: "b@example.com",
+            })
             .mockResolvedValueOnce({ id: "u4" });
         const emailTakenReq = {
             params: { id: "u2" },
@@ -948,7 +983,11 @@ describe("auth routes runtime", () => {
         expect(zodRes.statusCode).toBe(400);
 
         prisma.user.findUnique
-            .mockResolvedValueOnce({ id: "u2", username: "bob", email: "b@example.com" })
+            .mockResolvedValueOnce({
+                id: "u2",
+                username: "bob",
+                email: "b@example.com",
+            })
             .mockResolvedValueOnce(null)
             .mockResolvedValueOnce(null);
         prisma.user.update.mockResolvedValueOnce({
@@ -979,7 +1018,7 @@ describe("auth routes runtime", () => {
                     tokenVersion: { increment: 1 },
                     subsonicPassword: null,
                 }),
-            })
+            }),
         );
 
         prisma.user.findUnique.mockResolvedValueOnce({
@@ -1006,7 +1045,10 @@ describe("auth routes runtime", () => {
         const listInvites = getHandler("/invite-codes", "get");
         const revokeInvite = getHandler("/invite-codes/:id", "delete");
 
-        const badReq = { user: { id: "admin-1" }, body: { ttl: "invalid" } } as any;
+        const badReq = {
+            user: { id: "admin-1" },
+            body: { ttl: "invalid" },
+        } as any;
         const badRes = createRes();
         await createInvite(badReq, badRes);
         expect(badRes.statusCode).toBe(400);
@@ -1014,7 +1056,9 @@ describe("auth routes runtime", () => {
         const randomSpy = jest
             .spyOn(crypto, "randomBytes")
             .mockReturnValue(Buffer.alloc(8, 0) as any);
-        (prisma as any).inviteCode.findUnique.mockResolvedValue({ id: "existing" });
+        (prisma as any).inviteCode.findUnique.mockResolvedValue({
+            id: "existing",
+        });
         const exhaustedReq = {
             user: { id: "admin-1" },
             body: { ttl: "1h", maxUses: 1 },
@@ -1022,7 +1066,9 @@ describe("auth routes runtime", () => {
         const exhaustedRes = createRes();
         await createInvite(exhaustedReq, exhaustedRes);
         expect(exhaustedRes.statusCode).toBe(500);
-        expect(exhaustedRes.body).toEqual({ error: "Failed to generate unique code" });
+        expect(exhaustedRes.body).toEqual({
+            error: "Failed to generate unique code",
+        });
         randomSpy.mockRestore();
 
         (prisma as any).inviteCode.findUnique.mockResolvedValueOnce(null);
@@ -1095,12 +1141,16 @@ describe("auth routes runtime", () => {
             "active",
         ]);
 
-        (prisma as any).inviteCode.findMany.mockRejectedValueOnce(new Error("db"));
+        (prisma as any).inviteCode.findMany.mockRejectedValueOnce(
+            new Error("db"),
+        );
         const listErrRes = createRes();
         await listInvites({} as any, listErrRes);
         expect(listErrRes.statusCode).toBe(500);
 
-        (prisma as any).inviteCode.update.mockRejectedValueOnce({ code: "P2025" });
+        (prisma as any).inviteCode.update.mockRejectedValueOnce({
+            code: "P2025",
+        });
         const revokeMissingReq = { params: { id: "missing" } } as any;
         const revokeMissingRes = createRes();
         await revokeInvite(revokeMissingReq, revokeMissingRes);
@@ -1113,11 +1163,15 @@ describe("auth routes runtime", () => {
         expect(revokeRes.statusCode).toBe(200);
         expect(revokeRes.body).toEqual({ message: "Invite code revoked" });
 
-        (prisma as any).inviteCode.update.mockRejectedValueOnce(new Error("db"));
+        (prisma as any).inviteCode.update.mockRejectedValueOnce(
+            new Error("db"),
+        );
         const revokeErrRes = createRes();
         await revokeInvite({ params: { id: "ic-2" } } as any, revokeErrRes);
         expect(revokeErrRes.statusCode).toBe(500);
-        expect(revokeErrRes.body).toEqual({ error: "Failed to revoke invite code" });
+        expect(revokeErrRes.body).toEqual({
+            error: "Failed to revoke invite code",
+        });
     });
 
     it("covers register route branches including invite/user/email checks and transaction errors", async () => {
@@ -1203,7 +1257,9 @@ describe("auth routes runtime", () => {
         const usernameTakenRes = createRes();
         await register(badInviteReq, usernameTakenRes);
         expect(usernameTakenRes.statusCode).toBe(400);
-        expect(usernameTakenRes.body).toEqual({ error: "Username already taken" });
+        expect(usernameTakenRes.body).toEqual({
+            error: "Username already taken",
+        });
 
         (prisma as any).inviteCode.findUnique.mockResolvedValueOnce({
             id: "ic-1",
@@ -1323,7 +1379,7 @@ describe("auth routes runtime", () => {
                     email: "racer@example.com",
                 },
             } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(400);
@@ -1338,29 +1394,31 @@ describe("auth routes runtime", () => {
                     id: "ic-1",
                     useCount: { lt: 1 },
                 }),
-            })
+            }),
         );
     });
 
     it("covers remaining login and 2FA disable edge branches", async () => {
-        prisma.user.findUnique.mockImplementationOnce(async ({ where }: any) => {
-            if (where.username === "alice@example.com") {
+        prisma.user.findUnique.mockImplementationOnce(
+            async ({ where }: any) => {
+                if (where.username === "alice@example.com") {
+                    return null;
+                }
+                if (where.email === "alice@example.com") {
+                    return {
+                        id: "u1",
+                        username: "alice",
+                        role: "user",
+                        passwordHash: "hash-1",
+                        tokenVersion: 1,
+                        twoFactorEnabled: false,
+                        twoFactorSecret: null,
+                        twoFactorRecoveryCodes: null,
+                    };
+                }
                 return null;
-            }
-            if (where.email === "alice@example.com") {
-                return {
-                    id: "u1",
-                    username: "alice",
-                    role: "user",
-                    passwordHash: "hash-1",
-                    tokenVersion: 1,
-                    twoFactorEnabled: false,
-                    twoFactorSecret: null,
-                    twoFactorRecoveryCodes: null,
-                };
-            }
-            return null;
-        });
+            },
+        );
         mockBcryptCompare.mockResolvedValueOnce(true);
         const emailLookupReq = {
             body: { username: "alice@example.com", password: "pw" },
@@ -1432,7 +1490,7 @@ describe("auth routes runtime", () => {
         expect(prisma.user.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({ role: "user" }),
-            })
+            }),
         );
     });
-    });
+});

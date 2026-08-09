@@ -60,7 +60,9 @@ describe("track mappings routes integration", () => {
         const res = await request(app).get("/api/track-mappings/album/album-1");
 
         expect(res.status).toBe(401);
-        expect(res.body).toEqual(expect.objectContaining({ error: expect.any(String) }));
+        expect(res.body).toEqual(
+            expect.objectContaining({ error: expect.any(String) }),
+        );
     });
 
     it("returns mappings for an album", async () => {
@@ -94,7 +96,7 @@ describe("track mappings routes integration", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: "Invalid mappings array",
-            })
+            }),
         );
         expect(mockCreateMapping).not.toHaveBeenCalled();
     });
@@ -142,13 +144,25 @@ describe("track mappings routes integration", () => {
         expect(res.status).toBe(200);
         expect(res.body).toEqual({
             mappings: [
-                expect.objectContaining({ id: "map-1", trackYtMusicId: "yt-1" }),
-                expect.objectContaining({ id: "map-2", trackYtMusicId: "yt-2" }),
+                expect.objectContaining({
+                    id: "map-1",
+                    trackYtMusicId: "yt-1",
+                }),
+                expect.objectContaining({
+                    id: "map-2",
+                    trackYtMusicId: "yt-2",
+                }),
             ],
         });
         expect(mockCreateMapping).toHaveBeenCalledTimes(2);
-        expect(mockCreateMapping).toHaveBeenNthCalledWith(1, payload.mappings[0]);
-        expect(mockCreateMapping).toHaveBeenNthCalledWith(2, payload.mappings[1]);
+        expect(mockCreateMapping).toHaveBeenNthCalledWith(
+            1,
+            payload.mappings[0],
+        );
+        expect(mockCreateMapping).toHaveBeenNthCalledWith(
+            2,
+            payload.mappings[1],
+        );
     });
 
     it("rejects POST /api/track-mappings/batch for non-admin users", async () => {
@@ -188,7 +202,7 @@ describe("track mappings routes integration", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: "Duplicate mapping linkage in batch payload",
-            })
+            }),
         );
         expect(mockCreateMapping).not.toHaveBeenCalled();
     });

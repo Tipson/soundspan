@@ -1,9 +1,6 @@
 import { logger } from "../utils/logger";
 import { randomUUID } from "crypto";
-import {
-    trackJobStart,
-    trackJobEnd,
-} from "../services/workerEventLoopMonitor";
+import { trackJobStart, trackJobEnd } from "../services/workerEventLoopMonitor";
 import type Bull from "bull";
 import type Redis from "ioredis";
 import {
@@ -52,7 +49,7 @@ const jestLazyConnectOverride =
     process.env.JEST_WORKER_ID !== undefined ? { lazyConnect: true } : {};
 let schedulerLockRedis: Redis = createIORedisClient(
     "worker-scheduler-locks",
-    jestLazyConnectOverride
+    jestLazyConnectOverride,
 );
 const schedulerLockOwnerId = `${WORKER_PROCESSOR_ID}:scheduler-claims`;
 const ONE_MINUTE_MS = 60_000;
@@ -63,7 +60,7 @@ const DEFAULT_SCHEDULER_SKIP_WARN_THRESHOLD = 3;
 const parsedSchedulerSkipWarnThreshold = Number.parseInt(
     process.env.SCHEDULER_CLAIM_SKIP_WARN_THRESHOLD ||
         `${DEFAULT_SCHEDULER_SKIP_WARN_THRESHOLD}`,
-    10
+    10,
 );
 const SCHEDULER_SKIP_WARN_THRESHOLD =
     Number.isFinite(parsedSchedulerSkipWarnThreshold) &&
@@ -86,7 +83,7 @@ const queueProcessorCounters = {
 
 function logSchedulerClaimObservability(context: string): void {
     logger.info(
-        `[SchedulerClaim/Observability] context=${context} workerId=${WORKER_PROCESSOR_ID} owner=${schedulerLockOwnerId} acquired=${schedulerClaimCounters.acquired} skipped=${schedulerClaimCounters.skipped} failedAcquire=${schedulerClaimCounters.failedAcquire} failedRelease=${schedulerClaimCounters.failedRelease} retryRecoveries=${schedulerClaimCounters.retryRecoveries}`
+        `[SchedulerClaim/Observability] context=${context} workerId=${WORKER_PROCESSOR_ID} owner=${schedulerLockOwnerId} acquired=${schedulerClaimCounters.acquired} skipped=${schedulerClaimCounters.skipped} failedAcquire=${schedulerClaimCounters.failedAcquire} failedRelease=${schedulerClaimCounters.failedRelease} retryRecoveries=${schedulerClaimCounters.retryRecoveries}`,
     );
 }
 
@@ -104,7 +101,7 @@ function maybeLogSchedulerClaimObservability(context: string): void {
 function recordQueueProcessorEvent(
     queueName: string,
     event: "active" | "completed" | "failed",
-    job: Bull.Job<any>
+    job: Bull.Job<any>,
 ): void {
     queueProcessorCounters[event] += 1;
 
@@ -120,7 +117,7 @@ function recordQueueProcessorEvent(
         // the known stall suspects; other queues stay on sampled logging.
         if (queueName === "worker-scheduler" || queueName === "library-scan") {
             logger.info(
-                `[WorkerEventLoop] job-start queue=${queueName} jobId=${jobId} jobName=${jobName}`
+                `[WorkerEventLoop] job-start queue=${queueName} jobId=${jobId} jobName=${jobName}`,
             );
         }
     } else {
@@ -132,13 +129,14 @@ function recordQueueProcessorEvent(
         queueProcessorCounters[event] % OBSERVABILITY_LOG_EVERY === 0
     ) {
         logger.info(
-            `[QueueProcessor/Observability] workerId=${WORKER_PROCESSOR_ID} event=${event} queue=${queueName} count=${queueProcessorCounters[event]} jobId=${job?.id ?? "unknown"} jobName=${job?.name ?? "unknown"}`
+            `[QueueProcessor/Observability] workerId=${WORKER_PROCESSOR_ID} event=${event} queue=${queueName} count=${queueProcessorCounters[event]} jobId=${job?.id ?? "unknown"} jobName=${job?.name ?? "unknown"}`,
         );
     }
 }
 
 function isRetryableSchedulerClaimError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error ?? "");
+    const message =
+        error instanceof Error ? error.message : String(error ?? "");
     return (
         message.includes("Connection is closed") ||
         message.includes("Connection is in closing state") ||
@@ -157,13 +155,13 @@ function recreateSchedulerLockRedisClient(): void {
 
     schedulerLockRedis = createIORedisClient(
         "worker-scheduler-locks",
-        jestLazyConnectOverride
+        jestLazyConnectOverride,
     );
 }
 
 async function withSchedulerClaimRedisRetry<T>(
     operationName: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
 ): Promise<T> {
     for (let attempt = 1; ; attempt += 1) {
         try {
@@ -178,7 +176,7 @@ async function withSchedulerClaimRedisRetry<T>(
 
             logger.warn(
                 `[SchedulerClaim] ${operationName} failed due to Redis connection closure (attempt ${attempt}/${SCHEDULER_CLAIM_RETRY_ATTEMPTS}); recreating client and retrying`,
-                error
+                error,
             );
             schedulerClaimCounters.retryRecoveries += 1;
 
@@ -218,15 +216,17 @@ const SCHEDULER_JOB_IDS = {
     imageBackfillStartup: "scheduler:image-backfill:startup",
     trackMappingReconcileStartup: "scheduler:track-mapping-reconcile:startup",
     trackMappingReconcileRepeat: "scheduler:track-mapping-reconcile:repeat",
-    remoteTrackMetadataRefreshStartup: "scheduler:remote-track-metadata-refresh:startup",
-    remoteTrackMetadataRefreshRepeat: "scheduler:remote-track-metadata-refresh:repeat",
+    remoteTrackMetadataRefreshStartup:
+        "scheduler:remote-track-metadata-refresh:startup",
+    remoteTrackMetadataRefreshRepeat:
+        "scheduler:remote-track-metadata-refresh:repeat",
 } as const;
 
 async function runWithSchedulerClaim(
     claimKey: string,
     ttlMs: number,
     operationName: string,
-    operation: () => Promise<void>
+    operation: () => Promise<void>,
 ): Promise<void> {
     const claimToken = `${schedulerLockOwnerId}:${Date.now()}:${Math.random()}`;
     const ttlSeconds = Math.max(1, Math.ceil(ttlMs / 1000));
@@ -240,8 +240,8 @@ async function runWithSchedulerClaim(
                     claimToken,
                     "EX",
                     ttlSeconds,
-                    "NX"
-                )
+                    "NX",
+                ),
         );
 
         if (acquired !== "OK") {
@@ -252,12 +252,12 @@ async function runWithSchedulerClaim(
             if (skippedCount >= SCHEDULER_SKIP_WARN_THRESHOLD) {
                 schedulerClaimCounters.skipped += 1;
                 logger.warn(
-                    `[SchedulerClaim/SLO] ${operationName} skipped ${skippedCount} consecutive time(s); claim held by another worker (owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`
+                    `[SchedulerClaim/SLO] ${operationName} skipped ${skippedCount} consecutive time(s); claim held by another worker (owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`,
                 );
             } else {
                 schedulerClaimCounters.skipped += 1;
                 logger.debug(
-                    `[SchedulerClaim] Skipping ${operationName}; claim is held by another worker (owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`
+                    `[SchedulerClaim] Skipping ${operationName}; claim is held by another worker (owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`,
                 );
             }
             maybeLogSchedulerClaimObservability("skip");
@@ -267,14 +267,14 @@ async function runWithSchedulerClaim(
         schedulerClaimSkipCounts.delete(claimKey);
         schedulerClaimCounters.acquired += 1;
         logger.debug(
-            `[SchedulerClaim] Acquired claim for ${operationName} (claimKey=${claimKey}, owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`
+            `[SchedulerClaim] Acquired claim for ${operationName} (claimKey=${claimKey}, owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`,
         );
         maybeLogSchedulerClaimObservability("acquire");
     } catch (err) {
         schedulerClaimCounters.failedAcquire += 1;
         logger.error(
             `[SchedulerClaim] Failed to claim ${operationName}; skipping cycle (owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`,
-            err
+            err,
         );
         maybeLogSchedulerClaimObservability("failed-acquire");
         return;
@@ -291,14 +291,14 @@ async function runWithSchedulerClaim(
                         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
                         1,
                         claimKey,
-                        claimToken
-                    )
+                        claimToken,
+                    ),
             );
         } catch (err) {
             schedulerClaimCounters.failedRelease += 1;
             logger.warn(
                 `[SchedulerClaim] Failed to release claim for ${operationName} (owner=${schedulerLockOwnerId}, workerId=${WORKER_PROCESSOR_ID})`,
-                err
+                err,
             );
             maybeLogSchedulerClaimObservability("failed-release");
         }
@@ -312,7 +312,7 @@ async function runWithSchedulerClaim(
 async function withTimeout<T>(
     operation: () => Promise<T>,
     timeoutMs: number,
-    operationName: string
+    operationName: string,
 ): Promise<T | undefined> {
     let timeoutId: NodeJS.Timeout | undefined;
     let timedOut = false;
@@ -321,7 +321,7 @@ async function withTimeout<T>(
         timeoutId = setTimeout(() => {
             timedOut = true;
             logger.warn(
-                `Operation timed out after ${timeoutMs}ms: ${operationName}`
+                `Operation timed out after ${timeoutMs}ms: ${operationName}`,
             );
             resolve(undefined);
         }, timeoutMs);
@@ -346,7 +346,7 @@ async function processDataIntegrityJob(): Promise<void> {
         "data integrity check",
         async () => {
             await runDataIntegrityCheck();
-        }
+        },
     );
 }
 
@@ -360,58 +360,58 @@ async function processReconciliationJob(): Promise<void> {
             const snapshot = await withTimeout(
                 () => lidarrService.getReconciliationSnapshot(),
                 30_000,
-                "getReconciliationSnapshot"
+                "getReconciliationSnapshot",
             );
 
             const staleCount = await withTimeout(
                 () => simpleDownloadManager.markStaleJobsAsFailed(snapshot),
                 120_000,
-                "markStaleJobsAsFailed"
+                "markStaleJobsAsFailed",
             );
             if (staleCount && staleCount > 0) {
                 logger.debug(
-                    `Periodic cleanup: marked ${staleCount} stale download(s) as failed`
+                    `Periodic cleanup: marked ${staleCount} stale download(s) as failed`,
                 );
             }
 
             const lidarrResult = await withTimeout(
                 () => simpleDownloadManager.reconcileWithLidarr(snapshot),
                 120_000,
-                "reconcileWithLidarr"
+                "reconcileWithLidarr",
             );
             if (lidarrResult && lidarrResult.reconciled > 0) {
                 logger.debug(
-                    `Periodic reconcile: ${lidarrResult.reconciled} job(s) matched in Lidarr`
+                    `Periodic reconcile: ${lidarrResult.reconciled} job(s) matched in Lidarr`,
                 );
             }
 
             const localResult = await withTimeout(
                 () => queueCleaner.reconcileWithLocalLibrary(),
                 120_000,
-                "reconcileWithLocalLibrary"
+                "reconcileWithLocalLibrary",
             );
             if (localResult && localResult.reconciled > 0) {
                 logger.debug(
-                    `Periodic reconcile: ${localResult.reconciled} job(s) matched in local library`
+                    `Periodic reconcile: ${localResult.reconciled} job(s) matched in local library`,
                 );
             }
 
             const syncResult = await withTimeout(
                 () => simpleDownloadManager.syncWithLidarrQueue(snapshot),
                 120_000,
-                "syncWithLidarrQueue"
+                "syncWithLidarrQueue",
             );
             if (syncResult && syncResult.cancelled > 0) {
                 logger.debug(
-                    `Periodic sync: ${syncResult.cancelled} job(s) synced with Lidarr queue`
+                    `Periodic sync: ${syncResult.cancelled} job(s) synced with Lidarr queue`,
                 );
             }
-        }
+        },
     );
 }
 
 async function processLidarrCleanupJob(
-    mode: "startup" | "repeat"
+    mode: "startup" | "repeat",
 ): Promise<void> {
     await runWithSchedulerClaim(
         "scheduler-claim:lidarr-cleanup-cycle",
@@ -427,7 +427,7 @@ async function processLidarrCleanupJob(
             const result = await withTimeout(
                 () => simpleDownloadManager.clearLidarrQueue(),
                 180_000,
-                "clearLidarrQueue"
+                "clearLidarrQueue",
             );
 
             if (!result) {
@@ -440,12 +440,12 @@ async function processLidarrCleanupJob(
                         ? "Initial cleanup"
                         : "Periodic Lidarr cleanup";
                 logger.debug(
-                    `${prefix}: removed ${result.removed} stuck download(s)`
+                    `${prefix}: removed ${result.removed} stuck download(s)`,
                 );
             } else if (mode === "startup") {
                 logger.debug("Initial cleanup: queue is clean");
             }
-        }
+        },
     );
 }
 
@@ -458,13 +458,15 @@ async function processCacheWarmupJob(): Promise<void> {
             await withTimeout(
                 () => dataCacheService.warmupCache(),
                 15 * ONE_MINUTE_MS,
-                "warmupCache"
+                "warmupCache",
             );
-        }
+        },
     );
 }
 
-async function processPodcastCleanupJob(mode: "startup" | "repeat"): Promise<void> {
+async function processPodcastCleanupJob(
+    mode: "startup" | "repeat",
+): Promise<void> {
     await runWithSchedulerClaim(
         "scheduler-claim:podcast-cleanup",
         30 * ONE_MINUTE_MS,
@@ -472,13 +474,14 @@ async function processPodcastCleanupJob(mode: "startup" | "repeat"): Promise<voi
             ? "startup podcast cache cleanup"
             : "podcast cache cleanup",
         async () => {
-            const { cleanupExpiredCache } = await import("../services/podcastDownload");
+            const { cleanupExpiredCache } =
+                await import("../services/podcastDownload");
             await withTimeout(
                 () => cleanupExpiredCache(),
                 10 * ONE_MINUTE_MS,
-                "cleanupExpiredCache"
+                "cleanupExpiredCache",
             );
-        }
+        },
     );
 }
 
@@ -488,12 +491,16 @@ async function processAudiobookAutoSyncJob(): Promise<void> {
         2 * ONE_HOUR_MS,
         "startup audiobook auto-sync",
         async () => {
-            const { getSystemSettings } = await import("../utils/systemSettings");
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
-            if (!settings?.audiobookshelfEnabled || !settings?.audiobookshelfUrl) {
+            if (
+                !settings?.audiobookshelfEnabled ||
+                !settings?.audiobookshelfUrl
+            ) {
                 logger.debug(
-                    "[STARTUP] Audiobookshelf is disabled or unconfigured - skipping auto-sync"
+                    "[STARTUP] Audiobookshelf is disabled or unconfigured - skipping auto-sync",
                 );
                 return;
             }
@@ -501,30 +508,29 @@ async function processAudiobookAutoSyncJob(): Promise<void> {
             const cachedCount = await prisma.audiobook.count();
             if (cachedCount > 0) {
                 logger.debug(
-                    `[STARTUP] Audiobook cache has ${cachedCount} entries - skipping auto-sync`
+                    `[STARTUP] Audiobook cache has ${cachedCount} entries - skipping auto-sync`,
                 );
                 return;
             }
 
             logger.debug(
-                "[STARTUP] Audiobook cache is empty - auto-syncing from Audiobookshelf..."
+                "[STARTUP] Audiobook cache is empty - auto-syncing from Audiobookshelf...",
             );
 
-            const { audiobookCacheService } = await import(
-                "../services/audiobookCache"
-            );
+            const { audiobookCacheService } =
+                await import("../services/audiobookCache");
             const result = await withTimeout(
                 () => audiobookCacheService.syncAll(),
                 2 * ONE_HOUR_MS,
-                "audiobookCacheService.syncAll"
+                "audiobookCacheService.syncAll",
             );
 
             if (result) {
                 logger.debug(
-                    `[STARTUP] Audiobook auto-sync complete: ${result.synced} audiobooks cached`
+                    `[STARTUP] Audiobook auto-sync complete: ${result.synced} audiobooks cached`,
                 );
             }
-        }
+        },
     );
 }
 
@@ -537,15 +543,15 @@ async function processDownloadQueueReconcileJob(): Promise<void> {
             const result = await withTimeout(
                 () => downloadQueueManager.reconcileOnStartup(),
                 20 * ONE_MINUTE_MS,
-                "downloadQueueManager.reconcileOnStartup"
+                "downloadQueueManager.reconcileOnStartup",
             );
 
             if (result) {
                 logger.debug(
-                    `Download queue reconciled: ${result.loaded} active, ${result.failed} marked failed`
+                    `Download queue reconciled: ${result.loaded} active, ${result.failed} marked failed`,
                 );
             }
-        }
+        },
     );
 }
 
@@ -555,9 +561,8 @@ async function processArtistCountsBackfillJob(): Promise<void> {
         3 * ONE_HOUR_MS,
         "startup artist-counts backfill",
         async () => {
-            const { isBackfillNeeded, backfillAllArtistCounts } = await import(
-                "../services/artistCountsService"
-            );
+            const { isBackfillNeeded, backfillAllArtistCounts } =
+                await import("../services/artistCountsService");
             const needsBackfill = await isBackfillNeeded();
             if (!needsBackfill) {
                 logger.debug("[STARTUP] Artist counts already populated");
@@ -565,21 +570,21 @@ async function processArtistCountsBackfillJob(): Promise<void> {
             }
 
             logger.info(
-                "[STARTUP] Artist counts need backfilling, starting in background..."
+                "[STARTUP] Artist counts need backfilling, starting in background...",
             );
 
             const result = await withTimeout(
                 () => backfillAllArtistCounts(),
                 3 * ONE_HOUR_MS,
-                "backfillAllArtistCounts"
+                "backfillAllArtistCounts",
             );
 
             if (result) {
                 logger.info(
-                    `[STARTUP] Artist counts backfill complete: ${result.processed} processed, ${result.errors} errors`
+                    `[STARTUP] Artist counts backfill complete: ${result.processed} processed, ${result.errors} errors`,
                 );
             }
-        }
+        },
     );
 }
 
@@ -589,9 +594,8 @@ async function processImageBackfillJob(): Promise<void> {
         6 * ONE_HOUR_MS,
         "startup image backfill",
         async () => {
-            const { isImageBackfillNeeded, backfillAllImages } = await import(
-                "../services/imageBackfill"
-            );
+            const { isImageBackfillNeeded, backfillAllImages } =
+                await import("../services/imageBackfill");
             const status = await isImageBackfillNeeded();
             if (!status.needed) {
                 logger.debug("[STARTUP] All images already stored locally");
@@ -599,7 +603,7 @@ async function processImageBackfillJob(): Promise<void> {
             }
 
             logger.info(
-                `[STARTUP] Image backfill needed: ${status.artistsWithExternalUrls} artists, ${status.albumsWithExternalUrls} albums with external URLs`
+                `[STARTUP] Image backfill needed: ${status.artistsWithExternalUrls} artists, ${status.albumsWithExternalUrls} albums with external URLs`,
             );
 
             const completed = await withTimeout(
@@ -608,13 +612,13 @@ async function processImageBackfillJob(): Promise<void> {
                     return true;
                 },
                 6 * ONE_HOUR_MS,
-                "backfillAllImages"
+                "backfillAllImages",
             );
 
             if (completed) {
                 logger.info("[STARTUP] Image backfill complete");
             }
-        }
+        },
     );
 }
 
@@ -624,24 +628,24 @@ async function processTrackMappingReconcileJob(): Promise<void> {
         ONE_HOUR_MS,
         "track mapping reconciliation",
         async () => {
-            const { trackReconciliationService } = await import(
-                "../services/trackReconciliation"
-            );
-            const orphanResult = await trackReconciliationService.reconcileOrphans();
+            const { trackReconciliationService } =
+                await import("../services/trackReconciliation");
+            const orphanResult =
+                await trackReconciliationService.reconcileOrphans();
             if (orphanResult.created > 0) {
                 logger.info(
-                    `[TrackMappingReconcile] Created ${orphanResult.created} mappings for orphaned provider rows`
+                    `[TrackMappingReconcile] Created ${orphanResult.created} mappings for orphaned provider rows`,
                 );
             }
 
             const result = await trackReconciliationService.reconcile();
             if (result.linked > 0) {
                 logger.info(
-                    `[TrackMappingReconcile] Linked ${result.linked} mappings to local tracks (${result.skipped} skipped)`
+                    `[TrackMappingReconcile] Linked ${result.linked} mappings to local tracks (${result.skipped} skipped)`,
                 );
             } else if (result.processed > 0) {
                 logger.debug(
-                    `[TrackMappingReconcile] No new links found (${result.processed} checked)`
+                    `[TrackMappingReconcile] No new links found (${result.processed} checked)`,
                 );
             }
 
@@ -649,14 +653,14 @@ async function processTrackMappingReconcileJob(): Promise<void> {
                 await trackReconciliationService.reconcileYoutubeToTidal();
             if (upgradeResult.upgraded > 0) {
                 logger.info(
-                    `[TrackMappingReconcile] Upgraded ${upgradeResult.upgraded} YT mappings to TIDAL (${upgradeResult.skipped} skipped)`
+                    `[TrackMappingReconcile] Upgraded ${upgradeResult.upgraded} YT mappings to TIDAL (${upgradeResult.skipped} skipped)`,
                 );
             } else if (upgradeResult.processed > 0) {
                 logger.debug(
-                    `[TrackMappingReconcile] No YT->TIDAL upgrades found (${upgradeResult.processed} checked)`
+                    `[TrackMappingReconcile] No YT->TIDAL upgrades found (${upgradeResult.processed} checked)`,
                 );
             }
-        }
+        },
     );
 }
 
@@ -666,16 +670,16 @@ async function processRemoteTrackMetadataRefreshJob(): Promise<void> {
         ONE_HOUR_MS,
         "remote track metadata refresh",
         async () => {
-            const { remoteTrackMetadataRefreshService } = await import(
-                "../services/remoteTrackMetadataRefresh"
-            );
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const { remoteTrackMetadataRefreshService } =
+                await import("../services/remoteTrackMetadataRefresh");
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
             if (result.updated > 0 || result.failed > 0) {
                 logger.info(
-                    `[MetadataRefresh] Updated ${result.updated} remote tracks, ${result.failed} failed`
+                    `[MetadataRefresh] Updated ${result.updated} remote tracks, ${result.failed} failed`,
                 );
             }
-        }
+        },
     );
 }
 
@@ -866,7 +870,7 @@ async function registerSchedulerJobs(): Promise<void> {
 
 // Register processors with named job types
 logger.info(
-    `[QueueProcessor/Identity] workerId=${WORKER_PROCESSOR_ID} owner=${schedulerLockOwnerId} hostname=${process.env.HOSTNAME ?? "unknown"} pid=${process.pid}`
+    `[QueueProcessor/Identity] workerId=${WORKER_PROCESSOR_ID} owner=${schedulerLockOwnerId} hostname=${process.env.HOSTNAME ?? "unknown"} pid=${process.pid}`,
 );
 scanQueue.process("scan", processScan);
 if (config.features.discovery) {
@@ -876,7 +880,7 @@ if (config.features.discovery) {
     discoverQueue.process(processDiscoverWeekly);
 } else {
     logger.info(
-        "[Features] Discovery disabled (DISCOVERY_ENABLED=false); discover queue processors not registered"
+        "[Features] Discovery disabled (DISCOVERY_ENABLED=false); discover queue processors not registered",
     );
 }
 imageQueue.process(processImageOptimization);
@@ -927,7 +931,7 @@ async function processSchedulerJob(job: Bull.Job<any>): Promise<void> {
             break;
         default:
             logger.warn(
-                `Scheduler wildcard received unknown job type "${job?.name ?? "unknown"}" (jobId=${job?.id ?? "unknown"}); skipping`
+                `Scheduler wildcard received unknown job type "${job?.name ?? "unknown"}" (jobId=${job?.id ?? "unknown"}); skipping`,
             );
             break;
     }
@@ -942,7 +946,7 @@ schedulerQueue.process("*", async (job: Bull.Job<any>) => {
     } catch (err) {
         logger.error(
             `Scheduler processor failed (${job?.name ?? "unknown"}):`,
-            err
+            err,
         );
         throw err;
     }
@@ -951,7 +955,7 @@ schedulerQueue.process("*", async (job: Bull.Job<any>) => {
 // Register download queue callback for unavailable albums
 downloadQueueManager.onUnavailableAlbum(async (info) => {
     logger.debug(
-        ` Recording unavailable album: ${info.artistName} - ${info.albumTitle}`
+        ` Recording unavailable album: ${info.artistName} - ${info.albumTitle}`,
     );
 
     if (!info.userId) {
@@ -986,10 +990,7 @@ downloadQueueManager.onUnavailableAlbum(async (info) => {
         if (error.code === "P2002") {
             logger.debug(`     Album already marked as unavailable`);
         } else {
-            logger.error(
-                ` Failed to record unavailable album:`,
-                error.message
-            );
+            logger.error(` Failed to record unavailable album:`, error.message);
         }
     }
 });
@@ -1008,7 +1009,7 @@ if (config.features.audioAnalysis) {
     });
 } else {
     logger.info(
-        "[Features] Audio analysis disabled (AUDIO_ANALYSIS_ENABLED=false); mood bucket worker not started"
+        "[Features] Audio analysis disabled (AUDIO_ANALYSIS_ENABLED=false); mood bucket worker not started",
     );
 }
 
@@ -1018,18 +1019,23 @@ startTrackMappingStalenessWorker();
 scanQueue.on("completed", (job, result) => {
     recordQueueProcessorEvent("library-scan", "completed", job);
     logger.debug(
-        `Scan job ${job.id} completed: +${result.tracksAdded} ~${result.tracksUpdated} -${result.tracksRemoved} (workerId=${WORKER_PROCESSOR_ID})`
+        `Scan job ${job.id} completed: +${result.tracksAdded} ~${result.tracksUpdated} -${result.tracksRemoved} (workerId=${WORKER_PROCESSOR_ID})`,
     );
 });
 
 scanQueue.on("failed", (job, err) => {
     recordQueueProcessorEvent("library-scan", "failed", job);
-    logger.error(`Scan job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`, err.message);
+    logger.error(
+        `Scan job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`,
+        err.message,
+    );
 });
 
 scanQueue.on("active", (job) => {
     recordQueueProcessorEvent("library-scan", "active", job);
-    logger.debug(` Scan job ${job.id} started (workerId=${WORKER_PROCESSOR_ID})`);
+    logger.debug(
+        ` Scan job ${job.id} started (workerId=${WORKER_PROCESSOR_ID})`,
+    );
 });
 
 // Event handlers for discover queue
@@ -1037,22 +1043,27 @@ discoverQueue.on("completed", (job, result) => {
     recordQueueProcessorEvent("discover-weekly", "completed", job);
     if (result.success) {
         logger.debug(
-            `Discover job ${job.id} completed: ${result.playlistName} (${result.songCount} songs) (workerId=${WORKER_PROCESSOR_ID})`
+            `Discover job ${job.id} completed: ${result.playlistName} (${result.songCount} songs) (workerId=${WORKER_PROCESSOR_ID})`,
         );
     } else {
-        logger.debug(`Discover job ${job.id} failed: ${result.error} (workerId=${WORKER_PROCESSOR_ID})`);
+        logger.debug(
+            `Discover job ${job.id} failed: ${result.error} (workerId=${WORKER_PROCESSOR_ID})`,
+        );
     }
 });
 
 discoverQueue.on("failed", (job, err) => {
     recordQueueProcessorEvent("discover-weekly", "failed", job);
-    logger.error(`Discover job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`, err.message);
+    logger.error(
+        `Discover job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`,
+        err.message,
+    );
 });
 
 discoverQueue.on("active", (job) => {
     recordQueueProcessorEvent("discover-weekly", "active", job);
     logger.debug(
-        ` Discover job ${job.id} started for user ${job.data.userId} (workerId=${WORKER_PROCESSOR_ID})`
+        ` Discover job ${job.id} started for user ${job.data.userId} (workerId=${WORKER_PROCESSOR_ID})`,
     );
 });
 
@@ -1062,13 +1073,16 @@ imageQueue.on("completed", (job, result) => {
     logger.debug(
         `Image job ${job.id} completed: ${
             result.success ? "success" : result.error
-        } (workerId=${WORKER_PROCESSOR_ID})`
+        } (workerId=${WORKER_PROCESSOR_ID})`,
     );
 });
 
 imageQueue.on("failed", (job, err) => {
     recordQueueProcessorEvent("image-optimization", "failed", job);
-    logger.error(`Image job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`, err.message);
+    logger.error(
+        `Image job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`,
+        err.message,
+    );
 });
 
 imageQueue.on("active", (job) => {
@@ -1079,18 +1093,23 @@ imageQueue.on("active", (job) => {
 validationQueue.on("completed", (job, result) => {
     recordQueueProcessorEvent("file-validation", "completed", job);
     logger.debug(
-        `Validation job ${job.id} completed: ${result.tracksChecked} checked, ${result.tracksRemoved} removed (workerId=${WORKER_PROCESSOR_ID})`
+        `Validation job ${job.id} completed: ${result.tracksChecked} checked, ${result.tracksRemoved} removed (workerId=${WORKER_PROCESSOR_ID})`,
     );
 });
 
 validationQueue.on("failed", (job, err) => {
     recordQueueProcessorEvent("file-validation", "failed", job);
-    logger.error(` Validation job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`, err.message);
+    logger.error(
+        ` Validation job ${job.id} failed (workerId=${WORKER_PROCESSOR_ID}):`,
+        err.message,
+    );
 });
 
 validationQueue.on("active", (job) => {
     recordQueueProcessorEvent("file-validation", "active", job);
-    logger.debug(` Validation job ${job.id} started (workerId=${WORKER_PROCESSOR_ID})`);
+    logger.debug(
+        ` Validation job ${job.id} started (workerId=${WORKER_PROCESSOR_ID})`,
+    );
 });
 
 // The scheduler queue runs the heavy maintenance cycles (metadata refresh,
@@ -1103,7 +1122,7 @@ schedulerQueue.on("active", (job) => {
 schedulerQueue.on("completed", (job) => {
     recordQueueProcessorEvent("worker-scheduler", "completed", job);
     logger.debug(
-        `Scheduler job ${job.id} completed (${job.name}) (workerId=${WORKER_PROCESSOR_ID})`
+        `Scheduler job ${job.id} completed (${job.name}) (workerId=${WORKER_PROCESSOR_ID})`,
     );
 });
 
@@ -1113,7 +1132,7 @@ schedulerQueue.on("failed", (job, err) => {
     }
     logger.error(
         `Scheduler job ${job?.id ?? "unknown"} failed (${job?.name ?? "unknown"}) (workerId=${WORKER_PROCESSOR_ID}):`,
-        err.message
+        err.message,
     );
 });
 
@@ -1134,25 +1153,25 @@ if (config.features.discovery) {
             const backlog = (counts.waiting ?? 0) + (counts.delayed ?? 0);
             if (backlog > 0) {
                 logger.warn(
-                    `[Features] Discovery disabled with ${backlog} discover job(s) still in Redis; they will not be processed until DISCOVERY_ENABLED=true`
+                    `[Features] Discovery disabled with ${backlog} discover job(s) still in Redis; they will not be processed until DISCOVERY_ENABLED=true`,
                 );
             }
         })
         .catch((error: any) => {
             logger.warn(
                 "[Features] Failed to inspect leftover discover queue backlog:",
-                error.message || error
+                error.message || error,
             );
         });
     logger.info(
-        "[Features] Discovery disabled (DISCOVERY_ENABLED=false); Discover Weekly scheduler not registered"
+        "[Features] Discovery disabled (DISCOVERY_ENABLED=false); Discover Weekly scheduler not registered",
     );
 }
 
 registerSchedulerJobs()
     .then(() => {
         logger.debug(
-            "Scheduler queue jobs registered (data-integrity, reconciliation, lidarr-cleanup, startup maintenance)"
+            "Scheduler queue jobs registered (data-integrity, reconciliation, lidarr-cleanup, startup maintenance)",
         );
     })
     .catch((err) => {

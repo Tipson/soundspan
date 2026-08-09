@@ -9,7 +9,13 @@
 import { logger } from "../utils/logger";
 import { prisma } from "../utils/db";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { lidarrService, LidarrRelease, AcquisitionError, AcquisitionErrorType, ReconciliationSnapshot } from "./lidarr";
+import {
+    lidarrService,
+    LidarrRelease,
+    AcquisitionError,
+    AcquisitionErrorType,
+    ReconciliationSnapshot,
+} from "./lidarr";
 import { yieldToEventLoop } from "../utils/async";
 import { musicBrainzService } from "./musicbrainz";
 import { getSystemSettings } from "../utils/systemSettings";
@@ -57,7 +63,7 @@ class SimpleDownloadManager {
      */
     private async withTransaction<T>(
         operation: (tx: TransactionClient) => Promise<T>,
-        options?: { maxRetries?: number; logPrefix?: string }
+        options?: { maxRetries?: number; logPrefix?: string },
     ): Promise<T> {
         const maxRetries = options?.maxRetries ?? 3;
         const logPrefix = options?.logPrefix ?? "[TX]";
@@ -82,7 +88,7 @@ class SimpleDownloadManager {
                     lastError = error;
                     const delay = Math.pow(2, attempt) * 100; // 200ms, 400ms, 800ms
                     logger.debug(
-                        `${logPrefix} Serialization conflict, retry ${attempt}/${maxRetries} after ${delay}ms`
+                        `${logPrefix} Serialization conflict, retry ${attempt}/${maxRetries} after ${delay}ms`,
                     );
                     await new Promise((resolve) => setTimeout(resolve, delay));
                     continue;
@@ -116,14 +122,14 @@ class SimpleDownloadManager {
      */
     private async recoverFromGrabRaceError(
         error: any,
-        downloadId: string
+        downloadId: string,
     ): Promise<{ matched: boolean; jobId?: string }> {
         if (error?.code !== "P2002") {
             throw error;
         }
 
         logger.debug(
-            `[GRAB-TX] P2002 on grab for downloadId=${downloadId}; re-finding the winning job`
+            `[GRAB-TX] P2002 on grab for downloadId=${downloadId}; re-finding the winning job`,
         );
 
         // Both the matched-update and the tracking-job create write
@@ -143,7 +149,7 @@ class SimpleDownloadManager {
 
         if (winner) {
             logger.debug(
-                `[GRAB-TX] Duplicate grab resolved to existing job: ${winner.id}`
+                `[GRAB-TX] Duplicate grab resolved to existing job: ${winner.id}`,
             );
             return { matched: true, jobId: winner.id };
         }
@@ -155,7 +161,7 @@ class SimpleDownloadManager {
         // existing "can't determine, don't fabricate a match" contract shape
         // rather than inventing a new resolution path.
         logger.warn(
-            `[DownloadManager] P2002 on grab but no winning job found for downloadId=${downloadId}`
+            `[DownloadManager] P2002 on grab but no winning job found for downloadId=${downloadId}`,
         );
         return { matched: false };
     }
@@ -171,12 +177,18 @@ class SimpleDownloadManager {
         albumTitle: string,
         albumMbid: string,
         userId: string,
-        isDiscovery: boolean = false
-    ): Promise<{ success: boolean; correlationId?: string; error?: string; errorType?: AcquisitionErrorType; isRecoverable?: boolean }> {
+        isDiscovery: boolean = false,
+    ): Promise<{
+        success: boolean;
+        correlationId?: string;
+        error?: string;
+        errorType?: AcquisitionErrorType;
+        isRecoverable?: boolean;
+    }> {
         logger.debug(
             `\n Starting download: ${artistName} - ${albumTitle}${
                 isDiscovery ? " (discovery)" : ""
-            }`
+            }`,
         );
         logger.debug(`   Job ID: ${jobId}`);
         logger.debug(`   Album MBID: ${albumMbid}`);
@@ -193,22 +205,21 @@ class SimpleDownloadManager {
             let artistMbid: string | undefined;
             try {
                 logger.debug(`   Fetching artist MBID from MusicBrainz...`);
-                const releaseGroup = await musicBrainzService.getReleaseGroup(
-                    albumMbid
-                );
+                const releaseGroup =
+                    await musicBrainzService.getReleaseGroup(albumMbid);
 
                 if (releaseGroup?.["artist-credit"]?.[0]?.artist?.id) {
                     artistMbid = releaseGroup["artist-credit"][0].artist.id;
                     logger.debug(`   Found artist MBID: ${artistMbid}`);
                 } else {
                     logger.warn(
-                        `   Could not extract artist MBID from release group`
+                        `   Could not extract artist MBID from release group`,
                     );
                 }
             } catch (mbError) {
                 logger.error(
                     `   Failed to fetch artist MBID from MusicBrainz:`,
-                    mbError
+                    mbError,
                 );
             }
 
@@ -219,12 +230,12 @@ class SimpleDownloadManager {
                 albumTitle,
                 musicPath,
                 artistMbid,
-                isDiscovery
+                isDiscovery,
             );
 
             if (!result) {
                 throw new Error(
-                    "Failed to add album to Lidarr - album not found"
+                    "Failed to add album to Lidarr - album not found",
                 );
             }
 
@@ -234,7 +245,7 @@ class SimpleDownloadManager {
             const actualLidarrMbid = result.foreignAlbumId;
             if (actualLidarrMbid && actualLidarrMbid !== albumMbid) {
                 logger.debug(
-                    `   MBID mismatch - original: ${albumMbid}, Lidarr: ${actualLidarrMbid}`
+                    `   MBID mismatch - original: ${albumMbid}, Lidarr: ${actualLidarrMbid}`,
                 );
             }
 
@@ -277,15 +288,19 @@ class SimpleDownloadManager {
             });
 
             logger.debug(
-                `   Download started with correlation ID: ${correlationId}`
+                `   Download started with correlation ID: ${correlationId}`,
             );
             return { success: true, correlationId };
         } catch (error: any) {
             logger.error(`   Failed to start download:`, error.message);
 
             // Extract error properties if this is an AcquisitionError
-            const errorType = error instanceof AcquisitionError ? error.type : undefined;
-            const isRecoverable = error instanceof AcquisitionError ? error.isRecoverable : undefined;
+            const errorType =
+                error instanceof AcquisitionError ? error.type : undefined;
+            const isRecoverable =
+                error instanceof AcquisitionError
+                    ? error.isRecoverable
+                    : undefined;
 
             // Get the job to check if it's a discovery job
             const job = await prisma.downloadJob.findUnique({
@@ -295,17 +310,19 @@ class SimpleDownloadManager {
 
             // Handle "No releases available" error - immediate failure
             if (error.message?.includes("No releases available")) {
-                logger.debug(`   No sources found - handling immediate failure`);
+                logger.debug(
+                    `   No sources found - handling immediate failure`,
+                );
 
                 // For discovery jobs, skip same-artist fallback
                 if (job?.discoveryBatchId) {
                     logger.debug(
-                        `   Discovery job - skipping same-artist fallback (diversity enforced)`
+                        `   Discovery job - skipping same-artist fallback (diversity enforced)`,
                     );
                 } else if (job && !job.discoveryBatchId) {
                     // For library downloads, try same-artist fallback
                     logger.debug(
-                        `   Library download - trying same-artist fallback...`
+                        `   Library download - trying same-artist fallback...`,
                     );
 
                     const artistMbid =
@@ -315,7 +332,7 @@ class SimpleDownloadManager {
                         const fallbackResult =
                             await this.tryNextAlbumFromArtist(
                                 { ...job, metadata: existingMetadata },
-                                "No sources available"
+                                "No sources available",
                             );
 
                         if (fallbackResult.retried && fallbackResult.jobId) {
@@ -342,15 +359,19 @@ class SimpleDownloadManager {
 
                 // Check batch completion for discovery jobs
                 if (job?.discoveryBatchId) {
-                    const { discoverWeeklyService } = await import(
-                        "./discoverWeekly"
-                    );
+                    const { discoverWeeklyService } =
+                        await import("./discoverWeekly");
                     await discoverWeeklyService.checkBatchCompletion(
-                        job.discoveryBatchId
+                        job.discoveryBatchId,
                     );
                 }
 
-                return { success: false, error: error.message, errorType, isRecoverable };
+                return {
+                    success: false,
+                    error: error.message,
+                    errorType,
+                    isRecoverable,
+                };
             }
 
             // If album wasn't found, try same-artist fallback ONLY for non-discovery jobs
@@ -358,14 +379,14 @@ class SimpleDownloadManager {
             if (job && error.message?.includes("album not found")) {
                 if (job.discoveryBatchId) {
                     logger.debug(
-                        `   Album not found - Discovery job, skipping same-artist fallback`
+                        `   Album not found - Discovery job, skipping same-artist fallback`,
                     );
                     logger.debug(
-                        `   Discovery system will find a different artist instead`
+                        `   Discovery system will find a different artist instead`,
                     );
                 } else {
                     logger.debug(
-                        `   Album not found - trying same-artist fallback...`
+                        `   Album not found - trying same-artist fallback...`,
                     );
 
                     const artistMbid =
@@ -375,7 +396,7 @@ class SimpleDownloadManager {
                         const fallbackResult =
                             await this.tryNextAlbumFromArtist(
                                 { ...job, metadata: existingMetadata },
-                                "Album not found in Lidarr"
+                                "Album not found in Lidarr",
                             );
 
                         if (fallbackResult.retried && fallbackResult.jobId) {
@@ -403,15 +424,19 @@ class SimpleDownloadManager {
 
             // Check batch completion for discovery jobs
             if (job?.discoveryBatchId) {
-                const { discoverWeeklyService } = await import(
-                    "./discoverWeekly"
-                );
+                const { discoverWeeklyService } =
+                    await import("./discoverWeekly");
                 await discoverWeeklyService.checkBatchCompletion(
-                    job.discoveryBatchId
+                    job.discoveryBatchId,
                 );
             }
 
-            return { success: false, error: error.message, errorType, isRecoverable };
+            return {
+                success: false,
+                error: error.message,
+                errorType,
+                isRecoverable,
+            };
         }
     }
 
@@ -427,7 +452,7 @@ class SimpleDownloadManager {
         albumMbid: string,
         albumTitle: string,
         artistName: string,
-        lidarrAlbumId: number
+        lidarrAlbumId: number,
     ): Promise<{ matched: boolean; jobId?: string }> {
         logger.debug(`[DOWNLOAD] Grabbed: ${artistName} - ${albumTitle}`);
         logger.debug(`   Download ID: ${downloadId}`);
@@ -448,7 +473,7 @@ class SimpleDownloadManager {
 
                 if (existingByRef) {
                     logger.debug(
-                        `   Already tracked by job: ${existingByRef.id}`
+                        `   Already tracked by job: ${existingByRef.id}`,
                     );
                     return { matched: true, jobId: existingByRef.id };
                 }
@@ -465,7 +490,7 @@ class SimpleDownloadManager {
                 });
 
                 logger.debug(
-                    `   Found ${activeJobs.length} unassigned active job(s)`
+                    `   Found ${activeJobs.length} unassigned active job(s)`,
                 );
 
                 // Normalize for matching
@@ -536,7 +561,7 @@ class SimpleDownloadManager {
                 // ═══════════════════════════════════════════════════════════════
                 if (matchedJob) {
                     logger.debug(
-                        `   Matched by ${matchStrategy}: ${matchedJob.id}`
+                        `   Matched by ${matchStrategy}: ${matchedJob.id}`,
                     );
 
                     await tx.downloadJob.update({
@@ -568,8 +593,10 @@ class SimpleDownloadManager {
                 // ═══════════════════════════════════════════════════════════════
 
                 // Normalize for duplicate detection
-                const normalizedArtistForDup = artistName?.toLowerCase().trim() || "";
-                const normalizedAlbumForDup = albumTitle?.toLowerCase().trim() || "";
+                const normalizedArtistForDup =
+                    artistName?.toLowerCase().trim() || "";
+                const normalizedAlbumForDup =
+                    albumTitle?.toLowerCase().trim() || "";
 
                 // Check by MBID first (most reliable)
                 let existingJob = null;
@@ -577,23 +604,33 @@ class SimpleDownloadManager {
                     existingJob = await tx.downloadJob.findFirst({
                         where: {
                             targetMbid: albumMbid,
-                            status: { in: ["pending", "processing", "completed"] },
+                            status: {
+                                in: ["pending", "processing", "completed"],
+                            },
                         },
                     });
                 }
 
                 // If no MBID match, check by artist+album name
-                if (!existingJob && normalizedArtistForDup && normalizedAlbumForDup) {
+                if (
+                    !existingJob &&
+                    normalizedArtistForDup &&
+                    normalizedAlbumForDup
+                ) {
                     const candidateJobs = await tx.downloadJob.findMany({
                         where: {
-                            status: { in: ["pending", "processing", "completed"] },
+                            status: {
+                                in: ["pending", "processing", "completed"],
+                            },
                         },
                     });
 
                     existingJob = candidateJobs.find((j) => {
                         const meta = j.metadata as any;
-                        const candArtist = meta?.artistName?.toLowerCase().trim() || "";
-                        const candAlbum = meta?.albumTitle?.toLowerCase().trim() || "";
+                        const candArtist =
+                            meta?.artistName?.toLowerCase().trim() || "";
+                        const candAlbum =
+                            meta?.albumTitle?.toLowerCase().trim() || "";
                         return (
                             candArtist === normalizedArtistForDup &&
                             candAlbum === normalizedAlbumForDup
@@ -603,12 +640,15 @@ class SimpleDownloadManager {
 
                 // If duplicate found, log warning and exit early
                 if (existingJob) {
-                    logger.warn(`[DownloadManager] Duplicate download detected`, {
-                        artist: artistName,
-                        album: albumTitle,
-                        mbid: albumMbid,
-                        existingJobId: existingJob.id,
-                    });
+                    logger.warn(
+                        `[DownloadManager] Duplicate download detected`,
+                        {
+                            artist: artistName,
+                            album: albumTitle,
+                            mbid: albumMbid,
+                            existingJobId: existingJob.id,
+                        },
+                    );
                     return { matched: false };
                 }
 
@@ -625,7 +665,7 @@ class SimpleDownloadManager {
 
                 if (!recentJob?.userId) {
                     logger.debug(
-                        `   Cannot determine user, skipping job creation`
+                        `   Cannot determine user, skipping job creation`,
                     );
                     return { matched: false };
                 }
@@ -653,9 +693,9 @@ class SimpleDownloadManager {
                 logger.debug(`   Created tracking job: ${trackingJob.id}`);
                 return { matched: true, jobId: trackingJob.id };
             },
-            { logPrefix: "[GRAB-TX]" }
+            { logPrefix: "[GRAB-TX]" },
         ).catch((error: any) =>
-            this.recoverFromGrabRaceError(error, downloadId)
+            this.recoverFromGrabRaceError(error, downloadId),
         );
     }
 
@@ -669,7 +709,7 @@ class SimpleDownloadManager {
         albumMbid?: string,
         artistName?: string,
         albumTitle?: string,
-        lidarrAlbumId?: number
+        lidarrAlbumId?: number,
     ): Promise<{
         jobId?: string;
         batchId?: string;
@@ -723,7 +763,7 @@ class SimpleDownloadManager {
                 // Strategy 2: lidarrAlbumId
                 if (!job && lidarrAlbumId) {
                     job = activeJobs.find(
-                        (j) => j.lidarrAlbumId === lidarrAlbumId
+                        (j) => j.lidarrAlbumId === lidarrAlbumId,
                     );
                     if (job) logger.debug(`    Matched by lidarrAlbumId`);
                 }
@@ -742,7 +782,8 @@ class SimpleDownloadManager {
                     job = activeJobs.find((j) => j.targetMbid === albumMbid);
                     if (!job) {
                         job = activeJobs.find(
-                            (j) => (j.metadata as any)?.lidarrMbid === albumMbid
+                            (j) =>
+                                (j.metadata as any)?.lidarrMbid === albumMbid,
                         );
                     }
                     if (job) logger.debug(`    Matched by MBID`);
@@ -794,7 +835,7 @@ class SimpleDownloadManager {
 
                 if (duplicateJobs.length > 0) {
                     logger.debug(
-                        `   Marking ${duplicateJobs.length} duplicate(s) complete`
+                        `   Marking ${duplicateJobs.length} duplicate(s) complete`,
                     );
                     await tx.downloadJob.updateMany({
                         where: { id: { in: duplicateJobs.map((j) => j.id) } },
@@ -834,7 +875,7 @@ class SimpleDownloadManager {
                     metadata: jobMeta,
                 };
             },
-            { logPrefix: "[COMPLETE-TX]" }
+            { logPrefix: "[COMPLETE-TX]" },
         );
 
         // Post-transaction operations (notifications, batch completion)
@@ -844,18 +885,18 @@ class SimpleDownloadManager {
                 const decision =
                     await notificationPolicyService.evaluateNotification(
                         result.jobId,
-                        "complete"
+                        "complete",
                     );
 
                 if (decision.shouldNotify) {
                     logger.debug(
-                        `   Sending completion notification: ${decision.reason}`
+                        `   Sending completion notification: ${decision.reason}`,
                     );
                     await notificationService.notifyDownloadComplete(
                         result.userId,
                         result.subject,
                         undefined,
-                        result.metadata?.artistId
+                        result.metadata?.artistId,
                     );
 
                     await prisma.downloadJob.update({
@@ -869,32 +910,30 @@ class SimpleDownloadManager {
                     });
                 } else {
                     logger.debug(
-                        `   Suppressing completion notification: ${decision.reason}`
+                        `   Suppressing completion notification: ${decision.reason}`,
                     );
                 }
             } catch (notifError) {
                 logger.error(
                     "Failed to evaluate/send download notification:",
-                    notifError
+                    notifError,
                 );
             }
 
             // Check batch completion
             if (result.batchId) {
-                const { discoverWeeklyService } = await import(
-                    "./discoverWeekly"
-                );
+                const { discoverWeeklyService } =
+                    await import("./discoverWeekly");
                 await discoverWeeklyService.checkBatchCompletion(
-                    result.batchId
+                    result.batchId,
                 );
             }
 
             if (result.spotifyImportJobId) {
-                const { spotifyImportService } = await import(
-                    "./spotifyImport"
-                );
+                const { spotifyImportService } =
+                    await import("./spotifyImport");
                 await spotifyImportService.checkImportCompletion(
-                    result.spotifyImportJobId
+                    result.spotifyImportJobId,
                 );
             }
         }
@@ -919,7 +958,7 @@ class SimpleDownloadManager {
     async onImportFailed(
         downloadId: string,
         reason: string,
-        albumMbid?: string
+        albumMbid?: string,
     ): Promise<{ retried: boolean; failed: boolean; jobId?: string }> {
         logger.debug(`\n[RETRY] Import failed: ${downloadId}`);
         logger.debug(`   Reason: ${reason}`);
@@ -955,8 +994,8 @@ class SimpleDownloadManager {
                     if (timeSinceLastFailure < FAILURE_DEDUP_WINDOW_MS) {
                         logger.debug(
                             `   Duplicate failure (${Math.round(
-                                timeSinceLastFailure / 1000
-                            )}s ago), skipping`
+                                timeSinceLastFailure / 1000,
+                            )}s ago), skipping`,
                         );
                         return { retried: false, failed: false, jobId: job.id };
                     }
@@ -997,7 +1036,7 @@ class SimpleDownloadManager {
 
                 return { retried: true, failed: false, jobId: job.id };
             },
-            { logPrefix: "[FAIL-TX]" }
+            { logPrefix: "[FAIL-TX]" },
         );
 
         // Blocklist cleanup happens outside transaction
@@ -1024,7 +1063,7 @@ class SimpleDownloadManager {
      */
     private async tryNextAlbumFromArtist(
         job: any,
-        reason: string
+        reason: string,
     ): Promise<{ retried: boolean; failed: boolean; jobId?: string }> {
         const metadata = (job.metadata as any) || {};
         const artistMbid = job.artistMbid || metadata.artistMbid;
@@ -1035,10 +1074,10 @@ class SimpleDownloadManager {
         // find a completely different artist instead
         if (job.discoveryBatchId) {
             logger.debug(
-                `[RETRY] Discovery job - skipping same-artist fallback (diversity enforced)`
+                `[RETRY] Discovery job - skipping same-artist fallback (diversity enforced)`,
             );
             logger.debug(
-                `   Discovery should find NEW artists, not more from: ${artistName}`
+                `   Discovery should find NEW artists, not more from: ${artistName}`,
             );
             return await this.markJobExhausted(job, reason);
         }
@@ -1051,7 +1090,7 @@ class SimpleDownloadManager {
             metadata.noFallback
         ) {
             logger.debug(
-                `[RETRY] Spotify Import job - skipping fallback (exact match required)`
+                `[RETRY] Spotify Import job - skipping fallback (exact match required)`,
             );
             logger.debug(`   User wants exact album: ${job.subject}`);
 
@@ -1060,11 +1099,10 @@ class SimpleDownloadManager {
 
             // Check if import is complete
             if (metadata.spotifyImportJobId) {
-                const { spotifyImportService } = await import(
-                    "./spotifyImport"
-                );
+                const { spotifyImportService } =
+                    await import("./spotifyImport");
                 await spotifyImportService.checkImportCompletion(
-                    metadata.spotifyImportJobId
+                    metadata.spotifyImportJobId,
                 );
             }
 
@@ -1073,7 +1111,7 @@ class SimpleDownloadManager {
 
         if (!artistMbid) {
             logger.debug(
-                `   No artistMbid - cannot try other albums from same artist`
+                `   No artistMbid - cannot try other albums from same artist`,
             );
             return await this.markJobExhausted(job, reason);
         }
@@ -1081,15 +1119,14 @@ class SimpleDownloadManager {
         logger.debug(
             `[RETRY] Trying other albums from artist: ${
                 artistName || artistMbid
-            }`
+            }`,
         );
 
         try {
             // Get albums available in LIDARR for this artist (not MusicBrainz)
             // MusicBrainz has many obscure albums (bootlegs, live recordings) that Lidarr can't find
-            const lidarrAlbums = await lidarrService.getArtistAlbums(
-                artistMbid
-            );
+            const lidarrAlbums =
+                await lidarrService.getArtistAlbums(artistMbid);
 
             if (!lidarrAlbums || lidarrAlbums.length === 0) {
                 logger.debug(`   No albums found in Lidarr for artist`);
@@ -1097,7 +1134,7 @@ class SimpleDownloadManager {
             }
 
             logger.debug(
-                `   Found ${lidarrAlbums.length} albums in Lidarr for artist`
+                `   Found ${lidarrAlbums.length} albums in Lidarr for artist`,
             );
 
             // Get albums we've already tried
@@ -1121,10 +1158,12 @@ class SimpleDownloadManager {
 
             // Filter to untried albums that exist in Lidarr
             const untriedAlbums = lidarrAlbums.filter(
-                (album: any) => !triedAlbumMbids.has(album.foreignAlbumId)
+                (album: any) => !triedAlbumMbids.has(album.foreignAlbumId),
             );
 
-            logger.debug(`   Untried albums in Lidarr: ${untriedAlbums.length}`);
+            logger.debug(
+                `   Untried albums in Lidarr: ${untriedAlbums.length}`,
+            );
 
             if (untriedAlbums.length === 0) {
                 logger.debug(`   All Lidarr albums from artist exhausted`);
@@ -1134,12 +1173,12 @@ class SimpleDownloadManager {
             // Pick the first untried album (prioritize studio albums over singles/EPs if possible)
             const studioAlbums = untriedAlbums.filter(
                 (a: any) =>
-                    a.albumType?.toLowerCase() === "album" || !a.albumType
+                    a.albumType?.toLowerCase() === "album" || !a.albumType,
             );
             const nextAlbum =
                 studioAlbums.length > 0 ? studioAlbums[0] : untriedAlbums[0];
             logger.debug(
-                `[RETRY] Trying next album from same artist: ${nextAlbum.title}`
+                `[RETRY] Trying next album from same artist: ${nextAlbum.title}`,
             );
 
             // Mark current job as exhausted (not failed - we're continuing with same artist)
@@ -1157,7 +1196,8 @@ class SimpleDownloadManager {
 
             // Get music path from settings with fallback to config
             const settings = await getSystemSettings();
-            const defaultMusicPath = settings?.musicPath || config.music.musicPath;
+            const defaultMusicPath =
+                settings?.musicPath || config.music.musicPath;
 
             // Create new job for the next album
             const newJob = await prisma.downloadJob.create({
@@ -1178,7 +1218,8 @@ class SimpleDownloadManager {
                         sameArtistFallback: true,
                         originalJobId: job.id,
                         downloadType: metadata.downloadType || "library",
-                        rootFolderPath: metadata.rootFolderPath || defaultMusicPath,
+                        rootFolderPath:
+                            metadata.rootFolderPath || defaultMusicPath,
                     },
                 },
             });
@@ -1191,7 +1232,7 @@ class SimpleDownloadManager {
                 artistName || "Unknown Artist",
                 nextAlbum.title,
                 albumMbid,
-                job.userId
+                job.userId,
             );
 
             if (result.success) {
@@ -1199,14 +1240,14 @@ class SimpleDownloadManager {
                 return { retried: true, failed: false, jobId: newJob.id };
             } else {
                 logger.debug(
-                    `   Same-artist fallback failed to start: ${result.error}`
+                    `   Same-artist fallback failed to start: ${result.error}`,
                 );
                 // The new job will be marked as failed by startDownload
                 return { retried: false, failed: true, jobId: newJob.id };
             }
         } catch (error: any) {
             logger.error(
-                `   Error trying same-artist fallback: ${error.message}`
+                `   Error trying same-artist fallback: ${error.message}`,
             );
             return await this.markJobExhausted(job, reason);
         }
@@ -1220,7 +1261,7 @@ class SimpleDownloadManager {
      */
     private async markJobExhausted(
         job: any,
-        reason: string
+        reason: string,
     ): Promise<{ retried: boolean; failed: boolean; jobId?: string }> {
         logger.debug(`[RETRY] Job fully exhausted: ${job.id}`);
 
@@ -1247,7 +1288,7 @@ class SimpleDownloadManager {
 
                 if (dupArtist === artistName && dupAlbum === albumTitle) {
                     logger.debug(
-                        `   Found completed duplicate job ${completedDuplicate.id} - marking this as completed too`
+                        `   Found completed duplicate job ${completedDuplicate.id} - marking this as completed too`,
                     );
                     await prisma.downloadJob.update({
                         where: { id: job.id },
@@ -1279,7 +1320,7 @@ class SimpleDownloadManager {
         if (job.discoveryBatchId) {
             const { discoverWeeklyService } = await import("./discoverWeekly");
             await discoverWeeklyService.checkBatchCompletion(
-                job.discoveryBatchId
+                job.discoveryBatchId,
             );
         }
 
@@ -1288,17 +1329,17 @@ class SimpleDownloadManager {
             const decision =
                 await notificationPolicyService.evaluateNotification(
                     job.id,
-                    "failed"
+                    "failed",
                 );
 
             if (decision.shouldNotify) {
                 logger.debug(
-                    `   Sending failure notification: ${decision.reason}`
+                    `   Sending failure notification: ${decision.reason}`,
                 );
                 await notificationService.notifyDownloadFailed(
                     job.userId,
                     job.subject,
-                    reason
+                    reason,
                 );
 
                 // Mark notification as sent
@@ -1313,13 +1354,13 @@ class SimpleDownloadManager {
                 });
             } else {
                 logger.debug(
-                    `   Suppressing failure notification: ${decision.reason}`
+                    `   Suppressing failure notification: ${decision.reason}`,
                 );
             }
         } catch (notifError) {
             logger.error(
                 "Failed to evaluate/send failure notification:",
-                notifError
+                notifError,
             );
         }
 
@@ -1334,7 +1375,7 @@ class SimpleDownloadManager {
      * Optionally accepts a pre-fetched snapshot to avoid duplicate API calls.
      */
     async markStaleJobsAsFailed(
-        existingSnapshot?: ReconciliationSnapshot
+        existingSnapshot?: ReconciliationSnapshot,
     ): Promise<number> {
         const pendingCutoff = new Date(Date.now() - this.PENDING_TIMEOUT_MS);
         const noSourceCutoff = new Date(Date.now() - this.NO_SOURCE_TIMEOUT_MS);
@@ -1348,12 +1389,12 @@ class SimpleDownloadManager {
         // Log to session for debugging Spotify imports
         if (activeJobs.length > 0) {
             const spotifyJobs = activeJobs.filter((j) =>
-                j.id.startsWith("spotify_")
+                j.id.startsWith("spotify_"),
             );
             if (spotifyJobs.length > 0) {
                 sessionLog(
                     "CLEANUP",
-                    `Checking ${activeJobs.length} active jobs (${spotifyJobs.length} Spotify import)`
+                    `Checking ${activeJobs.length} active jobs (${spotifyJobs.length} Spotify import)`,
                 );
             }
         }
@@ -1361,23 +1402,23 @@ class SimpleDownloadManager {
         // Separate pending from processing
         const pendingJobs = activeJobs.filter((j) => j.status === "pending");
         const processingJobs = activeJobs.filter(
-            (j) => j.status === "processing"
+            (j) => j.status === "processing",
         );
 
         // Handle old pending jobs - batch update instead of individual updates
         const stalePendingJobs = pendingJobs.filter(
-            (job) => job.createdAt < pendingCutoff
+            (job) => job.createdAt < pendingCutoff,
         );
 
         const pendingDiscoveryBatchIds = new Set<string>();
 
         if (stalePendingJobs.length > 0) {
             logger.debug(
-                `\n⏰ Found ${stalePendingJobs.length} stuck PENDING jobs (never started)`
+                `\n⏰ Found ${stalePendingJobs.length} stuck PENDING jobs (never started)`,
             );
             sessionLog(
                 "CLEANUP",
-                `Found ${stalePendingJobs.length} stuck PENDING jobs`
+                `Found ${stalePendingJobs.length} stuck PENDING jobs`,
             );
 
             // Collect discovery batch IDs before batch update
@@ -1397,7 +1438,9 @@ class SimpleDownloadManager {
                 },
             });
 
-            logger.debug(`   Batch updated ${stalePendingJobs.length} pending jobs to failed`);
+            logger.debug(
+                `   Batch updated ${stalePendingJobs.length} pending jobs to failed`,
+            );
         }
 
         // Check discovery batch completions for pending jobs (with yielding)
@@ -1444,10 +1487,11 @@ class SimpleDownloadManager {
                 // Only check if we have a snapshot (Lidarr is available)
                 if (startedAt < importCutoff) {
                     // Check using snapshot (O(1) lookup, no API call)
-                    const downloadStatus = lidarrService.isDownloadActiveInSnapshot(
-                        snapshot,
-                        job.lidarrRef
-                    );
+                    const downloadStatus =
+                        lidarrService.isDownloadActiveInSnapshot(
+                            snapshot,
+                            job.lidarrRef,
+                        );
 
                     if (downloadStatus.active) {
                         // Still downloading - collect for batch update
@@ -1460,7 +1504,7 @@ class SimpleDownloadManager {
                             },
                         });
                         logger.debug(
-                            `   ${job.subject}: Still downloading (${downloadStatus.progress || 0}%), extending timeout`
+                            `   ${job.subject}: Still downloading (${downloadStatus.progress || 0}%), extending timeout`,
                         );
                     } else {
                         // Not actively downloading - mark as stale
@@ -1491,7 +1535,7 @@ class SimpleDownloadManager {
         logger.debug(`\n⏰ Found ${staleJobs.length} stale download jobs`);
         sessionLog(
             "CLEANUP",
-            `Found ${staleJobs.length} stale jobs to mark as failed`
+            `Found ${staleJobs.length} stale jobs to mark as failed`,
         );
 
         // Track unique batch IDs to check
@@ -1506,7 +1550,7 @@ class SimpleDownloadManager {
                 const policyDecision =
                     await notificationPolicyService.evaluateNotification(
                         job.id,
-                        "timeout"
+                        "timeout",
                     );
 
                 // If policy says to extend timeout (still in retry window), do so
@@ -1515,7 +1559,7 @@ class SimpleDownloadManager {
                     policyDecision.reason.includes("extending timeout")
                 ) {
                     logger.debug(
-                        `   ${job.subject}: ${policyDecision.reason} - extending timeout`
+                        `   ${job.subject}: ${policyDecision.reason} - extending timeout`,
                     );
                     await prisma.downloadJob.update({
                         where: { id: job.id },
@@ -1532,7 +1576,7 @@ class SimpleDownloadManager {
             } catch (policyError) {
                 logger.error(
                     `   Failed to evaluate policy for ${job.id}:`,
-                    policyError
+                    policyError,
                 );
                 // Continue with failure handling if policy check fails
             }
@@ -1547,11 +1591,11 @@ class SimpleDownloadManager {
             logger.debug(
                 `   Timing out: ${job.subject} (${
                     hasLidarrRef ? "stuck import" : "no sources"
-                })`
+                })`,
             );
             sessionLog(
                 "CLEANUP",
-                `Marking stale: ${job.subject} - ${errorMessage}`
+                `Marking stale: ${job.subject} - ${errorMessage}`,
             );
             const artistName = metadata?.artistName?.toLowerCase().trim() || "";
             const albumTitle = metadata?.albumTitle?.toLowerCase().trim() || "";
@@ -1575,7 +1619,7 @@ class SimpleDownloadManager {
 
                     if (dupArtist === artistName && dupAlbum === albumTitle) {
                         logger.debug(
-                            `   Found completed duplicate - marking this job as completed too`
+                            `   Found completed duplicate - marking this job as completed too`,
                         );
                         await prisma.downloadJob.update({
                             where: { id: job.id },
@@ -1613,22 +1657,22 @@ class SimpleDownloadManager {
                 try {
                     const fallbackResult = await this.tryNextAlbumFromArtist(
                         { ...job, metadata },
-                        errorMessage
+                        errorMessage,
                     );
                     if (fallbackResult.retried && fallbackResult.jobId) {
                         logger.debug(
-                            `   Same-artist fallback started: ${fallbackResult.jobId}`
+                            `   Same-artist fallback started: ${fallbackResult.jobId}`,
                         );
                         replacementStarted = true;
                     }
                 } catch (fallbackErr: any) {
                     logger.error(
-                        `   Same-artist fallback error: ${fallbackErr.message}`
+                        `   Same-artist fallback error: ${fallbackErr.message}`,
                     );
                 }
             } else if (job.discoveryBatchId) {
                 logger.debug(
-                    `   Discovery job - letting discovery system find new artist`
+                    `   Discovery job - letting discovery system find new artist`,
                 );
             }
 
@@ -1661,7 +1705,7 @@ class SimpleDownloadManager {
             const { discoverWeeklyService } = await import("./discoverWeekly");
             for (const batchId of batchIds) {
                 logger.debug(
-                    `   Checking discovery batch completion: ${batchId}`
+                    `   Checking discovery batch completion: ${batchId}`,
                 );
                 await discoverWeeklyService.checkBatchCompletion(batchId);
                 await yieldToEventLoop();
@@ -1677,7 +1721,7 @@ class SimpleDownloadManager {
      */
     private async blocklistAndRetry(
         downloadId: string,
-        _lidarrAlbumId: number
+        _lidarrAlbumId: number,
     ) {
         try {
             const settings = await getSystemSettings();
@@ -1690,11 +1734,11 @@ class SimpleDownloadManager {
                     {
                         headers: { "X-Api-Key": settings.lidarrApiKey },
                         timeout: 10000,
-                    }
+                    },
                 );
 
                 const queueItem = queueResponse.data.records?.find(
-                    (item: any) => item.downloadId === downloadId
+                    (item: any) => item.downloadId === downloadId,
                 );
 
                 if (queueItem) {
@@ -1705,10 +1749,10 @@ class SimpleDownloadManager {
                         {
                             headers: { "X-Api-Key": settings.lidarrApiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
                     logger.debug(
-                        `   Blocklisted release, Lidarr searching for alternative`
+                        `   Blocklisted release, Lidarr searching for alternative`,
                     );
                 }
             } catch (queueError: any) {
@@ -1734,11 +1778,11 @@ class SimpleDownloadManager {
                 {
                     headers: { "X-Api-Key": settings.lidarrApiKey },
                     timeout: 10000,
-                }
+                },
             );
 
             const queueItem = queueResponse.data.records?.find(
-                (item: any) => item.downloadId === downloadId
+                (item: any) => item.downloadId === downloadId,
             );
 
             if (queueItem) {
@@ -1749,20 +1793,20 @@ class SimpleDownloadManager {
                     {
                         headers: { "X-Api-Key": settings.lidarrApiKey },
                         timeout: 10000,
-                    }
+                    },
                 );
                 logger.debug(
-                    `   Removed from Lidarr queue, blocklisted, triggering new search`
+                    `   Removed from Lidarr queue, blocklisted, triggering new search`,
                 );
             } else {
                 logger.debug(
-                    `   Item not found in Lidarr queue (may already be removed)`
+                    `   Item not found in Lidarr queue (may already be removed)`,
                 );
             }
         } catch (error: any) {
             logger.error(
                 `   Failed to remove from Lidarr queue:`,
-                error.message
+                error.message,
             );
         }
     }
@@ -1792,7 +1836,7 @@ class SimpleDownloadManager {
                 {
                     headers: { "X-Api-Key": settings.lidarrApiKey },
                     timeout: 10000,
-                }
+                },
             );
 
             const records = queueResponse.data.records || [];
@@ -1812,7 +1856,7 @@ class SimpleDownloadManager {
                     item.trackedDownloadStatus === "error" ||
                     item.trackedDownloadState === "importPending" ||
                     item.trackedDownloadState === "importFailed" ||
-                    (item.statusMessages && item.statusMessages.length > 0)
+                    (item.statusMessages && item.statusMessages.length > 0),
             );
 
             if (failedItems.length === 0) {
@@ -1835,19 +1879,23 @@ class SimpleDownloadManager {
             for (const chunk of chunks) {
                 const results = await Promise.allSettled(
                     chunk.map((item: any) =>
-                        axios.delete(
-                            `${settings.lidarrUrl}/api/v1/queue/${item.id}?removeFromClient=true&blocklist=true&skipRedownload=false`,
-                            {
-                                headers: { "X-Api-Key": settings.lidarrApiKey },
-                                timeout: 10000,
-                            }
-                        ).then(() => {
-                            logger.debug(
-                                `    Removed: ${item.title || item.album?.title || "Unknown"}`
-                            );
-                            return true;
-                        })
-                    )
+                        axios
+                            .delete(
+                                `${settings.lidarrUrl}/api/v1/queue/${item.id}?removeFromClient=true&blocklist=true&skipRedownload=false`,
+                                {
+                                    headers: {
+                                        "X-Api-Key": settings.lidarrApiKey,
+                                    },
+                                    timeout: 10000,
+                                },
+                            )
+                            .then(() => {
+                                logger.debug(
+                                    `    Removed: ${item.title || item.album?.title || "Unknown"}`,
+                                );
+                                return true;
+                            }),
+                    ),
                 );
 
                 // Count successes and collect errors
@@ -1857,7 +1905,10 @@ class SimpleDownloadManager {
                         removed++;
                     } else {
                         const reason = (result as PromiseRejectedResult).reason;
-                        const errorMsg = reason instanceof Error ? reason.message : "Unknown error";
+                        const errorMsg =
+                            reason instanceof Error
+                                ? reason.message
+                                : "Unknown error";
                         const msg = `Failed to remove ${(chunk[i] as any).id}: ${errorMsg}`;
                         logger.debug(` ${msg}`);
                         errors.push(msg);
@@ -1872,7 +1923,7 @@ class SimpleDownloadManager {
             if (albumIdsToSearch.length > 0) {
                 try {
                     logger.debug(
-                        `    Triggering search for ${albumIdsToSearch.length} album(s)...`
+                        `    Triggering search for ${albumIdsToSearch.length} album(s)...`,
                     );
                     await axios.post(
                         `${settings.lidarrUrl}/api/v1/command`,
@@ -1883,14 +1934,14 @@ class SimpleDownloadManager {
                         {
                             headers: { "X-Api-Key": settings.lidarrApiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
                     logger.debug(
-                        `    Search triggered for alternative releases`
+                        `    Search triggered for alternative releases`,
                     );
                 } catch (searchError: any) {
                     logger.debug(
-                        ` Failed to trigger search: ${searchError.message}`
+                        ` Failed to trigger search: ${searchError.message}`,
                     );
                 }
             }
@@ -1937,13 +1988,15 @@ class SimpleDownloadManager {
      * when called alongside other reconciliation methods.
      */
     async reconcileWithLidarr(
-        existingSnapshot?: ReconciliationSnapshot
+        existingSnapshot?: ReconciliationSnapshot,
     ): Promise<{
         reconciled: number;
         errors: string[];
         snapshot?: ReconciliationSnapshot;
     }> {
-        logger.debug(`\n[RECONCILE] Checking processing jobs against Lidarr...`);
+        logger.debug(
+            `\n[RECONCILE] Checking processing jobs against Lidarr...`,
+        );
 
         const processingJobs = await prisma.downloadJob.findMany({
             where: { status: "processing" },
@@ -1958,7 +2011,9 @@ class SimpleDownloadManager {
 
         // Use existing snapshot - do NOT re-fetch if undefined (means Lidarr is unavailable)
         if (!existingSnapshot) {
-            logger.debug(`   No Lidarr snapshot available, skipping reconciliation`);
+            logger.debug(
+                `   No Lidarr snapshot available, skipping reconciliation`,
+            );
             return { reconciled: 0, errors: [] };
         }
         const snapshot = existingSnapshot;
@@ -1969,7 +2024,8 @@ class SimpleDownloadManager {
 
         for (const job of processingJobs) {
             const metadata = job.metadata as any;
-            const albumMbid = job.targetMbid || metadata?.albumMbid || metadata?.lidarrMbid;
+            const albumMbid =
+                job.targetMbid || metadata?.albumMbid || metadata?.lidarrMbid;
             const artistName = metadata?.artistName;
             const albumTitle = metadata?.albumTitle;
 
@@ -1978,16 +2034,20 @@ class SimpleDownloadManager {
                 snapshot,
                 albumMbid,
                 artistName,
-                albumTitle
+                albumTitle,
             );
 
             // Also try lidarrMbid if different
-            if (!isAvailable && metadata?.lidarrMbid && metadata.lidarrMbid !== albumMbid) {
+            if (
+                !isAvailable &&
+                metadata?.lidarrMbid &&
+                metadata.lidarrMbid !== albumMbid
+            ) {
                 isAvailable = lidarrService.isAlbumAvailableInSnapshot(
                     snapshot,
                     metadata.lidarrMbid,
                     undefined,
-                    undefined
+                    undefined,
                 );
             }
 
@@ -2001,13 +2061,15 @@ class SimpleDownloadManager {
                         snapshot,
                         undefined,
                         parsedArtist,
-                        parsedAlbum
+                        parsedAlbum,
                     );
                 }
             }
 
             if (isAvailable) {
-                logger.debug(`   Job ${job.id}: Album "${job.subject}" found in Lidarr`);
+                logger.debug(
+                    `   Job ${job.id}: Album "${job.subject}" found in Lidarr`,
+                );
                 toComplete.push(job.id);
                 if (job.discoveryBatchId) {
                     discoveryBatchIds.add(job.discoveryBatchId);
@@ -2017,7 +2079,7 @@ class SimpleDownloadManager {
                 const jobAge = Date.now() - (job.createdAt?.getTime() || 0);
                 if (jobAge > 5 * 60 * 1000) {
                     logger.debug(
-                        `   Job ${job.id}: "${job.subject}" not yet available (${Math.round(jobAge / 60000)}m old)`
+                        `   Job ${job.id}: "${job.subject}" not yet available (${Math.round(jobAge / 60000)}m old)`,
                     );
                 }
             }
@@ -2033,7 +2095,9 @@ class SimpleDownloadManager {
                     error: null,
                 },
             });
-            logger.debug(`   Batch updated ${toComplete.length} job(s) to completed`);
+            logger.debug(
+                `   Batch updated ${toComplete.length} job(s) to completed`,
+            );
         }
 
         // Check discovery batch completions (deduplicated, with yielding)
@@ -2061,13 +2125,13 @@ class SimpleDownloadManager {
      * Optionally accepts a pre-fetched snapshot to avoid duplicate API calls.
      */
     async syncWithLidarrQueue(
-        existingSnapshot?: ReconciliationSnapshot
+        existingSnapshot?: ReconciliationSnapshot,
     ): Promise<{
         cancelled: number;
         errors: string[];
     }> {
         logger.debug(
-            `\n[QUEUE-SYNC] Syncing processing jobs with Lidarr queue...`
+            `\n[QUEUE-SYNC] Syncing processing jobs with Lidarr queue...`,
         );
 
         const processingJobs = await prisma.downloadJob.findMany({
@@ -2083,12 +2147,14 @@ class SimpleDownloadManager {
         }
 
         logger.debug(
-            `   Found ${processingJobs.length} processing job(s) with lidarrRef`
+            `   Found ${processingJobs.length} processing job(s) with lidarrRef`,
         );
 
         // Use existing snapshot - do NOT re-fetch if undefined (means Lidarr is unavailable)
         if (!existingSnapshot) {
-            logger.debug(`   No Lidarr snapshot available, skipping queue sync`);
+            logger.debug(
+                `   No Lidarr snapshot available, skipping queue sync`,
+            );
             return { cancelled: 0, errors: [] };
         }
 
@@ -2099,7 +2165,9 @@ class SimpleDownloadManager {
             const queueDownloadIds = new Set(snapshot.queue.keys());
             const queueItems = Array.from(snapshot.queue.values());
 
-            logger.debug(`   Lidarr queue has ${queueDownloadIds.size} item(s)`);
+            logger.debug(
+                `   Lidarr queue has ${queueDownloadIds.size} item(s)`,
+            );
 
             let cancelled = 0;
             const errors: string[] = [];
@@ -2107,10 +2175,23 @@ class SimpleDownloadManager {
 
             // Collect jobs that need metadata updates (to batch where possible)
             const jobsToResetCounter: { id: string; metadata: any }[] = [];
-            const jobsToIncrementCounter: { id: string; metadata: any; count: number }[] = [];
-            const jobsToUpdateDownloadId: { id: string; metadata: any; newDownloadId: string; oldDownloadId: string }[] = [];
+            const jobsToIncrementCounter: {
+                id: string;
+                metadata: any;
+                count: number;
+            }[] = [];
+            const jobsToUpdateDownloadId: {
+                id: string;
+                metadata: any;
+                newDownloadId: string;
+                oldDownloadId: string;
+            }[] = [];
             const jobsToComplete: { id: string; metadata: any }[] = [];
-            const jobsToFail: { id: string; metadata: any; missingCount: number }[] = [];
+            const jobsToFail: {
+                id: string;
+                metadata: any;
+                missingCount: number;
+            }[] = [];
 
             // Check each processing job against snapshot
             for (const job of processingJobs) {
@@ -2122,7 +2203,10 @@ class SimpleDownloadManager {
 
                 // If download is found in queue, reset its missing counter
                 if (queueDownloadIds.has(job.lidarrRef)) {
-                    if (metadata?.queueSyncMissingCount && metadata.queueSyncMissingCount > 0) {
+                    if (
+                        metadata?.queueSyncMissingCount &&
+                        metadata.queueSyncMissingCount > 0
+                    ) {
                         jobsToResetCounter.push({ id: job.id, metadata });
                     }
                     continue;
@@ -2132,7 +2216,11 @@ class SimpleDownloadManager {
                 const missingCount = (metadata?.queueSyncMissingCount || 0) + 1;
 
                 if (missingCount < 3) {
-                    jobsToIncrementCounter.push({ id: job.id, metadata, count: missingCount });
+                    jobsToIncrementCounter.push({
+                        id: job.id,
+                        metadata,
+                        count: missingCount,
+                    });
                     continue;
                 }
 
@@ -2144,7 +2232,9 @@ class SimpleDownloadManager {
                     const searchArtist = artistName?.toLowerCase() || "";
                     return (
                         queueTitle.includes(searchAlbum) &&
-                        (searchArtist ? queueTitle.includes(searchArtist) : true)
+                        (searchArtist
+                            ? queueTitle.includes(searchArtist)
+                            : true)
                     );
                 });
 
@@ -2163,7 +2253,7 @@ class SimpleDownloadManager {
                     snapshot,
                     job.targetMbid || undefined,
                     artistName,
-                    albumTitle
+                    albumTitle,
                 );
 
                 if (isAvailable) {
@@ -2205,8 +2295,15 @@ class SimpleDownloadManager {
                 });
             }
 
-            for (const { id, metadata, newDownloadId, oldDownloadId } of jobsToUpdateDownloadId) {
-                logger.debug(`   Job ${id}: Replacement download found: ${newDownloadId}`);
+            for (const {
+                id,
+                metadata,
+                newDownloadId,
+                oldDownloadId,
+            } of jobsToUpdateDownloadId) {
+                logger.debug(
+                    `   Job ${id}: Replacement download found: ${newDownloadId}`,
+                );
                 await prisma.downloadJob.update({
                     where: { id },
                     data: {
@@ -2224,7 +2321,9 @@ class SimpleDownloadManager {
             }
 
             for (const { id, metadata } of jobsToComplete) {
-                logger.debug(`   Job ${id}: Album found in library - marking complete`);
+                logger.debug(
+                    `   Job ${id}: Album found in library - marking complete`,
+                );
                 await prisma.downloadJob.update({
                     where: { id },
                     data: {
@@ -2242,7 +2341,9 @@ class SimpleDownloadManager {
             }
 
             for (const { id, metadata, missingCount } of jobsToFail) {
-                logger.warn(`   Job ${id}: Download not found after 90s - marking as failed`);
+                logger.warn(
+                    `   Job ${id}: Download not found after 90s - marking as failed`,
+                );
                 await prisma.downloadJob.update({
                     where: { id },
                     data: {
@@ -2262,7 +2363,8 @@ class SimpleDownloadManager {
 
             // Check discovery batch completions (deduplicated, with yielding)
             if (discoveryBatchIds.size > 0) {
-                const { discoverWeeklyService } = await import("./discoverWeekly");
+                const { discoverWeeklyService } =
+                    await import("./discoverWeekly");
                 for (const batchId of discoveryBatchIds) {
                     await discoverWeeklyService.checkBatchCompletion(batchId);
                     await yieldToEventLoop();
@@ -2274,7 +2376,7 @@ class SimpleDownloadManager {
         } catch (error: any) {
             logger.error(
                 `[QUEUE-SYNC] Failed to sync with Lidarr queue:`,
-                error.message
+                error.message,
             );
             return { cancelled: 0, errors: [error.message] };
         }

@@ -14,10 +14,7 @@ import { discoverQueue, scanQueue } from "../workers/queues";
 import { getSystemSettings } from "../utils/systemSettings";
 import { lidarrService } from "../services/lidarr";
 import { discoveryRecommendationsService } from "../services/discovery";
-import {
-    sendInternalRouteError,
-    sendRouteError,
-} from "./routeErrorResponse";
+import { sendInternalRouteError, sendRouteError } from "./routeErrorResponse";
 
 const router = Router();
 const isLegacyDiscoveryMode = config.discover.mode === "legacy";
@@ -47,7 +44,7 @@ router.get("/batch-status", async (req, res) => {
             const jobs = await discoverQueue.getJobs(
                 ["active", "waiting", "delayed"],
                 0,
-                200
+                200,
             );
             const activeJob = jobs.find((job) => job.data?.userId === userId);
 
@@ -103,10 +100,10 @@ router.get("/batch-status", async (req, res) => {
         }
 
         const completedJobs = activeBatch.jobs.filter(
-            (j) => j.status === "completed"
+            (j) => j.status === "completed",
         ).length;
         const failedJobs = activeBatch.jobs.filter(
-            (j) => j.status === "failed" || j.status === "exhausted"
+            (j) => j.status === "failed" || j.status === "exhausted",
         ).length;
         const totalJobs = activeBatch.jobs.length;
         const progress =
@@ -173,7 +170,7 @@ router.post("/generate", async (req, res) => {
                 await existingJob.remove().catch((err: unknown) => {
                     logger.warn(
                         `[Discover] Failed to remove stale manual job ${manualJobId}:`,
-                        err
+                        err,
                     );
                 });
             }
@@ -186,7 +183,7 @@ router.post("/generate", async (req, res) => {
                 {
                     // Deduplicate manual "Generate" clicks across API replicas.
                     jobId: manualJobId,
-                }
+                },
             );
 
             return res.json({
@@ -211,7 +208,9 @@ router.post("/generate", async (req, res) => {
             });
         }
 
-        logger.debug(`\n Queuing Discover Weekly generation for user ${userId}`);
+        logger.debug(
+            `\n Queuing Discover Weekly generation for user ${userId}`,
+        );
 
         // Add generation job to queue
         const job = await discoverQueue.add({ userId });
@@ -294,7 +293,9 @@ router.get("/current", async (req, res) => {
 
         if (!isLegacyDiscoveryMode) {
             const playlist =
-                await discoveryRecommendationsService.getCurrentPlaylist(userId);
+                await discoveryRecommendationsService.getCurrentPlaylist(
+                    userId,
+                );
             return res.json(playlist);
         }
 
@@ -345,7 +346,7 @@ router.get("/current", async (req, res) => {
 
                     // Create a map for quick lookup
                     const trackMap = new Map(
-                        libraryTracks.map((t) => [t.id, t])
+                        libraryTracks.map((t) => [t.id, t]),
                     );
 
                     for (const dt of discoveryAlbum.tracks) {
@@ -503,7 +504,7 @@ router.get("/current", async (req, res) => {
                     logger.debug(
                         `    ${i + 1}. ${album.artist} - ${album.album} [${
                             album.previewUrl ? "HAS PREVIEW" : "NO PREVIEW"
-                        }]`
+                        }]`,
                     );
                 });
                 if (unavailable.length > 5) {
@@ -603,7 +604,7 @@ router.post("/like", async (req, res) => {
         // Remove discovery tag from the artist in Lidarr
         // This prevents the artist from being deleted during cleanup
         logger.debug(
-            `   Removing discovery tag from artist: ${discoveryAlbum.artistName}`
+            `   Removing discovery tag from artist: ${discoveryAlbum.artistName}`,
         );
 
         // If artistMbid is a temp ID, we need to search Lidarr by artist name instead
@@ -612,7 +613,7 @@ router.post("/like", async (req, res) => {
             !discoveryAlbum.artistMbid.startsWith("temp-")
         ) {
             await lidarrService.removeDiscoveryTagByMbid(
-                discoveryAlbum.artistMbid
+                discoveryAlbum.artistMbid,
             );
         } else {
             // Search Lidarr for the artist by name and remove tag
@@ -621,7 +622,7 @@ router.post("/like", async (req, res) => {
                 const lidarrArtist = lidarrArtists.find(
                     (a) =>
                         a.artistName.toLowerCase() ===
-                        discoveryAlbum.artistName.toLowerCase()
+                        discoveryAlbum.artistName.toLowerCase(),
                 );
 
                 if (lidarrArtist) {
@@ -629,15 +630,15 @@ router.post("/like", async (req, res) => {
                     if (tagId && lidarrArtist.tags?.includes(tagId)) {
                         await lidarrService.removeTagsFromArtist(
                             lidarrArtist.id,
-                            [tagId]
+                            [tagId],
                         );
                         logger.debug(
-                            `   Removed discovery tag from ${lidarrArtist.artistName} (found by name)`
+                            `   Removed discovery tag from ${lidarrArtist.artistName} (found by name)`,
                         );
                     }
                 } else {
                     logger.debug(
-                        `   Artist ${discoveryAlbum.artistName} not found in Lidarr (may have been removed)`
+                        `   Artist ${discoveryAlbum.artistName} not found in Lidarr (may have been removed)`,
                     );
                 }
             } catch (e: any) {
@@ -693,11 +694,11 @@ router.post("/like", async (req, res) => {
                 },
             });
             logger.debug(
-                ` Added liked album to library: ${dbAlbum.artist.name} - ${dbAlbum.title} (matched from discovery)`
+                ` Added liked album to library: ${dbAlbum.artist.name} - ${dbAlbum.title} (matched from discovery)`,
             );
         } else {
             logger.debug(
-                `   [WARN] Could not find scanned album for: ${discoveryAlbum.artistName} - ${discoveryAlbum.albumTitle}`
+                `   [WARN] Could not find scanned album for: ${discoveryAlbum.artistName} - ${discoveryAlbum.albumTitle}`,
             );
         }
 
@@ -1041,7 +1042,7 @@ router.get("/popular-artists", async (req, res) => {
     } catch (error: any) {
         logger.error(
             "[Discover] Get popular artists error:",
-            error?.message || error
+            error?.message || error,
         );
         // Return empty array instead of 500 - allows homepage to still render
         res.json({ artists: [] });
@@ -1070,7 +1071,7 @@ router.delete("/clear", async (req, res) => {
         if (!isLegacyDiscoveryMode) {
             const { clearedCount } =
                 await discoveryRecommendationsService.clearCurrentPlaylist(
-                    userId
+                    userId,
                 );
 
             return res.json({
@@ -1103,11 +1104,11 @@ router.delete("/clear", async (req, res) => {
 
         const likedAlbums = discoveryAlbums.filter((a) => a.status === "LIKED");
         const activeAlbums = discoveryAlbums.filter(
-            (a) => a.status === "ACTIVE"
+            (a) => a.status === "ACTIVE",
         );
 
         logger.debug(
-            `  Found ${likedAlbums.length} liked albums to move to library`
+            `  Found ${likedAlbums.length} liked albums to move to library`,
         );
         logger.debug(`  Found ${activeAlbums.length} active albums to delete`);
 
@@ -1171,7 +1172,7 @@ router.delete("/clear", async (req, res) => {
                                             "X-Api-Key": settings.lidarrApiKey,
                                         },
                                         timeout: 10000,
-                                    }
+                                    },
                                 );
 
                                 const artistId = albumResponse.data.artistId;
@@ -1184,13 +1185,13 @@ router.delete("/clear", async (req, res) => {
                                             "X-Api-Key": settings.lidarrApiKey,
                                         },
                                         timeout: 10000,
-                                    }
+                                    },
                                 );
 
                                 // Update artist's root folder path to main library if in discovery
                                 if (
                                     artistResponse.data.path?.includes(
-                                        "/music/discovery"
+                                        "/music/discovery",
                                     )
                                 ) {
                                     // Move artist to main library path
@@ -1200,7 +1201,7 @@ router.delete("/clear", async (req, res) => {
                                             ...artistResponse.data,
                                             path: artistResponse.data.path.replace(
                                                 "/music/discovery",
-                                                "/music"
+                                                "/music",
                                             ),
                                             moveFiles: true,
                                         },
@@ -1210,15 +1211,15 @@ router.delete("/clear", async (req, res) => {
                                                     settings.lidarrApiKey,
                                             },
                                             timeout: 30000,
-                                        }
+                                        },
                                     );
                                     logger.debug(
-                                        `    Moved to library: ${album.artistName} - ${album.albumTitle}`
+                                        `    Moved to library: ${album.artistName} - ${album.albumTitle}`,
                                     );
                                 }
                             } catch (lidarrError: any) {
                                 logger.debug(
-                                    `  Lidarr move failed for ${album.albumTitle}: ${lidarrError.message}`
+                                    `  Lidarr move failed for ${album.albumTitle}: ${lidarrError.message}`,
                                 );
                             }
                         }
@@ -1233,7 +1234,7 @@ router.delete("/clear", async (req, res) => {
                     });
                 } catch (error: any) {
                     logger.error(
-                        `  ✗ Failed to move ${album.albumTitle}: ${error.message}`
+                        `  ✗ Failed to move ${album.albumTitle}: ${error.message}`,
                     );
                 }
             }
@@ -1265,7 +1266,7 @@ router.delete("/clear", async (req, res) => {
                                             "X-Api-Key": settings.lidarrApiKey,
                                         },
                                         timeout: 10000,
-                                    }
+                                    },
                                 );
                                 artistId = albumResponse.data.artistId;
                             } catch (e: any) {
@@ -1281,10 +1282,10 @@ router.delete("/clear", async (req, res) => {
                                         "X-Api-Key": settings.lidarrApiKey,
                                     },
                                     timeout: 10000,
-                                }
+                                },
                             );
                             logger.debug(
-                                `    Deleted from Lidarr: ${album.albumTitle}`
+                                `    Deleted from Lidarr: ${album.albumTitle}`,
                             );
 
                             // Check if artist should be removed too
@@ -1300,7 +1301,7 @@ router.delete("/clear", async (req, res) => {
                                                     settings.lidarrApiKey,
                                             },
                                             timeout: 10000,
-                                        }
+                                        },
                                     );
 
                                     const artist = artistResponse.data;
@@ -1341,14 +1342,14 @@ router.delete("/clear", async (req, res) => {
                                                         settings.lidarrApiKey,
                                                 },
                                                 timeout: 10000,
-                                            }
+                                            },
                                         );
                                         logger.debug(
-                                            `    Removed artist from Lidarr: ${artist.artistName}`
+                                            `    Removed artist from Lidarr: ${artist.artistName}`,
                                         );
                                     } else {
                                         logger.debug(
-                                            `    Keeping artist in Lidarr: ${artist.artistName} (has library or kept albums)`
+                                            `    Keeping artist in Lidarr: ${artist.artistName} (has library or kept albums)`,
                                         );
                                     }
                                 } catch (e: any) {
@@ -1358,7 +1359,7 @@ router.delete("/clear", async (req, res) => {
                         } catch (lidarrError: any) {
                             if (lidarrError.response?.status !== 404) {
                                 logger.debug(
-                                    `  Lidarr delete failed for ${album.albumTitle}: ${lidarrError.message}`
+                                    `  Lidarr delete failed for ${album.albumTitle}: ${lidarrError.message}`,
                                 );
                             }
                         }
@@ -1369,19 +1370,19 @@ router.delete("/clear", async (req, res) => {
                     try {
                         const discoveryPath = path.join(
                             config.music.musicPath,
-                            "discovery"
+                            "discovery",
                         );
                         // Try common folder structures: /discovery/Artist/Album or /discovery/Artist - Album
                         const possiblePaths = [
                             path.join(
                                 discoveryPath,
                                 album.artistName,
-                                album.albumTitle
+                                album.albumTitle,
                             ),
                             path.join(discoveryPath, album.artistName),
                             path.join(
                                 discoveryPath,
-                                `${album.artistName} - ${album.albumTitle}`
+                                `${album.artistName} - ${album.albumTitle}`,
                             ),
                         ];
 
@@ -1391,13 +1392,15 @@ router.delete("/clear", async (req, res) => {
                                     recursive: true,
                                     force: true,
                                 });
-                                logger.debug(`    Direct deleted: ${albumPath}`);
+                                logger.debug(
+                                    `    Direct deleted: ${albumPath}`,
+                                );
                                 break; // Stop after first successful delete
                             }
                         }
                     } catch (fsError: any) {
                         logger.debug(
-                            `    Filesystem delete failed for ${album.albumTitle}: ${fsError.message}`
+                            `    Filesystem delete failed for ${album.albumTitle}: ${fsError.message}`,
                         );
                     }
 
@@ -1437,7 +1440,7 @@ router.delete("/clear", async (req, res) => {
                     activeDeleted++;
                 } catch (error: any) {
                     logger.error(
-                        `  ✗ Failed to delete ${album.albumTitle}: ${error.message}`
+                        `  ✗ Failed to delete ${album.albumTitle}: ${error.message}`,
                     );
                 }
             }
@@ -1470,16 +1473,16 @@ router.delete("/clear", async (req, res) => {
                 },
             });
             const discoveryMbids = new Set(
-                allDiscoveryAlbums.map((da) => da.rgMbid)
+                allDiscoveryAlbums.map((da) => da.rgMbid),
             );
 
             // Build a set of liked artist names (case-insensitive) for extra protection
             const likedArtistNames = new Set(
                 allDiscoveryAlbums
                     .filter(
-                        (da) => da.status === "LIKED" || da.status === "MOVED"
+                        (da) => da.status === "LIKED" || da.status === "MOVED",
                     )
-                    .map((da) => da.artistName.toLowerCase())
+                    .map((da) => da.artistName.toLowerCase()),
             );
 
             // Find completed jobs that didn't make the playlist AND aren't from liked artists
@@ -1492,7 +1495,7 @@ router.delete("/clear", async (req, res) => {
                 const artistName = metadata?.artistName?.toLowerCase();
                 if (artistName && likedArtistNames.has(artistName)) {
                     logger.debug(
-                        `    Skipping ${metadata?.albumTitle} - artist ${metadata?.artistName} has liked albums`
+                        `    Skipping ${metadata?.albumTitle} - artist ${metadata?.artistName} has liked albums`,
                     );
                     return false;
                 }
@@ -1502,7 +1505,7 @@ router.delete("/clear", async (req, res) => {
 
             if (extraJobs.length > 0) {
                 logger.debug(
-                    `\n[CLEANUP] Found ${extraJobs.length} extra albums to clean from Lidarr...`
+                    `\n[CLEANUP] Found ${extraJobs.length} extra albums to clean from Lidarr...`,
                 );
 
                 for (const job of extraJobs) {
@@ -1525,12 +1528,12 @@ router.delete("/clear", async (req, res) => {
                                 },
                                 status: { in: ["LIKED", "MOVED"] },
                             },
-                        }
+                        },
                     );
 
                     if (isLikedByName) {
                         logger.debug(
-                            `    Skipping ${albumTitle} - marked as LIKED`
+                            `    Skipping ${albumTitle} - marked as LIKED`,
                         );
                         continue;
                     }
@@ -1547,7 +1550,7 @@ router.delete("/clear", async (req, res) => {
                                             "X-Api-Key": settings.lidarrApiKey,
                                         },
                                         timeout: 10000,
-                                    }
+                                    },
                                 );
                                 artistId = albumResponse.data.artistId;
                             } catch (e) {
@@ -1563,10 +1566,10 @@ router.delete("/clear", async (req, res) => {
                                         "X-Api-Key": settings.lidarrApiKey,
                                     },
                                     timeout: 10000,
-                                }
+                                },
                             );
                             logger.debug(
-                                `    Cleaned up extra album: ${albumTitle}`
+                                `    Cleaned up extra album: ${albumTitle}`,
                             );
 
                             // Check if artist should be removed too
@@ -1585,7 +1588,7 @@ router.delete("/clear", async (req, res) => {
 
                                 if (hasLikedByArtistName) {
                                     logger.debug(
-                                        `    Keeping artist: ${artistName} (has liked albums)`
+                                        `    Keeping artist: ${artistName} (has liked albums)`,
                                     );
                                     continue;
                                 }
@@ -1617,10 +1620,10 @@ router.delete("/clear", async (req, res) => {
                                                             settings.lidarrApiKey,
                                                     },
                                                     timeout: 10000,
-                                                }
+                                                },
                                             );
                                             logger.debug(
-                                                `    Removed extra artist from Lidarr: ${artistName}`
+                                                `    Removed extra artist from Lidarr: ${artistName}`,
                                             );
                                         } catch (e) {
                                             // Artist might have other albums
@@ -1632,7 +1635,7 @@ router.delete("/clear", async (req, res) => {
                             // Ignore - might already be removed
                             if (e.response?.status !== 404) {
                                 logger.debug(
-                                    `    Failed to clean up ${albumTitle}: ${e.message}`
+                                    `    Failed to clean up ${albumTitle}: ${e.message}`,
                                 );
                             }
                         }
@@ -1654,7 +1657,7 @@ router.delete("/clear", async (req, res) => {
             settings.lidarrApiKey
         ) {
             logger.debug(
-                `\n[CLEANUP] Checking for failed artists to remove from Lidarr...`
+                `\n[CLEANUP] Checking for failed artists to remove from Lidarr...`,
             );
 
             const failedJobs = await prisma.downloadJob.findMany({
@@ -1675,7 +1678,7 @@ router.delete("/clear", async (req, res) => {
                     failedArtistMbids.add(metadata.artistMbid);
                     artistNames.set(
                         metadata.artistMbid,
-                        metadata.artistName || "Unknown"
+                        metadata.artistName || "Unknown",
                     );
                 }
             }
@@ -1695,8 +1698,8 @@ router.delete("/clear", async (req, res) => {
                     if (hasNativeOwnedAlbums) {
                         logger.debug(
                             `   Keeping ${artistNames.get(
-                                artistMbid
-                            )} - has native library content`
+                                artistMbid,
+                            )} - has native library content`,
                         );
                         continue;
                     }
@@ -1713,8 +1716,8 @@ router.delete("/clear", async (req, res) => {
                     if (hasLikedDiscovery) {
                         logger.debug(
                             `   Keeping ${artistNames.get(
-                                artistMbid
-                            )} - has liked discovery albums`
+                                artistMbid,
+                            )} - has liked discovery albums`,
                         );
                         continue;
                     }
@@ -1725,11 +1728,11 @@ router.delete("/clear", async (req, res) => {
                         {
                             headers: { "X-Api-Key": settings.lidarrApiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
 
                     const lidarrArtist = searchResponse.data.find(
-                        (a: any) => a.foreignArtistId === artistMbid
+                        (a: any) => a.foreignArtistId === artistMbid,
                     );
 
                     if (lidarrArtist) {
@@ -1739,12 +1742,12 @@ router.delete("/clear", async (req, res) => {
                                 params: { deleteFiles: true },
                                 headers: { "X-Api-Key": settings.lidarrApiKey },
                                 timeout: 10000,
-                            }
+                            },
                         );
                         logger.debug(
                             ` Removed failed artist from Lidarr: ${artistNames.get(
-                                artistMbid
-                            )}`
+                                artistMbid,
+                            )}`,
                         );
                     }
                 } catch (e: any) {
@@ -1812,14 +1815,14 @@ router.delete("/clear", async (req, res) => {
                 });
                 orphanedAlbumsDeleted++;
                 logger.debug(
-                    `    Deleted orphaned album: ${orphanAlbum.artist.name} - ${orphanAlbum.title}`
+                    `    Deleted orphaned album: ${orphanAlbum.artist.name} - ${orphanAlbum.title}`,
                 );
             }
         }
 
         if (orphanedAlbumsDeleted > 0) {
             logger.debug(
-                `  Cleaned up ${orphanedAlbumsDeleted} orphaned discovery albums`
+                `  Cleaned up ${orphanedAlbumsDeleted} orphaned discovery albums`,
             );
         }
 
@@ -1848,7 +1851,7 @@ router.delete("/clear", async (req, res) => {
                 where: { id: { in: orphanIds } },
             });
             logger.debug(
-                `  Cleaned up ${orphanedArtists.length} orphaned artists`
+                `  Cleaned up ${orphanedArtists.length} orphaned artists`,
             );
         }
 
@@ -1861,7 +1864,7 @@ router.delete("/clear", async (req, res) => {
 
         if (orphanedDiscoveryTracks.count > 0) {
             logger.debug(
-                `  Cleaned up ${orphanedDiscoveryTracks.count} orphaned discovery track records`
+                `  Cleaned up ${orphanedDiscoveryTracks.count} orphaned discovery track records`,
             );
         }
 
@@ -1879,7 +1882,7 @@ router.delete("/clear", async (req, res) => {
 
         if (oldDiscoveryAlbums.count > 0) {
             logger.debug(
-                `  Cleaned up ${oldDiscoveryAlbums.count} old discovery album records`
+                `  Cleaned up ${oldDiscoveryAlbums.count} old discovery album records`,
             );
         }
 
@@ -1894,7 +1897,7 @@ router.delete("/clear", async (req, res) => {
             settings.lidarrApiKey
         ) {
             logger.debug(
-                `\n[LIDARR CLEANUP] Tag-based cleanup (discovery tag)...`
+                `\n[LIDARR CLEANUP] Tag-based cleanup (discovery tag)...`,
             );
 
             try {
@@ -1902,7 +1905,7 @@ router.delete("/clear", async (req, res) => {
                 const discoveryArtists =
                     await lidarrService.getDiscoveryArtists();
                 logger.debug(
-                    `   Found ${discoveryArtists.length} artists with discovery tag`
+                    `   Found ${discoveryArtists.length} artists with discovery tag`,
                 );
 
                 for (const lidarrArtist of discoveryArtists) {
@@ -1924,10 +1927,10 @@ router.delete("/clear", async (req, res) => {
                     if (hasKeptDiscovery) {
                         // Remove the tag but keep the artist
                         logger.debug(
-                            `   Keeping ${artistName} - has liked albums (removing tag)`
+                            `   Keeping ${artistName} - has liked albums (removing tag)`,
                         );
                         await lidarrService.removeDiscoveryTagByMbid(
-                            artistMbid
+                            artistMbid,
                         );
                         continue;
                     }
@@ -1936,7 +1939,7 @@ router.delete("/clear", async (req, res) => {
                     try {
                         const result = await lidarrService.deleteArtistById(
                             lidarrArtist.id,
-                            true
+                            true,
                         );
                         if (result.success) {
                             lidarrArtistsRemoved++;
@@ -1944,16 +1947,18 @@ router.delete("/clear", async (req, res) => {
                         }
                     } catch (deleteError: any) {
                         logger.debug(
-                            ` Failed to remove ${artistName}: ${deleteError.message}`
+                            ` Failed to remove ${artistName}: ${deleteError.message}`,
                         );
                     }
                 }
 
                 logger.debug(
-                    `   Tag-based cleanup complete: ${lidarrArtistsRemoved} artists removed`
+                    `   Tag-based cleanup complete: ${lidarrArtistsRemoved} artists removed`,
                 );
             } catch (lidarrError: any) {
-                logger.debug(`   Lidarr cleanup failed: ${lidarrError.message}`);
+                logger.debug(
+                    `   Lidarr cleanup failed: ${lidarrError.message}`,
+                );
             }
         }
 
@@ -1971,7 +1976,7 @@ router.delete("/clear", async (req, res) => {
         }
 
         logger.debug(
-            `\nClear complete: ${likedMoved} moved to library, ${activeDeleted} deleted, ${orphanedAlbumsDeleted} orphans cleaned, ${lidarrArtistsRemoved} Lidarr artists removed`
+            `\nClear complete: ${likedMoved} moved to library, ${activeDeleted} deleted, ${orphanedAlbumsDeleted} orphans cleaned, ${lidarrArtistsRemoved} Lidarr artists removed`,
         );
 
         res.json({
@@ -1985,7 +1990,7 @@ router.delete("/clear", async (req, res) => {
     } catch (error: any) {
         logger.error(
             "Clear discovery playlist error:",
-            error?.message || error
+            error?.message || error,
         );
         logger.error("Stack:", error?.stack);
         res.status(500).json({
@@ -2070,7 +2075,7 @@ router.delete("/exclusions", async (req, res) => {
         });
 
         logger.debug(
-            `[Discovery] Cleared ${result.count} exclusions for user ${userId}`
+            `[Discovery] Cleared ${result.count} exclusions for user ${userId}`,
         );
 
         res.json({
@@ -2163,7 +2168,7 @@ router.post("/cleanup-lidarr", async (req, res) => {
         }
 
         logger.debug(
-            "\n[CLEANUP] Starting Lidarr cleanup of discovery-only artists..."
+            "\n[CLEANUP] Starting Lidarr cleanup of discovery-only artists...",
         );
 
         const settings = await getSystemSettings();
@@ -2182,12 +2187,12 @@ router.post("/cleanup-lidarr", async (req, res) => {
             {
                 headers: { "X-Api-Key": settings.lidarrApiKey },
                 timeout: 30000,
-            }
+            },
         );
 
         const lidarrArtists = lidarrResponse.data;
         logger.debug(
-            `[CLEANUP] Found ${lidarrArtists.length} artists in Lidarr`
+            `[CLEANUP] Found ${lidarrArtists.length} artists in Lidarr`,
         );
 
         const artistsRemoved: string[] = [];
@@ -2231,7 +2236,7 @@ router.post("/cleanup-lidarr", async (req, res) => {
                 if (hasNativeOwnedAlbums || hasKeptDiscoveryAlbums) {
                     // This artist should stay in Lidarr
                     artistsKept.push(
-                        `${artistName} (has native library or kept albums)`
+                        `${artistName} (has native library or kept albums)`,
                     );
                     continue;
                 }
@@ -2245,7 +2250,7 @@ router.post("/cleanup-lidarr", async (req, res) => {
                 // This artist has no library albums and no active/kept discovery albums
                 // They should be removed from Lidarr
                 logger.debug(
-                    `[CLEANUP] Removing discovery-only artist: ${artistName}`
+                    `[CLEANUP] Removing discovery-only artist: ${artistName}`,
                 );
 
                 await axios.delete(
@@ -2254,7 +2259,7 @@ router.post("/cleanup-lidarr", async (req, res) => {
                         params: { deleteFiles: true },
                         headers: { "X-Api-Key": settings.lidarrApiKey },
                         timeout: 30000,
-                    }
+                    },
                 );
 
                 artistsRemoved.push(artistName);
@@ -2285,7 +2290,7 @@ router.post("/cleanup-lidarr", async (req, res) => {
     } catch (error: any) {
         logger.error(
             "[CLEANUP] Lidarr cleanup error:",
-            error?.message || error
+            error?.message || error,
         );
         res.status(500).json({
             error: "Failed to cleanup Lidarr",
@@ -2328,7 +2333,7 @@ router.post("/fix-tagging", async (req, res) => {
         });
 
         logger.debug(
-            `[FIX-TAGGING] Found ${discoveryArtists.length} artists with discovery records`
+            `[FIX-TAGGING] Found ${discoveryArtists.length} artists with discovery records`,
         );
 
         let albumsFixed = 0;
@@ -2351,7 +2356,7 @@ router.post("/fix-tagging", async (req, res) => {
             if (hasProtectedContent) {
                 // Artist has protected content - don't touch their albums
                 logger.debug(
-                    `[FIX-TAGGING] Skipping ${da.artistName} - has protected content (${hasProtectedContent.source})`
+                    `[FIX-TAGGING] Skipping ${da.artistName} - has protected content (${hasProtectedContent.source})`,
                 );
                 continue;
             }
@@ -2367,7 +2372,7 @@ router.post("/fix-tagging", async (req, res) => {
             if (hasLikedDiscovery) {
                 // User liked albums from this artist - don't touch
                 logger.debug(
-                    `[FIX-TAGGING] Skipping ${da.artistName} - has LIKED discovery albums`
+                    `[FIX-TAGGING] Skipping ${da.artistName} - has LIKED discovery albums`,
                 );
                 continue;
             }
@@ -2404,13 +2409,13 @@ router.post("/fix-tagging", async (req, res) => {
                 fixedArtists.push(da.artistName);
 
                 logger.debug(
-                    `[FIX-TAGGING] Fixed ${updated.count} albums for ${da.artistName}`
+                    `[FIX-TAGGING] Fixed ${updated.count} albums for ${da.artistName}`,
                 );
             }
         }
 
         logger.debug(
-            `[FIX-TAGGING] Complete: ${albumsFixed} albums fixed, ${ownedRecordsRemoved} OwnedAlbum records removed`
+            `[FIX-TAGGING] Complete: ${albumsFixed} albums fixed, ${ownedRecordsRemoved} OwnedAlbum records removed`,
         );
 
         res.json({

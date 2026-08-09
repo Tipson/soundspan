@@ -33,7 +33,8 @@ const mockDelete = prisma.libraryHealthRecord.delete as jest.Mock;
 
 function getHandler(path: string, method: "get" | "delete") {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.[method]
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -60,7 +61,10 @@ function createRes() {
 
 describe("admin library health routes", () => {
     const getLibraryHealthHandler = getHandler("/library-health", "get");
-    const dismissLibraryHealthHandler = getHandler("/library-health/:recordId", "delete");
+    const dismissLibraryHealthHandler = getHandler(
+        "/library-health/:recordId",
+        "delete",
+    );
 
     beforeEach(() => {
         jest.clearAllMocks();

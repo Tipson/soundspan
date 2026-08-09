@@ -6,7 +6,7 @@ describe("listen together mutation lock contract", () => {
         __dirname,
         "..",
         "services",
-        "listenTogetherSocket.ts"
+        "listenTogetherSocket.ts",
     );
 
     const socketSource = fs.readFileSync(socketServicePath, "utf8");
@@ -20,8 +20,7 @@ describe("listen together mutation lock contract", () => {
     it("wraps hot-path mutations with per-group lock", () => {
         expect(socketSource).toContain("withGroupMutationLock(");
         expect(socketSource).toContain("`playback:${data.action}`");
-        expect(socketSource).toContain("\"queue:add\"");
-        expect(socketSource).toContain("\"ready\"");
+        expect(socketSource).toContain('"queue:add"');
+        expect(socketSource).toContain('"ready"');
     });
 });
-

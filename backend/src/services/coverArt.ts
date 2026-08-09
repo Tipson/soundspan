@@ -21,7 +21,10 @@ interface ReleaseGroupLookupContext {
 
 class CoverArtService {
     private readonly baseUrl = "https://coverartarchive.org";
-    private readonly inFlightRequests = new Map<string, Promise<string | null>>();
+    private readonly inFlightRequests = new Map<
+        string,
+        Promise<string | null>
+    >();
 
     async getCoverArt(rgMbid: string): Promise<string | null> {
         const normalizedMbid = rgMbid.trim();
@@ -49,17 +52,19 @@ class CoverArtService {
             return inFlight;
         }
 
-        const requestPromise = this.fetchAndCacheCoverArt(normalizedMbid, cacheKey)
-            .finally(() => {
-                this.inFlightRequests.delete(cacheKey);
-            });
+        const requestPromise = this.fetchAndCacheCoverArt(
+            normalizedMbid,
+            cacheKey,
+        ).finally(() => {
+            this.inFlightRequests.delete(cacheKey);
+        });
         this.inFlightRequests.set(cacheKey, requestPromise);
         return requestPromise;
     }
 
     private async fetchAndCacheCoverArt(
         rgMbid: string,
-        cacheKey: string
+        cacheKey: string,
     ): Promise<string | null> {
         const coverArtResult = await this.fetchFromCoverArtArchive(rgMbid);
         if (coverArtResult.coverUrl) {
@@ -67,11 +72,12 @@ class CoverArtService {
             return coverArtResult.coverUrl;
         }
 
-        const releaseGroupContext = await this.resolveReleaseGroupContext(rgMbid);
+        const releaseGroupContext =
+            await this.resolveReleaseGroupContext(rgMbid);
         if (releaseGroupContext) {
             const fallbackCover = await this.fetchFromFallbackProviders(
                 releaseGroupContext,
-                rgMbid
+                rgMbid,
             );
             if (fallbackCover) {
                 await this.cacheCoverUrl(cacheKey, fallbackCover);
@@ -86,14 +92,14 @@ class CoverArtService {
     }
 
     private async fetchFromCoverArtArchive(
-        rgMbid: string
+        rgMbid: string,
     ): Promise<CoverArtLookupResult> {
         try {
             // Use rate limiter to prevent overwhelming Cover Art Archive
             const response = await rateLimiter.execute("coverart", () =>
                 axios.get(`${this.baseUrl}/release-group/${rgMbid}`, {
                     timeout: COVER_ART_TIMEOUT_MS,
-                })
+                }),
             );
 
             const images = Array.isArray(response.data?.images)
@@ -120,10 +126,11 @@ class CoverArtService {
     }
 
     private async resolveReleaseGroupContext(
-        rgMbid: string
+        rgMbid: string,
     ): Promise<ReleaseGroupLookupContext | null> {
         try {
-            const releaseGroup = await musicBrainzService.getReleaseGroup(rgMbid);
+            const releaseGroup =
+                await musicBrainzService.getReleaseGroup(rgMbid);
             if (!releaseGroup || typeof releaseGroup.title !== "string") {
                 return null;
             }
@@ -131,7 +138,8 @@ class CoverArtService {
             const artistCredits = Array.isArray(releaseGroup["artist-credit"])
                 ? releaseGroup["artist-credit"]
                 : [];
-            const artistName = musicBrainzService.extractPrimaryArtist(artistCredits);
+            const artistName =
+                musicBrainzService.extractPrimaryArtist(artistCredits);
             if (!artistName || artistName === "Unknown Artist") {
                 return null;
             }
@@ -143,7 +151,7 @@ class CoverArtService {
         } catch (err) {
             logger.warn(
                 `[CoverArt] Failed to resolve release-group metadata for ${rgMbid}:`,
-                err
+                err,
             );
             return null;
         }
@@ -151,31 +159,34 @@ class CoverArtService {
 
     private async fetchFromFallbackProviders(
         context: ReleaseGroupLookupContext,
-        rgMbid: string
+        rgMbid: string,
     ): Promise<string | null> {
         try {
             const fallback = await imageProviderService.getAlbumCover(
                 context.artistName,
                 context.albumTitle,
                 rgMbid,
-                { timeout: COVER_ART_TIMEOUT_MS }
+                { timeout: COVER_ART_TIMEOUT_MS },
             );
             return fallback?.url ?? null;
         } catch (err) {
             logger.warn(
                 `[CoverArt] Fallback providers failed for ${context.artistName} - ${context.albumTitle}:`,
-                err
+                err,
             );
             return null;
         }
     }
 
-    private async cacheCoverUrl(cacheKey: string, coverUrl: string): Promise<void> {
+    private async cacheCoverUrl(
+        cacheKey: string,
+        coverUrl: string,
+    ): Promise<void> {
         try {
             await redisClient.setEx(
                 cacheKey,
                 COVER_ART_CACHE_TTL_SECONDS,
-                coverUrl
+                coverUrl,
             );
         } catch (err) {
             logger.warn("Redis set error:", err);
@@ -187,7 +198,7 @@ class CoverArtService {
             await redisClient.setEx(
                 cacheKey,
                 COVER_ART_NOT_FOUND_CACHE_TTL_SECONDS,
-                "NOT_FOUND"
+                "NOT_FOUND",
             );
         } catch {
             // Ignore cache failures for negative lookups

@@ -21,7 +21,8 @@ function parseExtinf(payload: string): PendingMetadata {
     const commaIndex = payload.indexOf(",");
     const durationPart =
         commaIndex >= 0 ? payload.slice(0, commaIndex).trim() : payload.trim();
-    const titlePart = commaIndex >= 0 ? payload.slice(commaIndex + 1).trim() : "";
+    const titlePart =
+        commaIndex >= 0 ? payload.slice(commaIndex + 1).trim() : "";
     const metadata: PendingMetadata = {
         artist: null,
         title: null,
@@ -36,8 +37,7 @@ function parseExtinf(payload: string): PendingMetadata {
         const separatorIndex = titlePart.indexOf(" - ");
         if (separatorIndex > 0) {
             metadata.artist = titlePart.slice(0, separatorIndex).trim() || null;
-            metadata.title =
-                titlePart.slice(separatorIndex + 3).trim() || null;
+            metadata.title = titlePart.slice(separatorIndex + 3).trim() || null;
         } else {
             metadata.title = titlePart;
         }
@@ -51,7 +51,7 @@ function parseExtinf(payload: string): PendingMetadata {
  */
 export function parseM3U(
     content: string,
-    options: ParseM3UOptions = {}
+    options: ParseM3UOptions = {},
 ): M3UEntry[] {
     if (content.includes("\0")) {
         throw new Error("M3U content contains null bytes");
@@ -89,7 +89,9 @@ export function parseM3U(
 
         entries.push(entry);
         if (entries.length > maxEntries) {
-            throw new Error(`M3U file exceeds maximum of ${maxEntries} entries`);
+            throw new Error(
+                `M3U file exceeds maximum of ${maxEntries} entries`,
+            );
         }
     }
 

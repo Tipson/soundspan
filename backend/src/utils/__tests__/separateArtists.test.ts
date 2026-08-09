@@ -1,4 +1,7 @@
-import { separateArtists, separateArtistsPreservingOrder } from "../separateArtists";
+import {
+    separateArtists,
+    separateArtistsPreservingOrder,
+} from "../separateArtists";
 
 interface FakeTrack {
     id: number;
@@ -27,9 +30,15 @@ describe("separateArtists (round-robin)", () => {
 
     it("achieves perfect separation with balanced artists", () => {
         const items = [
-            track(1, "A"), track(2, "A"), track(3, "A"),
-            track(4, "B"), track(5, "B"), track(6, "B"),
-            track(7, "C"), track(8, "C"), track(9, "C"),
+            track(1, "A"),
+            track(2, "A"),
+            track(3, "A"),
+            track(4, "B"),
+            track(5, "B"),
+            track(6, "B"),
+            track(7, "C"),
+            track(8, "C"),
+            track(9, "C"),
         ];
         const result = separateArtists(items, getArtist);
         expect(result).toHaveLength(9);
@@ -39,8 +48,11 @@ describe("separateArtists (round-robin)", () => {
     it("achieves perfect separation when largest bucket ≤ ⌈n/2⌉", () => {
         // 5 tracks: A×3, B×2 → largest=3, ⌈5/2⌉=3, so perfect separation possible
         const items = [
-            track(1, "A"), track(2, "A"), track(3, "A"),
-            track(4, "B"), track(5, "B"),
+            track(1, "A"),
+            track(2, "A"),
+            track(3, "A"),
+            track(4, "B"),
+            track(5, "B"),
         ];
         const result = separateArtists(items, getArtist);
         expect(result).toHaveLength(5);
@@ -58,13 +70,20 @@ describe("separateArtists (round-robin)", () => {
 
     it("preserves all tracks (no drops)", () => {
         const items = [
-            track(1, "A"), track(2, "B"), track(3, "C"),
-            track(4, "A"), track(5, "B"), track(6, "C"),
-            track(7, "A"), track(8, "D"),
+            track(1, "A"),
+            track(2, "B"),
+            track(3, "C"),
+            track(4, "A"),
+            track(5, "B"),
+            track(6, "C"),
+            track(7, "A"),
+            track(8, "D"),
         ];
         const result = separateArtists(items, getArtist);
         expect(result).toHaveLength(items.length);
-        expect(result.map((t) => t.id).sort()).toEqual(items.map((t) => t.id).sort());
+        expect(result.map((t) => t.id).sort()).toEqual(
+            items.map((t) => t.id).sort(),
+        );
     });
 
     it("handles two items same artist", () => {
@@ -83,8 +102,12 @@ describe("separateArtists (round-robin)", () => {
     it("works with index-based usage pattern (frontend shuffle)", () => {
         // Simulates the frontend pattern: indices into a queue
         const queue = [
-            { artist: "A" }, { artist: "B" }, { artist: "A" },
-            { artist: "C" }, { artist: "A" }, { artist: "B" },
+            { artist: "A" },
+            { artist: "B" },
+            { artist: "A" },
+            { artist: "C" },
+            { artist: "A" },
+            { artist: "B" },
         ];
         const indices = [0, 1, 2, 3, 4, 5];
         const result = separateArtists(indices, (idx) => queue[idx].artist);
@@ -92,14 +115,14 @@ describe("separateArtists (round-robin)", () => {
         expect(result.sort()).toEqual([0, 1, 2, 3, 4, 5]);
         // Check no adjacent same artist via the queue lookup
         for (let i = 1; i < result.length; i++) {
-            expect(queue[result[i]].artist).not.toBe(queue[result[i - 1]].artist);
+            expect(queue[result[i]].artist).not.toBe(
+                queue[result[i - 1]].artist,
+            );
         }
     });
 
     it("treats missing/empty artist keys as distinct per track", () => {
-        const items = [
-            track(1, ""), track(2, ""), track(3, "A"),
-        ];
+        const items = [track(1, ""), track(2, ""), track(3, "A")];
         // Empty strings are equal keys — they will bucket together
         const result = separateArtists(items, getArtist);
         expect(result).toHaveLength(3);
@@ -118,7 +141,10 @@ describe("separateArtistsPreservingOrder (bounded swap)", () => {
 
     it("swaps adjacent same-artist tracks when possible", () => {
         const items = [
-            track(1, "A"), track(2, "A"), track(3, "B"), track(4, "C"),
+            track(1, "A"),
+            track(2, "A"),
+            track(3, "B"),
+            track(4, "C"),
         ];
         const result = separateArtistsPreservingOrder(items, getArtist);
         expect(result).toHaveLength(4);
@@ -132,8 +158,11 @@ describe("separateArtistsPreservingOrder (bounded swap)", () => {
         // A A A A B — with maxSwapDistance=3, the first A-A pair tries to find
         // a non-A within 3 ahead. B is at distance 3 from index 1, reachable.
         const items = [
-            track(1, "A"), track(2, "A"), track(3, "A"),
-            track(4, "A"), track(5, "B"),
+            track(1, "A"),
+            track(2, "A"),
+            track(3, "A"),
+            track(4, "A"),
+            track(5, "B"),
         ];
         const result = separateArtistsPreservingOrder(items, getArtist, 3);
         expect(result).toHaveLength(5);
@@ -143,7 +172,10 @@ describe("separateArtistsPreservingOrder (bounded swap)", () => {
 
     it("preserves order when no adjacency exists", () => {
         const items = [
-            track(1, "A"), track(2, "B"), track(3, "C"), track(4, "A"),
+            track(1, "A"),
+            track(2, "B"),
+            track(3, "C"),
+            track(4, "A"),
         ];
         const result = separateArtistsPreservingOrder(items, getArtist);
         expect(result).toEqual(items);
@@ -151,12 +183,18 @@ describe("separateArtistsPreservingOrder (bounded swap)", () => {
 
     it("preserves all tracks (no drops)", () => {
         const items = [
-            track(1, "A"), track(2, "A"), track(3, "B"),
-            track(4, "A"), track(5, "C"), track(6, "A"),
+            track(1, "A"),
+            track(2, "A"),
+            track(3, "B"),
+            track(4, "A"),
+            track(5, "C"),
+            track(6, "A"),
         ];
         const result = separateArtistsPreservingOrder(items, getArtist);
         expect(result).toHaveLength(items.length);
-        expect(result.map((t) => t.id).sort()).toEqual(items.map((t) => t.id).sort());
+        expect(result.map((t) => t.id).sort()).toEqual(
+            items.map((t) => t.id).sort(),
+        );
     });
 
     it("does not mutate the input array", () => {
@@ -176,8 +214,11 @@ describe("separateArtistsPreservingOrder (bounded swap)", () => {
     it("respects custom maxSwapDistance", () => {
         // A A B C D — with maxSwapDistance=1, can only look 1 ahead from index 1
         const items = [
-            track(1, "A"), track(2, "A"), track(3, "B"),
-            track(4, "C"), track(5, "D"),
+            track(1, "A"),
+            track(2, "A"),
+            track(3, "B"),
+            track(4, "C"),
+            track(5, "D"),
         ];
         const result = separateArtistsPreservingOrder(items, getArtist, 1);
         expect(result).toHaveLength(5);

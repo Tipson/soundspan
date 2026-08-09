@@ -12,7 +12,11 @@ describe("buildArtistIndexes", () => {
         );
 
         expect(result.lastModified).toBe(12345);
-        expect(result.index.map((bucket) => bucket.name)).toEqual(["A", "B", "#"]);
+        expect(result.index.map((bucket) => bucket.name)).toEqual([
+            "A",
+            "B",
+            "#",
+        ]);
         expect(result.index[0].artist[0]).toEqual({
             id: "ar-1",
             name: "ABBA",

@@ -121,7 +121,7 @@ export class EnrichmentService {
      */
     async updateSettings(
         userId: string,
-        settings: Partial<EnrichmentSettings>
+        settings: Partial<EnrichmentSettings>,
     ): Promise<EnrichmentSettings> {
         const current = await this.getSettings(userId);
         const updated = { ...current, ...settings };
@@ -141,7 +141,7 @@ export class EnrichmentService {
      */
     async enrichArtist(
         artistId: string,
-        settings?: EnrichmentSettings
+        settings?: EnrichmentSettings,
     ): Promise<ArtistEnrichmentData | null> {
         const config = settings || this.defaultSettings;
         if (!config.enabled) {
@@ -171,7 +171,7 @@ export class EnrichmentService {
             try {
                 const mbResults = await musicBrainzService.searchArtist(
                     artist.name,
-                    1
+                    1,
                 );
                 if (mbResults.length > 0) {
                     enrichmentData.mbid = mbResults[0].id;
@@ -191,7 +191,7 @@ export class EnrichmentService {
                     artist.name,
                     artistMbid && !artistMbid.startsWith("temp-")
                         ? artistMbid
-                        : undefined
+                        : undefined,
                 );
 
                 if (lastfmInfo) {
@@ -203,27 +203,29 @@ export class EnrichmentService {
                     logger.debug(
                         `  Found Last.fm data: ${
                             enrichmentData.tags?.length || 0
-                        } tags`
+                        } tags`,
                     );
 
                     // Get similar artists
-                    const artistMbidForSimilar = enrichmentData.mbid || artist.mbid;
+                    const artistMbidForSimilar =
+                        enrichmentData.mbid || artist.mbid;
                     const similar = await lastFmService.getSimilarArtists(
-                        artistMbidForSimilar && !artistMbidForSimilar.startsWith("temp-")
+                        artistMbidForSimilar &&
+                            !artistMbidForSimilar.startsWith("temp-")
                             ? artistMbidForSimilar
                             : "",
                         artist.name,
-                        10
+                        10,
                     );
                     enrichmentData.similarArtists = similar.map(
-                        (a: any) => a.name
+                        (a: any) => a.name,
                     );
                     logger.debug(`  Found ${similar.length} similar artists`);
                 }
             } catch (error) {
                 logger.error(
                     `  ✗ Last.fm lookup failed:`,
-                    error instanceof Error ? error.message : error
+                    error instanceof Error ? error.message : error,
                 );
             }
         }
@@ -235,7 +237,7 @@ export class EnrichmentService {
                 artist.name,
                 artistMbid && !artistMbid.startsWith("temp-")
                     ? artistMbid
-                    : undefined
+                    : undefined,
             );
 
             if (imageResult) {
@@ -246,14 +248,14 @@ export class EnrichmentService {
         } catch (error) {
             logger.error(
                 `  ✗ Artist image lookup failed:`,
-                error instanceof Error ? error.message : error
+                error instanceof Error ? error.message : error,
             );
         }
 
         logger.debug(
             `  Enrichment confidence: ${(
                 enrichmentData.confidence * 100
-            ).toFixed(0)}%`
+            ).toFixed(0)}%`,
         );
 
         return enrichmentData;
@@ -264,7 +266,7 @@ export class EnrichmentService {
      */
     async enrichAlbum(
         albumId: string,
-        settings?: EnrichmentSettings
+        settings?: EnrichmentSettings,
     ): Promise<AlbumEnrichmentData | null> {
         const config = settings || this.defaultSettings;
         if (!config.enabled) {
@@ -285,7 +287,7 @@ export class EnrichmentService {
         }
 
         logger.debug(
-            `[Enrichment] Processing album: ${album.artist.name} - ${album.title}`
+            `[Enrichment] Processing album: ${album.artist.name} - ${album.title}`,
         );
 
         const enrichmentData: AlbumEnrichmentData = {
@@ -304,7 +306,7 @@ export class EnrichmentService {
                         await musicBrainzService.getReleaseGroups(
                             album.artist.mbid,
                             ["album", "ep"],
-                            50
+                            50,
                         );
 
                     // Try to match by title
@@ -315,7 +317,7 @@ export class EnrichmentService {
                             rg.title.toLowerCase().replace(/[^a-z0-9]/g, "") ===
                                 album.title
                                     .toLowerCase()
-                                    .replace(/[^a-z0-9]/g, "")
+                                    .replace(/[^a-z0-9]/g, ""),
                     );
 
                     if (match) {
@@ -331,13 +333,13 @@ export class EnrichmentService {
                         try {
                             const rgDetails =
                                 await musicBrainzService.getReleaseGroup(
-                                    match.id
+                                    match.id,
                                 );
                             if (rgDetails?.releases?.[0]?.id) {
                                 const releaseId = rgDetails.releases[0].id;
                                 const releaseInfo =
                                     await musicBrainzService.getRelease(
-                                        releaseId
+                                        releaseId,
                                     );
                                 if (
                                     releaseInfo?.["label-info"]?.[0]?.label
@@ -346,7 +348,7 @@ export class EnrichmentService {
                                     enrichmentData.label =
                                         releaseInfo["label-info"][0].label.name;
                                     logger.debug(
-                                        `  Found label: ${enrichmentData.label}`
+                                        `  Found label: ${enrichmentData.label}`,
                                     );
                                 }
                             }
@@ -365,7 +367,7 @@ export class EnrichmentService {
             try {
                 const lastfmInfo = await lastFmService.getAlbumInfo(
                     album.artist.name,
-                    album.title
+                    album.title,
                 );
 
                 if (lastfmInfo) {
@@ -378,7 +380,7 @@ export class EnrichmentService {
                     logger.debug(
                         `  Found Last.fm data: ${
                             enrichmentData.tags?.length || 0
-                        } tags`
+                        } tags`,
                     );
                 }
             } catch (error) {
@@ -391,7 +393,7 @@ export class EnrichmentService {
             const coverResult = await imageProviderService.getAlbumCover(
                 album.artist.name,
                 album.title,
-                enrichmentData.rgMbid
+                enrichmentData.rgMbid,
             );
 
             if (coverResult) {
@@ -402,14 +404,14 @@ export class EnrichmentService {
         } catch (error) {
             logger.error(
                 `  ✗ Cover art lookup failed:`,
-                error instanceof Error ? error.message : error
+                error instanceof Error ? error.message : error,
             );
         }
 
         logger.debug(
             `  Enrichment confidence: ${(
                 enrichmentData.confidence * 100
-            ).toFixed(0)}%`
+            ).toFixed(0)}%`,
         );
 
         return enrichmentData;
@@ -420,7 +422,7 @@ export class EnrichmentService {
      */
     async applyArtistEnrichment(
         artistId: string,
-        data: ArtistEnrichmentData
+        data: ArtistEnrichmentData,
     ): Promise<void> {
         const updateData: any = {};
 
@@ -433,7 +435,7 @@ export class EnrichmentService {
 
             if (existingArtist && existingArtist.id !== artistId) {
                 logger.debug(
-                    `MBID ${data.mbid} already used by "${existingArtist.name}", skipping MBID update`
+                    `MBID ${data.mbid} already used by "${existingArtist.name}", skipping MBID update`,
                 );
             } else {
                 updateData.mbid = data.mbid;
@@ -447,7 +449,7 @@ export class EnrichmentService {
                 const localPath = await downloadAndStoreImage(
                     data.heroUrl,
                     artistId,
-                    "artist"
+                    "artist",
                 );
                 updateData.heroUrl = localPath || data.heroUrl;
             } else {
@@ -464,7 +466,7 @@ export class EnrichmentService {
                 data: updateData,
             });
             logger.debug(
-                `   Saved ${data.genres?.length || 0} genres for artist`
+                `   Saved ${data.genres?.length || 0} genres for artist`,
             );
         }
     }
@@ -474,7 +476,7 @@ export class EnrichmentService {
      */
     async applyAlbumEnrichment(
         albumId: string,
-        data: AlbumEnrichmentData
+        data: AlbumEnrichmentData,
     ): Promise<void> {
         const updateData: any = {};
 
@@ -485,7 +487,7 @@ export class EnrichmentService {
                 const localPath = await downloadAndStoreImage(
                     data.coverUrl,
                     albumId,
-                    "album"
+                    "album",
                 );
                 updateData.coverUrl = localPath || data.coverUrl;
             } else {
@@ -511,7 +513,7 @@ export class EnrichmentService {
             logger.debug(
                 `   Saved album data: ${
                     data.genres?.length || 0
-                } genres, label: ${data.label || "none"}`
+                } genres, label: ${data.label || "none"}`,
             );
         }
 
@@ -540,7 +542,6 @@ export class EnrichmentService {
             }
         }
     }
-
 }
 
 export const enrichmentService = new EnrichmentService();

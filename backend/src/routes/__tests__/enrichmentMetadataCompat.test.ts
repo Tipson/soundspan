@@ -127,11 +127,14 @@ const mockOwnedAlbumDeleteMany = prisma.ownedAlbum.deleteMany as jest.Mock;
 const mockOwnedAlbumUpsert = prisma.ownedAlbum.upsert as jest.Mock;
 const mockRedisDel = redisClient.del as jest.Mock;
 
-function getHandler(path: string, method: "get" | "put" | "post", stackIndex = 0) {
+function getHandler(
+    path: string,
+    method: "get" | "put" | "post",
+    stackIndex = 0,
+) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path &&
-            entry.route?.methods?.[method],
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -523,7 +526,7 @@ describe("enrichment metadata compatibility", () => {
                     displayTitle: "Album Name",
                     hasUserOverrides: true,
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });
@@ -556,7 +559,7 @@ describe("enrichment metadata compatibility", () => {
                     displayTitle: "Non-String MBID",
                     hasUserOverrides: true,
                 },
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });
@@ -590,7 +593,7 @@ describe("enrichment metadata compatibility", () => {
                     displayTitle: "Space Album",
                     hasUserOverrides: true,
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });

@@ -84,7 +84,7 @@ router.post("/lidarr", webhookLimiter, async (req, res) => {
             !settings?.lidarrApiKey
         ) {
             logger.debug(
-                `[WEBHOOK] Lidarr webhook received but Lidarr is disabled. Ignoring.`
+                `[WEBHOOK] Lidarr webhook received but Lidarr is disabled. Ignoring.`,
             );
             return res.status(202).json({
                 success: true,
@@ -98,9 +98,12 @@ router.post("/lidarr", webhookLimiter, async (req, res) => {
         if (settings.lidarrWebhookSecret) {
             const providedSecret = req.headers["x-webhook-secret"] as string;
 
-            if (!providedSecret || !timingSafeCompare(providedSecret, settings.lidarrWebhookSecret)) {
+            if (
+                !providedSecret ||
+                !timingSafeCompare(providedSecret, settings.lidarrWebhookSecret)
+            ) {
                 logger.debug(
-                    `[WEBHOOK] Lidarr webhook received with invalid or missing secret`
+                    `[WEBHOOK] Lidarr webhook received with invalid or missing secret`,
                 );
                 return res.status(401).json({
                     error: "Unauthorized - Invalid webhook secret",
@@ -108,11 +111,11 @@ router.post("/lidarr", webhookLimiter, async (req, res) => {
             }
         } else if (config.webhooks.lidarrAllowUnauthenticated) {
             logger.warn(
-                "[WEBHOOK] Lidarr webhook accepted WITHOUT authentication — set a webhook secret in System Settings and Lidarr's connection (x-webhook-secret) to secure this endpoint."
+                "[WEBHOOK] Lidarr webhook accepted WITHOUT authentication — set a webhook secret in System Settings and Lidarr's connection (x-webhook-secret) to secure this endpoint.",
             );
         } else {
             logger.warn(
-                "[WEBHOOK] Lidarr webhook rejected because no secret is configured. Set a webhook secret in System Settings and Lidarr, or set LIDARR_WEBHOOK_ALLOW_UNAUTHENTICATED=true to restore legacy behavior."
+                "[WEBHOOK] Lidarr webhook rejected because no secret is configured. Set a webhook secret in System Settings and Lidarr, or set LIDARR_WEBHOOK_ALLOW_UNAUTHENTICATED=true to restore legacy behavior.",
             );
             return res.status(401).json({
                 error: "Unauthorized - webhook secret not configured",
@@ -192,7 +195,7 @@ async function handleGrab(payload: any) {
         albumMbid || "",
         albumTitle || "",
         artistName || "",
-        lidarrAlbumId || 0
+        lidarrAlbumId || 0,
     );
 
     if (result.matched) {
@@ -228,7 +231,7 @@ async function handleDownload(payload: any) {
         albumMbid,
         artistName,
         albumTitle,
-        lidarrAlbumId
+        lidarrAlbumId,
     );
 
     if (result.jobId) {
@@ -241,7 +244,7 @@ async function handleDownload(payload: any) {
         // Trigger scan immediately for this album (incremental scan with enrichment data)
         // Don't wait for batch completion - enrichment should happen per-album
         logger.debug(
-            `   Triggering incremental scan for: ${artistName} - ${albumTitle}`
+            `   Triggering incremental scan for: ${artistName} - ${albumTitle}`,
         );
         await scanQueue.add("scan", {
             userId: downloadJob?.userId || null,
@@ -265,7 +268,7 @@ async function handleDownload(payload: any) {
         // at a time. Edge: an import landing while a scan is already ACTIVE
         // waits for the next scan trigger — acceptable next to the DoS.
         logger.debug(
-            `   No matching job for downloadId=${downloadId}; requesting coalesced library scan for the external import.`
+            `   No matching job for downloadId=${downloadId}; requesting coalesced library scan for the external import.`,
         );
         await scanQueue.add(
             "scan",
@@ -277,7 +280,7 @@ async function handleDownload(payload: any) {
                 jobId: "lidarr-external-import-scan",
                 removeOnComplete: true,
                 removeOnFail: true,
-            }
+            },
         );
     }
 }

@@ -24,14 +24,14 @@ const jestLazyConnectOverride =
     process.env.JEST_WORKER_ID !== undefined ? { lazyConnect: true } : {};
 let discoverProcessorLockRedis: Redis = createIORedisClient(
     "discover-processor-locks",
-    jestLazyConnectOverride
+    jestLazyConnectOverride,
 );
 const discoverProcessorNodeId = randomUUID();
 const DEFAULT_DISCOVER_LOCK_TTL_MS = 45 * 60 * 1000;
 const parsedDiscoverLockTtlMs = Number.parseInt(
     process.env.DISCOVER_PROCESSOR_LOCK_TTL_MS ||
         `${DEFAULT_DISCOVER_LOCK_TTL_MS}`,
-    10
+    10,
 );
 const DISCOVER_PROCESSOR_LOCK_TTL_MS =
     Number.isFinite(parsedDiscoverLockTtlMs) && parsedDiscoverLockTtlMs > 0
@@ -40,7 +40,8 @@ const DISCOVER_PROCESSOR_LOCK_TTL_MS =
 const DISCOVER_PROCESSOR_LOCK_KEY_PREFIX = "discover:processor:lock";
 
 function isRetryableDiscoverLockError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error ?? "");
+    const message =
+        error instanceof Error ? error.message : String(error ?? "");
     return (
         message.includes("Connection is closed") ||
         message.includes("Connection is in closing state") ||
@@ -58,13 +59,13 @@ function recreateDiscoverLockRedisClient(): void {
     }
     discoverProcessorLockRedis = createIORedisClient(
         "discover-processor-locks",
-        jestLazyConnectOverride
+        jestLazyConnectOverride,
     );
 }
 
 async function withDiscoverLockRedisRetry<T>(
     operationName: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
 ): Promise<T> {
     try {
         return await operation();
@@ -75,7 +76,7 @@ async function withDiscoverLockRedisRetry<T>(
 
         logger.warn(
             `[DiscoverProcessor] ${operationName} failed due to Redis connection closure; recreating client and retrying once`,
-            error
+            error,
         );
         recreateDiscoverLockRedisClient();
         return await operation();
@@ -92,12 +93,12 @@ function getDiscoverLockKey(userId: string): string {
 export async function shutdownDiscoverProcessor(): Promise<void> {
     try {
         await withDiscoverLockRedisRetry("shutdown quit", () =>
-            discoverProcessorLockRedis.quit()
+            discoverProcessorLockRedis.quit(),
         );
     } catch (error) {
         logger.warn(
             "[DiscoverProcessor] Failed to gracefully close lock Redis client; disconnecting forcefully",
-            error
+            error,
         );
         discoverProcessorLockRedis.disconnect();
     }
@@ -107,18 +108,18 @@ export async function shutdownDiscoverProcessor(): Promise<void> {
  * Executes processDiscoverWeekly.
  */
 export async function processDiscoverWeekly(
-    job: Job<DiscoverJobData>
+    job: Job<DiscoverJobData>,
 ): Promise<DiscoverJobResult> {
     const { userId } = job.data;
     const lockKey = getDiscoverLockKey(userId);
     const lockToken = `${discoverProcessorNodeId}:${Date.now()}:${job.id}`;
     const lockTtlSeconds = Math.max(
         1,
-        Math.ceil(DISCOVER_PROCESSOR_LOCK_TTL_MS / 1000)
+        Math.ceil(DISCOVER_PROCESSOR_LOCK_TTL_MS / 1000),
     );
 
     logger.debug(
-        `[DiscoverJob ${job.id}] Generating Discover Weekly for user ${userId}`
+        `[DiscoverJob ${job.id}] Generating Discover Weekly for user ${userId}`,
     );
 
     await job.progress(10);
@@ -132,13 +133,13 @@ export async function processDiscoverWeekly(
                     lockToken,
                     "EX",
                     lockTtlSeconds,
-                    "NX"
-                )
+                    "NX",
+                ),
         );
 
         if (claimResult !== "OK") {
             logger.warn(
-                `[DiscoverJob ${job.id}] Skipping generation for user ${userId}; processor claim is held by another worker`
+                `[DiscoverJob ${job.id}] Skipping generation for user ${userId}; processor claim is held by another worker`,
             );
             await job.progress(100);
             return {
@@ -154,12 +155,14 @@ export async function processDiscoverWeekly(
         await job.progress(20); // Starting generation
 
         logger.debug(
-            `[DiscoverJob ${job.id}] Starting discovery generation (mode=${config.discover.mode})...`
+            `[DiscoverJob ${job.id}] Starting discovery generation (mode=${config.discover.mode})...`,
         );
         const result =
             config.discover.mode === "legacy"
                 ? await discoverWeeklyService.generatePlaylist(userId)
-                : await discoveryRecommendationsService.generatePlaylist(userId);
+                : await discoveryRecommendationsService.generatePlaylist(
+                      userId,
+                  );
 
         logger.debug(`[DiscoverJob ${job.id}] Result:`, {
             success: result.success,
@@ -170,9 +173,7 @@ export async function processDiscoverWeekly(
 
         await job.progress(100); // Complete
 
-        logger.debug(
-            `[DiscoverJob ${job.id}] Generation complete: SUCCESS`
-        );
+        logger.debug(`[DiscoverJob ${job.id}] Generation complete: SUCCESS`);
 
         return {
             success: result.success,
@@ -183,7 +184,7 @@ export async function processDiscoverWeekly(
     } catch (error: any) {
         logger.error(
             `[DiscoverJob ${job.id}] Generation failed with exception:`,
-            error
+            error,
         );
         logger.error(`[DiscoverJob ${job.id}] Stack trace:`, error.stack);
 
@@ -201,13 +202,13 @@ export async function processDiscoverWeekly(
                         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
                         1,
                         lockKey,
-                        lockToken
-                    )
+                        lockToken,
+                    ),
             );
         } catch (releaseError) {
             logger.warn(
                 `[DiscoverJob ${job.id}] Failed to release processor claim for user ${userId}`,
-                releaseError
+                releaseError,
             );
         }
     }

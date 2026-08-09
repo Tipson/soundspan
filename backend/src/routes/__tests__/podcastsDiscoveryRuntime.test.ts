@@ -75,7 +75,7 @@ import router from "../podcasts";
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) throw new Error(`GET route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -100,7 +100,7 @@ function createRes() {
 describe("podcasts discovery runtime behavior", () => {
     const discoverGenresHandler = getGetHandler("/discover/genres");
     const discoverGenrePaginatedHandler = getGetHandler(
-        "/discover/genre/:genreId"
+        "/discover/genre/:genreId",
     );
     const previewHandler = getGetHandler("/preview/:itunesId");
 
@@ -182,7 +182,7 @@ describe("podcasts discovery runtime behavior", () => {
                     entity: "podcast",
                     limit: 10,
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ 9999: [] });
@@ -291,7 +291,7 @@ describe("podcasts discovery runtime behavior", () => {
                     entity: "podcast",
                     limit: 200,
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual([]);
@@ -331,7 +331,10 @@ describe("podcasts discovery runtime behavior", () => {
     });
 
     it("returns empty list when paginated genre discovery iTunes call fails", async () => {
-        mockAxiosGet.mockRejectedValueOnce({ code: "ECONNRESET", message: "boom" });
+        mockAxiosGet.mockRejectedValueOnce({
+            code: "ECONNRESET",
+            message: "boom",
+        });
         mockAxiosIsAxiosError.mockReturnValue(true);
 
         const req = {
@@ -385,7 +388,9 @@ describe("podcasts discovery runtime behavior", () => {
             id: "podcast-222",
             feedUrl: "https://feed/preview.xml",
         });
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-1",
             podcastId: "podcast-222",
         });
@@ -415,7 +420,7 @@ describe("podcasts discovery runtime behavior", () => {
                 isSubscribed: true,
                 subscribedPodcastId: "podcast-222",
                 description: "A preview description",
-            })
+            }),
         );
         expect(res.body.previewEpisodes).toHaveLength(3);
     });
@@ -455,7 +460,7 @@ describe("podcasts discovery runtime behavior", () => {
                 previewEpisodes: [],
                 isSubscribed: false,
                 subscribedPodcastId: null,
-            })
+            }),
         );
     });
 

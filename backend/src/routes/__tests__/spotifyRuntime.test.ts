@@ -54,7 +54,7 @@ import router from "../spotify";
 function getHandler(path: string, method: "get" | "post") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -108,9 +108,11 @@ describe("spotify route runtime", () => {
             id: "sp-default",
         });
 
-        spotifyImportService.generatePreview.mockResolvedValue(makePreview(5, 2));
+        spotifyImportService.generatePreview.mockResolvedValue(
+            makePreview(5, 2),
+        );
         spotifyImportService.generatePreviewFromDeezer.mockResolvedValue(
-            makePreview(4, 1)
+            makePreview(4, 1),
         );
         spotifyImportService.startImport.mockResolvedValue({
             id: "job-1",
@@ -232,7 +234,7 @@ describe("spotify route runtime", () => {
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual(preview);
             expect(spotifyImportService.generatePreview).toHaveBeenCalledWith(
-                "https://open.spotify.com/playlist/spotify-preview-1"
+                "https://open.spotify.com/playlist/spotify-preview-1",
             );
             expect(deezerService.getPlaylist).not.toHaveBeenCalled();
         });
@@ -270,7 +272,7 @@ describe("spotify route runtime", () => {
             const preview = makePreview(9, 3);
             deezerService.getPlaylist.mockResolvedValueOnce(deezerPlaylist);
             spotifyImportService.generatePreviewFromDeezer.mockResolvedValueOnce(
-                preview
+                preview,
             );
 
             const req = {
@@ -282,9 +284,9 @@ describe("spotify route runtime", () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual(preview);
-            expect(spotifyImportService.generatePreviewFromDeezer).toHaveBeenCalledWith(
-                deezerPlaylist
-            );
+            expect(
+                spotifyImportService.generatePreviewFromDeezer,
+            ).toHaveBeenCalledWith(deezerPlaylist);
             expect(spotifyImportService.generatePreview).not.toHaveBeenCalled();
         });
 
@@ -300,7 +302,7 @@ describe("spotify route runtime", () => {
 
         it("returns 500 when preview generation throws", async () => {
             spotifyImportService.generatePreview.mockRejectedValueOnce(
-                new Error("preview failed")
+                new Error("preview failed"),
             );
 
             const req = {
@@ -395,14 +397,14 @@ describe("spotify route runtime", () => {
             await importHandler(req, res);
 
             expect(spotifyImportService.generatePreview).toHaveBeenCalledWith(
-                "https://open.spotify.com/playlist/spotify-playlist-1"
+                "https://open.spotify.com/playlist/spotify-playlist-1",
             );
             expect(spotifyImportService.startImport).toHaveBeenCalledWith(
                 "u1",
                 "spotify-playlist-1",
                 "Spotify Import",
                 [],
-                preview
+                preview,
             );
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual({
@@ -417,7 +419,7 @@ describe("spotify route runtime", () => {
             const preview = makePreview(11, 1);
             deezerService.getPlaylist.mockResolvedValueOnce(deezerPlaylist);
             spotifyImportService.generatePreviewFromDeezer.mockResolvedValueOnce(
-                preview
+                preview,
             );
             spotifyImportService.startImport.mockResolvedValueOnce({
                 id: "job-deezer",
@@ -438,15 +440,15 @@ describe("spotify route runtime", () => {
             await importHandler(req, res);
 
             expect(deezerService.getPlaylist).toHaveBeenCalledWith("123");
-            expect(spotifyImportService.generatePreviewFromDeezer).toHaveBeenCalledWith(
-                deezerPlaylist
-            );
+            expect(
+                spotifyImportService.generatePreviewFromDeezer,
+            ).toHaveBeenCalledWith(deezerPlaylist);
             expect(spotifyImportService.startImport).toHaveBeenCalledWith(
                 "u1",
                 "deezer-proxy-id",
                 "Deezer Import",
                 [],
-                preview
+                preview,
             );
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual({
@@ -516,7 +518,9 @@ describe("spotify route runtime", () => {
             await importStatusHandler(req, res);
 
             expect(res.statusCode).toBe(403);
-            expect(res.body).toEqual({ error: "Not authorized to view this job" });
+            expect(res.body).toEqual({
+                error: "Not authorized to view this job",
+            });
         });
 
         it("returns job details for owner", async () => {
@@ -542,7 +546,7 @@ describe("spotify route runtime", () => {
 
         it("returns 500 when getJob throws", async () => {
             spotifyImportService.getJob.mockRejectedValueOnce(
-                new Error("status failed")
+                new Error("status failed"),
             );
 
             const req = {
@@ -590,7 +594,7 @@ describe("spotify route runtime", () => {
 
         it("returns 500 when import listing fails", async () => {
             spotifyImportService.getUserJobs.mockRejectedValueOnce(
-                new Error("list failed")
+                new Error("list failed"),
             );
 
             const req = { user: { id: "u1" } } as any;
@@ -646,7 +650,9 @@ describe("spotify route runtime", () => {
             await refreshHandler(req, res);
 
             expect(res.statusCode).toBe(403);
-            expect(res.body).toEqual({ error: "Not authorized to refresh this job" });
+            expect(res.body).toEqual({
+                error: "Not authorized to refresh this job",
+            });
         });
 
         it("returns added message when newly downloaded tracks are found", async () => {
@@ -695,7 +701,8 @@ describe("spotify route runtime", () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual({
-                message: "No new tracks found yet. Albums may still be downloading.",
+                message:
+                    "No new tracks found yet. Albums may still be downloading.",
                 added: 0,
                 total: 10,
             });
@@ -707,7 +714,7 @@ describe("spotify route runtime", () => {
                 userId: "u1",
             });
             spotifyImportService.refreshJobMatches.mockRejectedValueOnce(
-                new Error("refresh failed")
+                new Error("refresh failed"),
             );
 
             const req = {
@@ -756,7 +763,9 @@ describe("spotify route runtime", () => {
             await cancelHandler(req, res);
 
             expect(res.statusCode).toBe(403);
-            expect(res.body).toEqual({ error: "Not authorized to cancel this job" });
+            expect(res.body).toEqual({
+                error: "Not authorized to cancel this job",
+            });
         });
 
         it("returns playlist-created cancel message", async () => {
@@ -819,7 +828,7 @@ describe("spotify route runtime", () => {
                 userId: "u1",
             });
             spotifyImportService.cancelJob.mockRejectedValueOnce(
-                new Error("cancel failed")
+                new Error("cancel failed"),
             );
 
             const req = {

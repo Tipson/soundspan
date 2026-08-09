@@ -42,7 +42,8 @@ jest.mock("../../services/segmented-streaming/sessionService", () => ({
     SEGMENTED_SESSION_TOKEN_QUERY_PARAM: "st",
     SegmentedSessionError: MockSegmentedSessionError,
     segmentedStreamingSessionService: {
-        createLocalSession: (...args: unknown[]) => mockCreateLocalSession(...args),
+        createLocalSession: (...args: unknown[]) =>
+            mockCreateLocalSession(...args),
         getAuthorizedSession: (...args: unknown[]) =>
             mockGetAuthorizedSession(...args),
         validateSessionToken: (...args: unknown[]) =>
@@ -60,9 +61,7 @@ jest.mock("../../services/segmented-streaming/sessionService", () => ({
 }));
 
 import router from "../streaming";
-import {
-    SegmentedSessionError,
-} from "../../services/segmented-streaming/sessionService";
+import { SegmentedSessionError } from "../../services/segmented-streaming/sessionService";
 import { logger } from "../../utils/logger";
 
 function getHandler(method: "get" | "post", path: string) {
@@ -129,7 +128,10 @@ function findSegmentedMetricLogCall(
 
 describe("streaming route runtime", () => {
     const postSession = getHandler("post", "/v1/sessions");
-    const getManifest = getHandler("get", "/v1/sessions/:sessionId/manifest.mpd");
+    const getManifest = getHandler(
+        "get",
+        "/v1/sessions/:sessionId/manifest.mpd",
+    );
     const getSegment = getHandler(
         "get",
         "/v1/sessions/:sessionId/segments/:segmentName",
@@ -138,7 +140,10 @@ describe("streaming route runtime", () => {
         "get",
         "/v1/sessions/:sessionId/:segmentName",
     );
-    const postHeartbeat = getHandler("post", "/v1/sessions/:sessionId/heartbeat");
+    const postHeartbeat = getHandler(
+        "post",
+        "/v1/sessions/:sessionId/heartbeat",
+    );
     const postHandoff = getHandler("post", "/v1/sessions/:sessionId/handoff");
     const postClientMetric = getHandler("post", "/v1/client-metrics");
 
@@ -154,7 +159,9 @@ describe("streaming route runtime", () => {
         mockSchedulePlaybackErrorRepair.mockReset();
         mockGetRuntimeDrainState.mockReset();
         mockWaitForManifestReady.mockResolvedValue(undefined);
-        mockWaitForSegmentReady.mockResolvedValue("/tmp/assets/chunk-0-00001.m4s");
+        mockWaitForSegmentReady.mockResolvedValue(
+            "/tmp/assets/chunk-0-00001.m4s",
+        );
         mockValidateSessionToken.mockImplementation(() => {});
         mockGetRuntimeDrainState.mockReturnValue(false);
     });
@@ -241,7 +248,10 @@ describe("streaming route runtime", () => {
                 sessionId: "session-1",
             }),
         );
-        const metricCall = findSegmentedMetricLogCall("session.create", "success");
+        const metricCall = findSegmentedMetricLogCall(
+            "session.create",
+            "success",
+        );
         expect(metricCall?.[1]).toEqual(
             expect.objectContaining({
                 startupLoadId: 42,
@@ -285,7 +295,10 @@ describe("streaming route runtime", () => {
             trackId: "track-default-quality",
             desiredQuality: undefined,
         });
-        const metricCall = findSegmentedMetricLogCall("session.create", "success");
+        const metricCall = findSegmentedMetricLogCall(
+            "session.create",
+            "success",
+        );
         expect(metricCall?.[1]).toEqual(
             expect.objectContaining({
                 quality: "unknown",
@@ -311,7 +324,11 @@ describe("streaming route runtime", () => {
 
     it("maps service session errors on session creation", async () => {
         mockCreateLocalSession.mockRejectedValueOnce(
-            new SegmentedSessionError("Track not found", 404, "TRACK_NOT_FOUND"),
+            new SegmentedSessionError(
+                "Track not found",
+                404,
+                "TRACK_NOT_FOUND",
+            ),
         );
 
         const req = {
@@ -364,16 +381,26 @@ describe("streaming route runtime", () => {
 
         await getManifest(req, res);
 
-        expect(mockGetAuthorizedSession).toHaveBeenCalledWith("session-1", "user-1");
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockGetAuthorizedSession).toHaveBeenCalledWith(
+            "session-1",
+            "user-1",
+        );
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
         expect(mockWaitForManifestReady).toHaveBeenCalledWith(session);
         expect(res.sendFile).toHaveBeenCalledWith(
             "/tmp/manifest.mpd",
             expect.any(Function),
         );
-        const metricCall = findSegmentedMetricLogCall("manifest.fetch", "success");
+        const metricCall = findSegmentedMetricLogCall(
+            "manifest.fetch",
+            "success",
+        );
         expect(metricCall?.[1]).toEqual(
             expect.objectContaining({
                 startupLoadId: 7,
@@ -479,10 +506,17 @@ describe("streaming route runtime", () => {
 
         await getManifest(req, res);
 
-        expect(mockGetAuthorizedSession).toHaveBeenCalledWith("session-1", "user-1");
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockGetAuthorizedSession).toHaveBeenCalledWith(
+            "session-1",
+            "user-1",
+        );
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
         expect(mockWaitForManifestReady).toHaveBeenCalledWith(session);
         expect(res.sendFile).toHaveBeenCalledWith(
             "/tmp/manifest.mpd",
@@ -512,7 +546,10 @@ describe("streaming route runtime", () => {
         } as any;
         const res = createResponse();
         res.sendFile.mockImplementationOnce(
-            (_filePath: string, callback?: (error?: NodeJS.ErrnoException) => void) => {
+            (
+                _filePath: string,
+                callback?: (error?: NodeJS.ErrnoException) => void,
+            ) => {
                 const error = Object.assign(new Error("manifest missing"), {
                     code: "ENOENT",
                 }) as NodeJS.ErrnoException;
@@ -534,7 +571,10 @@ describe("streaming route runtime", () => {
                 retryAfterMs: null,
             },
         });
-        const metricCall = findSegmentedMetricLogCall("manifest.fetch", "error");
+        const metricCall = findSegmentedMetricLogCall(
+            "manifest.fetch",
+            "error",
+        );
         expect(metricCall?.[1]).toEqual(
             expect.objectContaining({
                 sessionId: "session-1",
@@ -573,7 +613,10 @@ describe("streaming route runtime", () => {
 
         await postHeartbeat(req, res);
 
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1");
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+        );
         expect(mockHeartbeatSession).toHaveBeenCalledWith(
             session,
             expect.objectContaining({
@@ -605,7 +648,8 @@ describe("streaming route runtime", () => {
         mockGetAuthorizedSession.mockResolvedValueOnce(session);
         mockCreateHandoffSession.mockResolvedValueOnce({
             sessionId: "session-2",
-            manifestUrl: "/api/streaming/v1/sessions/session-2/manifest.mpd?st=token-2",
+            manifestUrl:
+                "/api/streaming/v1/sessions/session-2/manifest.mpd?st=token-2",
             sessionToken: "token-2",
             expiresAt: "2099-01-01T00:10:00.000Z",
             previousSessionId: "session-1",
@@ -628,7 +672,10 @@ describe("streaming route runtime", () => {
 
         await postHandoff(req, res);
 
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1");
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+        );
         expect(mockCreateHandoffSession).toHaveBeenCalledWith(
             session,
             expect.objectContaining({
@@ -811,9 +858,13 @@ describe("streaming route runtime", () => {
 
         await getSegment(req, res);
 
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
         expect(mockWaitForSegmentReady).toHaveBeenCalledWith(
             session,
             "chunk-0-00001.m4s",
@@ -822,7 +873,10 @@ describe("streaming route runtime", () => {
             "/tmp/assets/chunk-0-00001.m4s",
             expect.any(Function),
         );
-        const metricCall = findSegmentedMetricLogCall("segment.fetch", "success");
+        const metricCall = findSegmentedMetricLogCall(
+            "segment.fetch",
+            "success",
+        );
         expect(metricCall?.[1]).toEqual(
             expect.objectContaining({
                 startupLoadId: 13,
@@ -845,7 +899,9 @@ describe("streaming route runtime", () => {
             expiresAt: "2099-01-01T00:05:00.000Z",
         };
         mockGetAuthorizedSession.mockResolvedValueOnce(session);
-        mockWaitForSegmentReady.mockResolvedValueOnce("/tmp/assets/chunk-1-00001.m4s");
+        mockWaitForSegmentReady.mockResolvedValueOnce(
+            "/tmp/assets/chunk-1-00001.m4s",
+        );
 
         const req = {
             user: { id: "user-1" },
@@ -859,9 +915,13 @@ describe("streaming route runtime", () => {
 
         await getSegment(req, res);
 
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
         expect(mockWaitForSegmentReady).toHaveBeenCalledWith(
             session,
             "chunk-1-00001.m4s",
@@ -898,7 +958,10 @@ describe("streaming route runtime", () => {
         } as any;
         const res = createResponse();
         res.sendFile.mockImplementationOnce(
-            (_filePath: string, callback?: (error?: NodeJS.ErrnoException) => void) => {
+            (
+                _filePath: string,
+                callback?: (error?: NodeJS.ErrnoException) => void,
+            ) => {
                 const error = Object.assign(new Error("segment missing"), {
                     code: "ENOENT",
                 }) as NodeJS.ErrnoException;
@@ -955,7 +1018,10 @@ describe("streaming route runtime", () => {
         } as any;
         const res = createResponse();
         res.sendFile.mockImplementationOnce(
-            (_filePath: string, callback?: (error?: NodeJS.ErrnoException) => void) => {
+            (
+                _filePath: string,
+                callback?: (error?: NodeJS.ErrnoException) => void,
+            ) => {
                 res.headersSent = true;
                 const error = Object.assign(new Error("client aborted"), {
                     code: "EPIPE",
@@ -1010,7 +1076,10 @@ describe("streaming route runtime", () => {
         } as any;
         const res = createResponse();
         res.sendFile.mockImplementationOnce(
-            (_filePath: string, callback?: (error?: NodeJS.ErrnoException) => void) => {
+            (
+                _filePath: string,
+                callback?: (error?: NodeJS.ErrnoException) => void,
+            ) => {
                 res.headersSent = true;
                 res.writableEnded = true;
                 const error = Object.assign(new Error("already ended"), {
@@ -1233,7 +1302,9 @@ describe("streaming route runtime", () => {
             expiresAt: "2099-01-01T00:05:00.000Z",
         };
         mockGetAuthorizedSession.mockResolvedValueOnce(session);
-        mockWaitForSegmentReady.mockResolvedValueOnce("/tmp/assets/chunk-0-00002.m4s");
+        mockWaitForSegmentReady.mockResolvedValueOnce(
+            "/tmp/assets/chunk-0-00002.m4s",
+        );
 
         const req = {
             user: { id: "user-1" },
@@ -1242,15 +1313,20 @@ describe("streaming route runtime", () => {
                 segmentName: "chunk-0-00002.m4s",
             },
             query: { st: "token-1" },
-            originalUrl: "/api/streaming/v1/sessions/session-1/chunk-0-00002.m4s?st=token-1",
+            originalUrl:
+                "/api/streaming/v1/sessions/session-1/chunk-0-00002.m4s?st=token-1",
         } as any;
         const res = createResponse();
 
         await getSegmentAlias(req, res);
 
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
         expect(mockWaitForSegmentReady).toHaveBeenCalledWith(
             session,
             "chunk-0-00002.m4s",
@@ -1276,7 +1352,9 @@ describe("streaming route runtime", () => {
             expiresAt: "2099-01-01T00:05:00.000Z",
         };
         mockGetAuthorizedSession.mockResolvedValueOnce(session);
-        mockWaitForSegmentReady.mockResolvedValueOnce("/tmp/assets/chunk-0-00002.webm");
+        mockWaitForSegmentReady.mockResolvedValueOnce(
+            "/tmp/assets/chunk-0-00002.webm",
+        );
 
         const req = {
             user: { id: "user-1" },
@@ -1285,15 +1363,20 @@ describe("streaming route runtime", () => {
                 segmentName: "chunk-0-00002.webm",
             },
             query: { st: "token-1" },
-            originalUrl: "/api/streaming/v1/sessions/session-1/chunk-0-00002.webm?st=token-1",
+            originalUrl:
+                "/api/streaming/v1/sessions/session-1/chunk-0-00002.webm?st=token-1",
         } as any;
         const res = createResponse();
 
         await getSegmentAlias(req, res);
 
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-1", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-1",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
         expect(mockWaitForSegmentReady).toHaveBeenCalledWith(
             session,
             "chunk-0-00002.webm",
@@ -1328,9 +1411,13 @@ describe("streaming route runtime", () => {
         } as any;
         const stringHeaderRes = createResponse();
         await getManifest(stringHeaderReq, stringHeaderRes);
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-header", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-header",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
 
         mockValidateSessionToken.mockClear();
         const arrayHeaderReq = {
@@ -1345,9 +1432,13 @@ describe("streaming route runtime", () => {
         } as any;
         const arrayHeaderRes = createResponse();
         await getManifest(arrayHeaderReq, arrayHeaderRes);
-        expect(mockValidateSessionToken).toHaveBeenCalledWith(session, "token-array", {
-            allowSessionIdMismatch: true,
-        });
+        expect(mockValidateSessionToken).toHaveBeenCalledWith(
+            session,
+            "token-array",
+            {
+                allowSessionIdMismatch: true,
+            },
+        );
         const metricCall = (logger.info as jest.Mock).mock.calls.find(
             (call: unknown[]) =>
                 call[0] === "[SegmentedStreaming][Metric] manifest.fetch" &&
@@ -1488,7 +1579,10 @@ describe("streaming route runtime", () => {
         } as any;
         const res = createResponse();
         res.sendFile.mockImplementationOnce(
-            (_filePath: string, callback?: (error?: NodeJS.ErrnoException) => void) => {
+            (
+                _filePath: string,
+                callback?: (error?: NodeJS.ErrnoException) => void,
+            ) => {
                 const error = Object.assign(new Error("manifest fs failure"), {
                     code: "EIO",
                 }) as NodeJS.ErrnoException;
@@ -1533,7 +1627,10 @@ describe("streaming route runtime", () => {
         } as any;
         const res = createResponse();
         res.sendFile.mockImplementationOnce(
-            (_filePath: string, callback?: (error?: NodeJS.ErrnoException) => void) => {
+            (
+                _filePath: string,
+                callback?: (error?: NodeJS.ErrnoException) => void,
+            ) => {
                 callback?.(
                     new SegmentedSessionError(
                         "Manifest token expired",
@@ -1724,7 +1821,9 @@ describe("streaming route runtime", () => {
         const unauthorizedHeartbeatRes = createResponse();
         await postHeartbeat(unauthorizedHeartbeatReq, unauthorizedHeartbeatRes);
         expect(unauthorizedHeartbeatRes.statusCode).toBe(401);
-        expect(unauthorizedHeartbeatRes.body).toEqual({ error: "Unauthorized" });
+        expect(unauthorizedHeartbeatRes.body).toEqual({
+            error: "Unauthorized",
+        });
 
         const unauthorizedHandoffReq = {
             params: { sessionId: "session-1" },
@@ -1778,7 +1877,9 @@ describe("streaming route runtime", () => {
             code: "HEARTBEAT_REJECTED",
         });
 
-        mockHeartbeatSession.mockRejectedValueOnce(new Error("heartbeat crashed"));
+        mockHeartbeatSession.mockRejectedValueOnce(
+            new Error("heartbeat crashed"),
+        );
         const heartbeatErrorReq = {
             user: { id: "user-1" },
             params: { sessionId: "session-1" },
@@ -1793,7 +1894,11 @@ describe("streaming route runtime", () => {
         });
 
         mockCreateHandoffSession.mockRejectedValueOnce(
-            new SegmentedSessionError("Handoff blocked", 403, "HANDOFF_BLOCKED"),
+            new SegmentedSessionError(
+                "Handoff blocked",
+                403,
+                "HANDOFF_BLOCKED",
+            ),
         );
         const handoffRejectReq = {
             user: { id: "user-1" },
@@ -1809,7 +1914,9 @@ describe("streaming route runtime", () => {
             code: "HANDOFF_BLOCKED",
         });
 
-        mockCreateHandoffSession.mockRejectedValueOnce(new Error("handoff failed"));
+        mockCreateHandoffSession.mockRejectedValueOnce(
+            new Error("handoff failed"),
+        );
         const handoffErrorReq = {
             user: { id: "user-1" },
             params: { sessionId: "session-1" },
@@ -1951,7 +2058,9 @@ describe("streaming route runtime", () => {
         await postClientMetric(failingReq, failingRes);
 
         expect(failingRes.statusCode).toBe(500);
-        expect(failingRes.body).toEqual({ error: "Failed to ingest client signal" });
+        expect(failingRes.body).toEqual({
+            error: "Failed to ingest client signal",
+        });
     });
 
     it("handles unauthorized session create and unknown session-create errors", async () => {
@@ -1972,7 +2081,9 @@ describe("streaming route runtime", () => {
             },
         });
 
-        mockCreateLocalSession.mockRejectedValueOnce(new Error("session create blew up"));
+        mockCreateLocalSession.mockRejectedValueOnce(
+            new Error("session create blew up"),
+        );
         const errorReq = {
             user: { id: "user-1" },
             body: { trackId: "track-1" },

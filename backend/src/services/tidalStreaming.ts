@@ -130,7 +130,8 @@ export interface TidalPlaylistDetail {
 class TidalStreamingService {
     private client: AxiosInstance;
     private readonly sidecarUrl: string;
-    private availabilityCache: { value: boolean; expiresAt: number } | null = null;
+    private availabilityCache: { value: boolean; expiresAt: number } | null =
+        null;
     private enabledCache: { value: boolean; expiresAt: number } | null = null;
     private availabilityInFlight: Promise<boolean> | null = null;
     private enabledInFlight: Promise<boolean> | null = null;
@@ -249,7 +250,7 @@ class TidalStreamingService {
      * Check if a specific user has TIDAL credentials stored.
      */
     async getAuthStatus(
-        userId: string
+        userId: string,
     ): Promise<{ authenticated: boolean; credentialsConfigured: boolean }> {
         try {
             const userSettings = await prisma.userSettings.findUnique({
@@ -274,7 +275,7 @@ class TidalStreamingService {
     async checkSidecarAuthStatus(userId: string): Promise<boolean> {
         const { data } = await this.client.get(
             `/user/auth/status?user_id=${encodeURIComponent(userId)}`,
-            { timeout: 5000 }
+            { timeout: 5000 },
         );
         return data?.authenticated === true;
     }
@@ -294,7 +295,7 @@ class TidalStreamingService {
                     refresh_token: creds.refresh_token,
                     user_id: creds.tidal_user_id || creds.user_id || "",
                     country_code: creds.country_code || "US",
-                }
+                },
             );
 
             // If the sidecar refreshed the token, persist the new one
@@ -312,7 +313,7 @@ class TidalStreamingService {
                     data: { tidalOAuthJson: encrypt(updatedJson) },
                 });
                 logger.info(
-                    `[TIDAL-STREAM] Refreshed and persisted new token for user ${userId}`
+                    `[TIDAL-STREAM] Refreshed and persisted new token for user ${userId}`,
                 );
             }
 
@@ -320,7 +321,7 @@ class TidalStreamingService {
         } catch (err: any) {
             logger.error(
                 `[TIDAL-STREAM] Failed to restore OAuth for user ${userId}:`,
-                err.response?.data || err.message
+                err.response?.data || err.message,
             );
             return false;
         }
@@ -332,12 +333,12 @@ class TidalStreamingService {
     async clearAuth(userId: string): Promise<void> {
         try {
             await this.client.post(
-                `/user/auth/clear?user_id=${encodeURIComponent(userId)}`
+                `/user/auth/clear?user_id=${encodeURIComponent(userId)}`,
             );
         } catch (err: any) {
             logger.warn(
                 `[TIDAL-STREAM] Failed to clear auth for user ${userId}:`,
-                err.response?.data || err.message
+                err.response?.data || err.message,
             );
         }
     }
@@ -387,13 +388,10 @@ class TidalStreamingService {
     /**
      * Search TIDAL using a user's session.
      */
-    async search(
-        userId: string,
-        query: string
-    ): Promise<any> {
+    async search(userId: string, query: string): Promise<any> {
         const res = await this.client.post(
             `/user/search?user_id=${encodeURIComponent(userId)}`,
-            { query }
+            { query },
         );
         return res.data;
     }
@@ -403,11 +401,11 @@ class TidalStreamingService {
      */
     async searchBatch(
         userId: string,
-        queries: Array<{ query: string; filter?: string; limit?: number }>
+        queries: Array<{ query: string; filter?: string; limit?: number }>,
     ): Promise<{ results: Array<{ query: string; results: any[] }> }> {
         const res = await this.client.post(
             `/user/search/batch?user_id=${encodeURIComponent(userId)}`,
-            queries
+            queries,
         );
         return res.data;
     }
@@ -420,7 +418,7 @@ class TidalStreamingService {
     async getStreamInfo(
         userId: string,
         trackId: number,
-        quality?: string
+        quality?: string,
     ): Promise<TidalStreamInfo> {
         const params = new URLSearchParams({
             user_id: userId,
@@ -428,7 +426,7 @@ class TidalStreamingService {
         if (quality) params.set("quality", quality);
 
         const res = await this.client.get(
-            `/user/stream-info/${trackId}?${params.toString()}`
+            `/user/stream-info/${trackId}?${params.toString()}`,
         );
         return res.data;
     }
@@ -441,7 +439,7 @@ class TidalStreamingService {
         userId: string,
         trackId: number,
         quality?: string,
-        rangeHeader?: string
+        rangeHeader?: string,
     ): Promise<{
         data: any;
         headers: Record<string, string>;
@@ -461,7 +459,7 @@ class TidalStreamingService {
                 responseType: "stream",
                 headers,
                 timeout: 300000, // 5 min for long streams
-            }
+            },
         );
 
         return {
@@ -478,17 +476,17 @@ class TidalStreamingService {
      */
     async getTrack(
         userId: string,
-        trackId: number
+        trackId: number,
     ): Promise<TidalTrackDetail | null> {
         try {
             const res = await this.client.get(
-                `/user/track/${trackId}?user_id=${encodeURIComponent(userId)}`
+                `/user/track/${trackId}?user_id=${encodeURIComponent(userId)}`,
             );
             return res.data;
         } catch (err: any) {
             logger.debug(
                 `[TIDAL-STREAM] getTrack failed for trackId=${trackId}:`,
-                err.response?.data || err.message
+                err.response?.data || err.message,
             );
             return null;
         }
@@ -503,7 +501,10 @@ class TidalStreamingService {
         return text
             .replace(/\s*\(feat\.?.*?\)/gi, "")
             .replace(/\s*\[.*?\]/g, "")
-            .replace(/\s*-\s*(remaster|deluxe|bonus|expanded|anniversary).*/gi, "")
+            .replace(
+                /\s*-\s*(remaster|deluxe|bonus|expanded|anniversary).*/gi,
+                "",
+            )
             .trim();
     }
 
@@ -544,8 +545,7 @@ class TidalStreamingService {
         if (lhsCompact === rhsCompact) return 0.98;
 
         const overlap = this.tokenOverlapScore(lhs, rhs);
-        const containsBonus =
-            lhs.includes(rhs) || rhs.includes(lhs) ? 0.1 : 0;
+        const containsBonus = lhs.includes(rhs) || rhs.includes(lhs) ? 0.1 : 0;
         return Math.min(1, overlap * 0.9 + containsBonus);
     }
 
@@ -553,17 +553,26 @@ class TidalStreamingService {
         return this.normaliseLoose(text).includes(term);
     }
 
-    private mismatchPenalty(expectedTitle: string, candidateTitle: string): number {
+    private mismatchPenalty(
+        expectedTitle: string,
+        candidateTitle: string,
+    ): number {
         let penalty = 0;
 
         for (const term of TidalStreamingService.UNDESIRED_MISMATCH_TERMS) {
-            if (!this.hasTerm(expectedTitle, term) && this.hasTerm(candidateTitle, term)) {
+            if (
+                !this.hasTerm(expectedTitle, term) &&
+                this.hasTerm(candidateTitle, term)
+            ) {
                 penalty += 0.3;
             }
         }
 
         for (const term of TidalStreamingService.VERSION_MISMATCH_TERMS) {
-            if (!this.hasTerm(expectedTitle, term) && this.hasTerm(candidateTitle, term)) {
+            if (
+                !this.hasTerm(expectedTitle, term) &&
+                this.hasTerm(candidateTitle, term)
+            ) {
                 penalty += 0.08;
             }
         }
@@ -572,15 +581,23 @@ class TidalStreamingService {
     }
 
     private normaliseDurationSeconds(value?: number): number | null {
-        if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+        if (
+            typeof value !== "number" ||
+            !Number.isFinite(value) ||
+            value <= 0
+        ) {
             return null;
         }
-        const seconds = value > 10_000 ? Math.round(value / 1000) : Math.round(value);
+        const seconds =
+            value > 10_000 ? Math.round(value / 1000) : Math.round(value);
         if (seconds <= 0 || seconds > 6 * 60 * 60) return null;
         return seconds;
     }
 
-    private durationSimilarity(expected?: number, candidate?: number): number | null {
+    private durationSimilarity(
+        expected?: number,
+        candidate?: number,
+    ): number | null {
         const expectedSeconds = this.normaliseDurationSeconds(expected);
         const candidateSeconds = this.normaliseDurationSeconds(candidate);
         if (expectedSeconds === null || candidateSeconds === null) return null;
@@ -600,32 +617,43 @@ class TidalStreamingService {
         return compact.length >= 8 ? compact : null;
     }
 
-    private scoreCandidate(
-        track: TidalMatchInput,
-        candidate: any
-    ): number {
-        const titleScore = this.textSimilarity(track.title, candidate?.title || "");
-        const artistScore = this.textSimilarity(track.artist, candidate?.artist || "");
+    private scoreCandidate(track: TidalMatchInput, candidate: any): number {
+        const titleScore = this.textSimilarity(
+            track.title,
+            candidate?.title || "",
+        );
+        const artistScore = this.textSimilarity(
+            track.artist,
+            candidate?.artist || "",
+        );
         const albumScore =
             track.albumTitle && candidate?.album?.title
                 ? this.textSimilarity(track.albumTitle, candidate.album.title)
                 : null;
-        const durationScore = this.durationSimilarity(track.duration, candidate?.duration);
+        const durationScore = this.durationSimilarity(
+            track.duration,
+            candidate?.duration,
+        );
 
         const weightedSignals: Array<{ score: number; weight: number }> = [
             { score: titleScore, weight: 0.58 },
             { score: artistScore, weight: 0.32 },
         ];
-        if (albumScore !== null) weightedSignals.push({ score: albumScore, weight: 0.08 });
-        if (durationScore !== null) weightedSignals.push({ score: durationScore, weight: 0.2 });
+        if (albumScore !== null)
+            weightedSignals.push({ score: albumScore, weight: 0.08 });
+        if (durationScore !== null)
+            weightedSignals.push({ score: durationScore, weight: 0.2 });
 
-        const totalWeight = weightedSignals.reduce((sum, entry) => sum + entry.weight, 0);
+        const totalWeight = weightedSignals.reduce(
+            (sum, entry) => sum + entry.weight,
+            0,
+        );
         let score =
             totalWeight > 0
                 ? weightedSignals.reduce(
-                    (sum, entry) => sum + entry.score * entry.weight,
-                    0
-                ) / totalWeight
+                      (sum, entry) => sum + entry.score * entry.weight,
+                      0,
+                  ) / totalWeight
                 : 0;
         score -= this.mismatchPenalty(track.title, candidate?.title || "");
 
@@ -654,7 +682,7 @@ class TidalStreamingService {
 
     private selectBestCandidate(
         track: TidalMatchInput,
-        candidates: any[]
+        candidates: any[],
     ): any | null {
         if (!candidates.length) return null;
 
@@ -697,7 +725,7 @@ class TidalStreamingService {
         title: string,
         albumTitle?: string,
         duration?: number,
-        isrc?: string
+        isrc?: string,
     ): Promise<TidalMatchResult | null> {
         try {
             const cleanArtist = this.sanitizeQuery(artist);
@@ -714,13 +742,13 @@ class TidalStreamingService {
                     duration,
                     isrc,
                 },
-                results.tracks
+                results.tracks,
             );
             return match ? this.toMatchResult(match) : null;
         } catch (err) {
             logger.debug(
                 `[TIDAL-STREAM] Match failed for "${artist} - ${title}":`,
-                err
+                err,
             );
             return null;
         }
@@ -732,7 +760,7 @@ class TidalStreamingService {
      */
     async findMatchesForAlbum(
         userId: string,
-        tracks: TidalMatchInput[]
+        tracks: TidalMatchInput[],
     ): Promise<Array<TidalMatchResult | null>> {
         try {
             const queries = tracks.map((t) => ({
@@ -757,7 +785,10 @@ class TidalStreamingService {
 
     // ── User quality preference ────────────────────────────────────
 
-    private qualityCache = new Map<string, { quality: string; expiresAt: number }>();
+    private qualityCache = new Map<
+        string,
+        { quality: string; expiresAt: number }
+    >();
     private static readonly QUALITY_CACHE_TTL_MS =
         config.nodeEnv === "test" ? 0 : 60_000;
 
@@ -777,7 +808,8 @@ class TidalStreamingService {
             if (TidalStreamingService.QUALITY_CACHE_TTL_MS > 0) {
                 this.qualityCache.set(userId, {
                     quality,
-                    expiresAt: Date.now() + TidalStreamingService.QUALITY_CACHE_TTL_MS,
+                    expiresAt:
+                        Date.now() + TidalStreamingService.QUALITY_CACHE_TTL_MS,
                 });
             }
             return quality;
@@ -795,7 +827,11 @@ class TidalStreamingService {
 
     // ── Browse (proxy to sidecar tidalapi endpoints) ─────────────
 
-    private browseParams(userId: string, quality: string, extra?: Record<string, string>): string {
+    private browseParams(
+        userId: string,
+        quality: string,
+        extra?: Record<string, string>,
+    ): string {
         const params = new URLSearchParams({ user_id: userId, quality });
         if (extra) {
             for (const [k, v] of Object.entries(extra)) params.set(k, v);
@@ -806,10 +842,13 @@ class TidalStreamingService {
     /**
      * Get personalized home page shelves.
      */
-    async getHomeShelves(userId: string, quality: string): Promise<TidalBrowseShelf[]> {
+    async getHomeShelves(
+        userId: string,
+        quality: string,
+    ): Promise<TidalBrowseShelf[]> {
         const res = await this.client.get(
             `/user/browse/home?${this.browseParams(userId, quality)}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data?.shelves ?? [];
     }
@@ -817,10 +856,13 @@ class TidalStreamingService {
     /**
      * Get editorial/explore shelves.
      */
-    async getExploreShelves(userId: string, quality: string): Promise<TidalBrowseShelf[]> {
+    async getExploreShelves(
+        userId: string,
+        quality: string,
+    ): Promise<TidalBrowseShelf[]> {
         const res = await this.client.get(
             `/user/browse/explore?${this.browseParams(userId, quality)}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data?.shelves ?? [];
     }
@@ -831,7 +873,7 @@ class TidalStreamingService {
     async getGenres(userId: string, quality: string): Promise<TidalGenre[]> {
         const res = await this.client.get(
             `/user/browse/genres?${this.browseParams(userId, quality)}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data?.genres ?? [];
     }
@@ -842,7 +884,7 @@ class TidalStreamingService {
     async getMoods(userId: string, quality: string): Promise<TidalGenre[]> {
         const res = await this.client.get(
             `/user/browse/moods?${this.browseParams(userId, quality)}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data?.moods ?? [];
     }
@@ -850,10 +892,13 @@ class TidalStreamingService {
     /**
      * Get personal mixes (daily discovery, etc.).
      */
-    async getMixes(userId: string, quality: string): Promise<TidalMixPreview[]> {
+    async getMixes(
+        userId: string,
+        quality: string,
+    ): Promise<TidalMixPreview[]> {
         const res = await this.client.get(
             `/user/browse/mixes?${this.browseParams(userId, quality)}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data?.mixes ?? [];
     }
@@ -864,11 +909,11 @@ class TidalStreamingService {
     async getGenrePlaylists(
         userId: string,
         path: string,
-        quality: string
+        quality: string,
     ): Promise<TidalPlaylistPreview[]> {
         const res = await this.client.get(
             `/user/browse/genre-playlists?${this.browseParams(userId, quality, { path })}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data?.playlists ?? [];
     }
@@ -880,13 +925,13 @@ class TidalStreamingService {
         userId: string,
         playlistId: string,
         quality: string,
-        limit?: number
+        limit?: number,
     ): Promise<TidalPlaylistDetail> {
         const extra: Record<string, string> = {};
         if (limit !== undefined) extra.limit = String(limit);
         const res = await this.client.get(
             `/user/browse/playlist/${encodeURIComponent(playlistId)}?${this.browseParams(userId, quality, extra)}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data;
     }
@@ -897,7 +942,7 @@ class TidalStreamingService {
     async getPublicBrowsePlaylist(
         playlistId: string,
         quality: string,
-        limit?: number
+        limit?: number,
     ): Promise<TidalPlaylistDetail> {
         const params = new URLSearchParams();
         params.set("quality", quality);
@@ -906,7 +951,7 @@ class TidalStreamingService {
         }
         const res = await this.client.get(
             `/browse/playlist/${encodeURIComponent(playlistId)}?${params.toString()}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data;
     }
@@ -917,11 +962,11 @@ class TidalStreamingService {
     async getBrowseMix(
         userId: string,
         mixId: string,
-        quality: string
+        quality: string,
     ): Promise<TidalPlaylistDetail> {
         const res = await this.client.get(
             `/user/browse/mix/${encodeURIComponent(mixId)}?${this.browseParams(userId, quality)}`,
-            { timeout: 15000 }
+            { timeout: 15000 },
         );
         return res.data;
     }

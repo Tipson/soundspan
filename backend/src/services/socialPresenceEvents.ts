@@ -20,7 +20,7 @@ const listeners = new Set<SocialPresenceListener>();
  * Executes subscribeSocialPresenceUpdates.
  */
 export function subscribeSocialPresenceUpdates(
-    listener: SocialPresenceListener
+    listener: SocialPresenceListener,
 ): () => void {
     listeners.add(listener);
     return () => {
@@ -32,17 +32,13 @@ export function subscribeSocialPresenceUpdates(
  * Executes publishSocialPresenceUpdate.
  */
 export function publishSocialPresenceUpdate(
-    event: SocialPresenceUpdatedEvent
+    event: SocialPresenceUpdatedEvent,
 ): void {
     listeners.forEach((listener) => {
         try {
             listener(event);
         } catch (error) {
-            logger.warn(
-                "[Social] Presence update listener failed:",
-                error
-            );
+            logger.warn("[Social] Presence update listener failed:", error);
         }
     });
 }
-

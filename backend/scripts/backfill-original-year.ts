@@ -25,7 +25,7 @@ async function backfillOriginalYear(dryRun: boolean = false) {
     console.log(
         `Mode: ${
             dryRun ? "DRY RUN (no changes)" : "LIVE (will update database)"
-        }\n`
+        }\n`,
     );
 
     try {
@@ -61,30 +61,30 @@ async function backfillOriginalYear(dryRun: boolean = false) {
         console.log("Sample of albums to be updated:");
         albumsToBackfill.slice(0, 5).forEach((album, idx) => {
             console.log(
-                `  ${idx + 1}. "${album.title}" by ${album.artist.name}`
+                `  ${idx + 1}. "${album.title}" by ${album.artist.name}`,
             );
             console.log(
-                `     Current: year=${album.year}, originalYear=${album.originalYear}`
+                `     Current: year=${album.year}, originalYear=${album.originalYear}`,
             );
             console.log(`     Will set: originalYear=${album.year}\n`);
         });
 
         if (albumsToBackfill.length > 5) {
             console.log(
-                `  ... and ${albumsToBackfill.length - 5} more albums\n`
+                `  ... and ${albumsToBackfill.length - 5} more albums\n`,
             );
         }
 
         if (dryRun) {
             console.log(
-                "DRY RUN: No changes made. Remove --dry-run to apply updates."
+                "DRY RUN: No changes made. Remove --dry-run to apply updates.",
             );
             return;
         }
 
         // Confirm before proceeding in live mode
         console.log(
-            `Proceeding with backfill of ${albumsToBackfill.length} albums...\n`
+            `Proceeding with backfill of ${albumsToBackfill.length} albums...\n`,
         );
 
         // Process in batches to avoid overwhelming the database
@@ -100,7 +100,7 @@ async function backfillOriginalYear(dryRun: boolean = false) {
                 prisma.album.update({
                     where: { id: album.id },
                     data: { originalYear: album.year },
-                })
+                }),
             );
 
             await Promise.all(updatePromises);
@@ -113,7 +113,7 @@ async function backfillOriginalYear(dryRun: boolean = false) {
                 100
             ).toFixed(1);
             console.log(
-                `Progress: ${processed}/${albumsToBackfill.length} (${progress}%) albums updated`
+                `Progress: ${processed}/${albumsToBackfill.length} (${progress}%) albums updated`,
             );
         }
 
@@ -121,7 +121,7 @@ async function backfillOriginalYear(dryRun: boolean = false) {
         console.log(`  - Total albums updated: ${updated}`);
         console.log(`  - Field populated: originalYear`);
         console.log(
-            `\nNote: Future albums will have originalYear populated automatically during enrichment.`
+            `\nNote: Future albums will have originalYear populated automatically during enrichment.`,
         );
     } catch (error) {
         console.error("\n✗ Error during backfill:", error);

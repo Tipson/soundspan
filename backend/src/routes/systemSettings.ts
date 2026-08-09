@@ -10,10 +10,7 @@ import { encrypt, decrypt } from "../utils/encryption";
 import { ENCRYPTED_SETTINGS_COLUMNS } from "../utils/encryptedColumns";
 import { BRAND_NAME, BRAND_SLUG } from "../config/brand";
 import { normalizeSafeOutboundUrl } from "../services/outboundUrlSafety";
-import {
-    sendInternalRouteError,
-    sendRouteError,
-} from "./routeErrorResponse";
+import { sendInternalRouteError, sendRouteError } from "./routeErrorResponse";
 
 const router = Router();
 const WEBHOOK_NAME_ALIASES = [BRAND_NAME];
@@ -97,7 +94,9 @@ const systemSettingsSchema = z.object({
 
     // Download Preferences
     downloadSource: z.enum(["soulseek", "lidarr", "tidal"]).optional(),
-    primaryFailureFallback: z.enum(["none", "lidarr", "soulseek", "tidal"]).optional(),
+    primaryFailureFallback: z
+        .enum(["none", "lidarr", "soulseek", "tidal"])
+        .optional(),
 
     // TIDAL — credential fields (tidalAccessToken, tidalRefreshToken,
     // tidalUserId) are deliberately absent: they are managed exclusively
@@ -105,7 +104,9 @@ const systemSettingsSchema = z.object({
     // settings form round-trip wipe the admin download connection.
     tidalEnabled: z.boolean().optional(),
     tidalCountryCode: z.string().nullable().optional(),
-    tidalQuality: z.enum(["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"]).optional(),
+    tidalQuality: z
+        .enum(["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"])
+        .optional(),
     tidalFileTemplate: z.string().nullable().optional(),
 
     // YouTube Music streaming
@@ -245,7 +246,7 @@ router.post("/", async (req, res) => {
         logger.debug("[SYSTEM SETTINGS] Saving settings...");
         logger.debug(
             "[SYSTEM SETTINGS] transcodeCacheMaxGb:",
-            data.transcodeCacheMaxGb
+            data.transcodeCacheMaxGb,
         );
 
         // Encrypt sensitive fields. Secret semantics: non-empty string →
@@ -285,7 +286,7 @@ router.post("/", async (req, res) => {
         // this instead of raw payload values, or "" would leak back in
         // as a wipe.
         const effectiveSecret = (
-            field: (typeof ENCRYPTED_SETTINGS_COLUMNS.systemSettings)[number]
+            field: (typeof ENCRYPTED_SETTINGS_COLUMNS.systemSettings)[number],
         ): string | null => {
             const submitted = (data as Record<string, unknown>)[field];
             if (typeof submitted === "string" && submitted !== "")
@@ -294,7 +295,7 @@ router.post("/", async (req, res) => {
             return safeDecrypt(
                 ((settings as Record<string, unknown>)[field] as
                     | string
-                    | null) ?? null
+                    | null) ?? null,
             );
         };
 
@@ -317,12 +318,11 @@ router.post("/", async (req, res) => {
                 data.soulseekPassword !== "")
         ) {
             try {
-                const { soulseekService } = await import(
-                    "../services/soulseek"
-                );
+                const { soulseekService } =
+                    await import("../services/soulseek");
                 soulseekService.disconnect();
                 logger.debug(
-                    "[SYSTEM SETTINGS] Disconnected Soulseek service due to credential update"
+                    "[SYSTEM SETTINGS] Disconnected Soulseek service due to credential update",
                 );
             } catch (err) {
                 logger.warn("Failed to disconnect Soulseek service:", err);
@@ -332,13 +332,13 @@ router.post("/", async (req, res) => {
         // If Audiobookshelf was disabled, clear all audiobook-related data
         if (data.audiobookshelfEnabled === false) {
             logger.debug(
-                "[CLEANUP] Audiobookshelf disabled - clearing all audiobook data from database"
+                "[CLEANUP] Audiobookshelf disabled - clearing all audiobook data from database",
             );
             try {
                 const deletedProgress =
                     await prisma.audiobookProgress.deleteMany({});
                 logger.debug(
-                    `   Deleted ${deletedProgress.count} audiobook progress entries`
+                    `   Deleted ${deletedProgress.count} audiobook progress entries`,
                 );
             } catch (clearError) {
                 logger.error("Failed to clear audiobook data:", clearError);
@@ -390,7 +390,7 @@ router.post("/", async (req, res) => {
                     {
                         headers: { "X-Api-Key": apiKey },
                         timeout: 10000,
-                    }
+                    },
                 );
 
                 // Match current webhook names and URL aliases.
@@ -403,36 +403,37 @@ router.post("/", async (req, res) => {
                         const nameMatch = WEBHOOK_NAME_ALIASES.some(
                             (candidate) =>
                                 typeof n.name === "string" &&
-                                n.name.toLowerCase() === candidate.toLowerCase()
+                                n.name.toLowerCase() ===
+                                    candidate.toLowerCase(),
                         );
 
                         const urlValue = n.fields?.find(
-                            (f: any) => f.name === "url"
+                            (f: any) => f.name === "url",
                         )?.value;
                         const urlMatch =
                             typeof urlValue === "string" &&
                             (urlValue.includes("webhooks/lidarr") ||
                                 WEBHOOK_URL_ALIASES.some((alias) =>
-                                    urlValue.includes(alias)
+                                    urlValue.includes(alias),
                                 ));
 
                         return nameMatch || urlMatch;
-                    }
+                    },
                 );
 
                 if (existingWebhook) {
                     const currentUrl = existingWebhook.fields?.find(
-                        (f: any) => f.name === "url"
+                        (f: any) => f.name === "url",
                     )?.value;
                     logger.debug(
-                        `   Found existing webhook: "${existingWebhook.name}" with URL: ${currentUrl}`
+                        `   Found existing webhook: "${existingWebhook.name}" with URL: ${currentUrl}`,
                     );
                     if (currentUrl !== webhookUrl) {
                         logger.debug(
-                            `   URL needs updating from: ${currentUrl}`
+                            `   URL needs updating from: ${currentUrl}`,
                         );
                         logger.debug(
-                            `   URL will be updated to: ${webhookUrl}`
+                            `   URL will be updated to: ${webhookUrl}`,
                         );
                     }
                 }
@@ -480,7 +481,7 @@ router.post("/", async (req, res) => {
                         {
                             headers: { "X-Api-Key": apiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
                     logger.debug("   Webhook updated");
                 } else {
@@ -491,7 +492,7 @@ router.post("/", async (req, res) => {
                         {
                             headers: { "X-Api-Key": apiKey },
                             timeout: 10000,
-                        }
+                        },
                     );
                     logger.debug("   Webhook created");
                 }
@@ -500,16 +501,16 @@ router.post("/", async (req, res) => {
             } catch (webhookError: any) {
                 logger.error(
                     "Failed to auto-configure webhook:",
-                    webhookError.message
+                    webhookError.message,
                 );
                 if (webhookError.response?.data) {
                     logger.error(
                         "   Lidarr error details:",
-                        JSON.stringify(webhookError.response.data, null, 2)
+                        JSON.stringify(webhookError.response.data, null, 2),
                     );
                 }
                 logger.debug(
-                    " User can configure webhook manually in Lidarr UI\n"
+                    " User can configure webhook manually in Lidarr UI\n",
                 );
                 // Don't fail the request if webhook config fails
             }
@@ -589,12 +590,12 @@ router.post("/test-lidarr", async (req, res) => {
             {
                 headers: { "X-Api-Key": apiKey },
                 timeout: 10000,
-            }
+            },
         );
 
         logger.debug(
             "[Lidarr Test] Connection successful, version:",
-            response.data.version
+            response.data.version,
         );
 
         res.json({
@@ -606,7 +607,7 @@ router.post("/test-lidarr", async (req, res) => {
         logger.error("[Lidarr Test] Error:", error.message);
         logger.error(
             "[Lidarr Test] Details:",
-            error.response?.data || error.code
+            error.response?.data || error.code,
         );
 
         let details = "Connection test failed";
@@ -679,7 +680,7 @@ router.post("/test-openai", async (req, res) => {
             {
                 headers: { Authorization: `Bearer ${apiKey}` },
                 timeout: 10000,
-            }
+            },
         );
 
         res.json({
@@ -745,7 +746,7 @@ router.post("/test-fanart", async (req, res) => {
             {
                 params: { api_key: fanartApiKey },
                 timeout: 5000,
-            }
+            },
         );
 
         // If we get here, the API key is valid
@@ -988,14 +989,14 @@ router.post("/test-soulseek", async (req, res) => {
                     (err: Error | null, client: any) => {
                         if (err) {
                             logger.debug(
-                                `[SOULSEEK-TEST] Connection failed: ${err.message}`
+                                `[SOULSEEK-TEST] Connection failed: ${err.message}`,
                             );
                             return reject(err);
                         }
                         logger.debug(`[SOULSEEK-TEST] Connected successfully`);
                         // We don't need to keep the connection open for the test
                         resolve();
-                    }
+                    },
                 );
             });
 
@@ -1073,11 +1074,11 @@ router.post("/test-spotify", async (req, res) => {
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",
                         Authorization: `Basic ${Buffer.from(
-                            `${clientId}:${clientSecret}`
+                            `${clientId}:${clientSecret}`,
                         ).toString("base64")}`,
                     },
                     timeout: 10000,
-                }
+                },
             );
 
             if (response.data.access_token) {
@@ -1132,7 +1133,8 @@ router.post("/test-tidal", async (req, res) => {
         if (!healthy) {
             return res.status(503).json({
                 error: "TIDAL service is not running",
-                details: "The tidal-downloader container is not reachable. Make sure it is running.",
+                details:
+                    "The tidal-downloader container is not reachable. Make sure it is running.",
             });
         }
 
@@ -1148,7 +1150,8 @@ router.post("/test-tidal", async (req, res) => {
         // No valid session — return info so the UI can trigger device auth
         return res.status(401).json({
             error: "Not authenticated to TIDAL",
-            details: "Use the TIDAL settings panel to authenticate via device authorization.",
+            details:
+                "Use the TIDAL settings panel to authenticate via device authorization.",
         });
     } catch (error: any) {
         logger.error("[TIDAL-TEST] Error:", error.message);
@@ -1373,14 +1376,13 @@ router.post("/queue-cleaner/stop", (req, res) => {
 router.post("/clear-caches", async (req, res) => {
     try {
         const { redisClient } = require("../utils/redis");
-        const { notificationService } = await import(
-            "../services/notificationService"
-        );
+        const { notificationService } =
+            await import("../services/notificationService");
 
         // Get all keys but exclude session keys
         const allKeys = await redisClient.keys("*");
         const keysToDelete = allKeys.filter(
-            (key: string) => !key.startsWith("sess:")
+            (key: string) => !key.startsWith("sess:"),
         );
 
         if (keysToDelete.length > 0) {
@@ -1389,20 +1391,20 @@ router.post("/clear-caches", async (req, res) => {
                     keysToDelete.length
                 } cache entries (excluding ${
                     allKeys.length - keysToDelete.length
-                } session keys)...`
+                } session keys)...`,
             );
             for (const key of keysToDelete) {
                 await redisClient.del(key);
             }
             logger.debug(
-                `[CACHE] Successfully cleared ${keysToDelete.length} cache entries`
+                `[CACHE] Successfully cleared ${keysToDelete.length} cache entries`,
             );
 
             // Send notification to user
             await notificationService.notifySystem(
                 req.user!.id,
                 "Caches Cleared",
-                `Successfully cleared ${keysToDelete.length} cache entries`
+                `Successfully cleared ${keysToDelete.length} cache entries`,
             );
 
             res.json({
@@ -1414,7 +1416,7 @@ router.post("/clear-caches", async (req, res) => {
             await notificationService.notifySystem(
                 req.user!.id,
                 "Caches Cleared",
-                "No cache entries to clear"
+                "No cache entries to clear",
             );
 
             res.json({

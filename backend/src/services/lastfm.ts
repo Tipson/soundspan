@@ -38,9 +38,8 @@ class LastFmService {
         // Priority: 1) User settings from DB, 2) env var, 3) disabled
         this.apiKey = this.envApiKey;
         try {
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
             if (settings?.lastfmApiKey) {
                 this.apiKey = settings.lastfmApiKey;
@@ -78,7 +77,7 @@ class LastFmService {
             throw new Error("Last.fm API key not available");
         }
         const response = await rateLimiter.execute("lastfm", () =>
-            this.client.get<T>("/", { params })
+            this.client.get<T>("/", { params }),
         );
         return response.data;
     }
@@ -86,7 +85,7 @@ class LastFmService {
     async getSimilarArtists(
         artistMbid: string,
         artistName: string,
-        limit = 30
+        limit = 30,
     ): Promise<SimilarArtist[]> {
         const normalizedArtistName = this.normalizeName(artistName);
         const trimmedMbid = (artistMbid || "").trim();
@@ -132,7 +131,7 @@ class LastFmService {
                 await redisClient.setEx(
                     cacheKey,
                     604800,
-                    JSON.stringify(results)
+                    JSON.stringify(results),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);
@@ -146,7 +145,7 @@ class LastFmService {
                 error.response?.data?.error === 6
             ) {
                 logger.debug(
-                    `Artist MBID not found on Last.fm, trying name search: ${artistName}`
+                    `Artist MBID not found on Last.fm, trying name search: ${artistName}`,
                 );
                 return this.getSimilarArtistsByName(artistName, limit);
             }
@@ -158,10 +157,10 @@ class LastFmService {
 
     private async getSimilarArtistsByName(
         artistName: string,
-        limit = 30
+        limit = 30,
     ): Promise<SimilarArtist[]> {
         const cacheKey = `lastfm:similar:name:${this.normalizeName(
-            artistName
+            artistName,
         )}:limit:${limit}`;
 
         try {
@@ -196,7 +195,7 @@ class LastFmService {
                 await redisClient.setEx(
                     cacheKey,
                     604800,
-                    JSON.stringify(results)
+                    JSON.stringify(results),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);
@@ -227,17 +226,25 @@ class LastFmService {
             const normalized = {
                 ...album,
                 image: normalizeToArray(album.image),
-                tags: album.tags ? {
-                    ...album.tags,
-                    tag: normalizeToArray(album.tags.tag)
-                } : album.tags,
-                tracks: album.tracks ? {
-                    ...album.tracks,
-                    track: normalizeToArray(album.tracks.track)
-                } : album.tracks
+                tags: album.tags
+                    ? {
+                          ...album.tags,
+                          tag: normalizeToArray(album.tags.tag),
+                      }
+                    : album.tags,
+                tracks: album.tracks
+                    ? {
+                          ...album.tracks,
+                          track: normalizeToArray(album.tracks.track),
+                      }
+                    : album.tracks,
             };
             try {
-                await redisClient.setEx(key, 2592000, JSON.stringify(normalized));
+                await redisClient.setEx(
+                    key,
+                    2592000,
+                    JSON.stringify(normalized),
+                );
             } catch (err) {
                 logger.warn("Redis set error:", err);
             }
@@ -261,13 +268,15 @@ class LastFmService {
             // Only try stripped version for "not found" errors
             const isNotFoundError =
                 error instanceof Error &&
-                'response' in error &&
+                "response" in error &&
                 (error as any).response?.data?.error === 6;
 
             if (isNotFoundError) {
                 const strippedAlbum = stripAlbumEdition(albumName);
                 if (strippedAlbum !== albumName && strippedAlbum.length > 2) {
-                    logger.debug(`Last.fm: Album "${albumName}" not found, trying "${strippedAlbum}"`);
+                    logger.debug(
+                        `Last.fm: Album "${albumName}" not found, trying "${strippedAlbum}"`,
+                    );
                     try {
                         const fallbackData = await this.request({
                             method: "album.getInfo",
@@ -278,15 +287,23 @@ class LastFmService {
                         });
 
                         if (fallbackData.album) {
-                            return normalizeAndCache(fallbackData.album, cacheKey);
+                            return normalizeAndCache(
+                                fallbackData.album,
+                                cacheKey,
+                            );
                         }
                     } catch (fallbackError: unknown) {
-                        logger.debug(`Last.fm: Fallback album "${strippedAlbum}" also not found`);
+                        logger.debug(
+                            `Last.fm: Fallback album "${strippedAlbum}" also not found`,
+                        );
                     }
                 }
             } else {
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                logger.error(`Last.fm album info error for ${albumName}: ${errorMsg}`);
+                const errorMsg =
+                    error instanceof Error ? error.message : String(error);
+                logger.error(
+                    `Last.fm album info error for ${albumName}: ${errorMsg}`,
+                );
             }
             return null;
         }
@@ -322,7 +339,7 @@ class LastFmService {
                 await redisClient.setEx(
                     cacheKey,
                     604800,
-                    JSON.stringify(albums)
+                    JSON.stringify(albums),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);
@@ -364,7 +381,7 @@ class LastFmService {
                 await redisClient.setEx(
                     cacheKey,
                     604800,
-                    JSON.stringify(tracks)
+                    JSON.stringify(tracks),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);
@@ -374,7 +391,7 @@ class LastFmService {
         } catch (error) {
             logger.error(
                 `Last.fm similar tracks error for ${trackName}:`,
-                error
+                error,
             );
             return [];
         }
@@ -383,7 +400,7 @@ class LastFmService {
     async getArtistTopTracks(
         artistMbid: string,
         artistName: string,
-        limit = 10
+        limit = 10,
     ) {
         const cacheKey = `lastfm:toptracks:${artistMbid || artistName}`;
 
@@ -419,7 +436,7 @@ class LastFmService {
                 await redisClient.setEx(
                     cacheKey,
                     604800,
-                    JSON.stringify(tracks)
+                    JSON.stringify(tracks),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);
@@ -435,7 +452,7 @@ class LastFmService {
     async getArtistTopAlbums(
         artistMbid: string,
         artistName: string,
-        limit = 10
+        limit = 10,
     ) {
         const cacheKey = `lastfm:topalbums:${artistMbid || artistName}`;
 
@@ -471,7 +488,7 @@ class LastFmService {
                 await redisClient.setEx(
                     cacheKey,
                     604800,
-                    JSON.stringify(albums)
+                    JSON.stringify(albums),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);
@@ -509,23 +526,24 @@ class LastFmService {
                 return {
                     ...artist,
                     image: normalizeToArray(artist.image),
-                    tags: artist.tags ? {
-                        ...artist.tags,
-                        tag: normalizeToArray(artist.tags.tag)
-                    } : artist.tags,
-                    similar: artist.similar ? {
-                        ...artist.similar,
-                        artist: normalizeToArray(artist.similar.artist)
-                    } : artist.similar
+                    tags: artist.tags
+                        ? {
+                              ...artist.tags,
+                              tag: normalizeToArray(artist.tags.tag),
+                          }
+                        : artist.tags,
+                    similar: artist.similar
+                        ? {
+                              ...artist.similar,
+                              artist: normalizeToArray(artist.similar.artist),
+                          }
+                        : artist.similar,
                 };
             }
 
             return artist;
         } catch (error) {
-            logger.error(
-                `Last.fm artist info error for ${artistName}:`,
-                error
-            );
+            logger.error(`Last.fm artist info error for ${artistName}:`, error);
             return null;
         }
     }
@@ -600,7 +618,7 @@ class LastFmService {
 
             const nameSimilarity = fuzz.ratio(
                 this.normalizeName(entry.name),
-                this.normalizeName(candidate.name)
+                this.normalizeName(candidate.name),
             );
 
             if (nameSimilarity >= 95) {
@@ -629,10 +647,16 @@ class LastFmService {
         const enriched = await Promise.all(
             capped.map((s) =>
                 this.buildArtistSearchResult(
-                    { name: s.name, mbid: s.mbid, listeners: 0, url: s.url, image: [] },
-                    true
-                )
-            )
+                    {
+                        name: s.name,
+                        mbid: s.mbid,
+                        listeners: 0,
+                        url: s.url,
+                        image: [],
+                    },
+                    true,
+                ),
+            ),
         );
 
         return enriched.filter(Boolean);
@@ -743,7 +767,7 @@ class LastFmService {
             const artists = data.results?.artistmatches?.artist || [];
 
             logger.debug(
-                `\n [LAST.FM SEARCH] Found ${artists.length} artists (before filtering)`
+                `\n [LAST.FM SEARCH] Found ${artists.length} artists (before filtering)`,
             );
 
             const queryLower = query.toLowerCase().trim();
@@ -768,12 +792,12 @@ class LastFmService {
                     const normalizedName = this.normalizeName(artist.name);
                     const similarity = fuzz.token_set_ratio(
                         queryLower,
-                        normalizedName
+                        normalizedName,
                     );
                     const listeners = parseInt(artist.listeners || "0", 10);
                     const hasMbid = Boolean(artist.mbid);
                     const wordMatches = wordMatchers.filter((matcher) =>
-                        matcher(normalizedName)
+                        matcher(normalizedName),
                     ).length;
 
                     return {
@@ -784,10 +808,20 @@ class LastFmService {
                         wordMatches,
                     };
                 })
-                .filter(({ similarity, wordMatches }: { similarity: number; wordMatches: number }) => {
-                    if (!queryLower) return true;
-                    return similarity >= 75 || wordMatches >= minWordMatches;
-                })
+                .filter(
+                    ({
+                        similarity,
+                        wordMatches,
+                    }: {
+                        similarity: number;
+                        wordMatches: number;
+                    }) => {
+                        if (!queryLower) return true;
+                        return (
+                            similarity >= 75 || wordMatches >= minWordMatches
+                        );
+                    },
+                )
                 .sort((a: any, b: any) => {
                     return (
                         Number(b.hasMbid) - Number(a.hasMbid) ||
@@ -811,7 +845,7 @@ class LastFmService {
             const limitedArtists = uniqueArtists.slice(0, limit);
 
             logger.debug(
-                `  → Filtered to ${limitedArtists.length} relevant matches (limit: ${limit})`
+                `  → Filtered to ${limitedArtists.length} relevant matches (limit: ${limit})`,
             );
 
             const enrichmentCount = Math.min(5, limitedArtists.length);
@@ -820,15 +854,15 @@ class LastFmService {
                     limitedArtists
                         .slice(0, enrichmentCount)
                         .map((artist: any) =>
-                            this.buildArtistSearchResult(artist, true)
-                        )
+                            this.buildArtistSearchResult(artist, true),
+                        ),
                 ),
                 Promise.all(
                     limitedArtists
                         .slice(enrichmentCount)
                         .map((artist: any) =>
-                            this.buildArtistSearchResult(artist, false)
-                        )
+                            this.buildArtistSearchResult(artist, false),
+                        ),
                 ),
             ]);
 
@@ -855,11 +889,11 @@ class LastFmService {
             const tracks = data.results?.trackmatches?.track || [];
 
             logger.debug(
-                `\n [LAST.FM TRACK SEARCH] Found ${tracks.length} tracks`
+                `\n [LAST.FM TRACK SEARCH] Found ${tracks.length} tracks`,
             );
 
             const validTracks = tracks.filter(
-                (track: any) => !this.isInvalidArtistName(track.artist)
+                (track: any) => !this.isInvalidArtistName(track.artist),
             );
             const limitedTracks = validTracks.slice(0, limit);
 
@@ -870,15 +904,15 @@ class LastFmService {
                     limitedTracks
                         .slice(0, enrichmentCount)
                         .map((track: any) =>
-                            this.buildTrackSearchResult(track, true)
-                        )
+                            this.buildTrackSearchResult(track, true),
+                        ),
                 ),
                 Promise.all(
                     limitedTracks
                         .slice(enrichmentCount)
                         .map((track: any) =>
-                            this.buildTrackSearchResult(track, false)
-                        )
+                            this.buildTrackSearchResult(track, false),
+                        ),
                 ),
             ]);
 
@@ -908,14 +942,18 @@ class LastFmService {
             if (track) {
                 return {
                     ...track,
-                    toptags: track.toptags ? {
-                        ...track.toptags,
-                        tag: normalizeToArray(track.toptags.tag)
-                    } : track.toptags,
-                    album: track.album ? {
-                        ...track.album,
-                        image: normalizeToArray(track.album.image)
-                    } : track.album
+                    toptags: track.toptags
+                        ? {
+                              ...track.toptags,
+                              tag: normalizeToArray(track.toptags.tag),
+                          }
+                        : track.toptags,
+                    album: track.album
+                        ? {
+                              ...track.album,
+                              image: normalizeToArray(track.album.image),
+                          }
+                        : track.album,
                 };
             }
 
@@ -1001,7 +1039,7 @@ class LastFmService {
         // Return empty if no API key configured
         if (!this.apiKey) {
             logger.warn(
-                "Last.fm: Cannot fetch chart artists - no API key configured"
+                "Last.fm: Cannot fetch chart artists - no API key configured",
             );
             return [];
         }
@@ -1035,7 +1073,7 @@ class LastFmService {
                     if (artist.mbid) {
                         try {
                             image = await fanartService.getArtistImage(
-                                artist.mbid
+                                artist.mbid,
                             );
                         } catch (error) {
                             // Silently fail
@@ -1057,11 +1095,13 @@ class LastFmService {
 
                     // Last fallback to Last.fm images (but filter placeholders)
                     if (!image) {
-                        const lastFmImage = this.getBestImage(normalizeToArray(artist.image));
+                        const lastFmImage = this.getBestImage(
+                            normalizeToArray(artist.image),
+                        );
                         if (
                             lastFmImage &&
                             !lastFmImage.includes(
-                                "2a96cbd8b46e442fc41c2b86b821562f"
+                                "2a96cbd8b46e442fc41c2b86b821562f",
                             )
                         ) {
                             image = lastFmImage;
@@ -1078,7 +1118,7 @@ class LastFmService {
                         image,
                         mbid: artist.mbid,
                     };
-                })
+                }),
             );
 
             // Cache for 6 hours (charts update frequently)
@@ -1086,7 +1126,7 @@ class LastFmService {
                 await redisClient.setEx(
                     cacheKey,
                     21600,
-                    JSON.stringify(detailedArtists)
+                    JSON.stringify(detailedArtists),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);

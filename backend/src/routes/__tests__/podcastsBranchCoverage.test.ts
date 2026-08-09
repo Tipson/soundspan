@@ -33,7 +33,11 @@ const prisma = {
         findUnique: jest.fn(async () => null),
     },
     podcastProgress: {
-        upsert: jest.fn(async () => ({ currentTime: 0, duration: 0, isFinished: false })),
+        upsert: jest.fn(async () => ({
+            currentTime: 0,
+            duration: 0,
+            isFinished: false,
+        })),
         deleteMany: jest.fn(async () => ({ count: 0 })),
     },
     podcastRecommendation: {
@@ -66,7 +70,10 @@ jest.mock("../../utils/db", () => ({
 class MockRSSFeedNotModifiedError extends Error {
     etag?: string;
     lastModified?: string;
-    constructor(message: string, metadata: { etag?: string; lastModified?: string } = {}) {
+    constructor(
+        message: string,
+        metadata: { etag?: string; lastModified?: string } = {},
+    ) {
         super(message);
         this.etag = metadata.etag;
         this.lastModified = metadata.lastModified;
@@ -74,19 +81,21 @@ class MockRSSFeedNotModifiedError extends Error {
 }
 
 const rssParserService = {
-    parseFeed: jest.fn<Promise<unknown>, [string, Record<string, unknown>?]>(async () => ({
-        podcast: {
-            title: "Parsed Podcast",
-            author: "Parsed Host",
-            description: "Parsed Description",
-            imageUrl: "https://img/parsed.jpg",
-            itunesId: "itunes-parsed",
-            language: "en",
-            explicit: false,
-        },
-        episodes: [],
-        feedMetadata: {},
-    })),
+    parseFeed: jest.fn<Promise<unknown>, [string, Record<string, unknown>?]>(
+        async () => ({
+            podcast: {
+                title: "Parsed Podcast",
+                author: "Parsed Host",
+                description: "Parsed Description",
+                imageUrl: "https://img/parsed.jpg",
+                itunesId: "itunes-parsed",
+                language: "en",
+                explicit: false,
+            },
+            episodes: [],
+            feedMetadata: {},
+        }),
+    ),
 };
 
 jest.mock("../../services/rss-parser", () => ({
@@ -109,20 +118,22 @@ jest.mock("../../services/notificationService", () => ({
 }));
 
 const getCachedFilePath = jest.fn<Promise<string | null>, [string]>(
-    async () => null
+    async () => null,
 );
 const isDownloading = jest.fn<boolean, [string]>(() => false);
-const getDownloadProgress = jest.fn<
-    { progress: number } | null,
-    [string]
->(() => null);
+const getDownloadProgress = jest.fn<{ progress: number } | null, [string]>(
+    () => null,
+);
 const downloadInBackground = jest.fn<void, [string, string, string]>();
 jest.mock("../../services/podcastDownload", () => ({
     getCachedFilePath: (episodeId: string) => getCachedFilePath(episodeId),
     isDownloading: (episodeId: string) => isDownloading(episodeId),
     getDownloadProgress: (episodeId: string) => getDownloadProgress(episodeId),
-    downloadInBackground: (episodeId: string, audioUrl: string, userId: string) =>
-        downloadInBackground(episodeId, audioUrl, userId),
+    downloadInBackground: (
+        episodeId: string,
+        audioUrl: string,
+        userId: string,
+    ) => downloadInBackground(episodeId, audioUrl, userId),
 }));
 
 const getSimilarPodcasts = jest.fn<
@@ -131,8 +142,11 @@ const getSimilarPodcasts = jest.fn<
 >(async () => []);
 jest.mock("../../services/itunes", () => ({
     itunesService: {
-        getSimilarPodcasts: (title: string, description?: string, author?: string) =>
-            getSimilarPodcasts(title, description, author),
+        getSimilarPodcasts: (
+            title: string,
+            description?: string,
+            author?: string,
+        ) => getSimilarPodcasts(title, description, author),
     },
 }));
 
@@ -184,9 +198,10 @@ type MockRes = {
 function getHandler(path: string, method: RouteMethod) {
     const stack = (router as unknown as { stack: RouteLayer[] }).stack;
     const layer = stack.find(
-        (entry) => entry.route?.path === path && entry.route?.methods?.[method]
+        (entry) => entry.route?.path === path && entry.route?.methods?.[method],
     );
-    if (!layer) throw new Error(`${method.toUpperCase()} route not found: ${path}`);
+    if (!layer)
+        throw new Error(`${method.toUpperCase()} route not found: ${path}`);
     const route = layer.route as NonNullable<RouteLayer["route"]>;
     return route.stack[route.stack.length - 1].handle;
 }
@@ -217,26 +232,39 @@ describe("podcasts branch coverage additions", () => {
     const syncCoversHandler = getHandler("/sync-covers", "post");
     const listHandler = getHandler("/", "get");
     const discoverTopHandler = getHandler("/discover/top", "get");
-    const discoverGenrePaginatedHandler = getHandler("/discover/genre/:genreId", "get");
+    const discoverGenrePaginatedHandler = getHandler(
+        "/discover/genre/:genreId",
+        "get",
+    );
     const previewHandler = getHandler("/preview/:itunesId", "get");
     const subscribeHandler = getHandler("/subscribe", "post");
     const byIdHandler = getHandler("/:id", "get");
-    const cacheStatusHandler = getHandler("/:podcastId/episodes/:episodeId/cache-status", "get");
-    const progressHandler = getHandler("/:podcastId/episodes/:episodeId/progress", "post");
+    const cacheStatusHandler = getHandler(
+        "/:podcastId/episodes/:episodeId/cache-status",
+        "get",
+    );
+    const progressHandler = getHandler(
+        "/:podcastId/episodes/:episodeId/progress",
+        "post",
+    );
     const similarHandler = getHandler("/:id/similar", "get");
     const refreshAllHandler = getHandler("/refresh-all", "post");
 
     beforeEach(() => {
         jest.clearAllMocks();
         (prisma.$connect as jest.Mock).mockResolvedValue(undefined);
-        normalizeSafeOutboundUrl.mockImplementation((url?: string) => url ?? null);
+        normalizeSafeOutboundUrl.mockImplementation(
+            (url?: string) => url ?? null,
+        );
         mockAxiosIsAxiosError.mockReturnValue(false);
         mockAxiosIsCancel.mockReturnValue(false);
         getCachedFilePath.mockResolvedValue(null);
         isDownloading.mockReturnValue(false);
         getDownloadProgress.mockReturnValue(null);
         getSimilarPodcasts.mockResolvedValue([]);
-        (prisma.podcastRecommendation.findMany as jest.Mock).mockResolvedValue([]);
+        (prisma.podcastRecommendation.findMany as jest.Mock).mockResolvedValue(
+            [],
+        );
     });
 
     it("sync-covers notification uses zero defaults when sync counts are missing", async () => {
@@ -247,13 +275,15 @@ describe("podcasts branch coverage additions", () => {
         expect(notificationService.notifySystem).toHaveBeenCalledWith(
             "u1",
             "Podcast Covers Synced",
-            "Synced 0 podcast covers and 0 episode covers"
+            "Synced 0 podcast covers and 0 episode covers",
         );
         expect(res.statusCode).toBe(200);
     });
 
     it("list route maps local episode cover and zero-duration progress branch", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             {
                 podcast: {
                     id: "pod-l1",
@@ -277,7 +307,9 @@ describe("podcasts branch coverage additions", () => {
                                     currentTime: 42,
                                     duration: 0,
                                     isFinished: false,
-                                    lastPlayedAt: new Date("2026-01-02T00:00:00.000Z"),
+                                    lastPlayedAt: new Date(
+                                        "2026-01-02T00:00:00.000Z",
+                                    ),
                                 },
                             ],
                         },
@@ -290,9 +322,16 @@ describe("podcasts branch coverage additions", () => {
         const res = createRes();
         await listHandler(req, res);
 
-        const body = res.body as Array<{ episodes: Array<{ coverUrl: string; progress: { progress: number } }> }>;
+        const body = res.body as Array<{
+            episodes: Array<{
+                coverUrl: string;
+                progress: { progress: number };
+            }>;
+        }>;
         expect(res.statusCode).toBe(200);
-        expect(body[0].episodes[0].coverUrl).toBe("/podcasts/episodes/ep-l1/cover");
+        expect(body[0].episodes[0].coverUrl).toBe(
+            "/podcasts/episodes/ep-l1/cover",
+        );
         expect(body[0].episodes[0].progress.progress).toBe(0);
     });
 
@@ -329,7 +368,7 @@ describe("podcasts branch coverage additions", () => {
             "https://itunes.apple.com/search",
             expect.objectContaining({
                 params: expect.objectContaining({ term: "podcast" }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual([]);
@@ -352,7 +391,10 @@ describe("podcasts branch coverage additions", () => {
             },
         });
 
-        const req = { params: { itunesId: "1234" }, user: { id: "u1" } } as unknown;
+        const req = {
+            params: { itunesId: "1234" },
+            user: { id: "u1" },
+        } as unknown;
         const res = createRes();
         await previewHandler(req, res);
 
@@ -364,7 +406,7 @@ describe("podcasts branch coverage additions", () => {
                 previewEpisodes: [],
                 isSubscribed: false,
                 subscribedPodcastId: null,
-            })
+            }),
         );
     });
 
@@ -388,7 +430,10 @@ describe("podcasts branch coverage additions", () => {
             episodes: [{ title: "No duration", publishedAt: "2026-02-01" }],
         });
 
-        const req = { params: { itunesId: "1001" }, user: { id: "u1" } } as unknown;
+        const req = {
+            params: { itunesId: "1001" },
+            user: { id: "u1" },
+        } as unknown;
         const res = createRes();
         await previewHandler(req, res);
 
@@ -420,17 +465,27 @@ describe("podcasts branch coverage additions", () => {
             id: "pod-7788",
             feedUrl: "https://feed/existing.xml",
         });
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce(null);
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce(null);
         rssParserService.parseFeed.mockResolvedValueOnce({
             podcast: { description: "Preview description" },
-            episodes: [{ title: "One", duration: 12, publishedAt: "2026-01-01" }],
+            episodes: [
+                { title: "One", duration: 12, publishedAt: "2026-01-01" },
+            ],
         });
 
-        const req = { params: { itunesId: "7788" }, user: { id: "u1" } } as unknown;
+        const req = {
+            params: { itunesId: "7788" },
+            user: { id: "u1" },
+        } as unknown;
         const res = createRes();
         await previewHandler(req, res);
 
-        const body = res.body as { isSubscribed: boolean; subscribedPodcastId: string | null };
+        const body = res.body as {
+            isSubscribed: boolean;
+            subscribedPodcastId: string | null;
+        };
         expect(res.statusCode).toBe(200);
         expect(body.isSubscribed).toBe(false);
         expect(body.subscribedPodcastId).toBeNull();
@@ -475,13 +530,15 @@ describe("podcasts branch coverage additions", () => {
                     feedEtag: '"nested-etag"',
                     feedLastModified: "Wed, 04 Mar 2026 00:00:00 GMT",
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });
 
     it("podcast detail maps progress percentage to 0 when duration is zero", async () => {
-        (prisma.podcastSubscription.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.podcastSubscription.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "u1",
             podcastId: "pod-zero",
         });
@@ -515,14 +572,19 @@ describe("podcasts branch coverage additions", () => {
             ],
         });
 
-        const req = { params: { id: "pod-zero" }, user: { id: "u1" } } as unknown;
+        const req = {
+            params: { id: "pod-zero" },
+            user: { id: "u1" },
+        } as unknown;
         const res = createRes();
         await byIdHandler(req, res);
 
-        const body = res.body as { episodes: Array<{ progress: { progress: number } }> };
+        const body = res.body as {
+            episodes: Array<{ progress: { progress: number } }>;
+        };
         expect(res.statusCode).toBe(200);
         expect(body.episodes[0].progress).toEqual(
-            expect.objectContaining({ progress: 0 })
+            expect.objectContaining({ progress: 0 }),
         );
     });
 
@@ -561,7 +623,7 @@ describe("podcasts branch coverage additions", () => {
         expect(getSimilarPodcasts).toHaveBeenCalledWith(
             "Similar Show",
             undefined,
-            undefined
+            undefined,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual([]);
@@ -587,7 +649,7 @@ describe("podcasts branch coverage additions", () => {
             expect.objectContaining({
                 create: expect.objectContaining({ isFinished: false }),
                 update: expect.objectContaining({ isFinished: false }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(body.progress.progress).toBe(0);
@@ -609,7 +671,11 @@ describe("podcasts branch coverage additions", () => {
         await progressHandler(req, res);
 
         const body = res.body as {
-            progress: { currentTime: number; progress: number; isFinished: boolean };
+            progress: {
+                currentTime: number;
+                progress: number;
+                isFinished: boolean;
+            };
         };
         expect(res.statusCode).toBe(200);
         expect(body.progress).toEqual({
@@ -631,7 +697,7 @@ describe("podcasts branch coverage additions", () => {
             new MockRSSFeedNotModifiedError("not modified", {
                 etag: '"updated-etag"',
                 lastModified: "Tue, 02 Mar 2026 00:00:00 GMT",
-            })
+            }),
         );
 
         await expect(refreshPodcastFeed("pod-not-modified")).resolves.toEqual({
@@ -647,7 +713,7 @@ describe("podcasts branch coverage additions", () => {
                     feedLastModified: "Tue, 02 Mar 2026 00:00:00 GMT",
                     lastRefreshed: expect.any(Date),
                 }),
-            })
+            }),
         );
     });
 
@@ -660,11 +726,11 @@ describe("podcasts branch coverage additions", () => {
             episodeCount: 8,
         });
         rssParserService.parseFeed.mockRejectedValueOnce(
-            new MockRSSFeedNotModifiedError("not modified")
+            new MockRSSFeedNotModifiedError("not modified"),
         );
 
         await expect(
-            refreshPodcastFeed("pod-not-modified-fallback")
+            refreshPodcastFeed("pod-not-modified-fallback"),
         ).resolves.toEqual({
             newEpisodesCount: 0,
             totalEpisodes: 8,
@@ -676,7 +742,7 @@ describe("podcasts branch coverage additions", () => {
                     feedEtag: '"stored-only"',
                     feedLastModified: "Sun, 28 Feb 2026 00:00:00 GMT",
                 }),
-            })
+            }),
         );
     });
 
@@ -708,12 +774,14 @@ describe("podcasts branch coverage additions", () => {
 
         expect(rssParserService.parseFeed).toHaveBeenCalledWith(
             "https://feed/no-headers.xml",
-            {}
+            {},
         );
     });
 
     it("refresh-all route aggregates successful and failed refresh results", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([
             { podcastId: "pod-ok" },
             { podcastId: "pod-fail" },
         ]);
@@ -744,11 +812,15 @@ describe("podcasts branch coverage additions", () => {
                     language: "en",
                     explicit: false,
                 },
-                episodes: [{ guid: "ep-1", title: "One", audioUrl: "https://a/1.mp3" }],
+                episodes: [
+                    { guid: "ep-1", title: "One", audioUrl: "https://a/1.mp3" },
+                ],
             })
             .mockRejectedValueOnce(new Error("feed parse failed"));
 
-        (prisma.podcastEpisode.createMany as jest.Mock).mockResolvedValueOnce({ count: 1 });
+        (prisma.podcastEpisode.createMany as jest.Mock).mockResolvedValueOnce({
+            count: 1,
+        });
 
         const req = { user: { id: "u1" } } as unknown;
         const res = createRes();
@@ -762,15 +834,15 @@ describe("podcasts branch coverage additions", () => {
                 total: 2,
                 totalNewEpisodes: 1,
                 failed: 1,
-            })
+            }),
         );
         expect(body.results).toHaveLength(2);
     });
 
     it("refresh-all route returns 500 when refresh-all pipeline throws", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockRejectedValueOnce(
-            new Error("subscription lookup failed")
-        );
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockRejectedValueOnce(new Error("subscription lookup failed"));
 
         const req = { user: { id: "u1" } } as unknown;
         const res = createRes();
@@ -781,9 +853,9 @@ describe("podcasts branch coverage additions", () => {
     });
 
     it("refresh-all reports 'Unknown error' for non-Error feed failures", async () => {
-        (prisma.podcastSubscription.findMany as jest.Mock).mockResolvedValueOnce([
-            { podcastId: "pod-unknown-error" },
-        ]);
+        (
+            prisma.podcastSubscription.findMany as jest.Mock
+        ).mockResolvedValueOnce([{ podcastId: "pod-unknown-error" }]);
         (prisma.podcast.findUnique as jest.Mock).mockResolvedValueOnce({
             id: "pod-unknown-error",
             feedUrl: "https://feed/unknown-error.xml",

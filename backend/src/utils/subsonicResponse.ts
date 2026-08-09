@@ -42,7 +42,8 @@ interface SubsonicResponseBody {
  * Resolves the response format from Subsonic query params, defaulting to XML.
  */
 export function getResponseFormat(query: SubsonicQuery): ResponseFormat {
-    const formatParam = typeof query.format === "string" ? query.format : undefined;
+    const formatParam =
+        typeof query.format === "string" ? query.format : undefined;
     const fParam = typeof query.f === "string" ? query.f : undefined;
     const raw = (formatParam ?? fParam ?? "xml").toLowerCase();
 

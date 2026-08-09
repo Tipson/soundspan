@@ -33,7 +33,7 @@ const prisma = createPrismaClient();
 
 async function run(apply: boolean): Promise<void> {
     console.log(
-        `[hash-api-keys] starting (${apply ? "APPLY — writing" : "DRY RUN — no writes"})`
+        `[hash-api-keys] starting (${apply ? "APPLY — writing" : "DRY RUN — no writes"})`,
     );
     // Surface the pepper source AND a value fingerprint so a mismatch with the
     // running app (which would make every migrated key fail to validate) is
@@ -43,14 +43,16 @@ async function run(apply: boolean): Promise<void> {
     const source = getPepperSource();
     console.log(
         `[hash-api-keys] pepper source: ${source ?? "(none — will fail)"}` +
-            (source ? ` (fingerprint ${getPepperFingerprint()})` : "")
+            (source ? ` (fingerprint ${getPepperFingerprint()})` : ""),
     );
 
     let rows = 0;
     let hashed = 0;
     let alreadyHashed = 0;
 
-    const keys = await prisma.apiKey.findMany({ select: { id: true, key: true } });
+    const keys = await prisma.apiKey.findMany({
+        select: { id: true, key: true },
+    });
     for (const row of keys) {
         rows += 1;
         const outcome = planApiKeyHashing(row.key);
@@ -68,11 +70,11 @@ async function run(apply: boolean): Promise<void> {
     }
 
     console.log(
-        `[hash-api-keys] ${apply ? "complete" : "dry run complete"}: rows=${rows} hashed=${hashed} alreadyHashed=${alreadyHashed}`
+        `[hash-api-keys] ${apply ? "complete" : "dry run complete"}: rows=${rows} hashed=${hashed} alreadyHashed=${alreadyHashed}`,
     );
     if (!apply && hashed > 0) {
         console.log(
-            "[hash-api-keys] re-run with --apply to write these changes (back up the database first)."
+            "[hash-api-keys] re-run with --apply to write these changes (back up the database first).",
         );
     }
 }

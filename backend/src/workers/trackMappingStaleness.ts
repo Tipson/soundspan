@@ -12,7 +12,7 @@ function resolveIntervalMs(): number {
     const parsed = Number.parseInt(
         process.env.TRACK_MAPPING_STALENESS_INTERVAL_MS ??
             `${DEFAULT_INTERVAL_MS}`,
-        10
+        10,
     );
     return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INTERVAL_MS;
 }
@@ -56,21 +56,18 @@ async function runTrackMappingStalenessCheck(): Promise<void> {
             } catch (error) {
                 logger.warn(
                     `[TrackMappingStaleness] Failed to mark stale mapping ${mapping.id}`,
-                    error
+                    error,
                 );
             }
         }
 
         if (markedStale > 0) {
             logger.info(
-                `[TrackMappingStaleness] Marked ${markedStale} stale track mappings`
+                `[TrackMappingStaleness] Marked ${markedStale} stale track mappings`,
             );
         }
     } catch (error) {
-        logger.error(
-            "[TrackMappingStaleness] Staleness check failed",
-            error
-        );
+        logger.error("[TrackMappingStaleness] Staleness check failed", error);
     } finally {
         stalenessRunInFlight = false;
     }
@@ -91,7 +88,7 @@ export function startTrackMappingStalenessWorker(): void {
     }
     void runTrackMappingStalenessCheck();
     logger.info(
-        `[TrackMappingStaleness] Worker started (intervalMs=${intervalMs})`
+        `[TrackMappingStaleness] Worker started (intervalMs=${intervalMs})`,
     );
 }
 

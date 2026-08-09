@@ -21,7 +21,7 @@ jest.mock("../rateLimiter", () => ({
     rateLimiter: {
         execute: jest.fn(
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
-                requestFn()
+                requestFn(),
         ),
     },
 }));
@@ -66,7 +66,7 @@ describe("lastFmService artist image strict fallback", () => {
                 url: "https://last.fm/music/ghost",
                 image: [],
             },
-            true
+            true,
         );
 
         expect(getArtistInfoSpy).toHaveBeenCalledWith("GHOST", "");
@@ -76,7 +76,7 @@ describe("lastFmService artist image strict fallback", () => {
         expect(result).toEqual(
             expect.objectContaining({
                 image: "https://images.example/strict.jpg",
-            })
+            }),
         );
     });
 
@@ -91,7 +91,9 @@ describe("lastFmService artist image strict fallback", () => {
             bio: {},
             tags: { tag: [] },
         } as any);
-        jest.spyOn(fanartService, "getArtistImage").mockResolvedValue(null as any);
+        jest.spyOn(fanartService, "getArtistImage").mockResolvedValue(
+            null as any,
+        );
         const strictDeezerSpy = jest
             .spyOn(deezerService, "getArtistImageStrict")
             .mockResolvedValue("https://images.example/strict.jpg");
@@ -104,22 +106,24 @@ describe("lastFmService artist image strict fallback", () => {
                 url: "https://last.fm/music/radiohead",
                 image: [],
             },
-            true
+            true,
         );
 
         expect(strictDeezerSpy).not.toHaveBeenCalled();
         expect(result).toEqual(
             expect.objectContaining({
                 image: "https://images.example/lastfm.jpg",
-            })
+            }),
         );
     });
 
     it("falls back to null image when strict Deezer lookup fails", async () => {
-        jest.spyOn(lastFmService, "getArtistInfo").mockResolvedValue(null as any);
-        jest
-            .spyOn(fanartService, "getArtistImage")
-            .mockResolvedValue(null as any);
+        jest.spyOn(lastFmService, "getArtistInfo").mockResolvedValue(
+            null as any,
+        );
+        jest.spyOn(fanartService, "getArtistImage").mockResolvedValue(
+            null as any,
+        );
         const strictDeezerSpy = jest
             .spyOn(deezerService, "getArtistImageStrict")
             .mockRejectedValue(new Error("strict failed"));
@@ -135,7 +139,7 @@ describe("lastFmService artist image strict fallback", () => {
                 url: "https://last.fm/music/ghost-face",
                 image: [],
             },
-            true
+            true,
         );
 
         expect(strictDeezerSpy).toHaveBeenCalledWith("Ghost Face");
@@ -143,7 +147,7 @@ describe("lastFmService artist image strict fallback", () => {
         expect(result).toEqual(
             expect.objectContaining({
                 image: null,
-            })
+            }),
         );
     });
 });

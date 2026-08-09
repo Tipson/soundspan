@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -129,7 +131,9 @@ describe("subsonic entity compatibility handlers", () => {
                 index: Array<{ artist: Array<Record<string, unknown>> }>;
             };
         };
-        const indexedArtists = payload.artists.index.flatMap((entry) => entry.artist);
+        const indexedArtists = payload.artists.index.flatMap(
+            (entry) => entry.artist,
+        );
 
         expect(indexedArtists).toEqual(
             expect.arrayContaining([
@@ -240,7 +244,9 @@ describe("subsonic entity compatibility handlers", () => {
     });
 
     it("returns generic error when artist lookup fails", async () => {
-        mockArtistFindFirst.mockRejectedValueOnce(new Error("artist query failed"));
+        mockArtistFindFirst.mockRejectedValueOnce(
+            new Error("artist query failed"),
+        );
 
         await handleGetArtist(
             buildReq({
@@ -327,7 +333,9 @@ describe("subsonic entity compatibility handlers", () => {
     });
 
     it("returns generic error when album lookup fails", async () => {
-        mockAlbumFindFirst.mockRejectedValueOnce(new Error("album query failed"));
+        mockAlbumFindFirst.mockRejectedValueOnce(
+            new Error("album query failed"),
+        );
 
         await handleGetAlbum(
             buildReq({
@@ -425,7 +433,9 @@ describe("subsonic entity compatibility handlers", () => {
     });
 
     it("returns generic error when song lookup fails", async () => {
-        mockTrackFindFirst.mockRejectedValueOnce(new Error("song query failed"));
+        mockTrackFindFirst.mockRejectedValueOnce(
+            new Error("song query failed"),
+        );
 
         await handleGetSong(
             buildReq({
@@ -490,7 +500,9 @@ describe("subsonic entity compatibility handlers", () => {
     });
 
     it("returns generic error when artistInfo2 lookup fails", async () => {
-        mockArtistFindFirst.mockRejectedValueOnce(new Error("artist info failed"));
+        mockArtistFindFirst.mockRejectedValueOnce(
+            new Error("artist info failed"),
+        );
 
         await handleGetArtistInfo2(
             buildReq({
@@ -555,7 +567,9 @@ describe("subsonic entity compatibility handlers", () => {
     });
 
     it("returns generic error when albumInfo2 lookup fails", async () => {
-        mockAlbumFindFirst.mockRejectedValueOnce(new Error("album info failed"));
+        mockAlbumFindFirst.mockRejectedValueOnce(
+            new Error("album info failed"),
+        );
 
         await handleGetAlbumInfo2(
             buildReq({

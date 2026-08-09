@@ -36,9 +36,13 @@ describe("scanProcessor runtime behavior", () => {
             albumTitle: string,
             candidateArtistName: string,
             candidateAlbumTitle: string,
-            threshold: number
+            threshold: number,
         ) => boolean;
-        artistByMbid?: { mbid: string; name: string; enrichmentStatus: string } | null;
+        artistByMbid?: {
+            mbid: string;
+            name: string;
+            enrichmentStatus: string;
+        } | null;
         albumByRgMbid?: {
             rgMbid: string;
             title: string;
@@ -79,22 +83,28 @@ describe("scanProcessor runtime behavior", () => {
             },
         };
 
-                const prisma = {
-                    downloadJob: {
-                        findMany: jest.fn(async () => options.activeJobs ?? []),
-                        updateMany: jest.fn(async (args: any) => {
-                    if (args?.where?.targetMbid && args?.where?.type === "artist") {
+        const prisma = {
+            downloadJob: {
+                findMany: jest.fn(async () => options.activeJobs ?? []),
+                updateMany: jest.fn(async (args: any) => {
+                    if (
+                        args?.where?.targetMbid &&
+                        args?.where?.type === "artist"
+                    ) {
                         return { count: 1 };
                     }
-                    if (args?.where?.targetMbid && args?.where?.type === "album") {
+                    if (
+                        args?.where?.targetMbid &&
+                        args?.where?.type === "album"
+                    ) {
                         return { count: options.albumDownloadUpdateCount ?? 1 };
                     }
                     if (args?.where?.lidarrRef) {
                         return { count: 1 };
                     }
-                        if (args?.where?.metadata) {
-                            return { count: options.metadataMatchUpdateCount ?? 0 };
-                        }
+                    if (args?.where?.metadata) {
+                        return { count: options.metadataMatchUpdateCount ?? 0 };
+                    }
                     if (args?.where?.id?.in) {
                         return { count: args.where.id.in.length };
                     }
@@ -149,29 +159,34 @@ describe("scanProcessor runtime behavior", () => {
             scanLibrary: jest.Mock;
         }> = [];
 
-        const MusicScannerService = jest.fn().mockImplementation(
-            (progressCallback: (progress: ProgressEvent) => void, coverCachePath: string) => {
-                const scanLibrary = jest.fn(async () => {
-                    for (const event of progressEvents) {
-                        progressCallback(event);
-                    }
+        const MusicScannerService = jest
+            .fn()
+            .mockImplementation(
+                (
+                    progressCallback: (progress: ProgressEvent) => void,
+                    coverCachePath: string,
+                ) => {
+                    const scanLibrary = jest.fn(async () => {
+                        for (const event of progressEvents) {
+                            progressCallback(event);
+                        }
 
-                    if (options.scanError) {
-                        throw options.scanError;
-                    }
+                        if (options.scanError) {
+                            throw options.scanError;
+                        }
 
-                    return scanResult;
-                });
+                        return scanResult;
+                    });
 
-                const instance = {
-                    progressCallback,
-                    coverCachePath,
-                    scanLibrary,
-                };
-                scannerInstances.push(instance);
-                return instance;
-            }
-        );
+                    const instance = {
+                        progressCallback,
+                        coverCachePath,
+                        scanLibrary,
+                    };
+                    scannerInstances.push(instance);
+                    return instance;
+                },
+            );
 
         jest.doMock("../../../utils/logger", () => ({ logger }));
         jest.doMock("../../../services/musicScanner", () => ({
@@ -190,7 +205,9 @@ describe("scanProcessor runtime behavior", () => {
         jest.doMock("../../../services/notificationService", () => ({
             notificationService,
         }));
-        jest.doMock("../../unifiedEnrichment", () => ({ triggerEnrichmentNow }));
+        jest.doMock("../../unifiedEnrichment", () => ({
+            triggerEnrichmentNow,
+        }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const module = require("../scanProcessor");
@@ -213,7 +230,7 @@ describe("scanProcessor runtime behavior", () => {
 
     function createJob(
         dataOverrides: Record<string, unknown> = {},
-        progressImpl?: (value: number) => Promise<void>
+        progressImpl?: (value: number) => Promise<void>,
     ) {
         return {
             id: "job-1",
@@ -226,7 +243,7 @@ describe("scanProcessor runtime behavior", () => {
                 progressImpl ??
                     (async (_value: number) => {
                         return undefined;
-                    })
+                    }),
             ),
         } as any;
     }
@@ -253,17 +270,20 @@ describe("scanProcessor runtime behavior", () => {
         await expect(module.processScan(job)).resolves.toEqual(
             expect.objectContaining({
                 tracksAdded: 3,
-            })
+            }),
         );
 
         expect(prisma.downloadJob.findMany).toHaveBeenCalledTimes(1);
         expect(prisma.album.findMany).not.toHaveBeenCalled();
         expect(matchAlbum).not.toHaveBeenCalled();
-        expect(discoverWeeklyService.checkBatchCompletion).not.toHaveBeenCalled();
+        expect(
+            discoverWeeklyService.checkBatchCompletion,
+        ).not.toHaveBeenCalled();
 
-        const reconcileUpdateCalls = prisma.downloadJob.updateMany.mock.calls.filter(
-            (call: any[]) => call[0]?.where?.id?.in
-        );
+        const reconcileUpdateCalls =
+            prisma.downloadJob.updateMany.mock.calls.filter(
+                (call: any[]) => call[0]?.where?.id?.in,
+            );
         expect(reconcileUpdateCalls).toHaveLength(0);
     });
 
@@ -298,7 +318,7 @@ describe("scanProcessor runtime behavior", () => {
                 where: expect.objectContaining({
                     id: expect.anything(),
                 }),
-            })
+            }),
         );
     });
 
@@ -339,13 +359,16 @@ describe("scanProcessor runtime behavior", () => {
             "Known Album",
             "Other Artist",
             "Completely Different",
-            0.75
+            0.75,
         );
-        expect(discoverWeeklyService.checkBatchCompletion).not.toHaveBeenCalled();
+        expect(
+            discoverWeeklyService.checkBatchCompletion,
+        ).not.toHaveBeenCalled();
 
-        const reconcileUpdateCalls = prisma.downloadJob.updateMany.mock.calls.filter(
-            (call: any[]) => call[0]?.where?.id?.in
-        );
+        const reconcileUpdateCalls =
+            prisma.downloadJob.updateMany.mock.calls.filter(
+                (call: any[]) => call[0]?.where?.id?.in,
+            );
         expect(reconcileUpdateCalls).toHaveLength(0);
     });
 
@@ -406,7 +429,7 @@ describe("scanProcessor runtime behavior", () => {
                 albumTitle,
                 candidateArtistName,
                 candidateAlbumTitle,
-                threshold
+                threshold,
             ) => {
                 return (
                     artistName === "Artist Two" &&
@@ -420,9 +443,10 @@ describe("scanProcessor runtime behavior", () => {
 
         await module.processScan(createJob());
 
-        const reconcileUpdateCalls = prisma.downloadJob.updateMany.mock.calls.filter(
-            (call: any[]) => call[0]?.where?.id?.in
-        );
+        const reconcileUpdateCalls =
+            prisma.downloadJob.updateMany.mock.calls.filter(
+                (call: any[]) => call[0]?.where?.id?.in,
+            );
         expect(reconcileUpdateCalls).toHaveLength(1);
         expect(reconcileUpdateCalls[0][0]).toEqual(
             expect.objectContaining({
@@ -433,7 +457,7 @@ describe("scanProcessor runtime behavior", () => {
                     status: "completed",
                     error: null,
                 }),
-            })
+            }),
         );
         expect(discoverWeeklyService.checkBatchCompletion.mock.calls).toEqual([
             ["batch-1"],
@@ -467,7 +491,7 @@ describe("scanProcessor runtime behavior", () => {
         expect(job.progress).toHaveBeenCalledWith(100);
         expect(logger.error).toHaveBeenCalledWith(
             "Failed to update job progress:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -479,8 +503,13 @@ describe("scanProcessor runtime behavior", () => {
             errors: [],
             duration: 44,
         };
-        const { module, prisma, scannerInstances, MusicScannerService, config } =
-            loadScanProcessor({ scanResult });
+        const {
+            module,
+            prisma,
+            scannerInstances,
+            MusicScannerService,
+            config,
+        } = loadScanProcessor({ scanResult });
         const job = createJob({
             musicPath: "/custom/library/music",
         });
@@ -489,10 +518,10 @@ describe("scanProcessor runtime behavior", () => {
 
         expect(MusicScannerService).toHaveBeenCalledTimes(1);
         expect(scannerInstances[0].coverCachePath).toBe(
-            path.join(config.music.transcodeCachePath, "../covers")
+            path.join(config.music.transcodeCachePath, "../covers"),
         );
         expect(scannerInstances[0].scanLibrary).toHaveBeenCalledWith(
-            "/custom/library/music"
+            "/custom/library/music",
         );
         expect(job.progress).toHaveBeenCalledWith(0);
         expect(job.progress).toHaveBeenCalledWith(100);
@@ -542,7 +571,7 @@ describe("scanProcessor runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "completed",
                 }),
-            })
+            }),
         );
         expect(prisma.downloadJob.updateMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -553,7 +582,7 @@ describe("scanProcessor runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "completed",
                 }),
-            })
+            }),
         );
         expect(prisma.downloadJob.updateMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -563,7 +592,7 @@ describe("scanProcessor runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "completed",
                 }),
-            })
+            }),
         );
         expect(prisma.artist.findUnique).toHaveBeenCalledWith({
             where: { mbid: "artist-mbid-1" },
@@ -576,12 +605,12 @@ describe("scanProcessor runtime behavior", () => {
         expect(enrichSimilarArtist).toHaveBeenCalledWith(
             expect.objectContaining({
                 name: "Pending Artist",
-            })
+            }),
         );
         expect(enrichSimilarArtist).toHaveBeenCalledWith(
             expect.objectContaining({
                 name: "Album Artist",
-            })
+            }),
         );
     });
 
@@ -619,7 +648,7 @@ describe("scanProcessor runtime behavior", () => {
                     targetMbid: "album-mbid-1",
                     type: "album",
                 }),
-            })
+            }),
         );
         expect(prisma.album.findFirst).toHaveBeenCalledWith({
             where: { rgMbid: "album-mbid-1" },
@@ -635,7 +664,7 @@ describe("scanProcessor runtime behavior", () => {
                         equals: "Imported Album",
                     },
                 }),
-            })
+            }),
         );
     });
 
@@ -669,8 +698,8 @@ describe("scanProcessor runtime behavior", () => {
 
         expect(logger.debug).toHaveBeenCalledWith(
             expect.stringContaining(
-                "No pending downloads found for: Album Artist - Imported Album"
-            )
+                "No pending downloads found for: Album Artist - Imported Album",
+            ),
         );
     });
 
@@ -691,10 +720,12 @@ describe("scanProcessor runtime behavior", () => {
 
         await module.processScan(job);
 
-        expect(spotifyImportService.buildPlaylistAfterScan).toHaveBeenCalledWith(
-            "spotify-job-1"
-        );
-        expect(spotifyImportService.reconcilePendingTracks).not.toHaveBeenCalled();
+        expect(
+            spotifyImportService.buildPlaylistAfterScan,
+        ).toHaveBeenCalledWith("spotify-job-1");
+        expect(
+            spotifyImportService.reconcilePendingTracks,
+        ).not.toHaveBeenCalled();
     });
 
     it("logs discovery weekly playlist build completion and ignores recoverable errors", async () => {
@@ -715,9 +746,11 @@ describe("scanProcessor runtime behavior", () => {
         await module.processScan(job);
 
         expect(discoverWeeklyService.buildFinalPlaylist).toHaveBeenCalledWith(
-            "batch-55"
+            "batch-55",
         );
-        expect(discoverWeeklyService.buildFinalPlaylist).toHaveBeenCalledTimes(1);
+        expect(discoverWeeklyService.buildFinalPlaylist).toHaveBeenCalledTimes(
+            1,
+        );
     });
 
     it("logs discovery weekly playlist build failures without failing the scan", async () => {
@@ -727,14 +760,14 @@ describe("scanProcessor runtime behavior", () => {
             discoveryBatchId: "batch-66",
         });
         discoverWeeklyService.buildFinalPlaylist.mockRejectedValueOnce(
-            new Error("dw-build-failed")
+            new Error("dw-build-failed"),
         );
 
         await module.processScan(job);
 
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1]  Failed to build Discovery playlist:",
-            "dw-build-failed"
+            "dw-build-failed",
         );
     });
 
@@ -753,14 +786,14 @@ describe("scanProcessor runtime behavior", () => {
             spotifyImportJobId: "spotify-job-1",
         });
         spotifyImportService.buildPlaylistAfterScan.mockRejectedValueOnce(
-            new Error("spotify-build-failed")
+            new Error("spotify-build-failed"),
         );
 
         await module.processScan(job);
 
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1]  Failed to build Spotify Import playlist:",
-            "spotify-build-failed"
+            "spotify-build-failed",
         );
     });
 
@@ -784,7 +817,7 @@ describe("scanProcessor runtime behavior", () => {
         expect(notificationService.notifySystem).toHaveBeenCalledWith(
             "user-1",
             "Library Scan Complete",
-            "Added 1 tracks, updated 0, removed 0"
+            "Added 1 tracks, updated 0, removed 0",
         );
     });
 
@@ -803,17 +836,17 @@ describe("scanProcessor runtime behavior", () => {
             userId: "user-1",
         });
         notificationService.notifySystem.mockRejectedValueOnce(
-            new Error("notify-failed")
+            new Error("notify-failed"),
         );
 
         await expect(module.processScan(job)).resolves.toEqual(
             expect.objectContaining({
                 tracksAdded: 0,
-            })
+            }),
         );
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1] Failed to send notification:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -839,14 +872,16 @@ describe("scanProcessor runtime behavior", () => {
 
         await module.processScan(job);
 
-        expect(spotifyImportService.reconcilePendingTracks).toHaveBeenCalledTimes(1);
+        expect(
+            spotifyImportService.reconcilePendingTracks,
+        ).toHaveBeenCalledTimes(1);
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ScanJob job-1] ✓ Reconciled 3 pending tracks to 2 playlists"
+            "[ScanJob job-1] ✓ Reconciled 3 pending tracks to 2 playlists",
         );
         expect(notificationService.notifySystem).toHaveBeenCalledWith(
             "user-1",
             "Playlist Tracks Matched",
-            "3 previously unmatched tracks were added to your playlists"
+            "3 previously unmatched tracks were added to your playlists",
         );
     });
 
@@ -865,14 +900,14 @@ describe("scanProcessor runtime behavior", () => {
             userId: "user-1",
         });
         spotifyImportService.reconcilePendingTracks.mockRejectedValueOnce(
-            new Error("reconcile-failed")
+            new Error("reconcile-failed"),
         );
 
         await module.processScan(job);
 
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1] Failed to reconcile pending tracks:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -897,9 +932,11 @@ describe("scanProcessor runtime behavior", () => {
 
         await module.processScan(job);
 
-        expect(discoverWeeklyService.reconcileDiscoveryTracks).toHaveBeenCalledTimes(1);
+        expect(
+            discoverWeeklyService.reconcileDiscoveryTracks,
+        ).toHaveBeenCalledTimes(1);
         expect(logger.info).toHaveBeenCalledWith(
-            "[SCAN] Discovery Weekly reconciliation: 4 tracks added across 2 batches"
+            "[SCAN] Discovery Weekly reconciliation: 4 tracks added across 2 batches",
         );
     });
 
@@ -918,28 +955,29 @@ describe("scanProcessor runtime behavior", () => {
             userId: "user-1",
         });
         discoverWeeklyService.reconcileDiscoveryTracks.mockRejectedValueOnce(
-            new Error("reconcile-weekly-failed")
+            new Error("reconcile-weekly-failed"),
         );
 
         await module.processScan(job);
 
         expect(logger.error).toHaveBeenCalledWith(
             "[SCAN] Discovery Weekly reconciliation failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("triggers mood tag enrichment when new tracks need tags", async () => {
-        const { module, prisma, logger, triggerEnrichmentNow } = loadScanProcessor({
-            scanResult: {
-                tracksAdded: 5,
-                tracksUpdated: 0,
-                tracksRemoved: 0,
-                errors: [],
-                duration: 11,
-            },
-            tracksNeedingTags: 2,
-        });
+        const { module, prisma, logger, triggerEnrichmentNow } =
+            loadScanProcessor({
+                scanResult: {
+                    tracksAdded: 5,
+                    tracksUpdated: 0,
+                    tracksRemoved: 0,
+                    errors: [],
+                    duration: 11,
+                },
+                tracksNeedingTags: 2,
+            });
         triggerEnrichmentNow.mockResolvedValueOnce({
             artists: 0,
             tracks: 7,
@@ -958,29 +996,30 @@ describe("scanProcessor runtime behavior", () => {
             },
         });
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ScanJob job-1] Found 2 tracks needing mood tags, triggering enrichment..."
+            "[ScanJob job-1] Found 2 tracks needing mood tags, triggering enrichment...",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ScanJob job-1] Mood tag enrichment completed: 7 tracks enriched"
+            "[ScanJob job-1] Mood tag enrichment completed: 7 tracks enriched",
         );
     });
 
     it("skips immediate mood-tag enrichment when no tracks need tags", async () => {
-        const { module, logger, prisma, triggerEnrichmentNow } = loadScanProcessor({
-            scanResult: {
-                tracksAdded: 4,
-                tracksUpdated: 0,
-                tracksRemoved: 0,
-                errors: [],
-                duration: 9,
-            },
-            tracksNeedingTags: 0,
-        });
+        const { module, logger, prisma, triggerEnrichmentNow } =
+            loadScanProcessor({
+                scanResult: {
+                    tracksAdded: 4,
+                    tracksUpdated: 0,
+                    tracksRemoved: 0,
+                    errors: [],
+                    duration: 9,
+                },
+                tracksNeedingTags: 0,
+            });
         await module.processScan(createJob());
 
         expect(prisma.track.count).toHaveBeenCalledTimes(1);
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ScanJob job-1] No tracks need immediate mood tag enrichment"
+            "[ScanJob job-1] No tracks need immediate mood tag enrichment",
         );
         expect(triggerEnrichmentNow).not.toHaveBeenCalled();
     });
@@ -1003,7 +1042,7 @@ describe("scanProcessor runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1] Mood tag enrichment failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1023,7 +1062,7 @@ describe("scanProcessor runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1] Failed to check for mood tag enrichment:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1044,7 +1083,7 @@ describe("scanProcessor runtime behavior", () => {
             albumByRgMbid: null,
         });
         prisma.artist.findUnique.mockRejectedValueOnce(
-            new Error("artist-lookup-failed")
+            new Error("artist-lookup-failed"),
         );
         const job = createJob({
             source: "lidarr-webhook",
@@ -1055,7 +1094,7 @@ describe("scanProcessor runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1]   Failed to trigger enrichment:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1071,7 +1110,7 @@ describe("scanProcessor runtime behavior", () => {
         expect(job.progress).not.toHaveBeenCalledWith(100);
         expect(logger.error).toHaveBeenCalledWith(
             "[ScanJob job-1] Scan failed:",
-            scanError
+            scanError,
         );
     });
 });

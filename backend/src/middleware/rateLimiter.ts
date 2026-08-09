@@ -17,7 +17,9 @@ export const apiLimiter = rateLimit({
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     handler: (req, res, next, options) => {
-        logger.warn(`API rate limit exceeded: ${req.ip} on ${req.method} ${req.path}`);
+        logger.warn(
+            `API rate limit exceeded: ${req.ip} on ${req.method} ${req.path}`,
+        );
         res.status(options.statusCode).send(options.message);
     },
     skip: (req) => {
@@ -28,7 +30,8 @@ export const apiLimiter = rateLimit({
             path === "/health" ||
             path === "/api/health" ||
             // Track streaming: /api/library/tracks/:id/stream
-            (path.startsWith("/api/library/tracks/") && path.endsWith("/stream")) ||
+            (path.startsWith("/api/library/tracks/") &&
+                path.endsWith("/stream")) ||
             // Podcast streaming: /api/podcasts/:podcastId/episodes/:episodeId/stream
             (path.startsWith("/api/podcasts/") && path.endsWith("/stream")) ||
             // Soulseek search polling: /api/soulseek/search/:searchId (no /status suffix)
@@ -55,7 +58,6 @@ export const authLimiter = rateLimit({
     },
     ...trustProxyValidation,
 });
-
 
 // Image/Cover art limiter (very high limit: 500 req/minute)
 // This is for image proxying - not a security risk, just bandwidth
@@ -115,7 +117,8 @@ export const lyricsMutationLimiter = rateLimit({
 export const ytMusicSearchLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 30,
-    message: "Too many YouTube Music search requests. Please slow down to avoid rate limiting.",
+    message:
+        "Too many YouTube Music search requests. Please slow down to avoid rate limiting.",
     standardHeaders: true,
     legacyHeaders: false,
     ...trustProxyValidation,
@@ -128,7 +131,8 @@ export const ytMusicSearchLimiter = rateLimit({
 export const ytMusicStreamLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 20,
-    message: "Too many YouTube Music stream requests. Please wait before playing more tracks.",
+    message:
+        "Too many YouTube Music stream requests. Please wait before playing more tracks.",
     standardHeaders: true,
     legacyHeaders: false,
     ...trustProxyValidation,

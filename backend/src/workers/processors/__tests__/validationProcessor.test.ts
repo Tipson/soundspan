@@ -44,10 +44,10 @@ describe("validationProcessor", () => {
         expect(job.progress).toHaveBeenNthCalledWith(1, 0);
         expect(job.progress).toHaveBeenNthCalledWith(2, 100);
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ValidationJob validation-1] Starting file validation"
+            "[ValidationJob validation-1] Starting file validation",
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ValidationJob validation-1] Validation complete: 4 tracks removed"
+            "[ValidationJob validation-1] Validation complete: 4 tracks removed",
         );
         expect(actual).toEqual(result);
     });
@@ -61,7 +61,9 @@ describe("validationProcessor", () => {
             progress: jest.fn().mockResolvedValue(undefined),
         } as any;
 
-        await expect(processValidation(job)).rejects.toThrow("validation failed");
+        await expect(processValidation(job)).rejects.toThrow(
+            "validation failed",
+        );
         expect(job.progress).toHaveBeenCalledTimes(1);
         expect(job.progress).toHaveBeenCalledWith(0);
     });

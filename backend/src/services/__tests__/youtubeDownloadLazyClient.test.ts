@@ -15,7 +15,12 @@ describe("youtubeDownloadService lazy client", () => {
         jest.resetModules();
         jest.doMock("../../config", () => ({ config: { nodeEnv: "test" } }));
         jest.doMock("../../utils/logger", () => ({
-            logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+            logger: {
+                debug: jest.fn(),
+                info: jest.fn(),
+                warn: jest.fn(),
+                error: jest.fn(),
+            },
         }));
 
         expect(() => {
@@ -35,7 +40,12 @@ describe("youtubeDownloadService lazy client", () => {
             config: { ytmusicStreamer: { url: "http://sidecar:8586" } },
         }));
         jest.doMock("../../utils/logger", () => ({
-            logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+            logger: {
+                debug: jest.fn(),
+                info: jest.fn(),
+                warn: jest.fn(),
+                error: jest.fn(),
+            },
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -45,10 +55,12 @@ describe("youtubeDownloadService lazy client", () => {
         expect(create).not.toHaveBeenCalled();
 
         // The client is built on first request, using the configured base URL.
-        await youtubeDownloadService.getVideoInfo("http://youtube.com/watch?v=x");
+        await youtubeDownloadService.getVideoInfo(
+            "http://youtube.com/watch?v=x",
+        );
         expect(create).toHaveBeenCalledTimes(1);
         expect(create).toHaveBeenCalledWith(
-            expect.objectContaining({ baseURL: "http://sidecar:8586" })
+            expect.objectContaining({ baseURL: "http://sidecar:8586" }),
         );
     });
 
@@ -65,17 +77,26 @@ describe("youtubeDownloadService lazy client", () => {
             },
         }));
         jest.doMock("../../utils/logger", () => ({
-            logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+            logger: {
+                debug: jest.fn(),
+                info: jest.fn(),
+                warn: jest.fn(),
+                error: jest.fn(),
+            },
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { youtubeDownloadService } = require("../youtubeDownload");
 
-        await youtubeDownloadService.getVideoInfo("http://youtube.com/watch?v=x");
+        await youtubeDownloadService.getVideoInfo(
+            "http://youtube.com/watch?v=x",
+        );
         expect(create).toHaveBeenCalledWith(
             expect.objectContaining({
-                headers: expect.objectContaining({ "x-internal-secret": "sek-123" }),
-            })
+                headers: expect.objectContaining({
+                    "x-internal-secret": "sek-123",
+                }),
+            }),
         );
     });
 });

@@ -1,7 +1,10 @@
 /**
  * Parses a base-10 integer from an env var, using `fallback` when the value is empty.
  */
-export function parseEnvInt(value: string | undefined, fallback: number): number {
+export function parseEnvInt(
+    value: string | undefined,
+    fallback: number,
+): number {
     if (typeof value !== "string") {
         return fallback;
     }
@@ -28,7 +31,7 @@ export function parseEnvInt(value: string | undefined, fallback: number): number
  */
 export function parseEnvBool(
     value: string | undefined,
-    defaultValue: boolean
+    defaultValue: boolean,
 ): boolean {
     if (typeof value !== "string") {
         return defaultValue;
@@ -68,7 +71,7 @@ export function parseEnvCsv(value: string | undefined): string[] | undefined {
  */
 export function parseEnvFloat(
     value: string | undefined,
-    fallback: number
+    fallback: number,
 ): number {
     if (typeof value !== "string") {
         return fallback;

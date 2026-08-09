@@ -38,7 +38,7 @@ export interface BrowseImageCacheEntry {
  * Returns the cached image entry if the file exists on disk, or null.
  */
 export function getBrowseImageFromCache(
-    key: string
+    key: string,
 ): BrowseImageCacheEntry | null {
     const dir = ensureCacheDir();
     const filePath = path.join(dir, `${key}.img`);
@@ -61,12 +61,12 @@ export function getBrowseImageFromCache(
  * atomically (write-to-temp then rename), and returns the cache entry — or null on failure.
  */
 export async function fetchAndCacheBrowseImage(
-    url: string
+    url: string,
 ): Promise<BrowseImageCacheEntry | null> {
     const result = await fetchExternalImage({ url });
     if (!result.ok) {
         logger.warn(
-            `[BrowseImageCache] Failed to fetch image: ${result.status} — ${result.message ?? url}`
+            `[BrowseImageCache] Failed to fetch image: ${result.status} — ${result.message ?? url}`,
         );
         return null;
     }
@@ -74,21 +74,21 @@ export async function fetchAndCacheBrowseImage(
     const contentType = result.contentType ?? "";
     if (contentType && !contentType.startsWith("image/")) {
         logger.warn(
-            `[BrowseImageCache] Rejected non-image content-type: ${contentType} — ${url}`
+            `[BrowseImageCache] Rejected non-image content-type: ${contentType} — ${url}`,
         );
         return null;
     }
 
     if (result.buffer.length < MIN_IMAGE_BYTES) {
         logger.warn(
-            `[BrowseImageCache] Rejected tiny response (${result.buffer.length} bytes) — ${url}`
+            `[BrowseImageCache] Rejected tiny response (${result.buffer.length} bytes) — ${url}`,
         );
         return null;
     }
 
     if (result.buffer.length > MAX_IMAGE_BYTES) {
         logger.warn(
-            `[BrowseImageCache] Rejected oversized response (${result.buffer.length} bytes) — ${url}`
+            `[BrowseImageCache] Rejected oversized response (${result.buffer.length} bytes) — ${url}`,
         );
         return null;
     }

@@ -3,7 +3,11 @@ import { logger } from "../utils/logger";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { lastFmService } from "../services/lastfm";
-import { searchService, normalizeCacheQuery, type SearchResults } from "../services/search";
+import {
+    searchService,
+    normalizeCacheQuery,
+    type SearchResults,
+} from "../services/search";
 import axios from "axios";
 import { redisClient } from "../utils/redis";
 
@@ -26,7 +30,7 @@ function normalizeDiscoverArtistTags(value: unknown): string[] {
 async function getLocalSimilarArtistsFromGraph(
     artistName: string,
     artistMbid: string,
-    limit: number
+    limit: number,
 ): Promise<any[]> {
     const normalizedArtistName = normalizeDiscoverArtistName(artistName);
     const seedFilters: any[] = [
@@ -99,7 +103,9 @@ async function getLocalSimilarArtistsFromGraph(
     return mapped;
 }
 
-async function filterLibraryArtistsFromDiscoverResults(artists: any[]): Promise<any[]> {
+async function filterLibraryArtistsFromDiscoverResults(
+    artists: any[],
+): Promise<any[]> {
     if (artists.length === 0) {
         return artists;
     }
@@ -107,9 +113,11 @@ async function filterLibraryArtistsFromDiscoverResults(artists: any[]): Promise<
     const candidateNames = Array.from(
         new Set(
             artists
-                .map((artist) => (typeof artist?.name === "string" ? artist.name.trim() : ""))
-                .filter(Boolean)
-        )
+                .map((artist) =>
+                    typeof artist?.name === "string" ? artist.name.trim() : "",
+                )
+                .filter(Boolean),
+        ),
     );
 
     if (candidateNames.length === 0) {
@@ -130,12 +138,14 @@ async function filterLibraryArtistsFromDiscoverResults(artists: any[]): Promise<
     }
 
     const libraryArtistNames = new Set(
-        libraryArtists.map((artist) => normalizeDiscoverArtistName(artist.name))
+        libraryArtists.map((artist) =>
+            normalizeDiscoverArtistName(artist.name),
+        ),
     );
 
     return artists.filter(
         (artist) =>
-            !libraryArtistNames.has(normalizeDiscoverArtistName(artist?.name))
+            !libraryArtistNames.has(normalizeDiscoverArtistName(artist?.name)),
     );
 }
 
@@ -259,7 +269,9 @@ router.get("/", async (req, res) => {
 
         const query = (q as string).trim();
         const parsed = parseInt(limit as string, 10);
-        const searchLimit = Number.isNaN(parsed) ? 20 : Math.min(Math.max(parsed, 1), 100);
+        const searchLimit = Number.isNaN(parsed)
+            ? 20
+            : Math.min(Math.max(parsed, 1), 100);
 
         if (!query) {
             return res.json({
@@ -343,7 +355,7 @@ router.get("/genres", async (req, res) => {
                 id: g.id,
                 name: g.name,
                 trackCount: g._count.trackGenres,
-            }))
+            })),
         );
     } catch (error) {
         logger.error("Get genres error:", error);
@@ -412,7 +424,9 @@ router.get("/discover", async (req, res) => {
 
         const query = (q as string).trim();
         const parsedLimit = parseInt(limit as string, 10);
-        const searchLimit = Number.isNaN(parsedLimit) ? 20 : Math.min(Math.max(parsedLimit, 1), 50);
+        const searchLimit = Number.isNaN(parsedLimit)
+            ? 20
+            : Math.min(Math.max(parsedLimit, 1), 50);
 
         if (!query) {
             return res.json({ results: [], aliasInfo: null });
@@ -423,7 +437,9 @@ router.get("/discover", async (req, res) => {
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
-                logger.debug(`[SEARCH DISCOVER] Cache hit for query="${query}" type=${type}`);
+                logger.debug(
+                    `[SEARCH DISCOVER] Cache hit for query="${query}" type=${type}`,
+                );
                 return res.json(JSON.parse(cached));
             }
         } catch (err) {
@@ -434,11 +450,16 @@ router.get("/discover", async (req, res) => {
 
         // Resolve alias (sequential -- modifies the search query, cached 30 days)
         let searchQuery = query;
-        let aliasInfo: { original: string; canonical: string; mbid?: string } | null = null;
+        let aliasInfo: {
+            original: string;
+            canonical: string;
+            mbid?: string;
+        } | null = null;
 
         if (type === "music" || type === "all") {
             try {
-                const correction = await lastFmService.getArtistCorrection(query);
+                const correction =
+                    await lastFmService.getArtistCorrection(query);
                 if (correction?.corrected) {
                     searchQuery = correction.canonicalName;
                     aliasInfo = {
@@ -446,10 +467,15 @@ router.get("/discover", async (req, res) => {
                         canonical: correction.canonicalName,
                         mbid: correction.mbid,
                     };
-                    logger.debug(`[SEARCH DISCOVER] Alias resolved: "${query}" -> "${correction.canonicalName}"`);
+                    logger.debug(
+                        `[SEARCH DISCOVER] Alias resolved: "${query}" -> "${correction.canonicalName}"`,
+                    );
                 }
             } catch (correctionError) {
-                logger.warn("[SEARCH DISCOVER] Correction check failed:", correctionError);
+                logger.warn(
+                    "[SEARCH DISCOVER] Correction check failed:",
+                    correctionError,
+                );
             }
         }
 
@@ -457,53 +483,77 @@ router.get("/discover", async (req, res) => {
         const promiseMap: Record<string, Promise<any>> = {};
 
         if (type === "music" || type === "all") {
-            promiseMap.artists = lastFmService.searchArtists(searchQuery, searchLimit);
-            promiseMap.tracks = lastFmService.searchTracks(searchQuery, searchLimit);
+            promiseMap.artists = lastFmService.searchArtists(
+                searchQuery,
+                searchLimit,
+            );
+            promiseMap.tracks = lastFmService.searchTracks(
+                searchQuery,
+                searchLimit,
+            );
         }
 
         if (type === "podcasts" || type === "all") {
-            promiseMap.podcasts = axios.get("https://itunes.apple.com/search", {
-                params: { term: query, media: "podcast", entity: "podcast", limit: searchLimit },
-                timeout: 5000,
-            }).then((resp) => resp.data.results.map((podcast: any) => ({
-                type: "podcast",
-                id: podcast.collectionId,
-                name: podcast.collectionName,
-                artist: podcast.artistName,
-                description: podcast.description,
-                coverUrl: podcast.artworkUrl600 || podcast.artworkUrl100,
-                feedUrl: podcast.feedUrl,
-                genres: podcast.genres || [],
-                trackCount: podcast.trackCount,
-            })));
+            promiseMap.podcasts = axios
+                .get("https://itunes.apple.com/search", {
+                    params: {
+                        term: query,
+                        media: "podcast",
+                        entity: "podcast",
+                        limit: searchLimit,
+                    },
+                    timeout: 5000,
+                })
+                .then((resp) =>
+                    resp.data.results.map((podcast: any) => ({
+                        type: "podcast",
+                        id: podcast.collectionId,
+                        name: podcast.collectionName,
+                        artist: podcast.artistName,
+                        description: podcast.description,
+                        coverUrl:
+                            podcast.artworkUrl600 || podcast.artworkUrl100,
+                        feedUrl: podcast.feedUrl,
+                        genres: podcast.genres || [],
+                        trackCount: podcast.trackCount,
+                    })),
+                );
         }
 
         // Await all with allSettled so one failure doesn't block others
         const keys = Object.keys(promiseMap);
-        const settled = await Promise.allSettled(keys.map((k) => promiseMap[k]));
+        const settled = await Promise.allSettled(
+            keys.map((k) => promiseMap[k]),
+        );
         const resolved: Record<string, any[]> = {};
         keys.forEach((k, i) => {
             const result = settled[i];
             if (result.status === "fulfilled") {
                 resolved[k] = result.value;
             } else {
-                logger.error(`[SEARCH DISCOVER] ${k} search failed:`, result.reason);
+                logger.error(
+                    `[SEARCH DISCOVER] ${k} search failed:`,
+                    result.reason,
+                );
                 resolved[k] = [];
             }
         });
 
         if (resolved.artists) {
-            logger.debug(`[SEARCH DISCOVER] Found ${resolved.artists.length} artist results`);
-            const filteredArtists = await filterLibraryArtistsFromDiscoverResults(
-                resolved.artists
-            );
             logger.debug(
-                `[SEARCH DISCOVER] Filtered to ${filteredArtists.length} new artists not already in library`
+                `[SEARCH DISCOVER] Found ${resolved.artists.length} artist results`,
+            );
+            const filteredArtists =
+                await filterLibraryArtistsFromDiscoverResults(resolved.artists);
+            logger.debug(
+                `[SEARCH DISCOVER] Filtered to ${filteredArtists.length} new artists not already in library`,
             );
             results.push(...filteredArtists);
         }
         if (resolved.tracks) {
-            logger.debug(`[SEARCH DISCOVER] Found ${resolved.tracks.length} track results`);
+            logger.debug(
+                `[SEARCH DISCOVER] Found ${resolved.tracks.length} track results`,
+            );
             results.push(...resolved.tracks);
         }
         if (resolved.podcasts) {
@@ -587,7 +637,9 @@ router.get("/discover/similar", async (req, res) => {
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
-                logger.debug(`[SEARCH SIMILAR] Cache hit for artist="${artistName}"`);
+                logger.debug(
+                    `[SEARCH SIMILAR] Cache hit for artist="${artistName}"`,
+                );
                 return res.json(JSON.parse(cached));
             }
         } catch (err) {
@@ -597,24 +649,31 @@ router.get("/discover/similar", async (req, res) => {
         const similar = await lastFmService.getSimilarArtists(
             artistMbid,
             artistName,
-            seedLimit
+            seedLimit,
         );
-        let similarArtists = similar.length > 0
-            ? await lastFmService.enrichSimilarArtists(similar, similarLimit)
-            : [];
+        let similarArtists =
+            similar.length > 0
+                ? await lastFmService.enrichSimilarArtists(
+                      similar,
+                      similarLimit,
+                  )
+                : [];
 
         if (similarArtists.length === 0) {
             logger.debug(
-                `[SEARCH SIMILAR] Last.fm returned no enriched artists for artist="${artistName}", falling back to local graph`
+                `[SEARCH SIMILAR] Last.fm returned no enriched artists for artist="${artistName}", falling back to local graph`,
             );
             try {
                 similarArtists = await getLocalSimilarArtistsFromGraph(
                     artistName,
                     artistMbid,
-                    similarLimit
+                    similarLimit,
                 );
             } catch (fallbackError) {
-                logger.warn("[SEARCH SIMILAR] Local fallback query error:", fallbackError);
+                logger.warn(
+                    "[SEARCH SIMILAR] Local fallback query error:",
+                    fallbackError,
+                );
             }
         }
 

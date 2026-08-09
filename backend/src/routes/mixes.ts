@@ -85,9 +85,8 @@ router.get("/", async (req, res) => {
         }
 
         // Generate all mixes
-        const mixes = await programmaticPlaylistService.generateAllMixes(
-            userId
-        );
+        const mixes =
+            await programmaticPlaylistService.generateAllMixes(userId);
 
         // Cache for 1 hour
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(mixes));
@@ -217,7 +216,7 @@ router.post("/mood", async (req, res) => {
 
         const mix = await programmaticPlaylistService.generateMoodOnDemand(
             userId,
-            params
+            params,
         );
 
         if (!mix) {
@@ -254,7 +253,7 @@ router.post("/mood", async (req, res) => {
             .filter((t: any) => t !== undefined);
 
         logger.debug(
-            `[MIXES] Generated mood-on-demand mix with ${mix.trackCount} tracks`
+            `[MIXES] Generated mood-on-demand mix with ${mix.trackCount} tracks`,
         );
 
         res.json({
@@ -675,7 +674,7 @@ router.post("/mood/buckets/:mood/save", async (req, res) => {
             .filter((t: any) => t !== undefined);
 
         logger.debug(
-            `[MIXES] Saved mood bucket mix for user ${userId}: ${mood} (${savedMix.trackCount} tracks)`
+            `[MIXES] Saved mood bucket mix for user ${userId}: ${mood} (${savedMix.trackCount} tracks)`,
         );
 
         res.json({
@@ -713,7 +712,7 @@ router.post("/mood/buckets/backfill", requireAdmin, async (req, res) => {
         }
 
         logger.debug(
-            `[MIXES] Starting mood bucket backfill requested by user ${userId}`
+            `[MIXES] Starting mood bucket backfill requested by user ${userId}`,
         );
 
         const result = await moodBucketService.backfillAllTracks();
@@ -775,7 +774,7 @@ router.post("/refresh", async (req, res) => {
         // Regenerate mixes with random selection (not date-based)
         const mixes = await programmaticPlaylistService.generateAllMixes(
             userId,
-            true
+            true,
         );
 
         // Cache for 1 hour
@@ -904,7 +903,7 @@ router.post("/:id/save", async (req, res) => {
                 playlistId: playlist.id,
                 trackId,
                 sort: index,
-            })
+            }),
         );
 
         await prisma.playlistItem.createMany({
@@ -912,7 +911,7 @@ router.post("/:id/save", async (req, res) => {
         });
 
         logger.debug(
-            `[MIXES] Saved mix ${mixId} as playlist ${playlist.id} (${mix.trackIds.length} tracks)`
+            `[MIXES] Saved mix ${mixId} as playlist ${playlist.id} (${mix.trackIds.length} tracks)`,
         );
 
         res.json({

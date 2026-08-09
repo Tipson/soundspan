@@ -8,7 +8,7 @@ export function errorHandler(
     err: Error,
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
 ) {
     // Handle AppError with proper categorization
     if (err instanceof AppError) {

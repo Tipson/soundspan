@@ -5,10 +5,7 @@
  * (Spotify, Deezer, YT Music, Tidal).
  */
 
-import {
-    normalizeQuotes,
-    normalizeFullwidth,
-} from "./stringNormalization";
+import { normalizeQuotes, normalizeFullwidth } from "./stringNormalization";
 import type { M3UEntry } from "../services/m3uParser";
 
 // ── String normalization helpers ──────────────────────────────────
@@ -26,40 +23,36 @@ export function normalizeApostrophes(str: string): string {
 export function normalizeString(str: string): string {
     const normalizedInput = normalizeFullwidth(normalizeQuotes(str));
 
-    return (
-        normalizedInput
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^\w\s]/g, "")
-            .replace(/\s+/g, " ")
-            .trim()
-    );
+    return normalizedInput
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\w\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 /**
  * Removes common release suffixes (remaster/live/version/etc.) from titles.
  */
 export function stripTrackSuffix(str: string): string {
-    return (
-        normalizeApostrophes(str)
-            .replace(
-                /\s*-\s*(\d{4}\s+)?(remaster(ed)?|deluxe|bonus|single|radio edit|remix|acoustic|live|mono|stereo|version|edition|mix)(\s+\d{4})?(\s+(version|edition|mix))?.*$/i,
-                ""
-            )
-            .replace(/\s*-\s*\d{4}\s*$/, "")
-            .replace(
-                /\s*\([^)]*(?:live at|live from|recorded at|performed at)[^)]*\)\s*/gi,
-                " "
-            )
-            .replace(/\s*\([^)]*remaster[^)]*\)\s*/gi, " ")
-            .replace(/\s*\([^)]*version[^)]*\)\s*/gi, " ")
-            .replace(/\s*\([^)]*edition[^)]*\)\s*/gi, " ")
-            .replace(/\s*\(\s*live\s*(\d{4})?\s*\)\s*/gi, " ")
-            .replace(/\s*\[[^\]]*\]\s*/g, " ")
-            .replace(/\s+/g, " ")
-            .trim()
-    );
+    return normalizeApostrophes(str)
+        .replace(
+            /\s*-\s*(\d{4}\s+)?(remaster(ed)?|deluxe|bonus|single|radio edit|remix|acoustic|live|mono|stereo|version|edition|mix)(\s+\d{4})?(\s+(version|edition|mix))?.*$/i,
+            "",
+        )
+        .replace(/\s*-\s*\d{4}\s*$/, "")
+        .replace(
+            /\s*\([^)]*(?:live at|live from|recorded at|performed at)[^)]*\)\s*/gi,
+            " ",
+        )
+        .replace(/\s*\([^)]*remaster[^)]*\)\s*/gi, " ")
+        .replace(/\s*\([^)]*version[^)]*\)\s*/gi, " ")
+        .replace(/\s*\([^)]*edition[^)]*\)\s*/gi, " ")
+        .replace(/\s*\(\s*live\s*(\d{4})?\s*\)\s*/gi, " ")
+        .replace(/\s*\[[^\]]*\]\s*/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 /**
@@ -151,7 +144,7 @@ function getFilenameStem(filePath: string): string {
  */
 export function matchTrackAgainstLibrary(
     input: TrackMatchInput,
-    candidates: LocalTrackCandidate[]
+    candidates: LocalTrackCandidate[],
 ): TrackMatchResult | null {
     if (!candidates.length) return null;
 
@@ -186,7 +179,7 @@ export function matchTrackAgainstLibrary(
                 normalizeTrackTitle(c.title) === normTitle
             ) {
                 const cAlbum = normalizeString(
-                    normalizeAlbumForMatching(c.albumTitle)
+                    normalizeAlbumForMatching(c.albumTitle),
                 );
                 if (
                     cAlbum.length > 0 &&
@@ -253,7 +246,7 @@ export function matchTrackAgainstLibrary(
  */
 export function matchM3UEntryAgainstLibrary(
     entry: M3UEntry,
-    candidates: LocalTrackCandidate[]
+    candidates: LocalTrackCandidate[],
 ): TrackMatchResult | null {
     if (!candidates.length) return null;
 
@@ -286,7 +279,7 @@ export function matchM3UEntryAgainstLibrary(
         for (const candidate of sortedCandidates) {
             if (!candidate.filePath) continue;
             const candidateFilename = normalizeTrackTitle(
-                getFilenameStem(candidate.filePath)
+                getFilenameStem(candidate.filePath),
             );
             if (candidateFilename === entryFilename) {
                 return {
@@ -321,7 +314,7 @@ export function matchM3UEntryAgainstLibrary(
                 title: entry.title,
                 duration: entry.durationSeconds ?? undefined,
             },
-            sortedCandidates
+            sortedCandidates,
         );
     }
 

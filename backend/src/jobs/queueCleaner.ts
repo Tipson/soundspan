@@ -20,8 +20,12 @@ class QueueCleanerService {
     private readonly prismaRetryAttempts = 3;
 
     // Cached dynamic imports (lazy-loaded once, reused on subsequent calls)
-    private discoverWeeklyService: typeof import("../services/discoverWeekly")["discoverWeeklyService"] | null = null;
-    private matchAlbum: typeof import("../utils/fuzzyMatch")["matchAlbum"] | null = null;
+    private discoverWeeklyService:
+        | (typeof import("../services/discoverWeekly"))["discoverWeeklyService"]
+        | null = null;
+    private matchAlbum:
+        | (typeof import("../utils/fuzzyMatch"))["matchAlbum"]
+        | null = null;
 
     /**
      * Get discoverWeeklyService (lazy-loaded and cached)
@@ -47,7 +51,9 @@ class QueueCleanerService {
 
     private isRetryablePrismaError(error: unknown): boolean {
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(error.code);
+            return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(
+                error.code,
+            );
         }
 
         if (error instanceof Prisma.PrismaClientRustPanicError) {
@@ -74,7 +80,7 @@ class QueueCleanerService {
 
     private async withPrismaRetry<T>(
         operationName: string,
-        operation: () => Promise<T>
+        operation: () => Promise<T>,
     ): Promise<T> {
         for (let attempt = 1; ; attempt += 1) {
             try {
@@ -89,10 +95,12 @@ class QueueCleanerService {
 
                 logger.warn(
                     `[QueueCleaner/Prisma] ${operationName} failed (attempt ${attempt}/${this.prismaRetryAttempts}), retrying`,
-                    error
+                    error,
                 );
                 await prisma.$connect().catch(() => {});
-                await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+                await new Promise((resolve) =>
+                    setTimeout(resolve, 250 * attempt),
+                );
             }
         }
     }
@@ -155,16 +163,17 @@ class QueueCleanerService {
                 await simpleDownloadManager.reconcileWithLidarr();
             if (reconcileResult.reconciled > 0) {
                 logger.debug(
-                    `✓ Reconciled ${reconcileResult.reconciled} job(s) with Lidarr`
+                    `✓ Reconciled ${reconcileResult.reconciled} job(s) with Lidarr`,
                 );
                 this.emptyQueueChecks = 0; // Reset counter
             }
 
             // PART 0.26: Sync with Lidarr queue (detect cancelled downloads)
-            const queueSyncResult = await simpleDownloadManager.syncWithLidarrQueue();
+            const queueSyncResult =
+                await simpleDownloadManager.syncWithLidarrQueue();
             if (queueSyncResult.cancelled > 0) {
                 logger.debug(
-                    `✓ Synced ${queueSyncResult.cancelled} job(s) with Lidarr queue (cancelled/completed)`
+                    `✓ Synced ${queueSyncResult.cancelled} job(s) with Lidarr queue (cancelled/completed)`,
                 );
                 this.emptyQueueChecks = 0; // Reset counter
             }
@@ -174,7 +183,7 @@ class QueueCleanerService {
             const localReconcileResult = await this.reconcileWithLocalLibrary();
             if (localReconcileResult.reconciled > 0) {
                 logger.debug(
-                    `✓ Reconciled ${localReconcileResult.reconciled} job(s) with local library`
+                    `✓ Reconciled ${localReconcileResult.reconciled} job(s) with local library`,
                 );
                 this.emptyQueueChecks = 0; // Reset counter
             }
@@ -185,7 +194,7 @@ class QueueCleanerService {
                 await discoverWeeklyService.checkStuckBatches();
             if (stuckBatchCount > 0) {
                 logger.debug(
-                    `⏰ Force-completed ${stuckBatchCount} stuck discovery batch(es)`
+                    `⏰ Force-completed ${stuckBatchCount} stuck discovery batch(es)`,
                 );
                 this.emptyQueueChecks = 0; // Reset counter
             }
@@ -193,12 +202,12 @@ class QueueCleanerService {
             // PART 1: Check for stuck downloads needing blocklist + retry
             const cleanResult = await cleanStuckDownloads(
                 settings.lidarrUrl,
-                settings.lidarrApiKey
+                settings.lidarrApiKey,
             );
 
             if (cleanResult.removed > 0) {
                 logger.debug(
-                    `[CLEANUP] Removed ${cleanResult.removed} stuck download(s) - searching for alternatives`
+                    `[CLEANUP] Removed ${cleanResult.removed} stuck download(s) - searching for alternatives`,
                 );
                 this.emptyQueueChecks = 0; // Reset counter - queue had activity
 
@@ -228,12 +237,12 @@ class QueueCleanerService {
                                             mode: "insensitive",
                                         },
                                     },
-                                })
+                                }),
                         );
 
                         for (const job of matchingJobs) {
                             const { metadata } = resolveDownloadJobMetadata(
-                                job.metadata
+                                job.metadata,
                             );
                             const currentRetryCount = metadata.retryCount || 0;
 
@@ -245,18 +254,19 @@ class QueueCleanerService {
                                         data: {
                                             metadata: {
                                                 ...metadata,
-                                                retryCount: currentRetryCount + 1,
+                                                retryCount:
+                                                    currentRetryCount + 1,
                                                 lastError:
                                                     "Import failed - searching for alternative release",
                                             },
                                         },
-                                    })
+                                    }),
                             );
 
                             logger.debug(
                                 `   Updated job ${job.id}: retry ${
                                     currentRetryCount + 1
-                                }`
+                                }`,
                             );
                         }
                     }
@@ -267,7 +277,7 @@ class QueueCleanerService {
             const completedDownloads = await getRecentCompletedDownloads(
                 settings.lidarrUrl,
                 settings.lidarrApiKey,
-                5 // Only check last 5 minutes since we're running frequently
+                5, // Only check last 5 minutes since we're running frequently
             );
 
             let recoveredCount = 0;
@@ -294,7 +304,7 @@ class QueueCleanerService {
                                     { lidarrRef: download.downloadId },
                                 ],
                             },
-                        })
+                        }),
                 );
 
                 if (orphanedJobs.length > 0) {
@@ -302,7 +312,7 @@ class QueueCleanerService {
                         download.artist?.name || "Unknown Artist";
                     const albumTitle = download.album?.title || "Unknown Album";
                     logger.debug(
-                        `Recovered orphaned job: ${artistName} - ${albumTitle}`
+                        `Recovered orphaned job: ${artistName} - ${albumTitle}`,
                     );
                     logger.debug(`   Download ID: ${download.downloadId}`);
                     this.emptyQueueChecks = 0; // Reset counter - found work to do
@@ -316,7 +326,7 @@ class QueueCleanerService {
                                 where: {
                                     id: {
                                         in: orphanedJobs.map(
-                                            (j: { id: string }) => j.id
+                                            (j: { id: string }) => j.id,
                                         ),
                                     },
                                 },
@@ -324,7 +334,7 @@ class QueueCleanerService {
                                     status: "completed",
                                     completedAt: new Date(),
                                 },
-                            })
+                            }),
                     );
 
                     // Check batch completion for any Discovery jobs
@@ -337,13 +347,14 @@ class QueueCleanerService {
                     }
 
                     if (discoveryBatchIds.size > 0) {
-                        const discoverWeeklyService = await this.getDiscoverWeeklyService();
+                        const discoverWeeklyService =
+                            await this.getDiscoverWeeklyService();
                         for (const batchId of discoveryBatchIds) {
                             logger.debug(
-                                `    Checking Discovery batch completion: ${batchId}`
+                                `    Checking Discovery batch completion: ${batchId}`,
                             );
                             await discoverWeeklyService.checkBatchCompletion(
-                                batchId
+                                batchId,
                             );
                         }
                     }
@@ -351,11 +362,11 @@ class QueueCleanerService {
                     // Trigger library scan for non-discovery jobs
                     const nonDiscoveryJobs = orphanedJobs.filter(
                         (j: { discoveryBatchId: string | null }) =>
-                            !j.discoveryBatchId
+                            !j.discoveryBatchId,
                     );
                     if (nonDiscoveryJobs.length > 0) {
                         logger.debug(
-                            `    Triggering library scan for recovered job(s)...`
+                            `    Triggering library scan for recovered job(s)...`,
                         );
                         await scanQueue.add("scan", {
                             type: "full",
@@ -372,7 +383,7 @@ class QueueCleanerService {
             // Only log skipped count occasionally to reduce noise
             if (skippedCount > 0 && this.emptyQueueChecks === 0) {
                 logger.debug(
-                    `   (Skipped ${skippedCount} incomplete download records)`
+                    `   (Skipped ${skippedCount} incomplete download records)`,
                 );
             }
 
@@ -384,7 +395,7 @@ class QueueCleanerService {
                         where: {
                             status: { in: ["pending", "processing"] },
                         },
-                    })
+                    }),
             );
 
             const hadActivity =
@@ -393,12 +404,12 @@ class QueueCleanerService {
             if (!hadActivity) {
                 this.emptyQueueChecks++;
                 logger.debug(
-                    ` Queue empty (${this.emptyQueueChecks}/${this.maxEmptyChecks})`
+                    ` Queue empty (${this.emptyQueueChecks}/${this.maxEmptyChecks})`,
                 );
 
                 if (this.emptyQueueChecks >= this.maxEmptyChecks) {
                     logger.debug(
-                        ` No activity for ${this.maxEmptyChecks} checks - stopping cleaner`
+                        ` No activity for ${this.maxEmptyChecks} checks - stopping cleaner`,
                     );
                     this.stop();
                     return;
@@ -410,14 +421,14 @@ class QueueCleanerService {
             // Schedule next check
             this.timeoutId = setTimeout(
                 () => this.runCleanup(),
-                this.checkInterval
+                this.checkInterval,
             );
         } catch (error) {
             logger.error(" Queue cleanup error:", error);
             // Still schedule next check even on error
             this.timeoutId = setTimeout(
                 () => this.runCleanup(),
-                this.checkInterval
+                this.checkInterval,
             );
         }
     }
@@ -444,7 +455,7 @@ class QueueCleanerService {
             () =>
                 prisma.downloadJob.findMany({
                     where: { status: { in: ["pending", "processing"] } },
-                })
+                }),
         );
 
         if (processingJobs.length === 0) {
@@ -452,14 +463,14 @@ class QueueCleanerService {
         }
 
         logger.debug(
-            `[LOCAL-RECONCILE] Checking ${processingJobs.length} job(s) against local library...`
+            `[LOCAL-RECONCILE] Checking ${processingJobs.length} job(s) against local library...`,
         );
 
         // Extract jobs with valid artist/album metadata
         const jobsToCheck = processingJobs
             .map((job) => {
                 const { artistName, albumTitle } = resolveDownloadJobMetadata(
-                    job.metadata
+                    job.metadata,
                 );
                 return {
                     job,
@@ -486,11 +497,11 @@ class QueueCleanerService {
                         title: true,
                         artist: { select: { name: true } },
                     },
-                })
+                }),
         );
 
         logger.debug(
-            `[LOCAL-RECONCILE] Loaded ${localAlbums.length} local albums for matching`
+            `[LOCAL-RECONCILE] Loaded ${localAlbums.length} local albums for matching`,
         );
 
         // Build normalized lookup index for O(1) exact matching
@@ -518,7 +529,7 @@ class QueueCleanerService {
             if (exactIndex.has(exactKey)) {
                 matched = true;
                 logger.debug(
-                    `[LOCAL-RECONCILE] ✓ Exact match for "${artistName} - ${albumTitle}"`
+                    `[LOCAL-RECONCILE] ✓ Exact match for "${artistName} - ${albumTitle}"`,
                 );
             }
 
@@ -538,7 +549,7 @@ class QueueCleanerService {
                         ) {
                             matched = true;
                             logger.debug(
-                                `[LOCAL-RECONCILE] ✓ Contains match "${artistName} - ${albumTitle}" -> "${album.artist.name} - ${album.title}"`
+                                `[LOCAL-RECONCILE] ✓ Contains match "${artistName} - ${albumTitle}" -> "${album.artist.name} - ${album.title}"`,
                             );
                             break;
                         }
@@ -554,14 +565,14 @@ class QueueCleanerService {
                         albumTitle!,
                         album.artist.name,
                         album.title,
-                        0.75
-                    )
+                        0.75,
+                    ),
                 );
 
                 if (fuzzyMatch) {
                     matched = true;
                     logger.debug(
-                        `[LOCAL-RECONCILE] ✓ Fuzzy match "${artistName} - ${albumTitle}" -> "${fuzzyMatch.artist.name} - ${fuzzyMatch.title}"`
+                        `[LOCAL-RECONCILE] ✓ Fuzzy match "${artistName} - ${albumTitle}" -> "${fuzzyMatch.artist.name} - ${fuzzyMatch.title}"`,
                     );
                 }
             }
@@ -586,10 +597,10 @@ class QueueCleanerService {
                             completedAt: new Date(),
                             error: null,
                         },
-                    })
+                    }),
             );
             logger.debug(
-                `[LOCAL-RECONCILE] Batch updated ${toComplete.length} job(s) to completed`
+                `[LOCAL-RECONCILE] Batch updated ${toComplete.length} job(s) to completed`,
             );
         }
 

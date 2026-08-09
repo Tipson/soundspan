@@ -5,7 +5,10 @@ import { requireAuthOrToken } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { lastFmService } from "../services/lastfm";
 import { normalizeForMatching, calculateSimilarity } from "../utils/fuzzyMatch";
-import { extractPrimaryArtist, normalizeArtistName } from "../utils/artistNormalization";
+import {
+    extractPrimaryArtist,
+    normalizeArtistName,
+} from "../utils/artistNormalization";
 
 const router = Router();
 
@@ -26,7 +29,11 @@ type PreparedTrackCandidate = {
 
 function parseLastFmArtistName(artist: LastFmTrackLike["artist"]): string {
     if (typeof artist === "string") return artist.trim();
-    if (artist && typeof artist === "object" && typeof artist.name === "string") {
+    if (
+        artist &&
+        typeof artist === "object" &&
+        typeof artist.name === "string"
+    ) {
         return artist.name.trim();
     }
     return "Unknown artist";
@@ -37,10 +44,16 @@ function stripTrackVersionSuffix(input: string): string {
         .replace(/['`′ʼ]/g, "'")
         .replace(
             /\s*-\s*(\d{4}\s+)?(remaster(ed)?|deluxe|bonus|single|radio edit|remix|acoustic|live|mono|stereo|version|edition|mix)(\s+\d{4})?.*$/i,
-            ""
+            "",
         )
-        .replace(/\s*\([^)]*(remaster|version|edition|mix|live)[^)]*\)\s*/gi, " ")
-        .replace(/\s*\[[^\]]*(remaster|version|edition|mix|live)[^\]]*\]\s*/gi, " ")
+        .replace(
+            /\s*\([^)]*(remaster|version|edition|mix|live)[^)]*\)\s*/gi,
+            " ",
+        )
+        .replace(
+            /\s*\[[^\]]*(remaster|version|edition|mix|live)[^\]]*\]\s*/gi,
+            " ",
+        )
         .replace(/\s+/g, " ")
         .trim();
 }
@@ -64,17 +77,28 @@ function parseSimilarityValue(value: number | string | undefined): number {
 function scoreTrackCandidate(
     lfmTitle: string,
     lfmArtist: string,
-    candidate: PreparedTrackCandidate
+    candidate: PreparedTrackCandidate,
 ) {
     const normalizedLfmTitle = normalizeTrackTitleForMatch(lfmTitle);
-    const normalizedLfmArtist = normalizeArtistName(extractPrimaryArtist(lfmArtist));
+    const normalizedLfmArtist = normalizeArtistName(
+        extractPrimaryArtist(lfmArtist),
+    );
 
-    const titleFuzz = fuzz.token_set_ratio(normalizedLfmTitle, candidate.normalizedTitle) / 100;
-    const titleSimple = calculateSimilarity(normalizedLfmTitle, candidate.normalizedTitle);
+    const titleFuzz =
+        fuzz.token_set_ratio(normalizedLfmTitle, candidate.normalizedTitle) /
+        100;
+    const titleSimple = calculateSimilarity(
+        normalizedLfmTitle,
+        candidate.normalizedTitle,
+    );
     const titleScore = Math.max(titleFuzz, titleSimple);
 
-    const artistFuzz = fuzz.ratio(normalizedLfmArtist, candidate.normalizedArtist) / 100;
-    const artistSimple = calculateSimilarity(normalizedLfmArtist, candidate.normalizedArtist);
+    const artistFuzz =
+        fuzz.ratio(normalizedLfmArtist, candidate.normalizedArtist) / 100;
+    const artistSimple = calculateSimilarity(
+        normalizedLfmArtist,
+        candidate.normalizedArtist,
+    );
     const artistScore = Math.max(artistFuzz, artistSimple);
 
     let finalScore = titleScore * 0.72 + artistScore * 0.28;
@@ -185,14 +209,14 @@ router.get("/for-you", async (req, res) => {
                     },
                 });
                 return similar.map((s) => s.toArtist);
-            })
+            }),
         );
 
         // Flatten and deduplicate
         const recommendedArtists = Array.from(
             new Map(
-                allSimilarArtists.flat().map((artist) => [artist.id, artist])
-            ).values()
+                allSimilarArtists.flat().map((artist) => [artist.id, artist]),
+            ).values(),
         );
 
         // Filter out artists user already owns (from native library)
@@ -203,11 +227,11 @@ router.get("/for-you", async (req, res) => {
         const ownedArtistIds = new Set(ownedArtists.map((a) => a.artistId));
 
         logger.debug(
-            `Filtering recommendations: ${ownedArtistIds.size} owned artists to exclude`
+            `Filtering recommendations: ${ownedArtistIds.size} owned artists to exclude`,
         );
 
         const newArtists = recommendedArtists.filter(
-            (artist) => !ownedArtistIds.has(artist.id)
+            (artist) => !ownedArtistIds.has(artist.id),
         );
 
         // Get album counts for recommended artists (from enriched discography)
@@ -220,7 +244,7 @@ router.get("/for-you", async (req, res) => {
             _count: { rgMbid: true },
         });
         const albumCountMap = new Map(
-            albumCounts.map((ac) => [ac.artistId, ac._count.rgMbid])
+            albumCounts.map((ac) => [ac.artistId, ac._count.rgMbid]),
         );
 
         // Only use cached data (DB heroUrl or Redis cache) - no API calls during page loads.
@@ -230,9 +254,9 @@ router.get("/for-you", async (req, res) => {
         // Get all cached images in a single Redis call for efficiency
         const artistsToCheck = newArtists.slice(0, limitNum);
         const cacheKeys = artistsToCheck
-            .filter(a => !a.heroUrl)
-            .map(a => `hero:${a.id}`);
-        
+            .filter((a) => !a.heroUrl)
+            .map((a) => `hero:${a.id}`);
+
         let cachedImages: (string | null)[] = [];
         if (cacheKeys.length > 0) {
             try {
@@ -257,7 +281,8 @@ router.get("/for-you", async (req, res) => {
 
         const artistsWithMetadata = artistsToCheck.map((artist) => {
             // Use DB heroUrl first, then Redis cache, otherwise null
-            const coverArt = artist.heroUrl || cachedImageMap.get(artist.id) || null;
+            const coverArt =
+                artist.heroUrl || cachedImageMap.get(artist.id) || null;
 
             return {
                 ...artist,
@@ -267,13 +292,13 @@ router.get("/for-you", async (req, res) => {
         });
 
         logger.debug(
-            `Recommendations: Found ${artistsWithMetadata.length} new artists`
+            `Recommendations: Found ${artistsWithMetadata.length} new artists`,
         );
         artistsWithMetadata.forEach((a) => {
             logger.debug(
                 `  ${a.name}: coverArt=${a.coverArt ? "YES" : "NO"}, albums=${
                     a.albumCount
-                }`
+                }`,
             );
         });
 
@@ -369,8 +394,11 @@ router.get("/", async (req, res) => {
 
         const recommendations = similarArtists.map((similar) => {
             const artist = artistMap.get(similar.toArtistId);
-            const artistAlbums = (albumsByArtist.get(similar.toArtistId) || []).slice(0, 3);
-            const ownedRgMbids = ownedByArtist.get(similar.toArtistId) || new Set();
+            const artistAlbums = (
+                albumsByArtist.get(similar.toArtistId) || []
+            ).slice(0, 3);
+            const ownedRgMbids =
+                ownedByArtist.get(similar.toArtistId) || new Set();
 
             return {
                 artist: {
@@ -459,9 +487,9 @@ router.get("/albums", async (req, res) => {
         const genreTags = Array.from(
             new Set(
                 seedAlbum.tracks.flatMap((track) =>
-                    track.trackGenres.map((tg) => tg.genre.name)
-                )
-            )
+                    track.trackGenres.map((tg) => tg.genre.name),
+                ),
+            ),
         );
 
         // Strategy 1: Get albums from similar artists
@@ -511,12 +539,14 @@ router.get("/albums", async (req, res) => {
         // Combine and deduplicate
         const allAlbums = [...similarArtistAlbums, ...genreMatchAlbums];
         const uniqueAlbums = Array.from(
-            new Map(allAlbums.map((album) => [album.id, album])).values()
+            new Map(allAlbums.map((album) => [album.id, album])).values(),
         );
 
         // Batch check ownership instead of N+1
         const slicedAlbums = uniqueAlbums.slice(0, 20);
-        const artistIdsForOwnership = [...new Set(slicedAlbums.map((a) => a.artistId))];
+        const artistIdsForOwnership = [
+            ...new Set(slicedAlbums.map((a) => a.artistId)),
+        ];
         const ownedAlbumsForRec = await prisma.ownedAlbum.findMany({
             where: { artistId: { in: artistIdsForOwnership } },
             select: { rgMbid: true },
@@ -579,10 +609,16 @@ router.get("/albums", async (req, res) => {
  */
 router.get("/tracks", async (req, res) => {
     try {
-        const { seedTrackId, artist: artistParam, title: titleParam } = req.query;
+        const {
+            seedTrackId,
+            artist: artistParam,
+            title: titleParam,
+        } = req.query;
 
         if (!seedTrackId && !artistParam) {
-            return res.status(400).json({ error: "seedTrackId or artist+title required" });
+            return res
+                .status(400)
+                .json({ error: "seedTrackId or artist+title required" });
         }
 
         // Get seed track
@@ -599,20 +635,24 @@ router.get("/tracks", async (req, res) => {
               })
             : null;
 
-        const seedArtistName = seedTrack?.album.artist.name
-            || (typeof artistParam === "string" ? artistParam.trim() : "");
-        const seedTitle = seedTrack?.title
-            || (typeof titleParam === "string" ? titleParam.trim() : "");
+        const seedArtistName =
+            seedTrack?.album.artist.name ||
+            (typeof artistParam === "string" ? artistParam.trim() : "");
+        const seedTitle =
+            seedTrack?.title ||
+            (typeof titleParam === "string" ? titleParam.trim() : "");
 
         if (!seedArtistName || !seedTitle) {
-            return res.status(400).json({ error: "Could not resolve seed artist and title" });
+            return res
+                .status(400)
+                .json({ error: "Could not resolve seed artist and title" });
         }
 
         // Use Last.fm to get similar tracks
         const similarTracksFromLastFm = await lastFmService.getSimilarTracks(
             seedArtistName,
             seedTitle,
-            20
+            20,
         );
         const lfmTracks = (similarTracksFromLastFm as LastFmTrackLike[])
             .map((track) => ({
@@ -645,8 +685,16 @@ router.get("/tracks", async (req, res) => {
                         album: {
                             artist: {
                                 OR: [
-                                    { name: { equals: seedArtistName, mode: "insensitive" } },
-                                    { normalizedName: normalizeArtistName(seedArtistName) },
+                                    {
+                                        name: {
+                                            equals: seedArtistName,
+                                            mode: "insensitive",
+                                        },
+                                    },
+                                    {
+                                        normalizedName:
+                                            normalizeArtistName(seedArtistName),
+                                    },
                                 ],
                             },
                         },
@@ -681,18 +729,18 @@ router.get("/tracks", async (req, res) => {
             new Set(
                 lfmTracks
                     .map((track) =>
-                        normalizeArtistName(extractPrimaryArtist(track.artist))
+                        normalizeArtistName(extractPrimaryArtist(track.artist)),
                     )
-                    .filter((name) => name.length > 0)
-            )
+                    .filter((name) => name.length > 0),
+            ),
         );
 
         const artistNameClauses = Array.from(
             new Set(
                 lfmTracks
                     .map((track) => extractPrimaryArtist(track.artist))
-                    .filter((name) => name.length > 0)
-            )
+                    .filter((name) => name.length > 0),
+            ),
         ).map((name) => ({
             name: {
                 equals: name,
@@ -741,28 +789,34 @@ router.get("/tracks", async (req, res) => {
             });
         }
 
-        const preparedCandidates: PreparedTrackCandidate[] = candidateTracks.map((track) => ({
-            track,
-            normalizedTitle: normalizeTrackTitleForMatch(track.title || ""),
-            normalizedArtist: normalizeArtistName(track.album?.artist?.name || ""),
-        }));
+        const preparedCandidates: PreparedTrackCandidate[] =
+            candidateTracks.map((track) => ({
+                track,
+                normalizedTitle: normalizeTrackTitleForMatch(track.title || ""),
+                normalizedArtist: normalizeArtistName(
+                    track.album?.artist?.name || "",
+                ),
+            }));
 
         const usedTrackIds = new Set<string>();
 
         const recommendations = lfmTracks.map((lfmTrack) => {
-            const normalizedLfmTitle = normalizeTrackTitleForMatch(lfmTrack.title);
+            const normalizedLfmTitle = normalizeTrackTitleForMatch(
+                lfmTrack.title,
+            );
             const normalizedLfmArtist = normalizeArtistName(
-                extractPrimaryArtist(lfmTrack.artist)
+                extractPrimaryArtist(lfmTrack.artist),
             );
 
             const bestCandidate = preparedCandidates
                 .filter((candidate) => !usedTrackIds.has(candidate.track.id))
                 .map((candidate) => {
-                    const { finalScore, titleScore, artistScore } = scoreTrackCandidate(
-                        lfmTrack.title,
-                        lfmTrack.artist,
-                        candidate
-                    );
+                    const { finalScore, titleScore, artistScore } =
+                        scoreTrackCandidate(
+                            lfmTrack.title,
+                            lfmTrack.artist,
+                            candidate,
+                        );
 
                     return {
                         candidate,
@@ -772,11 +826,13 @@ router.get("/tracks", async (req, res) => {
                         quickTitleRatio:
                             fuzz.token_set_ratio(
                                 normalizedLfmTitle,
-                                candidate.normalizedTitle
+                                candidate.normalizedTitle,
                             ) / 100,
                         quickArtistRatio:
-                            fuzz.ratio(normalizedLfmArtist, candidate.normalizedArtist) /
-                            100,
+                            fuzz.ratio(
+                                normalizedLfmArtist,
+                                candidate.normalizedArtist,
+                            ) / 100,
                     };
                 })
                 .filter(
@@ -784,7 +840,7 @@ router.get("/tracks", async (req, res) => {
                         result.quickTitleRatio >= 0.45 &&
                         result.quickArtistRatio >= 0.35 &&
                         result.titleScore >= 0.45 &&
-                        result.artistScore >= 0.35
+                        result.artistScore >= 0.35,
                 )
                 .sort((a, b) => b.finalScore - a.finalScore)[0];
 
@@ -802,8 +858,12 @@ router.get("/tracks", async (req, res) => {
                     inLibrary: true,
                     similarity: lfmTrack.similarity,
                     matchConfidence: Math.round(bestCandidate.finalScore * 100),
-                    titleSimilarity: Number(bestCandidate.titleScore.toFixed(2)),
-                    artistSimilarity: Number(bestCandidate.artistScore.toFixed(2)),
+                    titleSimilarity: Number(
+                        bestCandidate.titleScore.toFixed(2),
+                    ),
+                    artistSimilarity: Number(
+                        bestCandidate.artistScore.toFixed(2),
+                    ),
                 };
             }
 

@@ -43,7 +43,7 @@ const mockGetFeatures = featureDetection.getFeatures as jest.Mock;
 function getHandler(path: string, method: "get") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {

@@ -27,7 +27,12 @@ jest.mock("../../utils/db", () => ({
 }));
 
 jest.mock("../../utils/logger", () => ({
-    logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+    logger: {
+        debug: jest.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+    },
 }));
 
 jest.mock("../../utils/shuffle", () => ({
@@ -44,7 +49,11 @@ jest.mock("../../utils/separateArtists", () => ({
 
 import { Prisma } from "../../utils/db";
 import { separateArtists } from "../../utils/separateArtists";
-import { MOOD_CONFIG, MoodBucketService, VALID_MOODS } from "../moodBucketService";
+import {
+    MOOD_CONFIG,
+    MoodBucketService,
+    VALID_MOODS,
+} from "../moodBucketService";
 import { applyArtistCap } from "../programmaticPlaylistArtistCap";
 
 type TestTrack = {
@@ -97,7 +106,7 @@ const makeTrack = (overrides: Partial<TestTrack> = {}): TestTrack => ({
 type PrismaMockTypes = {
     PrismaClientKnownRequestError: new (
         message: string,
-        meta: { code: string }
+        meta: { code: string },
     ) => Error & { code: string };
     PrismaClientRustPanicError: new (message: string) => Error;
     PrismaClientUnknownRequestError: new (message: string) => Error;
@@ -107,11 +116,11 @@ type PrivateMoodBucketService = {
     isRetryablePrismaError: (error: unknown) => boolean;
     withPrismaRetry: <T>(
         operationName: string,
-        operation: () => Promise<T>
+        operation: () => Promise<T>,
     ) => Promise<T>;
     evaluateMoodRules: (
         track: TestTrack,
-        rules: Record<string, unknown>
+        rules: Record<string, unknown>,
     ) => number;
 };
 
@@ -135,33 +144,49 @@ describe("MoodBucketService", () => {
     describe("isRetryablePrismaError", () => {
         it("handles all supported Prisma error types and messages", () => {
             const privateService = asPrivate(service);
-            const knownRetryable = new prismaTypes.PrismaClientKnownRequestError(
-                "known retryable",
-                { code: "P1001" }
+            const knownRetryable =
+                new prismaTypes.PrismaClientKnownRequestError(
+                    "known retryable",
+                    { code: "P1001" },
+                );
+            const knownNonRetryable =
+                new prismaTypes.PrismaClientKnownRequestError(
+                    "known non-retryable",
+                    { code: "P2002" },
+                );
+            const rustPanic = new prismaTypes.PrismaClientRustPanicError(
+                "panic",
             );
-            const knownNonRetryable = new prismaTypes.PrismaClientKnownRequestError(
-                "known non-retryable",
-                { code: "P2002" }
-            );
-            const rustPanic = new prismaTypes.PrismaClientRustPanicError("panic");
             const unknownRetryable =
                 new prismaTypes.PrismaClientUnknownRequestError(
-                "Engine has already exited"
-            );
+                    "Engine has already exited",
+                );
             const unknownNonRetryable =
-                new prismaTypes.PrismaClientUnknownRequestError("other unknown");
+                new prismaTypes.PrismaClientUnknownRequestError(
+                    "other unknown",
+                );
 
-            expect(privateService.isRetryablePrismaError(knownRetryable)).toBe(true);
-            expect(privateService.isRetryablePrismaError(knownNonRetryable)).toBe(false);
+            expect(privateService.isRetryablePrismaError(knownRetryable)).toBe(
+                true,
+            );
+            expect(
+                privateService.isRetryablePrismaError(knownNonRetryable),
+            ).toBe(false);
             expect(privateService.isRetryablePrismaError(rustPanic)).toBe(true);
-            expect(privateService.isRetryablePrismaError(unknownRetryable)).toBe(true);
-            expect(privateService.isRetryablePrismaError(unknownNonRetryable)).toBe(false);
+            expect(
+                privateService.isRetryablePrismaError(unknownRetryable),
+            ).toBe(true);
+            expect(
+                privateService.isRetryablePrismaError(unknownNonRetryable),
+            ).toBe(false);
             expect(
                 privateService.isRetryablePrismaError(
-                    new Error("Can't reach database server")
-                )
+                    new Error("Can't reach database server"),
+                ),
             ).toBe(true);
-            expect(privateService.isRetryablePrismaError(new Error("boom"))).toBe(false);
+            expect(
+                privateService.isRetryablePrismaError(new Error("boom")),
+            ).toBe(false);
         });
     });
 
@@ -169,7 +194,9 @@ describe("MoodBucketService", () => {
         it("returns immediately on first successful attempt", async () => {
             const privateService = asPrivate(service);
             const op = jest.fn().mockResolvedValue("ok");
-            await expect(privateService.withPrismaRetry("op", op)).resolves.toBe("ok");
+            await expect(
+                privateService.withPrismaRetry("op", op),
+            ).resolves.toBe("ok");
             expect(op).toHaveBeenCalledTimes(1);
             expect(mockPrisma.$connect).not.toHaveBeenCalled();
         });
@@ -178,17 +205,23 @@ describe("MoodBucketService", () => {
             const privateService = asPrivate(service);
             const timeoutSpy = jest
                 .spyOn(global, "setTimeout")
-                .mockImplementation(((handler: Parameters<typeof setTimeout>[0]) => {
+                .mockImplementation(((
+                    handler: Parameters<typeof setTimeout>[0],
+                ) => {
                     if (typeof handler === "function") handler();
                     return 0 as unknown as ReturnType<typeof setTimeout>;
                 }) as typeof setTimeout);
 
             const op = jest
                 .fn()
-                .mockRejectedValueOnce(new Error("Response from the Engine was empty"))
+                .mockRejectedValueOnce(
+                    new Error("Response from the Engine was empty"),
+                )
                 .mockResolvedValueOnce("done");
 
-            await expect(privateService.withPrismaRetry("op", op)).resolves.toBe("done");
+            await expect(
+                privateService.withPrismaRetry("op", op),
+            ).resolves.toBe("done");
             expect(op).toHaveBeenCalledTimes(2);
             expect(mockPrisma.$connect).toHaveBeenCalledTimes(1);
             timeoutSpy.mockRestore();
@@ -199,7 +232,9 @@ describe("MoodBucketService", () => {
             const err = new Error("fatal");
             const op = jest.fn().mockRejectedValue(err);
 
-            await expect(privateService.withPrismaRetry("op", op)).rejects.toBe(err);
+            await expect(privateService.withPrismaRetry("op", op)).rejects.toBe(
+                err,
+            );
             expect(op).toHaveBeenCalledTimes(1);
             expect(mockPrisma.$connect).not.toHaveBeenCalled();
         });
@@ -208,7 +243,9 @@ describe("MoodBucketService", () => {
             const privateService = asPrivate(service);
             const timeoutSpy = jest
                 .spyOn(global, "setTimeout")
-                .mockImplementation(((handler: Parameters<typeof setTimeout>[0]) => {
+                .mockImplementation(((
+                    handler: Parameters<typeof setTimeout>[0],
+                ) => {
                     if (typeof handler === "function") handler();
                     return 0 as unknown as ReturnType<typeof setTimeout>;
                 }) as typeof setTimeout);
@@ -216,7 +253,9 @@ describe("MoodBucketService", () => {
             const err = new Error("Connection reset");
             const op = jest.fn().mockRejectedValue(err);
 
-            await expect(privateService.withPrismaRetry("op", op)).rejects.toBe(err);
+            await expect(privateService.withPrismaRetry("op", op)).rejects.toBe(
+                err,
+            );
             expect(op).toHaveBeenCalledTimes(3);
             expect(mockPrisma.$connect).toHaveBeenCalledTimes(2);
             timeoutSpy.mockRestore();
@@ -224,14 +263,18 @@ describe("MoodBucketService", () => {
 
         it("throws synthesized error when retries disabled and lastError is not Error", async () => {
             const privateService = asPrivate(service);
-            Object.defineProperty(service as unknown as object, "PRISMA_RETRY_ATTEMPTS", {
-                value: 0,
-            });
+            Object.defineProperty(
+                service as unknown as object,
+                "PRISMA_RETRY_ATTEMPTS",
+                {
+                    value: 0,
+                },
+            );
             const op = jest.fn().mockRejectedValue("string error");
 
-            await expect(privateService.withPrismaRetry("op", op)).rejects.toThrow(
-                "[MoodBucket] op failed after retries"
-            );
+            await expect(
+                privateService.withPrismaRetry("op", op),
+            ).rejects.toThrow("[MoodBucket] op failed after retries");
             expect(op).not.toHaveBeenCalled();
         });
     });
@@ -246,7 +289,7 @@ describe("MoodBucketService", () => {
                     moodSad: 0.1,
                     valence: 0.2,
                     energy: 0.2,
-                })
+                }),
             );
 
             const nonEnhancedScores = service.calculateMoodScores(
@@ -257,7 +300,7 @@ describe("MoodBucketService", () => {
                     moodSad: 0.1,
                     valence: 0.2,
                     energy: 0.2,
-                })
+                }),
             );
 
             expect(enhancedScores.happy).toBeGreaterThan(0.5);
@@ -283,7 +326,7 @@ describe("MoodBucketService", () => {
                     bpm: null,
                     keyScale: null,
                     moodTags: ["HAPPY", "upbeat", "joyful"],
-                })
+                }),
             );
 
             expect(scores.happy).toBeCloseTo(0.7, 5);
@@ -298,7 +341,7 @@ describe("MoodBucketService", () => {
                     moodTags: [],
                     valence: 0.8,
                     energy: 0.9,
-                })
+                }),
             );
 
             expect(scores.happy).toBeGreaterThan(0.5);
@@ -312,10 +355,12 @@ describe("MoodBucketService", () => {
                     moodTags: ["mysterious", "cinematic"],
                     valence: null,
                     energy: null,
-                })
+                }),
             );
 
-            expect(Object.values(scores).every((score) => score === 0)).toBe(true);
+            expect(Object.values(scores).every((score) => score === 0)).toBe(
+                true,
+            );
         });
 
         it("evaluates mood rules across string and numeric constraint branches", () => {
@@ -323,78 +368,82 @@ describe("MoodBucketService", () => {
             expect(
                 privateService.evaluateMoodRules(
                     makeTrack({ keyScale: "minor" }),
-                    { keyScale: "minor" }
-                )
+                    { keyScale: "minor" },
+                ),
             ).toBe(1);
 
             expect(
                 privateService.evaluateMoodRules(
                     makeTrack({ keyScale: "major" }),
-                    { keyScale: "minor" }
-                )
+                    { keyScale: "minor" },
+                ),
             ).toBe(0);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ energy: 0.5 }), {
                     energy: { min: 0.4, max: 0.6 },
-                })
+                }),
             ).toBe(1);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ energy: 0.1 }), {
                     energy: { min: 0.4, max: 0.6 },
-                })
+                }),
             ).toBe(0);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ energy: 0.9 }), {
                     energy: { min: 0.4, max: 0.6 },
-                })
+                }),
             ).toBe(0);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ valence: 0.9 }), {
                     valence: { min: 0.6 },
-                })
+                }),
             ).toBeCloseTo(0.65, 5);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ valence: 0.2 }), {
                     valence: { min: 0.6 },
-                })
+                }),
             ).toBe(0);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ arousal: 0.2 }), {
                     arousal: { max: 0.5 },
-                })
+                }),
             ).toBeCloseTo(0.65, 5);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ arousal: 0.8 }), {
                     arousal: { max: 0.5 },
-                })
+                }),
             ).toBe(0);
 
             expect(
                 privateService.evaluateMoodRules(makeTrack({ energy: null }), {
                     energy: { min: 0.6 },
-                })
+                }),
             ).toBe(0);
         });
     });
 
     describe("getMoodMix and user mix flows", () => {
         it("throws for invalid mood value", async () => {
-            const invalidMood = "invalid" as unknown as (typeof VALID_MOODS)[number];
+            const invalidMood =
+                "invalid" as unknown as (typeof VALID_MOODS)[number];
             await expect(service.getMoodMix(invalidMood)).rejects.toThrow(
-                "Invalid mood: invalid"
+                "Invalid mood: invalid",
             );
         });
 
         it("returns null when mood pool has fewer than eight tracks", async () => {
             mockPrisma.moodBucket.findMany.mockResolvedValue(
-                Array.from({ length: 7 }, (_, i) => ({ trackId: `t-${i}`, score: 0.8 }))
+                Array.from({ length: 7 }, (_, i) => ({
+                    trackId: `t-${i}`,
+                    score: 0.8,
+                })),
             );
 
             await expect(service.getMoodMix("happy")).resolves.toBeNull();
@@ -425,14 +474,16 @@ describe("MoodBucketService", () => {
             expect(mix.trackCount).toBe(10);
             expect(mix.coverUrls.length).toBeLessThanOrEqual(4);
             expect((applyArtistCap as jest.Mock).mock.calls[0][1]).toEqual(
-                expect.objectContaining({ maxPerArtist: 2, targetCount: 8 })
+                expect.objectContaining({ maxPerArtist: 2, targetCount: 8 }),
             );
             expect(separateArtists).toHaveBeenCalled();
         });
 
         it("saveUserMoodMix returns null when mix generation fails", async () => {
             jest.spyOn(service, "getMoodMix").mockResolvedValue(null);
-            await expect(service.saveUserMoodMix("user-1", "focus")).resolves.toBeNull();
+            await expect(
+                service.saveUserMoodMix("user-1", "focus"),
+            ).resolves.toBeNull();
             expect(mockPrisma.userMoodMix.upsert).not.toHaveBeenCalled();
         });
 
@@ -464,7 +515,7 @@ describe("MoodBucketService", () => {
                     mood: "party",
                     trackCount: 2,
                     name: `Your ${MOOD_CONFIG.party.name} Mix`,
-                })
+                }),
             );
         });
     });
@@ -517,27 +568,31 @@ describe("MoodBucketService", () => {
             expect(result.assigned).toBe(1);
             expect(mockPrisma.track.findMany).toHaveBeenNthCalledWith(
                 1,
-                expect.objectContaining({ skip: 0, take: 1 })
+                expect.objectContaining({ skip: 0, take: 1 }),
             );
             expect(mockPrisma.track.findMany).toHaveBeenNthCalledWith(
                 2,
-                expect.objectContaining({ skip: 1, take: 1 })
+                expect.objectContaining({ skip: 1, take: 1 }),
             );
             expect(mockPrisma.track.findMany).toHaveBeenNthCalledWith(
                 3,
-                expect.objectContaining({ skip: 2, take: 1 })
+                expect.objectContaining({ skip: 2, take: 1 }),
             );
             expect(mockPrisma.moodBucket.upsert).toHaveBeenCalledTimes(1);
         });
 
         it("assignTrackToMoods returns empty when track not found or analysis not complete", async () => {
             mockPrisma.track.findUnique.mockResolvedValueOnce(null);
-            await expect(service.assignTrackToMoods("missing")).resolves.toEqual([]);
+            await expect(
+                service.assignTrackToMoods("missing"),
+            ).resolves.toEqual([]);
 
             mockPrisma.track.findUnique.mockResolvedValueOnce(
-                makeTrack({ analysisStatus: "processing" })
+                makeTrack({ analysisStatus: "processing" }),
             );
-            await expect(service.assignTrackToMoods("processing")).resolves.toEqual([]);
+            await expect(
+                service.assignTrackToMoods("processing"),
+            ).resolves.toEqual([]);
 
             expect(mockPrisma.$transaction).not.toHaveBeenCalled();
         });
@@ -561,14 +616,14 @@ describe("MoodBucketService", () => {
                     instrumentalness: null,
                     bpm: null,
                     keyScale: null,
-                })
+                }),
             );
 
             const assigned = await service.assignTrackToMoods("zero-track");
             expect(assigned).toEqual([]);
             expect(mockPrisma.moodBucket.upsert).not.toHaveBeenCalled();
             expect(mockPrisma.moodBucket.deleteMany).toHaveBeenCalledTimes(
-                VALID_MOODS.length
+                VALID_MOODS.length,
             );
             expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
         });
@@ -579,14 +634,16 @@ describe("MoodBucketService", () => {
                     moodHappy: null,
                     moodSad: null,
                     moodTags: ["happy", "party"],
-                })
+                }),
             );
 
             const assigned = await service.assignTrackToMoods("mixed-track");
-            expect(assigned).toEqual(expect.arrayContaining(["happy", "party"]));
+            expect(assigned).toEqual(
+                expect.arrayContaining(["happy", "party"]),
+            );
             expect(mockPrisma.moodBucket.upsert).toHaveBeenCalledTimes(2);
             expect(mockPrisma.moodBucket.deleteMany).toHaveBeenCalledTimes(
-                VALID_MOODS.length - 2
+                VALID_MOODS.length - 2,
             );
             expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
         });

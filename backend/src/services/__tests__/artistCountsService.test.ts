@@ -34,7 +34,8 @@ describe("artistCountsService", () => {
         jest.doMock("../../utils/db", () => ({ prisma }));
         jest.doMock("../../utils/logger", () => ({ logger }));
 
-        const mod = require("../artistCountsService") as typeof import("../artistCountsService");
+        const mod =
+            require("../artistCountsService") as typeof import("../artistCountsService");
 
         return { mod, prisma, logger };
     }
@@ -83,7 +84,9 @@ describe("artistCountsService", () => {
         prisma.track.count.mockResolvedValue(4);
         prisma.artist.update.mockResolvedValueOnce({});
 
-        await expect(mod.updateArtistCounts("artist-2")).resolves.toBeUndefined();
+        await expect(
+            mod.updateArtistCounts("artist-2"),
+        ).resolves.toBeUndefined();
         expect(prisma.artist.update).toHaveBeenCalledWith({
             where: { id: "artist-2" },
             data: expect.objectContaining({
@@ -96,11 +99,11 @@ describe("artistCountsService", () => {
         prisma.artist.update.mockRejectedValueOnce(new Error("update failed"));
 
         await expect(mod.updateArtistCounts("artist-3")).rejects.toThrow(
-            "update failed"
+            "update failed",
         );
         expect(logger.error).toHaveBeenCalledWith(
             "[ArtistCounts] Failed to update counts for artist-3:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -108,12 +111,12 @@ describe("artistCountsService", () => {
         const { mod, prisma } = loadModule();
         prisma.album.count.mockResolvedValue(0);
         prisma.track.count.mockResolvedValue(0);
-        prisma.artist.update.mockResolvedValueOnce({}).mockRejectedValueOnce(
-            new Error("second update failed")
-        );
+        prisma.artist.update
+            .mockResolvedValueOnce({})
+            .mockRejectedValueOnce(new Error("second update failed"));
 
         await expect(
-            mod.updateMultipleArtistCounts(["artist-a", "artist-b"])
+            mod.updateMultipleArtistCounts(["artist-a", "artist-b"]),
         ).resolves.toEqual({
             updated: 1,
             errors: 1,
@@ -140,10 +143,10 @@ describe("artistCountsService", () => {
 
         expect(prisma.artist.update).toHaveBeenCalledTimes(2);
         expect(prisma.artist.update).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: "artist-album" } })
+            expect.objectContaining({ where: { id: "artist-album" } }),
         );
         expect(prisma.artist.update).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: "artist-track" } })
+            expect.objectContaining({ where: { id: "artist-track" } }),
         );
     });
 
@@ -175,7 +178,7 @@ describe("artistCountsService", () => {
             errors: 0,
         });
         expect(logger.warn).toHaveBeenCalledWith(
-            "[ArtistCounts] Backfill already in progress, skipping"
+            "[ArtistCounts] Backfill already in progress, skipping",
         );
 
         resolveTotal(0);
@@ -212,13 +215,13 @@ describe("artistCountsService", () => {
         expect(onProgress).toHaveBeenCalledWith(1, 2);
         expect(logger.error).toHaveBeenCalledWith(
             "[ArtistCounts] Failed to update Artist Two (artist-2):",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(logger.info).toHaveBeenCalledWith(
-            "[ArtistCounts] Starting backfill for 2 artists"
+            "[ArtistCounts] Starting backfill for 2 artists",
         );
         expect(logger.info).toHaveBeenCalledWith(
-            "[ArtistCounts] Backfill complete: 1 processed, 1 errors"
+            "[ArtistCounts] Backfill complete: 1 processed, 1 errors",
         );
     });
 
@@ -253,7 +256,7 @@ describe("artistCountsService", () => {
             errors: 0,
         });
         expect(logger.info).toHaveBeenCalledWith(
-            "[ArtistCounts] Progress: 500/500 (100%)"
+            "[ArtistCounts] Progress: 500/500 (100%)",
         );
     });
 
@@ -288,7 +291,7 @@ describe("artistCountsService", () => {
         await mod.forceRecalculateAllCounts();
 
         expect(logger.info).toHaveBeenCalledWith(
-            "[ArtistCounts] Force recalculating all counts..."
+            "[ArtistCounts] Force recalculating all counts...",
         );
         expect(prisma.artist.updateMany).toHaveBeenCalledWith({
             data: { countsLastUpdated: null },

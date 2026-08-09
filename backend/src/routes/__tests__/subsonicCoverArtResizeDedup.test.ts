@@ -2,8 +2,10 @@ import fs from "fs";
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -111,10 +113,12 @@ describe("handleGetCoverArt cover-art resize dedup", () => {
         mockAlbumFindFirst.mockResolvedValue({
             coverUrl: "native:album/cover.png",
         });
-        jest
-            .spyOn(fs, "existsSync")
-            .mockImplementation((p: fs.PathLike) => p === nativeCoverPath);
-        jest.spyOn(fs, "readFileSync").mockReturnValue(Buffer.from("png-bytes"));
+        jest.spyOn(fs, "existsSync").mockImplementation(
+            (p: fs.PathLike) => p === nativeCoverPath,
+        );
+        jest.spyOn(fs, "readFileSync").mockReturnValue(
+            Buffer.from("png-bytes"),
+        );
         mockResizeCoverArt.mockResolvedValue({
             buffer: Buffer.from("resized-webp"),
             contentType: "image/webp",
@@ -123,7 +127,10 @@ describe("handleGetCoverArt cover-art resize dedup", () => {
 
         const res = buildRes();
         await handleGetCoverArt(
-            buildReq({ id: "al-album-1", size: "300" }, { accept: "image/webp" }),
+            buildReq(
+                { id: "al-album-1", size: "300" },
+                { accept: "image/webp" },
+            ),
             res,
         );
 
@@ -136,7 +143,10 @@ describe("handleGetCoverArt cover-art resize dedup", () => {
             size: 320,
             format: "webp",
         });
-        expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/webp");
+        expect(res.setHeader).toHaveBeenCalledWith(
+            "Content-Type",
+            "image/webp",
+        );
         expect(res.send).toHaveBeenCalledWith(Buffer.from("resized-webp"));
     });
 
@@ -144,10 +154,12 @@ describe("handleGetCoverArt cover-art resize dedup", () => {
         mockAlbumFindFirst.mockResolvedValue({
             coverUrl: "native:album/cover.png",
         });
-        jest
-            .spyOn(fs, "existsSync")
-            .mockImplementation((p: fs.PathLike) => p === nativeCoverPath);
-        jest.spyOn(fs, "readFileSync").mockReturnValue(Buffer.from("png-bytes"));
+        jest.spyOn(fs, "existsSync").mockImplementation(
+            (p: fs.PathLike) => p === nativeCoverPath,
+        );
+        jest.spyOn(fs, "readFileSync").mockReturnValue(
+            Buffer.from("png-bytes"),
+        );
         mockResizeCoverArt.mockImplementation(
             async (opts: { buffer: Buffer; contentType: string | null }) => ({
                 buffer: opts.buffer,

@@ -61,29 +61,26 @@ const defaultConnectionLimit =
     defaultConnectionLimitByRole.all;
 const parsedLimit = parseInt(
     process.env.DATABASE_POOL_SIZE || `${defaultConnectionLimit}`,
-    10
+    10,
 );
 const parsedTimeout = parseInt(process.env.DATABASE_POOL_TIMEOUT || "30", 10);
-const connectionLimit = Number.isNaN(parsedLimit) ?
-        defaultConnectionLimit
-    :   Math.max(1, parsedLimit);
+const connectionLimit = Number.isNaN(parsedLimit)
+    ? defaultConnectionLimit
+    : Math.max(1, parsedLimit);
 const poolTimeout = Number.isNaN(parsedTimeout) ? 30 : parsedTimeout;
-const poolConfigSource =
-    process.env.DATABASE_POOL_SIZE ?
-        "env"
-    :   `${backendProcessRoleResolution.source}:role-default(${backendProcessRole})`;
+const poolConfigSource = process.env.DATABASE_POOL_SIZE
+    ? "env"
+    : `${backendProcessRoleResolution.source}:role-default(${backendProcessRole})`;
 
 // Prisma 7: pool sizing moved off DATABASE_URL query params
 // (connection_limit/pool_timeout were Rust-engine concepts) onto the pg
 // driver adapter's pool options inside createPrismaClient.
 export const prisma = createPrismaClient({
     log:
-        (
-            process.env.NODE_ENV === "development" &&
-            process.env.LOG_QUERIES === "true"
-        ) ?
-            ["query", "error", "warn"]
-        :   ["error", "warn"],
+        process.env.NODE_ENV === "development" &&
+        process.env.LOG_QUERIES === "true"
+            ? ["query", "error", "warn"]
+            : ["error", "warn"],
     connectionLimit,
     poolTimeoutSeconds: poolTimeout,
 });

@@ -12,10 +12,37 @@ import { ytMusicService } from "./youtubeMusic";
 const log = logger.child("RemoteTrackMetadataRefresh");
 
 const DEFAULT_BATCH_SIZE = 100;
-const TITLE_PLACEHOLDERS = ["Unknown", "unknown", "", "Unknown Track", "unknown track"];
-const ARTIST_PLACEHOLDERS = ["Unknown", "unknown", "", "Unknown Artist", "unknown artist"];
-const ALBUM_PLACEHOLDERS = ["Unknown", "unknown", "", "Unknown Album", "unknown album", "Single", "single"];
-const REAL_VALUE_PLACEHOLDERS = new Set(["unknown", "", "single", "unknown album", "unknown artist", "unknown track"]);
+const TITLE_PLACEHOLDERS = [
+    "Unknown",
+    "unknown",
+    "",
+    "Unknown Track",
+    "unknown track",
+];
+const ARTIST_PLACEHOLDERS = [
+    "Unknown",
+    "unknown",
+    "",
+    "Unknown Artist",
+    "unknown artist",
+];
+const ALBUM_PLACEHOLDERS = [
+    "Unknown",
+    "unknown",
+    "",
+    "Unknown Album",
+    "unknown album",
+    "Single",
+    "single",
+];
+const REAL_VALUE_PLACEHOLDERS = new Set([
+    "unknown",
+    "",
+    "single",
+    "unknown album",
+    "unknown artist",
+    "unknown track",
+]);
 
 /**
  * Returns true if the value is a real (non-placeholder) string.
@@ -46,9 +73,9 @@ function dedupeUserIds(userIds: Array<string | null | undefined>): string[] {
         new Set(
             userIds.filter(
                 (userId): userId is string =>
-                    typeof userId === "string" && userId.trim().length > 0
-            )
-        )
+                    typeof userId === "string" && userId.trim().length > 0,
+            ),
+        ),
     );
 }
 
@@ -57,7 +84,7 @@ class RemoteTrackMetadataRefreshService {
      * Find remote provider rows with placeholder metadata and re-fetch from provider APIs.
      */
     async refreshUnknownMetadata(
-        batchSize: number = DEFAULT_BATCH_SIZE
+        batchSize: number = DEFAULT_BATCH_SIZE,
     ): Promise<{ updated: number; failed: number }> {
         const unknownTidal = await prisma.trackTidal.findMany({
             where: {
@@ -84,7 +111,7 @@ class RemoteTrackMetadataRefreshService {
         }
 
         log.info(
-            `Found ${unknownTidal.length} Tidal and ${unknownYt.length} YT Music rows with placeholder metadata`
+            `Found ${unknownTidal.length} Tidal and ${unknownYt.length} YT Music rows with placeholder metadata`,
         );
 
         let updated = 0;
@@ -97,7 +124,7 @@ class RemoteTrackMetadataRefreshService {
                 select: { userId: true },
             });
             const tidalUserIds = dedupeUserIds(
-                tidalUsers.map((user) => user.userId)
+                tidalUsers.map((user) => user.userId),
             );
             const tidalUserIdSet = new Set(tidalUserIds);
             let preferredTidalUserId: string | null = null;
@@ -120,12 +147,12 @@ class RemoteTrackMetadataRefreshService {
                             try {
                                 detail = await tidalStreamingService.getTrack(
                                     candidateUserId,
-                                    row.tidalId
+                                    row.tidalId,
                                 );
                             } catch (err) {
                                 log.warn(
                                     `Failed to refresh TrackTidal id=${row.id} with user ${candidateUserId}`,
-                                    err
+                                    err,
                                 );
                                 continue;
                             }
@@ -137,10 +164,14 @@ class RemoteTrackMetadataRefreshService {
                         }
 
                         const updateData: Record<string, string | number> = {};
-                        if (isRealValue(detail?.title)) updateData.title = detail.title;
-                        if (isRealValue(detail?.artist)) updateData.artist = detail.artist;
-                        if (isRealValue(detail?.album?.title)) updateData.album = detail.album.title;
-                        if (detail?.duration && detail.duration > 0) updateData.duration = detail.duration;
+                        if (isRealValue(detail?.title))
+                            updateData.title = detail.title;
+                        if (isRealValue(detail?.artist))
+                            updateData.artist = detail.artist;
+                        if (isRealValue(detail?.album?.title))
+                            updateData.album = detail.album.title;
+                        if (detail?.duration && detail.duration > 0)
+                            updateData.duration = detail.duration;
 
                         if (Object.keys(updateData).length > 0) {
                             await prisma.trackTidal.update({
@@ -148,22 +179,27 @@ class RemoteTrackMetadataRefreshService {
                                 data: updateData,
                             });
                             preferredTidalUserId = successfulUserId;
-                            log.debug(`Refreshed TrackTidal id=${row.id}: updated fields [${Object.keys(updateData).join(", ")}]`);
+                            log.debug(
+                                `Refreshed TrackTidal id=${row.id}: updated fields [${Object.keys(updateData).join(", ")}]`,
+                            );
                             updated++;
                         } else {
                             log.warn(
-                                `TrackTidal id=${row.id}: no candidate Tidal credentials returned real metadata`
+                                `TrackTidal id=${row.id}: no candidate Tidal credentials returned real metadata`,
                             );
                             failed++;
                         }
                     } catch (err) {
-                        log.warn(`Failed to refresh TrackTidal id=${row.id}`, err);
+                        log.warn(
+                            `Failed to refresh TrackTidal id=${row.id}`,
+                            err,
+                        );
                         failed++;
                     }
                 }
             } else {
                 log.warn(
-                    `No authenticated Tidal user found — skipping ${unknownTidal.length} rows with placeholder metadata`
+                    `No authenticated Tidal user found — skipping ${unknownTidal.length} rows with placeholder metadata`,
                 );
                 failed += unknownTidal.length;
             }
@@ -172,42 +208,56 @@ class RemoteTrackMetadataRefreshService {
         // Refresh YT Music rows
         if (unknownYt.length > 0) {
             log.debug(
-                `Refreshing ${unknownYt.length} YT Music rows via __public__ metadata lookup`
+                `Refreshing ${unknownYt.length} YT Music rows via __public__ metadata lookup`,
             );
             for (const row of unknownYt) {
                 try {
                     const song = await ytMusicService.getSong(
                         "__public__",
-                        row.videoId
+                        row.videoId,
                     );
                     const ytUpdateData: Record<string, string | number> = {};
-                    if (isRealValue(song?.title)) ytUpdateData.title = song.title;
-                    if (isRealValue(song?.artist)) ytUpdateData.artist = song.artist;
-                    if (isRealValue(song?.album)) ytUpdateData.album = song.album;
-                    if (song?.duration && song.duration > 0) ytUpdateData.duration = song.duration;
+                    if (isRealValue(song?.title))
+                        ytUpdateData.title = song.title;
+                    if (isRealValue(song?.artist))
+                        ytUpdateData.artist = song.artist;
+                    if (isRealValue(song?.album))
+                        ytUpdateData.album = song.album;
+                    if (song?.duration && song.duration > 0)
+                        ytUpdateData.duration = song.duration;
 
                     if (Object.keys(ytUpdateData).length > 0) {
                         await prisma.trackYtMusic.update({
                             where: { id: row.id },
                             data: ytUpdateData,
                         });
-                        log.debug(`Refreshed TrackYtMusic id=${row.id}: updated fields [${Object.keys(ytUpdateData).join(", ")}]`);
+                        log.debug(
+                            `Refreshed TrackYtMusic id=${row.id}: updated fields [${Object.keys(ytUpdateData).join(", ")}]`,
+                        );
                         updated++;
                     } else {
-                        log.debug(`TrackYtMusic id=${row.id}: API returned no real metadata`);
+                        log.debug(
+                            `TrackYtMusic id=${row.id}: API returned no real metadata`,
+                        );
                         failed++;
                     }
                 } catch (err) {
-                    log.warn(`Failed to refresh TrackYtMusic id=${row.id}`, err);
+                    log.warn(
+                        `Failed to refresh TrackYtMusic id=${row.id}`,
+                        err,
+                    );
                     failed++;
                 }
             }
         }
 
-        log.info(`Metadata refresh complete: ${updated} updated, ${failed} failed`);
+        log.info(
+            `Metadata refresh complete: ${updated} updated, ${failed} failed`,
+        );
 
         return { updated, failed };
     }
 }
 
-export const remoteTrackMetadataRefreshService = new RemoteTrackMetadataRefreshService();
+export const remoteTrackMetadataRefreshService =
+    new RemoteTrackMetadataRefreshService();

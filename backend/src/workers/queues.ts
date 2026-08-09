@@ -2,7 +2,9 @@ import Bull from "bull";
 import { logger } from "../utils/logger";
 import { config } from "../config";
 
-function buildBullRedisConfig(redisUrlString: string): Bull.QueueOptions["redis"] {
+function buildBullRedisConfig(
+    redisUrlString: string,
+): Bull.QueueOptions["redis"] {
     const fallback: Bull.QueueOptions["redis"] = {
         host: "127.0.0.1",
         port: 6379,
@@ -39,13 +41,13 @@ function buildBullRedisConfig(redisUrlString: string): Bull.QueueOptions["redis"
         }
 
         logger.debug(
-            `[Bull] Redis config resolved (host=${redisUrl.hostname}, port=${port}, db=${redisConfig.db ?? 0}, tls=${isTls})`
+            `[Bull] Redis config resolved (host=${redisUrl.hostname}, port=${port}, db=${redisConfig.db ?? 0}, tls=${isTls})`,
         );
 
         return redisConfig as Bull.QueueOptions["redis"];
     } catch (error) {
         logger.warn(
-            `[Bull] Failed to parse REDIS_URL for queues, falling back to ${fallback.host}:${fallback.port}`
+            `[Bull] Failed to parse REDIS_URL for queues, falling back to ${fallback.host}:${fallback.port}`,
         );
         return fallback;
     }

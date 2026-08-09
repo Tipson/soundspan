@@ -118,11 +118,11 @@ const mockDownloadUpdate = prisma.downloadJob.update as jest.Mock;
 function getRouteHandler(
     path: string,
     method: "get" | "post" | "delete" | "patch",
-    stackIndex = 0
+    stackIndex = 0,
 ) {
     const layer = (downloadsRouter as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -192,7 +192,9 @@ describe("downloads interactive release compatibility", () => {
 
     it("returns 404 when album cannot be found in Lidarr even after artist add", async () => {
         mockLidarrIsEnabled.mockResolvedValue(true);
-        mockLidarrSearchAlbum.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+        mockLidarrSearchAlbum
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([]);
         mockGetReleaseGroup.mockResolvedValue({
             "artist-credit": [{ artist: { id: "artist-mbid-1" } }],
         });
@@ -213,13 +215,13 @@ describe("downloads interactive release compatibility", () => {
             "Artist",
             "/music",
             false,
-            false
+            false,
         );
         expect(res.statusCode).toBe(404);
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: "Album not found in Lidarr",
-            })
+            }),
         );
     });
 
@@ -351,7 +353,9 @@ describe("downloads interactive release compatibility", () => {
 
     it("returns 500 when interactive release lookup throws unexpectedly", async () => {
         mockLidarrIsEnabled.mockResolvedValue(true);
-        mockLidarrSearchAlbum.mockRejectedValue(new Error("lidarr search exploded"));
+        mockLidarrSearchAlbum.mockRejectedValue(
+            new Error("lidarr search exploded"),
+        );
 
         const req = {
             params: { albumMbid: "rg-throw" },
@@ -410,7 +414,7 @@ describe("downloads interactive release compatibility", () => {
                     userId: "user-1",
                     status: { in: ["pending", "processing"] },
                 }),
-            })
+            }),
         );
         expect(mockDownloadCreate).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -425,14 +429,14 @@ describe("downloads interactive release compatibility", () => {
                         selectedRelease: "Album 24bit FLAC",
                     }),
                 }),
-            })
+            }),
         );
         expect(mockLidarrGrabRelease).toHaveBeenCalledWith(
             expect.objectContaining({
                 guid: "guid-1",
                 indexerId: 42,
                 title: "Album 24bit FLAC",
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -504,7 +508,7 @@ describe("downloads interactive release compatibility", () => {
                     status: "failed",
                     error: "Failed to grab release from indexer",
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({ error: "Failed to grab release" });

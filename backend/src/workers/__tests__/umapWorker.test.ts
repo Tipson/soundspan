@@ -41,11 +41,11 @@ describe("umapWorker", () => {
 
         jest.doMock("umap-js", () => ({ UMAP }));
 
-        const exitSpy = jest
-            .spyOn(process, "exit")
-            .mockImplementation(((code?: string | number | null | undefined): never => {
-                throw new Error(`process.exit:${code}`);
-            }) as typeof process.exit);
+        const exitSpy = jest.spyOn(process, "exit").mockImplementation(((
+            code?: string | number | null | undefined,
+        ): never => {
+            throw new Error(`process.exit:${code}`);
+        }) as typeof process.exit);
 
         let moduleError: unknown;
 
@@ -77,7 +77,7 @@ describe("umapWorker", () => {
                 minDist: 0.1,
                 spread: 1.0,
             });
-        }
+        },
     );
 
     it("calls fit with embeddings from workerData", () => {

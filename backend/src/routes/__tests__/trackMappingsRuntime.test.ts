@@ -25,7 +25,7 @@ import router from "../trackMappings";
 function getHandler(path: string, method: "get" | "post") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -78,7 +78,7 @@ describe("trackMappings route runtime", () => {
         await getAlbumMappings(req, res);
 
         expect(trackMappingService.getMappingsForAlbum).toHaveBeenCalledWith(
-            "album_1"
+            "album_1",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ mappings: [{ id: "cm_1" }] });
@@ -106,11 +106,11 @@ describe("trackMappings route runtime", () => {
                 details: expect.arrayContaining([
                     expect.objectContaining({
                         message: expect.stringContaining(
-                            "At least one linkage key is required"
+                            "At least one linkage key is required",
                         ),
                     }),
                 ]),
-            })
+            }),
         );
         expect(trackMappingService.createMapping).not.toHaveBeenCalled();
     });
@@ -151,7 +151,7 @@ describe("trackMappings route runtime", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 mappings: expect.any(Array),
-            })
+            }),
         );
     });
 });

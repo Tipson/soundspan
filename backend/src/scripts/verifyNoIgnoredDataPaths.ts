@@ -5,7 +5,8 @@ const SRC_ROOT = join(__dirname, "..");
 const FILE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const DISALLOWED_IMPORT = /\bfrom\s+["'][^"']*\/data\/[^"']*["']/g;
 const DISALLOWED_REQUIRE = /\brequire\(\s*["'][^"']*\/data\/[^"']*["']\s*\)/g;
-const DISALLOWED_JOIN_PATH = /\bjoin\(\s*__dirname\s*,\s*["'][^"']*\/data\/[^"']*["']/g;
+const DISALLOWED_JOIN_PATH =
+    /\bjoin\(\s*__dirname\s*,\s*["'][^"']*\/data\/[^"']*["']/g;
 
 interface Violation {
     filePath: string;
@@ -43,7 +44,11 @@ export function findLine(content: string, index: number): number {
 export function scanFile(filePath: string): Violation[] {
     const content = readFileSync(filePath, "utf8");
     const violations: Violation[] = [];
-    const patterns = [DISALLOWED_IMPORT, DISALLOWED_REQUIRE, DISALLOWED_JOIN_PATH];
+    const patterns = [
+        DISALLOWED_IMPORT,
+        DISALLOWED_REQUIRE,
+        DISALLOWED_JOIN_PATH,
+    ];
 
     for (const pattern of patterns) {
         pattern.lastIndex = 0;
@@ -71,13 +76,19 @@ export function main() {
     const violations = files.flatMap(scanFile);
 
     if (violations.length === 0) {
-        console.log("verifyNoIgnoredDataPaths: no disallowed /data/ source references found.");
+        console.log(
+            "verifyNoIgnoredDataPaths: no disallowed /data/ source references found.",
+        );
         return;
     }
 
-    console.error("verifyNoIgnoredDataPaths: disallowed ignored-path references found:");
+    console.error(
+        "verifyNoIgnoredDataPaths: disallowed ignored-path references found:",
+    );
     for (const violation of violations) {
-        console.error(`- ${violation.filePath}:${violation.line} -> ${violation.snippet}`);
+        console.error(
+            `- ${violation.filePath}:${violation.line} -> ${violation.snippet}`,
+        );
     }
     process.exit(1);
 }

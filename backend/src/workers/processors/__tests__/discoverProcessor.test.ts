@@ -22,7 +22,8 @@ describe("discoverProcessor", () => {
         };
 
         const resolvedClaimResult =
-            options && Object.prototype.hasOwnProperty.call(options, "claimResult")
+            options &&
+            Object.prototype.hasOwnProperty.call(options, "claimResult")
                 ? options.claimResult
                 : "OK";
 
@@ -46,7 +47,9 @@ describe("discoverProcessor", () => {
         };
 
         const clients = [lockClient, replacementLockClient];
-        const createIORedisClient = jest.fn(() => clients.shift() || lockClient);
+        const createIORedisClient = jest.fn(
+            () => clients.shift() || lockClient,
+        );
 
         const discoverWeeklyService = {
             generatePlaylist: jest.fn(async () => ({
@@ -67,7 +70,7 @@ describe("discoverProcessor", () => {
 
         if (options?.generateError) {
             discoveryRecommendationsService.generatePlaylist.mockRejectedValueOnce(
-                new Error(options.generateError)
+                new Error(options.generateError),
             );
         }
 
@@ -108,9 +111,10 @@ describe("discoverProcessor", () => {
     }
 
     it("returns skipped result when claim is already held", async () => {
-        const { module, discoveryRecommendationsService } = loadDiscoverProcessor({
-            claimResult: null,
-        });
+        const { module, discoveryRecommendationsService } =
+            loadDiscoverProcessor({
+                claimResult: null,
+            });
         const job = buildJob();
 
         await expect(module.processDiscoverWeekly(job)).resolves.toEqual({
@@ -120,7 +124,9 @@ describe("discoverProcessor", () => {
             songCount: 0,
         });
 
-        expect(discoveryRecommendationsService.generatePlaylist).not.toHaveBeenCalled();
+        expect(
+            discoveryRecommendationsService.generatePlaylist,
+        ).not.toHaveBeenCalled();
     });
 
     it("processes strict-mode generation and releases lock", async () => {
@@ -135,9 +141,9 @@ describe("discoverProcessor", () => {
             songCount: 20,
             batchId: "b2",
         });
-        expect(discoveryRecommendationsService.generatePlaylist).toHaveBeenCalledWith(
-            "u1"
-        );
+        expect(
+            discoveryRecommendationsService.generatePlaylist,
+        ).toHaveBeenCalledWith("u1");
         expect(lockClient.eval).toHaveBeenCalled();
     });
 
@@ -159,20 +165,22 @@ describe("discoverProcessor", () => {
                 success: true,
                 playlistName: "Discover Legacy",
                 songCount: 10,
-            })
+            }),
         );
 
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining("failed due to Redis connection closure"),
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(createIORedisClient).toHaveBeenCalledTimes(2);
         expect(createIORedisClient).toHaveBeenCalledWith(
             "discover-processor-locks",
-            expect.objectContaining({ lazyConnect: true })
+            expect.objectContaining({ lazyConnect: true }),
         );
         expect(replacementLockClient.set).toHaveBeenCalled();
-        expect(discoverWeeklyService.generatePlaylist).toHaveBeenCalledWith("u1");
+        expect(discoverWeeklyService.generatePlaylist).toHaveBeenCalledWith(
+            "u1",
+        );
     });
 
     it("re-throws on generation failure so Bull retries, and supports shutdown fallback", async () => {
@@ -184,14 +192,14 @@ describe("discoverProcessor", () => {
         // The job must REJECT (not resolve with success:false) so Bull's retry /
         // dead-letter machinery engages instead of recording a silent failure.
         await expect(module.processDiscoverWeekly(job)).rejects.toThrow(
-            "generation-boom"
+            "generation-boom",
         );
 
         lockClient.quit.mockRejectedValueOnce(new Error("quit-failed"));
         await module.shutdownDiscoverProcessor();
         expect(logger.warn).toHaveBeenCalledWith(
             "[DiscoverProcessor] Failed to gracefully close lock Redis client; disconnecting forcefully",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(lockClient.disconnect).toHaveBeenCalled();
     });
@@ -207,13 +215,13 @@ describe("discoverProcessor", () => {
             expect.objectContaining({
                 success: true,
                 playlistName: "Discover Strict",
-            })
+            }),
         );
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "Failed to release processor claim for user u1"
+                "Failed to release processor claim for user u1",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

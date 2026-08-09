@@ -111,10 +111,14 @@ describe("listenTogetherManager runtime behavior", () => {
         });
 
         groupManager.addMember("g-dirty", "guest-1", "Guest 1");
-        expect(groupManager.dirtyGroups().map((g) => g.id)).toContain("g-dirty");
+        expect(groupManager.dirtyGroups().map((g) => g.id)).toContain(
+            "g-dirty",
+        );
 
         groupManager.markClean("g-dirty");
-        expect(groupManager.dirtyGroups().map((g) => g.id)).not.toContain("g-dirty");
+        expect(groupManager.dirtyGroups().map((g) => g.id)).not.toContain(
+            "g-dirty",
+        );
 
         groupManager.remove("g-dirty");
         expect(groupManager.has("g-dirty")).toBe(false);
@@ -141,7 +145,11 @@ describe("listenTogetherManager runtime behavior", () => {
         });
 
         // Existing member path updates/broadcasts without a join callback.
-        const existingSnapshot = groupManager.addMember("g-members", "host", "Host");
+        const existingSnapshot = groupManager.addMember(
+            "g-members",
+            "host",
+            "Host",
+        );
         expect(existingSnapshot.members.length).toBe(1);
         expect(callbacks.onMemberJoined).not.toHaveBeenCalled();
 
@@ -159,7 +167,7 @@ describe("listenTogetherManager runtime behavior", () => {
             expect.objectContaining({
                 userId: "host",
                 newHostUserId: "u-a",
-            })
+            }),
         );
 
         const ended = groupManager.removeMember("g-members", "u-a");
@@ -168,7 +176,7 @@ describe("listenTogetherManager runtime behavior", () => {
         expect(lastEnded.ended).toBe(true);
         expect(callbacks.onGroupEnded).toHaveBeenCalledWith(
             "g-members",
-            "All members left"
+            "All members left",
         );
     });
 
@@ -216,7 +224,9 @@ describe("listenTogetherManager runtime behavior", () => {
         });
         groupManager.addMember("g-playback", "guest", "Guest");
 
-        expect(() => groupManager.play("g-playback", "guest")).toThrow(GroupError);
+        expect(() => groupManager.play("g-playback", "guest")).toThrow(
+            GroupError,
+        );
 
         const playDelta = groupManager.play("g-playback", "host");
         expect(playDelta.isPlaying).toBe(true);
@@ -274,16 +284,18 @@ describe("listenTogetherManager runtime behavior", () => {
         expect(waiting.waiting).toBe(true);
         expect(waiting.snapshot.readyDeadlineMs).toEqual(expect.any(Number));
         expect(groupManager.get("g-ready")?.readyDeadlineMs).toEqual(
-            expect.any(Number)
+            expect.any(Number),
         );
         expect(() => groupManager.setTrack("g-ready", "host", 0, true)).toThrow(
-            GroupError
+            GroupError,
         );
 
         expect(groupManager.reportReady("g-ready", "host")).toBe(false);
         expect(groupManager.reportReady("g-ready", "guest")).toBe(true);
         expect(callbacks.onPlayAt).toHaveBeenCalledTimes(1);
-        expect(groupManager.snapshotById("g-ready")?.readyDeadlineMs).toBeNull();
+        expect(
+            groupManager.snapshotById("g-ready")?.readyDeadlineMs,
+        ).toBeNull();
 
         // Trigger timeout path on a new waiting gate.
         callbacks.onPlayAt.mockClear();
@@ -313,17 +325,19 @@ describe("listenTogetherManager runtime behavior", () => {
             "g-unavailable-ready",
             "host",
             1,
-            true
+            true,
         );
         expect(waiting.waiting).toBe(true);
 
-        expect(groupManager.reportReady("g-unavailable-ready", "host")).toBe(false);
+        expect(groupManager.reportReady("g-unavailable-ready", "host")).toBe(
+            false,
+        );
         groupManager.setUnavailableIndices("g-unavailable-ready", "guest", [1]);
 
         expect(callbacks.onPlayAt).toHaveBeenCalledTimes(1);
-        expect(groupManager.snapshotById("g-unavailable-ready")?.syncState).toBe(
-            "playing"
-        );
+        expect(
+            groupManager.snapshotById("g-unavailable-ready")?.syncState,
+        ).toBe("playing");
     });
 
     it("treats play/pause/seek as no-ops while waiting and keeps track-change conflicts", () => {
@@ -358,18 +372,18 @@ describe("listenTogetherManager runtime behavior", () => {
         expect(callbacks.onPlaybackDelta).not.toHaveBeenCalled();
 
         expect(() => groupManager.next("g-ready-block", "host")).toThrow(
-            "Track change already in progress"
+            "Track change already in progress",
         );
         expect(() =>
-            groupManager.setTrack("g-ready-block", "host", 0, true)
+            groupManager.setTrack("g-ready-block", "host", 0, true),
         ).toThrow("Track change already in progress");
 
         expect(groupManager.snapshotById("g-ready-block")?.syncState).toBe(
-            "waiting"
+            "waiting",
         );
-        expect(groupManager.snapshotById("g-ready-block")?.playback.positionMs).toBe(
-            0
-        );
+        expect(
+            groupManager.snapshotById("g-ready-block")?.playback.positionMs,
+        ).toBe(0);
     });
 
     it("re-arms ready-gate timeout when applying an external waiting snapshot", async () => {
@@ -402,9 +416,11 @@ describe("listenTogetherManager runtime behavior", () => {
 
         expect(callbacks.onPlayAt).toHaveBeenCalledTimes(1);
         expect(groupManager.snapshotById("g-ready-rearm")?.syncState).toBe(
-            "playing"
+            "playing",
         );
-        expect(groupManager.snapshotById("g-ready-rearm")?.readyDeadlineMs).toBeNull();
+        expect(
+            groupManager.snapshotById("g-ready-rearm")?.readyDeadlineMs,
+        ).toBeNull();
     });
 
     it("hydrates external snapshots for unknown groups and clears ready-gate state for non-waiting sync", () => {
@@ -477,9 +493,11 @@ describe("listenTogetherManager runtime behavior", () => {
 
         expect(callbacks.onPlayAt).toHaveBeenCalledTimes(1);
         expect(groupManager.snapshotById("g-ready-expired")?.syncState).toBe(
-            "playing"
+            "playing",
         );
-        expect(groupManager.snapshotById("g-ready-expired")?.readyDeadlineMs).toBeNull();
+        expect(
+            groupManager.snapshotById("g-ready-expired")?.readyDeadlineMs,
+        ).toBeNull();
     });
 
     it("keeps ready-gate timers referenced when timer handles expose ref/unref", () => {
@@ -503,13 +521,13 @@ describe("listenTogetherManager runtime behavior", () => {
         const unrefSpy = jest.fn();
         const setTimeoutSpy = jest
             .spyOn(global, "setTimeout")
-            .mockImplementation(((
-                _handler: (...args: any[]) => void,
-            ) =>
-                ({
-                    ref: refSpy,
-                    unref: unrefSpy,
-                }) as unknown as NodeJS.Timeout) as typeof setTimeout);
+            .mockImplementation(
+                ((_handler: (...args: any[]) => void) =>
+                    ({
+                        ref: refSpy,
+                        unref: unrefSpy,
+                    }) as unknown as NodeJS.Timeout) as typeof setTimeout,
+            );
         const clearTimeoutSpy = jest
             .spyOn(global, "clearTimeout")
             .mockImplementation((() => undefined) as typeof clearTimeout);
@@ -547,9 +565,7 @@ describe("listenTogetherManager runtime behavior", () => {
         let scheduledCallback: (() => void) | null = null;
         const setTimeoutSpy = jest
             .spyOn(global, "setTimeout")
-            .mockImplementation(((
-                handler: (...args: any[]) => void,
-            ) => {
+            .mockImplementation(((handler: (...args: any[]) => void) => {
                 scheduledCallback = () => handler();
                 return 1 as unknown as NodeJS.Timeout;
             }) as typeof setTimeout);
@@ -584,8 +600,16 @@ describe("listenTogetherManager runtime behavior", () => {
             createdAt: new Date(),
         });
         groupManager.addMember("g-ready-default-deadline", "guest", "Guest");
-        groupManager.addSocket("g-ready-default-deadline", "host", "host-socket");
-        groupManager.addSocket("g-ready-default-deadline", "guest", "guest-socket");
+        groupManager.addSocket(
+            "g-ready-default-deadline",
+            "host",
+            "host-socket",
+        );
+        groupManager.addSocket(
+            "g-ready-default-deadline",
+            "guest",
+            "guest-socket",
+        );
 
         const before = groupManager.snapshotById("g-ready-default-deadline");
         expect(before).toBeDefined();
@@ -606,7 +630,9 @@ describe("listenTogetherManager runtime behavior", () => {
         const after = groupManager.snapshotById("g-ready-default-deadline");
         expect(after?.syncState).toBe("waiting");
         expect(after?.readyDeadlineMs).toEqual(expect.any(Number));
-        expect((after?.readyDeadlineMs ?? 0) - now).toBeGreaterThanOrEqual(7_900);
+        expect((after?.readyDeadlineMs ?? 0) - now).toBeGreaterThanOrEqual(
+            7_900,
+        );
         expect((after?.readyDeadlineMs ?? 0) - now).toBeLessThanOrEqual(8_100);
     });
 
@@ -624,14 +650,22 @@ describe("listenTogetherManager runtime behavior", () => {
             createdAt: new Date(),
         });
         groupManager.addMember("g-ready-preserve-deadline", "guest", "Guest");
-        groupManager.addSocket("g-ready-preserve-deadline", "host", "host-socket");
-        groupManager.addSocket("g-ready-preserve-deadline", "guest", "guest-socket");
+        groupManager.addSocket(
+            "g-ready-preserve-deadline",
+            "host",
+            "host-socket",
+        );
+        groupManager.addSocket(
+            "g-ready-preserve-deadline",
+            "guest",
+            "guest-socket",
+        );
 
         const waiting = groupManager.setTrack(
             "g-ready-preserve-deadline",
             "host",
             1,
-            true
+            true,
         );
         const existingDeadline = waiting.snapshot.readyDeadlineMs;
         expect(existingDeadline).toEqual(expect.any(Number));
@@ -665,14 +699,22 @@ describe("listenTogetherManager runtime behavior", () => {
             createdAt: new Date(),
         });
         groupManager.addMember("g-ready-recompute-deadline", "guest", "Guest");
-        groupManager.addSocket("g-ready-recompute-deadline", "host", "host-socket");
-        groupManager.addSocket("g-ready-recompute-deadline", "guest", "guest-socket");
+        groupManager.addSocket(
+            "g-ready-recompute-deadline",
+            "host",
+            "host-socket",
+        );
+        groupManager.addSocket(
+            "g-ready-recompute-deadline",
+            "guest",
+            "guest-socket",
+        );
 
         const waiting = groupManager.setTrack(
             "g-ready-recompute-deadline",
             "host",
             1,
-            true
+            true,
         );
         const localGroup = groupManager.get("g-ready-recompute-deadline");
         expect(localGroup).toBeDefined();
@@ -692,7 +734,9 @@ describe("listenTogetherManager runtime behavior", () => {
         const after = groupManager.snapshotById("g-ready-recompute-deadline");
         expect(after?.syncState).toBe("waiting");
         expect(after?.readyDeadlineMs).toEqual(expect.any(Number));
-        expect((after?.readyDeadlineMs ?? 0) - now).toBeGreaterThanOrEqual(7_900);
+        expect((after?.readyDeadlineMs ?? 0) - now).toBeGreaterThanOrEqual(
+            7_900,
+        );
         expect((after?.readyDeadlineMs ?? 0) - now).toBeLessThanOrEqual(8_100);
     });
 
@@ -718,19 +762,22 @@ describe("listenTogetherManager runtime behavior", () => {
         expect(addDelta.queue[0]?.provider?.source).toBe("local");
         expect(groupManager.get("g-queue")?.syncState).toBe("paused");
 
-        groupManager.modifyQueue("g-queue", "host", { action: "remove", index: 0 });
+        groupManager.modifyQueue("g-queue", "host", {
+            action: "remove",
+            index: 0,
+        });
         expect(() =>
             groupManager.modifyQueue("g-queue", "host", {
                 action: "remove",
                 index: 99,
-            })
+            }),
         ).toThrow(GroupError);
         expect(() =>
             groupManager.modifyQueue("g-queue", "host", {
                 action: "reorder",
                 fromIndex: 0,
                 toIndex: 1,
-            })
+            }),
         ).toThrow(GroupError);
 
         const clearDelta = groupManager.modifyQueue("g-queue", "host", {
@@ -769,7 +816,7 @@ describe("listenTogetherManager runtime behavior", () => {
         });
         // currentIndex is still 0, so Y goes after index 0 (after A), before X
         expect(
-            groupManager.get("g-insert")?.playback.queue.map((t) => t.id)
+            groupManager.get("g-insert")?.playback.queue.map((t) => t.id),
         ).toEqual(["A", "Y", "X", "B", "C"]);
     });
 
@@ -809,18 +856,20 @@ describe("listenTogetherManager runtime behavior", () => {
         });
         groupManager.addMember("g-end", "guest", "Guest");
 
-        expect(() => groupManager.endGroup("g-end", "guest")).toThrow(GroupError);
+        expect(() => groupManager.endGroup("g-end", "guest")).toThrow(
+            GroupError,
+        );
         groupManager.endGroup("g-end", "host");
         expect(callbacks.onGroupEnded).toHaveBeenCalledWith(
             "g-end",
-            "Host ended the group"
+            "Host ended the group",
         );
 
         callbacks.onGroupEnded.mockClear();
         groupManager.forceEnd("g-end", "forced cleanup");
         expect(callbacks.onGroupEnded).toHaveBeenCalledWith(
             "g-end",
-            "forced cleanup"
+            "forced cleanup",
         );
     });
 
@@ -943,7 +992,12 @@ describe("listenTogetherManager runtime behavior", () => {
         groupManager.addSocket("g-host-transfer", "user-a", "sock-a");
         groupManager.addSocket("g-host-transfer", "user-b", "sock-b");
 
-        const waiting = groupManager.setTrack("g-host-transfer", "host", 1, true);
+        const waiting = groupManager.setTrack(
+            "g-host-transfer",
+            "host",
+            1,
+            true,
+        );
         expect(waiting.waiting).toBe(true);
         groupManager.reportReady("g-host-transfer", "user-a");
         groupManager.reportReady("g-host-transfer", "user-b");
@@ -969,7 +1023,12 @@ describe("listenTogetherManager runtime behavior", () => {
         });
         groupManager.addSocket("g-auto-play-off", "host", "sock-host");
 
-        const result = groupManager.setTrack("g-auto-play-off", "host", 1, false);
+        const result = groupManager.setTrack(
+            "g-auto-play-off",
+            "host",
+            1,
+            false,
+        );
         expect(result.waiting).toBe(false);
         expect(groupManager.get("g-auto-play-off")?.syncState).toBe("paused");
     });
@@ -1029,7 +1088,9 @@ describe("listenTogetherManager runtime behavior", () => {
             action: "remove",
             index: 0,
         });
-        expect(groupManager.snapshotById("g-remove-shift")?.playback.currentIndex).toBe(1);
+        expect(
+            groupManager.snapshotById("g-remove-shift")?.playback.currentIndex,
+        ).toBe(1);
     });
 
     it("clears ready timeout when ending a group from a waiting state", () => {
@@ -1060,9 +1121,11 @@ describe("listenTogetherManager runtime behavior", () => {
         groupManager.setCallbacks(createCallbacks());
         expect(groupManager.snapshotById("missing-group")).toBeUndefined();
         expect(() =>
-            groupManager.removeMember("missing-group", "missing-user")
+            groupManager.removeMember("missing-group", "missing-user"),
         ).toThrow(GroupError);
-        expect(() => groupManager.forceEnd("missing-group", "noop")).not.toThrow();
+        expect(() =>
+            groupManager.forceEnd("missing-group", "noop"),
+        ).not.toThrow();
     });
 
     it("enforces member and control checks for playback and queue edits", () => {
@@ -1082,7 +1145,7 @@ describe("listenTogetherManager runtime behavior", () => {
         expect(() =>
             groupManager.modifyQueue("g-authz", "guest", {
                 action: "clear",
-            })
+            }),
         ).toThrow(GroupError);
 
         groupManager.addMember("g-authz", "guest", "Guest");
@@ -1103,7 +1166,9 @@ describe("listenTogetherManager runtime behavior", () => {
         });
 
         expect(groupManager.reportReady("g-report-ready", "host")).toBe(false);
-        expect(groupManager.removeMember("g-report-ready", "unknown-user")).toEqual({
+        expect(
+            groupManager.removeMember("g-report-ready", "unknown-user"),
+        ).toEqual({
             ended: false,
         });
     });
@@ -1112,8 +1177,9 @@ describe("listenTogetherManager runtime behavior", () => {
         const callbacks = createCallbacks();
         groupManager.setCallbacks(callbacks);
 
-        const initialTracks = Array.from({ length: MAX_QUEUE_SIZE - 1 }, (_, i) =>
-            track(`init-${i}`)
+        const initialTracks = Array.from(
+            { length: MAX_QUEUE_SIZE - 1 },
+            (_, i) => track(`init-${i}`),
         );
         groupManager.create("g-cap", {
             name: "Cap Test",
@@ -1136,7 +1202,9 @@ describe("listenTogetherManager runtime behavior", () => {
         });
         expect(partialAdd.queue).toHaveLength(MAX_QUEUE_SIZE);
         expect(partialAdd.queue.at(-1)?.id).toBe("fill");
-        expect(partialAdd.queue.some((item) => item.id === "overflow")).toBe(false);
+        expect(partialAdd.queue.some((item) => item.id === "overflow")).toBe(
+            false,
+        );
 
         const noOpAdd = groupManager.modifyQueue("g-cap", "u1", {
             action: "add",
@@ -1145,8 +1213,9 @@ describe("listenTogetherManager runtime behavior", () => {
         expect(noOpAdd.queue).toHaveLength(MAX_QUEUE_SIZE);
         expect(noOpAdd.stateVersion).toBe(partialAdd.stateVersion);
 
-        const insertTracks = Array.from({ length: MAX_QUEUE_SIZE - 1 }, (_, i) =>
-            track(`insert-${i}`)
+        const insertTracks = Array.from(
+            { length: MAX_QUEUE_SIZE - 1 },
+            (_, i) => track(`insert-${i}`),
         );
         groupManager.create("g-cap-insert", {
             name: "Cap Insert Test",
@@ -1169,15 +1238,18 @@ describe("listenTogetherManager runtime behavior", () => {
         });
         expect(partialInsert.queue).toHaveLength(MAX_QUEUE_SIZE);
         expect(partialInsert.queue[1]?.id).toBe("inserted");
-        expect(partialInsert.queue.some((item) => item.id === "dropped")).toBe(false);
+        expect(partialInsert.queue.some((item) => item.id === "dropped")).toBe(
+            false,
+        );
     });
 
     it("truncates oversized queue on hydrate", () => {
         const callbacks = createCallbacks();
         groupManager.setCallbacks(callbacks);
 
-        const oversizedQueue = Array.from({ length: MAX_QUEUE_SIZE + 50 }, (_, i) =>
-            track(`hydrate-${i}`)
+        const oversizedQueue = Array.from(
+            { length: MAX_QUEUE_SIZE + 50 },
+            (_, i) => track(`hydrate-${i}`),
         );
         const group = groupManager.hydrate("g-hydrate-cap", {
             name: "Hydrate Cap",
@@ -1191,7 +1263,14 @@ describe("listenTogetherManager runtime behavior", () => {
             currentTimeMs: 0,
             stateVersion: 1,
             createdAt: new Date(),
-            members: [{ userId: "h1", username: "Host", isHost: true, joinedAt: new Date() }],
+            members: [
+                {
+                    userId: "h1",
+                    username: "Host",
+                    isHost: true,
+                    joinedAt: new Date(),
+                },
+            ],
         });
 
         expect(group.playback.queue).toHaveLength(MAX_QUEUE_SIZE);
@@ -1201,8 +1280,9 @@ describe("listenTogetherManager runtime behavior", () => {
         const callbacks = createCallbacks();
         groupManager.setCallbacks(callbacks);
 
-        const oversizedQueue = Array.from({ length: MAX_QUEUE_SIZE + 100 }, (_, i) =>
-            track(`ext-${i}`)
+        const oversizedQueue = Array.from(
+            { length: MAX_QUEUE_SIZE + 100 },
+            (_, i) => track(`ext-${i}`),
         );
         groupManager.applyExternalSnapshot({
             id: "g-ext-cap",
@@ -1223,7 +1303,13 @@ describe("listenTogetherManager runtime behavior", () => {
                 trackId: oversizedQueue[0].id,
             },
             members: [
-                { userId: "h1", username: "Host", isHost: true, joinedAt: new Date().toISOString(), isConnected: false },
+                {
+                    userId: "h1",
+                    username: "Host",
+                    isHost: true,
+                    joinedAt: new Date().toISOString(),
+                    isConnected: false,
+                },
             ],
         });
 

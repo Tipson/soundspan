@@ -41,7 +41,7 @@ describe("wikidataService", () => {
             wikidataService: module.wikidataService as {
                 getArtistInfo: (
                     artistName: string,
-                    mbid: string
+                    mbid: string,
                 ) => Promise<{ summary?: string; heroUrl?: string }>;
             },
             client,
@@ -54,10 +54,16 @@ describe("wikidataService", () => {
     it("returns cached artist info when redis has payload", async () => {
         const { wikidataService, redisClient, client } = loadWikidataService();
         redisClient.get.mockResolvedValueOnce(
-            JSON.stringify({ summary: "cached summary", heroUrl: "cached hero" })
+            JSON.stringify({
+                summary: "cached summary",
+                heroUrl: "cached hero",
+            }),
         );
 
-        const result = await wikidataService.getArtistInfo("Artist A", "mbid-a");
+        const result = await wikidataService.getArtistInfo(
+            "Artist A",
+            "mbid-a",
+        );
 
         expect(result).toEqual({
             summary: "cached summary",
@@ -74,14 +80,17 @@ describe("wikidataService", () => {
             data: { results: { bindings: [] } },
         });
 
-        const result = await wikidataService.getArtistInfo("Artist B", "mbid-b");
+        const result = await wikidataService.getArtistInfo(
+            "Artist B",
+            "mbid-b",
+        );
 
         expect(logger.warn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "No Wikidata entry found for Artist B"
+            "No Wikidata entry found for Artist B",
         );
         expect(result).toEqual({});
     });
@@ -144,7 +153,10 @@ describe("wikidataService", () => {
             throw new Error(`Unexpected URL: ${url}`);
         });
 
-        const result = await wikidataService.getArtistInfo("Artist C", "mbid-c");
+        const result = await wikidataService.getArtistInfo(
+            "Artist C",
+            "mbid-c",
+        );
 
         const fileName = "My_Image.jpg";
         const md5 = crypto.createHash("md5").update(fileName).digest("hex");
@@ -157,7 +169,7 @@ describe("wikidataService", () => {
         expect(redisClient.setEx).toHaveBeenCalledWith(
             "wikidata:mbid-c",
             2592000,
-            JSON.stringify(result)
+            JSON.stringify(result),
         );
     });
 
@@ -165,7 +177,9 @@ describe("wikidataService", () => {
         const { wikidataService, redisClient, client, logger } =
             loadWikidataService();
         redisClient.get.mockResolvedValueOnce(null);
-        redisClient.setEx.mockRejectedValueOnce(new Error("redis write failed"));
+        redisClient.setEx.mockRejectedValueOnce(
+            new Error("redis write failed"),
+        );
 
         client.get.mockImplementation(async (url: string) => {
             if (url.includes("query.wikidata.org/sparql")) {
@@ -198,7 +212,10 @@ describe("wikidataService", () => {
             throw new Error("unexpected url");
         });
 
-        const result = await wikidataService.getArtistInfo("Artist D", "mbid-d");
+        const result = await wikidataService.getArtistInfo(
+            "Artist D",
+            "mbid-d",
+        );
 
         expect(result).toEqual({
             summary: undefined,
@@ -206,7 +223,7 @@ describe("wikidataService", () => {
         });
         expect(logger.warn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -216,12 +233,15 @@ describe("wikidataService", () => {
         redisClient.get.mockResolvedValueOnce(null);
         client.get.mockRejectedValueOnce(new Error("wikidata offline"));
 
-        const result = await wikidataService.getArtistInfo("Artist E", "mbid-e");
+        const result = await wikidataService.getArtistInfo(
+            "Artist E",
+            "mbid-e",
+        );
 
         expect(result).toEqual({});
         expect(logger.error).toHaveBeenCalledWith(
             "Wikidata fetch failed for Artist E:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

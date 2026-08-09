@@ -115,7 +115,7 @@ const mockSearchReleaseGroups =
 function getHandler(path: string, method: "get", stackIndex = 0) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -143,10 +143,13 @@ function createRes() {
 }
 
 describe("enrichment MusicBrainz lookup compatibility", () => {
-    const searchArtistsHandler = getHandler("/search/musicbrainz/artists", "get");
+    const searchArtistsHandler = getHandler(
+        "/search/musicbrainz/artists",
+        "get",
+    );
     const searchReleaseGroupsHandler = getHandler(
         "/search/musicbrainz/release-groups",
-        "get"
+        "get",
     );
 
     beforeEach(() => {
@@ -178,7 +181,10 @@ describe("enrichment MusicBrainz lookup compatibility", () => {
             },
         ]);
 
-        const req = { query: { q: " Daft Punk " }, user: { id: "user-1" } } as any;
+        const req = {
+            query: { q: " Daft Punk " },
+            user: { id: "user-1" },
+        } as any;
         const res = createRes();
 
         await searchArtistsHandler(req, res);
@@ -234,7 +240,7 @@ describe("enrichment MusicBrainz lookup compatibility", () => {
                 disambiguation: null,
                 country: null,
                 type: null,
-            })
+            }),
         );
         expect(Number.isNaN(res.body.artists[0].score)).toBe(true);
     });
@@ -276,7 +282,7 @@ describe("enrichment MusicBrainz lookup compatibility", () => {
         expect(mockSearchReleaseGroups).toHaveBeenCalledWith(
             "Random Access",
             "Daft Punk",
-            10
+            10,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -296,10 +302,13 @@ describe("enrichment MusicBrainz lookup compatibility", () => {
 
     it("returns 500 with message when release-group lookup fails", async () => {
         mockSearchReleaseGroups.mockRejectedValue(
-            new Error("release-group lookup failed")
+            new Error("release-group lookup failed"),
         );
 
-        const req = { query: { q: "Random Access" }, user: { id: "user-1" } } as any;
+        const req = {
+            query: { q: "Random Access" },
+            user: { id: "user-1" },
+        } as any;
         const res = createRes();
 
         await searchReleaseGroupsHandler(req, res);

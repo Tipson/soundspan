@@ -9,40 +9,40 @@ describe("parseEmbedding", () => {
 
     it("throws for empty, null, and undefined input", () => {
         expect(() => parseEmbedding("")).toThrow(
-            "Invalid embedding: expected non-empty string"
+            "Invalid embedding: expected non-empty string",
         );
         expect(() => parseEmbedding("   ")).toThrow(
-            "Invalid embedding: expected non-empty string"
+            "Invalid embedding: expected non-empty string",
         );
         expect(() => parseEmbedding(null as unknown as string)).toThrow(
-            "Invalid embedding: expected non-empty string"
+            "Invalid embedding: expected non-empty string",
         );
         expect(() => parseEmbedding(undefined as unknown as string)).toThrow(
-            "Invalid embedding: expected non-empty string"
+            "Invalid embedding: expected non-empty string",
         );
     });
 
     it("throws for non-string input", () => {
         expect(() => parseEmbedding(123 as unknown as string)).toThrow(
-            "Invalid embedding: expected non-empty string"
+            "Invalid embedding: expected non-empty string",
         );
         expect(() => parseEmbedding([1, 2, 3] as unknown as string)).toThrow(
-            "Invalid embedding: expected non-empty string"
+            "Invalid embedding: expected non-empty string",
         );
-        expect(() => parseEmbedding({ value: "[1,2,3]" } as unknown as string)).toThrow(
-            "Invalid embedding: expected non-empty string"
-        );
+        expect(() =>
+            parseEmbedding({ value: "[1,2,3]" } as unknown as string),
+        ).toThrow("Invalid embedding: expected non-empty string");
     });
 
     it("throws for malformed embeddings with non-numeric values", () => {
         expect(() => parseEmbedding("[1,two,3]")).toThrow(
-            "Invalid embedding: contains non-numeric values"
+            "Invalid embedding: contains non-numeric values",
         );
         expect(() => parseEmbedding("[1,,3]")).toThrow(
-            "Invalid embedding: contains non-numeric values"
+            "Invalid embedding: contains non-numeric values",
         );
         expect(() => parseEmbedding("[1,NaN,3]")).toThrow(
-            "Invalid embedding: contains non-numeric values"
+            "Invalid embedding: contains non-numeric values",
         );
     });
 

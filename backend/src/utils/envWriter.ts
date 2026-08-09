@@ -48,7 +48,10 @@ function shouldSkipEnvSync(envPath: string): string | null {
     }
 
     const rootEnvPath = `${path.parse(envPath).root}.env`;
-    if (envPath === rootEnvPath && process.env.ENABLE_ENV_FILE_SYNC !== "true") {
+    if (
+        envPath === rootEnvPath &&
+        process.env.ENABLE_ENV_FILE_SYNC !== "true"
+    ) {
         return "resolved .env path is filesystem root; refusing implicit write";
     }
 
@@ -56,7 +59,11 @@ function shouldSkipEnvSync(envPath: string): string | null {
 }
 
 function atomicWriteFileSecret(targetPath: string, content: string): void {
-    assert.strictEqual(typeof targetPath, "string", "targetPath must be a string");
+    assert.strictEqual(
+        typeof targetPath,
+        "string",
+        "targetPath must be a string",
+    );
     assert.ok(targetPath.trim().length > 0, "targetPath must not be empty");
 
     const tempPath = `${targetPath}.tmp-${process.pid}-${crypto
@@ -75,7 +82,10 @@ function atomicWriteFileSecret(targetPath: string, content: string): void {
             fs.unlinkSync(tempPath);
         } catch (cleanupError) {
             if ((cleanupError as NodeJS.ErrnoException).code !== "ENOENT") {
-                logger.debug("Failed to clean up temporary .env file", cleanupError);
+                logger.debug(
+                    "Failed to clean up temporary .env file",
+                    cleanupError,
+                );
             }
         }
         throw error;
@@ -87,7 +97,7 @@ function atomicWriteFileSecret(targetPath: string, content: string): void {
  * Preserves existing variables not in the provided map
  */
 export async function writeEnvFile(
-    variables: Record<string, string | null | undefined>
+    variables: Record<string, string | null | undefined>,
 ): Promise<void> {
     const envPath = resolveEnvPath();
     const skipReason = shouldSkipEnvSync(envPath);

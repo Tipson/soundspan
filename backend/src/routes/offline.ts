@@ -55,12 +55,18 @@ router.post("/albums/:id/download", async (req, res) => {
         const { quality } = downloadAlbumSchema.parse(req.body);
 
         // Get user's default quality if not specified
-        let selectedQuality: "original" | "high" | "medium" | "low" = quality || "medium";
+        let selectedQuality: "original" | "high" | "medium" | "low" =
+            quality || "medium";
         if (!quality) {
             const settings = await prisma.userSettings.findUnique({
                 where: { userId },
             });
-            selectedQuality = (settings?.playbackQuality as "original" | "high" | "medium" | "low") || "medium";
+            selectedQuality =
+                (settings?.playbackQuality as
+                    | "original"
+                    | "high"
+                    | "medium"
+                    | "low") || "medium";
         }
 
         // Get album with tracks
@@ -68,10 +74,7 @@ router.post("/albums/:id/download", async (req, res) => {
             where: { id: albumId },
             include: {
                 tracks: {
-                    orderBy: [
-                        { discNo: "asc" },
-                        { trackNo: "asc" },
-                    ],
+                    orderBy: [{ discNo: "asc" }, { trackNo: "asc" }],
                 },
                 artist: {
                     select: {

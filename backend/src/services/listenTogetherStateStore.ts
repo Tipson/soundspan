@@ -11,10 +11,11 @@ const DEFAULT_LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS = 21_600; // 6 hours
 const parsedStateStoreTtlSeconds = Number.parseInt(
     process.env.LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS ||
         `${DEFAULT_LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS}`,
-    10
+    10,
 );
 const LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS =
-    Number.isFinite(parsedStateStoreTtlSeconds) && parsedStateStoreTtlSeconds > 0
+    Number.isFinite(parsedStateStoreTtlSeconds) &&
+    parsedStateStoreTtlSeconds > 0
         ? parsedStateStoreTtlSeconds
         : DEFAULT_LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS;
 
@@ -22,7 +23,8 @@ function isLikelyGroupSnapshot(value: unknown): value is GroupSnapshot {
     if (!value || typeof value !== "object") return false;
     const snapshot = value as Record<string, unknown>;
     if (typeof snapshot.id !== "string") return false;
-    if (!snapshot.playback || typeof snapshot.playback !== "object") return false;
+    if (!snapshot.playback || typeof snapshot.playback !== "object")
+        return false;
     if (!Array.isArray(snapshot.members)) return false;
     return true;
 }
@@ -101,13 +103,13 @@ class ListenTogetherStateStore {
             const parsed = JSON.parse(raw) as unknown;
             if (!isLikelyGroupSnapshot(parsed)) {
                 logger.warn(
-                    `[ListenTogether/StateStore] Ignoring malformed snapshot for group ${groupId}`
+                    `[ListenTogether/StateStore] Ignoring malformed snapshot for group ${groupId}`,
                 );
                 return null;
             }
             if (parsed.id !== groupId) {
                 logger.warn(
-                    `[ListenTogether/StateStore] Ignoring snapshot with mismatched id for group ${groupId}`
+                    `[ListenTogether/StateStore] Ignoring snapshot with mismatched id for group ${groupId}`,
                 );
                 return null;
             }
@@ -115,7 +117,7 @@ class ListenTogetherStateStore {
         } catch (err) {
             logger.warn(
                 `[ListenTogether/StateStore] Failed to fetch snapshot for group ${groupId}`,
-                err
+                err,
             );
             return null;
         }
@@ -135,12 +137,12 @@ class ListenTogetherStateStore {
                 JSON.stringify(snapshot),
                 `${LISTEN_TOGETHER_STATE_STORE_TTL_SECONDS}`,
                 `${ordering.stateVersion}`,
-                `${ordering.serverTime}`
+                `${ordering.serverTime}`,
             );
         } catch (err) {
             logger.warn(
                 `[ListenTogether/StateStore] Failed to persist snapshot for group ${groupId}`,
-                err
+                err,
             );
         }
     }
@@ -155,7 +157,7 @@ class ListenTogetherStateStore {
         } catch (err) {
             logger.warn(
                 `[ListenTogether/StateStore] Failed to delete snapshot for group ${groupId}`,
-                err
+                err,
             );
         }
     }

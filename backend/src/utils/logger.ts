@@ -32,7 +32,7 @@ const resolveLogLevel = (): LogLevel => {
     }
 
     console.warn(
-        `Invalid LOG_LEVEL "${configured}"; falling back to "${DEFAULT_LOG_LEVEL}"`
+        `Invalid LOG_LEVEL "${configured}"; falling back to "${DEFAULT_LOG_LEVEL}"`,
     );
     return DEFAULT_LOG_LEVEL;
 };
@@ -109,11 +109,12 @@ function emit(
         ? `[${level.toUpperCase()}] [${scope}] ${message}`
         : `[${level.toUpperCase()}] ${message}`;
 
-    const method = level === "debug"
-        ? console.debug
-        : level === "info"
-            ? console.info
-            : level === "warn"
+    const method =
+        level === "debug"
+            ? console.debug
+            : level === "info"
+              ? console.info
+              : level === "warn"
                 ? console.warn
                 : console.error;
 

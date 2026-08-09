@@ -142,7 +142,9 @@ describe("unified enrichment runtime behavior", () => {
             getTrackInfo: jest.fn(async () => null),
         };
         const enrichSimilarArtist = jest.fn(async () => undefined);
-        const refreshPodcastFeed = jest.fn(async () => ({ newEpisodesCount: 0 }));
+        const refreshPodcastFeed = jest.fn(async () => ({
+            newEpisodesCount: 0,
+        }));
         const logger = {
             debug: jest.fn(),
             info: jest.fn(),
@@ -220,7 +222,7 @@ describe("unified enrichment runtime behavior", () => {
             refreshPodcastFeed,
         }));
         jest.doMock("p-limit", () =>
-            jest.fn(() => (fn: () => Promise<unknown>) => fn())
+            jest.fn(() => (fn: () => Promise<unknown>) => fn()),
         );
         jest.doMock("ioredis", () => jest.fn());
 
@@ -388,7 +390,7 @@ describe("unified enrichment runtime behavior", () => {
         const { queueRedisPrimary, queueRedisRecovery } =
             setupUnifiedEnrichmentMocks();
         (queueRedisPrimary.llen as jest.Mock).mockRejectedValueOnce(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
         (queueRedisRecovery.llen as jest.Mock).mockResolvedValueOnce(0);
 
@@ -397,13 +399,19 @@ describe("unified enrichment runtime behavior", () => {
 
         const progress = await enrichment.getEnrichmentProgress();
         expect(queueRedisPrimary.disconnect).toHaveBeenCalledTimes(1);
-        expect(queueRedisRecovery.llen).toHaveBeenCalledWith("audio:clap:queue");
+        expect(queueRedisRecovery.llen).toHaveBeenCalledWith(
+            "audio:clap:queue",
+        );
         expect(progress.audioAnalysis.completed).toBe(4);
     });
 
     it("supports force full-enrichment flags while safely no-oping when claim is held", async () => {
-        const { prisma, claimRedisPrimary, enrichmentStateService, enrichmentFailureService } =
-            setupUnifiedEnrichmentMocks();
+        const {
+            prisma,
+            claimRedisPrimary,
+            enrichmentStateService,
+            enrichmentFailureService,
+        } = setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce(null);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -418,16 +426,16 @@ describe("unified enrichment runtime behavior", () => {
             expect.objectContaining({
                 pendingMoodBucketBackfill: true,
                 moodBucketBackfillInProgress: false,
-            })
+            }),
         );
         expect(prisma.artist.updateMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: { enrichmentStatus: "pending" },
-            })
+            }),
         );
         expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
         expect(enrichmentFailureService.clearAllFailures).toHaveBeenCalledWith(
-            "vibe"
+            "vibe",
         );
         expect(result).toEqual({ artists: 0, tracks: 0, audioQueued: 0 });
     });
@@ -436,7 +444,7 @@ describe("unified enrichment runtime behavior", () => {
         const { claimRedisPrimary, claimRedisRecovery } =
             setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockRejectedValueOnce(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
         (claimRedisRecovery.set as jest.Mock).mockResolvedValueOnce(null);
 
@@ -465,7 +473,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(enrichmentStateService.clear).toHaveBeenCalledTimes(1);
         expect(enrichmentStateService.initializeState).toHaveBeenCalled();
         expect(controlSubscriber.subscribe).toHaveBeenCalledWith(
-            "enrichment:control"
+            "enrichment:control",
         );
 
         await enrichment.stopUnifiedEnrichmentWorker();
@@ -474,12 +482,14 @@ describe("unified enrichment runtime behavior", () => {
     it("handles state update failures during stop without crashing teardown", async () => {
         const { enrichmentStateService } = setupUnifiedEnrichmentMocks();
         (enrichmentStateService.updateState as jest.Mock).mockRejectedValueOnce(
-            new Error("state write failed")
+            new Error("state write failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
-        await expect(enrichment.stopUnifiedEnrichmentWorker()).resolves.toBeUndefined();
+        await expect(
+            enrichment.stopUnifiedEnrichmentWorker(),
+        ).resolves.toBeUndefined();
     });
 
     it("retries enrichment progress DB reads on transient prisma errors", async () => {
@@ -487,7 +497,7 @@ describe("unified enrichment runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("../../utils/db");
         const retryable = new Prisma.PrismaClientKnownRequestError(
-            "temporary db issue"
+            "temporary db issue",
         );
         (prisma.$transaction as jest.Mock)
             .mockRejectedValueOnce(retryable)
@@ -518,7 +528,7 @@ describe("unified enrichment runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("../../utils/db");
         const retryable = new Prisma.PrismaClientKnownRequestError(
-            "too many clients"
+            "too many clients",
         ) as any;
         retryable.code = "P2037";
         (prisma.$transaction as jest.Mock)
@@ -551,8 +561,18 @@ describe("unified enrichment runtime behavior", () => {
         (prisma.track.findMany as jest.Mock)
             .mockResolvedValueOnce([{ id: "track-a" }, { id: "track-b" }]) // pre-check
             .mockResolvedValueOnce([
-                { id: "track-a", filePath: "/music/a.flac", title: "A", duration: 120 },
-                { id: "track-b", filePath: "/music/b.flac", title: "B", duration: 140 },
+                {
+                    id: "track-a",
+                    filePath: "/music/a.flac",
+                    title: "A",
+                    duration: 120,
+                },
+                {
+                    id: "track-b",
+                    filePath: "/music/b.flac",
+                    title: "B",
+                    duration: 140,
+                },
             ]); // queueAudioAnalysis
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -569,8 +589,16 @@ describe("unified enrichment runtime behavior", () => {
             setupUnifiedEnrichmentMocks();
         getFeatures.mockResolvedValueOnce({ vibeEmbeddings: true });
         (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([
-            { id: "track-v1", filePath: "/music/v1.flac", vibeAnalysisStatus: null },
-            { id: "track-v2", filePath: "/music/v2.flac", vibeAnalysisStatus: "pending" },
+            {
+                id: "track-v1",
+                filePath: "/music/v1.flac",
+                vibeAnalysisStatus: null,
+            },
+            {
+                id: "track-v2",
+                filePath: "/music/v2.flac",
+                vibeAnalysisStatus: "pending",
+            },
         ]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -580,7 +608,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(prisma.track.update).toHaveBeenCalledTimes(2);
         expect(queueRedisPrimary.rpush).toHaveBeenCalledWith(
             "audio:clap:queue",
-            expect.any(String)
+            expect.any(String),
         );
         expect(queued).toBe(2);
     });
@@ -611,7 +639,7 @@ describe("unified enrichment runtime behavior", () => {
             expect.objectContaining({
                 where: { enrichmentStatus: "completed" },
                 data: { enrichmentStatus: "pending", lastEnriched: null },
-            })
+            }),
         );
         expect(claimRedisPrimary.set).toHaveBeenCalledTimes(1);
         expect(claimRedisPrimary.eval).toHaveBeenCalledTimes(1);
@@ -649,32 +677,45 @@ describe("unified enrichment runtime behavior", () => {
         const enrichment = require("../unifiedEnrichment");
         const result = await enrichment.runFullEnrichment();
 
-        expect(audioAnalysisCleanupService.cleanupStaleProcessing).toHaveBeenCalled();
-        expect(vibeAnalysisCleanupService.cleanupStaleProcessing).not.toHaveBeenCalled();
+        expect(
+            audioAnalysisCleanupService.cleanupStaleProcessing,
+        ).toHaveBeenCalled();
+        expect(
+            vibeAnalysisCleanupService.cleanupStaleProcessing,
+        ).not.toHaveBeenCalled();
         expect(claimRedisPrimary.eval).toHaveBeenCalledTimes(1);
         expect(result).toEqual({ artists: 0, tracks: 0, audioQueued: 0 });
     });
 
     it("requeues audio tracks through redis retry path during claimed full enrichment", async () => {
-        const { claimRedisPrimary, queueRedisPrimary, queueRedisRecovery, prisma } =
-            setupUnifiedEnrichmentMocks();
+        const {
+            claimRedisPrimary,
+            queueRedisPrimary,
+            queueRedisRecovery,
+            prisma,
+        } = setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         (queueRedisPrimary.rpush as jest.Mock).mockRejectedValueOnce(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
-                return [
-                    {
-                        id: "track-enrich-1",
-                        filePath: "/music/t1.flac",
-                        title: "Track One",
-                        duration: 180,
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [
+                        {
+                            id: "track-enrich-1",
+                            filePath: "/music/t1.flac",
+                            title: "Track One",
+                            duration: 180,
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
@@ -689,7 +730,7 @@ describe("unified enrichment runtime behavior", () => {
                 data: expect.objectContaining({
                     analysisStatus: "processing",
                 }),
-            })
+            }),
         );
         expect(result.audioQueued).toBeGreaterThanOrEqual(1);
     });
@@ -740,7 +781,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(queueRedisPrimary.keys).toHaveBeenCalledTimes(2);
         expect(queueRedisPrimary.del).toHaveBeenCalledTimes(2);
         expect(enrichmentStateService.updateState).toHaveBeenCalledWith(
-            expect.objectContaining({ completionNotificationSent: true })
+            expect.objectContaining({ completionNotificationSent: true }),
         );
         expect(notificationService.notifySystem).not.toHaveBeenCalled();
         expect(notificationService.create).not.toHaveBeenCalled();
@@ -759,7 +800,9 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.track.count as jest.Mock).mockResolvedValue(0);
-        (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: "user-1" }]);
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([
+            { id: "user-1" },
+        ]);
         (prisma.$transaction as jest.Mock)
             .mockResolvedValueOnce([
                 [{ enrichmentStatus: "pending", _count: 1 }],
@@ -814,13 +857,13 @@ describe("unified enrichment runtime behavior", () => {
         expect(notificationService.notifySystem).toHaveBeenCalledWith(
             "user-1",
             "Enrichment Complete",
-            expect.stringContaining("Enriched")
+            expect.stringContaining("Enriched"),
         );
         expect(enrichmentStateService.updateState).toHaveBeenCalledWith(
             expect.objectContaining({
                 pendingMoodBucketBackfill: false,
                 moodBucketBackfillInProgress: false,
-            })
+            }),
         );
     });
 
@@ -841,23 +884,28 @@ describe("unified enrichment runtime behavior", () => {
                 mbid: "artist-mbid-1",
             },
         ]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) {
-                return [
-                    {
-                        id: "track-1",
-                        title: "Track One",
-                        albumId: "album-1",
-                        filePath: "/music/track-1.flac",
-                        album: { artist: { name: "Artist One" } },
-                    },
-                ];
-            }
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) {
+                    return [
+                        {
+                            id: "track-1",
+                            title: "Track One",
+                            albumId: "album-1",
+                            filePath: "/music/track-1.flac",
+                            album: { artist: { name: "Artist One" } },
+                        },
+                    ];
+                }
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [];
+                }
                 return [];
-            }
-            return [];
-        });
+            },
+        );
         (lastFmService.getTrackInfo as jest.Mock).mockResolvedValueOnce({
             toptags: { tag: [{ name: "Chill" }, { name: "Alt Rock" }] },
         });
@@ -869,7 +917,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(result.artists).toBe(1);
         expect(result.tracks).toBe(1);
         expect(enrichSimilarArtist).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "artist-1" })
+            expect.objectContaining({ id: "artist-1" }),
         );
         expect(prisma.track.update).toHaveBeenCalledWith({
             where: { id: "track-1" },
@@ -896,15 +944,20 @@ describe("unified enrichment runtime behavior", () => {
                 mbid: "mbid-fail",
             },
         ]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) return [];
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) return [];
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [];
+                }
                 return [];
-            }
-            return [];
-        });
+            },
+        );
         (enrichSimilarArtist as jest.Mock).mockRejectedValueOnce(
-            new Error("Timeout enriching artist: Artist Fail")
+            new Error("Timeout enriching artist: Artist Fail"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -917,7 +970,7 @@ describe("unified enrichment runtime behavior", () => {
                 entityType: "artist",
                 entityId: "artist-fail-1",
                 errorCode: "TIMEOUT_ERROR",
-            })
+            }),
         );
     });
 
@@ -932,25 +985,30 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) {
-                return [
-                    {
-                        id: "track-fail-1",
-                        title: "Track Fail",
-                        albumId: "album-fail-1",
-                        filePath: "/music/fail.flac",
-                        album: { artist: { name: "Artist Fail" } },
-                    },
-                ];
-            }
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) {
+                    return [
+                        {
+                            id: "track-fail-1",
+                            title: "Track Fail",
+                            albumId: "album-fail-1",
+                            filePath: "/music/fail.flac",
+                            album: { artist: { name: "Artist Fail" } },
+                        },
+                    ];
+                }
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [];
+                }
                 return [];
-            }
-            return [];
-        });
+            },
+        );
         (lastFmService.getTrackInfo as jest.Mock).mockRejectedValueOnce(
-            new Error("Timeout fetching track tags")
+            new Error("Timeout fetching track tags"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -963,38 +1021,38 @@ describe("unified enrichment runtime behavior", () => {
                 entityType: "track",
                 entityId: "track-fail-1",
                 errorCode: "TIMEOUT_ERROR",
-            })
+            }),
         );
     });
 
     it("times out stalled Last.fm track lookups and records timeout failures", async () => {
         jest.useFakeTimers();
-        const {
-            prisma,
-            lastFmService,
-            enrichmentFailureService,
-        } = setupUnifiedEnrichmentMocks();
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) {
-                return [
-                    {
-                        id: "track-timeout-1",
-                        title: "Track Timeout",
-                        albumId: "album-timeout-1",
-                        filePath: "/music/timeout.flac",
-                        album: { artist: { name: "Artist Timeout" } },
-                    },
-                ];
-            }
-            return [];
-        });
+        const { prisma, lastFmService, enrichmentFailureService } =
+            setupUnifiedEnrichmentMocks();
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) {
+                    return [
+                        {
+                            id: "track-timeout-1",
+                            title: "Track Timeout",
+                            albumId: "album-timeout-1",
+                            filePath: "/music/timeout.flac",
+                            album: { artist: { name: "Artist Timeout" } },
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
         (lastFmService.getTrackInfo as jest.Mock).mockImplementation(
-            () => new Promise(() => undefined)
+            () => new Promise(() => undefined),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
-        const runPromise = enrichment.__unifiedEnrichmentTestables.enrichTrackTagsBatch();
+        const runPromise =
+            enrichment.__unifiedEnrichmentTestables.enrichTrackTagsBatch();
 
         await jest.advanceTimersByTimeAsync(30_001);
         await expect(runPromise).resolves.toBe(0);
@@ -1003,7 +1061,7 @@ describe("unified enrichment runtime behavior", () => {
                 entityType: "track",
                 entityId: "track-timeout-1",
                 errorCode: "TIMEOUT_ERROR",
-            })
+            }),
         );
     });
 
@@ -1018,26 +1076,31 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) return [];
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
-                return [
-                    {
-                        id: "audio-1",
-                        filePath: "/music/audio-1.flac",
-                        title: "Audio 1",
-                        duration: 120,
-                    },
-                    {
-                        id: "audio-2",
-                        filePath: "/music/audio-2.flac",
-                        title: "Audio 2",
-                        duration: 130,
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) return [];
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [
+                        {
+                            id: "audio-1",
+                            filePath: "/music/audio-1.flac",
+                            title: "Audio 1",
+                            duration: 120,
+                        },
+                        {
+                            id: "audio-2",
+                            filePath: "/music/audio-2.flac",
+                            title: "Audio 2",
+                            duration: 130,
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
         (queueRedisPrimary.rpush as jest.Mock)
             .mockRejectedValueOnce(new Error("push failed"))
             .mockResolvedValueOnce(1);
@@ -1050,27 +1113,28 @@ describe("unified enrichment runtime behavior", () => {
         expect(result.audioQueued).toBe(1);
         expect(logger.error).toHaveBeenCalledWith(
             "   Failed to queue Audio 1:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("refreshes stale podcast feeds during the podcast phase", async () => {
-        const {
-            claimRedisPrimary,
-            prisma,
-            getFeatures,
-            refreshPodcastFeed,
-        } = setupUnifiedEnrichmentMocks();
+        const { claimRedisPrimary, prisma, getFeatures, refreshPodcastFeed } =
+            setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) return [];
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) return [];
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [];
+                }
                 return [];
-            }
-            return [];
-        });
+            },
+        );
         (prisma.podcast.count as jest.Mock).mockResolvedValueOnce(1);
         (prisma.podcast.findMany as jest.Mock).mockResolvedValueOnce([
             { id: "podcast-1", title: "Podcast One" },
@@ -1089,7 +1153,7 @@ describe("unified enrichment runtime behavior", () => {
     it("handles non-retryable claim redis errors by skipping the cycle", async () => {
         const { claimRedisPrimary, logger } = setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockRejectedValueOnce(
-            new Error("permission denied")
+            new Error("permission denied"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1100,9 +1164,9 @@ describe("unified enrichment runtime behavior", () => {
         expect(claimRedisPrimary.disconnect).not.toHaveBeenCalled();
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining(
-                "[Enrichment] Failed to claim immediate enrichment cycle; skipping cycle"
+                "[Enrichment] Failed to claim immediate enrichment cycle; skipping cycle",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1115,9 +1179,9 @@ describe("unified enrichment runtime behavior", () => {
         const enrichment = require("../unifiedEnrichment");
         await enrichment.startUnifiedEnrichmentWorker();
 
-        const messageHandler = (controlSubscriber.on as jest.Mock).mock.calls.find(
-            (call: any[]) => call[0] === "message"
-        )?.[1];
+        const messageHandler = (
+            controlSubscriber.on as jest.Mock
+        ).mock.calls.find((call: any[]) => call[0] === "message")?.[1];
         expect(messageHandler).toBeTruthy();
 
         messageHandler("enrichment:control", "pause");
@@ -1127,7 +1191,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(logger.debug).toHaveBeenCalledWith("[Enrichment] Paused");
         expect(logger.debug).toHaveBeenCalledWith("[Enrichment] Resumed");
         expect(logger.debug).toHaveBeenCalledWith(
-            "[Enrichment] Stopping gracefully - completing current item..."
+            "[Enrichment] Stopping gracefully - completing current item...",
         );
 
         await enrichment.stopUnifiedEnrichmentWorker();
@@ -1146,27 +1210,34 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) {
-                return [
-                    {
-                        id: "track-failure-notify",
-                        title: "Track Failure Notify",
-                        albumId: "album-1",
-                        filePath: "/music/t.flac",
-                        album: { artist: { name: "Artist One" } },
-                    },
-                ];
-            }
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) {
+                    return [
+                        {
+                            id: "track-failure-notify",
+                            title: "Track Failure Notify",
+                            albumId: "album-1",
+                            filePath: "/music/t.flac",
+                            album: { artist: { name: "Artist One" } },
+                        },
+                    ];
+                }
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [];
+                }
                 return [];
-            }
-            return [];
-        });
-        (lastFmService.getTrackInfo as jest.Mock).mockRejectedValueOnce(
-            new Error("Timeout while reading Last.fm")
+            },
         );
-        (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: "user-1" }]);
+        (lastFmService.getTrackInfo as jest.Mock).mockRejectedValueOnce(
+            new Error("Timeout while reading Last.fm"),
+        );
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([
+            { id: "user-1" },
+        ]);
         (prisma.$transaction as jest.Mock)
             .mockResolvedValueOnce([
                 [{ enrichmentStatus: "pending", _count: 1 }],
@@ -1214,12 +1285,12 @@ describe("unified enrichment runtime behavior", () => {
                 userId: "user-1",
                 type: "error",
                 title: "Enrichment Completed with Errors",
-            })
+            }),
         );
         expect(notificationService.notifySystem).toHaveBeenCalledWith(
             "user-1",
             "Enrichment Complete",
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -1236,16 +1307,23 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) return [];
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) return [];
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [];
+                }
                 return [];
-            }
-            return [];
-        });
-        (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: "user-1" }]);
+            },
+        );
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([
+            { id: "user-1" },
+        ]);
         (notificationService.notifySystem as jest.Mock).mockRejectedValueOnce(
-            new Error("notify failed")
+            new Error("notify failed"),
         );
         (prisma.$transaction as jest.Mock)
             .mockResolvedValueOnce([
@@ -1291,7 +1369,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[Enrichment] Failed to send completion notification:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1323,7 +1401,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             "[Enrichment] Failed to read completion progress snapshot; skipping completion-specific post-processing for this cycle:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1385,7 +1463,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(notificationService.notifySystem).not.toHaveBeenCalled();
         expect(logger.debug).toHaveBeenCalledWith(
-            "[Enrichment] Completion notification already sent, skipping"
+            "[Enrichment] Completion notification already sent, skipping",
         );
     });
 
@@ -1408,7 +1486,7 @@ describe("unified enrichment runtime behavior", () => {
                     throw new Error("state update failed");
                 }
                 return undefined;
-            }
+            },
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1421,7 +1499,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(enrichmentFailureService.recordFailure).toHaveBeenCalledTimes(5);
         expect(logger.error).toHaveBeenCalledWith(
             "[Enrichment] Cycle error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1450,7 +1528,9 @@ describe("unified enrichment runtime behavior", () => {
         await enrichment.startUnifiedEnrichmentWorker();
 
         await jest.advanceTimersByTimeAsync(5_000);
-        expect((claimRedisPrimary.set as jest.Mock).mock.calls.length).toBeGreaterThan(1);
+        expect(
+            (claimRedisPrimary.set as jest.Mock).mock.calls.length,
+        ).toBeGreaterThan(1);
 
         await enrichment.stopUnifiedEnrichmentWorker();
     });
@@ -1503,7 +1583,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             "[Enrichment] Failed to read/update enrichment progress after processing batch; continuing cycle:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1546,7 +1626,7 @@ describe("unified enrichment runtime behavior", () => {
                 0,
             ]);
         (queueRedisPrimary.keys as jest.Mock).mockRejectedValueOnce(
-            new Error("keys failed")
+            new Error("keys failed"),
         );
         (enrichmentStateService.getState as jest.Mock)
             .mockResolvedValueOnce({ status: "idle" })
@@ -1562,7 +1642,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[Enrichment] Failed to clear mix cache on core complete:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1573,11 +1653,11 @@ describe("unified enrichment runtime behavior", () => {
         (prisma.$transaction as jest.Mock)
             .mockRejectedValueOnce(
                 new Prisma.PrismaClientUnknownRequestError(
-                    "Response from the Engine was empty"
-                )
+                    "Response from the Engine was empty",
+                ),
             )
             .mockImplementation(async (queries: Array<Promise<unknown>>) =>
-                Promise.all(queries)
+                Promise.all(queries),
             );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1592,7 +1672,7 @@ describe("unified enrichment runtime behavior", () => {
         const { claimRedisPrimary, logger } = setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         (claimRedisPrimary.eval as jest.Mock).mockRejectedValueOnce(
-            new Error("release failed")
+            new Error("release failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1601,7 +1681,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             "[Enrichment] Failed to release cycle claim for immediate enrichment cycle",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1624,11 +1704,11 @@ describe("unified enrichment runtime behavior", () => {
                     throw new Error("state update failed");
                 }
                 return undefined;
-            }
+            },
         );
-        (enrichmentFailureService.recordFailure as jest.Mock).mockRejectedValueOnce(
-            new Error("record failure insert failed")
-        );
+        (
+            enrichmentFailureService.recordFailure as jest.Mock
+        ).mockRejectedValueOnce(new Error("record failure insert failed"));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
@@ -1636,7 +1716,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[Enrichment] Failed to record failure:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1657,7 +1737,7 @@ describe("unified enrichment runtime behavior", () => {
             { id: "podcast-bad", title: "Broken Podcast" },
         ]);
         (refreshPodcastFeed as jest.Mock).mockRejectedValueOnce(
-            new Error("feed timeout")
+            new Error("feed timeout"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1666,33 +1746,31 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "   [Podcast] Failed to refresh Broken Podcast:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("warns and skips vibe phase when audio queue length cannot be read", async () => {
-        const {
-            claimRedisPrimary,
-            prisma,
-            queueRedisPrimary,
-            logger,
-        } = setupUnifiedEnrichmentMocks();
+        const { claimRedisPrimary, prisma, queueRedisPrimary, logger } =
+            setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue(async () => []);
-        (prisma.track.count as jest.Mock).mockImplementation(async (args?: { where?: any }) => {
-            const where = args?.where;
-            if (!where) return 1;
-            if (where.AND) return 1;
-            if (where.analysisStatus === "completed") return 1;
-            if (where.analysisStatus === "pending") return 0;
-            if (where.analysisStatus === "processing") return 0;
-            if (where.analysisStatus === "failed") return 0;
-            if (where.vibeAnalysisStatus === "processing") return 0;
-            return 0;
-        });
+        (prisma.track.count as jest.Mock).mockImplementation(
+            async (args?: { where?: any }) => {
+                const where = args?.where;
+                if (!where) return 1;
+                if (where.AND) return 1;
+                if (where.analysisStatus === "completed") return 1;
+                if (where.analysisStatus === "pending") return 0;
+                if (where.analysisStatus === "processing") return 0;
+                if (where.analysisStatus === "failed") return 0;
+                if (where.vibeAnalysisStatus === "processing") return 0;
+                return 0;
+            },
+        );
         (queueRedisPrimary.llen as jest.Mock).mockRejectedValue(
-            new Error("queue length unavailable")
+            new Error("queue length unavailable"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1701,7 +1779,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             "[Enrichment] Unable to read audio analysis queue length; skipping vibe phase this cycle",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1744,9 +1822,9 @@ describe("unified enrichment runtime behavior", () => {
                 0,
                 0,
             ]);
-        (moodBucketService.backfillAllTracks as jest.Mock).mockRejectedValueOnce(
-            new Error("backfill failed")
-        );
+        (
+            moodBucketService.backfillAllTracks as jest.Mock
+        ).mockRejectedValueOnce(new Error("backfill failed"));
         (queueRedisPrimary.keys as jest.Mock)
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([]);
@@ -1766,7 +1844,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[Enrichment] Automatic mood bucket backfill failed (will retry on next fully-complete cycle):",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(enrichmentStateService.updateState).toHaveBeenCalledWith({
             moodBucketBackfillInProgress: false,
@@ -1812,7 +1890,7 @@ describe("unified enrichment runtime behavior", () => {
                 0,
             ]);
         (queueRedisPrimary.keys as jest.Mock).mockRejectedValueOnce(
-            new Error("mix key lookup failed")
+            new Error("mix key lookup failed"),
         );
         (enrichmentStateService.getState as jest.Mock)
             .mockResolvedValueOnce({ status: "idle" })
@@ -1831,27 +1909,30 @@ describe("unified enrichment runtime behavior", () => {
         expect(queueRedisPrimary.keys).toHaveBeenCalledWith("mixes:*");
         expect(logger.error).toHaveBeenCalledWith(
             "[Enrichment] Failed to clear mix cache on full complete:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("marks tracks as _not_found when Last.fm returns no tag payload", async () => {
-        const { claimRedisPrimary, prisma, getFeatures } = setupUnifiedEnrichmentMocks();
+        const { claimRedisPrimary, prisma, getFeatures } =
+            setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) {
-                return [
-                    {
-                        id: "track-not-found",
-                        title: "Track Not Found",
-                        album: { artist: { name: "Artist Not Found" } },
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) {
+                    return [
+                        {
+                            id: "track-not-found",
+                            title: "Track Not Found",
+                            album: { artist: { name: "Artist Not Found" } },
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
@@ -1876,37 +1957,45 @@ describe("unified enrichment runtime behavior", () => {
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue(async () => []);
         let completedCount = 0;
-        (prisma.track.count as jest.Mock).mockImplementation(async (args?: { where?: any }) => {
-            const where = args?.where;
-            if (!where) return 1;
-            if (where.AND) return 1;
-            if (where.analysisStatus === "completed") {
-                completedCount += 1;
-                return completedCount;
-            }
-            if (where.analysisStatus === "pending") return 0;
-            if (where.analysisStatus === "processing") return 0;
-            if (where.analysisStatus === "failed") return 0;
-            if (where.vibeAnalysisStatus === "processing") return 0;
-            return 0;
-        });
-        (audioAnalysisCleanupService.cleanupStaleProcessing as jest.Mock).mockResolvedValue({
+        (prisma.track.count as jest.Mock).mockImplementation(
+            async (args?: { where?: any }) => {
+                const where = args?.where;
+                if (!where) return 1;
+                if (where.AND) return 1;
+                if (where.analysisStatus === "completed") {
+                    completedCount += 1;
+                    return completedCount;
+                }
+                if (where.analysisStatus === "pending") return 0;
+                if (where.analysisStatus === "processing") return 0;
+                if (where.analysisStatus === "failed") return 0;
+                if (where.vibeAnalysisStatus === "processing") return 0;
+                return 0;
+            },
+        );
+        (
+            audioAnalysisCleanupService.cleanupStaleProcessing as jest.Mock
+        ).mockResolvedValue({
             reset: 1,
             permanentlyFailed: 1,
             recovered: 0,
         });
-        (audioAnalysisCleanupService.isCircuitOpen as jest.Mock).mockReturnValue(true);
+        (
+            audioAnalysisCleanupService.isCircuitOpen as jest.Mock
+        ).mockReturnValue(true);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
         const result = await enrichment.runFullEnrichment();
 
         expect(logger.debug).toHaveBeenCalledWith(
-            "[Enrichment] Audio analysis cleanup: 1 reset, 1 permanently failed, 0 recovered"
+            "[Enrichment] Audio analysis cleanup: 1 reset, 1 permanently failed, 0 recovered",
         );
-        expect(audioAnalysisCleanupService.recordSuccess).toHaveBeenCalledTimes(1);
+        expect(audioAnalysisCleanupService.recordSuccess).toHaveBeenCalledTimes(
+            1,
+        );
         expect(logger.warn).toHaveBeenCalledWith(
-            "[Enrichment] Audio analysis circuit breaker OPEN - skipping queue"
+            "[Enrichment] Audio analysis circuit breaker OPEN - skipping queue",
         );
         expect(result.audioQueued).toBe(0);
     });
@@ -1923,17 +2012,19 @@ describe("unified enrichment runtime behavior", () => {
         getFeatures.mockResolvedValue({ vibeEmbeddings: true });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue(async () => []);
-        (prisma.track.count as jest.Mock).mockImplementation(async (args?: { where?: any }) => {
-            const where = args?.where;
-            if (!where) return 1;
-            if (where.AND) return 1;
-            if (where.analysisStatus === "completed") return 1;
-            if (where.analysisStatus === "pending") return 0;
-            if (where.analysisStatus === "processing") return 0;
-            if (where.analysisStatus === "failed") return 0;
-            if (where.vibeAnalysisStatus === "processing") return 0;
-            return 0;
-        });
+        (prisma.track.count as jest.Mock).mockImplementation(
+            async (args?: { where?: any }) => {
+                const where = args?.where;
+                if (!where) return 1;
+                if (where.AND) return 1;
+                if (where.analysisStatus === "completed") return 1;
+                if (where.analysisStatus === "pending") return 0;
+                if (where.analysisStatus === "processing") return 0;
+                if (where.analysisStatus === "failed") return 0;
+                if (where.vibeAnalysisStatus === "processing") return 0;
+                return 0;
+            },
+        );
         (prisma.$queryRaw as jest.Mock)
             .mockResolvedValueOnce([{ count: BigInt(0) }])
             .mockResolvedValueOnce([{ count: BigInt(0) }])
@@ -1947,7 +2038,7 @@ describe("unified enrichment runtime behavior", () => {
             .mockResolvedValueOnce([{ count: BigInt(0) }])
             .mockResolvedValueOnce([{ count: BigInt(0) }]);
         (prisma.track.update as jest.Mock).mockRejectedValueOnce(
-            new Error("update failed")
+            new Error("update failed"),
         );
         (queueRedisPrimary.llen as jest.Mock).mockResolvedValue(0);
 
@@ -1957,7 +2048,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "   Failed to queue vibe embedding for track-vibe-fail:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1973,7 +2064,7 @@ describe("unified enrichment runtime behavior", () => {
             },
         ]);
         (queueRedisPrimary.rpush as jest.Mock).mockRejectedValueOnce(
-            new Error("push failed")
+            new Error("push failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1984,17 +2075,13 @@ describe("unified enrichment runtime behavior", () => {
         expect(prisma.track.update).not.toHaveBeenCalled();
         expect(logger.error).toHaveBeenCalledWith(
             "   Failed to queue vibe embedding for track-vibe-rpush-fail:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("retries CLAP queue push with recreated redis client when the connection closes", async () => {
-        const {
-            prisma,
-            getFeatures,
-            queueRedisPrimary,
-            queueRedisRecovery,
-        } = setupUnifiedEnrichmentMocks();
+        const { prisma, getFeatures, queueRedisPrimary, queueRedisRecovery } =
+            setupUnifiedEnrichmentMocks();
         getFeatures.mockResolvedValueOnce({ vibeEmbeddings: true });
         (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([
             {
@@ -2004,7 +2091,7 @@ describe("unified enrichment runtime behavior", () => {
             },
         ]);
         (queueRedisPrimary.rpush as jest.Mock).mockRejectedValueOnce(
-            new Error("Connection is closed")
+            new Error("Connection is closed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2021,7 +2108,7 @@ describe("unified enrichment runtime behavior", () => {
                 data: expect.objectContaining({
                     vibeAnalysisStatus: "processing",
                 }),
-            })
+            }),
         );
     });
 
@@ -2038,20 +2125,22 @@ describe("unified enrichment runtime behavior", () => {
         getFeatures.mockResolvedValue({ vibeEmbeddings: true });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue(async () => []);
-        (prisma.track.count as jest.Mock).mockImplementation(async (args?: { where?: any }) => {
-            const where = args?.where;
-            if (!where) return 1;
-            if (where.AND) return 1;
-            if (where.analysisStatus === "completed") return 1;
-            if (where.analysisStatus === "pending") return 0;
-            if (where.analysisStatus === "processing") return 0;
-            if (where.analysisStatus === "failed") return 0;
-            if (where.vibeAnalysisStatus === "processing") return 0;
-            return 0;
-        });
-        (vibeAnalysisCleanupService.cleanupStaleProcessing as jest.Mock).mockResolvedValue(
-            { reset: 2 }
+        (prisma.track.count as jest.Mock).mockImplementation(
+            async (args?: { where?: any }) => {
+                const where = args?.where;
+                if (!where) return 1;
+                if (where.AND) return 1;
+                if (where.analysisStatus === "completed") return 1;
+                if (where.analysisStatus === "pending") return 0;
+                if (where.analysisStatus === "processing") return 0;
+                if (where.analysisStatus === "failed") return 0;
+                if (where.vibeAnalysisStatus === "processing") return 0;
+                return 0;
+            },
         );
+        (
+            vibeAnalysisCleanupService.cleanupStaleProcessing as jest.Mock
+        ).mockResolvedValue({ reset: 2 });
         (prisma.$queryRaw as jest.Mock)
             .mockResolvedValueOnce([{ count: BigInt(0) }])
             .mockResolvedValueOnce([{ count: BigInt(0) }])
@@ -2071,10 +2160,10 @@ describe("unified enrichment runtime behavior", () => {
         await enrichment.runFullEnrichment();
 
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ENRICHMENT] Cleaned up 2 stale vibe processing entries"
+            "[ENRICHMENT] Cleaned up 2 stale vibe processing entries",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ENRICHMENT] Queued 1 tracks for vibe embedding"
+            "[ENRICHMENT] Queued 1 tracks for vibe embedding",
         );
     });
 
@@ -2084,10 +2173,10 @@ describe("unified enrichment runtime behavior", () => {
         const { Prisma } = require("../../utils/db");
         (prisma.$transaction as jest.Mock)
             .mockRejectedValueOnce(
-                new Prisma.PrismaClientRustPanicError("panic in query engine")
+                new Prisma.PrismaClientRustPanicError("panic in query engine"),
             )
             .mockImplementation(async (queries: Array<Promise<unknown>>) =>
-                Promise.all(queries)
+                Promise.all(queries),
             );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2108,7 +2197,7 @@ describe("unified enrichment runtime behavior", () => {
         (prisma.$transaction as jest.Mock)
             .mockRejectedValueOnce(new Error("starting progress unavailable"))
             .mockImplementation(async (queries: Array<Promise<unknown>>) =>
-                Promise.all(queries)
+                Promise.all(queries),
             );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2117,7 +2206,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             "[Enrichment] Failed to read starting progress, defaulting to notification-safe mode:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -2132,9 +2221,9 @@ describe("unified enrichment runtime behavior", () => {
         const enrichment = require("../unifiedEnrichment");
         await enrichment.startUnifiedEnrichmentWorker();
 
-        const messageHandler = (controlSubscriber.on as jest.Mock).mock.calls.find(
-            (call: any[]) => call[0] === "message"
-        )?.[1];
+        const messageHandler = (
+            controlSubscriber.on as jest.Mock
+        ).mock.calls.find((call: any[]) => call[0] === "message")?.[1];
         expect(messageHandler).toBeTruthy();
 
         messageHandler("enrichment:control", "stop");
@@ -2169,7 +2258,7 @@ describe("unified enrichment runtime behavior", () => {
                     throw new Error("state update failed");
                 }
                 return undefined;
-            }
+            },
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2180,9 +2269,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(enrichmentFailureService.recordFailure).toHaveBeenCalledTimes(5);
         expect(logger.error).toHaveBeenCalledWith(
-            expect.stringContaining(
-                "[Enrichment] Circuit breaker triggered -"
-            )
+            expect.stringContaining("[Enrichment] Circuit breaker triggered -"),
         );
     });
 
@@ -2214,7 +2301,7 @@ describe("unified enrichment runtime behavior", () => {
         await waitPromise;
 
         expect(logger.warn).toHaveBeenCalledWith(
-            "[Enrichment] Stop wait exceeded 1ms while a cycle was still running; proceeding with teardown"
+            "[Enrichment] Stop wait exceeded 1ms while a cycle was still running; proceeding with teardown",
         );
         enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
             isRunning: false,
@@ -2235,7 +2322,7 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2248,7 +2335,7 @@ describe("unified enrichment runtime behavior", () => {
             immediateEnrichmentRequested: false,
         });
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2257,22 +2344,27 @@ describe("unified enrichment runtime behavior", () => {
     });
 
     it("keeps state idle when runEnrichmentCycle starts already fully complete", async () => {
-        const { prisma, enrichmentStateService } = setupUnifiedEnrichmentMocks();
+        const { prisma, enrichmentStateService } =
+            setupUnifiedEnrichmentMocks();
         (prisma.artist.groupBy as jest.Mock).mockResolvedValueOnce([
             { enrichmentStatus: "completed", _count: 3 },
         ]);
-        (prisma.track.count as jest.Mock).mockImplementation(async (args?: any) => {
-            const where = args?.where;
-            if (!where) return 10;
-            if (where.AND) return 10;
-            if (where.analysisStatus === "completed") return 10;
-            if (where.analysisStatus === "pending") return 0;
-            if (where.analysisStatus === "processing") return 0;
-            if (where.analysisStatus === "failed") return 0;
-            if (where.vibeAnalysisStatus === "processing") return 0;
-            return 0;
-        });
-        (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ count: BigInt(8) }]);
+        (prisma.track.count as jest.Mock).mockImplementation(
+            async (args?: any) => {
+                const where = args?.where;
+                if (!where) return 10;
+                if (where.AND) return 10;
+                if (where.analysisStatus === "completed") return 10;
+                if (where.analysisStatus === "pending") return 0;
+                if (where.analysisStatus === "processing") return 0;
+                if (where.analysisStatus === "failed") return 0;
+                if (where.vibeAnalysisStatus === "processing") return 0;
+                return 0;
+            },
+        );
+        (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+            { count: BigInt(8) },
+        ]);
         (prisma.enrichmentFailure.count as jest.Mock).mockResolvedValue(0);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2286,7 +2378,7 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2294,22 +2386,22 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         expect(enrichmentStateService.updateState).not.toHaveBeenCalledWith(
-            expect.objectContaining({ status: "running" })
+            expect.objectContaining({ status: "running" }),
         );
         expect(enrichmentStateService.updateState).not.toHaveBeenCalledWith(
-            expect.objectContaining({ currentPhase: "artists" })
+            expect.objectContaining({ currentPhase: "artists" }),
         );
         expect(enrichmentStateService.updateState).not.toHaveBeenCalledWith(
-            expect.objectContaining({ currentPhase: "tracks" })
+            expect.objectContaining({ currentPhase: "tracks" }),
         );
         expect(enrichmentStateService.updateState).not.toHaveBeenCalledWith(
-            expect.objectContaining({ currentPhase: "audio" })
+            expect.objectContaining({ currentPhase: "audio" }),
         );
         expect(enrichmentStateService.updateState).not.toHaveBeenCalledWith(
-            expect.objectContaining({ currentPhase: "vibe" })
+            expect.objectContaining({ currentPhase: "vibe" }),
         );
         expect(enrichmentStateService.updateState).not.toHaveBeenCalledWith(
-            expect.objectContaining({ currentPhase: "podcasts" })
+            expect.objectContaining({ currentPhase: "podcasts" }),
         );
     });
 
@@ -2318,15 +2410,19 @@ describe("unified enrichment runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
         (prisma.artist.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (args?: any) => {
-            if (args?.where?.OR) {
-                enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
-                    isPaused: true,
-                });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (args?: any) => {
+                if (args?.where?.OR) {
+                    enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests(
+                        {
+                            isPaused: true,
+                        },
+                    );
+                    return [];
+                }
                 return [];
-            }
-            return [];
-        });
+            },
+        );
         enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
             isPaused: false,
             isRunning: false,
@@ -2336,7 +2432,7 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2344,14 +2440,18 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         // Halt after audio executor
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (args?: any) => {
-            if (args?.where?.analysisStatus === "pending") {
-                enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
-                    isPaused: true,
-                });
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (args?: any) => {
+                if (args?.where?.analysisStatus === "pending") {
+                    enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests(
+                        {
+                            isPaused: true,
+                        },
+                    );
+                }
+                return [];
+            },
+        );
         enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
             isPaused: false,
             isRunning: false,
@@ -2361,7 +2461,7 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2369,15 +2469,17 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         // Halt after vibe executor
-        (prisma.track.count as jest.Mock).mockImplementation(async (args?: any) => {
-            if (args?.where?.analysisStatus === "processing") {
+        (prisma.track.count as jest.Mock).mockImplementation(
+            async (args?: any) => {
+                if (args?.where?.analysisStatus === "processing") {
+                    return 0;
+                }
+                if (args?.where?.analysisStatus === "completed") {
+                    return 0;
+                }
                 return 0;
-            }
-            if (args?.where?.analysisStatus === "completed") {
-                return 0;
-            }
-            return 0;
-        });
+            },
+        );
         (prisma.track.findMany as jest.Mock).mockResolvedValue([]);
         (prisma.$queryRaw as jest.Mock).mockImplementation(async () => {
             enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
@@ -2394,7 +2496,7 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2405,7 +2507,11 @@ describe("unified enrichment runtime behavior", () => {
     it("guards paused artist and track batch workers before processing loop bodies", async () => {
         const { prisma } = setupUnifiedEnrichmentMocks();
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([
-            { id: "artist-paused", name: "Paused Artist", mbid: "artist-paused-mbid" },
+            {
+                id: "artist-paused",
+                name: "Paused Artist",
+                mbid: "artist-paused-mbid",
+            },
         ]);
         (prisma.track.findMany as jest.Mock).mockResolvedValueOnce([
             {
@@ -2426,33 +2532,36 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.enrichArtistsBatch()
+            enrichment.__unifiedEnrichmentTestables.enrichArtistsBatch(),
         ).resolves.toBe(0);
         await expect(
-            enrichment.__unifiedEnrichmentTestables.enrichTrackTagsBatch()
+            enrichment.__unifiedEnrichmentTestables.enrichTrackTagsBatch(),
         ).resolves.toBe(0);
     });
 
     it("halts after vibe phase and exposes runtime-state getter/setter helpers", async () => {
-        const { prisma, vibeAnalysisCleanupService } = setupUnifiedEnrichmentMocks();
+        const { prisma, vibeAnalysisCleanupService } =
+            setupUnifiedEnrichmentMocks();
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
         (prisma.artist.findMany as jest.Mock).mockResolvedValue([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.track.count as jest.Mock).mockImplementation(async (args?: any) => {
-            if (args?.where?.analysisStatus === "processing") return 0;
-            if (args?.where?.analysisStatus === "completed") return 0;
-            return 0;
-        });
-        (vibeAnalysisCleanupService.cleanupStaleProcessing as jest.Mock).mockImplementation(
-            async () => {
-                enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
-                    isPaused: true,
-                });
-                return { reset: 0 };
-            }
+        (prisma.track.count as jest.Mock).mockImplementation(
+            async (args?: any) => {
+                if (args?.where?.analysisStatus === "processing") return 0;
+                if (args?.where?.analysisStatus === "completed") return 0;
+                return 0;
+            },
         );
+        (
+            vibeAnalysisCleanupService.cleanupStaleProcessing as jest.Mock
+        ).mockImplementation(async () => {
+            enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
+                isPaused: true,
+            });
+            return { reset: 0 };
+        });
 
         enrichment.__unifiedEnrichmentTestables.__setRuntimeStateForTests({
             isPaused: false,
@@ -2464,7 +2573,7 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2480,7 +2589,7 @@ describe("unified enrichment runtime behavior", () => {
                 isStopping: false,
                 immediateEnrichmentRequested: false,
                 lastRunTime: expect.any(Number),
-            })
+            }),
         );
     });
 
@@ -2500,7 +2609,7 @@ describe("unified enrichment runtime behavior", () => {
                 expect.any(String),
                 "EX",
                 900,
-                "NX"
+                "NX",
             );
         } finally {
             if (priorClaimTtl === undefined) {
@@ -2523,9 +2632,9 @@ describe("unified enrichment runtime behavior", () => {
         await enrichment.startUnifiedEnrichmentWorker();
 
         expect(controlSubscriber.subscribe).toHaveBeenCalledTimes(1);
-        const messageHandler = (controlSubscriber.on as jest.Mock).mock.calls.find(
-            (call: any[]) => call[0] === "message"
-        )?.[1];
+        const messageHandler = (
+            controlSubscriber.on as jest.Mock
+        ).mock.calls.find((call: any[]) => call[0] === "message")?.[1];
         expect(messageHandler).toBeTruthy();
 
         messageHandler("other:channel", "pause");
@@ -2534,7 +2643,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(logger.debug).not.toHaveBeenCalledWith("[Enrichment] Paused");
         expect(logger.debug).not.toHaveBeenCalledWith("[Enrichment] Resumed");
         expect(logger.debug).not.toHaveBeenCalledWith(
-            "[Enrichment] Stopping gracefully - completing current item..."
+            "[Enrichment] Stopping gracefully - completing current item...",
         );
 
         await enrichment.stopUnifiedEnrichmentWorker();
@@ -2558,7 +2667,7 @@ describe("unified enrichment runtime behavior", () => {
                     throw "state update string failure";
                 }
                 return undefined;
-            }
+            },
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2569,7 +2678,7 @@ describe("unified enrichment runtime behavior", () => {
             expect.objectContaining({
                 entityId: "system",
                 errorMessage: "state update string failure",
-            })
+            }),
         );
     });
 
@@ -2584,11 +2693,15 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([
-            { id: "artist-string-fail", name: "Artist String Fail", mbid: "mbid-string-fail" },
+            {
+                id: "artist-string-fail",
+                name: "Artist String Fail",
+                mbid: "mbid-string-fail",
+            },
         ]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue([]);
         (enrichSimilarArtist as jest.Mock).mockRejectedValueOnce(
-            "artist plain failure"
+            "artist plain failure",
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2601,7 +2714,7 @@ describe("unified enrichment runtime behavior", () => {
                 entityId: "artist-string-fail",
                 errorMessage: "artist plain failure",
                 errorCode: "ENRICHMENT_ERROR",
-            })
+            }),
         );
     });
 
@@ -2616,34 +2729,36 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) {
-                return [
-                    {
-                        id: "track-mood-include",
-                        title: "Mood Include",
-                        albumId: "album-1",
-                        filePath: "/music/mood-include.flac",
-                        album: { artist: { name: "Artist One" } },
-                    },
-                    {
-                        id: "track-mood-none",
-                        title: "Mood None",
-                        albumId: "album-2",
-                        filePath: "/music/mood-none.flac",
-                        album: { artist: { name: "Artist Two" } },
-                    },
-                    {
-                        id: "track-mood-error",
-                        title: "Mood Error",
-                        albumId: "album-3",
-                        filePath: "/music/mood-error.flac",
-                        album: { artist: { name: "Artist Three" } },
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) {
+                    return [
+                        {
+                            id: "track-mood-include",
+                            title: "Mood Include",
+                            albumId: "album-1",
+                            filePath: "/music/mood-include.flac",
+                            album: { artist: { name: "Artist One" } },
+                        },
+                        {
+                            id: "track-mood-none",
+                            title: "Mood None",
+                            albumId: "album-2",
+                            filePath: "/music/mood-none.flac",
+                            album: { artist: { name: "Artist Two" } },
+                        },
+                        {
+                            id: "track-mood-error",
+                            title: "Mood Error",
+                            albumId: "album-3",
+                            filePath: "/music/mood-error.flac",
+                            album: { artist: { name: "Artist Three" } },
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
         (lastFmService.getTrackInfo as jest.Mock)
             .mockResolvedValueOnce({
                 toptags: { tag: [{ name: "Ultra Chillwave Vibes" }] },
@@ -2673,7 +2788,7 @@ describe("unified enrichment runtime behavior", () => {
                 entityId: "track-mood-error",
                 errorMessage: "[object Object]",
                 errorCode: "LASTFM_ERROR",
-            })
+            }),
         );
     });
 
@@ -2684,27 +2799,31 @@ describe("unified enrichment runtime behavior", () => {
             getFeatures,
             queueRedisPrimary,
             queueRedisRecovery,
-        } =
-            setupUnifiedEnrichmentMocks();
+        } = setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) return [];
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
-                return [
-                    {
-                        id: "audio-string-retry",
-                        filePath: "/music/audio-string-retry.flac",
-                        title: "Audio String Retry",
-                        duration: 180,
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) return [];
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [
+                        {
+                            id: "audio-string-retry",
+                            filePath: "/music/audio-string-retry.flac",
+                            title: "Audio String Retry",
+                            duration: 180,
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
         (queueRedisPrimary.rpush as jest.Mock).mockRejectedValueOnce(
-            "Connection is closed"
+            "Connection is closed",
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2727,22 +2846,27 @@ describe("unified enrichment runtime behavior", () => {
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query?: any) => {
-            if (query?.include?.album) return [];
-            if (query?.where?.analysisStatus === "pending" && query?.select?.filePath) {
-                return [
-                    {
-                        id: "audio-none-queued",
-                        filePath: "/music/audio-none.flac",
-                        title: "Audio None",
-                        duration: 120,
-                    },
-                ];
-            }
-            return [];
-        });
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query?: any) => {
+                if (query?.include?.album) return [];
+                if (
+                    query?.where?.analysisStatus === "pending" &&
+                    query?.select?.filePath
+                ) {
+                    return [
+                        {
+                            id: "audio-none-queued",
+                            filePath: "/music/audio-none.flac",
+                            title: "Audio None",
+                            duration: 120,
+                        },
+                    ];
+                }
+                return [];
+            },
+        );
         (queueRedisPrimary.rpush as jest.Mock).mockRejectedValue(
-            new Error("push failed hard")
+            new Error("push failed hard"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2751,7 +2875,7 @@ describe("unified enrichment runtime behavior", () => {
 
         expect(result.audioQueued).toBe(0);
         expect(logger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("Queued 0 tracks for audio analysis")
+            expect.stringContaining("Queued 0 tracks for audio analysis"),
         );
     });
 
@@ -2766,8 +2890,8 @@ describe("unified enrichment runtime behavior", () => {
             .fn()
             .mockRejectedValueOnce(
                 new Prisma.PrismaClientUnknownRequestError(
-                    "Engine has already exited"
-                )
+                    "Engine has already exited",
+                ),
             )
             .mockResolvedValueOnce("engine-exited-recovered");
         const stringResetOperation = jest
@@ -2778,14 +2902,14 @@ describe("unified enrichment runtime behavior", () => {
         await expect(
             enrichment.__unifiedEnrichmentTestables.withEnrichmentPrismaRetry(
                 "engine-exited-op",
-                engineExitedOperation
-            )
+                engineExitedOperation,
+            ),
         ).resolves.toBe("engine-exited-recovered");
         await expect(
             enrichment.__unifiedEnrichmentTestables.withEnrichmentPrismaRetry(
                 "string-reset-op",
-                stringResetOperation
-            )
+                stringResetOperation,
+            ),
         ).resolves.toBe("string-reset-recovered");
     });
 
@@ -2797,9 +2921,8 @@ describe("unified enrichment runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
 
-        const tooManyConnectionsError = new Prisma.PrismaClientKnownRequestError(
-            "too many clients"
-        ) as any;
+        const tooManyConnectionsError =
+            new Prisma.PrismaClientKnownRequestError("too many clients") as any;
         tooManyConnectionsError.code = "P2037";
 
         const operation = jest
@@ -2808,16 +2931,16 @@ describe("unified enrichment runtime behavior", () => {
             .mockResolvedValueOnce("recovered-after-reconnect");
 
         (prisma.$disconnect as jest.Mock).mockRejectedValueOnce(
-            new Error("disconnect failed")
+            new Error("disconnect failed"),
         );
         (prisma.$connect as jest.Mock).mockRejectedValueOnce(
-            new Error("connect failed")
+            new Error("connect failed"),
         );
 
         const retryPromise =
             enrichment.__unifiedEnrichmentTestables.withEnrichmentPrismaRetry(
                 "p2037-retry-swallow",
-                operation
+                operation,
             );
 
         await jest.advanceTimersByTimeAsync(1_000);
@@ -2827,12 +2950,8 @@ describe("unified enrichment runtime behavior", () => {
     });
 
     it("short-circuits podcast phase when no stale feeds exist", async () => {
-        const {
-            claimRedisPrimary,
-            prisma,
-            getFeatures,
-            refreshPodcastFeed,
-        } = setupUnifiedEnrichmentMocks();
+        const { claimRedisPrimary, prisma, getFeatures, refreshPodcastFeed } =
+            setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
@@ -2848,12 +2967,8 @@ describe("unified enrichment runtime behavior", () => {
     });
 
     it("breaks podcast refresh loop when paused during iteration and handles zero new-episode refreshes", async () => {
-        const {
-            claimRedisPrimary,
-            prisma,
-            getFeatures,
-            refreshPodcastFeed,
-        } = setupUnifiedEnrichmentMocks();
+        const { claimRedisPrimary, prisma, getFeatures, refreshPodcastFeed } =
+            setupUnifiedEnrichmentMocks();
         (claimRedisPrimary.set as jest.Mock).mockResolvedValueOnce("OK");
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
@@ -2892,7 +3007,7 @@ describe("unified enrichment runtime behavior", () => {
         });
 
         await expect(
-            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false)
+            enrichment.__unifiedEnrichmentTestables.runEnrichmentCycle(false),
         ).resolves.toEqual({
             artists: 0,
             tracks: 0,
@@ -2956,7 +3071,9 @@ describe("unified enrichment runtime behavior", () => {
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue(async () => []);
-        (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: "user-1" }]);
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([
+            { id: "user-1" },
+        ]);
         (prisma.$transaction as jest.Mock).mockResolvedValue([
             [{ enrichmentStatus: "completed", _count: 1 }],
             1,
@@ -2996,9 +3113,9 @@ describe("unified enrichment runtime behavior", () => {
                 userId: "user-1",
                 title: "Enrichment Completed with Errors",
                 message: expect.stringContaining(
-                    "artist(s), 2 track(s), 3 audio analysis"
+                    "artist(s), 2 track(s), 3 audio analysis",
                 ),
-            })
+            }),
         );
     });
 
@@ -3014,7 +3131,9 @@ describe("unified enrichment runtime behavior", () => {
         getFeatures.mockResolvedValue({ vibeEmbeddings: false });
         (prisma.artist.findMany as jest.Mock).mockResolvedValueOnce([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue(async () => []);
-        (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: "user-1" }]);
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([
+            { id: "user-1" },
+        ]);
         (prisma.$transaction as jest.Mock).mockResolvedValue([
             [{ enrichmentStatus: "completed", _count: 1 }],
             1,
@@ -3055,7 +3174,7 @@ describe("unified enrichment runtime behavior", () => {
             expect.objectContaining({
                 userId: "user-1",
                 title: "Enrichment Completed with Errors",
-            })
+            }),
         );
         expect(createCallPayload?.message).toContain("1 artist(s)");
         expect(createCallPayload?.message).toContain("2 audio analysis");
@@ -3108,7 +3227,7 @@ describe("unified enrichment runtime behavior", () => {
         expect(notificationService.create).not.toHaveBeenCalled();
         expect(notificationService.notifySystem).not.toHaveBeenCalled();
         expect(enrichmentStateService.updateState).toHaveBeenCalledWith(
-            expect.objectContaining({ completionNotificationSent: true })
+            expect.objectContaining({ completionNotificationSent: true }),
         );
     });
 
@@ -3124,9 +3243,9 @@ describe("unified enrichment runtime behavior", () => {
         expect(claimRedisPrimary.disconnect).not.toHaveBeenCalled();
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining(
-                "[Enrichment] Failed to claim immediate enrichment cycle; skipping cycle"
+                "[Enrichment] Failed to claim immediate enrichment cycle; skipping cycle",
             ),
-            undefined
+            undefined,
         );
     });
 
@@ -3137,24 +3256,26 @@ describe("unified enrichment runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const enrichment = require("../unifiedEnrichment");
 
-        const unknownEmptyOperation = jest.fn().mockRejectedValueOnce(
-            new Prisma.PrismaClientUnknownRequestError("")
-        );
-        const undefinedErrorOperation = jest.fn().mockRejectedValueOnce(
-            undefined
-        );
+        const unknownEmptyOperation = jest
+            .fn()
+            .mockRejectedValueOnce(
+                new Prisma.PrismaClientUnknownRequestError(""),
+            );
+        const undefinedErrorOperation = jest
+            .fn()
+            .mockRejectedValueOnce(undefined);
 
         await expect(
             enrichment.__unifiedEnrichmentTestables.withEnrichmentPrismaRetry(
                 "unknown-empty-op",
-                unknownEmptyOperation
-            )
+                unknownEmptyOperation,
+            ),
         ).rejects.toBeInstanceOf(Error);
         await expect(
             enrichment.__unifiedEnrichmentTestables.withEnrichmentPrismaRetry(
                 "undefined-error-op",
-                undefinedErrorOperation
-            )
+                undefinedErrorOperation,
+            ),
         ).rejects.toBeUndefined();
     });
 });

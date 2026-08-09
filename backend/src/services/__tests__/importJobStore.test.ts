@@ -160,11 +160,11 @@ describe("import job store", () => {
 
         const active = await importJobStore.findActiveJobForSource(
             "user-1",
-            "spotify:37i9dQZF1DX4JAvHpjipBk"
+            "spotify:37i9dQZF1DX4JAvHpjipBk",
         );
         const terminal = await importJobStore.findActiveJobForSource(
             "user-1",
-            "spotify:completed-playlist"
+            "spotify:completed-playlist",
         );
 
         expect(prisma.importJob.findFirst).toHaveBeenNthCalledWith(1, {
@@ -172,7 +172,12 @@ describe("import job store", () => {
                 userId: "user-1",
                 normalizedSource: "spotify:37i9dQZF1DX4JAvHpjipBk",
                 status: {
-                    in: ["pending", "resolving", "creating_playlist", "cancelling"],
+                    in: [
+                        "pending",
+                        "resolving",
+                        "creating_playlist",
+                        "cancelling",
+                    ],
                 },
             },
             orderBy: {

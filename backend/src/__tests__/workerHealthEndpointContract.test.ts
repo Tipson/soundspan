@@ -14,7 +14,7 @@ describe("worker health endpoint contract", () => {
         expect(workerSource).toContain("!isStartupComplete ||");
         expect(workerSource).toContain("isDraining ||");
         expect(workerSource).toContain(
-            "createDependencyReadinessTracker(\"worker\")"
+            'createDependencyReadinessTracker("worker")',
         );
         expect(workerSource).toContain("dependencyReadiness.isHealthy()");
         expect(workerSource).toContain("isStartupComplete = true");

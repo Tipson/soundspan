@@ -38,7 +38,9 @@ const discoverWeeklyBasePrisma = prisma;
 
 function isRetryableDiscoverWeeklyPrismaError(error: unknown): boolean {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(error.code);
+        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(
+            error.code,
+        );
     }
 
     if (error instanceof Prisma.PrismaClientRustPanicError) {
@@ -65,7 +67,7 @@ function isRetryableDiscoverWeeklyPrismaError(error: unknown): boolean {
 
 async function withDiscoverWeeklyPrismaRetry<T>(
     operationName: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
 ): Promise<T> {
     for (let attempt = 1; ; attempt += 1) {
         try {
@@ -80,7 +82,7 @@ async function withDiscoverWeeklyPrismaRetry<T>(
 
             logger.warn(
                 `[DiscoverWeekly/Prisma] ${operationName} failed (attempt ${attempt}/${DISCOVER_WEEKLY_PRISMA_RETRY_ATTEMPTS}), retrying`,
-                error
+                error,
             );
             await discoverWeeklyBasePrisma.$connect().catch(() => {});
             await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
@@ -90,7 +92,7 @@ async function withDiscoverWeeklyPrismaRetry<T>(
 
 function createPrismaRetryProxy<T extends object>(
     client: T,
-    namespace: string
+    namespace: string,
 ): T {
     return new Proxy(client, {
         get(target, property, receiver) {
@@ -100,17 +102,21 @@ function createPrismaRetryProxy<T extends object>(
                 return (...args: unknown[]) =>
                     withDiscoverWeeklyPrismaRetry(
                         `${namespace}.${property}`,
-                        () => value.apply(target, args)
+                        () => value.apply(target, args),
                     );
             }
 
-            if (value && typeof value === "object" && typeof property === "string") {
+            if (
+                value &&
+                typeof value === "object" &&
+                typeof property === "string"
+            ) {
                 return new Proxy(value as object, {
                     get(modelTarget, modelProperty, modelReceiver) {
                         const modelValue = Reflect.get(
                             modelTarget,
                             modelProperty,
-                            modelReceiver
+                            modelReceiver,
                         );
 
                         if (
@@ -120,7 +126,7 @@ function createPrismaRetryProxy<T extends object>(
                             return (...args: unknown[]) =>
                                 withDiscoverWeeklyPrismaRetry(
                                     `${namespace}.${property}.${modelProperty}`,
-                                    () => modelValue.apply(modelTarget, args)
+                                    () => modelValue.apply(modelTarget, args),
                                 );
                         }
 
@@ -136,7 +142,7 @@ function createPrismaRetryProxy<T extends object>(
 
 const discoverWeeklyPrisma = createPrismaRetryProxy(
     discoverWeeklyBasePrisma,
-    "discoverWeekly"
+    "discoverWeekly",
 );
 
 interface SeedArtist {
@@ -178,7 +184,7 @@ interface BatchLogEntry {
  * - Wild Card: 0-29% (0-0.29) or explicitly set
  */
 function getTierFromSimilarity(
-    similarity: number
+    similarity: number,
 ): "high" | "medium" | "explore" | "wildcard" {
     if (similarity >= 0.6) return "high";
     if (similarity >= 0.45) return "medium";
@@ -214,9 +220,10 @@ export class DiscoverWeeklyService {
             const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
             // Get user config
-            const config = await discoverWeeklyPrisma.userDiscoverConfig.findUnique({
-                where: { userId },
-            });
+            const config =
+                await discoverWeeklyPrisma.userDiscoverConfig.findUnique({
+                    where: { userId },
+                });
 
             if (!config || !config.enabled) {
                 discoveryLogger.error("Discovery Weekly not enabled for user");
@@ -235,7 +242,10 @@ export class DiscoverWeeklyService {
 
             // CRITICAL: Process previous week's liked albums before generating new ones
             discoveryLogger.section("PROCESSING PREVIOUS WEEK");
-            await discoveryAlbumLifecycle.processBeforeGeneration(userId, settings);
+            await discoveryAlbumLifecycle.processBeforeGeneration(
+                userId,
+                settings,
+            );
 
             const targetCount = config.playlistSize;
 
@@ -244,25 +254,25 @@ export class DiscoverWeeklyService {
             const seeds = await discoverySeeding.getSeedArtists(userId);
             if (seeds.length === 0) {
                 discoveryLogger.error(
-                    "No seed artists found - need listening history"
+                    "No seed artists found - need listening history",
                 );
                 discoveryLogger.end(false, "No seed artists");
                 throw new Error(
-                    "No seed artists found - need listening history"
+                    "No seed artists found - need listening history",
                 );
             }
             discoveryLogger.success(`Found ${seeds.length} seed artists:`);
             discoveryLogger.list(
                 seeds.map(
-                    (s) => `${s.name}${s.mbid ? ` (${s.mbid})` : " (no MBID)"}`
-                )
+                    (s) => `${s.name}${s.mbid ? ` (${s.mbid})` : " (no MBID)"}`,
+                ),
             );
 
             // Step 2: Pre-fetch and cache similar artists (parallel with rate limiting)
             discoveryLogger.section("STEP 2: SIMILAR ARTISTS");
             const similarArtistsMap = await this.prefetchSimilarArtists(seeds);
             discoveryLogger.success(
-                `Cached ${similarArtistsMap.size} similar artist sets`
+                `Cached ${similarArtistsMap.size} similar artist sets`,
             );
             for (const [key, similar] of similarArtistsMap.entries()) {
                 const seedName =
@@ -270,7 +280,7 @@ export class DiscoverWeeklyService {
                     key;
                 discoveryLogger.write(
                     `  ${seedName}: ${similar.length} similar artists`,
-                    1
+                    1,
                 );
             }
 
@@ -280,22 +290,22 @@ export class DiscoverWeeklyService {
             const albumsToRequest = Math.ceil(targetCount * downloadRatio);
 
             discoveryLogger.section(
-                "STEP 3: ALBUM RECOMMENDATIONS (Multi-Strategy)"
+                "STEP 3: ALBUM RECOMMENDATIONS (Multi-Strategy)",
             );
             discoveryLogger.info(
-                `Requesting ${albumsToRequest} albums (${downloadRatio}x target of ${targetCount}) to account for failures`
+                `Requesting ${albumsToRequest} albums (${downloadRatio}x target of ${targetCount}) to account for failures`,
             );
 
             const recommended = await this.findRecommendedAlbumsMultiStrategy(
                 seeds,
                 similarArtistsMap,
                 albumsToRequest, // Request more albums!
-                userId
+                userId,
             );
 
             if (recommended.length === 0) {
                 discoveryLogger.error(
-                    "No recommendations found after filtering"
+                    "No recommendations found after filtering",
                 );
                 discoveryLogger.end(false, "No recommendations found");
                 throw new Error("No recommendations found");
@@ -306,27 +316,27 @@ export class DiscoverWeeklyService {
             const minRecommendations = targetCount;
             if (recommended.length < minRecommendations) {
                 discoveryLogger.warn(
-                    `Only ${recommended.length} recommendations found, need at least ${minRecommendations} for ${targetCount} unique albums`
+                    `Only ${recommended.length} recommendations found, need at least ${minRecommendations} for ${targetCount} unique albums`,
                 );
                 discoveryLogger.warn(
-                    "Consider expanding seed artists or playing more music"
+                    "Consider expanding seed artists or playing more music",
                 );
                 await discoveryBatchLogger.warn(
                     "threshold-check",
-                    `Low recommendations: ${recommended.length}/${minRecommendations} minimum (target: ${targetCount} unique albums)`
+                    `Low recommendations: ${recommended.length}/${minRecommendations} minimum (target: ${targetCount} unique albums)`,
                 );
             }
 
             discoveryLogger.success(
-                `${recommended.length} albums recommended for download`
+                `${recommended.length} albums recommended for download`,
             );
             discoveryLogger.list(
                 recommended.map(
                     (r) =>
                         `${r.artistName} - ${r.albumTitle} (similarity: ${(
                             r.similarity * 100
-                        ).toFixed(0)}%)`
-                )
+                        ).toFixed(0)}%)`,
+                ),
             );
 
             // Step 4: Create batch and jobs in a transaction
@@ -335,82 +345,84 @@ export class DiscoverWeeklyService {
             // Get music path from settings (already fetched at line 276) with fallback to app config
             const musicPath = settings?.musicPath || appConfig.music.musicPath;
 
-            const batch = await discoverWeeklyPrisma.$transaction(async (tx) => {
-                // Create discovery batch
-                const newBatch = await tx.discoveryBatch.create({
-                    data: {
-                        userId,
-                        weekStart,
-                        targetSongCount: targetCount,
-                        status: "downloading",
-                        totalAlbums: recommended.length,
-                        completedAlbums: 0,
-                        failedAlbums: 0,
-                        logs: [
-                            {
-                                timestamp: new Date().toISOString(),
-                                level: "info",
-                                message: `Started with ${recommended.length} albums to download`,
-                            },
-                        ] as any,
-                    },
-                });
-                discoveryLogger.success(`Created batch: ${newBatch.id}`);
-
-                // Create all download jobs in the same transaction
-                for (const album of recommended) {
-                    // Ensure similarity is a valid number
-                    const similarity =
-                        typeof album.similarity === "number" &&
-                        !isNaN(album.similarity)
-                            ? album.similarity
-                            : 0.5;
-
-                    // Check for existing pending/processing job to avoid duplicates
-                    const existingJob = await tx.downloadJob.findFirst({
-                        where: {
-                            targetMbid: album.albumMbid,
-                            status: { in: ["pending", "processing"] },
-                        },
-                    });
-
-                    if (existingJob) {
-                        logger.debug(
-                            `   Skipping job: ${album.artistName} - ${album.albumTitle} (already in queue: ${existingJob.id})`
-                        );
-                        continue;
-                    }
-
-                    logger.debug(
-                        `   Creating job: ${album.artistName} - ${album.albumTitle} (similarity: ${similarity}, tier: ${album.tier})`
-                    );
-
-                    await tx.downloadJob.create({
+            const batch = await discoverWeeklyPrisma.$transaction(
+                async (tx) => {
+                    // Create discovery batch
+                    const newBatch = await tx.discoveryBatch.create({
                         data: {
                             userId,
-                            subject: `${album.artistName} - ${album.albumTitle}`,
-                            type: "album",
-                            targetMbid: album.albumMbid,
-                            status: "pending",
-                            discoveryBatchId: newBatch.id,
-                            metadata: {
-                                downloadType: "discovery",
-                                rootFolderPath: musicPath,
-                                artistName: album.artistName,
-                                artistMbid: album.artistMbid,
-                                albumTitle: album.albumTitle,
-                                albumMbid: album.albumMbid,
-                                similarity: similarity,
-                                tier: album.tier,
-                            },
+                            weekStart,
+                            targetSongCount: targetCount,
+                            status: "downloading",
+                            totalAlbums: recommended.length,
+                            completedAlbums: 0,
+                            failedAlbums: 0,
+                            logs: [
+                                {
+                                    timestamp: new Date().toISOString(),
+                                    level: "info",
+                                    message: `Started with ${recommended.length} albums to download`,
+                                },
+                            ] as any,
                         },
                     });
-                }
+                    discoveryLogger.success(`Created batch: ${newBatch.id}`);
 
-                return newBatch;
-            });
+                    // Create all download jobs in the same transaction
+                    for (const album of recommended) {
+                        // Ensure similarity is a valid number
+                        const similarity =
+                            typeof album.similarity === "number" &&
+                            !isNaN(album.similarity)
+                                ? album.similarity
+                                : 0.5;
+
+                        // Check for existing pending/processing job to avoid duplicates
+                        const existingJob = await tx.downloadJob.findFirst({
+                            where: {
+                                targetMbid: album.albumMbid,
+                                status: { in: ["pending", "processing"] },
+                            },
+                        });
+
+                        if (existingJob) {
+                            logger.debug(
+                                `   Skipping job: ${album.artistName} - ${album.albumTitle} (already in queue: ${existingJob.id})`,
+                            );
+                            continue;
+                        }
+
+                        logger.debug(
+                            `   Creating job: ${album.artistName} - ${album.albumTitle} (similarity: ${similarity}, tier: ${album.tier})`,
+                        );
+
+                        await tx.downloadJob.create({
+                            data: {
+                                userId,
+                                subject: `${album.artistName} - ${album.albumTitle}`,
+                                type: "album",
+                                targetMbid: album.albumMbid,
+                                status: "pending",
+                                discoveryBatchId: newBatch.id,
+                                metadata: {
+                                    downloadType: "discovery",
+                                    rootFolderPath: musicPath,
+                                    artistName: album.artistName,
+                                    artistMbid: album.artistMbid,
+                                    albumTitle: album.albumTitle,
+                                    albumMbid: album.albumMbid,
+                                    similarity: similarity,
+                                    tier: album.tier,
+                                },
+                            },
+                        });
+                    }
+
+                    return newBatch;
+                },
+            );
             discoveryLogger.success(
-                `Created ${recommended.length} download jobs`
+                `Created ${recommended.length} download jobs`,
             );
 
             // Step 5: Start downloads outside transaction (they involve external APIs)
@@ -421,16 +433,16 @@ export class DiscoverWeeklyService {
             const jobs = await discoverWeeklyPrisma.downloadJob.findMany({
                 where: { discoveryBatchId: batch.id },
             });
-    
+
             // Create concurrent acquisition promises
             const acquisitionPromises = jobs.map(async (job) => {
                 const metadata = job.metadata as any;
-    
+
                 discoveryLogger.info(
                     `Acquiring: ${metadata.artistName} - ${metadata.albumTitle}`,
-                    1
+                    1,
                 );
-    
+
                 const result = await acquisitionService.acquireAlbum(
                     {
                         albumTitle: metadata.albumTitle,
@@ -442,30 +454,34 @@ export class DiscoverWeeklyService {
                         userId: userId,
                         discoveryBatchId: batch.id,
                         existingJobId: job.id,
-                    }
+                    },
                 );
-    
+
                 if (result.success) {
                     discoveryLogger.success(
                         `Acquired via ${result.source}: ${metadata.artistName} - ${metadata.albumTitle}`,
-                        1
+                        1,
                     );
-    
-                    const newStatus = result.source === "soulseek" ? "completed" : "processing";
+
+                    const newStatus =
+                        result.source === "soulseek"
+                            ? "completed"
+                            : "processing";
                     await discoverWeeklyPrisma.downloadJob.update({
                         where: { id: job.id },
                         data: {
                             status: newStatus,
                             lidarrRef: result.correlationId || null,
-                            completedAt: newStatus === "completed" ? new Date() : null,
+                            completedAt:
+                                newStatus === "completed" ? new Date() : null,
                         },
                     });
                 } else {
                     discoveryLogger.error(
                         `Failed to acquire: ${metadata.albumTitle} - ${result.error}`,
-                        1
+                        1,
                     );
-    
+
                     await discoverWeeklyPrisma.downloadJob.update({
                         where: { id: job.id },
                         data: {
@@ -474,22 +490,22 @@ export class DiscoverWeeklyService {
                             completedAt: new Date(),
                         },
                     });
-    
+
                     await discoveryBatchLogger.error(
                         batch.id,
-                        `Failed to acquire ${metadata.albumTitle}: ${result.error}`
+                        `Failed to acquire ${metadata.albumTitle}: ${result.error}`,
                     );
                 }
-    
+
                 return { job, result };
             });
-    
+
             // Execute all acquisitions concurrently
             const results = await Promise.allSettled(acquisitionPromises);
-    
+
             // Process results and update counters
             results.forEach((settledResult, index) => {
-                if (settledResult.status === 'fulfilled') {
+                if (settledResult.status === "fulfilled") {
                     const { result } = settledResult.value;
                     if (result.success) {
                         downloadsStarted++;
@@ -500,17 +516,23 @@ export class DiscoverWeeklyService {
                     downloadsFailed++;
                     const job = jobs[index];
                     const metadata = job.metadata as any;
-                    logger.error(`[Discover] Failed to acquire ${metadata.albumTitle}: ${settledResult.reason}`);
+                    logger.error(
+                        `[Discover] Failed to acquire ${metadata.albumTitle}: ${settledResult.reason}`,
+                    );
                 }
             });
-    
+
             // Log batch completion summary
-            logger.info(`[Discover] Batch complete: ${downloadsStarted} succeeded, ${downloadsFailed} failed`);
+            logger.info(
+                `[Discover] Batch complete: ${downloadsStarted} succeeded, ${downloadsFailed} failed`,
+            );
 
             // After all download attempts, check if batch should be completed
             // This handles cases where downloads fail before webhooks are triggered
             if (downloadsStarted === 0 || downloadsFailed > 0) {
-                logger.debug(`[Discovery] Checking batch completion (started: ${downloadsStarted}, failed: ${downloadsFailed})`);
+                logger.debug(
+                    `[Discovery] Checking batch completion (started: ${downloadsStarted}, failed: ${downloadsFailed})`,
+                );
                 await this.checkBatchCompletion(batch.id);
             }
 
@@ -524,12 +546,12 @@ export class DiscoverWeeklyService {
 
             await discoveryBatchLogger.info(
                 batch.id,
-                `${downloadsStarted} downloads started, waiting for webhooks`
+                `${downloadsStarted} downloads started, waiting for webhooks`,
             );
 
             discoveryLogger.end(
                 true,
-                `${downloadsStarted}/${recommended.length} downloads queued`
+                `${downloadsStarted}/${recommended.length} downloads queued`,
             );
 
             return {
@@ -550,14 +572,14 @@ export class DiscoverWeeklyService {
      * Now includes exponential backoff retry for API failures
      */
     private async prefetchSimilarArtists(
-        seeds: SeedArtist[]
+        seeds: SeedArtist[],
     ): Promise<Map<string, any[]>> {
         const cache = new Map<string, any[]>();
 
         // Helper: fetch with exponential backoff retry
         const fetchWithRetry = async (
             seed: SeedArtist,
-            maxRetries = 3
+            maxRetries = 3,
         ): Promise<any[]> => {
             const totalAttempts = Math.max(1, maxRetries);
 
@@ -566,7 +588,7 @@ export class DiscoverWeeklyService {
                     const similar = await lastFmService.getSimilarArtists(
                         seed.mbid || "",
                         seed.name,
-                        20
+                        20,
                     );
                     return similar;
                 } catch (error: any) {
@@ -579,14 +601,14 @@ export class DiscoverWeeklyService {
                     if (isRetryable && attempt < totalAttempts) {
                         const delay = Math.pow(2, attempt) * 500; // 1s, 2s, 4s
                         logger.warn(
-                            `   Retry ${attempt}/${totalAttempts} for ${seed.name} in ${delay}ms (${error.message})`
+                            `   Retry ${attempt}/${totalAttempts} for ${seed.name} in ${delay}ms (${error.message})`,
                         );
                         await new Promise((r) => setTimeout(r, delay));
                         continue;
                     }
 
                     logger.warn(
-                        `   Failed to get similar artists for ${seed.name}: ${error.message}`
+                        `   Failed to get similar artists for ${seed.name}: ${error.message}`,
                     );
                     return [];
                 }
@@ -602,7 +624,7 @@ export class DiscoverWeeklyService {
                 seedBatch.map(async (seed) => {
                     const similar = await fetchWithRetry(seed);
                     return { key: seed.mbid || seed.name, similar };
-                })
+                }),
             );
 
             for (const { key, similar } of results) {
@@ -627,30 +649,32 @@ export class DiscoverWeeklyService {
         const BATCH_TIMEOUT_NO_COMPLETIONS = 60 * 60 * 1000; // 60 minutes
         const ABSOLUTE_MAX_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours - force fail any batch older than this
 
-        const stuckBatches = await discoverWeeklyPrisma.discoveryBatch.findMany({
-            where: {
-                status: { in: ["downloading", "scanning"] },
+        const stuckBatches = await discoverWeeklyPrisma.discoveryBatch.findMany(
+            {
+                where: {
+                    status: { in: ["downloading", "scanning"] },
+                },
+                include: { jobs: true },
             },
-            include: { jobs: true },
-        });
+        );
 
         let forcedCount = 0;
 
         for (const batch of stuckBatches) {
             const batchAge = Date.now() - batch.createdAt.getTime();
             const completedJobs = batch.jobs.filter(
-                (j) => j.status === "completed"
+                (j) => j.status === "completed",
             );
             const pendingJobs = batch.jobs.filter(
-                (j) => j.status === "pending" || j.status === "processing"
+                (j) => j.status === "pending" || j.status === "processing",
             );
 
             // Absolute timeout - fail any batch older than 2 hours regardless of state
             if (batchAge > ABSOLUTE_MAX_TIMEOUT) {
                 logger.debug(
                     `\n⏰ [BATCH FORCE FAIL] Batch ${batch.id} is ${Math.round(
-                        batchAge / 3600000
-                    )}h old - force failing`
+                        batchAge / 3600000,
+                    )}h old - force failing`,
                 );
 
                 await discoverWeeklyPrisma.discoveryBatch.update({
@@ -689,10 +713,10 @@ export class DiscoverWeeklyService {
                 logger.debug(
                     `\n⏰ [BATCH TIMEOUT] Batch ${
                         batch.id
-                    } stuck for ${Math.round(batchAge / 60000)}min`
+                    } stuck for ${Math.round(batchAge / 60000)}min`,
                 );
                 logger.debug(
-                    `   Completed: ${completedJobs.length}, Pending: ${pendingJobs.length}`
+                    `   Completed: ${completedJobs.length}, Pending: ${pendingJobs.length}`,
                 );
 
                 // Mark all pending jobs as failed (timed out)
@@ -709,7 +733,7 @@ export class DiscoverWeeklyService {
                 });
 
                 logger.debug(
-                    `   Marked ${pendingJobs.length} pending jobs as failed`
+                    `   Marked ${pendingJobs.length} pending jobs as failed`,
                 );
 
                 // Now trigger batch completion check
@@ -744,19 +768,19 @@ export class DiscoverWeeklyService {
             batch.status === "scanning"
         ) {
             logger.debug(
-                `[BATCH ${batchId}] Already ${batch.status} - skipping`
+                `[BATCH ${batchId}] Already ${batch.status} - skipping`,
             );
             return;
         }
 
         const completedJobs = batch.jobs.filter(
-            (j) => j.status === "completed"
+            (j) => j.status === "completed",
         );
         const failedJobs = batch.jobs.filter(
-            (j) => j.status === "failed" || j.status === "exhausted"
+            (j) => j.status === "failed" || j.status === "exhausted",
         );
         const pendingJobs = batch.jobs.filter(
-            (j) => j.status === "pending" || j.status === "processing"
+            (j) => j.status === "pending" || j.status === "processing",
         );
 
         const completed = completedJobs.length;
@@ -764,20 +788,22 @@ export class DiscoverWeeklyService {
         const total = batch.jobs.length;
 
         logger.debug(
-            `[BATCH ${batchId}] Status: ${completed} completed, ${failed} failed, ${pendingJobs.length} pending (total: ${total})`
+            `[BATCH ${batchId}] Status: ${completed} completed, ${failed} failed, ${pendingJobs.length} pending (total: ${total})`,
         );
 
         // Wait for ALL downloads to complete/fail
         if (pendingJobs.length > 0) {
             logger.debug(
-                `[BATCH ${batchId}] Still waiting for ${pendingJobs.length} downloads`
+                `[BATCH ${batchId}] Still waiting for ${pendingJobs.length} downloads`,
             );
             return;
         }
 
         // Wait for Lidarr to finish importing files
-        logger.debug(`[BATCH ${batchId}] All jobs done! Waiting 60s for Lidarr to finish importing...`);
-        await new Promise(resolve => setTimeout(resolve, 60000));
+        logger.debug(
+            `[BATCH ${batchId}] All jobs done! Waiting 60s for Lidarr to finish importing...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 60000));
         logger.debug(`[BATCH ${batchId}] Transitioning to scan phase...`);
 
         // All jobs finished - use transaction to update batch and create unavailable records
@@ -803,7 +829,7 @@ export class DiscoverWeeklyService {
                             tier:
                                 metadata?.tier ||
                                 getTierFromSimilarity(
-                                    metadata?.similarity || 0.5
+                                    metadata?.similarity || 0.5,
                                 ),
                             attemptNumber: 1,
                             weekStartDate: batch.weekStart,
@@ -852,11 +878,11 @@ export class DiscoverWeeklyService {
 
         // All successful downloads will be included in the playlist
         logger.debug(
-            `   ${completed} albums ready for playlist. Triggering scan...`
+            `   ${completed} albums ready for playlist. Triggering scan...`,
         );
         await discoveryBatchLogger.info(
             batchId,
-            `${completed} completed, ${failed} failed. All successful downloads will be in playlist.`
+            `${completed} completed, ${failed} failed. All successful downloads will be in playlist.`,
         );
 
         // Trigger ONE scan with batch ID
@@ -867,7 +893,7 @@ export class DiscoverWeeklyService {
         });
 
         logger.debug(
-            `   Scan queued - will build playlist after scan completes`
+            `   Scan queued - will build playlist after scan completes`,
         );
     }
 
@@ -897,7 +923,7 @@ export class DiscoverWeeklyService {
         logger.debug(`   Found ${completedJobs.length} completed downloads`);
         await discoveryBatchLogger.info(
             batchId,
-            `Building playlist from ${completedJobs.length} completed downloads`
+            `Building playlist from ${completedJobs.length} completed downloads`,
         );
 
         // Build search criteria from completed jobs - use MBID (primary) + artist/album name (fallback)
@@ -913,13 +939,13 @@ export class DiscoverWeeklyService {
             .filter((c) => c.artistName && c.albumTitle);
 
         logger.debug(
-            `   Searching for tracks using MBID (primary) + name fallback:`
+            `   Searching for tracks using MBID (primary) + name fallback:`,
         );
         for (const c of searchCriteria) {
             logger.debug(
                 `     - "${c.albumTitle}" by "${c.artistName}" (MBID: ${
                     c.albumMbid || "none"
-                })`
+                })`,
             );
         }
 
@@ -940,7 +966,7 @@ export class DiscoverWeeklyService {
                 });
                 if (tracks.length > 0) {
                     logger.debug(
-                        `     [MBID] Found ${tracks.length} tracks for "${criteria.albumTitle}"`
+                        `     [MBID] Found ${tracks.length} tracks for "${criteria.albumTitle}"`,
                     );
                 }
             }
@@ -968,7 +994,7 @@ export class DiscoverWeeklyService {
                 });
                 if (tracks.length > 0) {
                     logger.debug(
-                        `     [NAME] Found ${tracks.length} tracks for "${criteria.albumTitle}"`
+                        `     [NAME] Found ${tracks.length} tracks for "${criteria.albumTitle}"`,
                     );
                 }
             }
@@ -1014,7 +1040,7 @@ export class DiscoverWeeklyService {
                         }));
                         if (tracks.length > 0) {
                             logger.debug(
-                                `     [NORMALIZED] Found ${tracks.length} tracks for "${criteria.albumTitle}"`
+                                `     [NORMALIZED] Found ${tracks.length} tracks for "${criteria.albumTitle}"`,
                             );
                             break;
                         }
@@ -1024,7 +1050,7 @@ export class DiscoverWeeklyService {
 
             if (tracks.length === 0) {
                 logger.debug(
-                    `     [MISS] No tracks found for "${criteria.albumTitle}" by "${criteria.artistName}"`
+                    `     [MISS] No tracks found for "${criteria.albumTitle}" by "${criteria.artistName}"`,
                 );
             }
 
@@ -1033,15 +1059,17 @@ export class DiscoverWeeklyService {
 
         // Remove duplicates (same track ID)
         const uniqueTracks = Array.from(
-            new Map(allTracks.map((t) => [t.id, t])).values()
+            new Map(allTracks.map((t) => [t.id, t])).values(),
         );
         allTracks = uniqueTracks;
 
-        logger.debug(`   Found ${allTracks.length} tracks from imported albums`);
+        logger.debug(
+            `   Found ${allTracks.length} tracks from imported albums`,
+        );
 
         if (allTracks.length === 0) {
             logger.debug(
-                `   No tracks found after scan - albums may not have imported yet`
+                `   No tracks found after scan - albums may not have imported yet`,
             );
             await discoverWeeklyPrisma.discoveryBatch.update({
                 where: { id: batchId },
@@ -1053,7 +1081,7 @@ export class DiscoverWeeklyService {
             });
             await discoveryBatchLogger.error(
                 batchId,
-                "No tracks found after scan"
+                "No tracks found after scan",
             );
             return;
         }
@@ -1080,12 +1108,12 @@ export class DiscoverWeeklyService {
         const anchorCount = Math.ceil(availableAlbums * 0.2); // Add 20% anchors on top
 
         logger.debug(
-            `   Unique albums available: ${availableAlbums} (from ${allTracks.length} total tracks)`
+            `   Unique albums available: ${availableAlbums} (from ${allTracks.length} total tracks)`,
         );
         logger.debug(
             `   Target composition: ${availableAlbums} discovery + ${anchorCount} anchors = ${
                 availableAlbums + anchorCount
-            } total`
+            } total`,
         );
 
         // Shuffle the unique album tracks
@@ -1094,7 +1122,7 @@ export class DiscoverWeeklyService {
         // Step 1: Get ALL discovery tracks (1 per album) - no limit!
         let discoverySelected = [...shuffled];
         logger.debug(
-            `   Discovery tracks: ${discoverySelected.length} (ALL available, 1 per album)`
+            `   Discovery tracks: ${discoverySelected.length} (ALL available, 1 per album)`,
         );
 
         // Step 2: ALWAYS add library anchor tracks (20%)
@@ -1120,7 +1148,13 @@ export class DiscoverWeeklyService {
                     album: {
                         artist: {
                             OR: [
-                                { normalizedName: { in: seedArtistNames.map(n => normalizeArtistName(n)) } },
+                                {
+                                    normalizedName: {
+                                        in: seedArtistNames.map((n) =>
+                                            normalizeArtistName(n),
+                                        ),
+                                    },
+                                },
                                 ...(seedArtistMbids.length > 0
                                     ? [{ mbid: { in: seedArtistMbids } }]
                                     : []),
@@ -1138,7 +1172,7 @@ export class DiscoverWeeklyService {
             });
 
             logger.debug(
-                `   Found ${libraryTracks.length} candidate library tracks from ${seedArtistNames.length} seed artists`
+                `   Found ${libraryTracks.length} candidate library tracks from ${seedArtistNames.length} seed artists`,
             );
 
             if (libraryTracks.length > 0) {
@@ -1157,7 +1191,9 @@ export class DiscoverWeeklyService {
                 }
 
                 // Shuffle and take what we need
-                const uniqueAnchors = shuffleArray(Array.from(anchorsByAlbum.values()));
+                const uniqueAnchors = shuffleArray(
+                    Array.from(anchorsByAlbum.values()),
+                );
                 libraryAnchors = uniqueAnchors.slice(0, anchorCount);
 
                 // Mark these as library anchors and track used albums
@@ -1172,7 +1208,7 @@ export class DiscoverWeeklyService {
         if (libraryAnchors.length < anchorCount) {
             const needed = anchorCount - libraryAnchors.length;
             logger.debug(
-                `   Only ${libraryAnchors.length}/${anchorCount} anchors from seeds, adding ${needed} from popular library tracks`
+                `   Only ${libraryAnchors.length}/${anchorCount} anchors from seeds, adding ${needed} from popular library tracks`,
             );
 
             // Get track IDs we already have (discovery + current anchors)
@@ -1183,23 +1219,24 @@ export class DiscoverWeeklyService {
 
             // Find popular library tracks (from artists with most plays or albums)
             // Exclude albums already used
-            const popularLibraryTracks = await discoverWeeklyPrisma.track.findMany({
-                where: {
-                    album: {
-                        location: "LIBRARY",
-                        id: { notIn: Array.from(usedAlbumIds) }, // 1 per album
+            const popularLibraryTracks =
+                await discoverWeeklyPrisma.track.findMany({
+                    where: {
+                        album: {
+                            location: "LIBRARY",
+                            id: { notIn: Array.from(usedAlbumIds) }, // 1 per album
+                        },
+                        id: { notIn: Array.from(usedTrackIds) },
                     },
-                    id: { notIn: Array.from(usedTrackIds) },
-                },
-                include: {
-                    album: { include: { artist: true } },
-                },
-                orderBy: {
-                    // Order by album's artist name for variety, or you could add play count
-                    album: { artist: { name: "asc" } },
-                },
-                take: needed * 10, // Get extra for 1-per-album selection
-            });
+                    include: {
+                        album: { include: { artist: true } },
+                    },
+                    orderBy: {
+                        // Order by album's artist name for variety, or you could add play count
+                        album: { artist: { name: "asc" } },
+                    },
+                    take: needed * 10, // Get extra for 1-per-album selection
+                });
 
             if (popularLibraryTracks.length > 0) {
                 // Group by album and pick 1 per album
@@ -1216,7 +1253,9 @@ export class DiscoverWeeklyService {
                     }
                 }
 
-                const shuffledPopular = shuffleArray(Array.from(popByAlbum.values()));
+                const shuffledPopular = shuffleArray(
+                    Array.from(popByAlbum.values()),
+                );
                 const additionalAnchors = shuffledPopular.slice(0, needed);
 
                 for (const track of additionalAnchors) {
@@ -1226,17 +1265,17 @@ export class DiscoverWeeklyService {
 
                 libraryAnchors = [...libraryAnchors, ...additionalAnchors];
                 logger.debug(
-                    `   Added ${additionalAnchors.length} popular library tracks as anchors (1 per album)`
+                    `   Added ${additionalAnchors.length} popular library tracks as anchors (1 per album)`,
                 );
             } else {
                 logger.debug(
-                    `   No additional library tracks available for anchors`
+                    `   No additional library tracks available for anchors`,
                 );
             }
         }
 
         logger.debug(
-            `   Library anchors: ${libraryAnchors.length}/${anchorCount}`
+            `   Library anchors: ${libraryAnchors.length}/${anchorCount}`,
         );
 
         // Combine ALL discovery tracks with anchors
@@ -1247,22 +1286,22 @@ export class DiscoverWeeklyService {
 
         await discoveryBatchLogger.info(
             batchId,
-            `Playlist built: ${discoverySelected.length} discovery + ${libraryAnchors.length} anchors = ${selected.length} total`
+            `Playlist built: ${discoverySelected.length} discovery + ${libraryAnchors.length} anchors = ${selected.length} total`,
         );
 
         // Log final result
         const target = batch.targetSongCount; // For logging purposes only
         if (selected.length < target) {
             logger.debug(
-                `   NOTE: Got ${selected.length} tracks (target was ${target}, including ALL successful downloads)`
+                `   NOTE: Got ${selected.length} tracks (target was ${target}, including ALL successful downloads)`,
             );
             await discoveryBatchLogger.info(
                 batchId,
-                `Got ${selected.length} tracks (target was ${target})`
+                `Got ${selected.length} tracks (target was ${target})`,
             );
         } else {
             logger.debug(
-                `   SUCCESS: Got ${selected.length} tracks (${discoverySelected.length} discovery + ${libraryAnchors.length} anchors)`
+                `   SUCCESS: Got ${selected.length} tracks (${discoverySelected.length} discovery + ${libraryAnchors.length} anchors)`,
             );
         }
 
@@ -1313,7 +1352,7 @@ export class DiscoverWeeklyService {
                         // Debug: Log if job wasn't matched
                         if (!job) {
                             logger.debug(
-                                `   [WARN] No job match for: ${track.album.artist.name} - ${track.album.title}`
+                                `   [WARN] No job match for: ${track.album.artist.name} - ${track.album.title}`,
                             );
                             logger.debug(
                                 `     Available jobs: ${completedJobs
@@ -1323,10 +1362,10 @@ export class DiscoverWeeklyService {
                                                 (j.metadata as any)?.artistName
                                             } - ${
                                                 (j.metadata as any)?.albumTitle
-                                            }`
+                                            }`,
                                     )
                                     .slice(0, 5)
-                                    .join(", ")}...`
+                                    .join(", ")}...`,
                             );
                         } else {
                             logger.debug(
@@ -1336,7 +1375,7 @@ export class DiscoverWeeklyService {
                                     track.album.title
                                 } (tier: ${storedTier}, similarity: ${(
                                     storedSimilarity * 100
-                                ).toFixed(0)}%)`
+                                ).toFixed(0)}%)`,
                             );
                         }
 
@@ -1388,7 +1427,7 @@ export class DiscoverWeeklyService {
                         if (exclusionMonths > 0) {
                             const expiresAt = new Date();
                             expiresAt.setMonth(
-                                expiresAt.getMonth() + exclusionMonths
+                                expiresAt.getMonth() + exclusionMonths,
                             );
 
                             await tx.discoverExclusion.upsert({
@@ -1442,25 +1481,25 @@ export class DiscoverWeeklyService {
             logger.error(`   Stack:`, txError.stack);
             await discoveryBatchLogger.error(
                 batchId,
-                `Transaction failed: ${txError.message}`
+                `Transaction failed: ${txError.message}`,
             );
         }
 
         if (result) {
             logger.debug(
-                `   Playlist complete: ${result.trackCount} tracks from ${result.albumCount} albums`
+                `   Playlist complete: ${result.trackCount} tracks from ${result.albumCount} albums`,
             );
             await discoveryBatchLogger.info(
                 batchId,
-                `Playlist complete: ${result.trackCount} tracks from ${result.albumCount} albums`
+                `Playlist complete: ${result.trackCount} tracks from ${result.albumCount} albums`,
             );
         } else {
             logger.error(
-                `   ERROR: Transaction returned null - no records created`
+                `   ERROR: Transaction returned null - no records created`,
             );
             await discoveryBatchLogger.error(
                 batchId,
-                "Transaction failed - no records created"
+                "Transaction failed - no records created",
             );
         }
 
@@ -1486,20 +1525,21 @@ export class DiscoverWeeklyService {
         tracksAdded: number;
     }> {
         logger.debug(
-            `\n[Discovery Weekly] Reconciling tracks across completed batches...`
+            `\n[Discovery Weekly] Reconciling tracks across completed batches...`,
         );
 
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
         // Find completed batches from last 7 days
-        const completedBatches = await discoverWeeklyPrisma.discoveryBatch.findMany({
-            where: {
-                status: "completed",
-                completedAt: { gte: sevenDaysAgo },
-            },
-            orderBy: { completedAt: "desc" },
-        });
+        const completedBatches =
+            await discoverWeeklyPrisma.discoveryBatch.findMany({
+                where: {
+                    status: "completed",
+                    completedAt: { gte: sevenDaysAgo },
+                },
+                orderBy: { completedAt: "desc" },
+            });
 
         if (completedBatches.length === 0) {
             logger.debug(`   No completed batches in last 7 days to reconcile`);
@@ -1507,7 +1547,7 @@ export class DiscoverWeeklyService {
         }
 
         logger.debug(
-            `   Found ${completedBatches.length} completed batch(es) from last 7 days`
+            `   Found ${completedBatches.length} completed batch(es) from last 7 days`,
         );
 
         let totalTracksAdded = 0;
@@ -1518,12 +1558,13 @@ export class DiscoverWeeklyService {
             batchesChecked++;
 
             // Get completed download jobs for this batch
-            const completedJobs = await discoverWeeklyPrisma.downloadJob.findMany({
-                where: {
-                    discoveryBatchId: batch.id,
-                    status: "completed",
-                },
-            });
+            const completedJobs =
+                await discoverWeeklyPrisma.downloadJob.findMany({
+                    where: {
+                        discoveryBatchId: batch.id,
+                        status: "completed",
+                    },
+                });
 
             if (completedJobs.length === 0) {
                 logger.debug(`     No completed jobs in batch ${batch.id}`);
@@ -1531,7 +1572,7 @@ export class DiscoverWeeklyService {
             }
 
             logger.debug(
-                `     Found ${completedJobs.length} completed download job(s)`
+                `     Found ${completedJobs.length} completed download job(s)`,
             );
 
             // Check each completed job to see if it has corresponding DiscoveryAlbum records
@@ -1542,9 +1583,7 @@ export class DiscoverWeeklyService {
                 const albumTitle = metadata?.albumTitle;
 
                 if (!albumMbid) {
-                    logger.debug(
-                        `     Skipping job ${job.id} - no album MBID`
-                    );
+                    logger.debug(`     Skipping job ${job.id} - no album MBID`);
                     continue;
                 }
 
@@ -1564,7 +1603,7 @@ export class DiscoverWeeklyService {
                 }
 
                 logger.debug(
-                    `     Album "${albumTitle}" by "${artistName}" missing from Discovery - checking library...`
+                    `     Album "${albumTitle}" by "${artistName}" missing from Discovery - checking library...`,
                 );
 
                 // PRIMARY: Search by rgMbid (most accurate)
@@ -1579,14 +1618,14 @@ export class DiscoverWeeklyService {
                 });
                 if (tracks.length > 0) {
                     logger.debug(
-                        `       [MBID] Found ${tracks.length} tracks in library`
+                        `       [MBID] Found ${tracks.length} tracks in library`,
                     );
                 }
 
                 // FALLBACK: Search by artist name + album title (case-insensitive)
                 if (tracks.length === 0 && artistName && albumTitle) {
                     logger.debug(
-                        `       [NAME] Trying name-based search: "${artistName}" - "${albumTitle}"`
+                        `       [NAME] Trying name-based search: "${artistName}" - "${albumTitle}"`,
                     );
                     tracks = await discoverWeeklyPrisma.track.findMany({
                         where: {
@@ -1609,14 +1648,14 @@ export class DiscoverWeeklyService {
                     });
                     if (tracks.length > 0) {
                         logger.debug(
-                            `       [NAME] Found ${tracks.length} tracks in library`
+                            `       [NAME] Found ${tracks.length} tracks in library`,
                         );
                     }
                 }
 
                 if (tracks.length === 0) {
                     logger.debug(
-                        `       No tracks found in library - album may not have imported yet`
+                        `       No tracks found in library - album may not have imported yet`,
                     );
                     continue;
                 }
@@ -1628,7 +1667,7 @@ export class DiscoverWeeklyService {
                     metadata?.tier || getTierFromSimilarity(similarity);
 
                 logger.debug(
-                    `       ✓ Creating Discovery records for ${tracks.length} track(s)...`
+                    `       ✓ Creating Discovery records for ${tracks.length} track(s)...`,
                 );
 
                 try {
@@ -1678,18 +1717,18 @@ export class DiscoverWeeklyService {
                     });
 
                     logger.debug(
-                        `       ✓ Added ${tracks.length} track(s) to Discovery Weekly`
+                        `       ✓ Added ${tracks.length} track(s) to Discovery Weekly`,
                     );
                 } catch (error: any) {
                     logger.error(
-                        `       ✗ Failed to create Discovery records: ${error.message}`
+                        `       ✗ Failed to create Discovery records: ${error.message}`,
                     );
                 }
             }
         }
 
         logger.debug(
-            `   Reconciliation complete: ${totalTracksAdded} tracks added across ${batchesChecked} batches`
+            `   Reconciliation complete: ${totalTracksAdded} tracks added across ${batchesChecked} batches`,
         );
 
         return {
@@ -1742,7 +1781,7 @@ export class DiscoverWeeklyService {
                     params: { pageSize: 500 },
                     headers: { "X-Api-Key": settings.lidarrApiKey },
                     timeout: 30000,
-                }
+                },
             );
 
             const queueItems = queueResponse.data?.records || [];
@@ -1773,10 +1812,10 @@ export class DiscoverWeeklyService {
                                         "X-Api-Key": settings.lidarrApiKey,
                                     },
                                     timeout: 10000,
-                                }
+                                },
                             );
                             logger.debug(
-                                `   Removed orphaned queue item: ${item.title}`
+                                `   Removed orphaned queue item: ${item.title}`,
                             );
                             removed++;
                         } catch (e) {
@@ -1794,7 +1833,7 @@ export class DiscoverWeeklyService {
         } catch (error: any) {
             logger.error(
                 `[CLEANUP] Error cleaning orphaned queue:`,
-                error.message
+                error.message,
             );
         }
     }
@@ -1810,7 +1849,7 @@ export class DiscoverWeeklyService {
      */
     private async cleanupFailedArtists(batchId: string): Promise<void> {
         logger.debug(
-            `\n[CLEANUP] Tag-based cleanup for failed discovery artists...`
+            `\n[CLEANUP] Tag-based cleanup for failed discovery artists...`,
         );
 
         const batch = await discoverWeeklyPrisma.discoveryBatch.findUnique({
@@ -1832,13 +1871,13 @@ export class DiscoverWeeklyService {
         }
 
         logger.debug(
-            `   ${successfulArtistMbids.size} artists had successful downloads`
+            `   ${successfulArtistMbids.size} artists had successful downloads`,
         );
 
         // Get all artists with the discovery tag
         const discoveryArtists = await lidarrService.getDiscoveryArtists();
         logger.debug(
-            `   ${discoveryArtists.length} artists in Lidarr have discovery tag`
+            `   ${discoveryArtists.length} artists in Lidarr have discovery tag`,
         );
 
         let removed = 0;
@@ -1857,16 +1896,18 @@ export class DiscoverWeeklyService {
             }
 
             // Keep if artist has liked/moved discovery albums
-            const hasKept = await discoverWeeklyPrisma.discoveryAlbum.findFirst({
-                where: {
-                    artistMbid,
-                    status: { in: ["LIKED", "MOVED"] },
+            const hasKept = await discoverWeeklyPrisma.discoveryAlbum.findFirst(
+                {
+                    where: {
+                        artistMbid,
+                        status: { in: ["LIKED", "MOVED"] },
+                    },
                 },
-            });
+            );
 
             if (hasKept) {
                 logger.debug(
-                    `   Keeping ${artistName} - has liked albums (removing tag)`
+                    `   Keeping ${artistName} - has liked albums (removing tag)`,
                 );
                 await lidarrService.removeDiscoveryTagByMbid(artistMbid);
                 kept++;
@@ -1874,17 +1915,18 @@ export class DiscoverWeeklyService {
             }
 
             // Keep if artist has ACTIVE discovery albums from other weeks
-            const hasActiveOther = await discoverWeeklyPrisma.discoveryAlbum.findFirst({
-                where: {
-                    artistMbid,
-                    status: "ACTIVE",
-                    weekStartDate: { not: batch.weekStart },
-                },
-            });
+            const hasActiveOther =
+                await discoverWeeklyPrisma.discoveryAlbum.findFirst({
+                    where: {
+                        artistMbid,
+                        status: "ACTIVE",
+                        weekStartDate: { not: batch.weekStart },
+                    },
+                });
 
             if (hasActiveOther) {
                 logger.debug(
-                    `   Keeping ${artistName} - has active albums from other batches`
+                    `   Keeping ${artistName} - has active albums from other batches`,
                 );
                 kept++;
                 continue;
@@ -1894,7 +1936,7 @@ export class DiscoverWeeklyService {
             try {
                 const result = await lidarrService.deleteArtistById(
                     lidarrArtist.id,
-                    true
+                    true,
                 );
                 if (result.success) {
                     logger.debug(` Removed: ${artistName}`);
@@ -1902,7 +1944,7 @@ export class DiscoverWeeklyService {
                 }
             } catch (error: any) {
                 logger.error(
-                    ` Failed to remove ${artistName}: ${error.message}`
+                    ` Failed to remove ${artistName}: ${error.message}`,
                 );
             }
         }
@@ -1910,7 +1952,7 @@ export class DiscoverWeeklyService {
         logger.debug(`   Cleanup complete: ${removed} removed, ${kept} kept`);
         await discoveryBatchLogger.info(
             batchId,
-            `Lidarr cleanup: ${removed} failed artists removed`
+            `Lidarr cleanup: ${removed} failed artists removed`,
         );
     }
 
@@ -1920,10 +1962,10 @@ export class DiscoverWeeklyService {
      */
     private async cleanupExtraAlbums(
         extraJobs: any[],
-        userId: string
+        userId: string,
     ): Promise<void> {
         logger.debug(
-            `\n[CLEANUP] Removing ${extraJobs.length} extra albums from Lidarr and filesystem...`
+            `\n[CLEANUP] Removing ${extraJobs.length} extra albums from Lidarr and filesystem...`,
         );
 
         // Track artists to potentially remove (if they have no other albums)
@@ -1944,11 +1986,11 @@ export class DiscoverWeeklyService {
                     // Delete the album from Lidarr (with files)
                     const result = await lidarrService.deleteAlbum(
                         job.lidarrAlbumId,
-                        true
+                        true,
                     );
                     if (result.success) {
                         logger.debug(
-                            `   ✓ Removed: ${artistName} - ${albumTitle}`
+                            `   ✓ Removed: ${artistName} - ${albumTitle}`,
                         );
                         albumsRemoved++;
 
@@ -1958,12 +2000,12 @@ export class DiscoverWeeklyService {
                         }
                     } else {
                         logger.debug(
-                            `   - Skip: ${artistName} - ${albumTitle} (${result.message})`
+                            `   - Skip: ${artistName} - ${albumTitle} (${result.message})`,
                         );
                     }
                 } else {
                     logger.debug(
-                        `   - Skip: ${artistName} - ${albumTitle} (no Lidarr ID)`
+                        `   - Skip: ${artistName} - ${albumTitle} (no Lidarr ID)`,
                     );
                 }
 
@@ -1978,7 +2020,7 @@ export class DiscoverWeeklyService {
                 });
             } catch (error: any) {
                 logger.error(
-                    `   ✗ Error: ${artistName} - ${albumTitle}: ${error.message}`
+                    `   ✗ Error: ${artistName} - ${albumTitle}: ${error.message}`,
                 );
                 errors++;
             }
@@ -1991,18 +2033,19 @@ export class DiscoverWeeklyService {
                 const albums = await lidarrService.getArtistAlbums(artistMbid);
 
                 // Check if artist has native library content (real user library)
-                const hasNativeOwnedAlbums = await discoverWeeklyPrisma.ownedAlbum.findFirst({
-                    where: {
-                        artist: { mbid: artistMbid },
-                        source: "native_scan",
-                    },
-                });
+                const hasNativeOwnedAlbums =
+                    await discoverWeeklyPrisma.ownedAlbum.findFirst({
+                        where: {
+                            artist: { mbid: artistMbid },
+                            source: "native_scan",
+                        },
+                    });
 
                 if (!albums || (albums.length === 0 && !hasNativeOwnedAlbums)) {
                     // No albums left, remove artist
                     const result = await lidarrService.deleteArtist(
                         artistMbid,
-                        true
+                        true,
                     );
                     if (result.success) {
                         logger.debug(` Removed empty artist: ${artistMbid}`);
@@ -2014,7 +2057,7 @@ export class DiscoverWeeklyService {
         }
 
         logger.debug(
-            `   Extra album cleanup: ${albumsRemoved} removed, ${errors} errors`
+            `   Extra album cleanup: ${albumsRemoved} removed, ${errors} errors`,
         );
     }
 
@@ -2034,7 +2077,7 @@ export class DiscoverWeeklyService {
     private async isArtistInLibrary(
         artistName: string,
         artistMbid: string | undefined,
-        membership?: ArtistLibraryMembership
+        membership?: ArtistLibraryMembership,
     ): Promise<boolean> {
         if (membership) {
             if (
@@ -2044,7 +2087,9 @@ export class DiscoverWeeklyService {
             ) {
                 return true;
             }
-            return membership.nameHasAlbum.get(artistName.toLowerCase()) === true;
+            return (
+                membership.nameHasAlbum.get(artistName.toLowerCase()) === true
+            );
         }
 
         // Check by MBID first (most accurate)
@@ -2055,7 +2100,7 @@ export class DiscoverWeeklyService {
             });
             if (byMbid && byMbid.albums.length > 0) {
                 logger.debug(
-                    `     [LIBRARY] ${artistName} IN LIBRARY (matched by MBID, ${byMbid.albums.length} album(s))`
+                    `     [LIBRARY] ${artistName} IN LIBRARY (matched by MBID, ${byMbid.albums.length} album(s))`,
                 );
                 return true;
             }
@@ -2071,7 +2116,7 @@ export class DiscoverWeeklyService {
 
         if (byName !== null && byName.albums.length > 0) {
             logger.debug(
-                `     [LIBRARY] ${artistName} IN LIBRARY (matched by name, ${byName.albums.length} album(s))`
+                `     [LIBRARY] ${artistName} IN LIBRARY (matched by name, ${byName.albums.length} album(s))`,
             );
             return true;
         }
@@ -2114,7 +2159,7 @@ export class DiscoverWeeklyService {
      * original per-candidate try/catch call sites already had.
      */
     private async prefetchArtistLibraryMembership(
-        candidates: Array<{ name: string; mbid?: string }>
+        candidates: Array<{ name: string; mbid?: string }>,
     ): Promise<ArtistLibraryMembership> {
         const mbidHasAlbum = new Map<string, boolean>();
         const nameHasAlbum = new Map<string, boolean>();
@@ -2125,16 +2170,16 @@ export class DiscoverWeeklyService {
                     .map((c) => c.mbid)
                     .filter(
                         (mbid): mbid is string =>
-                            !!mbid && !mbid.startsWith("temp-")
-                    )
-            )
+                            !!mbid && !mbid.startsWith("temp-"),
+                    ),
+            ),
         );
         const uniqueNames = Array.from(
             new Set(
                 candidates
                     .map((c) => c.name)
-                    .filter((name): name is string => !!name)
-            )
+                    .filter((name): name is string => !!name),
+            ),
         );
 
         if (nonTempMbids.length === 0 && uniqueNames.length === 0) {
@@ -2162,15 +2207,18 @@ export class DiscoverWeeklyService {
                 const hasAlbum = row.albums.length > 0;
                 mbidHasAlbum.set(
                     row.mbid,
-                    hasAlbum || mbidHasAlbum.get(row.mbid) === true
+                    hasAlbum || mbidHasAlbum.get(row.mbid) === true,
                 );
                 const key = row.name.toLowerCase();
-                nameHasAlbum.set(key, hasAlbum || nameHasAlbum.get(key) === true);
+                nameHasAlbum.set(
+                    key,
+                    hasAlbum || nameHasAlbum.get(key) === true,
+                );
             }
         } catch (error) {
             logger.warn(
                 "   Failed to batch-prefetch artist library membership; treating all candidates as not-in-library for this run",
-                error
+                error,
             );
         }
 
@@ -2183,7 +2231,7 @@ export class DiscoverWeeklyService {
      */
     private async isAlbumOwnedByName(
         artistName: string,
-        albumTitle: string
+        albumTitle: string,
     ): Promise<boolean> {
         // Normalize for comparison
         const normalizedArtist = artistName.toLowerCase().trim();
@@ -2193,7 +2241,7 @@ export class DiscoverWeeklyService {
             .replace(/\[.*?\]/g, "") // Remove bracketed content
             .replace(
                 /[-–—]\s*(deluxe|remaster|bonus|special|anniversary|expanded|limited|collector).*$/i,
-                ""
+                "",
             )
             .trim();
 
@@ -2208,7 +2256,7 @@ export class DiscoverWeeklyService {
         });
         if (album) {
             logger.debug(
-                `     [OWNED-NAME] Found "${albumTitle}" by "${artistName}" in Album table`
+                `     [OWNED-NAME] Found "${albumTitle}" by "${artistName}" in Album table`,
             );
             return true;
         }
@@ -2226,10 +2274,12 @@ export class DiscoverWeeklyService {
         // Look up the actual album titles for these owned albums
         if (ownedAlbumRefs.length > 0) {
             const rgMbids = ownedAlbumRefs.map((o) => o.rgMbid);
-            const ownedAlbumRecords = await discoverWeeklyPrisma.album.findMany({
-                where: { rgMbid: { in: rgMbids } },
-                select: { title: true },
-            });
+            const ownedAlbumRecords = await discoverWeeklyPrisma.album.findMany(
+                {
+                    where: { rgMbid: { in: rgMbids } },
+                    select: { title: true },
+                },
+            );
 
             for (const owned of ownedAlbumRecords) {
                 const ownedNormalized = owned.title
@@ -2243,7 +2293,7 @@ export class DiscoverWeeklyService {
                         normalizedAlbum.includes(ownedNormalized))
                 ) {
                     logger.debug(
-                        `     [OWNED-NAME] Found "${albumTitle}" by "${artistName}" in OwnedAlbum table`
+                        `     [OWNED-NAME] Found "${albumTitle}" by "${artistName}" in OwnedAlbum table`,
                     );
                     return true;
                 }
@@ -2258,15 +2308,16 @@ export class DiscoverWeeklyService {
      */
     private async isAlbumExcluded(
         albumMbid: string,
-        userId: string
+        userId: string,
     ): Promise<boolean> {
-        const exclusion = await discoverWeeklyPrisma.discoverExclusion.findFirst({
-            where: {
-                userId,
-                albumMbid,
-                expiresAt: { gt: new Date() },
-            },
-        });
+        const exclusion =
+            await discoverWeeklyPrisma.discoverExclusion.findFirst({
+                where: {
+                    userId,
+                    albumMbid,
+                    expiresAt: { gt: new Date() },
+                },
+            });
         return !!exclusion;
     }
 
@@ -2278,7 +2329,7 @@ export class DiscoverWeeklyService {
      */
     async findReplacementAlbum(
         failedJob: any,
-        batch: any
+        batch: any,
     ): Promise<{
         artistName: string;
         artistMbid: string;
@@ -2290,7 +2341,7 @@ export class DiscoverWeeklyService {
         const failedArtistMbid = metadata?.artistMbid;
 
         logger.debug(
-            `[Discovery] Finding replacement for: ${metadata?.artistName} - ${metadata?.albumTitle}`
+            `[Discovery] Finding replacement for: ${metadata?.artistName} - ${metadata?.albumTitle}`,
         );
 
         // Get all MBIDs and ARTIST MBIDs already attempted in this batch (for diversity tracking)
@@ -2308,13 +2359,13 @@ export class DiscoverWeeklyService {
         }
 
         logger.debug(
-            `[Discovery]   Already have ${attemptedArtistMbids.size} artists in batch, prioritizing new artists`
+            `[Discovery]   Already have ${attemptedArtistMbids.size} artists in batch, prioritizing new artists`,
         );
 
         // Tier 2: Try album from DIFFERENT similar artist - search ALL seeds with more similar artists
         // IMPORTANT: Never pick same artist twice for diversity!
         logger.debug(
-            `[Discovery]   Tier 2: Searching ALL seeds for albums from NEW artists (diversity enforced)`
+            `[Discovery]   Tier 2: Searching ALL seeds for albums from NEW artists (diversity enforced)`,
         );
         const seeds = await discoverySeeding.getSeedArtists(batch.userId);
 
@@ -2327,7 +2378,7 @@ export class DiscoverWeeklyService {
                 const similarArtists = await lastFmService.getSimilarArtists(
                     seed.mbid,
                     seed.name,
-                    30
+                    30,
                 );
 
                 for (const similar of similarArtists) {
@@ -2342,14 +2393,14 @@ export class DiscoverWeeklyService {
                     const albums = await lastFmService.getArtistTopAlbums(
                         similar.mbid,
                         similar.name,
-                        5
+                        5,
                     );
 
                     for (const album of albums) {
                         // Get MBID from MusicBrainz
                         const mbAlbum = await musicBrainzService.searchAlbum(
                             album.name,
-                            similar.name
+                            similar.name,
                         );
 
                         if (mbAlbum && !attemptedMbids.has(mbAlbum.id)) {
@@ -2358,31 +2409,32 @@ export class DiscoverWeeklyService {
                                 const artistInLibrary =
                                     await this.isArtistInLibrary(
                                         similar.name,
-                                        similar.mbid
+                                        similar.mbid,
                                     );
                                 if (artistInLibrary) {
                                     logger.debug(
-                                        `[Discovery]   Skipping ${similar.name} - already in library`
+                                        `[Discovery]   Skipping ${similar.name} - already in library`,
                                     );
                                     continue;
                                 }
                             } catch (e: any) {
                                 logger.error(
-                                    `[Discovery]   isArtistInLibrary error for ${similar.name}: ${e.message}`
+                                    `[Discovery]   isArtistInLibrary error for ${similar.name}: ${e.message}`,
                                 );
                                 // Continue anyway - assume not in library if check fails
                             }
 
                             // Check if owned
                             try {
-                                const owned = await discoverySeeding.isAlbumOwned(
-                                    mbAlbum.id,
-                                    batch.userId
-                                );
+                                const owned =
+                                    await discoverySeeding.isAlbumOwned(
+                                        mbAlbum.id,
+                                        batch.userId,
+                                    );
                                 if (owned) continue;
                             } catch (e: any) {
                                 logger.error(
-                                    `[Discovery]   isAlbumOwned error: ${e.message}`
+                                    `[Discovery]   isAlbumOwned error: ${e.message}`,
                                 );
                                 continue; // Skip on error
                             }
@@ -2391,18 +2443,18 @@ export class DiscoverWeeklyService {
                             try {
                                 const excluded = await this.isAlbumExcluded(
                                     mbAlbum.id,
-                                    batch.userId
+                                    batch.userId,
                                 );
                                 if (excluded) continue;
                             } catch (e: any) {
                                 logger.error(
-                                    `[Discovery]   isAlbumExcluded error: ${e.message}`
+                                    `[Discovery]   isAlbumExcluded error: ${e.message}`,
                                 );
                                 continue; // Skip on error
                             }
 
                             logger.debug(
-                                `[Discovery]   Tier 2 replacement found: ${album.name} by ${similar.name} (NEW artist!)`
+                                `[Discovery]   Tier 2 replacement found: ${album.name} by ${similar.name} (NEW artist!)`,
                             );
                             return {
                                 artistName: similar.name,
@@ -2422,12 +2474,12 @@ export class DiscoverWeeklyService {
         // NOTE: Same-artist fallback REMOVED - we enforce strict one-album-per-artist
         // If we can't find a new artist, go straight to library anchor
         logger.debug(
-            `[Discovery]   No new artists found, using library anchor (diversity enforced)`
+            `[Discovery]   No new artists found, using library anchor (diversity enforced)`,
         );
 
         // Tier 3: Use track from user's library as anchor (related to discovery seeds)
         logger.debug(
-            `[Discovery]   Tier 3: Selecting anchor track from user's library (seed artists)`
+            `[Discovery]   Tier 3: Selecting anchor track from user's library (seed artists)`,
         );
         try {
             // Get a random album from seed artists that user already owns
@@ -2456,7 +2508,7 @@ export class DiscoverWeeklyService {
                     !attemptedMbids.has(ownedAlbum.rgMbid)
                 ) {
                     logger.debug(
-                        `[Discovery]   Tier 3 anchor found: ${ownedAlbum.artist.name} - ${ownedAlbum.title} (from library)`
+                        `[Discovery]   Tier 3 anchor found: ${ownedAlbum.artist.name} - ${ownedAlbum.title} (from library)`,
                     );
                     return {
                         artistName: ownedAlbum.artist.name,
@@ -2470,7 +2522,7 @@ export class DiscoverWeeklyService {
             }
         } catch (e) {
             logger.debug(
-                `[Discovery]   Tier 3 search failed: ${(e as Error).message}`
+                `[Discovery]   Tier 3 search failed: ${(e as Error).message}`,
             );
         }
 
@@ -2488,7 +2540,7 @@ export class DiscoverWeeklyService {
         seeds: SeedArtist[],
         similarCache: Map<string, any[]>,
         targetCount: number,
-        userId: string
+        userId: string,
     ): Promise<RecommendedAlbum[]> {
         const recommendations: RecommendedAlbum[] = [];
         const seenArtists = new Set<string>();
@@ -2516,7 +2568,7 @@ export class DiscoverWeeklyService {
             }
         }
         logger.debug(
-            `   Total similar artists from all seeds: ${allSimilarArtists.length}`
+            `   Total similar artists from all seeds: ${allSimilarArtists.length}`,
         );
 
         logger.debug(`\n   === PASS 1: NEW Artists Only ===`);
@@ -2534,11 +2586,11 @@ export class DiscoverWeeklyService {
             try {
                 artistInLibrary = await this.isArtistInLibrary(
                     sim.name,
-                    sim.mbid
+                    sim.mbid,
                 );
             } catch (e: any) {
                 logger.error(
-                    `     isArtistInLibrary ERROR for ${sim.name}: ${e.message}`
+                    `     isArtistInLibrary ERROR for ${sim.name}: ${e.message}`,
                 );
             }
 
@@ -2552,7 +2604,7 @@ export class DiscoverWeeklyService {
             const album = await this.findValidAlbumForArtist(
                 sim,
                 userId,
-                seenAlbums
+                seenAlbums,
             );
             if (album) {
                 totalAlbumsChecked += album.albumsChecked;
@@ -2564,14 +2616,14 @@ export class DiscoverWeeklyService {
                 if (album.recommendation) {
                     recommendations.push(album.recommendation);
                     logger.debug(
-                        `    ✓ ADDED (NEW): ${sim.name} - ${album.recommendation.albumTitle}`
+                        `    ✓ ADDED (NEW): ${sim.name} - ${album.recommendation.albumTitle}`,
                     );
                 }
             }
         }
 
         logger.debug(
-            `   Pass 1 complete: ${recommendations.length}/${targetCount} from NEW artists`
+            `   Pass 1 complete: ${recommendations.length}/${targetCount} from NEW artists`,
         );
 
         if (
@@ -2582,7 +2634,7 @@ export class DiscoverWeeklyService {
             logger.debug(
                 `   Need ${targetCount - recommendations.length} more, have ${
                     existingArtistsForFallback.length
-                } existing artists to try`
+                } existing artists to try`,
             );
 
             for (const sim of existingArtistsForFallback) {
@@ -2592,7 +2644,7 @@ export class DiscoverWeeklyService {
                 const album = await this.findValidAlbumForArtist(
                     sim,
                     userId,
-                    seenAlbums
+                    seenAlbums,
                 );
                 if (album) {
                     totalAlbumsChecked += album.albumsChecked;
@@ -2605,14 +2657,14 @@ export class DiscoverWeeklyService {
                         recommendations.push(album.recommendation);
                         addedFromExistingArtists++;
                         logger.debug(
-                            `    ✓ ADDED (EXISTING): ${sim.name} - ${album.recommendation.albumTitle}`
+                            `    ✓ ADDED (EXISTING): ${sim.name} - ${album.recommendation.albumTitle}`,
                         );
                     }
                 }
             }
 
             logger.debug(
-                `   Pass 2 complete: Added ${addedFromExistingArtists} from existing artists`
+                `   Pass 2 complete: Added ${addedFromExistingArtists} from existing artists`,
             );
         }
 
@@ -2620,46 +2672,46 @@ export class DiscoverWeeklyService {
         logger.debug(`\n   === Recommendation Summary ===`);
         logger.debug(`   Similar artists checked: ${totalSimilarArtists}`);
         logger.debug(
-            `   Artists already in library (fallback pool): ${skippedArtistInLibrary}`
+            `   Artists already in library (fallback pool): ${skippedArtistInLibrary}`,
         );
         logger.debug(`   Albums checked: ${totalAlbumsChecked}`);
         logger.debug(`   Skipped (no MBID from MusicBrainz): ${skippedNoMbid}`);
         logger.debug(`   Skipped (album already owned): ${skippedOwned}`);
         logger.debug(
-            `   Skipped (excluded - recently recommended): ${skippedExcluded}`
+            `   Skipped (excluded - recently recommended): ${skippedExcluded}`,
         );
         logger.debug(`   Skipped (duplicate): ${skippedDuplicate}`);
         logger.debug(` Found ${recommendations.length} albums total`);
         logger.debug(
             `     - ${
                 recommendations.length - addedFromExistingArtists
-            } from NEW artists`
+            } from NEW artists`,
         );
         logger.debug(
-            `     - ${addedFromExistingArtists} from EXISTING artists (fallback)`
+            `     - ${addedFromExistingArtists} from EXISTING artists (fallback)`,
         );
 
         if (recommendations.length === 0 && totalSimilarArtists === 0) {
             logger.debug(
-                `   [WARN] No similar artists found! Check Last.fm API configuration.`
+                `   [WARN] No similar artists found! Check Last.fm API configuration.`,
             );
         } else if (recommendations.length === 0 && totalAlbumsChecked === 0) {
             logger.debug(
-                `   [WARN] No albums returned from Last.fm! Check getArtistTopAlbums.`
+                `   [WARN] No albums returned from Last.fm! Check getArtistTopAlbums.`,
             );
         } else if (
             recommendations.length === 0 &&
             skippedNoMbid === totalAlbumsChecked
         ) {
             logger.debug(
-                `   [WARN] All albums failed MusicBrainz lookup! Check searchAlbum.`
+                `   [WARN] All albums failed MusicBrainz lookup! Check searchAlbum.`,
             );
         } else if (
             recommendations.length === 0 &&
             skippedOwned >= totalAlbumsChecked
         ) {
             logger.debug(
-                `   [WARN] All albums already owned! Need more variety in similar artists.`
+                `   [WARN] All albums already owned! Need more variety in similar artists.`,
             );
         }
 
@@ -2673,7 +2725,7 @@ export class DiscoverWeeklyService {
     private async findValidAlbumForArtist(
         artist: any,
         userId: string,
-        seenAlbums: Set<string>
+        seenAlbums: Set<string>,
     ): Promise<{
         recommendation: RecommendedAlbum | null;
         albumsChecked: number;
@@ -2713,7 +2765,7 @@ export class DiscoverWeeklyService {
             const topAlbums = await lastFmService.getArtistTopAlbums(
                 artist.mbid || "",
                 artist.name,
-                10
+                10,
             );
 
             if (topAlbums.length === 0) {
@@ -2738,7 +2790,7 @@ export class DiscoverWeeklyService {
                 // Get MBID from MusicBrainz
                 const mbAlbum = await musicBrainzService.searchAlbum(
                     album.name,
-                    artist.name
+                    artist.name,
                 );
 
                 if (!mbAlbum) {
@@ -2755,7 +2807,10 @@ export class DiscoverWeeklyService {
 
                 // Skip if owned by MBID
                 try {
-                    const owned = await discoverySeeding.isAlbumOwned(mbAlbum.id, userId);
+                    const owned = await discoverySeeding.isAlbumOwned(
+                        mbAlbum.id,
+                        userId,
+                    );
                     if (owned) {
                         skippedOwned++;
                         continue;
@@ -2768,7 +2823,7 @@ export class DiscoverWeeklyService {
                 try {
                     const ownedByName = await this.isAlbumOwnedByName(
                         artist.name,
-                        album.name
+                        album.name,
                     );
                     if (ownedByName) {
                         skippedOwned++;
@@ -2782,7 +2837,7 @@ export class DiscoverWeeklyService {
                 try {
                     const excluded = await this.isAlbumExcluded(
                         mbAlbum.id,
-                        userId
+                        userId,
                     );
                     if (excluded) {
                         skippedExcluded++;
@@ -2810,7 +2865,7 @@ export class DiscoverWeeklyService {
             }
         } catch (error: any) {
             logger.warn(
-                `   Failed to get albums for ${artist.name}: ${error.message}`
+                `   Failed to get albums for ${artist.name}: ${error.message}`,
             );
         }
 
@@ -2867,7 +2922,7 @@ export class DiscoverWeeklyService {
                         if (genre && typeof genre === "string") {
                             genreCounts.set(
                                 genre.toLowerCase(),
-                                (genreCounts.get(genre.toLowerCase()) || 0) + 1
+                                (genreCounts.get(genre.toLowerCase()) || 0) + 1,
                             );
                         }
                     }
@@ -2883,7 +2938,7 @@ export class DiscoverWeeklyService {
                         if (genre && typeof genre === "string") {
                             genreCounts.set(
                                 genre.toLowerCase(),
-                                (genreCounts.get(genre.toLowerCase()) || 0) + 1
+                                (genreCounts.get(genre.toLowerCase()) || 0) + 1,
                             );
                         }
                     }
@@ -2908,10 +2963,10 @@ export class DiscoverWeeklyService {
     private async tagExplorationStrategy(
         userId: string,
         targetCount: number,
-        seenAlbums: Set<string>
+        seenAlbums: Set<string>,
     ): Promise<RecommendedAlbum[]> {
         logger.debug(
-            `\n[STRATEGY] Tag Exploration - finding studio albums by genre`
+            `\n[STRATEGY] Tag Exploration - finding studio albums by genre`,
         );
 
         const recommendations: RecommendedAlbum[] = [];
@@ -2951,7 +3006,7 @@ export class DiscoverWeeklyService {
                 // Use Last.fm's getTopAlbumsByTag
                 const tagAlbums = await lastFmService.getTopAlbumsByTag(
                     genre,
-                    30
+                    30,
                 );
 
                 for (const album of tagAlbums) {
@@ -2966,32 +3021,35 @@ export class DiscoverWeeklyService {
                     // Get MBID from MusicBrainz
                     const mbAlbum = await musicBrainzService.searchAlbum(
                         album.name,
-                        artistName
+                        artistName,
                     );
                     if (!mbAlbum || seenAlbums.has(mbAlbum.id)) continue;
 
                     // Check if owned by MBID
-                    const owned = await discoverySeeding.isAlbumOwned(mbAlbum.id, userId);
+                    const owned = await discoverySeeding.isAlbumOwned(
+                        mbAlbum.id,
+                        userId,
+                    );
                     if (owned) continue;
 
                     // Check if owned by name (catches MBID mismatches)
                     const ownedByName = await this.isAlbumOwnedByName(
                         artistName,
-                        album.name
+                        album.name,
                     );
                     if (ownedByName) continue;
 
                     // Check if album was recently recommended (exclusion period)
                     const excluded = await this.isAlbumExcluded(
                         mbAlbum.id,
-                        userId
+                        userId,
                     );
                     if (excluded) continue;
 
                     // Check if artist is in library (prefer new artists)
                     const inLibrary = await this.isArtistInLibrary(
                         artistName,
-                        undefined
+                        undefined,
                     );
                     if (inLibrary) continue;
 
@@ -3004,18 +3062,18 @@ export class DiscoverWeeklyService {
                         tier: "wildcard",
                     });
                     logger.debug(
-                        `   ✓ TAG: ${artistName} - ${album.name} (${genre})`
+                        `   ✓ TAG: ${artistName} - ${album.name} (${genre})`,
                     );
                 }
             } catch (error: any) {
                 logger.warn(
-                    `   Tag search failed for ${genre}: ${error.message}`
+                    `   Tag search failed for ${genre}: ${error.message}`,
                 );
             }
         }
 
         logger.debug(
-            `   Tag exploration found ${recommendations.length} albums`
+            `   Tag exploration found ${recommendations.length} albums`,
         );
         return recommendations;
     }
@@ -3034,7 +3092,7 @@ export class DiscoverWeeklyService {
         seeds: SeedArtist[],
         similarCache: Map<string, any[]>,
         targetCount: number,
-        userId: string
+        userId: string,
     ): Promise<RecommendedAlbum[]> {
         const seenAlbums = new Set<string>();
         const seenArtists = new Set<string>();
@@ -3043,26 +3101,26 @@ export class DiscoverWeeklyService {
         logger.debug(`\n[DISCOVERY] Tier-Based Selection`);
         logger.debug(`   Target: ${targetCount} albums`);
         logger.debug(
-            `   Distribution: 30% high, 40% medium, 20% explore, 10% wildcard`
+            `   Distribution: 30% high, 40% medium, 20% explore, 10% wildcard`,
         );
 
         // Calculate counts for each tier
         const wildcardCount = Math.max(
             1,
-            Math.ceil(targetCount * TIER_DISTRIBUTION.wildcard)
+            Math.ceil(targetCount * TIER_DISTRIBUTION.wildcard),
         );
         const similarArtistTarget = targetCount - wildcardCount;
 
         const highCount = Math.ceil(
-            similarArtistTarget * (TIER_DISTRIBUTION.high / 0.9)
+            similarArtistTarget * (TIER_DISTRIBUTION.high / 0.9),
         );
         const mediumCount = Math.ceil(
-            similarArtistTarget * (TIER_DISTRIBUTION.medium / 0.9)
+            similarArtistTarget * (TIER_DISTRIBUTION.medium / 0.9),
         );
         const exploreCount = similarArtistTarget - highCount - mediumCount;
 
         logger.debug(
-            `   Targets: ${highCount} high, ${mediumCount} medium, ${exploreCount} explore, ${wildcardCount} wildcard`
+            `   Targets: ${highCount} high, ${mediumCount} medium, ${exploreCount} explore, ${wildcardCount} wildcard`,
         );
 
         // Collect all similar artists from all seeds
@@ -3080,21 +3138,23 @@ export class DiscoverWeeklyService {
             typeof artist.match === "number" ? artist.match : 0;
 
         const byTier = {
-            high: allSimilarArtists.filter((a) => getArtistMatchScore(a) >= 0.7),
+            high: allSimilarArtists.filter(
+                (a) => getArtistMatchScore(a) >= 0.7,
+            ),
             medium: allSimilarArtists.filter(
                 (a) =>
                     getArtistMatchScore(a) >= 0.5 &&
-                    getArtistMatchScore(a) < 0.7
+                    getArtistMatchScore(a) < 0.7,
             ),
             explore: allSimilarArtists.filter(
                 (a) =>
                     getArtistMatchScore(a) >= 0.3 &&
-                    getArtistMatchScore(a) < 0.5
+                    getArtistMatchScore(a) < 0.5,
             ),
         };
 
         logger.debug(
-            `   Available: ${byTier.high.length} high, ${byTier.medium.length} medium, ${byTier.explore.length} explore`
+            `   Available: ${byTier.high.length} high, ${byTier.medium.length} medium, ${byTier.explore.length} explore`,
         );
 
         // Debug: Show top artists from each tier with their match scores
@@ -3103,7 +3163,7 @@ export class DiscoverWeeklyService {
                 `   HIGH tier sample: ${byTier.high
                     .slice(0, 3)
                     .map((a) => `${a.name}(${(a.match * 100).toFixed(0)}%)`)
-                    .join(", ")}`
+                    .join(", ")}`,
             );
         }
         if (byTier.medium.length > 0) {
@@ -3111,7 +3171,7 @@ export class DiscoverWeeklyService {
                 `   MEDIUM tier sample: ${byTier.medium
                     .slice(0, 3)
                     .map((a) => `${a.name}(${(a.match * 100).toFixed(0)}%)`)
-                    .join(", ")}`
+                    .join(", ")}`,
             );
         }
         if (byTier.explore.length > 0) {
@@ -3119,7 +3179,7 @@ export class DiscoverWeeklyService {
                 `   EXPLORE tier sample: ${byTier.explore
                     .slice(0, 3)
                     .map((a) => `${a.name}(${(a.match * 100).toFixed(0)}%)`)
-                    .join(", ")}`
+                    .join(", ")}`,
             );
         }
 
@@ -3135,17 +3195,18 @@ export class DiscoverWeeklyService {
         // for the exact semantics reproduced. selectFromTier itself stays serial
         // (early break + ordered seenArtists/seenAlbums mutation); only its
         // per-candidate membership check moves off the DB.
-        const artistLibraryMembership = await this.prefetchArtistLibraryMembership([
-            ...byTier.high,
-            ...byTier.medium,
-            ...byTier.explore,
-        ]);
+        const artistLibraryMembership =
+            await this.prefetchArtistLibraryMembership([
+                ...byTier.high,
+                ...byTier.medium,
+                ...byTier.explore,
+            ]);
 
         // Helper to select from a tier
         const selectFromTier = async (
             tier: any[],
             count: number,
-            tierName: "high" | "medium" | "explore"
+            tierName: "high" | "medium" | "explore",
         ): Promise<RecommendedAlbum[]> => {
             const selected: RecommendedAlbum[] = [];
 
@@ -3161,7 +3222,7 @@ export class DiscoverWeeklyService {
                     artistInLibrary = await this.isArtistInLibrary(
                         artist.name,
                         artist.mbid,
-                        artistLibraryMembership
+                        artistLibraryMembership,
                     );
                 } catch (e) {
                     // Continue on error
@@ -3176,7 +3237,7 @@ export class DiscoverWeeklyService {
                 const result = await this.findValidAlbumForArtist(
                     artist,
                     userId,
-                    seenAlbums
+                    seenAlbums,
                 );
 
                 if (result.recommendation) {
@@ -3188,7 +3249,7 @@ export class DiscoverWeeklyService {
                     logger.debug(
                         `    ✓ [${tierName.toUpperCase()}] ${artist.name} - ${
                             result.recommendation.albumTitle
-                        } (${(artistMatch * 100).toFixed(0)}%)`
+                        } (${(artistMatch * 100).toFixed(0)}%)`,
                     );
                 }
             }
@@ -3205,7 +3266,7 @@ export class DiscoverWeeklyService {
         const mediumPicks = await selectFromTier(
             byTier.medium,
             mediumCount,
-            "medium"
+            "medium",
         );
         recommendations.push(...mediumPicks);
 
@@ -3213,14 +3274,14 @@ export class DiscoverWeeklyService {
         const explorePicks = await selectFromTier(
             byTier.explore,
             exploreCount,
-            "explore"
+            "explore",
         );
         recommendations.push(...explorePicks);
 
         // If we didn't get enough from tiered selection, fill with any available NEW artists
         if (recommendations.length < similarArtistTarget) {
             logger.debug(
-                `\n   === Filling remaining slots (NEW artists only) ===`
+                `\n   === Filling remaining slots (NEW artists only) ===`,
             );
             const remaining = similarArtistTarget - recommendations.length;
             const allRemaining = [
@@ -3241,7 +3302,7 @@ export class DiscoverWeeklyService {
                     artistInLibrary = await this.isArtistInLibrary(
                         artist.name,
                         artist.mbid,
-                        artistLibraryMembership
+                        artistLibraryMembership,
                     );
                 } catch (e) {
                     // Continue on error
@@ -3255,22 +3316,21 @@ export class DiscoverWeeklyService {
                 const result = await this.findValidAlbumForArtist(
                     artist,
                     userId,
-                    seenAlbums
+                    seenAlbums,
                 );
                 if (result.recommendation) {
                     seenArtists.add(key);
                     const artistMatch = getArtistMatchScore(artist);
                     // Use the artist's actual match score for tier assignment
-                    result.recommendation.tier = getTierFromSimilarity(
-                        artistMatch
-                    );
+                    result.recommendation.tier =
+                        getTierFromSimilarity(artistMatch);
                     // Also update similarity to use actual match score
                     result.recommendation.similarity = artistMatch;
                     recommendations.push(result.recommendation);
                     logger.debug(
                         `    ✓ [FILL] ${artist.name} - ${
                             result.recommendation.albumTitle
-                        } (${(artistMatch * 100).toFixed(0)}%)`
+                        } (${(artistMatch * 100).toFixed(0)}%)`,
                     );
                 }
             }
@@ -3279,12 +3339,12 @@ export class DiscoverWeeklyService {
         // FALLBACK: If still not enough, allow existing artists with NEW albums
         if (recommendations.length < similarArtistTarget) {
             logger.debug(
-                `\n   === FALLBACK: Existing artists with NEW albums ===`
+                `\n   === FALLBACK: Existing artists with NEW albums ===`,
             );
             logger.debug(
                 `   Need ${
                     similarArtistTarget - recommendations.length
-                } more recommendations`
+                } more recommendations`,
             );
 
             const allRemaining = [
@@ -3303,20 +3363,19 @@ export class DiscoverWeeklyService {
                 const result = await this.findValidAlbumForArtist(
                     artist,
                     userId,
-                    seenAlbums
+                    seenAlbums,
                 );
                 if (result.recommendation) {
                     seenArtists.add(key);
                     const artistMatch = getArtistMatchScore(artist);
-                    result.recommendation.tier = getTierFromSimilarity(
-                        artistMatch
-                    );
+                    result.recommendation.tier =
+                        getTierFromSimilarity(artistMatch);
                     result.recommendation.similarity = artistMatch;
                     recommendations.push(result.recommendation);
                     logger.debug(
                         `    ✓ [EXISTING] ${artist.name} - ${
                             result.recommendation.albumTitle
-                        } (${(artistMatch * 100).toFixed(0)}%)`
+                        } (${(artistMatch * 100).toFixed(0)}%)`,
                     );
                 }
             }
@@ -3324,12 +3383,12 @@ export class DiscoverWeeklyService {
 
         // Add genre wildcards for variety
         logger.debug(
-            `\n   === Adding ${wildcardCount} WILDCARD picks from genre tags ===`
+            `\n   === Adding ${wildcardCount} WILDCARD picks from genre tags ===`,
         );
         const wildcards = await this.tagExplorationStrategy(
             userId,
             wildcardCount,
-            seenAlbums
+            seenAlbums,
         );
         for (const wc of wildcards) {
             wc.tier = "wildcard";
@@ -3347,7 +3406,7 @@ export class DiscoverWeeklyService {
 
         logger.debug(`\n[DISCOVERY] Final: ${recommendations.length} albums`);
         logger.debug(
-            `   High: ${tierCounts.high}, Medium: ${tierCounts.medium}, Explore: ${tierCounts.explore}, Wildcard: ${tierCounts.wildcard}`
+            `   High: ${tierCounts.high}, Medium: ${tierCounts.medium}, Explore: ${tierCounts.explore}, Wildcard: ${tierCounts.wildcard}`,
         );
 
         return recommendations.slice(0, targetCount);

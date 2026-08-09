@@ -11,7 +11,9 @@ export interface CreatePrismaClientOptions {
     databaseUrl?: string;
 }
 
-function schemaFromDatabaseUrl(databaseUrl: string | undefined): string | undefined {
+function schemaFromDatabaseUrl(
+    databaseUrl: string | undefined,
+): string | undefined {
     if (!databaseUrl) return undefined;
     try {
         return new URL(databaseUrl).searchParams.get("schema") || undefined;
@@ -43,13 +45,16 @@ export function createPrismaClient(
 
     const databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL;
     const schema = schemaFromDatabaseUrl(databaseUrl);
-    const adapter = new PrismaPg({
-        connectionString: databaseUrl,
-        ...(connectionLimit !== undefined ? { max: connectionLimit } : {}),
-        ...(poolTimeoutSeconds !== undefined ?
-            { connectionTimeoutMillis: poolTimeoutSeconds * 1000 }
-        :   {}),
-    }, schema ? { schema } : undefined);
+    const adapter = new PrismaPg(
+        {
+            connectionString: databaseUrl,
+            ...(connectionLimit !== undefined ? { max: connectionLimit } : {}),
+            ...(poolTimeoutSeconds !== undefined
+                ? { connectionTimeoutMillis: poolTimeoutSeconds * 1000 }
+                : {}),
+        },
+        schema ? { schema } : undefined,
+    );
 
     return new PrismaClient({
         adapter,

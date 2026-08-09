@@ -57,7 +57,7 @@ const mockLoggerError = logger.error as jest.Mock;
 function getHandler(path: string, method: "get" | "post", stackIndex = 0) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -167,7 +167,11 @@ describe("listenTogether routes runtime", () => {
         const createResPayload = createRes();
         await createGroupHandler(createReq, createResPayload);
 
-        expect(mockCreateGroup).toHaveBeenCalledWith("u1", "alice", createReq.body);
+        expect(mockCreateGroup).toHaveBeenCalledWith(
+            "u1",
+            "alice",
+            createReq.body,
+        );
         expect(createResPayload.statusCode).toBe(201);
         expect(createResPayload.body).toEqual(baseSnapshot);
 
@@ -181,7 +185,7 @@ describe("listenTogether routes runtime", () => {
         expect(mockJoinGroup).toHaveBeenCalledWith("u2", "bob", "abc123");
         expect(joinResPayload.statusCode).toBe(200);
         expect(joinResPayload.body).toEqual(
-            expect.objectContaining({ id: "group-1" })
+            expect.objectContaining({ id: "group-1" }),
         );
 
         const discoverReq = { user: { id: "u2" } } as any;
@@ -246,7 +250,7 @@ describe("listenTogether routes runtime", () => {
             expect.objectContaining({
                 error: "Invalid request",
                 details: expect.any(Array),
-            })
+            }),
         );
     });
 
@@ -265,13 +269,18 @@ describe("listenTogether routes runtime", () => {
             expect.objectContaining({
                 error: "Invalid request",
                 details: expect.any(Array),
-            })
+            }),
         );
     });
 
     it("maps GroupError codes to expected HTTP statuses", async () => {
         const cases: Array<{
-            code: "NOT_FOUND" | "NOT_MEMBER" | "NOT_ALLOWED" | "INVALID" | "CONFLICT";
+            code:
+                | "NOT_FOUND"
+                | "NOT_MEMBER"
+                | "NOT_ALLOWED"
+                | "INVALID"
+                | "CONFLICT";
             status: number;
         }> = [
             { code: "NOT_FOUND", status: 404 },
@@ -289,7 +298,7 @@ describe("listenTogether routes runtime", () => {
             const res = createRes();
 
             mockJoinGroup.mockRejectedValueOnce(
-                new GroupError(testCase.code, `${testCase.code} failure`)
+                new GroupError(testCase.code, `${testCase.code} failure`),
             );
 
             await joinGroupHandler(req, res);
@@ -314,7 +323,7 @@ describe("listenTogether routes runtime", () => {
         expect(res.body).toEqual({ error: "Internal server error" });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[ListenTogether] discover failed:",
-            error
+            error,
         );
     });
 });

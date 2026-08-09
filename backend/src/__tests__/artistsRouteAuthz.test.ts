@@ -12,13 +12,15 @@
 
 export {};
 
-const mockRequireAuthOrToken = jest.fn(async (req: any, res: any, next: any) => {
-    if (req.headers["x-test-user"]) {
-        req.user = { id: "user-1", username: "tester", role: "user" };
-        return next();
-    }
-    return res.status(401).json({ error: "Not authenticated" });
-});
+const mockRequireAuthOrToken = jest.fn(
+    async (req: any, res: any, next: any) => {
+        if (req.headers["x-test-user"]) {
+            req.user = { id: "user-1", username: "tester", role: "user" };
+            return next();
+        }
+        return res.status(401).json({ error: "Not authenticated" });
+    },
+);
 
 jest.mock("../middleware/auth", () => ({
     requireAuthOrToken: (req: any, res: any, next: any) =>

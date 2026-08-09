@@ -30,7 +30,7 @@ export class PodcastCacheService {
         this.coverCacheDir = buildCachePath(
             config.music.musicPath,
             "cover-cache",
-            "podcasts"
+            "podcasts",
         );
     }
 
@@ -60,7 +60,7 @@ export class PodcastCacheService {
             });
 
             logger.debug(
-                `[PODCAST] Found ${podcasts.length} podcasts needing cover sync`
+                `[PODCAST] Found ${podcasts.length} podcasts needing cover sync`,
             );
 
             for (const podcast of podcasts) {
@@ -69,7 +69,7 @@ export class PodcastCacheService {
                         const localPath = await this.downloadCover(
                             podcast.id,
                             podcast.imageUrl,
-                            "podcast"
+                            "podcast",
                         );
 
                         if (localPath) {
@@ -78,7 +78,9 @@ export class PodcastCacheService {
                                 data: { localCoverPath: localPath },
                             });
                             result.synced++;
-                            logger.debug(`  Synced cover for: ${podcast.title}`);
+                            logger.debug(
+                                `  Synced cover for: ${podcast.title}`,
+                            );
                         } else {
                             result.skipped++;
                         }
@@ -136,11 +138,11 @@ export class PodcastCacheService {
 
             // Filter to only episodes with unique covers
             const uniqueEpisodes = episodes.filter(
-                (ep) => ep.imageUrl !== ep.podcast.imageUrl
+                (ep) => ep.imageUrl !== ep.podcast.imageUrl,
             );
 
             logger.debug(
-                `[PODCAST] Found ${uniqueEpisodes.length} episodes with unique covers`
+                `[PODCAST] Found ${uniqueEpisodes.length} episodes with unique covers`,
             );
 
             for (const episode of uniqueEpisodes) {
@@ -149,7 +151,7 @@ export class PodcastCacheService {
                         const localPath = await this.downloadCover(
                             episode.id,
                             episode.imageUrl,
-                            "episode"
+                            "episode",
                         );
 
                         if (localPath) {
@@ -159,7 +161,7 @@ export class PodcastCacheService {
                             });
                             result.synced++;
                             logger.debug(
-                                `  Synced cover for episode: ${episode.title}`
+                                `  Synced cover for episode: ${episode.title}`,
                             );
                         } else {
                             result.skipped++;
@@ -191,7 +193,7 @@ export class PodcastCacheService {
     private async downloadCover(
         id: string,
         imageUrl: string,
-        type: "podcast" | "episode"
+        type: "podcast" | "episode",
     ): Promise<string | null> {
         try {
             // DNS-resolving SSRF guard: feed-supplied cover URLs are untrusted
@@ -201,7 +203,7 @@ export class PodcastCacheService {
             if (!safeUrl) {
                 logger.error(
                     `SSRF-blocked cover download for ${type} ${id}:`,
-                    imageUrl
+                    imageUrl,
                 );
                 return null;
             }
@@ -210,7 +212,7 @@ export class PodcastCacheService {
 
             if (!response.ok) {
                 throw new Error(
-                    `HTTP ${response.status}: ${response.statusText}`
+                    `HTTP ${response.status}: ${response.statusText}`,
                 );
             }
 
@@ -224,7 +226,7 @@ export class PodcastCacheService {
         } catch (error: any) {
             logger.error(
                 `Failed to download cover for ${type} ${id}:`,
-                error.message
+                error.message,
             );
             return null;
         }
@@ -258,7 +260,9 @@ export class PodcastCacheService {
             if (!validCoverPaths.has(file)) {
                 await fs.unlink(path.join(this.coverCacheDir, file));
                 deleted++;
-                logger.debug(`  [DELETE] Deleted orphaned podcast cover: ${file}`);
+                logger.debug(
+                    `  [DELETE] Deleted orphaned podcast cover: ${file}`,
+                );
             }
         }
 

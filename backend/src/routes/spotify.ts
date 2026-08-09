@@ -151,11 +151,11 @@ router.post("/preview", async (req, res) => {
             // Convert Deezer format to Spotify Import format
             const preview =
                 await spotifyImportService.generatePreviewFromDeezer(
-                    deezerPlaylist
+                    deezerPlaylist,
                 );
 
             logger.debug(
-                `[Playlist Import] Deezer preview generated: ${preview.summary.total} tracks, ${preview.summary.inLibrary} in library`
+                `[Playlist Import] Deezer preview generated: ${preview.summary.total} tracks, ${preview.summary.inLibrary} in library`,
             );
             res.json(preview);
         } else {
@@ -163,7 +163,7 @@ router.post("/preview", async (req, res) => {
             const preview = await spotifyImportService.generatePreview(url);
 
             logger.debug(
-                `[Spotify Import] Preview generated: ${preview.summary.total} tracks, ${preview.summary.inLibrary} in library`
+                `[Spotify Import] Preview generated: ${preview.summary.total} tracks, ${preview.summary.inLibrary} in library`,
             );
             res.json(preview);
         }
@@ -247,18 +247,19 @@ router.post("/import", async (req, res) => {
                     .status(404)
                     .json({ error: "Deezer playlist not found" });
             }
-            preview = await spotifyImportService.generatePreviewFromDeezer(
-                deezerPlaylist
-            );
+            preview =
+                await spotifyImportService.generatePreviewFromDeezer(
+                    deezerPlaylist,
+                );
         } else {
             preview = await spotifyImportService.generatePreview(effectiveUrl);
         }
 
         logger.debug(
-            `[Spotify Import] Starting import for user ${userId}: ${playlistName}`
+            `[Spotify Import] Starting import for user ${userId}: ${playlistName}`,
         );
         logger.debug(
-            `[Spotify Import] Resolution-only import: ignoring ${albumMbidsToDownload.length} selected download album(s)`
+            `[Spotify Import] Resolution-only import: ignoring ${albumMbidsToDownload.length} selected download album(s)`,
         );
 
         const job = await spotifyImportService.startImport(
@@ -266,7 +267,7 @@ router.post("/import", async (req, res) => {
             spotifyPlaylistId,
             playlistName,
             [],
-            preview
+            preview,
         );
 
         res.json({

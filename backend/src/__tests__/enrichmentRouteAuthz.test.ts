@@ -104,7 +104,7 @@ jest.mock("../config", () => ({
 
 jest.mock("../utils/featureGate", () => ({
     sendFeatureDisabled: jest.fn((res: any) =>
-        res.status(404).json({ error: "feature disabled" })
+        res.status(404).json({ error: "feature disabled" }),
     ),
     createFeatureDisabledHandler: jest.fn(),
 }));

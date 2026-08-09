@@ -45,7 +45,7 @@ function rgbToHex(r: number, g: number, b: number): string {
  * Extract dominant colors from an image buffer using sharp
  */
 export async function extractColorsFromImage(
-    imageBuffer: Buffer
+    imageBuffer: Buffer,
 ): Promise<ColorPalette> {
     try {
         // Resize image to 100x100 for performance
@@ -197,28 +197,28 @@ export async function extractColorsFromImage(
             vibrant: rgbToHex(
                 boostedVibrant.r,
                 boostedVibrant.g,
-                boostedVibrant.b
+                boostedVibrant.b,
             ),
             darkVibrant: rgbToHex(
                 darkVibrantColor.r,
                 darkVibrantColor.g,
-                darkVibrantColor.b
+                darkVibrantColor.b,
             ),
             lightVibrant: rgbToHex(
                 lightVibrantColor.r,
                 lightVibrantColor.g,
-                lightVibrantColor.b
+                lightVibrantColor.b,
             ),
             muted: rgbToHex(mutedColor.r, mutedColor.g, mutedColor.b),
             darkMuted: rgbToHex(
                 darkMutedColor.r,
                 darkMutedColor.g,
-                darkMutedColor.b
+                darkMutedColor.b,
             ),
             lightMuted: rgbToHex(
                 lightMutedColor.r,
                 lightMutedColor.g,
-                lightMutedColor.b
+                lightMutedColor.b,
             ),
         };
     } catch (error) {

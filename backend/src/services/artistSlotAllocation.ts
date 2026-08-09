@@ -188,7 +188,11 @@ export function allocateTracksWithArtistWeighting<T>(
 
     const result: T[] = [];
     const maxRounds = ceiling;
-    for (let round = 0; round < maxRounds && result.length < target; round += 1) {
+    for (
+        let round = 0;
+        round < maxRounds && result.length < target;
+        round += 1
+    ) {
         for (const artistPicks of picks) {
             if (round < artistPicks.length) {
                 result.push(artistPicks[round]);

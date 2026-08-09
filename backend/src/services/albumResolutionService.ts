@@ -46,10 +46,13 @@ export interface AlbumResolutionResult {
 export async function resolveAlbumForRemoteTrack(
     rawAlbumTitle: string,
     artistId: string,
-    provider: "tidal" | "youtube"
+    provider: "tidal" | "youtube",
 ): Promise<AlbumResolutionResult | null> {
     // 1. Guard generic titles
-    if (!rawAlbumTitle || GENERIC_ALBUM_TITLES.has(rawAlbumTitle.trim().toLowerCase())) {
+    if (
+        !rawAlbumTitle ||
+        GENERIC_ALBUM_TITLES.has(rawAlbumTitle.trim().toLowerCase())
+    ) {
         return null;
     }
 
@@ -72,7 +75,10 @@ export async function resolveAlbumForRemoteTrack(
     const strippedInput = stripAlbumEdition(trimmedTitle);
     const normalizedInput = normalizeAlbumTitle(strippedInput);
 
-    if (normalizedInput && normalizedInput !== normalizeAlbumTitle(trimmedTitle)) {
+    if (
+        normalizedInput &&
+        normalizedInput !== normalizeAlbumTitle(trimmedTitle)
+    ) {
         // The input had edition info stripped — search for the stripped form
         const strippedMatch = await prisma.album.findFirst({
             where: {
@@ -83,7 +89,11 @@ export async function resolveAlbumForRemoteTrack(
         });
 
         if (strippedMatch) {
-            return { id: strippedMatch.id, title: strippedMatch.title, created: false };
+            return {
+                id: strippedMatch.id,
+                title: strippedMatch.title,
+                created: false,
+            };
         }
     }
 
@@ -95,7 +105,9 @@ export async function resolveAlbumForRemoteTrack(
     });
 
     for (const candidate of candidateAlbums) {
-        const candidateStripped = normalizeAlbumTitle(stripAlbumEdition(candidate.title));
+        const candidateStripped = normalizeAlbumTitle(
+            stripAlbumEdition(candidate.title),
+        );
         if (candidateStripped === normalizedInput) {
             return { id: candidate.id, title: candidate.title, created: false };
         }
@@ -112,7 +124,7 @@ export async function resolveAlbumForRemoteTrack(
  */
 export function buildSyntheticRgMbid(
     artistId: string,
-    normalizedTitle: string
+    normalizedTitle: string,
 ): string {
     const hash = createHash("sha256")
         .update(`${artistId}|${normalizedTitle}`)
@@ -128,7 +140,7 @@ export function buildSyntheticRgMbid(
 async function createRemoteAlbum(
     title: string,
     artistId: string,
-    provider: "tidal" | "youtube"
+    provider: "tidal" | "youtube",
 ): Promise<AlbumResolutionResult> {
     const normalizedTitle = normalizeAlbumTitle(title);
     const rgMbid = buildSyntheticRgMbid(artistId, normalizedTitle);
@@ -148,16 +160,16 @@ async function createRemoteAlbum(
     });
     if (!resolved) {
         throw new Error(
-            `Failed to resolve remote album row after createMany for rgMbid=${rgMbid}`
+            `Failed to resolve remote album row after createMany for rgMbid=${rgMbid}`,
         );
     }
     if (insertResult.count > 0) {
         log.info(
-            `Resolved remote album "${title}" id=${resolved.id} for artistId=${artistId} (provider=${provider})`
+            `Resolved remote album "${title}" id=${resolved.id} for artistId=${artistId} (provider=${provider})`,
         );
     } else {
         log.debug(
-            `Album creation raced for "${title}" artistId=${artistId}; reusing id=${resolved.id}`
+            `Album creation raced for "${title}" artistId=${artistId}; reusing id=${resolved.id}`,
         );
     }
     return { id: resolved.id, title: resolved.title, created: false };

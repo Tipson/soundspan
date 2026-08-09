@@ -48,15 +48,17 @@ describe("TrackMappingService", () => {
         mockPrisma.trackMapping.findFirst.mockResolvedValue(null);
         // Default: createMapping transaction creates successfully
         mockPrisma.trackMapping.findMany.mockResolvedValue([]);
-        mockPrisma.trackMapping.create.mockImplementation(async (args: any) => ({
-            id: "auto-mapping-1",
-            ...args.data,
-            stale: false,
-            createdAt: new Date(),
-        }));
+        mockPrisma.trackMapping.create.mockImplementation(
+            async (args: any) => ({
+                id: "auto-mapping-1",
+                ...args.data,
+                stale: false,
+                createdAt: new Date(),
+            }),
+        );
         mockPrisma.$transaction.mockImplementation(
             async (callback: (tx: typeof mockPrisma) => unknown) =>
-                callback(mockPrisma)
+                callback(mockPrisma),
         );
     });
 
@@ -72,10 +74,15 @@ describe("TrackMappingService", () => {
                 quality: "LOSSLESS",
                 explicit: false,
             };
-            const expected = { id: "ct_1", ...tidalData, createdAt: new Date() };
+            const expected = {
+                id: "ct_1",
+                ...tidalData,
+                createdAt: new Date(),
+            };
             mockPrisma.trackTidal.upsert.mockResolvedValueOnce(expected);
 
-            const result = await trackMappingService.upsertTrackTidal(tidalData);
+            const result =
+                await trackMappingService.upsertTrackTidal(tidalData);
 
             expect(result).toEqual(expected);
             expect(mockPrisma.trackTidal.upsert).toHaveBeenCalledWith({
@@ -202,7 +209,7 @@ describe("TrackMappingService", () => {
 
         it("throws and logs on DB error", async () => {
             mockPrisma.trackTidal.upsert.mockRejectedValueOnce(
-                new Error("DB error")
+                new Error("DB error"),
             );
 
             await expect(
@@ -212,7 +219,7 @@ describe("TrackMappingService", () => {
                     artist: "A",
                     album: "Al",
                     duration: 100,
-                })
+                }),
             ).rejects.toThrow("DB error");
             expect(mockLogger.error).toHaveBeenCalled();
         });
@@ -313,7 +320,7 @@ describe("TrackMappingService", () => {
 
         it("throws and logs on DB error", async () => {
             mockPrisma.trackYtMusic.upsert.mockRejectedValueOnce(
-                new Error("DB error")
+                new Error("DB error"),
             );
 
             await expect(
@@ -323,7 +330,7 @@ describe("TrackMappingService", () => {
                     artist: "A",
                     album: "Al",
                     duration: 100,
-                })
+                }),
             ).rejects.toThrow("DB error");
         });
     });
@@ -430,10 +437,17 @@ describe("TrackMappingService", () => {
         it("computes created idempotently across repeated ensureRemoteTrack calls", async () => {
             // ensureRemoteTrack calls findUnique for existence, upsertTrackTidal calls findUnique for preserve check
             mockPrisma.trackTidal.findUnique
-                .mockResolvedValueOnce(null)   // 1st ensureRemoteTrack: existence check → new
-                .mockResolvedValueOnce(null)   // 1st upsertTrackTidal: preserve check → no existing
-                .mockResolvedValueOnce({ id: "tt-row-idempotent" })  // 2nd ensureRemoteTrack: existence check → exists
-                .mockResolvedValueOnce({ id: "tt-row-idempotent", tidalId: 998, title: "Same Song", artist: "Artist", album: "Album", duration: 200 }); // 2nd upsertTrackTidal: preserve check
+                .mockResolvedValueOnce(null) // 1st ensureRemoteTrack: existence check → new
+                .mockResolvedValueOnce(null) // 1st upsertTrackTidal: preserve check → no existing
+                .mockResolvedValueOnce({ id: "tt-row-idempotent" }) // 2nd ensureRemoteTrack: existence check → exists
+                .mockResolvedValueOnce({
+                    id: "tt-row-idempotent",
+                    tidalId: 998,
+                    title: "Same Song",
+                    artist: "Artist",
+                    album: "Album",
+                    duration: 200,
+                }); // 2nd upsertTrackTidal: preserve check
             mockPrisma.trackTidal.upsert.mockResolvedValue({
                 id: "tt-row-idempotent",
                 tidalId: 998,
@@ -483,8 +497,10 @@ describe("TrackMappingService", () => {
                     artist: "Artist",
                     album: "Album",
                     duration: 123,
-                })
-            ).rejects.toThrow("ensureRemoteTrack requires videoId to be omitted");
+                }),
+            ).rejects.toThrow(
+                "ensureRemoteTrack requires videoId to be omitted",
+            );
         });
 
         it("rejects payloads missing provider-linked identifiers", async () => {
@@ -495,7 +511,7 @@ describe("TrackMappingService", () => {
                     artist: "Artist",
                     album: "Album",
                     duration: 123,
-                })
+                }),
             ).rejects.toThrow("ensureRemoteTrack requires tidalId > 0");
 
             await expect(
@@ -505,7 +521,7 @@ describe("TrackMappingService", () => {
                     artist: "Artist",
                     album: "Album",
                     duration: 123,
-                })
+                }),
             ).rejects.toThrow("ensureRemoteTrack requires non-empty videoId");
         });
 
@@ -518,7 +534,7 @@ describe("TrackMappingService", () => {
                     artist: "Artist",
                     album: "Album",
                     duration: 123,
-                })
+                }),
             ).rejects.toThrow("ensureRemoteTrack requires non-empty title");
         });
 
@@ -611,7 +627,7 @@ describe("TrackMappingService", () => {
             });
             // findFirst throws, simulating DB error during mapping check
             mockPrisma.trackMapping.findFirst.mockRejectedValueOnce(
-                new Error("DB connection lost")
+                new Error("DB connection lost"),
             );
 
             // ensureRemoteTrack should still succeed — ensureMapping error is swallowed
@@ -631,7 +647,7 @@ describe("TrackMappingService", () => {
             });
             expect(mockLogger.warn).toHaveBeenCalledWith(
                 expect.stringContaining("Failed to ensure TrackMapping"),
-                expect.any(Error)
+                expect.any(Error),
             );
         });
 
@@ -831,10 +847,8 @@ describe("TrackMappingService", () => {
                 trackMappingService.createMapping({
                     confidence: 0.9,
                     source: "manual",
-                })
-            ).rejects.toThrow(
-                "TrackMapping requires at least one linkage key"
-            );
+                }),
+            ).rejects.toThrow("TrackMapping requires at least one linkage key");
 
             expect(mockPrisma.$transaction).not.toHaveBeenCalled();
         });
@@ -922,7 +936,7 @@ describe("TrackMappingService", () => {
 
         it("returns empty array on DB error", async () => {
             mockPrisma.trackMapping.findMany.mockRejectedValueOnce(
-                new Error("DB error")
+                new Error("DB error"),
             );
 
             const result =
@@ -1031,7 +1045,7 @@ describe("TrackMappingService", () => {
 
         it("returns empty array on DB error", async () => {
             mockPrisma.track.findMany.mockRejectedValueOnce(
-                new Error("DB error")
+                new Error("DB error"),
             );
 
             const result =
@@ -1059,11 +1073,11 @@ describe("TrackMappingService", () => {
 
         it("throws on DB error", async () => {
             mockPrisma.trackMapping.update.mockRejectedValueOnce(
-                new Error("not found")
+                new Error("not found"),
             );
 
             await expect(
-                trackMappingService.markStale("nonexistent")
+                trackMappingService.markStale("nonexistent"),
             ).rejects.toThrow("not found");
         });
     });

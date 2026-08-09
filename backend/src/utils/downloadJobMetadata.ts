@@ -11,7 +11,7 @@ export interface ResolvedDownloadJobMetadata {
  * Resolve commonly used download-job metadata fields with existing fallback behavior.
  */
 export function resolveDownloadJobMetadata(
-    metadata: unknown
+    metadata: unknown,
 ): ResolvedDownloadJobMetadata {
     const resolvedMetadata = (metadata as any) || {};
     const artistName = resolvedMetadata?.artistName as string | undefined;

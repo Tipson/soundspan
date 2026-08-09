@@ -22,7 +22,9 @@ jest.mock("../deezer", () => ({
 
 jest.mock("../rateLimiter", () => ({
     rateLimiter: {
-        execute: jest.fn(async (_bucket: string, fn: () => Promise<unknown>) => fn()),
+        execute: jest.fn(async (_bucket: string, fn: () => Promise<unknown>) =>
+            fn(),
+        ),
     },
 }));
 
@@ -44,20 +46,25 @@ type SpotifyServiceTestHandle = {
     getAnonymousToken: () => Promise<string | null>;
     performTokenRefresh: () => Promise<string | null>;
     extractTracksFromApolloCache: (
-        html: string
+        html: string,
     ) => Array<{ trackId: string; albumName: string; albumId: string }>;
     scrapePlaylistPageForAlbums: (
-        playlistId: string
+        playlistId: string,
     ) => Promise<Map<string, { album: string; albumId: string }>>;
     scrapeTrackPagesForAlbums: (
-        tracks: Array<{ spotifyId: string; title: string; artist: string }>
+        tracks: Array<{ spotifyId: string; title: string; artist: string }>,
     ) => Promise<Map<string, { album: string; albumId: string }>>;
     resolveAlbumsViaDeezer: (
-        tracks: Array<{ spotifyId: string; title: string; artist: string }>
+        tracks: Array<{ spotifyId: string; title: string; artist: string }>,
     ) => Promise<Map<string, { album: string; albumId: string }>>;
-    parseEmbedTrackRows: (playlistId: string, html: string) => SpotifyPlaylist | null;
+    parseEmbedTrackRows: (
+        playlistId: string,
+        html: string,
+    ) => SpotifyPlaylist | null;
     parseDurationLabelToMs: (label: string) => number;
-    fetchPlaylistViaEmbedHtml: (playlistId: string) => Promise<SpotifyPlaylist | null>;
+    fetchPlaylistViaEmbedHtml: (
+        playlistId: string,
+    ) => Promise<SpotifyPlaylist | null>;
 };
 
 function getSvc(): SpotifyServiceTestHandle {
@@ -76,7 +83,9 @@ describe("spotifyService branch coverage", () => {
 
     it("clears refresh promise when a shared token refresh rejects", async () => {
         const svc = getSvc();
-        jest.spyOn(svc, "performTokenRefresh").mockRejectedValueOnce(new Error("refresh boom"));
+        jest.spyOn(svc, "performTokenRefresh").mockRejectedValueOnce(
+            new Error("refresh boom"),
+        );
 
         await expect(svc.getAnonymousToken()).rejects.toThrow("refresh boom");
         expect(svc.tokenRefreshPromise).toBeNull();
@@ -91,28 +100,36 @@ describe("spotifyService branch coverage", () => {
         const token = await svc.performTokenRefresh();
 
         expect(token).toBeNull();
-        expect(mockLoggerDebug).toHaveBeenCalledWith("Spotify: Token endpoint failed (429)");
-        expect(mockLoggerDebug).toHaveBeenCalledWith("Spotify: Token endpoint failed (503)");
+        expect(mockLoggerDebug).toHaveBeenCalledWith(
+            "Spotify: Token endpoint failed (429)",
+        );
+        expect(mockLoggerDebug).toHaveBeenCalledWith(
+            "Spotify: Token endpoint failed (503)",
+        );
         expect(mockLoggerWarn).toHaveBeenCalled();
     });
 
     it("parses play.spotify.com and querystring URL formats", () => {
         expect(
-            spotifyService.parseUrl("https://play.spotify.com/playlist/37i9dQZF1DX4dyzvuaRJ0n?si=abc")
+            spotifyService.parseUrl(
+                "https://play.spotify.com/playlist/37i9dQZF1DX4dyzvuaRJ0n?si=abc",
+            ),
         ).toEqual({
             type: "playlist",
             id: "37i9dQZF1DX4dyzvuaRJ0n",
         });
 
         expect(
-            spotifyService.parseUrl("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC?utm_source=test")
+            spotifyService.parseUrl(
+                "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC?utm_source=test",
+            ),
         ).toEqual({
             type: "track",
             id: "4uLU6hMCjMI75M1A2tKUQC",
         });
 
         expect(
-            spotifyService.parseUrl("spotify:playlist:37i9dQZF1DX4dyzvuaRJ0n")
+            spotifyService.parseUrl("spotify:playlist:37i9dQZF1DX4dyzvuaRJ0n"),
         ).toEqual({
             type: "playlist",
             id: "37i9dQZF1DX4dyzvuaRJ0n",
@@ -121,19 +138,23 @@ describe("spotifyService branch coverage", () => {
 
     it("handles malformed Spotify ids by extracting only alphanumeric prefix", () => {
         expect(
-            spotifyService.parseUrl("https://open.spotify.com/album/abc123___bad")
+            spotifyService.parseUrl(
+                "https://open.spotify.com/album/abc123___bad",
+            ),
         ).toEqual({ type: "album", id: "abc123" });
     });
 
     it("throws for track URLs passed into getPlaylist", async () => {
         await expect(
-            spotifyService.getPlaylist("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC")
+            spotifyService.getPlaylist(
+                "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC",
+            ),
         ).rejects.toThrow("Expected playlist URL, got track");
     });
 
     it("extracts Apollo cache tracks using album object id fallback", () => {
         const extracted = getSvc().extractTracksFromApolloCache(
-            `<script>window.__APOLLO_STATE__ = {"Track:":{"id":"track-id-fallback","albumOfTrack":{"name":"Album Obj","id":"album-id-only"}}}</script>`
+            `<script>window.__APOLLO_STATE__ = {"Track:":{"id":"track-id-fallback","albumOfTrack":{"name":"Album Obj","id":"album-id-only"}}}</script>`,
         );
 
         expect(extracted).toEqual([
@@ -178,14 +199,20 @@ describe("spotifyService branch coverage", () => {
             data: `<html><script id="__NEXT_DATA__" type="application/json">${nextData}</script></html>`,
         });
 
-        const albums = await getSvc().scrapePlaylistPageForAlbums("playlist-v2");
-        expect(albums.get("uid-track-1")).toEqual({ album: "Album V2", albumId: "album-v2" });
+        const albums =
+            await getSvc().scrapePlaylistPageForAlbums("playlist-v2");
+        expect(albums.get("uid-track-1")).toEqual({
+            album: "Album V2",
+            albumId: "album-v2",
+        });
     });
 
     it("handles track-page scraping branches for short og payloads and trackUnion data", async () => {
         const timeoutSpy = jest
             .spyOn(global, "setTimeout")
-            .mockImplementation(((handler: Parameters<typeof setTimeout>[0]) => {
+            .mockImplementation(((
+                handler: Parameters<typeof setTimeout>[0],
+            ) => {
                 if (typeof handler === "function") {
                     handler();
                 }
@@ -210,7 +237,9 @@ describe("spotifyService branch coverage", () => {
         });
 
         mockAxiosGet
-            .mockResolvedValueOnce({ data: `<meta property="og:description" content="Artist · Album A · Song A · 2024">` })
+            .mockResolvedValueOnce({
+                data: `<meta property="og:description" content="Artist · Album A · Song A · 2024">`,
+            })
             .mockResolvedValueOnce({
                 data: `<script id="__NEXT_DATA__" type="application/json">${nextData}</script>`,
             });
@@ -222,7 +251,10 @@ describe("spotifyService branch coverage", () => {
         ];
 
         const albums = await getSvc().scrapeTrackPagesForAlbums(tracks);
-        expect(albums.get("track-a")).toEqual({ album: "Album A", albumId: "" });
+        expect(albums.get("track-a")).toEqual({
+            album: "Album A",
+            albumId: "",
+        });
         expect(albums.get("track-b")).toEqual({
             album: "TrackUnion Album",
             albumId: "album-trackunion",
@@ -247,7 +279,9 @@ describe("spotifyService branch coverage", () => {
     it("logs non-Error failures during track-page scraping and keeps processing", async () => {
         const timeoutSpy = jest
             .spyOn(global, "setTimeout")
-            .mockImplementation(((handler: Parameters<typeof setTimeout>[0]) => {
+            .mockImplementation(((
+                handler: Parameters<typeof setTimeout>[0],
+            ) => {
                 if (typeof handler === "function") {
                     handler();
                 }
@@ -265,9 +299,12 @@ describe("spotifyService branch coverage", () => {
             { spotifyId: "track-pass", title: "Pass", artist: "Artist P" },
         ]);
 
-        expect(albums.get("track-pass")).toEqual({ album: "Album B", albumId: "" });
+        expect(albums.get("track-pass")).toEqual({
+            album: "Album B",
+            albumId: "",
+        });
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[Spotify Track Scraper] Failed for track track-fail: network-string-error"
+            "[Spotify Track Scraper] Failed for track track-fail: network-string-error",
         );
 
         timeoutSpy.mockRestore();
@@ -275,12 +312,16 @@ describe("spotifyService branch coverage", () => {
 
     it("skips duplicate Deezer ids and enforces 50-track resolution cap", async () => {
         const tracks = Array.from({ length: 52 }, (_, idx) => ({
-            spotifyId: idx === 1 ? "dup-id" : idx === 0 ? "dup-id" : `sp-${idx}`,
+            spotifyId:
+                idx === 1 ? "dup-id" : idx === 0 ? "dup-id" : `sp-${idx}`,
             title: `Track ${idx}`,
             artist: `Artist ${idx}`,
         }));
 
-        mockDeezerTrackAlbum.mockResolvedValue({ albumName: "Album X", albumId: 123 });
+        mockDeezerTrackAlbum.mockResolvedValue({
+            albumName: "Album X",
+            albumId: 123,
+        });
 
         const albums = await getSvc().resolveAlbumsViaDeezer(tracks);
 
@@ -293,7 +334,7 @@ describe("spotifyService branch coverage", () => {
     it("uses unknown metadata fallbacks when embed row metadata is absent", () => {
         const parsed = getSvc().parseEmbedTrackRows(
             "rows-no-metadata",
-            `<li data-testid="tracklist-row-0"><h3>Only Song</h3><h4>Only Artist</h4></li>`
+            `<li data-testid="tracklist-row-0"><h3>Only Song</h3><h4>Only Artist</h4></li>`,
         );
 
         expect(parsed).toEqual(
@@ -302,21 +343,21 @@ describe("spotifyService branch coverage", () => {
                 owner: "Unknown",
                 imageUrl: null,
                 tracks: [expect.objectContaining({ durationMs: 0 })],
-            })
+            }),
         );
     });
 
     it("falls back to unknown playlist/owner when metadata strips to empty text", () => {
         const parsed = getSvc().parseEmbedTrackRows(
             "rows-empty-metadata",
-            `<span>&nbsp;</span><span>·</span><span>&nbsp;</span><li data-testid="tracklist-row-0"><h3>Song</h3><h4>Artist</h4></li>`
+            `<span>&nbsp;</span><span>·</span><span>&nbsp;</span><li data-testid="tracklist-row-0"><h3>Song</h3><h4>Artist</h4></li>`,
         );
 
         expect(parsed).toEqual(
             expect.objectContaining({
                 name: "Unknown Playlist",
                 owner: "Unknown",
-            })
+            }),
         );
     });
 
@@ -355,9 +396,13 @@ describe("spotifyService branch coverage", () => {
 
     it("maps search retry response with owner/image/trackCount defaults", async () => {
         mockAxiosGet
-            .mockResolvedValueOnce(makeTokenResponse("token-old-retry-defaults"))
+            .mockResolvedValueOnce(
+                makeTokenResponse("token-old-retry-defaults"),
+            )
             .mockRejectedValueOnce({ response: { status: 401 } })
-            .mockResolvedValueOnce(makeTokenResponse("token-new-retry-defaults"))
+            .mockResolvedValueOnce(
+                makeTokenResponse("token-new-retry-defaults"),
+            )
             .mockResolvedValueOnce({
                 data: {
                     playlists: {
@@ -375,7 +420,10 @@ describe("spotifyService branch coverage", () => {
                 },
             });
 
-        const results = await spotifyService.searchPlaylists("retry-defaults", 2);
+        const results = await spotifyService.searchPlaylists(
+            "retry-defaults",
+            2,
+        );
         expect(results).toEqual([
             {
                 id: "retry-defaults",
@@ -421,7 +469,10 @@ describe("spotifyService branch coverage", () => {
                 },
             });
 
-        const categoryPlaylists = await spotifyService.getCategoryPlaylists("cat", 5);
+        const categoryPlaylists = await spotifyService.getCategoryPlaylists(
+            "cat",
+            5,
+        );
         const categories = await spotifyService.getCategories(5);
 
         expect(categoryPlaylists).toEqual([
@@ -434,7 +485,9 @@ describe("spotifyService branch coverage", () => {
                 trackCount: 0,
             },
         ]);
-        expect(categories).toEqual([{ id: "cat-1", name: "Category One", imageUrl: null }]);
+        expect(categories).toEqual([
+            { id: "cat-1", name: "Category One", imageUrl: null },
+        ]);
     });
 
     it("maps API playlist defaults for sparse payload fields", async () => {
@@ -472,7 +525,9 @@ describe("spotifyService branch coverage", () => {
                 },
             })
             .mockResolvedValueOnce({ data: "<html></html>" })
-            .mockResolvedValueOnce({ data: "<html><meta property=\"og:description\" content=\"x · Unknown Album · y\"></html>" });
+            .mockResolvedValueOnce({
+                data: '<html><meta property="og:description" content="x · Unknown Album · y"></html>',
+            });
 
         mockDeezerTrackAlbum.mockResolvedValueOnce({
             albumName: "Recovered Via Deezer",
@@ -497,7 +552,7 @@ describe("spotifyService branch coverage", () => {
                 coverUrl: null,
                 album: "Recovered Via Deezer",
                 albumId: "deezer:7",
-            })
+            }),
         );
     });
 
@@ -516,7 +571,8 @@ describe("spotifyService branch coverage", () => {
             `,
         });
 
-        const playlist = await getSvc().fetchPlaylistViaEmbedHtml("embed-entities");
+        const playlist =
+            await getSvc().fetchPlaylistViaEmbedHtml("embed-entities");
 
         expect(playlist).toEqual({
             id: "embed-entities",
@@ -546,7 +602,8 @@ describe("spotifyService branch coverage", () => {
             `,
         });
 
-        const playlist = await getSvc().fetchPlaylistViaEmbedHtml("embed-invalid-rows");
+        const playlist =
+            await getSvc().fetchPlaylistViaEmbedHtml("embed-invalid-rows");
         expect(playlist).toBeNull();
     });
 
@@ -610,17 +667,22 @@ describe("spotifyService branch coverage", () => {
             `,
         });
 
-        const playlist = await getSvc().fetchPlaylistViaEmbedHtml("embed-empty-fields");
+        const playlist =
+            await getSvc().fetchPlaylistViaEmbedHtml("embed-empty-fields");
         expect(playlist).toBeNull();
     });
 
     it("returns null when embed fetch throws a network error", async () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("socket hang up"));
 
-        const playlist = await getSvc().fetchPlaylistViaEmbedHtml("embed-network-fail");
+        const playlist =
+            await getSvc().fetchPlaylistViaEmbedHtml("embed-network-fail");
 
         expect(playlist).toBeNull();
-        expect(mockLoggerError).toHaveBeenCalledWith("Spotify embed HTML error:", "socket hang up");
+        expect(mockLoggerError).toHaveBeenCalledWith(
+            "Spotify embed HTML error:",
+            "socket hang up",
+        );
     });
 
     it("returns [] for categories and category playlists on API failures", async () => {
@@ -629,7 +691,10 @@ describe("spotifyService branch coverage", () => {
             .mockRejectedValueOnce(new Error("category playlist fail"))
             .mockRejectedValueOnce(new Error("categories fail"));
 
-        const categoryPlaylists = await spotifyService.getCategoryPlaylists("focus", 3);
+        const categoryPlaylists = await spotifyService.getCategoryPlaylists(
+            "focus",
+            3,
+        );
         const categories = await spotifyService.getCategories(3);
 
         expect(categoryPlaylists).toEqual([]);

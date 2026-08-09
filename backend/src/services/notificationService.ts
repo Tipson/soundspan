@@ -35,7 +35,7 @@ class NotificationService {
         });
 
         logger.debug(
-            `[NOTIFICATION] Created: ${type} - ${title} for user ${userId}`
+            `[NOTIFICATION] Created: ${type} - ${title} for user ${userId}`,
         );
         return notification;
     }
@@ -124,7 +124,7 @@ class NotificationService {
 
         if (result.count > 0) {
             logger.debug(
-                `[NOTIFICATION] Cleaned up ${result.count} old notifications`
+                `[NOTIFICATION] Cleaned up ${result.count} old notifications`,
             );
         }
         return result;
@@ -139,7 +139,7 @@ class NotificationService {
         userId: string,
         subject: string,
         albumId?: string,
-        artistId?: string
+        artistId?: string,
     ) {
         return this.create({
             userId,
@@ -156,7 +156,7 @@ class NotificationService {
     async notifyDownloadFailed(
         userId: string,
         subject: string,
-        error?: string
+        error?: string,
     ) {
         return this.create({
             userId,
@@ -176,7 +176,7 @@ class NotificationService {
         userId: string,
         playlistName: string,
         playlistId: string,
-        trackCount: number
+        trackCount: number,
     ) {
         return this.create({
             userId,
@@ -195,7 +195,7 @@ class NotificationService {
         playlistName: string,
         playlistId: string,
         matchedTracks: number,
-        totalTracks: number
+        totalTracks: number,
     ) {
         const message = `"${playlistName}" imported with ${matchedTracks} of ${totalTracks} tracks`;
 

@@ -47,7 +47,12 @@ export const CURATED_VIBE_MIXES: readonly CuratedVibeMixDefinition[] = [
                 { AND: [{ valence: { lte: 0.3 } }, { arousal: { lte: 0.4 } }] },
                 {
                     lastfmTags: {
-                        hasSome: ["sad", "melancholic", "heartbreak", "emotional"],
+                        hasSome: [
+                            "sad",
+                            "melancholic",
+                            "heartbreak",
+                            "emotional",
+                        ],
                     },
                 },
             ],
@@ -70,7 +75,12 @@ export const CURATED_VIBE_MIXES: readonly CuratedVibeMixDefinition[] = [
                 },
                 {
                     lastfmTags: {
-                        hasSome: ["empowering", "confident", "uplifting", "anthemic"],
+                        hasSome: [
+                            "empowering",
+                            "confident",
+                            "uplifting",
+                            "anthemic",
+                        ],
                     },
                 },
             ],
@@ -212,7 +222,12 @@ export const CURATED_VIBE_MIXES: readonly CuratedVibeMixDefinition[] = [
                 },
                 {
                     lastfmTags: {
-                        hasSome: ["emotional", "heartbreak", "feelings", "vulnerable"],
+                        hasSome: [
+                            "emotional",
+                            "heartbreak",
+                            "feelings",
+                            "vulnerable",
+                        ],
                     },
                 },
             ],
@@ -254,7 +269,12 @@ export const CURATED_VIBE_MIXES: readonly CuratedVibeMixDefinition[] = [
                 },
                 {
                     lastfmTags: {
-                        hasSome: ["dreamy", "aesthetic", "cinematic", "romantic"],
+                        hasSome: [
+                            "dreamy",
+                            "aesthetic",
+                            "cinematic",
+                            "romantic",
+                        ],
                     },
                 },
             ],
@@ -298,5 +318,5 @@ export const CURATED_VIBE_MIXES: readonly CuratedVibeMixDefinition[] = [
 export const CURATED_VIBE_MIXES_BY_TYPE: Readonly<
     Record<string, CuratedVibeMixDefinition>
 > = Object.fromEntries(
-    CURATED_VIBE_MIXES.map((definition) => [definition.type, definition])
+    CURATED_VIBE_MIXES.map((definition) => [definition.type, definition]),
 );

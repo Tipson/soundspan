@@ -59,18 +59,64 @@ const mockPrisma = {
         count: jest.fn(),
     },
     // Stubs required by library.ts imports even though not used in these tests
-    track: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn(), delete: jest.fn(), deleteMany: jest.fn() },
+    track: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
+        delete: jest.fn(),
+        deleteMany: jest.fn(),
+    },
     trackTidal: { findUnique: jest.fn(), upsert: jest.fn() },
     trackYtMusic: { findUnique: jest.fn(), upsert: jest.fn() },
-    likedTrack: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn(), upsert: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
-    dislikedEntity: { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
-    play: { findFirst: jest.fn(), create: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() },
+    likedTrack: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
+        upsert: jest.fn(),
+        createMany: jest.fn(),
+        deleteMany: jest.fn(),
+    },
+    dislikedEntity: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        upsert: jest.fn(),
+        createMany: jest.fn(),
+        deleteMany: jest.fn(),
+    },
+    play: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        findMany: jest.fn(),
+        groupBy: jest.fn(),
+    },
     userSettings: { findUnique: jest.fn() },
-    artist: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn(), updateMany: jest.fn(), update: jest.fn(), deleteMany: jest.fn(), delete: jest.fn() },
-    album: { findMany: jest.fn(), groupBy: jest.fn(), count: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), delete: jest.fn(), update: jest.fn() },
+    artist: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        count: jest.fn(),
+        updateMany: jest.fn(),
+        update: jest.fn(),
+        deleteMany: jest.fn(),
+        delete: jest.fn(),
+    },
+    album: {
+        findMany: jest.fn(),
+        groupBy: jest.fn(),
+        count: jest.fn(),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        delete: jest.fn(),
+        update: jest.fn(),
+    },
     audiobookProgress: { findMany: jest.fn() },
     podcastProgress: { findMany: jest.fn() },
-    ownedAlbum: { groupBy: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), deleteMany: jest.fn() },
+    ownedAlbum: {
+        groupBy: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        deleteMany: jest.fn(),
+    },
     genre: { findMany: jest.fn() },
     similarArtist: { findMany: jest.fn(), deleteMany: jest.fn() },
     $transaction: jest.fn(),
@@ -105,15 +151,37 @@ jest.mock("../../config", () => ({
 
 // ── Service stubs (not exercised in remote-pref tests) ──────────
 
-jest.mock("../../workers/queues", () => ({ scanQueue: { add: jest.fn(), getJob: jest.fn() } }));
-jest.mock("../../workers/organizeSingles", () => ({ organizeSingles: jest.fn() }));
-jest.mock("../../services/lastfm", () => ({ lastFmService: { getArtistTopTracks: jest.fn(), getSimilarArtists: jest.fn() } }));
+jest.mock("../../workers/queues", () => ({
+    scanQueue: { add: jest.fn(), getJob: jest.fn() },
+}));
+jest.mock("../../workers/organizeSingles", () => ({
+    organizeSingles: jest.fn(),
+}));
+jest.mock("../../services/lastfm", () => ({
+    lastFmService: {
+        getArtistTopTracks: jest.fn(),
+        getSimilarArtists: jest.fn(),
+    },
+}));
 jest.mock("../../services/fanart", () => ({ fanartService: {} }));
-jest.mock("../../services/deezer", () => ({ deezerService: { getAlbumCover: jest.fn(), getArtistImage: jest.fn() } }));
-jest.mock("../../services/imageProvider", () => ({ imageProviderService: { getAlbumCover: jest.fn() } }));
-jest.mock("../../services/musicbrainz", () => ({ musicBrainzService: { searchArtist: jest.fn(), getReleaseGroups: jest.fn() } }));
-jest.mock("../../services/coverArt", () => ({ coverArtService: { getCoverArt: jest.fn(), clearNotFoundCache: jest.fn() } }));
-jest.mock("../../utils/systemSettings", () => ({ getSystemSettings: jest.fn() }));
+jest.mock("../../services/deezer", () => ({
+    deezerService: { getAlbumCover: jest.fn(), getArtistImage: jest.fn() },
+}));
+jest.mock("../../services/imageProvider", () => ({
+    imageProviderService: { getAlbumCover: jest.fn() },
+}));
+jest.mock("../../services/musicbrainz", () => ({
+    musicBrainzService: {
+        searchArtist: jest.fn(),
+        getReleaseGroups: jest.fn(),
+    },
+}));
+jest.mock("../../services/coverArt", () => ({
+    coverArtService: { getCoverArt: jest.fn(), clearNotFoundCache: jest.fn() },
+}));
+jest.mock("../../utils/systemSettings", () => ({
+    getSystemSettings: jest.fn(),
+}));
 jest.mock("../../services/audioStreaming", () => ({
     AudioStreamingService: jest.fn().mockImplementation(() => ({
         getStreamFilePath: jest.fn(),
@@ -122,7 +190,10 @@ jest.mock("../../services/audioStreaming", () => ({
     })),
 }));
 jest.mock("../../services/dataCache", () => ({
-    dataCacheService: { getArtistImagesBatch: jest.fn(), getArtistImage: jest.fn() },
+    dataCacheService: {
+        getArtistImagesBatch: jest.fn(),
+        getArtistImage: jest.fn(),
+    },
 }));
 jest.mock("../../services/artistCountsService", () => ({
     backfillAllArtistCounts: jest.fn(),
@@ -149,8 +220,12 @@ jest.mock("../../utils/shuffle", () => ({
 }));
 jest.mock("../../utils/colorExtractor", () => ({
     extractColorsFromImage: jest.fn(async () => ({
-        vibrant: "#000", darkVibrant: "#000", lightVibrant: "#000",
-        muted: "#000", darkMuted: "#000", lightMuted: "#000",
+        vibrant: "#000",
+        darkVibrant: "#000",
+        lightVibrant: "#000",
+        muted: "#000",
+        darkMuted: "#000",
+        lightMuted: "#000",
     })),
 }));
 jest.mock("../../services/imageProxy", () => ({
@@ -163,7 +238,9 @@ jest.mock("../../services/imageStorage", () => ({
 jest.mock("../../services/lidarr", () => ({
     lidarrService: { deleteArtist: jest.fn() },
 }));
-jest.mock("music-metadata", () => ({ parseFile: jest.fn() }), { virtual: true });
+jest.mock("music-metadata", () => ({ parseFile: jest.fn() }), {
+    virtual: true,
+});
 jest.mock("../../services/trackMappingService", () => ({
     trackMappingService: {
         ensureRemoteTrack: jest.fn(),
@@ -171,16 +248,18 @@ jest.mock("../../services/trackMappingService", () => ({
 }));
 
 jest.mock("../../services/remoteTrackMetadataResolver", () => ({
-    resolveRemoteTrackMetadataForRequest: jest.fn(async ({ metadata }: any) => ({
-        title: metadata.title ?? "Unknown",
-        artist: metadata.artist ?? "Unknown",
-        album: metadata.album ?? "Unknown",
-        duration: metadata.duration ?? 180,
-        thumbnailUrl: metadata.thumbnailUrl,
-        isrc: metadata.isrc,
-        explicit: metadata.explicit,
-        quality: metadata.quality,
-    })),
+    resolveRemoteTrackMetadataForRequest: jest.fn(
+        async ({ metadata }: any) => ({
+            title: metadata.title ?? "Unknown",
+            artist: metadata.artist ?? "Unknown",
+            album: metadata.album ?? "Unknown",
+            duration: metadata.duration ?? 180,
+            thumbnailUrl: metadata.thumbnailUrl,
+            isrc: metadata.isrc,
+            explicit: metadata.explicit,
+            quality: metadata.quality,
+        }),
+    ),
 }));
 
 // ── Router under test ────────────────────────────────────────────
@@ -189,16 +268,15 @@ import router from "../library";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 import { errorHandler } from "../../middleware/errorHandler";
 import { trackMappingService } from "../../services/trackMappingService";
-import {
-    resolveRemoteTrackMetadataForRequest,
-} from "../../services/remoteTrackMetadataResolver";
+import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";
 
 const app = createRouteTestApp("/api/library", router);
 // Mount the real errorHandler after the router, as index.ts does in
 // production: asyncHandler-migrated routes surface unexpected failures via
 // next(err) -> errorHandler instead of responding from an inline catch.
 app.use(errorHandler);
-const mockEnsureRemoteTrack = trackMappingService.ensureRemoteTrack as jest.Mock;
+const mockEnsureRemoteTrack =
+    trackMappingService.ensureRemoteTrack as jest.Mock;
 const mockResolveRemoteTrackMetadataForRequest =
     resolveRemoteTrackMetadataForRequest as jest.Mock;
 
@@ -212,8 +290,9 @@ describe("library remote track preference endpoints", () => {
             id: input.provider === "tidal" ? "tt-default" : "yt-default",
             created: false,
         }));
-        mockResolveRemoteTrackMetadataForRequest.mockReset().mockImplementation(
-            async ({ metadata }: any) => ({
+        mockResolveRemoteTrackMetadataForRequest
+            .mockReset()
+            .mockImplementation(async ({ metadata }: any) => ({
                 title: metadata.title ?? "Unknown",
                 artist: metadata.artist ?? "Unknown",
                 album: metadata.album ?? "Unknown",
@@ -222,8 +301,7 @@ describe("library remote track preference endpoints", () => {
                 isrc: metadata.isrc,
                 explicit: metadata.explicit,
                 quality: metadata.quality,
-            })
-        );
+            }));
     });
 
     // ── parseRemoteTrackId validation ────────────────────────────
@@ -263,16 +341,20 @@ describe("library remote track preference endpoints", () => {
             expect(res.body.signal).toBe("thumbs_up");
             expect(res.body.likedAt).toBeTruthy();
 
-            expect(mockPrisma.likedRemoteTrack.findUnique).toHaveBeenCalledWith({
-                where: {
-                    userId_trackYtMusicId: {
-                        userId: TEST_USER_ID,
-                        trackYtMusicId: "yt-row-1",
+            expect(mockPrisma.likedRemoteTrack.findUnique).toHaveBeenCalledWith(
+                {
+                    where: {
+                        userId_trackYtMusicId: {
+                            userId: TEST_USER_ID,
+                            trackYtMusicId: "yt-row-1",
+                        },
                     },
+                    select: { likedAt: true },
                 },
-                select: { likedAt: true },
-            });
-            expect(mockPrisma.remoteLikedTrack.findUnique).not.toHaveBeenCalled();
+            );
+            expect(
+                mockPrisma.remoteLikedTrack.findUnique,
+            ).not.toHaveBeenCalled();
         });
 
         it("returns preference for tidal: prefixed track", async () => {
@@ -291,20 +373,23 @@ describe("library remote track preference endpoints", () => {
             expect(res.body.state).toBe("neutral");
             expect(res.body.likedAt).toBeNull();
 
-            expect(mockPrisma.likedRemoteTrack.findUnique).toHaveBeenCalledWith({
-                where: {
-                    userId_trackTidalId: {
-                        userId: TEST_USER_ID,
-                        trackTidalId: "tidal-row-1",
+            expect(mockPrisma.likedRemoteTrack.findUnique).toHaveBeenCalledWith(
+                {
+                    where: {
+                        userId_trackTidalId: {
+                            userId: TEST_USER_ID,
+                            trackTidalId: "tidal-row-1",
+                        },
                     },
+                    select: { likedAt: true },
                 },
-                select: { likedAt: true },
-            });
+            );
         });
 
         it("requires authentication", async () => {
-            const res = await request(app)
-                .get("/api/library/remote-tracks/yt:abc/preference");
+            const res = await request(app).get(
+                "/api/library/remote-tracks/yt:abc/preference",
+            );
 
             expect(res.status).toBe(401);
         });
@@ -314,7 +399,7 @@ describe("library remote track preference endpoints", () => {
                 id: "yt-row-err",
             });
             mockPrisma.likedRemoteTrack.findUnique.mockRejectedValueOnce(
-                new Error("DB connection lost")
+                new Error("DB connection lost"),
             );
 
             const res = await request(app)
@@ -390,7 +475,7 @@ describe("library remote track preference endpoints", () => {
                     artist: "Rick Astley",
                     album: "Whenever You Need Somebody",
                     duration: 213,
-                })
+                }),
             );
             expect(mockPrisma.likedRemoteTrack.upsert).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -400,9 +485,8 @@ describe("library remote track preference endpoints", () => {
                             trackYtMusicId: "yt-row-1",
                         },
                     },
-                })
+                }),
             );
-
         });
 
         it("repairs placeholder metadata inline before liking a tidal track", async () => {
@@ -435,12 +519,14 @@ describe("library remote track preference endpoints", () => {
                 });
 
             expect(res.status).toBe(200);
-            expect(mockResolveRemoteTrackMetadataForRequest).toHaveBeenCalledWith(
+            expect(
+                mockResolveRemoteTrackMetadataForRequest,
+            ).toHaveBeenCalledWith(
                 expect.objectContaining({
                     provider: "tidal",
                     userId: TEST_USER_ID,
                     tidalId: 69778330,
-                })
+                }),
             );
             expect(mockEnsureRemoteTrack).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -452,7 +538,7 @@ describe("library remote track preference endpoints", () => {
                     duration: 428,
                     isrc: "USWB10800347",
                     explicit: false,
-                })
+                }),
             );
         });
 
@@ -467,14 +553,17 @@ describe("library remote track preference endpoints", () => {
             const res = await request(app)
                 .post("/api/library/remote-tracks/tidal:987654/preference")
                 .set(AUTH_HEADER, AUTH_VALUE)
-                .send({ signal: "thumbs_up", metadata: { title: "Song", artist: "Artist" } });
+                .send({
+                    signal: "thumbs_up",
+                    metadata: { title: "Song", artist: "Artist" },
+                });
 
             expect(res.status).toBe(200);
             expect(mockEnsureRemoteTrack).toHaveBeenCalledWith(
                 expect.objectContaining({
                     provider: "tidal",
                     tidalId: 987654,
-                })
+                }),
             );
             expect(mockPrisma.likedRemoteTrack.upsert).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -484,7 +573,7 @@ describe("library remote track preference endpoints", () => {
                             trackTidalId: "tidal-row-1",
                         },
                     },
-                })
+                }),
             );
         });
 
@@ -492,7 +581,9 @@ describe("library remote track preference endpoints", () => {
             mockPrisma.trackYtMusic.findUnique.mockResolvedValueOnce({
                 id: "yt-row-delete",
             });
-            mockPrisma.likedRemoteTrack.deleteMany.mockResolvedValueOnce({ count: 1 });
+            mockPrisma.likedRemoteTrack.deleteMany.mockResolvedValueOnce({
+                count: 1,
+            });
 
             const res = await request(app)
                 .post("/api/library/remote-tracks/yt:vid456/preference")
@@ -503,12 +594,14 @@ describe("library remote track preference endpoints", () => {
             // thumbs_down removes the like; resolveTrackPreference returns "clear" since both dates are null
             expect(res.body.signal).toBe("clear");
             expect(res.body.state).toBe("neutral");
-            expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith({
-                where: {
-                    userId: TEST_USER_ID,
-                    trackYtMusicId: "yt-row-delete",
+            expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith(
+                {
+                    where: {
+                        userId: TEST_USER_ID,
+                        trackYtMusicId: "yt-row-delete",
+                    },
                 },
-            });
+            );
         });
 
         it("deletes FK likes on clear signal", async () => {
@@ -522,7 +615,9 @@ describe("library remote track preference endpoints", () => {
             expect(res.status).toBe(200);
             expect(res.body.signal).toBe("clear");
             expect(res.body.state).toBe("neutral");
-            expect(mockPrisma.likedRemoteTrack.deleteMany).not.toHaveBeenCalled();
+            expect(
+                mockPrisma.likedRemoteTrack.deleteMany,
+            ).not.toHaveBeenCalled();
         });
 
         it("accepts numeric score as alias (positive → thumbs_up)", async () => {
@@ -542,7 +637,9 @@ describe("library remote track preference endpoints", () => {
             mockPrisma.trackYtMusic.findUnique.mockResolvedValueOnce({
                 id: "yt-row-neg",
             });
-            mockPrisma.likedRemoteTrack.deleteMany.mockResolvedValueOnce({ count: 1 });
+            mockPrisma.likedRemoteTrack.deleteMany.mockResolvedValueOnce({
+                count: 1,
+            });
 
             const res = await request(app)
                 .post("/api/library/remote-tracks/yt:vid-neg/preference")
@@ -551,12 +648,14 @@ describe("library remote track preference endpoints", () => {
 
             expect(res.status).toBe(200);
             expect(res.body.signal).toBe("clear");
-            expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith({
-                where: {
-                    userId: TEST_USER_ID,
-                    trackYtMusicId: "yt-row-neg",
+            expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith(
+                {
+                    where: {
+                        userId: TEST_USER_ID,
+                        trackYtMusicId: "yt-row-neg",
+                    },
                 },
-            });
+            );
         });
 
         it("requires authentication", async () => {
@@ -569,13 +668,16 @@ describe("library remote track preference endpoints", () => {
 
         it("returns 500 when prisma throws on upsert", async () => {
             mockPrisma.likedRemoteTrack.upsert.mockRejectedValueOnce(
-                new Error("unique constraint")
+                new Error("unique constraint"),
             );
 
             const res = await request(app)
                 .post("/api/library/remote-tracks/yt:vid-err/preference")
                 .set(AUTH_HEADER, AUTH_VALUE)
-                .send({ signal: "thumbs_up", metadata: { title: "T", artist: "A" } });
+                .send({
+                    signal: "thumbs_up",
+                    metadata: { title: "T", artist: "A" },
+                });
 
             expect(res.status).toBe(500);
         });
@@ -595,7 +697,7 @@ describe("library remote track preference endpoints", () => {
                     artist: "Unknown",
                     album: "Unknown",
                     duration: 180,
-                })
+                }),
             );
         });
     });

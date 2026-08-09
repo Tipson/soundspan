@@ -14,13 +14,13 @@ export function enableSlowQueryMonitoring() {
             logger.warn(
                 `  Slow query detected (${e.duration}ms):\n` +
                     `   Query: ${e.query}\n` +
-                    `   Params: ${e.params}`
+                    `   Params: ${e.params}`,
             );
         }
     });
 
     logger.debug(
-        `Slow query monitoring enabled (threshold: ${SLOW_QUERY_THRESHOLD_MS}ms)`
+        `Slow query monitoring enabled (threshold: ${SLOW_QUERY_THRESHOLD_MS}ms)`,
     );
 }
 

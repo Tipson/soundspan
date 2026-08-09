@@ -34,7 +34,7 @@ class FeatureDetectionService {
         this.lastCheck = now;
 
         logger.debug(
-            `[FEATURE-DETECTION] Features: musicCNN=${musicCNN}, vibeEmbeddings=${vibeEmbeddings}`
+            `[FEATURE-DETECTION] Features: musicCNN=${musicCNN}, vibeEmbeddings=${vibeEmbeddings}`,
         );
 
         return this.cache;
@@ -50,7 +50,10 @@ class FeatureDetectionService {
             const heartbeat = await redisClient.get("audio:worker:heartbeat");
             if (heartbeat) {
                 const timestamp = parseInt(heartbeat, 10);
-                if (!isNaN(timestamp) && Date.now() - timestamp < HEARTBEAT_TTL) {
+                if (
+                    !isNaN(timestamp) &&
+                    Date.now() - timestamp < HEARTBEAT_TTL
+                ) {
                     return true;
                 }
             }
@@ -76,7 +79,10 @@ class FeatureDetectionService {
             const heartbeat = await redisClient.get("clap:worker:heartbeat");
             if (heartbeat) {
                 const timestamp = parseInt(heartbeat, 10);
-                if (!isNaN(timestamp) && Date.now() - timestamp < HEARTBEAT_TTL) {
+                if (
+                    !isNaN(timestamp) &&
+                    Date.now() - timestamp < HEARTBEAT_TTL
+                ) {
                     return true;
                 }
             }

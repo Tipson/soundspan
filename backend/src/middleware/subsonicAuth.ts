@@ -42,7 +42,8 @@ export async function requireSubsonicAuth(
     next: NextFunction,
 ): Promise<void> {
     const format = getResponseFormat(req.query);
-    const callback = typeof req.query.callback === "string" ? req.query.callback : undefined;
+    const callback =
+        typeof req.query.callback === "string" ? req.query.callback : undefined;
 
     const username = typeof req.query.u === "string" ? req.query.u : "";
     const password = typeof req.query.p === "string" ? req.query.p : "";
@@ -124,7 +125,7 @@ export async function requireSubsonicAuth(
                         },
                     },
                 },
-            })
+            }),
         );
 
         if (!apiKeyRecord || !apiKeyRecord.user) {
@@ -154,7 +155,12 @@ export async function requireSubsonicAuth(
                 where: { id: apiKeyRecord.id },
                 data: { lastUsed: new Date() },
             })
-            .catch((err) => { logger.debug("Failed to update API key lastUsed (subsonic)", err); });
+            .catch((err) => {
+                logger.debug(
+                    "Failed to update API key lastUsed (subsonic)",
+                    err,
+                );
+            });
 
         req.user = {
             id: apiKeyRecord.user.id,
@@ -200,11 +206,19 @@ export async function requireSubsonicAuth(
             const expectedToken = createHash("md5")
                 .update(subsonicSecret + salt)
                 .digest("hex");
-            if (timingSafeCompare(expectedToken.toLowerCase(), token.toLowerCase())) {
+            if (
+                timingSafeCompare(
+                    expectedToken.toLowerCase(),
+                    token.toLowerCase(),
+                )
+            ) {
                 authenticated = true;
             }
         } catch (err) {
-            logger.debug("Subsonic token auth failed, trying password auth", err);
+            logger.debug(
+                "Subsonic token auth failed, trying password auth",
+                err,
+            );
         }
     }
 

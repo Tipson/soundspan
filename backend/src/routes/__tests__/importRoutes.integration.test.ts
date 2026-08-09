@@ -61,10 +61,13 @@ import { createRouteTestApp } from "./helpers/createRouteTestApp";
 const app = createRouteTestApp("/api/import", router);
 
 describe("import routes integration", () => {
-    const mockParseSourceUrl = playlistImportService.parseSourceUrl as jest.Mock;
+    const mockParseSourceUrl =
+        playlistImportService.parseSourceUrl as jest.Mock;
     const mockPreviewImport = playlistImportService.previewImport as jest.Mock;
-    const mockPreviewM3UImport = playlistImportService.previewM3UImport as jest.Mock;
-    const mockImportPlaylist = playlistImportService.importPlaylist as jest.Mock;
+    const mockPreviewM3UImport =
+        playlistImportService.previewM3UImport as jest.Mock;
+    const mockImportPlaylist =
+        playlistImportService.importPlaylist as jest.Mock;
     const mockCreateJob = importJobStore.createJob as jest.Mock;
     const mockGetJob = importJobStore.getJob as jest.Mock;
     const mockListJobsForUser = importJobStore.listJobsForUser as jest.Mock;
@@ -80,10 +83,14 @@ describe("import routes integration", () => {
     it("requires auth for POST /api/import/preview", async () => {
         const res = await request(app)
             .post("/api/import/preview")
-            .send({ url: "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk" });
+            .send({
+                url: "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk",
+            });
 
         expect(res.status).toBe(401);
-        expect(res.body).toEqual(expect.objectContaining({ error: expect.any(String) }));
+        expect(res.body).toEqual(
+            expect.objectContaining({ error: expect.any(String) }),
+        );
     });
 
     it("validates preview payload and returns 400 for invalid url", async () => {
@@ -96,7 +103,7 @@ describe("import routes integration", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: "Valid playlist URL is required",
-            })
+            }),
         );
         expect(mockPreviewImport).not.toHaveBeenCalled();
     });
@@ -142,7 +149,13 @@ describe("import routes integration", () => {
             requestedPlaylistName: "Roadtrip",
             status: "pending",
             progress: 0,
-            summary: { total: 0, local: 0, youtube: 0, tidal: 0, unresolved: 0 },
+            summary: {
+                total: 0,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
             resolvedTracks: null,
             createdPlaylistId: null,
             error: null,
@@ -167,7 +180,7 @@ describe("import routes integration", () => {
         });
         expect(mockFindActiveJobForSource).toHaveBeenCalledWith(
             "user-1",
-            "spotify:37i9dQZF1DX4JAvHpjipBk"
+            "spotify:37i9dQZF1DX4JAvHpjipBk",
         );
         expect(mockCreateJob).toHaveBeenCalledWith({
             userId: "user-1",
@@ -178,7 +191,13 @@ describe("import routes integration", () => {
             requestedPlaylistName: "Roadtrip",
             status: "pending",
             progress: 0,
-            summary: { total: 0, local: 0, youtube: 0, tidal: 0, unresolved: 0 },
+            summary: {
+                total: 0,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
         });
         expect(mockEnqueueImportJob).toHaveBeenCalledWith("job-new");
     });
@@ -320,7 +339,7 @@ describe("import routes integration", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: "Valid previewData is required",
-            })
+            }),
         );
         expect(mockImportPlaylist).not.toHaveBeenCalled();
     });
@@ -338,7 +357,13 @@ describe("import routes integration", () => {
                     // source is "local" but has no trackId — inconsistent
                 },
             ],
-            summary: { total: 1, local: 1, youtube: 0, tidal: 0, unresolved: 0 },
+            summary: {
+                total: 1,
+                local: 1,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
         };
 
         const res = await request(app)
@@ -363,7 +388,13 @@ describe("import routes integration", () => {
                     // missing trackYtMusicId
                 },
             ],
-            summary: { total: 1, local: 0, youtube: 1, tidal: 0, unresolved: 0 },
+            summary: {
+                total: 1,
+                local: 0,
+                youtube: 1,
+                tidal: 0,
+                unresolved: 0,
+            },
         };
 
         const res = await request(app)
@@ -377,7 +408,7 @@ describe("import routes integration", () => {
 
     it("returns 502 when sidecar fetch fails during preview", async () => {
         mockPreviewImport.mockRejectedValueOnce(
-            new Error("ECONNREFUSED: connect failed to ytmusic-streamer:8586")
+            new Error("ECONNREFUSED: connect failed to ytmusic-streamer:8586"),
         );
 
         const res = await request(app)
@@ -391,13 +422,15 @@ describe("import routes integration", () => {
 
     it("returns 400 when Tidal auth is required but missing during preview", async () => {
         mockPreviewImport.mockRejectedValueOnce(
-            new Error("Tidal import requires authentication")
+            new Error("Tidal import requires authentication"),
         );
 
         const res = await request(app)
             .post("/api/import/preview")
             .set(AUTH_HEADER, AUTH_VALUE)
-            .send({ url: "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000001" });
+            .send({
+                url: "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000001",
+            });
 
         expect(res.status).toBe(400);
     });
@@ -406,10 +439,29 @@ describe("import routes integration", () => {
         const m3uPreview = {
             playlistName: "Road Trip",
             resolved: [
-                { index: 0, artist: "Artist A", title: "Song A", source: "local", trackId: "track-1", confidence: 100 },
-                { index: 1, artist: "Artist B", title: "Song B", source: "unresolved", confidence: 0 },
+                {
+                    index: 0,
+                    artist: "Artist A",
+                    title: "Song A",
+                    source: "local",
+                    trackId: "track-1",
+                    confidence: 100,
+                },
+                {
+                    index: 1,
+                    artist: "Artist B",
+                    title: "Song B",
+                    source: "unresolved",
+                    confidence: 0,
+                },
             ],
-            summary: { total: 2, local: 1, youtube: 0, tidal: 0, unresolved: 1 },
+            summary: {
+                total: 2,
+                local: 1,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 1,
+            },
         };
         mockPreviewM3UImport.mockResolvedValueOnce(m3uPreview);
 
@@ -418,14 +470,15 @@ describe("import routes integration", () => {
             .set(AUTH_HEADER, AUTH_VALUE)
             .send({
                 name: "Road Trip",
-                content: "#EXTM3U\n#EXTINF:200,Artist A - Song A\n/music/a.flac\n#EXTINF:180,Artist B - Song B\n/music/b.flac",
+                content:
+                    "#EXTM3U\n#EXTINF:200,Artist A - Song A\n/music/a.flac\n#EXTINF:180,Artist B - Song B\n/music/b.flac",
             });
 
         expect(res.status).toBe(200);
         expect(res.body).toEqual(m3uPreview);
         expect(mockPreviewM3UImport).toHaveBeenCalledWith(
             "Road Trip",
-            "#EXTM3U\n#EXTINF:200,Artist A - Song A\n/music/a.flac\n#EXTINF:180,Artist B - Song B\n/music/b.flac"
+            "#EXTM3U\n#EXTINF:200,Artist A - Song A\n/music/a.flac\n#EXTINF:180,Artist B - Song B\n/music/b.flac",
         );
     });
 
@@ -437,7 +490,9 @@ describe("import routes integration", () => {
 
         expect(res.status).toBe(400);
         expect(res.body).toEqual(
-            expect.objectContaining({ error: expect.stringMatching(/content/i) })
+            expect.objectContaining({
+                error: expect.stringMatching(/content/i),
+            }),
         );
         expect(mockPreviewM3UImport).not.toHaveBeenCalled();
     });
@@ -458,7 +513,13 @@ describe("import routes integration", () => {
         mockPreviewM3UImport.mockResolvedValueOnce({
             playlistName: "M3U import",
             resolved: [],
-            summary: { total: 0, local: 0, youtube: 0, tidal: 0, unresolved: 0 },
+            summary: {
+                total: 0,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
         });
 
         const res = await request(app)
@@ -467,7 +528,10 @@ describe("import routes integration", () => {
             .send({ content: "#EXTM3U\n" });
 
         expect(res.status).toBe(200);
-        expect(mockPreviewM3UImport).toHaveBeenCalledWith("M3U import", "#EXTM3U\n");
+        expect(mockPreviewM3UImport).toHaveBeenCalledWith(
+            "M3U import",
+            "#EXTM3U\n",
+        );
     });
 
     it("executes imports with previewData and forwards response payload", async () => {
@@ -525,7 +589,7 @@ describe("import routes integration", () => {
         expect(mockImportPlaylist).toHaveBeenCalledWith(
             "user-1",
             previewData,
-            "Custom Name"
+            "Custom Name",
         );
     });
 });

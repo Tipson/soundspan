@@ -12,9 +12,9 @@ function rejection(error: string) {
 
 describe("parseJourneyRequest", () => {
     it("requires a non-empty fromTrackId", () => {
-        expect(parseJourneyRequest({ fromTrackId: "", toTrackId: "to-1" })).toEqual(
-            rejection("fromTrackId is required")
-        );
+        expect(
+            parseJourneyRequest({ fromTrackId: "", toTrackId: "to-1" }),
+        ).toEqual(rejection("fromTrackId is required"));
     });
 
     it.each([
@@ -22,19 +22,19 @@ describe("parseJourneyRequest", () => {
         { fromTrackId: "from-1", toTrackId: "to-1", mood: "happy" },
     ])("requires exactly one target for $body", (body) => {
         expect(parseJourneyRequest(body)).toEqual(
-            rejection("Provide exactly one of toTrackId or mood")
+            rejection("Provide exactly one of toTrackId or mood"),
         );
     });
 
     it("rejects an invalid mood", () => {
         expect(
-            parseJourneyRequest({ fromTrackId: "from-1", mood: "invalid" })
+            parseJourneyRequest({ fromTrackId: "from-1", mood: "invalid" }),
         ).toEqual(rejection(INVALID_MOOD_ERROR));
     });
 
     it("rejects an identical origin and destination", () => {
         expect(
-            parseJourneyRequest({ fromTrackId: "same-1", toTrackId: "same-1" })
+            parseJourneyRequest({ fromTrackId: "same-1", toTrackId: "same-1" }),
         ).toEqual(rejection("Origin and destination are the same track"));
     });
 
@@ -44,7 +44,7 @@ describe("parseJourneyRequest", () => {
                 fromTrackId: "from-1",
                 toTrackId: "to-1",
                 excludeTrackIds: "track-1",
-            })
+            }),
         ).toEqual(rejection("excludeTrackIds must be an array of strings"));
     });
 
@@ -55,9 +55,9 @@ describe("parseJourneyRequest", () => {
                 toTrackId: "to-1",
                 excludeTrackIds: Array.from(
                     { length: MAX_JOURNEY_EXCLUDE_TRACK_IDS + 1 },
-                    (_, index) => `track-${index}`
+                    (_, index) => `track-${index}`,
                 ),
-            })
+            }),
         ).toEqual(rejection("excludeTrackIds cannot exceed 200 entries"));
     });
 
@@ -67,10 +67,8 @@ describe("parseJourneyRequest", () => {
                 fromTrackId: "from-1",
                 toTrackId: "to-1",
                 excludeTrackIds: ["track-1", ""],
-            })
-        ).toEqual(
-            rejection("excludeTrackIds must contain non-empty strings")
-        );
+            }),
+        ).toEqual(rejection("excludeTrackIds must contain non-empty strings"));
     });
 
     it("requires integer steps", () => {
@@ -79,7 +77,7 @@ describe("parseJourneyRequest", () => {
                 fromTrackId: "from-1",
                 toTrackId: "to-1",
                 steps: 2.5,
-            })
+            }),
         ).toEqual(rejection("steps must be an integer"));
     });
 
@@ -115,7 +113,7 @@ describe("parseJourneyRequest", () => {
 
     it("accepts a track target", () => {
         expect(
-            parseJourneyRequest({ fromTrackId: "from-1", toTrackId: "to-1" })
+            parseJourneyRequest({ fromTrackId: "from-1", toTrackId: "to-1" }),
         ).toEqual({
             ok: true,
             value: {
@@ -130,7 +128,7 @@ describe("parseJourneyRequest", () => {
 
     it("accepts a mood target", () => {
         expect(
-            parseJourneyRequest({ fromTrackId: "from-1", mood: "happy" })
+            parseJourneyRequest({ fromTrackId: "from-1", mood: "happy" }),
         ).toEqual({
             ok: true,
             value: {
@@ -178,8 +176,8 @@ describe("parseJourneyRequest", () => {
         "treats non-object body %# as an empty object",
         (body) => {
             expect(parseJourneyRequest(body)).toEqual(
-                rejection("fromTrackId is required")
+                rejection("fromTrackId is required"),
             );
-        }
+        },
     );
 });

@@ -4,7 +4,7 @@ import path from "path";
 describe("data integrity prisma retry contract", () => {
     const source = fs.readFileSync(
         path.resolve(__dirname, "../workers/dataIntegrity.ts"),
-        "utf8"
+        "utf8",
     );
 
     it("retries transient prisma engine failures in data integrity worker", () => {
@@ -16,13 +16,13 @@ describe("data integrity prisma retry contract", () => {
 
     it("applies retry wrapper to core cleanup write paths", () => {
         expect(source).toContain(
-            "runDataIntegrityCheck.album.update.mislocated"
+            "runDataIntegrityCheck.album.update.mislocated",
         );
         expect(source).toContain(
-            "runDataIntegrityCheck.$executeRaw.orphanedOwnedAlbums"
+            "runDataIntegrityCheck.$executeRaw.orphanedOwnedAlbums",
         );
         expect(source).toContain(
-            "runDataIntegrityCheck.downloadJob.deleteMany.oldJobs"
+            "runDataIntegrityCheck.downloadJob.deleteMany.oldJobs",
         );
     });
 });

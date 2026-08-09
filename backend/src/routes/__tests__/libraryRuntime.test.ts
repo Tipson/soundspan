@@ -285,20 +285,22 @@ jest.mock(
     () => ({
         parseFile: mockParseFile,
     }),
-    { virtual: true }
+    { virtual: true },
 );
 
 jest.mock("../../services/remoteTrackMetadataResolver", () => ({
-    resolveRemoteTrackMetadataForRequest: jest.fn(async ({ metadata }: any) => ({
-        title: metadata.title ?? "Unknown",
-        artist: metadata.artist ?? "Unknown",
-        album: metadata.album ?? "Unknown",
-        duration: metadata.duration ?? 180,
-        thumbnailUrl: metadata.thumbnailUrl,
-        isrc: metadata.isrc,
-        explicit: metadata.explicit,
-        quality: metadata.quality,
-    })),
+    resolveRemoteTrackMetadataForRequest: jest.fn(
+        async ({ metadata }: any) => ({
+            title: metadata.title ?? "Unknown",
+            artist: metadata.artist ?? "Unknown",
+            album: metadata.album ?? "Unknown",
+            duration: metadata.duration ?? 180,
+            thumbnailUrl: metadata.thumbnailUrl,
+            isrc: metadata.isrc,
+            explicit: metadata.explicit,
+            quality: metadata.quality,
+        }),
+    ),
 }));
 
 import router from "../library";
@@ -353,20 +355,26 @@ const mockLikedTrackCount = prisma.likedTrack.count as jest.Mock;
 const mockLikedTrackUpsert = prisma.likedTrack.upsert as jest.Mock;
 const mockLikedTrackCreateMany = prisma.likedTrack.createMany as jest.Mock;
 const mockLikedTrackDeleteMany = prisma.likedTrack.deleteMany as jest.Mock;
-const mockDislikedEntityFindUnique = prisma.dislikedEntity.findUnique as jest.Mock;
+const mockDislikedEntityFindUnique = prisma.dislikedEntity
+    .findUnique as jest.Mock;
 const mockDislikedEntityFindMany = prisma.dislikedEntity.findMany as jest.Mock;
 const mockDislikedEntityUpsert = prisma.dislikedEntity.upsert as jest.Mock;
-const mockDislikedEntityCreateMany = prisma.dislikedEntity.createMany as jest.Mock;
-const mockDislikedEntityDeleteMany = prisma.dislikedEntity.deleteMany as jest.Mock;
-const mockRemoteLikedTrackFindMany = (prisma as any).likedRemoteTrack.findMany as jest.Mock;
-const mockRemoteLikedTrackCount = (prisma as any).likedRemoteTrack.count as jest.Mock;
+const mockDislikedEntityCreateMany = prisma.dislikedEntity
+    .createMany as jest.Mock;
+const mockDislikedEntityDeleteMany = prisma.dislikedEntity
+    .deleteMany as jest.Mock;
+const mockRemoteLikedTrackFindMany = (prisma as any).likedRemoteTrack
+    .findMany as jest.Mock;
+const mockRemoteLikedTrackCount = (prisma as any).likedRemoteTrack
+    .count as jest.Mock;
 const mockRedisGet = redisClient.get as jest.Mock;
 const mockRedisSetEx = redisClient.setEx as jest.Mock;
 const mockPlayFindFirst = prisma.play.findFirst as jest.Mock;
 const mockPlayCreate = prisma.play.create as jest.Mock;
 const mockPlayFindMany = prisma.play.findMany as jest.Mock;
 const mockPlayGroupBy = prisma.play.groupBy as jest.Mock;
-const mockTrackMappingFindMany = (prisma as any).trackMapping.findMany as jest.Mock;
+const mockTrackMappingFindMany = (prisma as any).trackMapping
+    .findMany as jest.Mock;
 const mockUserSettingsFindUnique = prisma.userSettings.findUnique as jest.Mock;
 const mockArtistFindMany = prisma.artist.findMany as jest.Mock;
 const mockArtistFindUnique = prisma.artist.findUnique as jest.Mock;
@@ -383,15 +391,18 @@ const mockAlbumFindFirst = prisma.album.findFirst as jest.Mock;
 const mockAlbumFindUnique = prisma.album.findUnique as jest.Mock;
 const mockAlbumDelete = prisma.album.delete as jest.Mock;
 const mockAlbumUpdate = prisma.album.update as jest.Mock;
-const mockAudiobookProgressFindMany = prisma.audiobookProgress.findMany as jest.Mock;
-const mockPodcastProgressFindMany = prisma.podcastProgress.findMany as jest.Mock;
+const mockAudiobookProgressFindMany = prisma.audiobookProgress
+    .findMany as jest.Mock;
+const mockPodcastProgressFindMany = prisma.podcastProgress
+    .findMany as jest.Mock;
 const mockOwnedAlbumGroupBy = prisma.ownedAlbum.groupBy as jest.Mock;
 const mockOwnedAlbumFindMany = prisma.ownedAlbum.findMany as jest.Mock;
 const mockOwnedAlbumFindUnique = prisma.ownedAlbum.findUnique as jest.Mock;
 const mockOwnedAlbumDeleteMany = prisma.ownedAlbum.deleteMany as jest.Mock;
 const mockGenreFindMany = prisma.genre.findMany as jest.Mock;
 const mockSimilarArtistFindMany = prisma.similarArtist.findMany as jest.Mock;
-const mockSimilarArtistDeleteMany = prisma.similarArtist.deleteMany as jest.Mock;
+const mockSimilarArtistDeleteMany = prisma.similarArtist
+    .deleteMany as jest.Mock;
 const mockPrismaTransaction = prisma.$transaction as jest.Mock;
 const mockPrismaQueryRaw = prisma.$queryRaw as jest.Mock;
 const mockScanQueueAdd = scanQueue.add as jest.Mock;
@@ -407,15 +418,20 @@ const mockNormalizeExternalImageUrl = normalizeExternalImageUrl as jest.Mock;
 const mockDownloadAndStoreImage = downloadAndStoreImage as jest.Mock;
 const mockExtractColorsFromImage = extractColorsFromImage as jest.Mock;
 const mockGetSystemSettings = getSystemSettings as jest.Mock;
-const mockGetArtistImagesBatch = dataCacheService.getArtistImagesBatch as jest.Mock;
+const mockGetArtistImagesBatch =
+    dataCacheService.getArtistImagesBatch as jest.Mock;
 const mockGetArtistImage = dataCacheService.getArtistImage as jest.Mock;
-const mockLastFmGetArtistTopTracks = lastFmService.getArtistTopTracks as jest.Mock;
-const mockLastFmGetSimilarArtists = lastFmService.getSimilarArtists as jest.Mock;
+const mockLastFmGetArtistTopTracks =
+    lastFmService.getArtistTopTracks as jest.Mock;
+const mockLastFmGetSimilarArtists =
+    lastFmService.getSimilarArtists as jest.Mock;
 const mockDeezerGetArtistImage = deezerService.getArtistImage as jest.Mock;
 const mockImageProviderGetAlbumCover =
     imageProviderService.getAlbumCover as jest.Mock;
-const mockMusicBrainzSearchArtist = musicBrainzService.searchArtist as jest.Mock;
-const mockMusicBrainzGetReleaseGroups = musicBrainzService.getReleaseGroups as jest.Mock;
+const mockMusicBrainzSearchArtist =
+    musicBrainzService.searchArtist as jest.Mock;
+const mockMusicBrainzGetReleaseGroups =
+    musicBrainzService.getReleaseGroups as jest.Mock;
 const mockIsBackfillNeeded = isBackfillNeeded as jest.Mock;
 const mockGetBackfillProgress = getBackfillProgress as jest.Mock;
 const mockIsBackfillInProgress = isBackfillInProgress as jest.Mock;
@@ -433,11 +449,11 @@ const mockDeezerGetAlbumCover = deezerService.getAlbumCover as jest.Mock;
 function getHandler(
     method: "get" | "post" | "delete" | "put" | "patch",
     path: string,
-    stackIndex = 0
+    stackIndex = 0,
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: [${method}] ${path}`);
@@ -583,7 +599,9 @@ describe("library scan and organize runtime coverage", () => {
     });
 
     it("continues scan when pre-scan organization fails", async () => {
-        mockOrganizeSingles.mockRejectedValueOnce(new Error("slskd unavailable"));
+        mockOrganizeSingles.mockRejectedValueOnce(
+            new Error("slskd unavailable"),
+        );
 
         const req = { user: { id: "user-22" } } as any;
         const res = createRes();
@@ -602,7 +620,7 @@ describe("library scan and organize runtime coverage", () => {
         });
         expect(mockLoggerInfo).toHaveBeenCalledWith(
             "[Scan] SLSKD organization skipped:",
-            "slskd unavailable"
+            "slskd unavailable",
         );
     });
 
@@ -691,7 +709,9 @@ describe("library scan and organize runtime coverage", () => {
 
     it("keeps organization endpoint successful when background promise rejects", async () => {
         const backgroundError = new Error("organizer worker failed");
-        mockOrganizeSingles.mockReturnValueOnce(Promise.reject(backgroundError));
+        mockOrganizeSingles.mockReturnValueOnce(
+            Promise.reject(backgroundError),
+        );
 
         const req = {} as any;
         const res = createRes();
@@ -705,7 +725,7 @@ describe("library scan and organize runtime coverage", () => {
         });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Manual organization failed:",
-            backgroundError
+            backgroundError,
         );
     });
 
@@ -725,16 +745,22 @@ describe("library scan and organize runtime coverage", () => {
 
 describe("library policy and backfill runtime coverage", () => {
     const deletePolicyHandler = getHandler("get", "/delete-policy");
-    const artistCountsStatusHandler = getHandler("get", "/artist-counts/status");
+    const artistCountsStatusHandler = getHandler(
+        "get",
+        "/artist-counts/status",
+    );
     const artistCountsBackfillHandler = getHandler(
         "post",
-        "/artist-counts/backfill"
+        "/artist-counts/backfill",
     );
     const imageBackfillStatusHandler = getHandler(
         "get",
-        "/image-backfill/status"
+        "/image-backfill/status",
     );
-    const imageBackfillStartHandler = getHandler("post", "/image-backfill/start");
+    const imageBackfillStartHandler = getHandler(
+        "post",
+        "/image-backfill/start",
+    );
     const backfillGenresHandler = getHandler("post", "/backfill-genres");
 
     beforeEach(() => {
@@ -808,7 +834,10 @@ describe("library policy and backfill runtime coverage", () => {
 
     it("returns artist count status and handles status failures", async () => {
         const okRes = createRes();
-        await artistCountsStatusHandler({ user: { id: "admin-1" } } as any, okRes);
+        await artistCountsStatusHandler(
+            { user: { id: "admin-1" } } as any,
+            okRes,
+        );
 
         expect(okRes.statusCode).toBe(200);
         expect(okRes.body).toEqual({
@@ -823,7 +852,7 @@ describe("library policy and backfill runtime coverage", () => {
         await invokeWithErrorHandler(
             artistCountsStatusHandler,
             { user: { id: "admin-1" } } as any,
-            errRes
+            errRes,
         );
 
         expect(errRes.statusCode).toBe(500);
@@ -834,7 +863,7 @@ describe("library policy and backfill runtime coverage", () => {
         const inProgressRes = createRes();
         await artistCountsBackfillHandler(
             { user: { id: "admin-1" } } as any,
-            inProgressRes
+            inProgressRes,
         );
         expect(inProgressRes.statusCode).toBe(200);
         expect(inProgressRes.body).toEqual({
@@ -846,7 +875,7 @@ describe("library policy and backfill runtime coverage", () => {
         const startRes = createRes();
         await artistCountsBackfillHandler(
             { user: { id: "admin-1" } } as any,
-            startRes
+            startRes,
         );
         expect(startRes.statusCode).toBe(200);
         expect(startRes.body).toEqual({
@@ -854,29 +883,35 @@ describe("library policy and backfill runtime coverage", () => {
             status: "processing",
         });
         expect(mockBackfillAllArtistCounts).toHaveBeenCalledWith(
-            expect.any(Function)
+            expect.any(Function),
         );
 
         mockIsBackfillInProgress.mockImplementationOnce(() => {
             throw new Error("tracker unavailable");
         });
         const errRes = createRes();
-        await invokeWithErrorHandler(artistCountsBackfillHandler, { user: { id: "admin-1" } } as any, errRes);
+        await invokeWithErrorHandler(
+            artistCountsBackfillHandler,
+            { user: { id: "admin-1" } } as any,
+            errRes,
+        );
         expect(errRes.statusCode).toBe(500);
     });
 
     it("logs artist-count progress on 100-item boundaries and still responds with started", async () => {
         mockIsBackfillInProgress.mockReturnValueOnce(false);
-        mockBackfillAllArtistCounts.mockImplementationOnce(async (callback: any) => {
-            callback(50, 100);
-            callback(100, 100);
-            callback(200, 200);
-        });
+        mockBackfillAllArtistCounts.mockImplementationOnce(
+            async (callback: any) => {
+                callback(50, 100);
+                callback(100, 100);
+                callback(200, 200);
+            },
+        );
 
         const res = createRes();
         await artistCountsBackfillHandler(
             { user: { id: "admin-1" } } as any,
-            res
+            res,
         );
 
         expect(res.statusCode).toBe(200);
@@ -885,13 +920,16 @@ describe("library policy and backfill runtime coverage", () => {
             status: "processing",
         });
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ArtistCounts] Progress: 100/100"
+            "[ArtistCounts] Progress: 100/100",
         );
     });
 
     it("returns image backfill status and handles status errors", async () => {
         const okRes = createRes();
-        await imageBackfillStatusHandler({ user: { id: "admin-1" } } as any, okRes);
+        await imageBackfillStatusHandler(
+            { user: { id: "admin-1" } } as any,
+            okRes,
+        );
         expect(okRes.statusCode).toBe(200);
         expect(okRes.body).toEqual({
             needsBackfill: true,
@@ -902,13 +940,13 @@ describe("library policy and backfill runtime coverage", () => {
         });
 
         mockIsImageBackfillNeeded.mockRejectedValueOnce(
-            new Error("image status failed")
+            new Error("image status failed"),
         );
         const errRes = createRes();
         await invokeWithErrorHandler(
             imageBackfillStatusHandler,
             { user: { id: "admin-1" } } as any,
-            errRes
+            errRes,
         );
         expect(errRes.statusCode).toBe(500);
     });
@@ -922,7 +960,7 @@ describe("library policy and backfill runtime coverage", () => {
         const inProgressRes = createRes();
         await imageBackfillStartHandler(
             { user: { id: "admin-1" } } as any,
-            inProgressRes
+            inProgressRes,
         );
         expect(inProgressRes.statusCode).toBe(200);
         expect(inProgressRes.body).toEqual({
@@ -941,7 +979,10 @@ describe("library policy and backfill runtime coverage", () => {
             total: 50,
         });
         const startRes = createRes();
-        await imageBackfillStartHandler({ user: { id: "admin-1" } } as any, startRes);
+        await imageBackfillStartHandler(
+            { user: { id: "admin-1" } } as any,
+            startRes,
+        );
         expect(startRes.statusCode).toBe(200);
         expect(startRes.body).toEqual({
             message: "Image backfill started",
@@ -953,7 +994,11 @@ describe("library policy and backfill runtime coverage", () => {
             throw new Error("progress unavailable");
         });
         const errRes = createRes();
-        await invokeWithErrorHandler(imageBackfillStartHandler, { user: { id: "admin-1" } } as any, errRes);
+        await invokeWithErrorHandler(
+            imageBackfillStartHandler,
+            { user: { id: "admin-1" } } as any,
+            errRes,
+        );
         expect(errRes.statusCode).toBe(500);
     });
 
@@ -966,7 +1011,10 @@ describe("library policy and backfill runtime coverage", () => {
         mockBackfillAllImages.mockRejectedValueOnce(new Error("boom"));
 
         const res = createRes();
-        await imageBackfillStartHandler({ user: { id: "admin-1" } } as any, res);
+        await imageBackfillStartHandler(
+            { user: { id: "admin-1" } } as any,
+            res,
+        );
 
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -976,13 +1024,16 @@ describe("library policy and backfill runtime coverage", () => {
         await flushPromises();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[ImageBackfill] Backfill failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("handles genre backfill no-op, success, and failure branches", async () => {
         const emptyRes = createRes();
-        await backfillGenresHandler({ user: { id: "admin-1" } } as any, emptyRes);
+        await backfillGenresHandler(
+            { user: { id: "admin-1" } } as any,
+            emptyRes,
+        );
         expect(emptyRes.statusCode).toBe(200);
         expect(emptyRes.body).toEqual({
             message: "No artists need genre backfill",
@@ -998,7 +1049,7 @@ describe("library policy and backfill runtime coverage", () => {
         const successRes = createRes();
         await backfillGenresHandler(
             { user: { id: "admin-1" } } as any,
-            successRes
+            successRes,
         );
         expect(successRes.statusCode).toBe(200);
         expect(successRes.body).toEqual({
@@ -1014,9 +1065,15 @@ describe("library policy and backfill runtime coverage", () => {
             },
         });
 
-        mockArtistFindMany.mockRejectedValueOnce(new Error("artist query failed"));
+        mockArtistFindMany.mockRejectedValueOnce(
+            new Error("artist query failed"),
+        );
         const errRes = createRes();
-        await invokeWithErrorHandler(backfillGenresHandler, { user: { id: "admin-1" } } as any, errRes);
+        await invokeWithErrorHandler(
+            backfillGenresHandler,
+            { user: { id: "admin-1" } } as any,
+            errRes,
+        );
         expect(errRes.statusCode).toBe(500);
     });
 });
@@ -1077,7 +1134,7 @@ describe("library stream runtime coverage", () => {
 
     it("returns 404 when track has no native file path", async () => {
         mockTrackFindUnique.mockResolvedValueOnce(
-            createNativeTrack({ filePath: null, fileModified: null })
+            createNativeTrack({ filePath: null, fileModified: null }),
         );
 
         const req = {
@@ -1096,7 +1153,7 @@ describe("library stream runtime coverage", () => {
 
     it("returns 404 when the DB file path traverses outside the music root", async () => {
         mockTrackFindUnique.mockResolvedValueOnce(
-            createNativeTrack({ filePath: "../../../etc/passwd" })
+            createNativeTrack({ filePath: "../../../etc/passwd" }),
         );
 
         const req = {
@@ -1116,7 +1173,7 @@ describe("library stream runtime coverage", () => {
 
     it("returns 404 when the DB file path is an absolute path outside the root", async () => {
         mockTrackFindUnique.mockResolvedValueOnce(
-            createNativeTrack({ filePath: "/etc/shadow" })
+            createNativeTrack({ filePath: "/etc/shadow" }),
         );
 
         const req = {
@@ -1161,19 +1218,19 @@ describe("library stream runtime coverage", () => {
         expect(mockAudioStreamingCtor).toHaveBeenCalledWith(
             "/music",
             "/tmp/soundspan-cache",
-            1
+            1,
         );
         expect(mockStreamGetStreamFilePath).toHaveBeenCalledWith(
             "track-1",
             "high",
             new Date("2024-01-01T00:00:00.000Z"),
-            "/music/Artist/Album/track.flac"
+            "/music/Artist/Album/track.flac",
         );
         expect(mockStreamWithRangeSupport).toHaveBeenCalledWith(
             req,
             res,
             "/tmp/soundspan-cache/track-high.mp3",
-            "audio/mpeg"
+            "audio/mpeg",
         );
         expect(mockStreamDestroy).toHaveBeenCalledTimes(1);
         expect(res.statusCode).toBe(200);
@@ -1200,7 +1257,7 @@ describe("library stream runtime coverage", () => {
             "track-1",
             "low",
             new Date("2024-01-01T00:00:00.000Z"),
-            "/music/Artist/Album/track.flac"
+            "/music/Artist/Album/track.flac",
         );
     });
 
@@ -1246,27 +1303,27 @@ describe("library stream runtime coverage", () => {
             "track-1",
             "medium",
             new Date("2024-01-01T00:00:00.000Z"),
-            "/music/Artist/Album/track.flac"
+            "/music/Artist/Album/track.flac",
         );
         expect(mockStreamGetStreamFilePath).toHaveBeenNthCalledWith(
             2,
             "track-1",
             "original",
             new Date("2024-01-01T00:00:00.000Z"),
-            "/music/Artist/Album/track.flac"
+            "/music/Artist/Album/track.flac",
         );
         expect(mockStreamWithRangeSupport).toHaveBeenCalledWith(
             req,
             res,
             "/tmp/soundspan-cache/track-original.flac",
-            "audio/flac"
+            "audio/flac",
         );
         expect(res.statusCode).toBe(200);
     });
 
     it("returns 500 when native streaming fails without a recoverable fallback", async () => {
         mockStreamGetStreamFilePath.mockRejectedValueOnce(
-            new Error("transcoder failed")
+            new Error("transcoder failed"),
         );
 
         const req = {
@@ -1314,8 +1371,14 @@ describe("library catalog list runtime coverage", () => {
     const albumCoverHandler = getHandler("get", "/album-cover/:mbid", 1);
     const coverArtColorsHandler = getHandler("get", "/cover-art-colors", 1);
     const trackPreferenceHandler = getHandler("get", "/tracks/:id/preference");
-    const setTrackPreferenceHandler = getHandler("post", "/tracks/:id/preference");
-    const setAlbumPreferenceHandler = getHandler("post", "/albums/:id/preference");
+    const setTrackPreferenceHandler = getHandler(
+        "post",
+        "/tracks/:id/preference",
+    );
+    const setAlbumPreferenceHandler = getHandler(
+        "post",
+        "/albums/:id/preference",
+    );
     const trackByIdHandler = getHandler("get", "/tracks/:id");
     const audioInfoHandler = getHandler("get", "/tracks/:id/audio-info", 1);
     const deleteTrackHandler = getHandler("delete", "/tracks/:id", 1);
@@ -1383,7 +1446,7 @@ describe("library catalog list runtime coverage", () => {
                     getStreamFilePath: mockStreamGetStreamFilePath,
                     streamFileWithRangeSupport: mockStreamWithRangeSupport,
                     destroy: mockStreamDestroy,
-                }) as any
+                }) as any,
         );
         mockPlayFindMany.mockResolvedValue([]);
         mockAudiobookProgressFindMany.mockResolvedValue([]);
@@ -1406,7 +1469,10 @@ describe("library catalog list runtime coverage", () => {
         mockLikedTrackFindUnique.mockResolvedValue(null);
         mockLikedTrackFindMany.mockResolvedValue([]);
         mockLikedTrackCount.mockResolvedValue(0);
-        mockLikedTrackUpsert.mockResolvedValue({ userId: "user-1", trackId: "track-1" });
+        mockLikedTrackUpsert.mockResolvedValue({
+            userId: "user-1",
+            trackId: "track-1",
+        });
         mockLikedTrackCreateMany.mockResolvedValue({ count: 0 });
         mockLikedTrackDeleteMany.mockResolvedValue({ count: 0 });
         mockDislikedEntityFindUnique.mockResolvedValue(null);
@@ -1417,7 +1483,9 @@ describe("library catalog list runtime coverage", () => {
         mockRemoteLikedTrackFindMany.mockResolvedValue([]);
         mockRemoteLikedTrackCount.mockResolvedValue(0);
         mockTrackMappingFindMany.mockResolvedValue([]);
-        mockDownloadAndStoreImage.mockResolvedValue("native:albums/cover-miss.jpg");
+        mockDownloadAndStoreImage.mockResolvedValue(
+            "native:albums/cover-miss.jpg",
+        );
         mockPlayGroupBy.mockResolvedValue([]);
         mockPlayFindFirst.mockResolvedValue(null);
         mockPlayCreate.mockResolvedValue({});
@@ -1430,7 +1498,7 @@ describe("library catalog list runtime coverage", () => {
                     findMany: async () => [],
                     count: async () => 0,
                 },
-            })
+            }),
         );
         mockGetArtistImagesBatch.mockResolvedValue(new Map());
         mockGetArtistImage.mockResolvedValue(null);
@@ -1461,9 +1529,7 @@ describe("library catalog list runtime coverage", () => {
         mockStreamWithRangeSupport.mockResolvedValue(undefined);
         mockStreamDestroy.mockImplementation(() => undefined);
         mockCoverArtGetCoverArt.mockResolvedValue(null);
-        mockNormalizeExternalImageUrl.mockImplementation(
-            (url: string) => url
-        );
+        mockNormalizeExternalImageUrl.mockImplementation((url: string) => url);
         mockFetchExternalImage.mockResolvedValue({
             ok: true,
             url: "https://images.example/cover.jpg",
@@ -1490,8 +1556,9 @@ describe("library catalog list runtime coverage", () => {
             },
         });
         mockShuffleArray.mockImplementation((arr: unknown[]) => arr);
-        mockGetEffectiveYear.mockImplementation((album: any) =>
-            album.displayYear ?? album.originalYear ?? album.year ?? null
+        mockGetEffectiveYear.mockImplementation(
+            (album: any) =>
+                album.displayYear ?? album.originalYear ?? album.year ?? null,
         );
         mockGetDecadeWhereClause.mockImplementation((decadeStart: number) => ({
             OR: [
@@ -1507,8 +1574,8 @@ describe("library catalog list runtime coverage", () => {
                 },
             ],
         }));
-        mockGetDecadeFromYear.mockImplementation((year: number) =>
-            Math.floor(year / 10) * 10
+        mockGetDecadeFromYear.mockImplementation(
+            (year: number) => Math.floor(year / 10) * 10,
         );
         mockGetMergedGenres.mockReturnValue([]);
     });
@@ -1602,7 +1669,7 @@ describe("library catalog list runtime coverage", () => {
             expect.objectContaining({
                 take: 9,
                 where: expect.objectContaining({ userId: "user-1" }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body.items).toEqual([
@@ -1692,7 +1759,7 @@ describe("library catalog list runtime coverage", () => {
                     location: "LIBRARY",
                 }),
                 take: 20,
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body.artists).toEqual([
@@ -1710,7 +1777,9 @@ describe("library catalog list runtime coverage", () => {
     });
 
     it("returns 500 when recently added query fails", async () => {
-        mockAlbumFindMany.mockRejectedValueOnce(new Error("album query failed"));
+        mockAlbumFindMany.mockRejectedValueOnce(
+            new Error("album query failed"),
+        );
         const req = { query: { limit: "3" } } as any;
         const res = createRes();
 
@@ -1749,10 +1818,10 @@ describe("library catalog list runtime coverage", () => {
                     findMany: txArtistFindMany,
                     count: txArtistCount,
                 },
-            })
+            }),
         );
         mockGetArtistImagesBatch.mockResolvedValueOnce(
-            new Map([["artist-1", "cached-artist-1.jpg"]])
+            new Map([["artist-1", "cached-artist-1.jpg"]]),
         );
 
         const req = {
@@ -1782,7 +1851,7 @@ describe("library catalog list runtime coverage", () => {
                 take: 2,
                 skip: 1,
                 orderBy: { totalTrackCount: "desc" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -1833,7 +1902,7 @@ describe("library catalog list runtime coverage", () => {
                     findMany: txArtistFindMany,
                     count: txArtistCount,
                 },
-            })
+            }),
         );
 
         const req = {
@@ -1857,7 +1926,7 @@ describe("library catalog list runtime coverage", () => {
                 }),
                 cursor: { id: "artist-1" },
                 skip: 1,
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body.nextCursor).toBe(null);
@@ -1910,7 +1979,9 @@ describe("library catalog list runtime coverage", () => {
                 },
             ],
         });
-        mockMusicBrainzSearchArtist.mockResolvedValueOnce([{ id: "artist-real-mbid" }]);
+        mockMusicBrainzSearchArtist.mockResolvedValueOnce([
+            { id: "artist-real-mbid" },
+        ]);
         mockArtistFindUnique.mockResolvedValueOnce(null);
         mockArtistUpdate.mockResolvedValueOnce(undefined);
         mockMusicBrainzGetReleaseGroups.mockResolvedValueOnce([
@@ -1936,7 +2007,9 @@ describe("library catalog list runtime coverage", () => {
                 "secondary-types": ["Live"],
             },
         ]);
-        mockPlayGroupBy.mockResolvedValueOnce([{ trackId: "track-1", _count: { id: 6 } }]);
+        mockPlayGroupBy.mockResolvedValueOnce([
+            { trackId: "track-1", _count: { id: 6 } },
+        ]);
         mockLastFmGetArtistTopTracks.mockResolvedValueOnce([
             {
                 name: "Song One",
@@ -1996,21 +2069,24 @@ describe("library catalog list runtime coverage", () => {
         await artistByIdHandler(req, res);
 
         expect(res.statusCode).toBe(200);
-        expect(mockMusicBrainzSearchArtist).toHaveBeenCalledWith("Artist One", 1);
+        expect(mockMusicBrainzSearchArtist).toHaveBeenCalledWith(
+            "Artist One",
+            1,
+        );
         expect(mockMusicBrainzGetReleaseGroups).toHaveBeenCalledWith(
             "artist-real-mbid",
             ["album", "ep"],
-            100
+            100,
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "discography:artist-real-mbid",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "top-tracks:artist-1",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
         expect(res.body).toEqual(
             expect.objectContaining({
@@ -2053,7 +2129,7 @@ describe("library catalog list runtime coverage", () => {
                         coverArt: "similar-two.jpg",
                     }),
                 ]),
-            })
+            }),
         );
     });
 
@@ -2095,10 +2171,10 @@ describe("library catalog list runtime coverage", () => {
             { trackId: "track-owned", _count: { id: 2 } },
         ]);
         mockLastFmGetArtistTopTracks.mockRejectedValueOnce(
-            new Error("lastfm top tracks unavailable")
+            new Error("lastfm top tracks unavailable"),
         );
         mockLastFmGetSimilarArtists.mockRejectedValueOnce(
-            new Error("lastfm similar unavailable")
+            new Error("lastfm similar unavailable"),
         );
         mockGetArtistImage.mockResolvedValueOnce("hero-from-cache.jpg");
         mockRedisGet.mockImplementation(async (key: string) => {
@@ -2127,7 +2203,7 @@ describe("library catalog list runtime coverage", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "discography:mbid-error",
             120,
-            "[]"
+            "[]",
         );
         expect(res.body).toEqual(
             expect.objectContaining({
@@ -2148,7 +2224,7 @@ describe("library catalog list runtime coverage", () => {
                     }),
                 ],
                 similarArtists: [],
-            })
+            }),
         );
     });
 
@@ -2219,7 +2295,7 @@ describe("library catalog list runtime coverage", () => {
                         owned: true,
                     }),
                 ],
-            })
+            }),
         );
     });
 
@@ -2268,12 +2344,12 @@ describe("library catalog list runtime coverage", () => {
         expect(res.statusCode).toBe(200);
         expect(mockMusicBrainzSearchArtist).toHaveBeenCalledWith(
             "Artist Unknown",
-            1
+            1,
         );
         expect(mockMusicBrainzGetReleaseGroups).toHaveBeenCalledWith(
             "artist-unknown-resolved",
             ["album", "ep"],
-            100
+            100,
         );
         expect(mockPlayGroupBy).toHaveBeenCalled();
         expect(mockLastFmGetArtistTopTracks).toHaveBeenCalled();
@@ -2330,7 +2406,7 @@ describe("library catalog list runtime coverage", () => {
             },
         ]);
         mockDeezerGetArtistImage.mockResolvedValueOnce(
-            "https://images.example/similar-cacheless.jpg"
+            "https://images.example/similar-cacheless.jpg",
         );
 
         const req = {
@@ -2357,7 +2433,7 @@ describe("library catalog list runtime coverage", () => {
                         inLibrary: false,
                     }),
                 ],
-            })
+            }),
         );
     });
 
@@ -2425,7 +2501,7 @@ describe("library catalog list runtime coverage", () => {
                 skip: 2,
                 take: 5,
                 orderBy: { year: "desc" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -2480,7 +2556,7 @@ describe("library catalog list runtime coverage", () => {
                 skip: 0,
                 take: 1,
                 orderBy: { title: "desc" },
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -2553,7 +2629,7 @@ describe("library catalog list runtime coverage", () => {
                 tracks: [],
                 owned: false,
                 coverArt: "cover-2.jpg",
-            })
+            }),
         );
 
         const withTracksReq = {
@@ -2568,7 +2644,7 @@ describe("library catalog list runtime coverage", () => {
                 id: "album-3",
                 tracks: [{ id: "track-1", title: "Track One" }],
                 owned: true,
-            })
+            }),
         );
     });
 
@@ -2617,7 +2693,7 @@ describe("library catalog list runtime coverage", () => {
                 id: "album-string-true",
                 tracks: [{ id: "track-true", title: "Track True" }],
                 owned: false,
-            })
+            }),
         );
 
         const boolReq = {
@@ -2632,7 +2708,7 @@ describe("library catalog list runtime coverage", () => {
                 id: "album-bool-true",
                 tracks: [{ id: "track-bool", title: "Track Bool" }],
                 owned: true,
-            })
+            }),
         );
     });
 
@@ -2664,7 +2740,7 @@ describe("library catalog list runtime coverage", () => {
                 skip: 1,
                 take: 4,
                 orderBy: [{ discNo: "asc" }, { trackNo: "asc" }],
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -2681,7 +2757,9 @@ describe("library catalog list runtime coverage", () => {
             limit: 4,
         });
 
-        mockTrackFindMany.mockRejectedValueOnce(new Error("track lookup failed"));
+        mockTrackFindMany.mockRejectedValueOnce(
+            new Error("track lookup failed"),
+        );
         const errReq = { query: {} } as any;
         const errRes = createRes();
         await invokeWithErrorHandler(tracksHandler, errReq, errRes);
@@ -2876,9 +2954,7 @@ describe("library catalog list runtime coverage", () => {
                 trackYtMusic: null,
             },
         ]);
-        mockTrackFindMany.mockResolvedValueOnce([
-            createRadioTrack("local-1"),
-        ]);
+        mockTrackFindMany.mockResolvedValueOnce([createRadioTrack("local-1")]);
 
         const req = {
             query: { limit: "10" },
@@ -2995,10 +3071,10 @@ describe("library catalog list runtime coverage", () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.body.tracks.map((t: any) => t.id)).toEqual([
-            "yt:vid1",    // t1 — newest
-            "local-a",    // t2
+            "yt:vid1", // t1 — newest
+            "local-a", // t2
             "tidal:987", // t3
-            "local-b",    // t4 — oldest
+            "local-b", // t4 — oldest
         ]);
         expect(res.body.total).toBe(4);
     });
@@ -3034,16 +3110,20 @@ describe("library catalog list runtime coverage", () => {
             ytMusicOAuthJson: "yt-token",
         });
         mockLikedTrackFindMany.mockResolvedValue([]);
-        mockRemoteLikedTrackFindMany.mockImplementation(({ where, take }: any) => {
-            let filtered = remoteEntries;
-            if (where?.OR) {
-                const tiedCursorId = where.OR[1]?.id?.gt;
-                if (typeof tiedCursorId === "string") {
-                    filtered = remoteEntries.filter((entry) => entry.id > tiedCursorId);
+        mockRemoteLikedTrackFindMany.mockImplementation(
+            ({ where, take }: any) => {
+                let filtered = remoteEntries;
+                if (where?.OR) {
+                    const tiedCursorId = where.OR[1]?.id?.gt;
+                    if (typeof tiedCursorId === "string") {
+                        filtered = remoteEntries.filter(
+                            (entry) => entry.id > tiedCursorId,
+                        );
+                    }
                 }
-            }
-            return filtered.slice(0, take);
-        });
+                return filtered.slice(0, take);
+            },
+        );
 
         const seenTrackIds = new Set<string>();
         const seenCursorTrackIds = new Set<string>();
@@ -3075,7 +3155,8 @@ describe("library catalog list runtime coverage", () => {
             }
 
             expect(res.body.pagination.nextCursor).toBeTruthy();
-            const nextTrackId = res.body.pagination.nextCursor.trackId as string;
+            const nextTrackId = res.body.pagination.nextCursor
+                .trackId as string;
             expect(seenCursorTrackIds.has(nextTrackId)).toBe(false);
             seenCursorTrackIds.add(nextTrackId);
             cursorLikedAt = res.body.pagination.nextCursor.likedAt;
@@ -3180,7 +3261,7 @@ describe("library catalog list runtime coverage", () => {
                 orderBy: { random: "asc" },
                 take: 2,
                 select: { id: true },
-            })
+            }),
         );
         // The pivot page already had `limit` rows, so no wrap-around top-up
         // query fired — exactly 2 findMany calls total (sample + hydrate).
@@ -3189,14 +3270,15 @@ describe("library catalog list runtime coverage", () => {
             2,
             expect.objectContaining({
                 where: { id: { in: ["track-9", "track-8"] } },
-            })
+            }),
         );
         expect(largeRes.statusCode).toBe(200);
         expect(largeRes.body.total).toBe(10);
         expect(largeRes.body.tracks).toHaveLength(2);
-        expect(
-            largeRes.body.tracks.map((t: any) => t.id).sort()
-        ).toEqual(["track-8", "track-9"]);
+        expect(largeRes.body.tracks.map((t: any) => t.id).sort()).toEqual([
+            "track-8",
+            "track-9",
+        ]);
     });
 
     it("tops up with a wrap-around query when the pivot page is short, and still returns exactly `limit` distinct tracks", async () => {
@@ -3237,7 +3319,7 @@ describe("library catalog list runtime coverage", () => {
                 orderBy: { random: "asc" },
                 take: 3,
                 select: { id: true },
-            })
+            }),
         );
         // Top-up asks for exactly the shortfall (3 requested - 1 already found).
         expect(mockTrackFindMany).toHaveBeenNthCalledWith(
@@ -3247,11 +3329,15 @@ describe("library catalog list runtime coverage", () => {
                 orderBy: { random: "asc" },
                 take: 2,
                 select: { id: true },
-            })
+            }),
         );
         const hydrateArgs = mockTrackFindMany.mock.calls[2][0];
         const hydratedIds = hydrateArgs.where.id.in as string[];
-        expect([...hydratedIds].sort()).toEqual(["track-1", "track-2", "track-3"]);
+        expect([...hydratedIds].sort()).toEqual([
+            "track-1",
+            "track-2",
+            "track-3",
+        ]);
         expect(new Set(hydratedIds).size).toBe(3);
 
         expect(res.statusCode).toBe(200);
@@ -3335,7 +3421,7 @@ describe("library catalog list runtime coverage", () => {
                 signal: "thumbs_up",
                 state: "liked",
                 score: 1,
-            })
+            }),
         );
 
         const conflictedReq = {
@@ -3351,13 +3437,16 @@ describe("library catalog list runtime coverage", () => {
                 signal: "thumbs_down",
                 state: "disliked",
                 score: -1,
-            })
+            }),
         );
     });
 
     it("updates thumbs preference state for up/down/clear signals", async () => {
         mockTrackFindUnique.mockResolvedValue({ id: "track-1" });
-        mockLikedTrackUpsert.mockResolvedValue({ userId: "user-1", trackId: "track-1" });
+        mockLikedTrackUpsert.mockResolvedValue({
+            userId: "user-1",
+            trackId: "track-1",
+        });
         mockLikedTrackDeleteMany.mockResolvedValue({ count: 1 });
         mockDislikedEntityUpsert.mockResolvedValue({ id: "disliked-track-1" });
         mockDislikedEntityDeleteMany.mockResolvedValue({ count: 1 });
@@ -3387,7 +3476,7 @@ describe("library catalog list runtime coverage", () => {
                 signal: "thumbs_up",
                 state: "liked",
                 score: 1,
-            })
+            }),
         );
         expect(mockLikedTrackUpsert).toHaveBeenCalled();
         expect(mockDislikedEntityDeleteMany).toHaveBeenCalled();
@@ -3405,7 +3494,7 @@ describe("library catalog list runtime coverage", () => {
                 signal: "thumbs_down",
                 state: "disliked",
                 score: -1,
-            })
+            }),
         );
         expect(mockDislikedEntityUpsert).toHaveBeenCalled();
         expect(mockLikedTrackDeleteMany).toHaveBeenCalled();
@@ -3423,7 +3512,7 @@ describe("library catalog list runtime coverage", () => {
                 signal: "clear",
                 state: "neutral",
                 score: 0,
-            })
+            }),
         );
         expect(mockLikedTrackDeleteMany).toHaveBeenCalledWith({
             where: {
@@ -3460,7 +3549,7 @@ describe("library catalog list runtime coverage", () => {
                     deleteMany: mockDislikedEntityDeleteMany,
                     createMany: mockDislikedEntityCreateMany,
                 },
-            })
+            }),
         );
 
         const invalidReq = {
@@ -3490,7 +3579,7 @@ describe("library catalog list runtime coverage", () => {
                 signal: "thumbs_up",
                 state: "liked",
                 score: 1,
-            })
+            }),
         );
         expect(mockLikedTrackCreateMany).toHaveBeenCalledWith({
             data: [
@@ -3523,7 +3612,7 @@ describe("library catalog list runtime coverage", () => {
                 signal: "thumbs_down",
                 state: "disliked",
                 score: -1,
-            })
+            }),
         );
         expect(mockDislikedEntityCreateMany).toHaveBeenCalledWith({
             data: [
@@ -3558,7 +3647,7 @@ describe("library catalog list runtime coverage", () => {
                 signal: "clear",
                 state: "neutral",
                 score: 0,
-            })
+            }),
         );
         expect(mockLikedTrackDeleteMany).toHaveBeenCalledWith({
             where: {
@@ -3594,7 +3683,7 @@ describe("library catalog list runtime coverage", () => {
                 albumId: "album-empty",
                 trackCount: 0,
                 signal: "thumbs_up",
-            })
+            }),
         );
         expect(mockPrismaTransaction).not.toHaveBeenCalled();
     });
@@ -3626,7 +3715,9 @@ describe("library catalog list runtime coverage", () => {
         const missingFileRes = createRes();
         await audioInfoHandler(missingFileReq, missingFileRes);
         expect(missingFileRes.statusCode).toBe(404);
-        expect(missingFileRes.body).toEqual({ error: "File not found on disk" });
+        expect(missingFileRes.body).toEqual({
+            error: "File not found on disk",
+        });
         missingFileSpy.mockRestore();
 
         const presentFileSpy = jest
@@ -3639,10 +3730,10 @@ describe("library catalog list runtime coverage", () => {
         } as any;
         const okRes = createRes();
         await audioInfoHandler(okReq, okRes);
-        expect(mockParseFile).toHaveBeenCalledWith(
-            "/music/Artist/track.flac",
-            { duration: false, skipCovers: true }
-        );
+        expect(mockParseFile).toHaveBeenCalledWith("/music/Artist/track.flac", {
+            duration: false,
+            skipCovers: true,
+        });
         expect(okRes.statusCode).toBe(200);
         expect(okRes.body).toEqual({
             codec: "flac",
@@ -3704,7 +3795,7 @@ describe("library catalog list runtime coverage", () => {
         const disabledRes = createRes();
         await deleteAlbumHandler(
             { params: { id: "album-locked" } } as any,
-            disabledRes
+            disabledRes,
         );
 
         expect(disabledRes.statusCode).toBe(403);
@@ -3725,15 +3816,13 @@ describe("library catalog list runtime coverage", () => {
             artist: { name: "Failing Artist" },
             tracks: [],
         });
-        mockAlbumDelete.mockRejectedValueOnce(
-            new Error("album-db-down")
-        );
+        mockAlbumDelete.mockRejectedValueOnce(new Error("album-db-down"));
 
         const failureRes = createRes();
         await invokeWithErrorHandler(
             deleteAlbumHandler,
             { params: { id: "album-delete-fail" } } as any,
-            failureRes
+            failureRes,
         );
 
         expect(failureRes.statusCode).toBe(500);
@@ -3760,7 +3849,9 @@ describe("library catalog list runtime coverage", () => {
         const deleteTrackResNotFound = createRes();
         await deleteTrackHandler(deleteTrackReq, deleteTrackResNotFound);
         expect(deleteTrackResNotFound.statusCode).toBe(404);
-        expect(deleteTrackResNotFound.body).toEqual({ error: "Track not found" });
+        expect(deleteTrackResNotFound.body).toEqual({
+            error: "Track not found",
+        });
 
         mockTrackFindUnique.mockResolvedValueOnce({
             id: "track-2",
@@ -3769,8 +3860,13 @@ describe("library catalog list runtime coverage", () => {
             album: { artist: { id: "artist-2", name: "Artist Two" } },
         });
         const deleteTrackResOk = createRes();
-        await deleteTrackHandler({ params: { id: "track-2" } } as any, deleteTrackResOk);
-        expect(mockTrackDelete).toHaveBeenCalledWith({ where: { id: "track-2" } });
+        await deleteTrackHandler(
+            { params: { id: "track-2" } } as any,
+            deleteTrackResOk,
+        );
+        expect(mockTrackDelete).toHaveBeenCalledWith({
+            where: { id: "track-2" },
+        });
         expect(deleteTrackResOk.statusCode).toBe(200);
         expect(deleteTrackResOk.body).toEqual({
             message: "Track deleted successfully",
@@ -3785,7 +3881,9 @@ describe("library catalog list runtime coverage", () => {
         const deleteAlbumResNotFound = createRes();
         await deleteAlbumHandler(deleteAlbumReq, deleteAlbumResNotFound);
         expect(deleteAlbumResNotFound.statusCode).toBe(404);
-        expect(deleteAlbumResNotFound.body).toEqual({ error: "Album not found" });
+        expect(deleteAlbumResNotFound.body).toEqual({
+            error: "Album not found",
+        });
 
         mockAlbumFindUnique.mockResolvedValueOnce({
             id: "album-2",
@@ -3795,8 +3893,13 @@ describe("library catalog list runtime coverage", () => {
         });
         const albumFsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(false);
         const deleteAlbumResOk = createRes();
-        await deleteAlbumHandler({ params: { id: "album-2" } } as any, deleteAlbumResOk);
-        expect(mockAlbumDelete).toHaveBeenCalledWith({ where: { id: "album-2" } });
+        await deleteAlbumHandler(
+            { params: { id: "album-2" } } as any,
+            deleteAlbumResOk,
+        );
+        expect(mockAlbumDelete).toHaveBeenCalledWith({
+            where: { id: "album-2" },
+        });
         expect(deleteAlbumResOk.statusCode).toBe(200);
         expect(deleteAlbumResOk.body).toEqual({
             message: "Album deleted successfully",
@@ -3813,7 +3916,9 @@ describe("library catalog list runtime coverage", () => {
         const deleteArtistResNotFound = createRes();
         await deleteArtistHandler(deleteArtistReq, deleteArtistResNotFound);
         expect(deleteArtistResNotFound.statusCode).toBe(404);
-        expect(deleteArtistResNotFound.body).toEqual({ error: "Artist not found" });
+        expect(deleteArtistResNotFound.body).toEqual({
+            error: "Artist not found",
+        });
 
         mockArtistFindUnique.mockResolvedValueOnce({
             id: "artist-2",
@@ -3823,7 +3928,10 @@ describe("library catalog list runtime coverage", () => {
         });
         const artistFsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(false);
         const deleteArtistResOk = createRes();
-        await deleteArtistHandler({ params: { id: "artist-2" } } as any, deleteArtistResOk);
+        await deleteArtistHandler(
+            { params: { id: "artist-2" } } as any,
+            deleteArtistResOk,
+        );
         expect(mockOwnedAlbumDeleteMany).toHaveBeenCalledWith({
             where: { artistId: "artist-2" },
         });
@@ -3849,19 +3957,18 @@ describe("library catalog list runtime coverage", () => {
             title: "Delete Me",
             filePath: "Artist-One/Track.flac",
         });
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(true);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
         const unlinkSpy = jest
             .spyOn(fs, "unlinkSync")
             .mockImplementation(() => undefined);
 
         const res = createRes();
-        await deleteTrackHandler({ params: { id: "track-delete-1" } } as any, res);
-
-        expect(unlinkSpy).toHaveBeenCalledWith(
-            "/music/Artist-One/Track.flac"
+        await deleteTrackHandler(
+            { params: { id: "track-delete-1" } } as any,
+            res,
         );
+
+        expect(unlinkSpy).toHaveBeenCalledWith("/music/Artist-One/Track.flac");
         expect(mockTrackDelete).toHaveBeenCalledWith({
             where: { id: "track-delete-1" },
         });
@@ -3881,9 +3988,7 @@ describe("library catalog list runtime coverage", () => {
             title: "Delete Me with Locked File",
             filePath: "Locked/Track.flac",
         });
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(true);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
         const unlinkSpy = jest
             .spyOn(fs, "unlinkSync")
             .mockImplementation(() => {
@@ -3891,7 +3996,10 @@ describe("library catalog list runtime coverage", () => {
             });
 
         const res = createRes();
-        await deleteTrackHandler({ params: { id: "track-delete-2" } } as any, res);
+        await deleteTrackHandler(
+            { params: { id: "track-delete-2" } } as any,
+            res,
+        );
 
         expect(unlinkSpy).toHaveBeenCalledWith("/music/Locked/Track.flac");
         expect(mockTrackDelete).toHaveBeenCalledWith({
@@ -3916,7 +4024,11 @@ describe("library catalog list runtime coverage", () => {
         mockTrackDelete.mockRejectedValueOnce(new Error("db delete failed"));
 
         const res = createRes();
-        await invokeWithErrorHandler(deleteTrackHandler, { params: { id: "track-delete-3" } } as any, res);
+        await invokeWithErrorHandler(
+            deleteTrackHandler,
+            { params: { id: "track-delete-3" } } as any,
+            res,
+        );
 
         expect(res.statusCode).toBe(500);
     });
@@ -3957,10 +4069,13 @@ describe("library catalog list runtime coverage", () => {
             .mockImplementation(() => undefined);
 
         const res = createRes();
-        await deleteArtistHandler({ params: { id: "artist-delete" } } as any, res);
+        await deleteArtistHandler(
+            { params: { id: "artist-delete" } } as any,
+            res,
+        );
 
         expect(unlinkSpy).toHaveBeenCalledWith(
-            "/music/Artist Folder/Album 1/track-one.flac"
+            "/music/Artist Folder/Album 1/track-one.flac",
         );
         expect(unlinkSpy).toHaveBeenCalledWith("/music/single-track.flac");
         expect(rmSpy).toHaveBeenCalledWith("/music/Artist Folder", {
@@ -4002,14 +4117,14 @@ describe("library catalog list runtime coverage", () => {
             ],
         });
 
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(true);
-        const unlinkSpy = jest.spyOn(fs, "unlinkSync").mockImplementation((targetPath: fs.PathLike) => {
-            if (targetPath.toString().endsWith("track-1.flac")) {
-                throw new Error("locked");
-            }
-        });
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
+        const unlinkSpy = jest
+            .spyOn(fs, "unlinkSync")
+            .mockImplementation((targetPath: fs.PathLike) => {
+                if (targetPath.toString().endsWith("track-1.flac")) {
+                    throw new Error("locked");
+                }
+            });
         const rmSyncSpy = jest
             .spyOn(fs, "rmSync")
             .mockImplementation((targetPath: fs.PathLike) => {
@@ -4020,25 +4135,28 @@ describe("library catalog list runtime coverage", () => {
         const readdirSpy = jest
             .spyOn(fs, "readdirSync")
             .mockReturnValue(["child-dir", "child.flac"] as any);
-        const statSpy = jest
-            .spyOn(fs, "statSync")
-            .mockImplementation((targetPath: fs.PathLike) => ({
-                isDirectory: () => targetPath.toString().endsWith("child-dir"),
-            }) as fs.Stats);
-        const rmdirSpy = jest
-            .spyOn(fs, "rmdirSync")
-            .mockImplementation(() => {
-                throw new Error("rmdir failed");
-            });
+        const statSpy = jest.spyOn(fs, "statSync").mockImplementation(
+            (targetPath: fs.PathLike) =>
+                ({
+                    isDirectory: () =>
+                        targetPath.toString().endsWith("child-dir"),
+                }) as fs.Stats,
+        );
+        const rmdirSpy = jest.spyOn(fs, "rmdirSync").mockImplementation(() => {
+            throw new Error("rmdir failed");
+        });
 
         const res = createRes();
-        await deleteArtistHandler({ params: { id: "artist-fallback" } } as any, res);
+        await deleteArtistHandler(
+            { params: { id: "artist-fallback" } } as any,
+            res,
+        );
 
         expect(unlinkSpy).toHaveBeenCalledWith(
-            "/music/Fallback Artist/Album/track-1.flac"
+            "/music/Fallback Artist/Album/track-1.flac",
         );
         expect(unlinkSpy).toHaveBeenCalledWith(
-            "/music/Fallback Artist/child.flac"
+            "/music/Fallback Artist/child.flac",
         );
         expect(rmSyncSpy).toHaveBeenCalledWith("/music/Fallback Artist", {
             recursive: true,
@@ -4047,8 +4165,10 @@ describe("library catalog list runtime coverage", () => {
         expect(readdirSpy).toHaveBeenCalled();
         expect(statSpy).toHaveBeenCalled();
         expect(mockLoggerError).toHaveBeenCalledWith(
-            expect.stringContaining("Cleanup also failed for /music/Fallback Artist"),
-            "rmdir failed"
+            expect.stringContaining(
+                "Cleanup also failed for /music/Fallback Artist",
+            ),
+            "rmdir failed",
         );
         expect(res.body.deletedFiles).toBeGreaterThan(0);
 
@@ -4072,22 +4192,35 @@ describe("library catalog list runtime coverage", () => {
         });
         const existsSpy = jest
             .spyOn(fs, "existsSync")
-            .mockImplementation((targetPath: fs.PathLike) => [
-                "/music/Common Folder/Track.flac",
-                "/music/Common Folder",
-                "/music/Common Artist",
-            ].includes(targetPath.toString()));
+            .mockImplementation((targetPath: fs.PathLike) =>
+                [
+                    "/music/Common Folder/Track.flac",
+                    "/music/Common Folder",
+                    "/music/Common Artist",
+                ].includes(targetPath.toString()),
+            );
         const unlinkSpy = jest
             .spyOn(fs, "unlinkSync")
             .mockImplementation(() => undefined);
-        const rmSyncSpy = jest.spyOn(fs, "rmSync").mockImplementation(() => undefined);
+        const rmSyncSpy = jest
+            .spyOn(fs, "rmSync")
+            .mockImplementation(() => undefined);
 
         const res = createRes();
-        await deleteArtistHandler({ params: { id: "artist-common" } } as any, res);
+        await deleteArtistHandler(
+            { params: { id: "artist-common" } } as any,
+            res,
+        );
 
         expect(res.statusCode).toBe(200);
-        expect(rmSyncSpy).toHaveBeenCalledWith("/music/Common Folder", { recursive: true, force: true });
-        expect(rmSyncSpy).toHaveBeenCalledWith("/music/Common Artist", { recursive: true, force: true });
+        expect(rmSyncSpy).toHaveBeenCalledWith("/music/Common Folder", {
+            recursive: true,
+            force: true,
+        });
+        expect(rmSyncSpy).toHaveBeenCalledWith("/music/Common Artist", {
+            recursive: true,
+            force: true,
+        });
         expect(unlinkSpy).toHaveBeenCalled();
         existsSpy.mockRestore();
         rmSyncSpy.mockRestore();
@@ -4105,7 +4238,7 @@ describe("library catalog list runtime coverage", () => {
             message: "deleted",
         });
         mockOwnedAlbumDeleteMany.mockRejectedValueOnce(
-            new Error("owned-album cleanup failed")
+            new Error("owned-album cleanup failed"),
         );
         mockArtistFindUnique.mockResolvedValueOnce({
             id: "artist-lidarr-ok",
@@ -4114,7 +4247,10 @@ describe("library catalog list runtime coverage", () => {
             albums: [],
         });
         let res = createRes();
-        await deleteArtistHandler({ params: { id: "artist-lidarr-ok" } } as any, res);
+        await deleteArtistHandler(
+            { params: { id: "artist-lidarr-ok" } } as any,
+            res,
+        );
         expect(res.body.lidarrDeleted).toBe(true);
         expect(res.body.lidarrError).toBeNull();
 
@@ -4129,12 +4265,15 @@ describe("library catalog list runtime coverage", () => {
             albums: [],
         });
         res = createRes();
-        await deleteArtistHandler({ params: { id: "artist-lidarr-failure" } } as any, res);
+        await deleteArtistHandler(
+            { params: { id: "artist-lidarr-failure" } } as any,
+            res,
+        );
         expect(res.body.lidarrDeleted).toBe(false);
         expect(res.body.lidarrError).toBe("not-found");
 
         mockLidarrDeleteArtist.mockRejectedValueOnce(
-            new Error("lidarr service unavailable")
+            new Error("lidarr service unavailable"),
         );
         mockArtistDelete.mockRejectedValueOnce(new Error("db unavailable"));
         mockArtistFindUnique.mockResolvedValueOnce({
@@ -4144,7 +4283,10 @@ describe("library catalog list runtime coverage", () => {
             albums: [],
         });
         res = createRes();
-        await deleteArtistHandler({ params: { id: "artist-lidarr-bad" } } as any, res);
+        await deleteArtistHandler(
+            { params: { id: "artist-lidarr-bad" } } as any,
+            res,
+        );
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({
             error: "Failed to delete artist",
@@ -4164,15 +4306,11 @@ describe("library catalog list runtime coverage", () => {
             artist: { name: "Delete Artist" },
             tracks: [{ filePath: "Delete Artist/Deletion Album/track.flac" }],
         });
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(true);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
         const unlinkSpy = jest
             .spyOn(fs, "unlinkSync")
             .mockImplementation(() => undefined);
-        const readdirSpy = jest
-            .spyOn(fs, "readdirSync")
-            .mockReturnValue([]);
+        const readdirSpy = jest.spyOn(fs, "readdirSync").mockReturnValue([]);
         const rmdirSpy = jest
             .spyOn(fs, "rmdirSync")
             .mockImplementation(() => undefined);
@@ -4181,15 +4319,17 @@ describe("library catalog list runtime coverage", () => {
         const res = createRes();
         await deleteAlbumHandler(req, res);
 
-        expect(mockAlbumDelete).toHaveBeenCalledWith({ where: { id: "album-del" } });
+        expect(mockAlbumDelete).toHaveBeenCalledWith({
+            where: { id: "album-del" },
+        });
         expect(unlinkSpy).toHaveBeenCalledWith(
-            "/music/Delete Artist/Deletion Album/track.flac"
+            "/music/Delete Artist/Deletion Album/track.flac",
         );
         expect(readdirSpy).toHaveBeenCalledWith(
-            "/music/Delete Artist/Deletion Album"
+            "/music/Delete Artist/Deletion Album",
         );
         expect(rmdirSpy).toHaveBeenCalledWith(
-            "/music/Delete Artist/Deletion Album"
+            "/music/Delete Artist/Deletion Album",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -4208,7 +4348,9 @@ describe("library catalog list runtime coverage", () => {
         const noInputRes = createRes();
         await coverArtHandler(noInputReq, noInputRes);
         expect(noInputRes.statusCode).toBe(400);
-        expect(noInputRes.body).toEqual({ error: "No cover ID or URL provided" });
+        expect(noInputRes.body).toEqual({
+            error: "No cover ID or URL provided",
+        });
 
         mockNormalizeExternalImageUrl.mockReturnValueOnce(null);
         const invalidReq = {
@@ -4237,7 +4379,7 @@ describe("library catalog list runtime coverage", () => {
                 etag: "etag-cache",
                 contentType: "image/jpeg",
                 data: Buffer.from("cached-cover").toString("base64"),
-            })
+            }),
         );
         const cached304Req = {
             params: {},
@@ -4262,7 +4404,9 @@ describe("library catalog list runtime coverage", () => {
         const invalidFetchRes = createRes();
         await coverArtHandler(invalidFetchReq, invalidFetchRes);
         expect(invalidFetchRes.statusCode).toBe(400);
-        expect(invalidFetchRes.body).toEqual({ error: "Invalid cover art URL" });
+        expect(invalidFetchRes.body).toEqual({
+            error: "Invalid cover art URL",
+        });
 
         mockRedisGet.mockResolvedValueOnce(null);
         mockFetchExternalImage.mockResolvedValueOnce({
@@ -4282,7 +4426,7 @@ describe("library catalog list runtime coverage", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             expect.stringContaining("cover-art:"),
             expect.any(Number),
-            JSON.stringify({ notFound: true })
+            JSON.stringify({ notFound: true }),
         );
 
         mockRedisGet.mockResolvedValueOnce(null);
@@ -4371,13 +4515,13 @@ describe("library catalog list runtime coverage", () => {
 
             expect(queryAudiobookRes.statusCode).toBe(200);
             expect(queryAudiobookRes.body).toEqual(
-                Buffer.from("audiobook-cover")
+                Buffer.from("audiobook-cover"),
             );
             expect(
-                queryAudiobookRes.headers["Access-Control-Allow-Origin"]
+                queryAudiobookRes.headers["Access-Control-Allow-Origin"],
             ).toBe("https://app.example");
             expect(queryAudiobookRes.headers["Cache-Control"]).toBe(
-                "public, max-age=7776000, immutable"
+                "public, max-age=7776000, immutable",
             );
             expect(fetchSpy).toHaveBeenCalledWith(
                 "https://ab.example/api/release-42",
@@ -4386,7 +4530,7 @@ describe("library catalog list runtime coverage", () => {
                         Authorization: "Bearer token-123",
                         "User-Agent": expect.stringContaining("soundspan/"),
                     }),
-                })
+                }),
             );
         } finally {
             delete config.allowedOrigins;
@@ -4426,7 +4570,7 @@ describe("library catalog list runtime coverage", () => {
                 headers: expect.objectContaining({
                     Authorization: "Bearer token-456",
                 }),
-            })
+            }),
         );
 
         fetchSpy.mockRestore();
@@ -4446,7 +4590,7 @@ describe("library catalog list runtime coverage", () => {
         expect(noCoverRes.statusCode).toBe(204);
 
         mockCoverArtGetCoverArt.mockResolvedValueOnce(
-            "https://coverartarchive.org/cover.jpg"
+            "https://coverartarchive.org/cover.jpg",
         );
         const okReq = { params: { mbid: "mbid-2" } } as any;
         const okRes = createRes();
@@ -4470,24 +4614,24 @@ describe("library catalog list runtime coverage", () => {
         config.allowedOrigins = ["https://app.example"];
         const existsSpy = jest
             .spyOn(fs, "existsSync")
-            .mockImplementation((candidatePath: fs.PathLike) =>
-                typeof candidatePath === "string" &&
-                candidatePath.includes("cover-present.jpg")
+            .mockImplementation(
+                (candidatePath: fs.PathLike) =>
+                    typeof candidatePath === "string" &&
+                    candidatePath.includes("cover-present.jpg"),
             );
-        mockAlbumFindUnique
-            .mockResolvedValueOnce({
-                id: "cover-miss",
-                title: "Missed Album",
-                artist: {
-                    id: "artist-cover",
-                    name: "Cover Artist",
-                },
-            });
+        mockAlbumFindUnique.mockResolvedValueOnce({
+            id: "cover-miss",
+            title: "Missed Album",
+            artist: {
+                id: "artist-cover",
+                name: "Cover Artist",
+            },
+        });
         mockDeezerGetAlbumCover.mockResolvedValueOnce(
-            "https://images.example/cover.jpg"
+            "https://images.example/cover.jpg",
         );
         mockDownloadAndStoreImage.mockResolvedValueOnce(
-            "native:albums/cover-miss.jpg"
+            "native:albums/cover-miss.jpg",
         );
 
         try {
@@ -4501,12 +4645,12 @@ describe("library catalog list runtime coverage", () => {
             expect(existsSpy).toHaveBeenCalled();
             expect(mockDeezerGetAlbumCover).toHaveBeenCalledWith(
                 "Cover Artist",
-                "Missed Album"
+                "Missed Album",
             );
             expect(mockDownloadAndStoreImage).toHaveBeenCalledWith(
                 "https://images.example/cover.jpg",
                 "cover-miss",
-                "album"
+                "album",
             );
             expect(mockAlbumUpdate).toHaveBeenCalledWith({
                 where: { id: "cover-miss" },
@@ -4531,8 +4675,7 @@ describe("library catalog list runtime coverage", () => {
                 options: {
                     headers: {
                         "Content-Type": "image/jpeg",
-                        "Cache-Control":
-                            "public, max-age=7776000, immutable",
+                        "Cache-Control": "public, max-age=7776000, immutable",
                         "Cross-Origin-Resource-Policy": "cross-origin",
                         "Access-Control-Allow-Origin": "https://app.example",
                         "Access-Control-Allow-Credentials": "true",
@@ -4546,9 +4689,7 @@ describe("library catalog list runtime coverage", () => {
     });
 
     it("recovers missing native cover IDs via Cover Art service when Deezer has no result", async () => {
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(false);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(false);
         mockAlbumFindUnique.mockResolvedValue({
             id: "cover-fallback",
             title: "Fallback Album",
@@ -4559,11 +4700,11 @@ describe("library catalog list runtime coverage", () => {
             },
         });
         mockCoverArtGetCoverArt.mockResolvedValue(
-            "https://coverartarchive.org/release-group/rg-fallback/front.jpg"
+            "https://coverartarchive.org/release-group/rg-fallback/front.jpg",
         );
         mockDeezerGetAlbumCover.mockResolvedValue(null);
         mockDownloadAndStoreImage.mockResolvedValue(
-            "native:albums/cover-fallback.jpg"
+            "native:albums/cover-fallback.jpg",
         );
 
         const req = {
@@ -4615,7 +4756,9 @@ describe("library catalog list runtime coverage", () => {
         expect(invalidRes.statusCode).toBe(400);
         expect(invalidRes.body).toEqual({ error: "Invalid image URL" });
 
-        const placeholderReq = { query: { url: "https://cdn/placeholder.jpg" } } as any;
+        const placeholderReq = {
+            query: { url: "https://cdn/placeholder.jpg" },
+        } as any;
         const placeholderRes = createRes();
         await coverArtColorsHandler(placeholderReq, placeholderRes);
         expect(placeholderRes.statusCode).toBe(200);
@@ -4623,7 +4766,7 @@ describe("library catalog list runtime coverage", () => {
             expect.objectContaining({
                 vibrant: "#1db954",
                 muted: "#535353",
-            })
+            }),
         );
 
         mockRedisGet.mockResolvedValueOnce(
@@ -4634,14 +4777,16 @@ describe("library catalog list runtime coverage", () => {
                 muted: "#dddddd",
                 darkMuted: "#eeeeee",
                 lightMuted: "#ffffff",
-            })
+            }),
         );
-        const cacheHitReq = { query: { url: "https://img.example/cache.jpg" } } as any;
+        const cacheHitReq = {
+            query: { url: "https://img.example/cache.jpg" },
+        } as any;
         const cacheHitRes = createRes();
         await coverArtColorsHandler(cacheHitReq, cacheHitRes);
         expect(cacheHitRes.statusCode).toBe(200);
         expect(cacheHitRes.body).toEqual(
-            expect.objectContaining({ vibrant: "#aaaaaa" })
+            expect.objectContaining({ vibrant: "#aaaaaa" }),
         );
 
         mockRedisGet.mockResolvedValueOnce(null);
@@ -4650,7 +4795,9 @@ describe("library catalog list runtime coverage", () => {
             status: "not_found",
             url: "https://img.example/missing.jpg",
         });
-        const notFoundReq = { query: { url: "https://img.example/missing.jpg" } } as any;
+        const notFoundReq = {
+            query: { url: "https://img.example/missing.jpg" },
+        } as any;
         const notFoundRes = createRes();
         await coverArtColorsHandler(notFoundReq, notFoundRes);
         expect(notFoundRes.statusCode).toBe(404);
@@ -4663,7 +4810,9 @@ describe("library catalog list runtime coverage", () => {
             url: "https://img.example/error.jpg",
             message: "fetch failed",
         });
-        const fetchErrorReq = { query: { url: "https://img.example/error.jpg" } } as any;
+        const fetchErrorReq = {
+            query: { url: "https://img.example/error.jpg" },
+        } as any;
         const fetchErrorRes = createRes();
         await coverArtColorsHandler(fetchErrorReq, fetchErrorRes);
         expect(fetchErrorRes.statusCode).toBe(504);
@@ -4688,12 +4837,12 @@ describe("library catalog list runtime coverage", () => {
         await coverArtColorsHandler(okReq, okRes);
         expect(okRes.statusCode).toBe(200);
         expect(okRes.body).toEqual(
-            expect.objectContaining({ vibrant: "#100000" })
+            expect.objectContaining({ vibrant: "#100000" }),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             expect.stringContaining("colors:"),
             2592000,
-            expect.any(String)
+            expect.any(String),
         );
 
         mockRedisGet.mockResolvedValueOnce(null);
@@ -4702,15 +4851,21 @@ describe("library catalog list runtime coverage", () => {
             url: "https://img.example/crash.jpg",
             buffer: Buffer.from("img"),
         });
-        mockExtractColorsFromImage.mockRejectedValueOnce(new Error("extract failed"));
-        const errReq = { query: { url: "https://img.example/crash.jpg" } } as any;
+        mockExtractColorsFromImage.mockRejectedValueOnce(
+            new Error("extract failed"),
+        );
+        const errReq = {
+            query: { url: "https://img.example/crash.jpg" },
+        } as any;
         const errRes = createRes();
         await invokeWithErrorHandler(coverArtColorsHandler, errReq, errRes);
         expect(errRes.statusCode).toBe(500);
     });
 
     it("continues color extraction when cache read fails", async () => {
-        mockNormalizeExternalImageUrl.mockReturnValueOnce("https://img.example/cover.png");
+        mockNormalizeExternalImageUrl.mockReturnValueOnce(
+            "https://img.example/cover.png",
+        );
         mockRedisGet.mockRejectedValueOnce(new Error("redis read failure"));
         mockFetchExternalImage.mockResolvedValueOnce({
             ok: true,
@@ -4724,14 +4879,18 @@ describe("library catalog list runtime coverage", () => {
         await coverArtColorsHandler(req, res);
 
         expect(res.statusCode).toBe(200);
-        expect(res.body).toEqual(expect.objectContaining({ vibrant: "#111111" }));
+        expect(res.body).toEqual(
+            expect.objectContaining({ vibrant: "#111111" }),
+        );
         expect(mockFetchExternalImage).toHaveBeenCalledWith(
-            expect.objectContaining({ url: "https://img.example/cover.png" })
+            expect.objectContaining({ url: "https://img.example/cover.png" }),
         );
     });
 
     it("continues color extraction when cache write fails", async () => {
-        mockNormalizeExternalImageUrl.mockReturnValueOnce("https://img.example/cover2.png");
+        mockNormalizeExternalImageUrl.mockReturnValueOnce(
+            "https://img.example/cover2.png",
+        );
         mockRedisGet.mockResolvedValueOnce(null);
         mockFetchExternalImage.mockResolvedValueOnce({
             ok: true,
@@ -4746,7 +4905,9 @@ describe("library catalog list runtime coverage", () => {
         await coverArtColorsHandler(req, res);
 
         expect(res.statusCode).toBe(200);
-        expect(res.body).toEqual(expect.objectContaining({ vibrant: "#111111" }));
+        expect(res.body).toEqual(
+            expect.objectContaining({ vibrant: "#111111" }),
+        );
     });
 
     it("filters artist-name genres and converts bigint counts", async () => {
@@ -4768,7 +4929,9 @@ describe("library catalog list runtime coverage", () => {
             genres: [{ genre: "electronic", count: 24 }],
         });
 
-        mockPrismaQueryRaw.mockRejectedValueOnce(new Error("genre query failed"));
+        mockPrismaQueryRaw.mockRejectedValueOnce(
+            new Error("genre query failed"),
+        );
         const errRes = createRes();
         await invokeWithErrorHandler(genresHandler, req, errRes);
         expect(errRes.statusCode).toBe(500);
@@ -4805,7 +4968,9 @@ describe("library catalog list runtime coverage", () => {
             decades: [{ decade: 1990, count: 17 }],
         });
 
-        mockAlbumFindMany.mockRejectedValueOnce(new Error("decade query failed"));
+        mockAlbumFindMany.mockRejectedValueOnce(
+            new Error("decade query failed"),
+        );
         const errRes = createRes();
         await invokeWithErrorHandler(decadesHandler, req, errRes);
         expect(errRes.statusCode).toBe(500);
@@ -4816,7 +4981,9 @@ describe("library catalog list runtime coverage", () => {
         const missingTypeRes = createRes();
         await radioHandler(missingTypeReq, missingTypeRes);
         expect(missingTypeRes.statusCode).toBe(400);
-        expect(missingTypeRes.body).toEqual({ error: "Radio type is required" });
+        expect(missingTypeRes.body).toEqual({
+            error: "Radio type is required",
+        });
 
         mockTrackFindMany
             .mockResolvedValueOnce([{ id: "u1" }, { id: "u2" }])
@@ -4842,7 +5009,10 @@ describe("library catalog list runtime coverage", () => {
                 createRadioTrack("lp1"),
                 createRadioTrack("lp2"),
             ]);
-        mockPrismaQueryRaw.mockResolvedValueOnce([{ id: "lp1" }, { id: "lp2" }]);
+        mockPrismaQueryRaw.mockResolvedValueOnce([
+            { id: "lp1" },
+            { id: "lp2" },
+        ]);
 
         const fallbackReq = {
             query: { type: "discovery", limit: "2" },
@@ -4914,8 +5084,20 @@ describe("library catalog list runtime coverage", () => {
 
         mockTrackFindMany
             .mockResolvedValueOnce([
-                { id: "a1", bpm: 120, energy: 0.8, valence: 0.6, danceability: 0.7 },
-                { id: "a2", bpm: 126, energy: 0.75, valence: 0.58, danceability: 0.72 },
+                {
+                    id: "a1",
+                    bpm: 120,
+                    energy: 0.8,
+                    valence: 0.6,
+                    danceability: 0.7,
+                },
+                {
+                    id: "a2",
+                    bpm: 126,
+                    energy: 0.75,
+                    valence: 0.58,
+                    danceability: 0.72,
+                },
             ])
             .mockResolvedValueOnce([
                 {
@@ -4959,7 +5141,10 @@ describe("library catalog list runtime coverage", () => {
                         id: "album-s1",
                         title: "Album S1",
                         coverUrl: "s1.jpg",
-                        artist: { id: "artist-sim-1", name: "Similar Artist 1" },
+                        artist: {
+                            id: "artist-sim-1",
+                            name: "Similar Artist 1",
+                        },
                     },
                 }),
                 createRadioTrack("s2", {
@@ -4967,7 +5152,10 @@ describe("library catalog list runtime coverage", () => {
                         id: "album-s2",
                         title: "Album S2",
                         coverUrl: "s2.jpg",
-                        artist: { id: "artist-sim-1", name: "Similar Artist 1" },
+                        artist: {
+                            id: "artist-sim-1",
+                            name: "Similar Artist 1",
+                        },
                     },
                 }),
             ]);
@@ -5165,7 +5353,10 @@ describe("library catalog list runtime coverage", () => {
                                 id: `album-${id}`,
                                 title: `Main Album ${id}`,
                                 coverUrl: `${id}.jpg`,
-                                artist: { id: "artist-main", name: "Main Artist" },
+                                artist: {
+                                    id: "artist-main",
+                                    name: "Main Artist",
+                                },
                             },
                         });
                     }
@@ -5213,10 +5404,10 @@ describe("library catalog list runtime coverage", () => {
         expect(res.body.tracks).toHaveLength(10);
 
         const similarTracks = res.body.tracks.filter(
-            (track: any) => track.artist.id !== "artist-main"
+            (track: any) => track.artist.id !== "artist-main",
         );
         const dominantArtistTracks = similarTracks.filter(
-            (track: any) => track.artist.id === "artist-sim-dominant"
+            (track: any) => track.artist.id === "artist-sim-dominant",
         );
         expect(dominantArtistTracks.length).toBeLessThanOrEqual(2);
     });
@@ -5336,16 +5527,22 @@ describe("library catalog list runtime coverage", () => {
                 // return a generous pool for the sampler to draw from.
                 const fillerCount =
                     typeof args.take === "number" ? args.take : 60;
-                return Array.from({ length: fillerCount }, (_unused, index) => ({
-                    id: `rnd-d${index + 1}`,
-                }));
+                return Array.from(
+                    { length: fillerCount },
+                    (_unused, index) => ({
+                        id: `rnd-d${index + 1}`,
+                    }),
+                );
             }
             if (Array.isArray(args.where?.id?.in) && args.include?.album) {
-                return (args.where.id.in as string[]).map((id: string, index: number) =>
-                    createRadioTrack(id, {
-                        trackGenres:
-                            index === 0 ? [{ genre: { name: "rock" } }] : [],
-                    }),
+                return (args.where.id.in as string[]).map(
+                    (id: string, index: number) =>
+                        createRadioTrack(id, {
+                            trackGenres:
+                                index === 0
+                                    ? [{ genre: { name: "rock" } }]
+                                    : [],
+                        }),
                 );
             }
             return [];
@@ -5383,7 +5580,7 @@ describe("library catalog list runtime coverage", () => {
                 bpm: 120,
                 energy: 0.82,
                 analysisMode: "enhanced",
-            })
+            }),
         );
         expect(vibeRes.body.tracks[0]).toEqual(
             expect.objectContaining({
@@ -5391,12 +5588,14 @@ describe("library catalog list runtime coverage", () => {
                 audioFeatures: expect.objectContaining({
                     bpm: expect.any(Number),
                 }),
-            })
+            }),
         );
     });
 
     it("covers favorites, decade, genre, mood, and all radio branches", async () => {
-        mockPrismaQueryRaw.mockResolvedValueOnce([{ id: "fav-1", play_count: 15n }]);
+        mockPrismaQueryRaw.mockResolvedValueOnce([
+            { id: "fav-1", play_count: 15n },
+        ]);
         mockTrackFindMany
             .mockResolvedValueOnce([]) // GH #46 diversify: pool artist lookup
             .mockResolvedValueOnce([createRadioTrack("fav-1")]);
@@ -5544,15 +5743,29 @@ describe("library catalog list runtime coverage", () => {
     });
 
     it("uses genre-based artist fallback when lastfm similar artists are insufficient", async () => {
-        mockGetMergedGenres.mockImplementation((artist: any) => artist?.genres || []);
+        mockGetMergedGenres.mockImplementation(
+            (artist: any) => artist?.genres || [],
+        );
         mockTrackFindMany.mockImplementation(async (args: any) => {
             if (
                 args.where?.album?.artistId === "artist-main" &&
                 !args.where?.album?.artistId?.in
             ) {
                 return [
-                    { id: "main-1", bpm: 120, energy: 0.8, valence: 0.65, danceability: 0.72 },
-                    { id: "main-2", bpm: 124, energy: 0.77, valence: 0.6, danceability: 0.7 },
+                    {
+                        id: "main-1",
+                        bpm: 120,
+                        energy: 0.8,
+                        valence: 0.65,
+                        danceability: 0.72,
+                    },
+                    {
+                        id: "main-2",
+                        bpm: 124,
+                        energy: 0.77,
+                        valence: 0.6,
+                        danceability: 0.7,
+                    },
                 ];
             }
             if (Array.isArray(args.where?.album?.artistId?.in)) {
@@ -5600,7 +5813,10 @@ describe("library catalog list runtime coverage", () => {
                             id: "album-genre-sim-1",
                             title: "Genre Sim",
                             coverUrl: "genre-sim-1.jpg",
-                            artist: { id: "artist-genre-1", name: "Genre Similar" },
+                            artist: {
+                                id: "artist-genre-1",
+                                name: "Genre Similar",
+                            },
                         },
                     }),
                     createRadioTrack("genre-sim-2", {
@@ -5608,7 +5824,10 @@ describe("library catalog list runtime coverage", () => {
                             id: "album-genre-sim-2",
                             title: "Genre Sim 2",
                             coverUrl: "genre-sim-2.jpg",
-                            artist: { id: "artist-genre-2", name: "Genre Similar 2" },
+                            artist: {
+                                id: "artist-genre-2",
+                                name: "Genre Similar 2",
+                            },
                         },
                     }),
                 ];
@@ -5627,7 +5846,11 @@ describe("library catalog list runtime coverage", () => {
             userGenres: [],
         });
         mockArtistFindMany.mockResolvedValueOnce([
-            { id: "artist-genre-1", genres: ["alt rock", "rock"], userGenres: [] },
+            {
+                id: "artist-genre-1",
+                genres: ["alt rock", "rock"],
+                userGenres: [],
+            },
             { id: "artist-genre-2", genres: ["rock"], userGenres: [] },
         ]);
 
@@ -5691,7 +5914,7 @@ describe("library album cover and media route edge coverage", () => {
                     getStreamFilePath: mockStreamGetStreamFilePath,
                     streamFileWithRangeSupport: mockStreamWithRangeSupport,
                     destroy: mockStreamDestroy,
-                }) as any
+                }) as any,
         );
         (config.music as any).musicPath = "/music";
         (config.music as any).transcodeCachePath = "/tmp/soundspan-cache";
@@ -5700,7 +5923,9 @@ describe("library album cover and media route edge coverage", () => {
         mockTrackFindUnique.mockResolvedValue(createNativeTrack());
         mockPlayFindFirst.mockResolvedValue(null);
         mockPlayCreate.mockResolvedValue({});
-        mockUserSettingsFindUnique.mockResolvedValue({ playbackQuality: "medium" });
+        mockUserSettingsFindUnique.mockResolvedValue({
+            playbackQuality: "medium",
+        });
         mockStreamGetStreamFilePath.mockResolvedValue({
             filePath: "/tmp/stream.flac",
             mimeType: "audio/flac",
@@ -5761,9 +5986,7 @@ describe("library album cover and media route edge coverage", () => {
     });
 
     it("returns 404 for audio-info when file does not exist", async () => {
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(false);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(false);
 
         mockTrackFindUnique.mockResolvedValueOnce({
             filePath: "missing/track.flac",
@@ -5785,9 +6008,7 @@ describe("library album cover and media route edge coverage", () => {
     });
 
     it("extracts audio metadata and maps fields correctly", async () => {
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(true);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
 
         mockTrackFindUnique.mockResolvedValueOnce({
             filePath: "library/Track.flac",
@@ -5826,9 +6047,7 @@ describe("library album cover and media route edge coverage", () => {
     });
 
     it("reuses cached audio metadata for repeated requests to the same track identity", async () => {
-        const existsSpy = jest
-            .spyOn(fs, "existsSync")
-            .mockReturnValue(true);
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
 
         mockTrackFindUnique.mockResolvedValue({
             filePath: "library/Cached-track.flac",
@@ -5939,7 +6158,7 @@ describe("library album cover and media route edge coverage", () => {
         expect(mockTrackFindUnique).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "track-stream" },
-            })
+            }),
         );
         expect(mockPlayFindFirst).toHaveBeenCalledWith({
             where: {
@@ -5955,19 +6174,19 @@ describe("library album cover and media route edge coverage", () => {
                     userId: "user-1",
                     trackId: "track-stream",
                 },
-            })
+            }),
         );
         expect(mockStreamGetStreamFilePath).toHaveBeenCalledWith(
             "track-stream",
             "medium",
             expect.any(Date),
-            expect.stringContaining("Artists/Track.flac")
+            expect.stringContaining("Artists/Track.flac"),
         );
         expect(mockStreamWithRangeSupport).toHaveBeenCalledWith(
             req,
             res,
             "/tmp/stream.flac",
-            "audio/flac"
+            "audio/flac",
         );
         expect(mockStreamDestroy).toHaveBeenCalled();
     });
@@ -6005,20 +6224,20 @@ describe("library album cover and media route edge coverage", () => {
             "track-stream-fallback",
             "high",
             expect.any(Date),
-            expect.stringContaining("Fallback/Track.flac")
+            expect.stringContaining("Fallback/Track.flac"),
         );
         expect(mockStreamGetStreamFilePath).toHaveBeenNthCalledWith(
             2,
             "track-stream-fallback",
             "original",
             expect.any(Date),
-            expect.stringContaining("Fallback/Track.flac")
+            expect.stringContaining("Fallback/Track.flac"),
         );
         expect(mockStreamWithRangeSupport).toHaveBeenCalledWith(
             req,
             res,
             "/tmp/stream-original.flac",
-            "audio/flac"
+            "audio/flac",
         );
         expect(mockStreamDestroy).toHaveBeenCalled();
     });
@@ -6035,7 +6254,9 @@ describe("library album cover and media route edge coverage", () => {
         });
         mockPlayFindFirst.mockResolvedValueOnce(null);
         mockPlayCreate.mockResolvedValueOnce({});
-        mockStreamGetStreamFilePath.mockRejectedValueOnce(new Error("stream setup failed"));
+        mockStreamGetStreamFilePath.mockRejectedValueOnce(
+            new Error("stream setup failed"),
+        );
 
         const req = {
             params: { id: "track-stream-error" },
@@ -6060,8 +6281,14 @@ describe("library unexpected-failure tails return 500 via the shared error path"
     const albumByIdHandler = getHandler("get", "/albums/:id");
     const likedPlaylistHandler = getHandler("get", "/liked");
     const trackPreferenceHandler = getHandler("get", "/tracks/:id/preference");
-    const setTrackPreferenceHandler = getHandler("post", "/tracks/:id/preference");
-    const setAlbumPreferenceHandler = getHandler("post", "/albums/:id/preference");
+    const setTrackPreferenceHandler = getHandler(
+        "post",
+        "/tracks/:id/preference",
+    );
+    const setAlbumPreferenceHandler = getHandler(
+        "post",
+        "/albums/:id/preference",
+    );
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -6100,7 +6327,10 @@ describe("library unexpected-failure tails return 500 via the shared error path"
     it("returns 500 when the track-preference lookup rejects", async () => {
         mockTrackFindUnique.mockRejectedValueOnce(new Error("db down"));
 
-        const req = { user: { id: "user-1" }, params: { id: "track-1" } } as any;
+        const req = {
+            user: { id: "user-1" },
+            params: { id: "track-1" },
+        } as any;
         const res = createRes();
         await invokeWithErrorHandler(trackPreferenceHandler, req, res);
 

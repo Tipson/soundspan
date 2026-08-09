@@ -142,7 +142,10 @@ describe("spotify import matchTrack concurrency", () => {
         });
         jest.doMock("../acquisitionService", () => ({
             acquisitionService: {
-                acquireAlbum: jest.fn(async () => ({ success: true, source: "soulseek" })),
+                acquireAlbum: jest.fn(async () => ({
+                    success: true,
+                    source: "soulseek",
+                })),
                 acquireTracks: jest.fn(async () => []),
             },
         }));
@@ -196,12 +199,42 @@ describe("spotify import matchTrack concurrency", () => {
         // 6 tracks, interleaving matched/unmatched, with two unmatched tracks
         // (T2, T4) sharing an album key to also pin grouping/accumulation order.
         const tracks = [
-            makeTrack({ spotifyId: "sp-1", title: "Song One", artist: "Artist Solo One", album: "Album One" }), // matched
-            makeTrack({ spotifyId: "sp-2", title: "Song Two", artist: "Artist Group", album: "Shared Album" }), // unmatched, key A
-            makeTrack({ spotifyId: "sp-3", title: "Song Three", artist: "Artist Solo Three", album: "Album Three" }), // matched
-            makeTrack({ spotifyId: "sp-4", title: "Song Four", artist: "Artist Group", album: "Shared Album" }), // unmatched, key A (2nd track)
-            makeTrack({ spotifyId: "sp-5", title: "Song Five", artist: "Artist Other", album: "Other Album" }), // unmatched, key B
-            makeTrack({ spotifyId: "sp-6", title: "Song Six", artist: "Artist Solo Six", album: "Album Six" }), // matched
+            makeTrack({
+                spotifyId: "sp-1",
+                title: "Song One",
+                artist: "Artist Solo One",
+                album: "Album One",
+            }), // matched
+            makeTrack({
+                spotifyId: "sp-2",
+                title: "Song Two",
+                artist: "Artist Group",
+                album: "Shared Album",
+            }), // unmatched, key A
+            makeTrack({
+                spotifyId: "sp-3",
+                title: "Song Three",
+                artist: "Artist Solo Three",
+                album: "Album Three",
+            }), // matched
+            makeTrack({
+                spotifyId: "sp-4",
+                title: "Song Four",
+                artist: "Artist Group",
+                album: "Shared Album",
+            }), // unmatched, key A (2nd track)
+            makeTrack({
+                spotifyId: "sp-5",
+                title: "Song Five",
+                artist: "Artist Other",
+                album: "Other Album",
+            }), // unmatched, key B
+            makeTrack({
+                spotifyId: "sp-6",
+                title: "Song Six",
+                artist: "Artist Solo Six",
+                album: "Album Six",
+            }), // matched
         ];
 
         const localTrackByTitle: Record<string, unknown> = {
@@ -209,19 +242,28 @@ describe("spotify import matchTrack concurrency", () => {
                 id: "local-1",
                 title: "Song One",
                 albumId: "album-local-1",
-                album: { title: "Album One", artist: { name: "Artist Solo One" } },
+                album: {
+                    title: "Album One",
+                    artist: { name: "Artist Solo One" },
+                },
             },
             "Song Three": {
                 id: "local-3",
                 title: "Song Three",
                 albumId: "album-local-3",
-                album: { title: "Album Three", artist: { name: "Artist Solo Three" } },
+                album: {
+                    title: "Album Three",
+                    artist: { name: "Artist Solo Three" },
+                },
             },
             "Song Six": {
                 id: "local-6",
                 title: "Song Six",
                 albumId: "album-local-6",
-                album: { title: "Album Six", artist: { name: "Artist Solo Six" } },
+                album: {
+                    title: "Album Six",
+                    artist: { name: "Artist Solo Six" },
+                },
             },
         };
 
@@ -250,14 +292,16 @@ describe("spotify import matchTrack concurrency", () => {
                 await readGates[title].promise;
                 readCompletions[title].resolve();
                 return localTrackByTitle[title] ?? null;
-            }
+            },
         );
         (musicBrainzService.searchArtist as jest.Mock).mockResolvedValue([]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
 
-        const previewPromise = (spotifyImportService as any).buildPreviewFromTracklist(
+        const previewPromise = (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             tracks,
             {
                 id: "playlist-concurrency",
@@ -267,7 +311,7 @@ describe("spotify import matchTrack concurrency", () => {
                 imageUrl: null,
                 trackCount: tracks.length,
             },
-            "Spotify"
+            "Spotify",
         );
 
         await allReadsStarted.promise;
@@ -281,14 +325,9 @@ describe("spotify import matchTrack concurrency", () => {
 
         // matchedTracks must be in exact input order, regardless of the
         // reversed DB-resolution order above.
-        expect(preview.matchedTracks.map((m: any) => m.spotifyTrack.spotifyId)).toEqual([
-            "sp-1",
-            "sp-2",
-            "sp-3",
-            "sp-4",
-            "sp-5",
-            "sp-6",
-        ]);
+        expect(
+            preview.matchedTracks.map((m: any) => m.spotifyTrack.spotifyId),
+        ).toEqual(["sp-1", "sp-2", "sp-3", "sp-4", "sp-5", "sp-6"]);
         expect(preview.matchedTracks.map((m: any) => m.matchType)).toEqual([
             "exact",
             "none",
@@ -307,14 +346,19 @@ describe("spotify import matchTrack concurrency", () => {
         // tracks stay in [sp-2, sp-4] order even though sp-4 resolved its DB
         // read before sp-2 did.
         expect(
-            preview.albumsToDownload.map((a: any) => `${a.artistName}|||${a.albumName}`)
-        ).toEqual(["Artist Group|||Shared Album", "Artist Other|||Other Album"]);
+            preview.albumsToDownload.map(
+                (a: any) => `${a.artistName}|||${a.albumName}`,
+            ),
+        ).toEqual([
+            "Artist Group|||Shared Album",
+            "Artist Other|||Other Album",
+        ]);
 
         const sharedAlbumGroup = preview.albumsToDownload.find(
-            (a: any) => a.artistName === "Artist Group"
+            (a: any) => a.artistName === "Artist Group",
         );
         expect(
-            sharedAlbumGroup.tracksNeeded.map((t: any) => t.spotifyId)
+            sharedAlbumGroup.tracksNeeded.map((t: any) => t.spotifyId),
         ).toEqual(["sp-2", "sp-4"]);
     });
 });

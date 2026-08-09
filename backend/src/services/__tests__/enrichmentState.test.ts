@@ -106,19 +106,19 @@ describe("enrichmentStateService", () => {
         expect(stateClient.del).toHaveBeenCalledWith("enrichment:state");
         expect(publisherClient.publish).toHaveBeenCalledWith(
             "enrichment:control",
-            "pause"
+            "pause",
         );
         expect(publisherClient.publish).toHaveBeenCalledWith(
             "audio:analysis:control",
-            "pause"
+            "pause",
         );
         expect(publisherClient.publish).toHaveBeenCalledWith(
             "enrichment:control",
-            "resume"
+            "resume",
         );
         expect(publisherClient.publish).toHaveBeenCalledWith(
             "enrichment:control",
-            "stop"
+            "stop",
         );
     });
 
@@ -126,37 +126,42 @@ describe("enrichmentStateService", () => {
         const stateClient = createStateClient();
         const failingPublisher = createPublisherClient();
         failingPublisher.publish.mockRejectedValueOnce(
-            new Error("Connection is closed.")
+            new Error("Connection is closed."),
         );
 
         const replacementPublisher = createPublisherClient();
 
-        const { enrichmentStateService, logger, createIORedisClient } = loadService({
-            stateClient,
-            publisherClient: failingPublisher,
-            extraClients: [replacementPublisher],
-        });
+        const { enrichmentStateService, logger, createIORedisClient } =
+            loadService({
+                stateClient,
+                publisherClient: failingPublisher,
+                extraClients: [replacementPublisher],
+            });
 
         await enrichmentStateService.initializeState();
         await expect(enrichmentStateService.pause()).resolves.toEqual(
-            expect.objectContaining({ status: "paused" })
+            expect.objectContaining({ status: "paused" }),
         );
 
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("pause publish failed due to Redis connection closure"),
-            expect.any(Error)
+            expect.stringContaining(
+                "pause publish failed due to Redis connection closure",
+            ),
+            expect.any(Error),
         );
         // state + publisher + recreated publisher
         expect(createIORedisClient).toHaveBeenCalledTimes(3);
         expect(replacementPublisher.publish).toHaveBeenCalledWith(
             "enrichment:control",
-            "pause"
+            "pause",
         );
     });
 
     it("retries state reads after connection-closed errors and recreates state client", async () => {
         const failingState = createStateClient();
-        failingState.get.mockRejectedValueOnce(new Error("Connection is closed."));
+        failingState.get.mockRejectedValueOnce(
+            new Error("Connection is closed."),
+        );
         failingState.disconnect.mockImplementationOnce(() => {
             throw new Error("disconnect failed");
         });
@@ -170,24 +175,25 @@ describe("enrichmentStateService", () => {
                 artists: { total: 1, completed: 0, failed: 0 },
                 tracks: { total: 1, completed: 0, failed: 0 },
                 audio: { total: 1, completed: 0, failed: 0, processing: 0 },
-            })
+            }),
         );
         const publisher = createPublisherClient();
 
-        const { enrichmentStateService, logger, createIORedisClient } = loadService({
-            stateClient: failingState,
-            publisherClient: publisher,
-            extraClients: [replacementState],
-        });
+        const { enrichmentStateService, logger, createIORedisClient } =
+            loadService({
+                stateClient: failingState,
+                publisherClient: publisher,
+                extraClients: [replacementState],
+            });
 
         await expect(enrichmentStateService.getState()).resolves.toEqual(
-            expect.objectContaining({ status: "running" })
+            expect.objectContaining({ status: "running" }),
         );
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "getState failed due to Redis connection closure"
+                "getState failed due to Redis connection closure",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(createIORedisClient).toHaveBeenCalledTimes(3);
         expect(replacementState.get).toHaveBeenCalledTimes(1);
@@ -197,13 +203,14 @@ describe("enrichmentStateService", () => {
         const failingState = createStateClient();
         failingState.get.mockRejectedValueOnce(new Error("permission denied"));
         const publisher = createPublisherClient();
-        const { enrichmentStateService, logger, createIORedisClient } = loadService({
-            stateClient: failingState,
-            publisherClient: publisher,
-        });
+        const { enrichmentStateService, logger, createIORedisClient } =
+            loadService({
+                stateClient: failingState,
+                publisherClient: publisher,
+            });
 
         await expect(enrichmentStateService.getState()).rejects.toThrow(
-            "permission denied"
+            "permission denied",
         );
         expect(logger.warn).not.toHaveBeenCalled();
         expect(createIORedisClient).toHaveBeenCalledTimes(2);
@@ -213,17 +220,18 @@ describe("enrichmentStateService", () => {
         const stateClient = createStateClient();
         const failingPublisher = createPublisherClient();
         failingPublisher.publish.mockRejectedValueOnce(
-            new Error("publisher forbidden")
+            new Error("publisher forbidden"),
         );
 
-        const { enrichmentStateService, logger, createIORedisClient } = loadService({
-            stateClient,
-            publisherClient: failingPublisher,
-        });
+        const { enrichmentStateService, logger, createIORedisClient } =
+            loadService({
+                stateClient,
+                publisherClient: failingPublisher,
+            });
 
         await enrichmentStateService.initializeState();
         await expect(enrichmentStateService.pause()).rejects.toThrow(
-            "publisher forbidden"
+            "publisher forbidden",
         );
         expect(logger.warn).not.toHaveBeenCalled();
         expect(createIORedisClient).toHaveBeenCalledTimes(2);
@@ -242,7 +250,7 @@ describe("enrichmentStateService", () => {
                 artists: { total: 1, completed: 0, failed: 0 },
                 tracks: { total: 1, completed: 0, failed: 0 },
                 audio: { total: 1, completed: 0, failed: 0, processing: 0 },
-            })
+            }),
         );
 
         await expect(enrichmentStateService.isRunning()).resolves.toBe(true);
@@ -264,11 +272,11 @@ describe("enrichmentStateService", () => {
                 artists: { total: 1, completed: 0, failed: 0 },
                 tracks: { total: 1, completed: 0, failed: 0 },
                 audio: { total: 1, completed: 0, failed: 0, processing: 0 },
-            })
+            }),
         );
 
         await expect(enrichmentStateService.resume()).rejects.toThrow(
-            "Cannot resume enrichment in stopping state"
+            "Cannot resume enrichment in stopping state",
         );
     });
 
@@ -285,7 +293,7 @@ describe("enrichmentStateService", () => {
                 artists: { total: 1, completed: 0, failed: 0 },
                 tracks: { total: 1, completed: 0, failed: 0 },
                 audio: { total: 1, completed: 0, failed: 0, processing: 0 },
-            })
+            }),
         );
         await expect(enrichmentStateService.detectHang()).resolves.toBe(false);
     });

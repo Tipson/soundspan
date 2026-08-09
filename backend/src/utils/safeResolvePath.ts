@@ -1,6 +1,9 @@
 import path from "node:path";
 
-export function safeResolvePath(base: string, untrusted: string): string | null {
+export function safeResolvePath(
+    base: string,
+    untrusted: string,
+): string | null {
     const resolvedBase = path.resolve(base);
     const resolvedTarget = path.resolve(resolvedBase, untrusted);
 

@@ -25,10 +25,9 @@ const displayNameSchema = z
     .string()
     .trim()
     .max(80)
-    .refine(
-        (value) => value.length === 0 || displayNamePattern.test(value),
-        { message: displayNameValidationMessage }
-    );
+    .refine((value) => value.length === 0 || displayNamePattern.test(value), {
+        message: displayNameValidationMessage,
+    });
 
 const settingsSchema = z.object({
     playbackQuality: z.enum(["original", "high", "medium", "low"]).optional(),
@@ -41,7 +40,9 @@ const settingsSchema = z.object({
     showYtMusicExplore: z.boolean().optional(),
     showTidalExplore: z.boolean().optional(),
     ytMusicQuality: z.enum(["LOW", "MEDIUM", "HIGH", "LOSSLESS"]).optional(),
-    tidalStreamingQuality: z.enum(["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"]).optional(),
+    tidalStreamingQuality: z
+        .enum(["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"])
+        .optional(),
     displayName: displayNameSchema.nullable().optional(),
 });
 
@@ -299,7 +300,9 @@ router.post(
         upload.single("file")(req, res, (err) => {
             if (err instanceof multer.MulterError) {
                 if (err.code === "LIMIT_FILE_SIZE") {
-                    return res.status(400).json({ error: "File too large. Maximum 5MB." });
+                    return res
+                        .status(400)
+                        .json({ error: "File too large. Maximum 5MB." });
                 }
                 return res.status(400).json({ error: err.message });
             }
@@ -342,7 +345,7 @@ router.post(
                 .status(500)
                 .json({ error: "Failed to upload profile picture" });
         }
-    }
+    },
 );
 
 /**

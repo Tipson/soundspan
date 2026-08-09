@@ -72,13 +72,10 @@ jest.mock("../../services/simpleDownloadManager", () => ({
 
 import router from "../notifications";
 
-function getHandler(
-    path: string,
-    method: "get" | "post" | "put" | "delete"
-) {
+function getHandler(path: string, method: "get" | "post" | "put" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -219,13 +216,19 @@ describe("notifications route runtime", () => {
         const listErrRes = createRes();
         await getNotifications(req, listErrRes);
         expect(listErrRes.statusCode).toBe(500);
-        expect(listErrRes.body).toEqual({ error: "Failed to fetch notifications" });
+        expect(listErrRes.body).toEqual({
+            error: "Failed to fetch notifications",
+        });
 
-        notificationService.getUnreadCount.mockRejectedValueOnce(new Error("boom"));
+        notificationService.getUnreadCount.mockRejectedValueOnce(
+            new Error("boom"),
+        );
         const unreadErrRes = createRes();
         await getUnreadCount(req, unreadErrRes);
         expect(unreadErrRes.statusCode).toBe(500);
-        expect(unreadErrRes.body).toEqual({ error: "Failed to fetch unread count" });
+        expect(unreadErrRes.body).toEqual({
+            error: "Failed to fetch unread count",
+        });
 
         notificationService.markAsRead.mockRejectedValueOnce(new Error("boom"));
         const readErrRes = createRes();
@@ -235,7 +238,9 @@ describe("notifications route runtime", () => {
             error: "Failed to mark notification as read",
         });
 
-        notificationService.markAllAsRead.mockRejectedValueOnce(new Error("boom"));
+        notificationService.markAllAsRead.mockRejectedValueOnce(
+            new Error("boom"),
+        );
         const readAllErrRes = createRes();
         await markAllRead(req, readAllErrRes);
         expect(readAllErrRes.statusCode).toBe(500);
@@ -247,7 +252,9 @@ describe("notifications route runtime", () => {
         const clearErrRes = createRes();
         await clearOne(req, clearErrRes);
         expect(clearErrRes.statusCode).toBe(500);
-        expect(clearErrRes.body).toEqual({ error: "Failed to clear notification" });
+        expect(clearErrRes.body).toEqual({
+            error: "Failed to clear notification",
+        });
 
         notificationService.clearAll.mockRejectedValueOnce(new Error("boom"));
         const clearAllErrRes = createRes();
@@ -277,7 +284,7 @@ describe("notifications route runtime", () => {
         const clearDownloadErrRes = createRes();
         await clearDownload(
             { user: { id: "u1" }, params: { id: "job-1" } } as any,
-            clearDownloadErrRes
+            clearDownloadErrRes,
         );
         expect(clearDownloadErrRes.statusCode).toBe(500);
         expect(clearDownloadErrRes.body).toEqual({
@@ -288,7 +295,7 @@ describe("notifications route runtime", () => {
         const clearAllDownloadsErrRes = createRes();
         await clearAllDownloads(
             { user: { id: "u1" } } as any,
-            clearAllDownloadsErrRes
+            clearAllDownloadsErrRes,
         );
         expect(clearAllDownloadsErrRes.statusCode).toBe(500);
         expect(clearAllDownloadsErrRes.body).toEqual({
@@ -309,7 +316,7 @@ describe("notifications route runtime", () => {
                     subject: `Album-${i}`,
                     status: "completed",
                 },
-            ])
+            ]),
         );
 
         const req = { user: { id: "u1" } } as any;
@@ -330,7 +337,9 @@ describe("notifications route runtime", () => {
         const activeRes = createRes();
         await getActiveDownloads(activeReq, activeRes);
         expect(activeRes.statusCode).toBe(200);
-        expect(activeRes.body).toEqual([{ id: "active-1", status: "processing" }]);
+        expect(activeRes.body).toEqual([
+            { id: "active-1", status: "processing" },
+        ]);
 
         const clearReq = { user: { id: "u1" }, params: { id: "job-1" } } as any;
         const clearRes = createRes();
@@ -360,7 +369,10 @@ describe("notifications route runtime", () => {
 
     it("returns 404 when retry target is missing", async () => {
         prisma.downloadJob.findFirst.mockResolvedValueOnce(null);
-        const req = { user: { id: "u1" }, params: { id: "job-missing" } } as any;
+        const req = {
+            user: { id: "u1" },
+            params: { id: "job-missing" },
+        } as any;
         const res = createRes();
         await retryDownload(req, res);
 
@@ -379,7 +391,10 @@ describe("notifications route runtime", () => {
             metadata: { downloadType: "pending-track-retry" },
         });
 
-        const missingMetaReq = { user: { id: "u1" }, params: { id: "job-1" } } as any;
+        const missingMetaReq = {
+            user: { id: "u1" },
+            params: { id: "job-1" },
+        } as any;
         const missingMetaRes = createRes();
         await retryDownload(missingMetaReq, missingMetaRes);
         expect(missingMetaRes.statusCode).toBe(400);
@@ -488,7 +503,7 @@ describe("notifications route runtime", () => {
         await retryDownload(noCredsReq, noCredsRes);
         expect(noCredsRes.statusCode).toBe(200);
         expect(noCredsRes.body.error).toBe(
-            "Soulseek credentials not configured"
+            "Soulseek credentials not configured",
         );
     });
 
@@ -520,7 +535,10 @@ describe("notifications route runtime", () => {
             allMatches: [],
         });
 
-        const noMatchReq = { user: { id: "u1" }, params: { id: "job-pending-search" } } as any;
+        const noMatchReq = {
+            user: { id: "u1" },
+            params: { id: "job-pending-search" },
+        } as any;
         const noMatchRes = createRes();
         await retryDownload(noMatchReq, noMatchRes);
         expect(noMatchRes.statusCode).toBe(200);
@@ -583,7 +601,7 @@ describe("notifications route runtime", () => {
                         filePath: "/music/Artist/Album/track.flac",
                     }),
                 }),
-            })
+            }),
         );
 
         prisma.downloadJob.findFirst.mockResolvedValueOnce({
@@ -632,7 +650,7 @@ describe("notifications route runtime", () => {
                     status: "failed",
                     error: "download failed",
                 }),
-            })
+            }),
         );
 
         prisma.downloadJob.findFirst.mockResolvedValueOnce({
@@ -680,7 +698,7 @@ describe("notifications route runtime", () => {
                     status: "failed",
                     error: "socket closed",
                 }),
-            })
+            }),
         );
     });
 
@@ -828,7 +846,7 @@ describe("notifications route runtime", () => {
                         tracksDownloaded: 1,
                     }),
                 }),
-            })
+            }),
         );
 
         prisma.downloadJob.findFirst.mockResolvedValueOnce({
@@ -873,7 +891,7 @@ describe("notifications route runtime", () => {
                     status: "failed",
                     error: "lidarr failed",
                 }),
-            })
+            }),
         );
 
         prisma.downloadJob.findFirst.mockResolvedValueOnce({
@@ -914,7 +932,7 @@ describe("notifications route runtime", () => {
                     status: "failed",
                     error: "No tracks found on Soulseek, no MBID for Lidarr fallback",
                 }),
-            })
+            }),
         );
 
         prisma.downloadJob.findFirst.mockResolvedValueOnce({
@@ -954,12 +972,14 @@ describe("notifications route runtime", () => {
                     status: "failed",
                     error: "soulseek crashed",
                 }),
-            })
+            }),
         );
     });
 
     it("returns 500 when retry handler throws unexpectedly", async () => {
-        prisma.downloadJob.findFirst.mockRejectedValueOnce(new Error("db exploded"));
+        prisma.downloadJob.findFirst.mockRejectedValueOnce(
+            new Error("db exploded"),
+        );
         const req = { user: { id: "u1" }, params: { id: "job-any" } } as any;
         const res = createRes();
         await retryDownload(req, res);

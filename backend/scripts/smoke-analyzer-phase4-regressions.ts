@@ -25,7 +25,7 @@ function sleep(ms: number): Promise<void> {
 async function waitForLog(
     logsRef: { value: string },
     pattern: RegExp,
-    timeoutMs: number
+    timeoutMs: number,
 ): Promise<boolean> {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
@@ -48,7 +48,7 @@ function mustGetEnv(name: string, fallback?: string): string {
 async function waitForTrackState(
     trackId: string,
     predicate: (track: TrackState | null) => boolean,
-    timeoutMs: number
+    timeoutMs: number,
 ): Promise<TrackState | null> {
     const startedAt = Date.now();
     let last: TrackState | null = null;
@@ -74,13 +74,15 @@ async function run(): Promise<void> {
     const redisUrl = mustGetEnv("REDIS_URL", "redis://localhost:6380");
     const pythonBin = mustGetEnv("PYTHON_BIN", "python3");
     const musicPath = mustGetEnv("MUSIC_PATH", "/tmp");
-    const analyzerScript = process.env.ANALYZER_SCRIPT || path.resolve(
-        process.cwd(),
-        "..",
-        "services",
-        "audio-analyzer",
-        "analyzer.py"
-    );
+    const analyzerScript =
+        process.env.ANALYZER_SCRIPT ||
+        path.resolve(
+            process.cwd(),
+            "..",
+            "services",
+            "audio-analyzer",
+            "analyzer.py",
+        );
 
     const candidates = await prisma.track.findMany({
         where: {
@@ -100,7 +102,9 @@ async function run(): Promise<void> {
     });
 
     if (candidates.length < 2) {
-        throw new Error("Need at least 2 completed tracks to run analyzer smoke test");
+        throw new Error(
+            "Need at least 2 completed tracks to run analyzer smoke test",
+        );
     }
 
     const staleTrack = candidates[0];
@@ -125,7 +129,9 @@ async function run(): Promise<void> {
     let redis: ReturnType<typeof createClient> | null = null;
     let analyzer: ReturnType<typeof spawn> | null = null;
     const logBuffer = { value: "" };
-    const smokeLogPath = process.env.ANALYZER_SMOKE_LOG_PATH || "/tmp/analyzer-phase4-regressions.log";
+    const smokeLogPath =
+        process.env.ANALYZER_SMOKE_LOG_PATH ||
+        "/tmp/analyzer-phase4-regressions.log";
 
     try {
         // Danceability consistency snapshot for enhanced-mode tracks.
@@ -139,7 +145,7 @@ async function run(): Promise<void> {
             _count: { _all: true },
         });
         console.log(
-            `[smoke] enhanced danceability overlap rows: ${enhancedSummary._count._all}`
+            `[smoke] enhanced danceability overlap rows: ${enhancedSummary._count._all}`,
         );
 
         redis = createClient({ url: redisUrl });
@@ -174,7 +180,7 @@ async function run(): Promise<void> {
         const ready = await waitForLog(
             logBuffer,
             /Starting Audio Analysis Worker \(BRPOP MODE\)/,
-            15000
+            15000,
         );
         if (!ready) {
             throw new Error("Analyzer did not start within timeout");
@@ -186,7 +192,7 @@ async function run(): Promise<void> {
             JSON.stringify({
                 trackId: staleTrack.id,
                 filePath: staleTrack.filePath,
-            })
+            }),
         );
 
         await redis.publish("audio:analysis:control", "pause");
@@ -195,7 +201,7 @@ async function run(): Promise<void> {
         await sleep(800);
         await redis.publish(
             "audio:analysis:control",
-            JSON.stringify({ command: "set_workers", count: 1 })
+            JSON.stringify({ command: "set_workers", count: 1 }),
         );
         await sleep(800);
 
@@ -214,18 +220,21 @@ async function run(): Promise<void> {
             JSON.stringify({
                 trackId: failureTrack.id,
                 filePath: forcedMissingPath,
-            })
+            }),
         );
 
         const failureTrackAfter = await waitForTrackState(
             failureTrack.id,
             (track) => track?.analysisStatus === "failed",
-            120000
+            120000,
         );
-        if (!failureTrackAfter || failureTrackAfter.analysisStatus !== "failed") {
+        if (
+            !failureTrackAfter ||
+            failureTrackAfter.analysisStatus !== "failed"
+        ) {
             const tail = logBuffer.value.slice(-4000);
             throw new Error(
-                `Failure track did not reach failed status within timeout (last status: ${failureTrackAfter?.analysisStatus ?? "missing"}). Log tail:\n${tail}`
+                `Failure track did not reach failed status within timeout (last status: ${failureTrackAfter?.analysisStatus ?? "missing"}). Log tail:\n${tail}`,
             );
         }
 
@@ -254,30 +263,33 @@ async function run(): Promise<void> {
         ];
 
         const missingPatterns = requiredLogPatterns.filter(
-            (pattern) => !pattern.test(logBuffer.value)
+            (pattern) => !pattern.test(logBuffer.value),
         );
         if (missingPatterns.length > 0) {
             throw new Error(
                 `Missing expected log patterns: ${missingPatterns
                     .map((pattern) => pattern.toString())
-                    .join(", ")}`
+                    .join(", ")}`,
             );
         }
 
         if (failureTrackAfter.analysisStatus !== "failed") {
             throw new Error(
-                `Expected failure track to end in failed status, got ${failureTrackAfter.analysisStatus}`
+                `Expected failure track to end in failed status, got ${failureTrackAfter.analysisStatus}`,
             );
         }
-        if (failureTrackAfter.analysisRetryCount <= failureTrackBefore.analysisRetryCount) {
+        if (
+            failureTrackAfter.analysisRetryCount <=
+            failureTrackBefore.analysisRetryCount
+        ) {
             throw new Error(
-                `Expected failure track retry count to increment from ${failureTrackBefore.analysisRetryCount}, got ${failureTrackAfter.analysisRetryCount}`
+                `Expected failure track retry count to increment from ${failureTrackBefore.analysisRetryCount}, got ${failureTrackAfter.analysisRetryCount}`,
             );
         }
 
         console.log(`[smoke] analyzer exit code: ${exitCode}`);
         console.log(
-            `[smoke] failure track state: ${failureTrackAfter.analysisStatus}, retries=${failureTrackAfter.analysisRetryCount}`
+            `[smoke] failure track state: ${failureTrackAfter.analysisStatus}, retries=${failureTrackAfter.analysisRetryCount}`,
         );
         console.log("[smoke] Phase 4 analyzer regression checks passed");
     } finally {

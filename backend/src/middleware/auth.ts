@@ -10,7 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
 
 if (!JWT_SECRET) {
     throw new Error(
-        "JWT_SECRET or SESSION_SECRET environment variable is required for authentication"
+        "JWT_SECRET or SESSION_SECRET environment variable is required for authentication",
     );
 }
 
@@ -66,10 +66,10 @@ export function generateToken(user: {
             userId: user.id,
             username: user.username,
             role: user.role,
-            tokenVersion: user.tokenVersion
+            tokenVersion: user.tokenVersion,
         },
         JWT_SECRET_VALIDATED,
-        { expiresIn: "24h" }
+        { expiresIn: "24h" },
     );
 }
 
@@ -82,10 +82,10 @@ export function generateRefreshToken(user: {
         {
             userId: user.id,
             tokenVersion: user.tokenVersion,
-            type: "refresh"
+            type: "refresh",
         },
         JWT_SECRET_VALIDATED,
-        { expiresIn: "30d" }
+        { expiresIn: "30d" },
     );
 }
 
@@ -130,7 +130,7 @@ export function verifyAccessToken(token: string): JWTPayload {
  * the token itself fails verification.
  */
 async function resolveAccessTokenUser(
-    token: string
+    token: string,
 ): Promise<{ id: string; username: string; role: string } | null> {
     const decoded = verifyAccessToken(token);
     const user = await prisma.user.findUnique({
@@ -158,7 +158,7 @@ async function resolveAccessTokenUser(
  */
 async function authenticateRequest(
     req: Request,
-    checkQueryToken: boolean = false
+    checkQueryToken: boolean = false,
 ): Promise<{ id: string; username: string; role: string } | null> {
     // Check session-based auth
     if (req.session?.userId) {
@@ -185,7 +185,7 @@ async function authenticateRequest(
                             select: { id: true, username: true, role: true },
                         },
                     },
-                })
+                }),
             );
 
             if (apiKeyRecord && apiKeyRecord.user) {
@@ -195,7 +195,9 @@ async function authenticateRequest(
                         where: { id: apiKeyRecord.id },
                         data: { lastUsed: new Date() },
                     })
-                    .catch((err) => { logger.debug("Failed to update API key lastUsed", err); });
+                    .catch((err) => {
+                        logger.debug("Failed to update API key lastUsed", err);
+                    });
 
                 return apiKeyRecord.user;
             }
@@ -239,7 +241,7 @@ async function authenticateRequest(
 export async function requireAuth(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
 ) {
     const user = await authenticateRequest(req, false);
     if (user) {
@@ -253,7 +255,7 @@ export async function requireAuth(
 export async function requireAdmin(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
 ) {
     if (!req.user || req.user.role !== "admin") {
         return res.status(403).json({ error: "Admin access required" });
@@ -266,7 +268,7 @@ export async function requireAdmin(
 export async function requireAuthOrToken(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
 ) {
     // First, check session-based auth (primary method for web)
     if (req.session?.userId) {
@@ -297,7 +299,7 @@ export async function requireAuthOrToken(
                             select: { id: true, username: true, role: true },
                         },
                     },
-                })
+                }),
             );
 
             if (apiKeyRecord && apiKeyRecord.user) {
@@ -307,7 +309,9 @@ export async function requireAuthOrToken(
                         where: { id: apiKeyRecord.id },
                         data: { lastUsed: new Date() },
                     })
-                    .catch((err) => { logger.debug("Failed to update API key lastUsed", err); });
+                    .catch((err) => {
+                        logger.debug("Failed to update API key lastUsed", err);
+                    });
 
                 req.user = apiKeyRecord.user;
                 return next();
@@ -327,7 +331,10 @@ export async function requireAuthOrToken(
                 return next();
             }
         } catch (error) {
-            logger.debug("Query token validation failed in requireAuthOrToken", error);
+            logger.debug(
+                "Query token validation failed in requireAuthOrToken",
+                error,
+            );
         }
     }
 
@@ -345,7 +352,10 @@ export async function requireAuthOrToken(
                 return next();
             }
         } catch (error) {
-            logger.debug("Bearer token validation failed in requireAuthOrToken", error);
+            logger.debug(
+                "Bearer token validation failed in requireAuthOrToken",
+                error,
+            );
         }
     }
 

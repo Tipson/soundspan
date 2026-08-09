@@ -57,13 +57,25 @@ describe("listenTogether service", () => {
 
         const groupManager: any = {
             create: jest.fn(() => groupState),
-            addMember: jest.fn(() => ({ id: "group-1", playback: {}, members: [] })),
+            addMember: jest.fn(() => ({
+                id: "group-1",
+                playback: {},
+                members: [],
+            })),
             has: jest.fn(() => false),
             get: jest.fn(() => groupState),
             hydrate: jest.fn(),
             applyExternalSnapshot: jest.fn(),
-            snapshot: jest.fn(() => ({ id: "group-1", playback: {}, members: [] })),
-            snapshotById: jest.fn(() => ({ id: "group-1", playback: {}, members: [] })),
+            snapshot: jest.fn(() => ({
+                id: "group-1",
+                playback: {},
+                members: [],
+            })),
+            snapshotById: jest.fn(() => ({
+                id: "group-1",
+                playback: {},
+                members: [],
+            })),
             removeMember: jest.fn(() => ({ ended: false })),
             remove: jest.fn(),
             endGroup: jest.fn(),
@@ -118,8 +130,12 @@ describe("listenTogether service", () => {
     }
 
     it("creates a group with validated local tracks and persists snapshot", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce(null);
         prisma.syncGroup.findUnique.mockResolvedValueOnce(null);
@@ -158,7 +174,7 @@ describe("listenTogether service", () => {
                 currentTrackId: "t1",
                 isPlaying: true,
                 currentTimeMs: 1000,
-            })
+            }),
         ).resolves.toEqual({ id: "group-1", playback: {}, members: [] });
 
         expect(groupManager.create).toHaveBeenCalledWith(
@@ -172,11 +188,11 @@ describe("listenTogether service", () => {
                     }),
                 ],
                 isPlaying: true,
-            })
+            }),
         );
         expect(listenTogetherStateStore.setSnapshot).toHaveBeenCalledWith(
             "group-1",
-            { id: "group-1", playback: {}, members: [] }
+            { id: "group-1", playback: {}, members: [] },
         );
     });
 
@@ -203,11 +219,11 @@ describe("listenTogether service", () => {
                 syncGroupMember: {
                     create: jest.fn(async () => ({})),
                 },
-            })
+            }),
         );
 
         await expect(
-            listenTogether.createGroup("host-2", "host-two")
+            listenTogether.createGroup("host-2", "host-two"),
         ).resolves.toEqual({
             id: "group-1",
             playback: {},
@@ -248,16 +264,18 @@ describe("listenTogether service", () => {
                 data: expect.objectContaining({
                     name: "DJ Host's Group",
                 }),
-            })
+            }),
         );
         expect(groupManager.create).toHaveBeenCalledWith(
             "group-display",
             expect.objectContaining({
                 hostUsername: "DJ Host",
-            })
+            }),
         );
 
-        prisma.syncGroup.findFirst.mockResolvedValueOnce({ id: "group-display" });
+        prisma.syncGroup.findFirst.mockResolvedValueOnce({
+            id: "group-display",
+        });
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce(null);
         prisma.syncGroupMember.upsert.mockResolvedValueOnce({});
         prisma.user.findUnique.mockResolvedValueOnce({
@@ -277,19 +295,25 @@ describe("listenTogether service", () => {
         expect(groupManager.addMember).toHaveBeenCalledWith(
             "group-display",
             "guest-1",
-            "Guest Display"
+            "Guest Display",
         );
     });
 
     it("joins a group by code and rehydrates from state store when missing in memory", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         prisma.syncGroup.findFirst.mockResolvedValueOnce({ id: "group-1" });
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce(null); // maybeLeaveExisting
         prisma.syncGroupMember.upsert.mockResolvedValueOnce({});
         groupManager.has.mockReturnValue(false);
-        (listenTogetherStateStore.getSnapshot as jest.Mock).mockResolvedValueOnce({
+        (
+            listenTogetherStateStore.getSnapshot as jest.Mock
+        ).mockResolvedValueOnce({
             id: "group-1",
             playback: {},
             members: [],
@@ -301,7 +325,7 @@ describe("listenTogether service", () => {
         });
 
         await expect(
-            listenTogether.joinGroup("guest-1", "Guest", "aaaaaa")
+            listenTogether.joinGroup("guest-1", "Guest", "aaaaaa"),
         ).resolves.toEqual({
             id: "group-1",
             playback: {},
@@ -316,7 +340,7 @@ describe("listenTogether service", () => {
         expect(prisma.syncGroupMember.upsert).toHaveBeenCalled();
         expect(listenTogetherStateStore.setSnapshot).toHaveBeenCalledWith(
             "group-1",
-            { id: "group-1", playback: {}, members: [{ id: "guest-1" }] }
+            { id: "group-1", playback: {}, members: [{ id: "guest-1" }] },
         );
     });
 
@@ -324,7 +348,7 @@ describe("listenTogether service", () => {
         const { listenTogether, MockGroupError } = loadService();
 
         await expect(
-            listenTogether.joinGroup("guest-1", "Guest", "bad")
+            listenTogether.joinGroup("guest-1", "Guest", "bad"),
         ).rejects.toBeInstanceOf(MockGroupError);
     });
 
@@ -357,7 +381,7 @@ describe("listenTogether service", () => {
         prisma.syncGroup.findUnique.mockResolvedValue({ id: "already-exists" });
 
         await expect(
-            listenTogether.createGroup("host-1", "Host", {})
+            listenTogether.createGroup("host-1", "Host", {}),
         ).rejects.toThrow("Failed to generate a unique join code");
     });
 
@@ -367,7 +391,7 @@ describe("listenTogether service", () => {
         prisma.syncGroup.findFirst.mockResolvedValueOnce(null);
 
         await expect(
-            listenTogether.joinGroup("guest-1", "Guest", "AAAAAA")
+            listenTogether.joinGroup("guest-1", "Guest", "AAAAAA"),
         ).rejects.toBeInstanceOf(MockGroupError);
     });
 
@@ -386,7 +410,7 @@ describe("listenTogether service", () => {
         });
 
         await expect(
-            listenTogether.joinGroup("guest-1", "Guest", "AAAAAA")
+            listenTogether.joinGroup("guest-1", "Guest", "AAAAAA"),
         ).resolves.toEqual({
             id: "new-group",
             playback: {},
@@ -399,17 +423,18 @@ describe("listenTogether service", () => {
                     syncGroupId: "old-group",
                     userId: "guest-1",
                 }),
-            })
+            }),
         );
     });
 
     it("enforces membership and in-memory presence on joinGroupById", async () => {
-        const { listenTogether, prisma, groupManager, MockGroupError } = loadService();
+        const { listenTogether, prisma, groupManager, MockGroupError } =
+            loadService();
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce(null);
 
         await expect(
-            listenTogether.joinGroupById("u1", "User", "group-1")
+            listenTogether.joinGroupById("u1", "User", "group-1"),
         ).rejects.toBeInstanceOf(MockGroupError);
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce({
@@ -420,13 +445,17 @@ describe("listenTogether service", () => {
         groupManager.get.mockReturnValueOnce(null);
 
         await expect(
-            listenTogether.joinGroupById("u1", "User", "group-1")
+            listenTogether.joinGroupById("u1", "User", "group-1"),
         ).rejects.toBeInstanceOf(MockGroupError);
     });
 
     it("adds missing in-memory member during joinGroupById and persists snapshot", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         const group = {
             id: "group-1",
@@ -455,23 +484,31 @@ describe("listenTogether service", () => {
         });
 
         await expect(
-            listenTogether.joinGroupById("u1", "User", "group-1")
+            listenTogether.joinGroupById("u1", "User", "group-1"),
         ).resolves.toEqual({
             id: "group-1",
             playback: {},
             members: [{ id: "u1" }],
         });
 
-        expect(groupManager.addMember).toHaveBeenCalledWith("group-1", "u1", "User");
+        expect(groupManager.addMember).toHaveBeenCalledWith(
+            "group-1",
+            "u1",
+            "User",
+        );
         expect(listenTogetherStateStore.setSnapshot).toHaveBeenCalledWith(
             "group-1",
-            { id: "group-1", playback: {}, members: [{ id: "u1" }] }
+            { id: "group-1", playback: {}, members: [{ id: "u1" }] },
         );
     });
 
     it("handles leaveGroup end/disband and host transfer branches", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         groupManager.has.mockReturnValue(true);
         groupManager.removeMember.mockReturnValueOnce({ ended: true });
@@ -479,11 +516,11 @@ describe("listenTogether service", () => {
         groupManager.snapshotById.mockReturnValueOnce(null);
 
         await expect(
-            listenTogether.leaveGroup("u1", "group-1")
+            listenTogether.leaveGroup("u1", "group-1"),
         ).resolves.toEqual({ ended: true });
         expect(groupManager.remove).toHaveBeenCalledWith("group-1");
         expect(listenTogetherStateStore.deleteSnapshot).toHaveBeenCalledWith(
-            "group-1"
+            "group-1",
         );
 
         groupManager.removeMember.mockReturnValueOnce({
@@ -499,7 +536,7 @@ describe("listenTogether service", () => {
         });
 
         await expect(
-            listenTogether.leaveGroup("u1", "group-1")
+            listenTogether.leaveGroup("u1", "group-1"),
         ).resolves.toEqual({
             ended: false,
             newHostUserId: "u2",
@@ -508,7 +545,7 @@ describe("listenTogether service", () => {
         expect(prisma.$transaction).toHaveBeenCalledTimes(2);
         expect(listenTogetherStateStore.setSnapshot).toHaveBeenCalledWith(
             "group-1",
-            { id: "group-1", playback: {}, members: [{ id: "u2" }] }
+            { id: "group-1", playback: {}, members: [{ id: "u2" }] },
         );
     });
 
@@ -518,15 +555,21 @@ describe("listenTogether service", () => {
         groupManager.has.mockReturnValue(false);
         groupManager.snapshotById.mockReturnValueOnce(null);
 
-        await expect(listenTogether.leaveGroup("u1", "group-missing")).resolves.toEqual({
+        await expect(
+            listenTogether.leaveGroup("u1", "group-missing"),
+        ).resolves.toEqual({
             ended: false,
         });
         expect(groupManager.removeMember).not.toHaveBeenCalled();
     });
 
     it("ends groups whether or not they are currently loaded in memory", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         groupManager.has.mockReturnValueOnce(true);
         prisma.$transaction.mockResolvedValueOnce(undefined);
@@ -535,7 +578,7 @@ describe("listenTogether service", () => {
         expect(groupManager.endGroup).toHaveBeenCalledWith("group-1", "host-1");
         expect(groupManager.remove).toHaveBeenCalledWith("group-1");
         expect(listenTogetherStateStore.deleteSnapshot).toHaveBeenCalledWith(
-            "group-1"
+            "group-1",
         );
 
         groupManager.has.mockReturnValueOnce(false);
@@ -564,7 +607,11 @@ describe("listenTogether service", () => {
                 joinCode: "LIVE01",
                 visibility: "public",
                 isPlaying: false,
-                hostUser: { id: "host-1", username: "host-1", displayName: "Host 1" },
+                hostUser: {
+                    id: "host-1",
+                    username: "host-1",
+                    displayName: "Host 1",
+                },
                 track: {
                     id: "track-db-1",
                     title: "DB Track",
@@ -578,7 +625,11 @@ describe("listenTogether service", () => {
                 joinCode: "DB0001",
                 visibility: "public",
                 isPlaying: true,
-                hostUser: { id: "host-2", username: "Host 2", displayName: null },
+                hostUser: {
+                    id: "host-2",
+                    username: "Host 2",
+                    displayName: null,
+                },
                 track: null,
                 members: [{ userId: "u2" }],
             },
@@ -603,7 +654,7 @@ describe("listenTogether service", () => {
                           ],
                       },
                   }
-                : null
+                : null,
         );
 
         await expect(listenTogether.discoverGroups("u3")).resolves.toEqual([
@@ -648,7 +699,11 @@ describe("listenTogether service", () => {
                 joinCode: "DBONLY",
                 visibility: "public",
                 isPlaying: false,
-                hostUser: { id: "host-9", username: "Host Nine", displayName: null },
+                hostUser: {
+                    id: "host-9",
+                    username: "Host Nine",
+                    displayName: null,
+                },
                 track: {
                     id: "track-db-only",
                     title: "Stored Track",
@@ -682,18 +737,26 @@ describe("listenTogether service", () => {
     it("returns null getMyGroup when no active membership exists", async () => {
         const { listenTogether, prisma } = loadService();
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce(null);
-        await expect(listenTogether.getMyGroup("missing-user")).resolves.toBeNull();
+        await expect(
+            listenTogether.getMyGroup("missing-user"),
+        ).resolves.toBeNull();
     });
 
     it("hydrates from DB when no in-memory or state-store snapshot exists", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce({
             syncGroupId: "group-1",
         });
         groupManager.has.mockReturnValueOnce(false);
-        (listenTogetherStateStore.getSnapshot as jest.Mock).mockResolvedValueOnce(null);
+        (
+            listenTogetherStateStore.getSnapshot as jest.Mock
+        ).mockResolvedValueOnce(null);
         prisma.syncGroup.findUnique.mockResolvedValueOnce({
             id: "group-1",
             isActive: true,
@@ -707,7 +770,11 @@ describe("listenTogether service", () => {
                     title: "Track 1",
                     duration: 120,
                     artist: { id: "artist-1", name: "Artist 1" },
-                    album: { id: "album-1", title: "Album 1", coverArt: "cover.jpg" },
+                    album: {
+                        id: "album-1",
+                        title: "Album 1",
+                        coverArt: "cover.jpg",
+                    },
                 },
                 {
                     id: "invalid-track",
@@ -723,7 +790,11 @@ describe("listenTogether service", () => {
                     userId: "host-1",
                     isHost: true,
                     joinedAt: new Date("2026-02-16T00:00:00.000Z"),
-                    user: { id: "host-1", username: "host-user", displayName: "Host" },
+                    user: {
+                        id: "host-1",
+                        username: "host-user",
+                        displayName: "Host",
+                    },
                 },
             ],
         });
@@ -752,13 +823,17 @@ describe("listenTogether service", () => {
                         username: "Host",
                     }),
                 ],
-            })
+            }),
         );
     });
 
     it("hydrates with queue parsing fallbacks and username fallback when displayName is empty", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce({
             syncGroupId: "group-parse",
@@ -833,13 +908,17 @@ describe("listenTogether service", () => {
                         username: "fallback-user",
                     }),
                 ],
-            })
+            }),
         );
     });
 
     it("hydrates with empty queue when stored queue payload is not an array", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce({
             syncGroupId: "group-non-array-queue",
@@ -878,17 +957,19 @@ describe("listenTogether service", () => {
             members: [{ id: "host-narray" }],
         });
 
-        await expect(listenTogether.getMyGroup("host-narray")).resolves.toEqual({
-            id: "group-non-array-queue",
-            playback: {},
-            members: [{ id: "host-narray" }],
-        });
+        await expect(listenTogether.getMyGroup("host-narray")).resolves.toEqual(
+            {
+                id: "group-non-array-queue",
+                playback: {},
+                members: [{ id: "host-narray" }],
+            },
+        );
 
         expect(groupManager.hydrate).toHaveBeenCalledWith(
             "group-non-array-queue",
             expect.objectContaining({
                 queue: [],
-            })
+            }),
         );
     });
 
@@ -932,12 +1013,12 @@ describe("listenTogether service", () => {
         await jest.advanceTimersByTimeAsync(30_000);
 
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ListenTogether] Persistence loop started"
+            "[ListenTogether] Persistence loop started",
         );
         expect(groupManager.markClean).toHaveBeenCalledWith("group-1");
         expect(logger.error).toHaveBeenCalledWith(
             "[ListenTogether] Failed to persist group group-2:",
-            expect.any(Error)
+            expect.any(Error),
         );
 
         listenTogether.stopPersistLoop();
@@ -948,7 +1029,11 @@ describe("listenTogether service", () => {
         const { listenTogether, prisma, groupManager, logger } = loadService();
         const now = Date.now();
 
-        groupManager.allGroupIds.mockReturnValue(["group-1", "group-2", "missing"]);
+        groupManager.allGroupIds.mockReturnValue([
+            "group-1",
+            "group-2",
+            "missing",
+        ]);
         groupManager.get.mockImplementation((id: string) => {
             if (id === "group-1") {
                 return {
@@ -990,7 +1075,7 @@ describe("listenTogether service", () => {
         expect(prisma.syncGroup.update).toHaveBeenCalledTimes(2);
         expect(logger.error).toHaveBeenCalledWith(
             "[ListenTogether] Final persist failed for group-2:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1024,7 +1109,7 @@ describe("listenTogether service", () => {
                 data: expect.objectContaining({
                     trackId: null,
                 }),
-            })
+            }),
         );
 
         groupManager.allGroupIds.mockReturnValue(["group-empty"]);
@@ -1048,7 +1133,7 @@ describe("listenTogether service", () => {
                 data: expect.objectContaining({
                     trackId: null,
                 }),
-            })
+            }),
         );
         jest.useRealTimers();
     });
@@ -1067,13 +1152,13 @@ describe("listenTogether service", () => {
             members: [{ id: "u1" }],
         });
 
-        await expect(listenTogether.joinGroup("u1", "User", "GROUP1")).resolves.toEqual(
-            {
-                id: "group-1",
-                playback: {},
-                members: [{ id: "u1" }],
-            }
-        );
+        await expect(
+            listenTogether.joinGroup("u1", "User", "GROUP1"),
+        ).resolves.toEqual({
+            id: "group-1",
+            playback: {},
+            members: [{ id: "u1" }],
+        });
         expect(prisma.syncGroupMember.updateMany).not.toHaveBeenCalled();
     });
 
@@ -1109,8 +1194,12 @@ describe("listenTogether service", () => {
     });
 
     it("returns null getMyGroup when DB group cannot be hydrated", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce({
             syncGroupId: "group-inactive",
@@ -1169,8 +1258,12 @@ describe("listenTogether service", () => {
     });
 
     it("truncates queue inputs to MAX_QUEUE_SIZE before validation on create", async () => {
-        const { listenTogether, prisma, groupManager, listenTogetherStateStore } =
-            loadService();
+        const {
+            listenTogether,
+            prisma,
+            groupManager,
+            listenTogetherStateStore,
+        } = loadService();
 
         prisma.syncGroupMember.findFirst.mockResolvedValueOnce(null);
         prisma.syncGroup.findUnique.mockResolvedValueOnce(null);
@@ -1218,7 +1311,7 @@ describe("listenTogether service", () => {
                 syncGroupMember: {
                     create: jest.fn(async () => ({})),
                 },
-            })
+            }),
         );
 
         await listenTogether.createGroup("host-1", "Host", {
@@ -1233,7 +1326,7 @@ describe("listenTogether service", () => {
                 queue: [],
                 currentTimeMs: 0,
                 isPlaying: false,
-            })
+            }),
         );
     });
 });

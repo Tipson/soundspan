@@ -10,8 +10,10 @@ const mockOnDownloadComplete = jest.fn();
 const mockOnImportFailed = jest.fn();
 jest.mock("../../services/simpleDownloadManager", () => ({
     simpleDownloadManager: {
-        onDownloadGrabbed: (...args: unknown[]) => mockOnDownloadGrabbed(...args),
-        onDownloadComplete: (...args: unknown[]) => mockOnDownloadComplete(...args),
+        onDownloadGrabbed: (...args: unknown[]) =>
+            mockOnDownloadGrabbed(...args),
+        onDownloadComplete: (...args: unknown[]) =>
+            mockOnDownloadComplete(...args),
         onImportFailed: (...args: unknown[]) => mockOnImportFailed(...args),
     },
 }));
@@ -61,12 +63,13 @@ jest.mock("../../utils/logger", () => ({
 import router from "../webhooks";
 import { prisma as prismaClient } from "../../utils/db";
 
-const mockDownloadJobFindUnique = prismaClient.downloadJob.findUnique as jest.Mock;
+const mockDownloadJobFindUnique = prismaClient.downloadJob
+    .findUnique as jest.Mock;
 
 function getHandler(method: "get" | "post", path: string) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -114,7 +117,10 @@ describe("webhooks routes runtime", () => {
         mockOnDownloadGrabbed.mockResolvedValue({ matched: false });
         mockOnDownloadComplete.mockResolvedValue({ jobId: null });
         mockOnImportFailed.mockResolvedValue(undefined);
-        mockDownloadJobFindUnique.mockResolvedValue({ id: "job-1", userId: "u1" });
+        mockDownloadJobFindUnique.mockResolvedValue({
+            id: "job-1",
+            userId: "u1",
+        });
     });
 
     afterAll(() => {
@@ -136,7 +142,7 @@ describe("webhooks routes runtime", () => {
                 legacyServiceAliases: expect.arrayContaining(["soundspan"]),
                 version: "9.9.9",
                 timestamp: expect.any(String),
-            })
+            }),
         );
     });
 
@@ -202,7 +208,7 @@ describe("webhooks routes runtime", () => {
 
         expect(res.statusCode).toBe(200);
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            expect.stringContaining("WITHOUT authentication")
+            expect.stringContaining("WITHOUT authentication"),
         );
 
         mockLoggerWarn.mockClear();
@@ -216,7 +222,7 @@ describe("webhooks routes runtime", () => {
             error: "Unauthorized - webhook secret not configured",
         });
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            expect.stringContaining("rejected because no secret")
+            expect.stringContaining("rejected because no secret"),
         );
     });
 
@@ -247,7 +253,7 @@ describe("webhooks routes runtime", () => {
             "mbid-1",
             "Album One",
             "Artist One",
-            42
+            42,
         );
         expect(mockQueueCleanerStart).toHaveBeenCalledTimes(1);
         expect(res.statusCode).toBe(200);
@@ -265,7 +271,10 @@ describe("webhooks routes runtime", () => {
 
     it("handles download-family events with and without matching jobs", async () => {
         mockOnDownloadComplete.mockResolvedValueOnce({ jobId: "job-1" });
-        mockDownloadJobFindUnique.mockResolvedValueOnce({ id: "job-1", userId: "u9" });
+        mockDownloadJobFindUnique.mockResolvedValueOnce({
+            id: "job-1",
+            userId: "u9",
+        });
 
         process.env.DEBUG_WEBHOOKS = "true";
 
@@ -287,7 +296,7 @@ describe("webhooks routes runtime", () => {
             "mbid-2",
             "Artist Two",
             "Album Two",
-            77
+            77,
         );
         expect(mockDownloadJobFindUnique).toHaveBeenCalledWith({
             where: { id: "job-1" },
@@ -302,7 +311,7 @@ describe("webhooks routes runtime", () => {
         });
         expect(mockLoggerDebug).toHaveBeenCalledWith(
             "   Payload:",
-            expect.any(String)
+            expect.any(String),
         );
 
         // Unmatched (external) downloads must NOT enqueue an unconditional
@@ -317,7 +326,9 @@ describe("webhooks routes runtime", () => {
             body: {
                 eventType: "TrackRetag",
                 downloadId: "dl-3",
-                albums: [{ title: "Album Three", foreignAlbumId: "mbid-3", id: 12 }],
+                albums: [
+                    { title: "Album Three", foreignAlbumId: "mbid-3", id: 12 },
+                ],
                 artist: { name: "Artist Three" },
             },
             headers: {},
@@ -337,7 +348,7 @@ describe("webhooks routes runtime", () => {
                 jobId: "lidarr-external-import-scan",
                 removeOnComplete: true,
                 removeOnFail: true,
-            })
+            }),
         );
 
         const noIdReq = {
@@ -366,11 +377,14 @@ describe("webhooks routes runtime", () => {
         expect(mockOnImportFailed).toHaveBeenCalledWith(
             "dl-4",
             "Import failed",
-            "mbid-4"
+            "mbid-4",
         );
         expect(failedRes.statusCode).toBe(200);
 
-        const healthReq = { body: { eventType: "HealthIssue" }, headers: {} } as any;
+        const healthReq = {
+            body: { eventType: "HealthIssue" },
+            headers: {},
+        } as any;
         const healthRes = createRes();
         await postLidarr(healthReq, healthRes);
         expect(healthRes.statusCode).toBe(200);
@@ -380,14 +394,19 @@ describe("webhooks routes runtime", () => {
         await postLidarr(testReq, testRes);
         expect(testRes.statusCode).toBe(200);
 
-        const unknownReq = { body: { eventType: "AlienEvent" }, headers: {} } as any;
+        const unknownReq = {
+            body: { eventType: "AlienEvent" },
+            headers: {},
+        } as any;
         const unknownRes = createRes();
         await postLidarr(unknownReq, unknownRes);
         expect(unknownRes.statusCode).toBe(200);
     });
 
     it("returns 500 on webhook processing errors", async () => {
-        mockGetSystemSettings.mockRejectedValueOnce(new Error("settings unavailable"));
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("settings unavailable"),
+        );
 
         const req = {
             body: { eventType: "Grab", downloadId: "dl-9" },
@@ -401,7 +420,7 @@ describe("webhooks routes runtime", () => {
         expect(res.body).toEqual({ error: "Webhook processing failed" });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Webhook error:",
-            "settings unavailable"
+            "settings unavailable",
         );
     });
 });

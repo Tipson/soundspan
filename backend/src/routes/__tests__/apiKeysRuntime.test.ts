@@ -39,7 +39,7 @@ const mockDeleteManyApiKeys = prismaClient.apiKey.deleteMany as jest.Mock;
 function getHandler(method: "get" | "post" | "delete", path: string) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -101,7 +101,9 @@ describe("apiKeys routes runtime", () => {
         await postCreate(missingNameReq, missingNameRes);
 
         expect(missingNameRes.statusCode).toBe(400);
-        expect(missingNameRes.body).toEqual({ error: "Device name is required" });
+        expect(missingNameRes.body).toEqual({
+            error: "Device name is required",
+        });
 
         const unauthReq = { body: { deviceName: "Phone" } } as any;
         const unauthRes = createRes();
@@ -137,7 +139,7 @@ describe("apiKeys routes runtime", () => {
                 name: "My Phone",
                 message:
                     "API key created successfully. Save this key - you won't see it again!",
-            })
+            }),
         );
     });
 

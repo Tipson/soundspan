@@ -2,24 +2,15 @@ import { Request, Response } from "express";
 
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    requireAuthOrToken: (
-        _req: Request,
-        _res: Response,
-        next: () => void
-    ) => next(),
+    requireAuthOrToken: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../middleware/rateLimiter", () => ({
-    ytMusicSearchLimiter: (
-        _req: Request,
-        _res: Response,
-        next: () => void
-    ) => next(),
-    ytMusicStreamLimiter: (
-        _req: Request,
-        _res: Response,
-        next: () => void
-    ) => next(),
+    ytMusicSearchLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    ytMusicStreamLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/logger", () => ({
@@ -59,7 +50,7 @@ const normalizeYtMusicStreamQuality = jest.fn(
             normalized === "lossless"
             ? normalized
             : undefined;
-    }
+    },
 );
 jest.mock("../../services/youtubeMusic", () => ({
     ytMusicService,
@@ -85,7 +76,7 @@ const mockEncrypt = jest.fn((value: string) => `enc:${value}`);
 const mockDecrypt = jest.fn((value: string) =>
     typeof value === "string" && value.startsWith("enc:")
         ? value.slice(4)
-        : value
+        : value,
 );
 jest.mock("../../utils/encryption", () => ({
     encrypt: (value: string) => mockEncrypt(value),
@@ -101,11 +92,11 @@ import router from "../youtubeMusic";
 
 function getRouteLayer(
     path: string,
-    method: "get" | "post" | "put" | "patch" | "delete"
+    method: "get" | "post" | "put" | "patch" | "delete",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -115,7 +106,7 @@ function getRouteLayer(
 
 function getLastHandler(
     path: string,
-    method: "get" | "post" | "put" | "patch" | "delete"
+    method: "get" | "post" | "put" | "patch" | "delete",
 ) {
     const layer = getRouteLayer(path, method);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -154,7 +145,7 @@ describe("youtube music route runtime behavior", () => {
     const deviceCodeHandler = getLastHandler("/auth/device-code", "post");
     const pollDeviceCodeHandler = getLastHandler(
         "/auth/device-code/poll",
-        "post"
+        "post",
     );
     const saveTokenHandler = getLastHandler("/auth/save-token", "post");
     const clearAuthHandler = getLastHandler("/auth/clear", "post");
@@ -237,11 +228,11 @@ describe("youtube music route runtime behavior", () => {
                     normalized === "lossless"
                     ? normalized
                     : undefined;
-            }
+            },
         );
 
         prisma.userSettings.findUnique.mockResolvedValue({
-            ytMusicOAuthJson: "enc:{\"access_token\":\"abc\"}",
+            ytMusicOAuthJson: 'enc:{"access_token":"abc"}',
         });
         prisma.userSettings.upsert.mockResolvedValue({});
     });
@@ -259,7 +250,9 @@ describe("youtube music route runtime behavior", () => {
 
         const errorRes = createRes();
         const errorNext = jest.fn();
-        mockGetSystemSettings.mockRejectedValueOnce(new Error("settings failed"));
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("settings failed"),
+        );
         await enabledMiddleware({} as any, errorRes, errorNext);
         expect(errorRes.statusCode).toBe(500);
         expect(errorNext).not.toHaveBeenCalled();
@@ -290,16 +283,16 @@ describe("youtube music route runtime behavior", () => {
             .mockResolvedValueOnce({ authenticated: false })
             .mockResolvedValueOnce({ authenticated: true, tier: "premium" });
         prisma.userSettings.findUnique.mockResolvedValueOnce({
-            ytMusicOAuthJson: "enc:{\"refresh_token\":\"r1\"}",
+            ytMusicOAuthJson: 'enc:{"refresh_token":"r1"}',
         });
 
         const restoredRes = createRes();
         await statusHandler(req, restoredRes);
         expect(ytMusicService.restoreOAuthWithCredentials).toHaveBeenCalledWith(
             "user-1",
-            "{\"refresh_token\":\"r1\"}",
+            '{"refresh_token":"r1"}',
             "client-id",
-            "client-secret"
+            "client-secret",
         );
         expect(restoredRes.body).toEqual(
             expect.objectContaining({
@@ -308,7 +301,7 @@ describe("youtube music route runtime behavior", () => {
                 credentialsConfigured: true,
                 authenticated: true,
                 tier: "premium",
-            })
+            }),
         );
 
         mockGetSystemSettings.mockRejectedValueOnce(new Error("boom"));
@@ -334,7 +327,7 @@ describe("youtube music route runtime behavior", () => {
         expect(okRes.statusCode).toBe(200);
         expect(ytMusicService.initiateDeviceAuth).toHaveBeenCalledWith(
             "client-id",
-            "client-secret"
+            "client-secret",
         );
 
         ytMusicService.initiateDeviceAuth.mockRejectedValueOnce({
@@ -352,7 +345,7 @@ describe("youtube music route runtime behavior", () => {
         const missingCodeRes = createRes();
         await pollDeviceCodeHandler(
             { ...reqBase, body: {} } as any,
-            missingCodeRes
+            missingCodeRes,
         );
         expect(missingCodeRes.statusCode).toBe(400);
 
@@ -364,27 +357,30 @@ describe("youtube music route runtime behavior", () => {
         const missingCredsRes = createRes();
         await pollDeviceCodeHandler(
             { ...reqBase, body: { deviceCode: "dc-1" } } as any,
-            missingCredsRes
+            missingCredsRes,
         );
         expect(missingCredsRes.statusCode).toBe(400);
 
         const pendingRes = createRes();
         await pollDeviceCodeHandler(
             { ...reqBase, body: { deviceCode: "dc-1" } } as any,
-            pendingRes
+            pendingRes,
         );
         expect(pendingRes.statusCode).toBe(200);
-        expect(pendingRes.body).toEqual({ status: "pending", error: undefined });
+        expect(pendingRes.body).toEqual({
+            status: "pending",
+            error: undefined,
+        });
 
         ytMusicService.pollDeviceAuth.mockResolvedValueOnce({
             status: "success",
-            oauth_json: "{\"access_token\":\"token-1\"}",
+            oauth_json: '{"access_token":"token-1"}',
             error: null,
         });
         const successRes = createRes();
         await pollDeviceCodeHandler(
             { ...reqBase, body: { deviceCode: "dc-2" } } as any,
-            successRes
+            successRes,
         );
         expect(successRes.statusCode).toBe(200);
         expect(successRes.body).toEqual({ status: "success", error: null });
@@ -392,10 +388,10 @@ describe("youtube music route runtime behavior", () => {
             where: { userId: "user-1" },
             create: {
                 userId: "user-1",
-                ytMusicOAuthJson: "enc:{\"access_token\":\"token-1\"}",
+                ytMusicOAuthJson: 'enc:{"access_token":"token-1"}',
             },
             update: {
-                ytMusicOAuthJson: "enc:{\"access_token\":\"token-1\"}",
+                ytMusicOAuthJson: 'enc:{"access_token":"token-1"}',
             },
         });
 
@@ -405,7 +401,7 @@ describe("youtube music route runtime behavior", () => {
         const errorRes = createRes();
         await pollDeviceCodeHandler(
             { ...reqBase, body: { deviceCode: "dc-3" } } as any,
-            errorRes
+            errorRes,
         );
         expect(errorRes.statusCode).toBe(500);
         expect(errorRes.body).toEqual({ error: "poll failed" });
@@ -415,16 +411,13 @@ describe("youtube music route runtime behavior", () => {
         const reqBase = { user: { id: "user-1" } } as any;
 
         const missingBodyRes = createRes();
-        await saveTokenHandler(
-            { ...reqBase, body: {} } as any,
-            missingBodyRes
-        );
+        await saveTokenHandler({ ...reqBase, body: {} } as any, missingBodyRes);
         expect(missingBodyRes.statusCode).toBe(400);
 
         const invalidJsonRes = createRes();
         await saveTokenHandler(
             { ...reqBase, body: { oauthJson: "not-json" } } as any,
-            invalidJsonRes
+            invalidJsonRes,
         );
         expect(invalidJsonRes.statusCode).toBe(400);
 
@@ -432,9 +425,9 @@ describe("youtube music route runtime behavior", () => {
         await saveTokenHandler(
             {
                 ...reqBase,
-                body: { oauthJson: "{\"access_token\":\"ok\"}" },
+                body: { oauthJson: '{"access_token":"ok"}' },
             } as any,
-            successRes
+            successRes,
         );
         expect(successRes.statusCode).toBe(200);
         expect(successRes.body).toEqual({ success: true });
@@ -442,17 +435,17 @@ describe("youtube music route runtime behavior", () => {
             where: { userId: "user-1" },
             create: {
                 userId: "user-1",
-                ytMusicOAuthJson: "enc:{\"access_token\":\"ok\"}",
+                ytMusicOAuthJson: 'enc:{"access_token":"ok"}',
             },
             update: {
-                ytMusicOAuthJson: "enc:{\"access_token\":\"ok\"}",
+                ytMusicOAuthJson: 'enc:{"access_token":"ok"}',
             },
         });
         expect(ytMusicService.restoreOAuthWithCredentials).toHaveBeenCalledWith(
             "user-1",
-            "{\"access_token\":\"ok\"}",
+            '{"access_token":"ok"}',
             "client-id",
-            "client-secret"
+            "client-secret",
         );
 
         ytMusicService.restoreOAuthWithCredentials.mockRejectedValueOnce({
@@ -462,9 +455,9 @@ describe("youtube music route runtime behavior", () => {
         await saveTokenHandler(
             {
                 ...reqBase,
-                body: { oauthJson: "{\"access_token\":\"bad\"}" },
+                body: { oauthJson: '{"access_token":"bad"}' },
             } as any,
-            errorRes
+            errorRes,
         );
         expect(errorRes.statusCode).toBe(500);
         expect(errorRes.body).toEqual({ error: "restore failed" });
@@ -502,14 +495,17 @@ describe("youtube music route runtime behavior", () => {
 
         const successRes = createRes();
         await searchHandler(
-            { ...reqBase, body: { query: "nina simone", filter: "songs" } } as any,
-            successRes
+            {
+                ...reqBase,
+                body: { query: "nina simone", filter: "songs" },
+            } as any,
+            successRes,
         );
         expect(successRes.statusCode).toBe(200);
         expect(ytMusicService.searchCanonical).toHaveBeenCalledWith(
             "user-1",
             "nina simone",
-            "songs"
+            "songs",
         );
         expect(successRes.body).toEqual(
             expect.objectContaining({
@@ -517,7 +513,7 @@ describe("youtube music route runtime behavior", () => {
                 filter: "songs",
                 total: 0,
                 results: [],
-            })
+            }),
         );
 
         ytMusicService.searchCanonical.mockRejectedValueOnce({
@@ -526,7 +522,7 @@ describe("youtube music route runtime behavior", () => {
         const authErrorRes = createRes();
         await searchHandler(
             { ...reqBase, body: { query: "auth error test" } } as any,
-            authErrorRes
+            authErrorRes,
         );
         expect(authErrorRes.statusCode).toBe(401);
 
@@ -536,7 +532,7 @@ describe("youtube music route runtime behavior", () => {
         const errorRes = createRes();
         await searchHandler(
             { ...reqBase, body: { query: "generic error" } } as any,
-            errorRes
+            errorRes,
         );
         expect(errorRes.statusCode).toBe(500);
         expect(errorRes.body).toEqual({ error: "search crashed" });
@@ -548,7 +544,7 @@ describe("youtube music route runtime behavior", () => {
         const albumRes = createRes();
         await albumHandler(
             { ...reqBase, params: { browseId: "alb-1" } } as any,
-            albumRes
+            albumRes,
         );
         expect(albumRes.statusCode).toBe(200);
         expect(ytMusicService.getAlbum).toHaveBeenCalledWith("user-1", "alb-1");
@@ -556,19 +552,21 @@ describe("youtube music route runtime behavior", () => {
         const artistRes = createRes();
         await artistHandler(
             { ...reqBase, params: { channelId: "artist-1" } } as any,
-            artistRes
+            artistRes,
         );
         expect(artistRes.statusCode).toBe(200);
         expect(ytMusicService.getArtist).toHaveBeenCalledWith(
             "user-1",
-            "artist-1"
+            "artist-1",
         );
 
-        ytMusicService.getAlbum.mockRejectedValueOnce({ response: { status: 401 } });
+        ytMusicService.getAlbum.mockRejectedValueOnce({
+            response: { status: 401 },
+        });
         const albumAuthErrorRes = createRes();
         await albumHandler(
             { ...reqBase, params: { browseId: "alb-1" } } as any,
-            albumAuthErrorRes
+            albumAuthErrorRes,
         );
         expect(albumAuthErrorRes.statusCode).toBe(401);
         expect(albumAuthErrorRes.body).toEqual({
@@ -581,7 +579,7 @@ describe("youtube music route runtime behavior", () => {
         const albumDetailRes = createRes();
         await albumHandler(
             { ...reqBase, params: { browseId: "alb-1" } } as any,
-            albumDetailRes
+            albumDetailRes,
         );
         expect(albumDetailRes.statusCode).toBe(500);
         expect(albumDetailRes.body).toEqual({ error: "album failed to load" });
@@ -592,7 +590,7 @@ describe("youtube music route runtime behavior", () => {
         const artistAuthErrorRes = createRes();
         await artistHandler(
             { ...reqBase, params: { channelId: "artist-1" } } as any,
-            artistAuthErrorRes
+            artistAuthErrorRes,
         );
         expect(artistAuthErrorRes.statusCode).toBe(401);
         expect(artistAuthErrorRes.body).toEqual({
@@ -605,16 +603,18 @@ describe("youtube music route runtime behavior", () => {
         const artistDetailRes = createRes();
         await artistHandler(
             { ...reqBase, params: { channelId: "artist-1" } } as any,
-            artistDetailRes
+            artistDetailRes,
         );
         expect(artistDetailRes.statusCode).toBe(500);
         expect(artistDetailRes.body).toEqual({ error: "artist lookup failed" });
 
-        ytMusicService.getSong.mockRejectedValueOnce({ response: { status: 401 } });
+        ytMusicService.getSong.mockRejectedValueOnce({
+            response: { status: 401 },
+        });
         const songAuthErrorRes = createRes();
         await songHandler(
             { ...reqBase, params: { videoId: "song-1" } } as any,
-            songAuthErrorRes
+            songAuthErrorRes,
         );
         expect(songAuthErrorRes.statusCode).toBe(401);
         expect(songAuthErrorRes.body).toEqual({
@@ -627,7 +627,7 @@ describe("youtube music route runtime behavior", () => {
         const songDetailRes = createRes();
         await songHandler(
             { ...reqBase, params: { videoId: "song-1" } } as any,
-            songDetailRes
+            songDetailRes,
         );
         expect(songDetailRes.statusCode).toBe(500);
         expect(songDetailRes.body).toEqual({ error: "song failed to load" });
@@ -637,10 +637,7 @@ describe("youtube music route runtime behavior", () => {
         const reqBase = { user: { id: "user-1" } } as any;
 
         const albumsRes = createRes();
-        await libraryAlbumsHandler(
-            { ...reqBase, query: {} } as any,
-            albumsRes
-        );
+        await libraryAlbumsHandler({ ...reqBase, query: {} } as any, albumsRes);
         expect(albumsRes.statusCode).toBe(200);
         expect(albumsRes.body).toEqual({ albums: [{ id: "album-1" }] });
 
@@ -650,7 +647,7 @@ describe("youtube music route runtime behavior", () => {
         const albumsAuthErrorRes = createRes();
         await libraryAlbumsHandler(
             { ...reqBase, query: {} } as any,
-            albumsAuthErrorRes
+            albumsAuthErrorRes,
         );
         expect(albumsAuthErrorRes.statusCode).toBe(401);
         expect(albumsAuthErrorRes.body).toEqual({
@@ -663,10 +660,12 @@ describe("youtube music route runtime behavior", () => {
         const albumsDetailRes = createRes();
         await libraryAlbumsHandler(
             { ...reqBase, query: {} } as any,
-            albumsDetailRes
+            albumsDetailRes,
         );
         expect(albumsDetailRes.statusCode).toBe(500);
-        expect(albumsDetailRes.body).toEqual({ error: "library albums failed" });
+        expect(albumsDetailRes.body).toEqual({
+            error: "library albums failed",
+        });
     });
 
     it("covers stream-info success and mapped error branches", async () => {
@@ -689,7 +688,7 @@ describe("youtube music route runtime behavior", () => {
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
             "user-1",
             "vid-1",
-            "high"
+            "high",
         );
 
         ytMusicService.getStreamInfo.mockRejectedValueOnce({
@@ -713,14 +712,18 @@ describe("youtube music route runtime behavior", () => {
         await streamInfoHandler(req, authErrorRes);
         expect(authErrorRes.statusCode).toBe(401);
 
-        ytMusicService.getStreamInfo.mockRejectedValueOnce(new Error("stream info"));
+        ytMusicService.getStreamInfo.mockRejectedValueOnce(
+            new Error("stream info"),
+        );
         const errorRes = createRes();
         await streamInfoHandler(req, errorRes);
         expect(errorRes.statusCode).toBe(500);
     });
 
     it("falls back to user ytMusicQuality for stream-info and stream when request omits quality", async () => {
-        prisma.userSettings.findUnique.mockResolvedValue({ ytMusicQuality: "LOW" });
+        prisma.userSettings.findUnique.mockResolvedValue({
+            ytMusicQuality: "LOW",
+        });
 
         const streamInfoReq = {
             user: { id: "user-1" },
@@ -733,7 +736,7 @@ describe("youtube music route runtime behavior", () => {
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
             "user-1",
             "vid-1",
-            "low"
+            "low",
         );
 
         const streamReq = {
@@ -749,7 +752,7 @@ describe("youtube music route runtime behavior", () => {
             "user-1",
             "vid-1",
             "low",
-            undefined
+            undefined,
         );
     });
 
@@ -775,7 +778,7 @@ describe("youtube music route runtime behavior", () => {
             (event: string, cb: (err: Error) => void) => {
                 if (event === "error") onError = cb;
                 return streamData;
-            }
+            },
         );
         ytMusicService.getStreamProxy.mockResolvedValueOnce({
             status: 206,
@@ -797,7 +800,7 @@ describe("youtube music route runtime behavior", () => {
             "user-1",
             "vid-1",
             "medium",
-            "bytes=0-200"
+            "bytes=0-200",
         );
 
         if (!onError) {
@@ -816,7 +819,7 @@ describe("youtube music route runtime behavior", () => {
             (event: string, cb: (err: Error) => void) => {
                 if (event === "error") onErrorHeadersSent = cb;
                 return streamDataHeadersSent;
-            }
+            },
         );
         ytMusicService.getStreamProxy.mockResolvedValueOnce({
             status: 200,
@@ -827,7 +830,9 @@ describe("youtube music route runtime behavior", () => {
         headersSentRes.headersSent = true;
         await streamHandler(reqBase, headersSentRes);
         if (!onErrorHeadersSent) {
-            throw new Error("Expected stream on(error) handler with headersSent");
+            throw new Error(
+                "Expected stream on(error) handler with headersSent",
+            );
         }
         onErrorHeadersSent(new Error("upstream failed again"));
         expect(headersSentRes.end).toHaveBeenCalledTimes(1);
@@ -853,7 +858,9 @@ describe("youtube music route runtime behavior", () => {
         await streamHandler(reqBase, authErrorRes);
         expect(authErrorRes.statusCode).toBe(401);
 
-        ytMusicService.getStreamProxy.mockRejectedValueOnce(new Error("proxy failed"));
+        ytMusicService.getStreamProxy.mockRejectedValueOnce(
+            new Error("proxy failed"),
+        );
         const errorRes = createRes();
         await streamHandler(reqBase, errorRes);
         expect(errorRes.statusCode).toBe(500);
@@ -866,19 +873,22 @@ describe("youtube music route runtime behavior", () => {
         const songsRes = createRes();
         await librarySongsHandler(
             { ...reqBase, query: { limit: "25" } } as any,
-            songsRes
+            songsRes,
         );
         expect(songsRes.statusCode).toBe(200);
         expect(songsRes.body).toEqual({ songs: [{ id: "song-1" }] });
-        expect(ytMusicService.getLibrarySongs).toHaveBeenCalledWith("user-1", 25);
+        expect(ytMusicService.getLibrarySongs).toHaveBeenCalledWith(
+            "user-1",
+            25,
+        );
 
         const albumsRes = createRes();
-        await libraryAlbumsHandler(
-            { ...reqBase, query: {} } as any,
-            albumsRes
-        );
+        await libraryAlbumsHandler({ ...reqBase, query: {} } as any, albumsRes);
         expect(albumsRes.statusCode).toBe(200);
-        expect(ytMusicService.getLibraryAlbums).toHaveBeenCalledWith("user-1", 100);
+        expect(ytMusicService.getLibraryAlbums).toHaveBeenCalledWith(
+            "user-1",
+            100,
+        );
 
         ytMusicService.getLibrarySongs.mockRejectedValueOnce({
             response: { data: { detail: "library songs failed" } },
@@ -886,7 +896,7 @@ describe("youtube music route runtime behavior", () => {
         const songsErrorRes = createRes();
         await librarySongsHandler(
             { ...reqBase, query: {} } as any,
-            songsErrorRes
+            songsErrorRes,
         );
         expect(songsErrorRes.statusCode).toBe(500);
         expect(songsErrorRes.body).toEqual({ error: "library songs failed" });
@@ -898,7 +908,7 @@ describe("youtube music route runtime behavior", () => {
         const invalidMatchRes = createRes();
         await matchHandler(
             { ...reqBase, body: { artist: "", title: "" } } as any,
-            invalidMatchRes
+            invalidMatchRes,
         );
         expect(invalidMatchRes.statusCode).toBe(400);
 
@@ -914,13 +924,13 @@ describe("youtube music route runtime behavior", () => {
                     isrc: "GBBKS9800363",
                 },
             } as any,
-            matchRes
+            matchRes,
         );
         expect(matchRes.statusCode).toBe(200);
         expect(matchRes.body).toEqual({ match: { videoId: "match-1" } });
 
         ytMusicService.findMatchForTrack.mockRejectedValueOnce(
-            new Error("match failed")
+            new Error("match failed"),
         );
         const matchErrorRes = createRes();
         await matchHandler(
@@ -928,14 +938,14 @@ describe("youtube music route runtime behavior", () => {
                 ...reqBase,
                 body: { artist: "A", title: "B" },
             } as any,
-            matchErrorRes
+            matchErrorRes,
         );
         expect(matchErrorRes.statusCode).toBe(500);
 
         const invalidBatchRes = createRes();
         await matchBatchHandler(
             { ...reqBase, body: { tracks: [] } } as any,
-            invalidBatchRes
+            invalidBatchRes,
         );
         expect(invalidBatchRes.statusCode).toBe(400);
 
@@ -950,7 +960,7 @@ describe("youtube music route runtime behavior", () => {
                     ],
                 },
             } as any,
-            batchRes
+            batchRes,
         );
         expect(batchRes.statusCode).toBe(200);
         expect(batchRes.body).toEqual({
@@ -958,7 +968,7 @@ describe("youtube music route runtime behavior", () => {
         });
 
         ytMusicService.findMatchesForAlbum.mockRejectedValueOnce(
-            new Error("batch failed")
+            new Error("batch failed"),
         );
         const batchErrorRes = createRes();
         await matchBatchHandler(
@@ -968,7 +978,7 @@ describe("youtube music route runtime behavior", () => {
                     tracks: [{ artist: "Artist 3", title: "Track 3" }],
                 },
             } as any,
-            batchErrorRes
+            batchErrorRes,
         );
         expect(batchErrorRes.statusCode).toBe(500);
     });
@@ -983,7 +993,9 @@ describe("youtube music route runtime behavior", () => {
 
         expect(res.statusCode).toBe(200);
         expect(ytMusicService.getAuthStatus).not.toHaveBeenCalled();
-        expect(ytMusicService.restoreOAuthWithCredentials).not.toHaveBeenCalled();
+        expect(
+            ytMusicService.restoreOAuthWithCredentials,
+        ).not.toHaveBeenCalled();
     });
 
     it("does not attempt OAuth restore/status checks for match endpoints", async () => {
@@ -995,7 +1007,7 @@ describe("youtube music route runtime behavior", () => {
                 ...reqBase,
                 body: { artist: "Massive Attack", title: "Teardrop" },
             } as any,
-            matchRes
+            matchRes,
         );
         expect(matchRes.statusCode).toBe(200);
 
@@ -1007,11 +1019,13 @@ describe("youtube music route runtime behavior", () => {
                     tracks: [{ artist: "Artist 1", title: "Track 1" }],
                 },
             } as any,
-            batchRes
+            batchRes,
         );
         expect(batchRes.statusCode).toBe(200);
         expect(ytMusicService.getAuthStatus).not.toHaveBeenCalled();
-        expect(ytMusicService.restoreOAuthWithCredentials).not.toHaveBeenCalled();
+        expect(
+            ytMusicService.restoreOAuthWithCredentials,
+        ).not.toHaveBeenCalled();
     });
 
     it("still maps sidecar 401 responses to unauthorized for search", async () => {

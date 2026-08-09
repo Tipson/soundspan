@@ -58,7 +58,7 @@ type MappingRow = Parameters<
 >[0];
 
 function providerProfile(
-    overrides: Partial<UserProviderProfile> = {}
+    overrides: Partial<UserProviderProfile> = {},
 ): UserProviderProfile {
     return {
         userId: "user-1",
@@ -70,7 +70,7 @@ function providerProfile(
 }
 
 function localTrack(
-    overrides: Partial<UnifiedLocalTrackRecord> = {}
+    overrides: Partial<UnifiedLocalTrackRecord> = {},
 ): UnifiedLocalTrackRecord {
     return {
         id: "local-1",
@@ -90,7 +90,7 @@ function localTrack(
 }
 
 function tidalTrack(
-    overrides: Partial<UnifiedTrackTidalRecord> = {}
+    overrides: Partial<UnifiedTrackTidalRecord> = {},
 ): UnifiedTrackTidalRecord {
     return {
         id: "tidal-1",
@@ -104,7 +104,7 @@ function tidalTrack(
 }
 
 function ytTrack(
-    overrides: Partial<UnifiedTrackYtMusicRecord> = {}
+    overrides: Partial<UnifiedTrackYtMusicRecord> = {},
 ): UnifiedTrackYtMusicRecord {
     return {
         id: "yt-1",
@@ -118,7 +118,7 @@ function ytTrack(
 }
 
 function playlistItem(
-    overrides: Partial<UnifiedPlaylistItemRecord> = {}
+    overrides: Partial<UnifiedPlaylistItemRecord> = {},
 ): UnifiedPlaylistItemRecord {
     return {
         id: "item-1",
@@ -155,11 +155,15 @@ describe("playlistTrackResolution", () => {
         mockPrisma.trackTidal.findMany.mockResolvedValue([]);
         mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);
         mockGetUserProviderProfile.mockResolvedValue(providerProfile());
-        mockResolveQueueForUser.mockResolvedValue(new Map<number, ResolvedSource>());
+        mockResolveQueueForUser.mockResolvedValue(
+            new Map<number, ResolvedSource>(),
+        );
     });
 
     it("returns an empty array for empty input", async () => {
-        await expect(resolvePlaylistItemsForUser([], "user-1")).resolves.toEqual([]);
+        await expect(
+            resolvePlaylistItemsForUser([], "user-1"),
+        ).resolves.toEqual([]);
 
         expect(mockPrisma.trackMapping.findMany).not.toHaveBeenCalled();
         expect(mockGetUserProviderProfile).not.toHaveBeenCalled();
@@ -167,15 +171,27 @@ describe("playlistTrackResolution", () => {
     });
 
     it("returns source priority for each mapping source", () => {
-        expect(playlistTrackResolutionTestables.sourcePriority("manual")).toBe(4);
+        expect(playlistTrackResolutionTestables.sourcePriority("manual")).toBe(
+            4,
+        );
         expect(playlistTrackResolutionTestables.sourcePriority("isrc")).toBe(3);
-        expect(playlistTrackResolutionTestables.sourcePriority("import-match")).toBe(2);
-        expect(playlistTrackResolutionTestables.sourcePriority("gap-fill")).toBe(1);
-        expect(playlistTrackResolutionTestables.sourcePriority("unknown")).toBe(0);
+        expect(
+            playlistTrackResolutionTestables.sourcePriority("import-match"),
+        ).toBe(2);
+        expect(
+            playlistTrackResolutionTestables.sourcePriority("gap-fill"),
+        ).toBe(1);
+        expect(playlistTrackResolutionTestables.sourcePriority("unknown")).toBe(
+            0,
+        );
     });
 
     it("sorts mappings by source priority, confidence, date, and id", () => {
-        const manual = mapping({ id: "map-manual", source: "manual", confidence: 0.2 });
+        const manual = mapping({
+            id: "map-manual",
+            source: "manual",
+            confidence: 0.2,
+        });
         const isrcHighConfidence = mapping({
             id: "map-isrc-high",
             source: "isrc",
@@ -200,22 +216,26 @@ describe("playlistTrackResolution", () => {
             createdAt: new Date("2024-01-01T00:00:00.000Z"),
         });
 
-        expect([isrcHighConfidence, manual].sort(playlistTrackResolutionTestables.compareMappings)).toEqual([
-            manual,
-            isrcHighConfidence,
-        ]);
-        expect([isrcNewer, isrcHighConfidence].sort(playlistTrackResolutionTestables.compareMappings)).toEqual([
-            isrcHighConfidence,
-            isrcNewer,
-        ]);
-        expect([isrcSameDateLowId, isrcNewer].sort(playlistTrackResolutionTestables.compareMappings)).toEqual([
-            isrcNewer,
-            isrcSameDateLowId,
-        ]);
-        expect([isrcSameDateLowId, isrcSameDateHighId].sort(playlistTrackResolutionTestables.compareMappings)).toEqual([
-            isrcSameDateHighId,
-            isrcSameDateLowId,
-        ]);
+        expect(
+            [isrcHighConfidence, manual].sort(
+                playlistTrackResolutionTestables.compareMappings,
+            ),
+        ).toEqual([manual, isrcHighConfidence]);
+        expect(
+            [isrcNewer, isrcHighConfidence].sort(
+                playlistTrackResolutionTestables.compareMappings,
+            ),
+        ).toEqual([isrcHighConfidence, isrcNewer]);
+        expect(
+            [isrcSameDateLowId, isrcNewer].sort(
+                playlistTrackResolutionTestables.compareMappings,
+            ),
+        ).toEqual([isrcNewer, isrcSameDateLowId]);
+        expect(
+            [isrcSameDateLowId, isrcSameDateHighId].sort(
+                playlistTrackResolutionTestables.compareMappings,
+            ),
+        ).toEqual([isrcSameDateHighId, isrcSameDateLowId]);
     });
 
     it("extracts all mapping tokens and item tokens", () => {
@@ -225,19 +245,19 @@ describe("playlistTrackResolution", () => {
                     trackId: "local-9",
                     trackTidalId: "tidal-9",
                     trackYtMusicId: "yt-9",
-                })
-            )
+                }),
+            ),
         ).toEqual(["l:local-9", "t:tidal-9", "y:yt-9"]);
 
         expect(
             playlistTrackResolutionTestables.getItemToken(
-                playlistItem({ trackId: "local-item" })
-            )
+                playlistItem({ trackId: "local-item" }),
+            ),
         ).toBe("l:local-item");
         expect(
             playlistTrackResolutionTestables.getItemToken(
-                playlistItem({ trackId: null, trackTidalId: "tidal-item" })
-            )
+                playlistItem({ trackId: null, trackTidalId: "tidal-item" }),
+            ),
         ).toBe("t:tidal-item");
         expect(
             playlistTrackResolutionTestables.getItemToken(
@@ -245,28 +265,31 @@ describe("playlistTrackResolution", () => {
                     trackId: null,
                     trackTidalId: null,
                     trackYtMusicId: "yt-item",
-                })
-            )
+                }),
+            ),
         ).toBe("y:yt-item");
-        expect(playlistTrackResolutionTestables.getItemToken(playlistItem())).toBeNull();
+        expect(
+            playlistTrackResolutionTestables.getItemToken(playlistItem()),
+        ).toBeNull();
     });
 
     it("prefers local mappings over remote mappings", () => {
-        const preferred = playlistTrackResolutionTestables.selectPreferredMappingForItem(
-            [
-                mapping({
-                    id: "map-remote",
-                    source: "manual",
-                    trackTidalId: "tidal-preferred-by-rank",
-                }),
-                mapping({
-                    id: "map-local",
-                    source: "gap-fill",
-                    trackId: "local-preferred",
-                }),
-            ],
-            providerProfile({ hasTidal: true, hasYtMusic: true })
-        );
+        const preferred =
+            playlistTrackResolutionTestables.selectPreferredMappingForItem(
+                [
+                    mapping({
+                        id: "map-remote",
+                        source: "manual",
+                        trackTidalId: "tidal-preferred-by-rank",
+                    }),
+                    mapping({
+                        id: "map-local",
+                        source: "gap-fill",
+                        trackId: "local-preferred",
+                    }),
+                ],
+                providerProfile({ hasTidal: true, hasYtMusic: true }),
+            );
 
         expect(preferred?.id).toBe("map-local");
     });
@@ -288,20 +311,20 @@ describe("playlistTrackResolution", () => {
         expect(
             playlistTrackResolutionTestables.selectPreferredMappingForItem(
                 candidates,
-                providerProfile({ hasTidal: true, hasYtMusic: false })
-            )?.id
+                providerProfile({ hasTidal: true, hasYtMusic: false }),
+            )?.id,
         ).toBe("map-tidal");
         expect(
             playlistTrackResolutionTestables.selectPreferredMappingForItem(
                 candidates,
-                providerProfile({ hasTidal: false, hasYtMusic: true })
-            )?.id
+                providerProfile({ hasTidal: false, hasYtMusic: true }),
+            )?.id,
         ).toBe("map-yt");
         expect(
             playlistTrackResolutionTestables.selectPreferredMappingForItem(
                 candidates,
-                providerProfile({ hasTidal: false, hasYtMusic: false })
-            )
+                providerProfile({ hasTidal: false, hasYtMusic: false }),
+            ),
         ).toBeUndefined();
     });
 
@@ -324,7 +347,7 @@ describe("playlistTrackResolution", () => {
                     duration: 150,
                 }),
             }),
-            "map-duration"
+            "map-duration",
         );
 
         expect(input).toEqual({
@@ -390,11 +413,18 @@ describe("playlistTrackResolution", () => {
             }),
         ]);
         mockGetUserProviderProfile.mockResolvedValueOnce(
-            providerProfile({ hasTidal: true, hasYtMusic: true })
+            providerProfile({ hasTidal: true, hasYtMusic: true }),
         );
         mockResolveQueueForUser.mockResolvedValueOnce(
             new Map<number, ResolvedSource>([
-                [0, { available: true, source: "local", trackId: "local-effective" }],
+                [
+                    0,
+                    {
+                        available: true,
+                        source: "local",
+                        trackId: "local-effective",
+                    },
+                ],
                 [
                     1,
                     {
@@ -413,7 +443,7 @@ describe("playlistTrackResolution", () => {
                         trackYtMusicId: "yt-effective",
                     },
                 ],
-            ])
+            ]),
         );
         mockPrisma.track.findMany.mockResolvedValueOnce([
             localTrack({ id: "local-effective", title: "Fetched Local" }),
@@ -442,12 +472,18 @@ describe("playlistTrackResolution", () => {
             playlistItem({
                 id: "item-tidal",
                 trackYtMusicId: "yt-origin",
-                trackYtMusic: ytTrack({ id: "yt-origin", videoId: "video-origin" }),
+                trackYtMusic: ytTrack({
+                    id: "yt-origin",
+                    videoId: "video-origin",
+                }),
             }),
             playlistItem({
                 id: "item-yt",
                 trackId: "local-origin",
-                track: localTrack({ id: "local-origin", title: "Original Local" }),
+                track: localTrack({
+                    id: "local-origin",
+                    title: "Original Local",
+                }),
             }),
         ];
 
@@ -468,7 +504,7 @@ describe("playlistTrackResolution", () => {
                     trackMappingId: "map-yt",
                 }),
             ],
-            "user-1"
+            "user-1",
         );
 
         expect(resolved).toEqual([
@@ -495,7 +531,9 @@ describe("playlistTrackResolution", () => {
                     trackTidalId: "tidal-effective",
                     trackYtMusicId: null,
                     track: null,
-                    trackTidal: expect.objectContaining({ id: "tidal-effective" }),
+                    trackTidal: expect.objectContaining({
+                        id: "tidal-effective",
+                    }),
                     trackYtMusic: null,
                 }),
                 resolution: {
@@ -513,7 +551,9 @@ describe("playlistTrackResolution", () => {
                     trackYtMusicId: "yt-effective",
                     track: null,
                     trackTidal: null,
-                    trackYtMusic: expect.objectContaining({ id: "yt-effective" }),
+                    trackYtMusic: expect.objectContaining({
+                        id: "yt-effective",
+                    }),
                 }),
                 resolution: {
                     available: true,
@@ -528,7 +568,14 @@ describe("playlistTrackResolution", () => {
     it("falls back to unavailable when resolved track records cannot be loaded", async () => {
         mockResolveQueueForUser.mockResolvedValueOnce(
             new Map<number, ResolvedSource>([
-                [0, { available: true, source: "local", trackId: "missing-local" }],
+                [
+                    0,
+                    {
+                        available: true,
+                        source: "local",
+                        trackId: "missing-local",
+                    },
+                ],
                 [
                     1,
                     {
@@ -547,13 +594,19 @@ describe("playlistTrackResolution", () => {
                         trackYtMusicId: "missing-yt",
                     },
                 ],
-            ])
+            ]),
         );
 
         const items = [
             playlistItem({ id: "missing-local-item", trackId: "local-origin" }),
-            playlistItem({ id: "missing-tidal-item", trackTidalId: "tidal-origin" }),
-            playlistItem({ id: "missing-yt-item", trackYtMusicId: "yt-origin" }),
+            playlistItem({
+                id: "missing-tidal-item",
+                trackTidalId: "tidal-origin",
+            }),
+            playlistItem({
+                id: "missing-yt-item",
+                trackYtMusicId: "yt-origin",
+            }),
         ];
 
         const resolved = await resolvePlaylistItemsForUser(items, "user-1");

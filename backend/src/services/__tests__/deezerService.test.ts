@@ -11,7 +11,9 @@ jest.mock("axios");
 
 jest.mock("../rateLimiter", () => ({
     rateLimiter: {
-        execute: jest.fn(async (_key: string, fn: () => Promise<unknown>) => fn()),
+        execute: jest.fn(async (_key: string, fn: () => Promise<unknown>) =>
+            fn(),
+        ),
     },
 }));
 
@@ -66,7 +68,7 @@ describe("deezerService", () => {
         mockRedisSetEx.mockResolvedValue("OK");
         mockRedisDel.mockResolvedValue(1);
         mockRateLimiterExecute.mockImplementation(
-            async (_key: string, fn: () => Promise<unknown>) => fn()
+            async (_key: string, fn: () => Promise<unknown>) => fn(),
         );
         mockImageProviderGetAlbumCover.mockResolvedValue(null);
         mockMusicBrainzGetReleaseGroup.mockResolvedValue(null);
@@ -76,7 +78,7 @@ describe("deezerService", () => {
     it("serves artist image from cache and cache-miss API with fallback image fields", async () => {
         mockRedisGet.mockResolvedValueOnce("https://cache.example/a.jpg");
         await expect(deezerService.getArtistImage("Artist A")).resolves.toBe(
-            "https://cache.example/a.jpg"
+            "https://cache.example/a.jpg",
         );
         expect(mockAxiosGet).not.toHaveBeenCalled();
 
@@ -92,53 +94,67 @@ describe("deezerService", () => {
             },
         });
         await expect(deezerService.getArtistImage("Artist B")).resolves.toBe(
-            "https://api.example/b-big.jpg"
+            "https://api.example/b-big.jpg",
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "deezer:artist:artist b",
             86400,
-            "https://api.example/b-big.jpg"
+            "https://api.example/b-big.jpg",
         );
 
         mockAxiosGet.mockRejectedValueOnce(new Error("artist lookup failed"));
-        await expect(deezerService.getArtistImage("Artist C")).resolves.toBeNull();
+        await expect(
+            deezerService.getArtistImage("Artist C"),
+        ).resolves.toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Deezer artist image error for Artist C:",
-            "artist lookup failed"
+            "artist lookup failed",
         );
     });
 
     it("handles strict artist image matching with empty input, exact match, and miss", async () => {
-        await expect(deezerService.getArtistImageStrict("   ")).resolves.toBeNull();
+        await expect(
+            deezerService.getArtistImageStrict("   "),
+        ).resolves.toBeNull();
         expect(mockAxiosGet).not.toHaveBeenCalled();
 
         mockAxiosGet.mockResolvedValueOnce({
             data: {
                 data: [
-                    { name: "The Ghost Inside", picture_xl: "https://img/the-ghost.jpg" },
+                    {
+                        name: "The Ghost Inside",
+                        picture_xl: "https://img/the-ghost.jpg",
+                    },
                     { name: "GHOST", picture_xl: "https://img/ghost.jpg" },
                 ],
             },
         });
         await expect(deezerService.getArtistImageStrict("ghost")).resolves.toBe(
-            "https://img/ghost.jpg"
+            "https://img/ghost.jpg",
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "deezer:artist-strict:ghost",
             86400,
-            "https://img/ghost.jpg"
+            "https://img/ghost.jpg",
         );
 
         mockAxiosGet.mockResolvedValueOnce({
             data: {
-                data: [{ name: "Ghostface", picture_xl: "https://img/ghostface.jpg" }],
+                data: [
+                    {
+                        name: "Ghostface",
+                        picture_xl: "https://img/ghostface.jpg",
+                    },
+                ],
             },
         });
-        await expect(deezerService.getArtistImageStrict("ghost")).resolves.toBeNull();
+        await expect(
+            deezerService.getArtistImageStrict("ghost"),
+        ).resolves.toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "deezer:artist-strict:ghost",
             86400,
-            "null"
+            "null",
         );
     });
 
@@ -160,7 +176,7 @@ describe("deezerService", () => {
             },
         });
         await expect(
-            deezerService.getAlbumCover("Artist X", "Album X")
+            deezerService.getAlbumCover("Artist X", "Album X"),
         ).resolves.toBe("https://img/exact-medium.jpg");
 
         mockAxiosGet.mockResolvedValueOnce({
@@ -169,16 +185,16 @@ describe("deezerService", () => {
             },
         });
         await expect(
-            deezerService.getTrackPreview("Artist X", "Track X")
+            deezerService.getTrackPreview("Artist X", "Track X"),
         ).resolves.toBe("https://preview/p.mp3");
 
         mockAxiosGet.mockRejectedValueOnce(new Error("preview failed"));
         await expect(
-            deezerService.getTrackPreview("Artist Y", "Track Y")
+            deezerService.getTrackPreview("Artist Y", "Track Y"),
         ).resolves.toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Deezer track preview error for Artist Y - Track Y:",
-            "preview failed"
+            "preview failed",
         );
     });
 
@@ -205,22 +221,22 @@ describe("deezerService", () => {
         await expect(
             deezerService.getAlbumCover(
                 "Taylor Swift",
-                "Speak Now (Taylor's Version)"
-            )
+                "Speak Now (Taylor's Version)",
+            ),
         ).resolves.toBe("https://img/speak-now-tv.jpg");
 
         expect(mockAxiosGet).toHaveBeenCalledTimes(2);
         expect(mockAxiosGet.mock.calls[0]?.[1]?.params?.q).toBe(
-            'artist:"Taylor Swift" album:"Speak Now (Taylor\'s Version)"'
+            'artist:"Taylor Swift" album:"Speak Now (Taylor\'s Version)"',
         );
         expect(mockAxiosGet.mock.calls[1]?.[1]?.params?.q).toBe(
-            "Taylor Swift Speak Now (Taylor's Version)"
+            "Taylor Swift Speak Now (Taylor's Version)",
         );
     });
 
     it("drops empty album-title variants after descriptor stripping", () => {
         const variants = (deezerService as any).buildAlbumTitleVariants(
-            " (Deluxe Edition) "
+            " (Deluxe Edition) ",
         ) as string[];
 
         expect(variants).toEqual(["(Deluxe Edition)"]);
@@ -228,14 +244,18 @@ describe("deezerService", () => {
     });
 
     it("resolves track album from cache, API, and malformed cache paths", async () => {
-        mockRedisGet.mockResolvedValueOnce('{"albumName":"Cached Album","albumId":"123"}');
+        mockRedisGet.mockResolvedValueOnce(
+            '{"albumName":"Cached Album","albumId":"123"}',
+        );
         await expect(
-            deezerService.getTrackAlbum("Artist", "Track")
+            deezerService.getTrackAlbum("Artist", "Track"),
         ).resolves.toEqual({ albumName: "Cached Album", albumId: "123" });
         expect(mockAxiosGet).not.toHaveBeenCalled();
 
         mockRedisGet.mockResolvedValueOnce("{bad-json");
-        await expect(deezerService.getTrackAlbum("Artist", "Track")).resolves.toBeNull();
+        await expect(
+            deezerService.getTrackAlbum("Artist", "Track"),
+        ).resolves.toBeNull();
 
         mockRedisGet.mockResolvedValueOnce(null);
         mockAxiosGet.mockResolvedValueOnce({
@@ -253,7 +273,7 @@ describe("deezerService", () => {
             },
         });
         await expect(
-            deezerService.getTrackAlbum("Artist Exact", "Track (feat. Guest)")
+            deezerService.getTrackAlbum("Artist Exact", "Track (feat. Guest)"),
         ).resolves.toEqual({ albumName: "Album Exact", albumId: "777" });
         expect(mockAxiosGet).toHaveBeenCalledWith(
             "https://api.deezer.com/search/track",
@@ -262,39 +282,47 @@ describe("deezerService", () => {
                     q: "Artist Exact Track",
                     limit: 5,
                 },
-            })
+            }),
         );
 
         mockAxiosGet.mockResolvedValueOnce({ data: { data: [] } });
         await expect(
-            deezerService.getTrackAlbum("No Artist", "No Track")
+            deezerService.getTrackAlbum("No Artist", "No Track"),
         ).resolves.toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "deezer:track-album:no artist:no track",
             86400,
-            "null"
+            "null",
         );
 
         mockAxiosGet.mockRejectedValueOnce(new Error("track album failed"));
         await expect(
-            deezerService.getTrackAlbum("Err Artist", "Err Track")
+            deezerService.getTrackAlbum("Err Artist", "Err Track"),
         ).resolves.toBeNull();
     });
 
     it("parses Deezer URLs for playlist/album/track and rejects non-matching URLs", () => {
-        expect(deezerService.parseUrl("https://www.deezer.com/playlist/123")).toEqual({
+        expect(
+            deezerService.parseUrl("https://www.deezer.com/playlist/123"),
+        ).toEqual({
             type: "playlist",
             id: "123",
         });
-        expect(deezerService.parseUrl("https://www.deezer.com/us/album/456")).toEqual({
+        expect(
+            deezerService.parseUrl("https://www.deezer.com/us/album/456"),
+        ).toEqual({
             type: "album",
             id: "456",
         });
-        expect(deezerService.parseUrl("https://www.deezer.com/track/789")).toEqual({
+        expect(
+            deezerService.parseUrl("https://www.deezer.com/track/789"),
+        ).toEqual({
             type: "track",
             id: "789",
         });
-        expect(deezerService.parseUrl("https://example.com/not-deezer")).toBeNull();
+        expect(
+            deezerService.parseUrl("https://example.com/not-deezer"),
+        ).toBeNull();
     });
 
     it("fetches playlists, chart playlists, and search playlists with mapping and errors", async () => {
@@ -313,7 +341,11 @@ describe("deezerService", () => {
                             id: 1,
                             title: "Track 1",
                             artist: { name: "Artist 1", id: 11 },
-                            album: { title: "Album 1", id: 21, cover_medium: "https://img/a1.jpg" },
+                            album: {
+                                title: "Album 1",
+                                id: 21,
+                                cover_medium: "https://img/a1.jpg",
+                            },
                             duration: 180,
                             preview: "https://prev/1.mp3",
                         },
@@ -335,10 +367,12 @@ describe("deezerService", () => {
                         durationMs: 180000,
                     }),
                 ],
-            })
+            }),
         );
 
-        mockAxiosGet.mockResolvedValueOnce({ data: { error: { message: "not found" } } });
+        mockAxiosGet.mockResolvedValueOnce({
+            data: { error: { message: "not found" } },
+        });
         await expect(deezerService.getPlaylist("404")).resolves.toBeNull();
 
         mockAxiosGet.mockRejectedValueOnce(new Error("playlist failed"));
@@ -386,25 +420,29 @@ describe("deezerService", () => {
                 ],
             },
         });
-        await expect(deezerService.searchPlaylists("jazz", 3)).resolves.toEqual([
-            {
-                id: "5",
-                title: "Search Hit",
-                description: null,
-                creator: "User",
-                imageUrl: "https://img/search.jpg",
-                trackCount: 8,
-                fans: 0,
-            },
-        ]);
+        await expect(deezerService.searchPlaylists("jazz", 3)).resolves.toEqual(
+            [
+                {
+                    id: "5",
+                    title: "Search Hit",
+                    description: null,
+                    creator: "User",
+                    imageUrl: "https://img/search.jpg",
+                    trackCount: 8,
+                    fans: 0,
+                },
+            ],
+        );
 
         mockAxiosGet.mockRejectedValueOnce(new Error("search failed"));
-        await expect(deezerService.searchPlaylists("jazz", 3)).resolves.toEqual([]);
+        await expect(deezerService.searchPlaylists("jazz", 3)).resolves.toEqual(
+            [],
+        );
     });
 
     it("returns featured playlists from cache and from chart+genre aggregation", async () => {
         mockRedisGet.mockResolvedValueOnce(
-            JSON.stringify([{ id: "cached", title: "Cached", fans: 0 }])
+            JSON.stringify([{ id: "cached", title: "Cached", fans: 0 }]),
         );
         await expect(deezerService.getFeaturedPlaylists(10)).resolves.toEqual([
             { id: "cached", title: "Cached", fans: 0 },
@@ -449,7 +487,7 @@ describe("deezerService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "deezer:playlists:featured:3",
             86400,
-            JSON.stringify(result)
+            JSON.stringify(result),
         );
 
         chartSpy.mockRestore();
@@ -457,7 +495,9 @@ describe("deezerService", () => {
     });
 
     it("handles genres and radio metadata with caching and error fallback", async () => {
-        mockRedisGet.mockResolvedValueOnce(JSON.stringify([{ id: 99, name: "Cached" }]));
+        mockRedisGet.mockResolvedValueOnce(
+            JSON.stringify([{ id: 99, name: "Cached" }]),
+        );
         await expect(deezerService.getGenres()).resolves.toEqual([
             { id: 99, name: "Cached" },
         ] as any);
@@ -467,7 +507,11 @@ describe("deezerService", () => {
             data: {
                 data: [
                     { id: 0, name: "All", picture: "x" },
-                    { id: 2, name: "Rock", picture_medium: "https://img/rock.jpg" },
+                    {
+                        id: 2,
+                        name: "Rock",
+                        picture_medium: "https://img/rock.jpg",
+                    },
                 ],
             },
         });
@@ -491,12 +535,14 @@ describe("deezerService", () => {
                     fans: 0,
                 },
             ]);
-        await expect(deezerService.getGenrePlaylists("Rock", 5)).resolves.toEqual([
-            expect.objectContaining({ id: "s1" }),
-        ]);
+        await expect(
+            deezerService.getGenrePlaylists("Rock", 5),
+        ).resolves.toEqual([expect.objectContaining({ id: "s1" })]);
         searchSpy.mockRestore();
 
-        mockRedisGet.mockResolvedValueOnce(JSON.stringify([{ id: "r1", title: "Cached Radio" }]));
+        mockRedisGet.mockResolvedValueOnce(
+            JSON.stringify([{ id: "r1", title: "Cached Radio" }]),
+        );
         await expect(deezerService.getRadioStations()).resolves.toEqual([
             { id: "r1", title: "Cached Radio" },
         ] as any);
@@ -505,7 +551,11 @@ describe("deezerService", () => {
         mockAxiosGet.mockResolvedValueOnce({
             data: {
                 data: [
-                    { id: 4, title: "Radio Four", picture: "https://img/r4.jpg" },
+                    {
+                        id: 4,
+                        title: "Radio Four",
+                        picture: "https://img/r4.jpg",
+                    },
                 ],
             },
         });
@@ -522,7 +572,9 @@ describe("deezerService", () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("radio stations failed"));
         await expect(deezerService.getRadioStations()).resolves.toEqual([]);
 
-        mockRedisGet.mockResolvedValueOnce(JSON.stringify([{ id: 3, name: "Cached Genre" }]));
+        mockRedisGet.mockResolvedValueOnce(
+            JSON.stringify([{ id: 3, name: "Cached Genre" }]),
+        );
         await expect(deezerService.getRadiosByGenre()).resolves.toEqual([
             { id: 3, name: "Cached Genre" },
         ] as any);
@@ -535,7 +587,11 @@ describe("deezerService", () => {
                         id: 10,
                         title: "Mood",
                         radios: [
-                            { id: 55, title: "Mood Mix", picture_medium: "https://img/mood.jpg" },
+                            {
+                                id: 55,
+                                title: "Mood Mix",
+                                picture_medium: "https://img/mood.jpg",
+                            },
                         ],
                     },
                 ],
@@ -563,7 +619,12 @@ describe("deezerService", () => {
 
     it("fetches radio tracks and editorial content with success and fallback", async () => {
         mockAxiosGet
-            .mockResolvedValueOnce({ data: { title: "Radio Name", picture_medium: "https://img/radio.jpg" } })
+            .mockResolvedValueOnce({
+                data: {
+                    title: "Radio Name",
+                    picture_medium: "https://img/radio.jpg",
+                },
+            })
             .mockResolvedValueOnce({
                 data: {
                     data: [
@@ -571,7 +632,11 @@ describe("deezerService", () => {
                             id: 7,
                             title: "Track Seven",
                             artist: { id: 70, name: "Artist Seven" },
-                            album: { id: 700, title: "Album Seven", cover: "https://img/a7.jpg" },
+                            album: {
+                                id: 700,
+                                title: "Album Seven",
+                                cover: "https://img/a7.jpg",
+                            },
                             duration: 210,
                             preview: "https://prev/7.mp3",
                         },
@@ -583,8 +648,13 @@ describe("deezerService", () => {
                 id: "radio-88",
                 title: "Radio Name",
                 trackCount: 1,
-                tracks: [expect.objectContaining({ deezerId: "7", durationMs: 210000 })],
-            })
+                tracks: [
+                    expect.objectContaining({
+                        deezerId: "7",
+                        durationMs: 210000,
+                    }),
+                ],
+            }),
         );
 
         mockAxiosGet.mockRejectedValueOnce(new Error("radio tracks failed"));
@@ -612,7 +682,11 @@ describe("deezerService", () => {
                             id: 5,
                             title: "Rock",
                             radios: [
-                                { id: 501, title: "Rock Radio", picture: "https://img/rockradio.jpg" },
+                                {
+                                    id: 501,
+                                    title: "Rock Radio",
+                                    picture: "https://img/rockradio.jpg",
+                                },
                             ],
                         },
                     ],
@@ -740,7 +814,7 @@ describe("deezerService", () => {
         });
 
         await expect(deezerService.getArtistImage("Artist One")).resolves.toBe(
-            "https://img/artist-medium.jpg"
+            "https://img/artist-medium.jpg",
         );
     });
 
@@ -748,7 +822,7 @@ describe("deezerService", () => {
         mockRedisGet.mockResolvedValueOnce("null");
 
         await expect(
-            deezerService.getAlbumCover("Cached Artist", "Cached Album")
+            deezerService.getAlbumCover("Cached Artist", "Cached Album"),
         ).resolves.toBeNull();
         expect(mockAxiosGet).not.toHaveBeenCalled();
     });
@@ -757,7 +831,7 @@ describe("deezerService", () => {
         mockRedisGet.mockResolvedValueOnce("null");
 
         await expect(
-            deezerService.getTrackPreview("Cached Artist", "Cached Track")
+            deezerService.getTrackPreview("Cached Artist", "Cached Track"),
         ).resolves.toBeNull();
         expect(mockAxiosGet).not.toHaveBeenCalled();
     });
@@ -776,7 +850,11 @@ describe("deezerService", () => {
                             id: 1,
                             title: "Track A",
                             artist: { name: "Artist", id: 11 },
-                            album: { title: "Album A", id: 22, cover: "https://img/album-cover.jpg" },
+                            album: {
+                                title: "Album A",
+                                id: 22,
+                                cover: "https://img/album-cover.jpg",
+                            },
                             duration: 121,
                         },
                         {
@@ -858,7 +936,7 @@ describe("deezerService", () => {
             });
             // Exact match should be found on first query and return immediately
             await expect(
-                deezerService.getAlbumCover("Nirvana", "Nevermind")
+                deezerService.getAlbumCover("Nirvana", "Nevermind"),
             ).resolves.toBe("https://img/nevermind.jpg");
             // Early exit: only one query made (score >= 200)
             expect(mockAxiosGet).toHaveBeenCalledTimes(1);
@@ -880,7 +958,7 @@ describe("deezerService", () => {
             // "Nirvana" exact match → 100. Total = 140 < 200, so all queries run
             const result = await deezerService.getAlbumCover(
                 "Nirvana",
-                "Nevermind"
+                "Nevermind",
             );
             expect(result).toBe("https://img/nevermind-deluxe.jpg");
         });
@@ -901,7 +979,7 @@ describe("deezerService", () => {
             // "Album Z" exact match → 100. Total = 125
             const result = await deezerService.getAlbumCover(
                 "Artist Z",
-                "Album Z"
+                "Album Z",
             );
             expect(result).toBe("https://img/album-z.jpg");
         });
@@ -921,7 +999,7 @@ describe("deezerService", () => {
             // Score 0 — still selected as best because it's the only candidate
             const result = await deezerService.getAlbumCover(
                 "Artist X",
-                "Album X"
+                "Album X",
             );
             expect(result).toBe("https://img/unrelated.jpg");
         });
@@ -938,10 +1016,7 @@ describe("deezerService", () => {
                 },
             });
             // Empty title/artist → NEGATIVE_INFINITY, no bestMatch
-            const result = await deezerService.getAlbumCover(
-                "Artist",
-                "Album"
-            );
+            const result = await deezerService.getAlbumCover("Artist", "Album");
             expect(result).toBeNull();
         });
 
@@ -953,7 +1028,7 @@ describe("deezerService", () => {
             });
             const result = await deezerService.getAlbumCover(
                 "Artist",
-                "Good Album"
+                "Good Album",
             );
             expect(result).toBeNull();
         });
@@ -976,7 +1051,7 @@ describe("deezerService", () => {
             // Plain title → only 2 queries: structured + loose (1 variant)
             expect(mockAxiosGet).toHaveBeenCalledTimes(1);
             expect(mockAxiosGet.mock.calls[0]?.[1]?.params?.q).toBe(
-                'artist:"Artist" album:"Simple"'
+                'artist:"Artist" album:"Simple"',
             );
         });
 
@@ -1003,12 +1078,12 @@ describe("deezerService", () => {
 
             await deezerService.getAlbumCover(
                 "Taylor Swift",
-                "Speak Now [Deluxe]"
+                "Speak Now [Deluxe]",
             );
             expect(mockAxiosGet).toHaveBeenCalledTimes(4);
             // The third query should be the structured query with the stripped title
             expect(mockAxiosGet.mock.calls[2]?.[1]?.params?.q).toBe(
-                'artist:"Taylor Swift" album:"Speak Now"'
+                'artist:"Taylor Swift" album:"Speak Now"',
             );
         });
 
@@ -1030,11 +1105,11 @@ describe("deezerService", () => {
 
             await deezerService.getAlbumCover(
                 "Radiohead",
-                "OK Computer (Remastered)"
+                "OK Computer (Remastered)",
             );
             // Third query should use the stripped variant
             expect(mockAxiosGet.mock.calls[2]?.[1]?.params?.q).toBe(
-                'artist:"Radiohead" album:"OK Computer"'
+                'artist:"Radiohead" album:"OK Computer"',
             );
         });
     });
@@ -1057,7 +1132,7 @@ describe("deezerService", () => {
 
             const result = await deezerService.getAlbumCover(
                 "Artist Hit",
-                "Album Hit"
+                "Album Hit",
             );
             expect(result).toBe("https://img/hit.jpg");
             expect(mockAxiosGet).toHaveBeenCalledTimes(2);
@@ -1087,7 +1162,7 @@ describe("deezerService", () => {
 
             const result = await deezerService.getAlbumCover(
                 "Unknown Artist",
-                "Unknown Album"
+                "Unknown Album",
             );
             expect(result).toBeNull();
         });
@@ -1109,7 +1184,7 @@ describe("deezerService", () => {
 
             const result = await deezerService.getAlbumCover(
                 "Fallback Artist",
-                "Fallback Album"
+                "Fallback Album",
             );
 
             expect(result).toBe("https://img/fallback.jpg");
@@ -1120,12 +1195,12 @@ describe("deezerService", () => {
             mockAxiosGet.mockRejectedValue("transport down");
 
             await expect(
-                deezerService.getAlbumCover("Broken Artist", "Broken Album")
+                deezerService.getAlbumCover("Broken Artist", "Broken Album"),
             ).resolves.toBeNull();
 
             expect(mockLoggerError).toHaveBeenCalledWith(
                 "Deezer album cover error for Broken Artist - Broken Album:",
-                "transport down"
+                "transport down",
             );
         });
     });
@@ -1182,7 +1257,11 @@ describe("deezerService", () => {
                             id: 99,
                             title: "Evening Drive",
                             artist: { name: "DJ Night", id: 12 },
-                            album: { title: "Night Mix", id: 34, cover: "https://img/album-cover.jpg" },
+                            album: {
+                                title: "Night Mix",
+                                id: 34,
+                                cover: "https://img/album-cover.jpg",
+                            },
                             duration: 210,
                             preview: "https://audio/night-drive.mp3",
                         },
@@ -1228,23 +1307,25 @@ describe("deezerService", () => {
         });
 
         await expect(
-            deezerService.getArtistImage("Fallback Artist")
+            deezerService.getArtistImage("Fallback Artist"),
         ).resolves.toBe("https://img/fallback-artist.jpg");
         expect(mockAxiosGet).toHaveBeenCalledWith(
             "https://api.deezer.com/search/artist",
             expect.objectContaining({
                 params: { q: "Fallback Artist", limit: 1 },
-            })
+            }),
         );
     });
 
     it("returns null and logs strict-artist lookup failures", async () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("strict lookup down"));
 
-        await expect(deezerService.getArtistImageStrict("Strict Artist")).resolves.toBeNull();
+        await expect(
+            deezerService.getArtistImageStrict("Strict Artist"),
+        ).resolves.toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Deezer strict artist image error for Strict Artist:",
-            "strict lookup down"
+            "strict lookup down",
         );
     });
 
@@ -1252,11 +1333,11 @@ describe("deezerService", () => {
         mockAxiosGet.mockRejectedValue(new Error("album search down"));
 
         await expect(
-            deezerService.getAlbumCover("Broken Artist", "Broken Album")
+            deezerService.getAlbumCover("Broken Artist", "Broken Album"),
         ).resolves.toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Deezer album cover error for Broken Artist - Broken Album:",
-            "album search down"
+            "album search down",
         );
     });
 
@@ -1268,11 +1349,11 @@ describe("deezerService", () => {
             });
 
         await expect(
-            deezerService.getAlbumCover("Explode Artist", "Explode Album")
+            deezerService.getAlbumCover("Explode Artist", "Explode Album"),
         ).resolves.toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Deezer album cover error for Explode Artist - Explode Album:",
-            "query build failed"
+            "query build failed",
         );
 
         querySpy.mockRestore();
@@ -1296,7 +1377,7 @@ describe("deezerService", () => {
         });
 
         await expect(
-            deezerService.getTrackAlbum("Target Artist", "Target Track")
+            deezerService.getTrackAlbum("Target Artist", "Target Track"),
         ).resolves.toEqual({
             albumName: "Fallback Album",
             albumId: "901",
@@ -1309,10 +1390,12 @@ describe("deezerService", () => {
             .spyOn(deezerService, "getChartPlaylists")
             .mockRejectedValueOnce(new Error("chart bootstrap failed"));
 
-        await expect(deezerService.getFeaturedPlaylists(5)).resolves.toEqual([]);
+        await expect(deezerService.getFeaturedPlaylists(5)).resolves.toEqual(
+            [],
+        );
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Deezer featured playlists error:",
-            "chart bootstrap failed"
+            "chart bootstrap failed",
         );
 
         chartSpy.mockRestore();
@@ -1326,12 +1409,12 @@ describe("deezerService", () => {
             },
         });
 
-        await expect(coverArtService.getCoverArt("rg-redis-warn")).resolves.toBe(
-            "https://img/caa-front.jpg"
-        );
+        await expect(
+            coverArtService.getCoverArt("rg-redis-warn"),
+        ).resolves.toBe("https://img/caa-front.jpg");
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1345,13 +1428,17 @@ describe("deezerService", () => {
             title: "Unknown Artist Album",
             "artist-credit": [{ name: "Unknown Artist" }],
         });
-        mockMusicBrainzExtractPrimaryArtist.mockReturnValueOnce("Unknown Artist");
+        mockMusicBrainzExtractPrimaryArtist.mockReturnValueOnce(
+            "Unknown Artist",
+        );
 
-        await expect(coverArtService.getCoverArt("rg-no-image")).resolves.toBeNull();
+        await expect(
+            coverArtService.getCoverArt("rg-no-image"),
+        ).resolves.toBeNull();
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "caa:rg-no-image",
             30 * 24 * 60 * 60,
-            "NOT_FOUND"
+            "NOT_FOUND",
         );
     });
 
@@ -1362,13 +1449,15 @@ describe("deezerService", () => {
             },
         });
         mockMusicBrainzGetReleaseGroup.mockRejectedValueOnce(
-            new Error("musicbrainz timeout")
+            new Error("musicbrainz timeout"),
         );
 
-        await expect(coverArtService.getCoverArt("rg-mb-fail")).resolves.toBeNull();
+        await expect(
+            coverArtService.getCoverArt("rg-mb-fail"),
+        ).resolves.toBeNull();
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "[CoverArt] Failed to resolve release-group metadata for rg-mb-fail:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1382,15 +1471,19 @@ describe("deezerService", () => {
             title: "Provider Album",
             "artist-credit": [{ name: "Provider Artist" }],
         });
-        mockMusicBrainzExtractPrimaryArtist.mockReturnValueOnce("Provider Artist");
+        mockMusicBrainzExtractPrimaryArtist.mockReturnValueOnce(
+            "Provider Artist",
+        );
         mockImageProviderGetAlbumCover.mockRejectedValueOnce(
-            new Error("provider unavailable")
+            new Error("provider unavailable"),
         );
 
-        await expect(coverArtService.getCoverArt("rg-provider-fail")).resolves.toBeNull();
+        await expect(
+            coverArtService.getCoverArt("rg-provider-fail"),
+        ).resolves.toBeNull();
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "[CoverArt] Fallback providers failed for Provider Artist - Provider Album:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -1402,12 +1495,12 @@ describe("deezerService", () => {
         });
         mockRedisSetEx.mockRejectedValueOnce(new Error("redis write failed"));
 
-        await expect(coverArtService.getCoverArt("rg-cache-write-fail")).resolves.toBe(
-            "https://img/caa-cache.jpg"
-        );
+        await expect(
+            coverArtService.getCoverArt("rg-cache-write-fail"),
+        ).resolves.toBe("https://img/caa-cache.jpg");
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 

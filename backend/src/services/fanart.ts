@@ -101,7 +101,7 @@ class FanartService {
                 if (rawUrl && !rawUrl.startsWith("http")) {
                     rawUrl = `https://assets.fanart.tv/fanart/music/${mbid}/artistbackground/${rawUrl}`;
                     logger.debug(
-                        `  Fanart.tv: Constructed full URL from filename`
+                        `  Fanart.tv: Constructed full URL from filename`,
                     );
                 }
 
@@ -114,7 +114,7 @@ class FanartService {
                 if (rawUrl && !rawUrl.startsWith("http")) {
                     rawUrl = `https://assets.fanart.tv/fanart/music/${mbid}/artistthumb/${rawUrl}`;
                     logger.debug(
-                        `  Fanart.tv: Constructed full URL from filename`
+                        `  Fanart.tv: Constructed full URL from filename`,
                     );
                 }
 
@@ -127,7 +127,7 @@ class FanartService {
                 if (rawUrl && !rawUrl.startsWith("http")) {
                     rawUrl = `https://assets.fanart.tv/fanart/music/${mbid}/hdmusiclogo/${rawUrl}`;
                     logger.debug(
-                        `  Fanart.tv: Constructed full URL from filename`
+                        `  Fanart.tv: Constructed full URL from filename`,
                     );
                 }
 
@@ -141,7 +141,7 @@ class FanartService {
                     await redisClient.setEx(
                         cacheKey,
                         7 * 24 * 60 * 60,
-                        imageUrl
+                        imageUrl,
                     );
                 } catch (error) {
                     // Redis errors are non-critical
@@ -199,7 +199,7 @@ class FanartService {
                     await redisClient.setEx(
                         cacheKey,
                         7 * 24 * 60 * 60,
-                        imageUrl
+                        imageUrl,
                     );
                 } catch (error) {
                     // Redis errors are non-critical

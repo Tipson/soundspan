@@ -270,10 +270,9 @@ router.post("/full", requireAdmin, async (req, res) => {
 
         res.json({
             message: "Full enrichment started",
-            description:
-                forceVibeRebuild ?
-                    "All artists, track tags, audio analysis, and CLAP embeddings will be re-processed"
-                :   "All artists, track tags, and audio analysis will be re-processed",
+            description: forceVibeRebuild
+                ? "All artists, track tags, audio analysis, and CLAP embeddings will be re-processed"
+                : "All artists, track tags, and audio analysis will be re-processed",
             forceVibeRebuild,
             forceMoodBucketBackfill,
         });
@@ -306,19 +305,19 @@ router.post("/full", requireAdmin, async (req, res) => {
  * Admin only - selective re-enrichment for large libraries
  */
 router.post("/reset-artists", requireAdmin, async (req, res) => {
-     try {
-         const result = await reRunArtistsOnly();
+    try {
+        const result = await reRunArtistsOnly();
 
-         res.json({
-             message: "Artist enrichment reset",
-             description: `${result.count} artists queued for re-enrichment`,
-             count: result.count,
-         });
-     } catch (error) {
-         logger.error("Reset artists error:", error);
-         res.status(500).json({ error: "Failed to reset artist enrichment" });
-     }
- });
+        res.json({
+            message: "Artist enrichment reset",
+            description: `${result.count} artists queued for re-enrichment`,
+            count: result.count,
+        });
+    } catch (error) {
+        logger.error("Reset artists error:", error);
+        res.status(500).json({ error: "Failed to reset artist enrichment" });
+    }
+});
 
 /**
  * @openapi
@@ -343,19 +342,19 @@ router.post("/reset-artists", requireAdmin, async (req, res) => {
  * Admin only - selective re-enrichment for large libraries
  */
 router.post("/reset-mood-tags", requireAdmin, async (req, res) => {
-     try {
-         const result = await reRunMoodTagsOnly();
+    try {
+        const result = await reRunMoodTagsOnly();
 
-         res.json({
-             message: "Mood tags reset",
-             description: `${result.count} tracks queued for mood tag re-enrichment`,
-             count: result.count,
-         });
-     } catch (error) {
-         logger.error("Reset mood tags error:", error);
-         res.status(500).json({ error: "Failed to reset mood tags" });
-     }
- });
+        res.json({
+            message: "Mood tags reset",
+            description: `${result.count} tracks queued for mood tag re-enrichment`,
+            count: result.count,
+        });
+    } catch (error) {
+        logger.error("Reset mood tags error:", error);
+        res.status(500).json({ error: "Failed to reset mood tags" });
+    }
+});
 
 /**
  * @openapi
@@ -384,23 +383,23 @@ router.post("/reset-mood-tags", requireAdmin, async (req, res) => {
  * analysis work that no consumer will drain.
  */
 router.post("/reset-audio-analysis", requireAdmin, async (req, res) => {
-     if (!config.features.audioAnalysis) {
-         sendFeatureDisabled(res);
-         return;
-     }
-     try {
-         const queued = await reRunAudioAnalysisOnly();
+    if (!config.features.audioAnalysis) {
+        sendFeatureDisabled(res);
+        return;
+    }
+    try {
+        const queued = await reRunAudioAnalysisOnly();
 
-         res.json({
-             message: "Audio analysis reset",
-             description: `${queued} tracks queued for audio re-analysis`,
-             count: queued,
-         });
-     } catch (error) {
-         logger.error("Reset audio analysis error:", error);
-         res.status(500).json({ error: "Failed to reset audio analysis" });
-     }
- });
+        res.json({
+            message: "Audio analysis reset",
+            description: `${queued} tracks queued for audio re-analysis`,
+            count: queued,
+        });
+    } catch (error) {
+        logger.error("Reset audio analysis error:", error);
+        res.status(500).json({ error: "Failed to reset audio analysis" });
+    }
+});
 
 /**
  * @openapi
@@ -421,31 +420,31 @@ router.post("/reset-audio-analysis", requireAdmin, async (req, res) => {
  *       404:
  *         description: Audio analysis feature disabled (AUDIO_ANALYSIS_ENABLED=false)
  */
- /**
-  * POST /enrichment/reset-vibe-embeddings
-  * Reset only vibe embeddings (keeps all other enrichment intact)
-  * Admin only - selective re-enrichment for large libraries
-  * Gated on config.features.audioAnalysis (vibe/CLAP is part of the audio
-  * analysis subsystem) so disabled deployments never queue undrained work.
-  */
- router.post("/reset-vibe-embeddings", requireAdmin, async (req, res) => {
-     if (!config.features.audioAnalysis) {
-         sendFeatureDisabled(res);
-         return;
-     }
-     try {
-         const queued = await reRunVibeEmbeddingsOnly();
+/**
+ * POST /enrichment/reset-vibe-embeddings
+ * Reset only vibe embeddings (keeps all other enrichment intact)
+ * Admin only - selective re-enrichment for large libraries
+ * Gated on config.features.audioAnalysis (vibe/CLAP is part of the audio
+ * analysis subsystem) so disabled deployments never queue undrained work.
+ */
+router.post("/reset-vibe-embeddings", requireAdmin, async (req, res) => {
+    if (!config.features.audioAnalysis) {
+        sendFeatureDisabled(res);
+        return;
+    }
+    try {
+        const queued = await reRunVibeEmbeddingsOnly();
 
-         res.json({
-             message: "Vibe embeddings reset",
-             description: `${queued} tracks queued for vibe embedding re-analysis`,
-             count: queued,
-         });
-     } catch (error) {
-         logger.error("Reset vibe embeddings error:", error);
-         res.status(500).json({ error: "Failed to reset vibe embeddings" });
-     }
- });
+        res.json({
+            message: "Vibe embeddings reset",
+            description: `${queued} tracks queued for vibe embedding re-analysis`,
+            count: queued,
+        });
+    } catch (error) {
+        logger.error("Reset vibe embeddings error:", error);
+        res.status(500).json({ error: "Failed to reset vibe embeddings" });
+    }
+});
 
 /**
  * @openapi
@@ -510,27 +509,27 @@ router.post("/repair-covers", requireAdmin, async (req, res) => {
  *       403:
  *         description: Admin access required
  */
- /**
-  * POST /enrichment/sync
-  * Trigger incremental enrichment (only processes pending items)
-  * Fast sync that picks up new content without re-processing everything
-  */
- router.post("/sync", requireAdmin, async (req, res) => {
-     try {
-         const result = await triggerEnrichmentNow();
+/**
+ * POST /enrichment/sync
+ * Trigger incremental enrichment (only processes pending items)
+ * Fast sync that picks up new content without re-processing everything
+ */
+router.post("/sync", requireAdmin, async (req, res) => {
+    try {
+        const result = await triggerEnrichmentNow();
 
-         res.json({
-             message: "Incremental sync started",
-             description: "Processing new and pending items only",
-             result,
-         });
-     } catch (error: any) {
-         logger.error("Trigger sync error:", error);
-         res.status(500).json({
-             error: error.message || "Failed to start sync",
-         });
-     }
- });
+        res.json({
+            message: "Incremental sync started",
+            description: "Processing new and pending items only",
+            result,
+        });
+    } catch (error: any) {
+        logger.error("Trigger sync error:", error);
+        res.status(500).json({
+            error: error.message || "Failed to start sync",
+        });
+    }
+});
 
 /**
  * @openapi
@@ -593,7 +592,7 @@ router.put("/settings", async (req, res) => {
         const userId = req.user!.id;
         const settings = await enrichmentService.updateSettings(
             userId,
-            req.body
+            req.body,
         );
         res.json(settings);
     } catch (error) {
@@ -643,7 +642,7 @@ router.post("/artist/:id", async (req, res) => {
 
         const enrichmentData = await enrichmentService.enrichArtist(
             req.params.id,
-            settings
+            settings,
         );
 
         if (!enrichmentData) {
@@ -653,7 +652,7 @@ router.post("/artist/:id", async (req, res) => {
         if (enrichmentData.confidence > 0.3) {
             await enrichmentService.applyArtistEnrichment(
                 req.params.id,
-                enrichmentData
+                enrichmentData,
             );
         }
 
@@ -711,7 +710,7 @@ router.post("/album/:id", async (req, res) => {
 
         const enrichmentData = await enrichmentService.enrichAlbum(
             req.params.id,
-            settings
+            settings,
         );
 
         if (!enrichmentData) {
@@ -721,7 +720,7 @@ router.post("/album/:id", async (req, res) => {
         if (enrichmentData.confidence > 0.3) {
             await enrichmentService.applyAlbumEnrichment(
                 req.params.id,
-                enrichmentData
+                enrichmentData,
             );
         }
 
@@ -841,9 +840,9 @@ router.get("/search/musicbrainz/artists", async (req, res) => {
             country: artist.country || null,
             type: artist.type || null,
             score:
-                typeof artist.score === "number" ?
-                    artist.score
-                :   Number.parseInt(artist.score || "0", 10),
+                typeof artist.score === "number"
+                    ? artist.score
+                    : Number.parseInt(artist.score || "0", 10),
         }));
 
         res.json({ artists });
@@ -904,7 +903,7 @@ router.get("/search/musicbrainz/release-groups", async (req, res) => {
         const releaseGroups = await musicBrainzService.searchReleaseGroups(
             query,
             artistName || undefined,
-            10
+            10,
         );
 
         const albums = releaseGroups.map((rg: any) => ({
@@ -919,9 +918,9 @@ router.get("/search/musicbrainz/release-groups", async (req, res) => {
                     .filter(Boolean)
                     .join(", ") || "Unknown Artist",
             score:
-                typeof rg.score === "number" ?
-                    rg.score
-                :   Number.parseInt(rg.score || "0", 10),
+                typeof rg.score === "number"
+                    ? rg.score
+                    : Number.parseInt(rg.score || "0", 10),
         }));
 
         res.json({ albums });
@@ -1079,7 +1078,7 @@ router.post("/retry", requireAdmin, async (req, res) => {
 
         // Get the failures to determine what to retry
         const failures = await Promise.all(
-            ids.map((id) => enrichmentFailureService.getFailure(id))
+            ids.map((id) => enrichmentFailureService.getFailure(id)),
         );
 
         // Group by type and trigger appropriate re-enrichment
@@ -1164,7 +1163,7 @@ router.post("/retry", requireAdmin, async (req, res) => {
             } catch (error) {
                 logger.error(
                     `Failed to reset ${failure.entityType} ${failure.entityId}:`,
-                    error
+                    error,
                 );
                 // Don't re-throw - continue processing other failures
             }
@@ -1274,13 +1273,18 @@ router.post("/skip", requireAdmin, async (req, res) => {
  */
 router.delete("/failures", requireAdmin, async (req, res) => {
     try {
-        const entityType = req.query.entityType as "artist" | "track" | "audio" | undefined;
+        const entityType = req.query.entityType as
+            | "artist"
+            | "track"
+            | "audio"
+            | undefined;
 
         if (entityType && !["artist", "track", "audio"].includes(entityType)) {
             return res.status(400).json({ error: "Invalid entityType" });
         }
 
-        const count = await enrichmentFailureService.clearAllFailures(entityType);
+        const count =
+            await enrichmentFailureService.clearAllFailures(entityType);
 
         res.json({
             message: `Cleared ${count} failure${count !== 1 ? "s" : ""}`,
@@ -1322,22 +1326,26 @@ router.delete("/failures", requireAdmin, async (req, res) => {
  * DELETE /enrichment/failures/:id
  * Delete a specific failure record
  */
-router.delete<{ id: string }>("/failures/:id", requireAdmin, async (req, res) => {
-    try {
-        const count = await enrichmentFailureService.deleteFailures([
-            req.params.id,
-        ]);
-        res.json({
-            message: "Failure deleted",
-            count,
-        });
-    } catch (error: any) {
-        logger.error("Delete failure error:", error);
-        res.status(500).json({
-            error: error.message || "Failed to delete failure",
-        });
-    }
-});
+router.delete<{ id: string }>(
+    "/failures/:id",
+    requireAdmin,
+    async (req, res) => {
+        try {
+            const count = await enrichmentFailureService.deleteFailures([
+                req.params.id,
+            ]);
+            res.json({
+                message: "Failure deleted",
+                count,
+            });
+        } catch (error: any) {
+            logger.error("Delete failure error:", error);
+            res.status(500).json({
+                error: error.message || "Failed to delete failure",
+            });
+        }
+    },
+);
 
 /**
  * @openapi
@@ -2165,7 +2173,7 @@ router.put("/concurrency", requireAdmin, async (req, res) => {
         // Clamp concurrency to 1-5
         const clampedConcurrency = Math.max(
             1,
-            Math.min(5, Math.floor(concurrency))
+            Math.min(5, Math.floor(concurrency)),
         );
 
         // Update system settings in database
@@ -2192,7 +2200,7 @@ router.put("/concurrency", requireAdmin, async (req, res) => {
         const tracksPerMin = Math.round(60 * clampedConcurrency);
 
         logger.debug(
-            `[Enrichment Settings] Updated concurrency to ${clampedConcurrency}`
+            `[Enrichment Settings] Updated concurrency to ${clampedConcurrency}`,
         );
 
         res.json({

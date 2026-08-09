@@ -115,7 +115,7 @@ describe("api entrypoint runtime behavior", () => {
         const compressionFilter = jest.fn(() => true);
         const compressionMiddleware = Object.assign(
             jest.fn(() => "compression-middleware"),
-            { filter: compressionFilter }
+            { filter: compressionFilter },
         );
 
         const redisClient = {
@@ -124,15 +124,13 @@ describe("api entrypoint runtime behavior", () => {
             close: jest.fn(redisCloseImpl || (async () => "OK")),
         };
         const prisma = {
-            $queryRaw: jest.fn(
-                prismaQueryRawImpl || (async () => 1)
+            $queryRaw: jest.fn(prismaQueryRawImpl || (async () => 1)),
+            $disconnect: jest.fn(
+                prismaDisconnectImpl || (async () => undefined),
             ),
-            $disconnect: jest.fn(prismaDisconnectImpl || (async () => undefined)),
             $connect: jest.fn(prismaConnectImpl || (async () => undefined)),
             user: {
-                findFirst: jest.fn(
-                    prismaFindFirstImpl || (async () => null)
-                ),
+                findFirst: jest.fn(prismaFindFirstImpl || (async () => null)),
                 update: jest.fn(async () => undefined),
             },
         };
@@ -151,7 +149,7 @@ describe("api entrypoint runtime behavior", () => {
                         overallHealthy: dependencyHealthy,
                         postgres: { ok: dependencyHealthy },
                         redis: { ok: dependencyHealthy },
-                    }))
+                    })),
             ),
             isHealthy: jest.fn(() => dependencyHealthy),
             getSnapshot: jest.fn(() => ({
@@ -162,7 +160,7 @@ describe("api entrypoint runtime behavior", () => {
             })),
         };
         const createDependencyReadinessTracker = jest.fn(
-            () => dependencyReadiness
+            () => dependencyReadiness,
         );
 
         const setupListenTogetherSocket = jest.fn();
@@ -182,10 +180,12 @@ describe("api entrypoint runtime behavior", () => {
         server.close = jest.fn((cb?: () => void) => {
             cb?.();
         });
-        server.on = jest.fn((event: string, handler: (...args: any[]) => void) => {
-            serverEventHandlers.set(event, handler);
-            return server;
-        });
+        server.on = jest.fn(
+            (event: string, handler: (...args: any[]) => void) => {
+                serverEventHandlers.set(event, handler);
+                return server;
+            },
+        );
         server.closeIdleConnections = jest.fn();
         server.closeAllConnections = jest.fn();
         const createServer = jest.fn(() => server);
@@ -217,8 +217,7 @@ describe("api entrypoint runtime behavior", () => {
             },
         };
         const hashedAdminPassword =
-            bcryptHashImpl ||
-            (async () => "hashed-admin-password");
+            bcryptHashImpl || (async () => "hashed-admin-password");
 
         const createBullBoard = jest.fn();
         const BullAdapter = jest.fn((queue) => ({ queue }));
@@ -233,7 +232,7 @@ describe("api entrypoint runtime behavior", () => {
             imageQueue: { name: "image" },
         };
         const shutdownWorkers = jest.fn(
-            shutdownWorkersImpl || (async () => undefined)
+            shutdownWorkersImpl || (async () => undefined),
         );
 
         jest.doMock("express", () => expressFn);
@@ -268,7 +267,10 @@ describe("api entrypoint runtime behavior", () => {
             persistAllGroups,
         }));
         jest.doMock("../middleware/errorHandler", () => ({ errorHandler }));
-        jest.doMock("../middleware/auth", () => ({ requireAuth, requireAdmin }));
+        jest.doMock("../middleware/auth", () => ({
+            requireAuth,
+            requireAdmin,
+        }));
         jest.doMock("../middleware/rateLimiter", () => ({
             authLimiter,
             apiLimiter,
@@ -279,7 +281,9 @@ describe("api entrypoint runtime behavior", () => {
             serve: swaggerServe,
             setup: swaggerSetup,
         }));
-        jest.doMock("../config/swagger", () => ({ swaggerSpec: { openapi: "3.0.0" } }));
+        jest.doMock("../config/swagger", () => ({
+            swaggerSpec: { openapi: "3.0.0" },
+        }));
         jest.doMock("bcrypt", () => ({
             hash: hashedAdminPassword,
         }));
@@ -343,10 +347,10 @@ describe("api entrypoint runtime behavior", () => {
 
     function getGetHandler(
         app: { get: jest.Mock },
-        routePath: string
+        routePath: string,
     ): (req: any, res: any) => unknown {
         const call = app.get.mock.calls.find(
-            (args: unknown[]) => args[0] === routePath
+            (args: unknown[]) => args[0] === routePath,
         );
         if (!call) {
             throw new Error(`GET route not registered: ${routePath}`);
@@ -358,10 +362,10 @@ describe("api entrypoint runtime behavior", () => {
 
     function getProcessHandler(
         processOnSpy: jest.SpyInstance,
-        event: string
+        event: string,
     ): (...args: any[]) => any {
         const call = processOnSpy.mock.calls.find(
-            (args: [string | symbol]) => args[0] === event
+            (args: [string | symbol]) => args[0] === event,
         );
         if (!call) {
             throw new Error(`Process handler not registered: ${event}`);
@@ -402,27 +406,31 @@ describe("api entrypoint runtime behavior", () => {
             expect.objectContaining({
                 threshold: 1024,
                 filter: expect.any(Function),
-            })
+            }),
         );
         expect(mocks.app.use).toHaveBeenCalledWith("compression-middleware");
         expect(mocks.server.listen).toHaveBeenCalledWith(
             3006,
             "0.0.0.0",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(mocks.prisma.$queryRaw).toHaveBeenCalled();
         expect(mocks.redisClient.ping).toHaveBeenCalled();
-        expect(mocks.createDependencyReadinessTracker).toHaveBeenCalledWith("api");
-        expect(mocks.setupListenTogetherSocket).toHaveBeenCalledWith(mocks.server);
+        expect(mocks.createDependencyReadinessTracker).toHaveBeenCalledWith(
+            "api",
+        );
+        expect(mocks.setupListenTogetherSocket).toHaveBeenCalledWith(
+            mocks.server,
+        );
         expect(mocks.server.on).toHaveBeenCalledWith(
             "connection",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(mocks.startPersistLoop).toHaveBeenCalledTimes(1);
         expect(mocks.createBullBoard).toHaveBeenCalledTimes(1);
         expect(mocks.app.get).toHaveBeenCalledWith(
             "/api/docs.json",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(processOnSpy).toHaveBeenCalled();
         expect(setIntervalSpy).toHaveBeenCalled();
@@ -436,7 +444,7 @@ describe("api entrypoint runtime behavior", () => {
 
         jest.spyOn(process, "on").mockImplementation(() => process as any);
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -455,7 +463,8 @@ describe("api entrypoint runtime behavior", () => {
         await flushPromises();
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const analysisInternalRouter = require("../routes/analysisInternal").default;
+        const analysisInternalRouter =
+            require("../routes/analysisInternal").default;
 
         for (const prefix of [
             "/api/discover",
@@ -465,7 +474,7 @@ describe("api entrypoint runtime behavior", () => {
             "/api/vibe",
         ]) {
             const call = mocks.app.use.mock.calls.find(
-                (args: unknown[]) => args[0] === prefix
+                (args: unknown[]) => args[0] === prefix,
             );
             expect(call).toBeDefined();
             // Disabled prefixes stay rate limited and mount the
@@ -482,7 +491,7 @@ describe("api entrypoint runtime behavior", () => {
 
             const handler = call![call!.length - 1] as (
                 req: any,
-                res: any
+                res: any,
             ) => void;
             expect(typeof handler).toBe("function");
 
@@ -504,7 +513,7 @@ describe("api entrypoint runtime behavior", () => {
 
         jest.spyOn(process, "on").mockImplementation(() => process as any);
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -522,7 +531,7 @@ describe("api entrypoint runtime behavior", () => {
             "/api/vibe",
         ]) {
             const call = mocks.app.use.mock.calls.find(
-                (args: unknown[]) => args[0] === prefix
+                (args: unknown[]) => args[0] === prefix,
             );
             expect(call).toBeDefined();
             expect(call![1]).toBe("api-limiter");
@@ -538,7 +547,7 @@ describe("api entrypoint runtime behavior", () => {
 
         jest.spyOn(process, "on").mockImplementation(() => process as any);
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -627,7 +636,7 @@ describe("api entrypoint runtime behavior", () => {
 
         for (const [prefix, chain] of Object.entries(expectedMounts)) {
             const call = mocks.app.use.mock.calls.find(
-                (args: unknown[]) => args[0] === prefix
+                (args: unknown[]) => args[0] === prefix,
             );
             if (!call) {
                 throw new Error(`Expected mount missing: ${prefix}`);
@@ -638,7 +647,7 @@ describe("api entrypoint runtime behavior", () => {
                 throw new Error(
                     `Mount chain mismatch for ${prefix}: ${
                         (error as Error).message
-                    }`
+                    }`,
                 );
             }
         }
@@ -650,7 +659,7 @@ describe("api entrypoint runtime behavior", () => {
             .map((args: unknown[]) => args[0])
             .filter(
                 (first): first is string =>
-                    typeof first === "string" && first.startsWith("/")
+                    typeof first === "string" && first.startsWith("/"),
             );
         for (const prefix of mountedPaths) {
             if (
@@ -658,14 +667,14 @@ describe("api entrypoint runtime behavior", () => {
                 !knownUnlisted.has(prefix)
             ) {
                 throw new Error(
-                    `Unreviewed route mount: ${prefix} — add it to the mount contract table with its expected auth/limiter chain`
+                    `Unreviewed route mount: ${prefix} — add it to the mount contract table with its expected auth/limiter chain`,
                 );
             }
         }
 
         // Bull Board admin dashboard requires session auth + admin role.
         const queuesCall = mocks.app.use.mock.calls.find(
-            (args: unknown[]) => args[0] === "/api/admin/queues"
+            (args: unknown[]) => args[0] === "/api/admin/queues",
         );
         expect(queuesCall).toBeDefined();
         expect(queuesCall![1]).toBe(mocks.requireAuth);
@@ -680,7 +689,7 @@ describe("api entrypoint runtime behavior", () => {
 
         jest.spyOn(process, "on").mockImplementation(() => process as any);
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -691,7 +700,7 @@ describe("api entrypoint runtime behavior", () => {
         await flushPromises();
 
         const call = mocks.app.use.mock.calls.find(
-            (args: unknown[]) => args[0] === "/api/device-link"
+            (args: unknown[]) => args[0] === "/api/device-link",
         );
         expect(call).toBeDefined();
         // device-link/verify is an unauthenticated, full-privilege API-key mint,
@@ -706,7 +715,7 @@ describe("api entrypoint runtime behavior", () => {
         };
 
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -728,34 +737,34 @@ describe("api entrypoint runtime behavior", () => {
         expect(
             compressionConfig.filter(
                 { path: "/api/audiobooks/book-1/stream" },
-                cacheRes
-            )
+                cacheRes,
+            ),
         ).toBe(false);
         expect(
             compressionConfig.filter(
                 { path: "/api/audiobooks/book-1/cover" },
-                cacheRes
-            )
+                cacheRes,
+            ),
         ).toBe(false);
         expect(
             compressionConfig.filter(
                 { path: "/api/library/tracks/track-1/stream" },
-                cacheRes
-            )
+                cacheRes,
+            ),
         ).toBe(false);
 
-        expect(
-            compressionConfig.filter({ path: "/api/mixes" }, cacheRes)
-        ).toBe(true);
+        expect(compressionConfig.filter({ path: "/api/mixes" }, cacheRes)).toBe(
+            true,
+        );
         expect(mocks.compressionFilter).toHaveBeenCalledWith(
             { path: "/api/mixes" },
-            cacheRes
+            cacheRes,
         );
 
         cacheRes.getHeader.mockReturnValueOnce("public, no-transform");
-        expect(
-            compressionConfig.filter({ path: "/api/mixes" }, cacheRes)
-        ).toBe(false);
+        expect(compressionConfig.filter({ path: "/api/mixes" }, cacheRes)).toBe(
+            false,
+        );
     });
 
     it("exits early when BACKEND_PROCESS_ROLE is worker on API entrypoint", () => {
@@ -795,9 +804,11 @@ describe("api entrypoint runtime behavior", () => {
         await flushPromises();
 
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            '[Startup] Invalid BACKEND_PROCESS_ROLE="invalid-role", defaulting to "all"'
+            '[Startup] Invalid BACKEND_PROCESS_ROLE="invalid-role", defaulting to "all"',
         );
-        expect(mocks.setupListenTogetherSocket).toHaveBeenCalledWith(mocks.server);
+        expect(mocks.setupListenTogetherSocket).toHaveBeenCalledWith(
+            mocks.server,
+        );
         expect(mocks.startPersistLoop).toHaveBeenCalledTimes(1);
         expect(setIntervalSpy).toHaveBeenCalled();
     });
@@ -883,7 +894,7 @@ describe("api entrypoint runtime behavior", () => {
         expect(res.statusCode).toBe(503);
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "[Startup] readiness probe failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -949,7 +960,7 @@ describe("api entrypoint runtime behavior", () => {
             .spyOn(process, "on")
             .mockImplementation(() => process as any);
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -975,7 +986,7 @@ describe("api entrypoint runtime behavior", () => {
         expect(mocks.prisma.$disconnect).toHaveBeenCalled();
         expect(process.exit).toHaveBeenCalledWith(0);
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "Shutdown already in progress..."
+            "Shutdown already in progress...",
         );
     });
 
@@ -989,7 +1000,7 @@ describe("api entrypoint runtime behavior", () => {
             .spyOn(process, "on")
             .mockImplementation(() => process as any);
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -1009,7 +1020,7 @@ describe("api entrypoint runtime behavior", () => {
 
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Error during shutdown:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(process.exit).toHaveBeenCalledWith(1);
     });
@@ -1024,7 +1035,7 @@ describe("api entrypoint runtime behavior", () => {
             .spyOn(process, "on")
             .mockImplementation(() => process as any);
         jest.spyOn(global, "setInterval").mockImplementation(
-            () => 1 as unknown as NodeJS.Timeout
+            () => 1 as unknown as NodeJS.Timeout,
         );
         process.exit = jest.fn() as any;
 
@@ -1036,14 +1047,17 @@ describe("api entrypoint runtime behavior", () => {
 
         const unhandledRejection = getProcessHandler(
             processOnSpy,
-            "unhandledRejection"
+            "unhandledRejection",
         );
         const uncaughtException = getProcessHandler(
             processOnSpy,
-            "uncaughtException"
+            "uncaughtException",
         );
 
-        unhandledRejection(new Error("api-unhandled-rejection"), Promise.resolve());
+        unhandledRejection(
+            new Error("api-unhandled-rejection"),
+            Promise.resolve(),
+        );
         uncaughtException(new Error("api-uncaught-exception"));
         await flushPromises();
 
@@ -1051,13 +1065,13 @@ describe("api entrypoint runtime behavior", () => {
             "Unhandled Promise Rejection:",
             expect.objectContaining({
                 reason: "api-unhandled-rejection",
-            })
+            }),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Uncaught Exception - initiating graceful shutdown:",
             expect.objectContaining({
                 message: "api-uncaught-exception",
-            })
+            }),
         );
     });
 
@@ -1112,12 +1126,12 @@ describe("api entrypoint runtime behavior", () => {
             expect.objectContaining({
                 postgres: { ok: false },
                 redis: { ok: true },
-            })
+            }),
         );
         expect(mocks.prisma.$disconnect).toHaveBeenCalled();
         expect(mocks.prisma.$connect).toHaveBeenCalled();
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "Database connection recovered"
+            "Database connection recovered",
         );
     });
 
@@ -1175,13 +1189,13 @@ describe("api entrypoint runtime behavior", () => {
 
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Failed to recover database connection:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "Health check failed - connections may be stale:",
             expect.objectContaining({
                 error: "interval-probe-failure",
-            })
+            }),
         );
     });
 
@@ -1207,10 +1221,10 @@ describe("api entrypoint runtime behavior", () => {
             "✗ PostgreSQL connection failed:",
             expect.objectContaining({
                 error: "postgres-down",
-            })
+            }),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
-            "Unable to connect to PostgreSQL. Please ensure:"
+            "Unable to connect to PostgreSQL. Please ensure:",
         );
         expect(process.exit).toHaveBeenCalledWith(1);
         expect(mocks.prisma.$queryRaw).toHaveBeenCalled();
@@ -1241,13 +1255,13 @@ describe("api entrypoint runtime behavior", () => {
         await flushPromises();
 
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Redis connection attempt 1/10 failed")
+            expect.stringContaining("Redis connection attempt 1/10 failed"),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "✗ Redis connection failed after all retries:",
             expect.objectContaining({
                 error: expect.stringContaining("Redis client is not ready"),
-            })
+            }),
         );
         expect(process.exit).toHaveBeenCalledWith(1);
         expect(mocks.redisClient.ping).not.toHaveBeenCalled();
@@ -1276,10 +1290,10 @@ describe("api entrypoint runtime behavior", () => {
         await flushPromises();
 
         const docsEndpoint = mocks.app.use.mock.calls.find(
-            (args) => args[0] === "/api/docs"
+            (args) => args[0] === "/api/docs",
         );
         const docsJsonEndpoint = mocks.app.get.mock.calls.find(
-            (args) => args[0] === "/api/docs.json"
+            (args) => args[0] === "/api/docs.json",
         );
 
         expect(docsEndpoint?.[1]).toBe("swagger-serve-middleware");
@@ -1300,7 +1314,7 @@ describe("api entrypoint runtime behavior", () => {
         process.exit = jest.fn() as any;
 
         const adminPasswordHash = jest.fn(
-            async (_value: string, _salt: number) => "hashed-admin-pass"
+            async (_value: string, _salt: number) => "hashed-admin-pass",
         );
         const mocks = setupApiEntrypointMocks({
             bcryptHashImpl: adminPasswordHash,
@@ -1323,15 +1337,18 @@ describe("api entrypoint runtime behavior", () => {
         expect(mocks.prisma.user.findFirst).toHaveBeenCalledWith({
             where: { role: "admin" },
         });
-        expect(adminPasswordHash).toHaveBeenCalledWith("new-admin-password", 10);
+        expect(adminPasswordHash).toHaveBeenCalledWith(
+            "new-admin-password",
+            10,
+        );
         expect(mocks.prisma.user.update).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "admin-id" },
                 data: { passwordHash: "hashed-admin-pass" },
-            })
+            }),
         );
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            "[Password Reset] Admin password has been reset via ADMIN_RESET_PASSWORD env var. Remove this env var and restart."
+            "[Password Reset] Admin password has been reset via ADMIN_RESET_PASSWORD env var. Remove this env var and restart.",
         );
         expect(setIntervalSpy).toHaveBeenCalled();
     });

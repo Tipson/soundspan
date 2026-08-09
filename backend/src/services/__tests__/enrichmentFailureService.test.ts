@@ -89,13 +89,13 @@ describe("enrichmentFailureService", () => {
                 }),
             });
             expect(
-                prisma.enrichmentFailure.create.mock.calls[0][0].data.metadata
+                prisma.enrichmentFailure.create.mock.calls[0][0].data.metadata,
             ).not.toBe(metadata);
             expect(result).toEqual(
                 expect.objectContaining({
                     id: "failure-1",
                     retryCount: 1,
-                })
+                }),
             );
         });
 
@@ -138,7 +138,7 @@ describe("enrichmentFailureService", () => {
                     id: "failure-2",
                     retryCount: 3,
                     metadata: existingMetadata,
-                })
+                }),
             );
         });
 
@@ -311,7 +311,10 @@ describe("enrichmentFailureService", () => {
     it("passes through count for resetRetryCount", async () => {
         prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({ count: 4 });
 
-        const result = await enrichmentFailureService.resetRetryCount(["r1", "r2"]);
+        const result = await enrichmentFailureService.resetRetryCount([
+            "r1",
+            "r2",
+        ]);
 
         expect(prisma.enrichmentFailure.updateMany).toHaveBeenCalledWith({
             where: { id: { in: ["r1", "r2"] } },
@@ -335,7 +338,9 @@ describe("enrichmentFailureService", () => {
 
     describe("clearAllFailures", () => {
         it("clears unresolved/unskipped failures and logs without type filter", async () => {
-            prisma.enrichmentFailure.deleteMany.mockResolvedValueOnce({ count: 9 });
+            prisma.enrichmentFailure.deleteMany.mockResolvedValueOnce({
+                count: 9,
+            });
 
             const result = await enrichmentFailureService.clearAllFailures();
 
@@ -346,15 +351,18 @@ describe("enrichmentFailureService", () => {
                 },
             });
             expect(logger.info).toHaveBeenCalledWith(
-                "Cleared 9 enrichment failures"
+                "Cleared 9 enrichment failures",
             );
             expect(result).toBe(9);
         });
 
         it("applies optional entity type filter and logs typed clear", async () => {
-            prisma.enrichmentFailure.deleteMany.mockResolvedValueOnce({ count: 2 });
+            prisma.enrichmentFailure.deleteMany.mockResolvedValueOnce({
+                count: 2,
+            });
 
-            const result = await enrichmentFailureService.clearAllFailures("audio");
+            const result =
+                await enrichmentFailureService.clearAllFailures("audio");
 
             expect(prisma.enrichmentFailure.deleteMany).toHaveBeenCalledWith({
                 where: {
@@ -364,14 +372,16 @@ describe("enrichmentFailureService", () => {
                 },
             });
             expect(logger.info).toHaveBeenCalledWith(
-                "Cleared 2 enrichment failures of type audio"
+                "Cleared 2 enrichment failures of type audio",
             );
             expect(result).toBe(2);
         });
     });
 
     it("removes old resolved failures before cutoff and logs cleanup details", async () => {
-        jest.useFakeTimers().setSystemTime(new Date("2026-02-17T12:00:00.000Z"));
+        jest.useFakeTimers().setSystemTime(
+            new Date("2026-02-17T12:00:00.000Z"),
+        );
         prisma.enrichmentFailure.deleteMany.mockResolvedValueOnce({ count: 5 });
 
         const result = await enrichmentFailureService.cleanupOldResolved(10);
@@ -380,10 +390,10 @@ describe("enrichmentFailureService", () => {
         expect(callArg.where.resolved).toBe(true);
         expect(callArg.where.resolvedAt.lt).toBeInstanceOf(Date);
         expect(callArg.where.resolvedAt.lt.toISOString()).toBe(
-            "2026-02-07T12:00:00.000Z"
+            "2026-02-07T12:00:00.000Z",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[Enrichment Failures] Cleaned up 5 old resolved failures"
+            "[Enrichment Failures] Cleaned up 5 old resolved failures",
         );
         expect(result).toBe(5);
     });
@@ -397,7 +407,7 @@ describe("enrichmentFailureService", () => {
 
             const result = await enrichmentFailureService.hasExceededRetries(
                 "artist",
-                "artist-1"
+                "artist-1",
             );
 
             expect(prisma.enrichmentFailure.findUnique).toHaveBeenCalledWith({
@@ -419,7 +429,7 @@ describe("enrichmentFailureService", () => {
 
             const result = await enrichmentFailureService.hasExceededRetries(
                 "audio",
-                "audio-1"
+                "audio-1",
             );
 
             expect(result).toBe(true);
@@ -433,7 +443,7 @@ describe("enrichmentFailureService", () => {
 
             const result = await enrichmentFailureService.hasExceededRetries(
                 "track",
-                "track-2"
+                "track-2",
             );
 
             expect(result).toBe(false);
@@ -444,7 +454,7 @@ describe("enrichmentFailureService", () => {
 
             const result = await enrichmentFailureService.hasExceededRetries(
                 "track",
-                "track-1"
+                "track-1",
             );
 
             expect(result).toBe(false);
@@ -466,11 +476,13 @@ describe("enrichmentFailureService", () => {
 
     describe("resolveByEntity", () => {
         it("resolves existing failures and emits debug log", async () => {
-            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({ count: 2 });
+            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({
+                count: 2,
+            });
 
             const result = await enrichmentFailureService.resolveByEntity(
                 "audio",
-                "track-99"
+                "track-99",
             );
 
             expect(prisma.enrichmentFailure.updateMany).toHaveBeenCalledWith({
@@ -485,17 +497,19 @@ describe("enrichmentFailureService", () => {
                 },
             });
             expect(logger.debug).toHaveBeenCalledWith(
-                "[Enrichment Failures] Resolved 2 failures for audio:track-99"
+                "[Enrichment Failures] Resolved 2 failures for audio:track-99",
             );
             expect(result).toBe(true);
         });
 
         it("returns false when no failures are resolved and skips debug log", async () => {
-            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({ count: 0 });
+            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({
+                count: 0,
+            });
 
             const result = await enrichmentFailureService.resolveByEntity(
                 "vibe",
-                "vibe-99"
+                "vibe-99",
             );
 
             expect(result).toBe(false);
@@ -517,7 +531,9 @@ describe("enrichmentFailureService", () => {
             prisma.track.findUnique
                 .mockResolvedValueOnce(null)
                 .mockResolvedValueOnce({ id: "track-audio-1" });
-            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({ count: 2 });
+            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({
+                count: 2,
+            });
 
             const result =
                 await enrichmentFailureService.cleanupOrphanedFailures();
@@ -545,13 +561,15 @@ describe("enrichmentFailureService", () => {
             });
             expect(result).toEqual({ cleaned: 2, checked: 4 });
             expect(logger.debug).toHaveBeenCalledWith(
-                "[Enrichment Failures] Cleaned up 2 orphaned failures"
+                "[Enrichment Failures] Cleaned up 2 orphaned failures",
             );
         });
 
         it("returns zero counts and does not resolve when there are no orphans", async () => {
             prisma.enrichmentFailure.findMany.mockResolvedValueOnce([]);
-            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({ count: 0 });
+            prisma.enrichmentFailure.updateMany.mockResolvedValueOnce({
+                count: 0,
+            });
 
             const result =
                 await enrichmentFailureService.cleanupOrphanedFailures();

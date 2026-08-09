@@ -3,7 +3,10 @@ export const TRACK_DISLIKE_ENTITY_TYPE = "track" as const;
 export type TrackPreferenceSignal = "thumbs_up" | "thumbs_down" | "clear";
 export type TrackPreferenceState = "liked" | "disliked" | "neutral";
 
-export const TRACK_PREFERENCE_SIGNAL_SCORE: Record<TrackPreferenceSignal, number> = {
+export const TRACK_PREFERENCE_SIGNAL_SCORE: Record<
+    TrackPreferenceSignal,
+    number
+> = {
     thumbs_up: 1,
     thumbs_down: -1,
     clear: 0,
@@ -28,10 +31,11 @@ export interface TrackPreferenceOrderBiasConfig {
     dislikedDropSlots: number;
 }
 
-export const TRACK_PREFERENCE_SIMILARITY_BIAS: TrackPreferenceSimilarityBiasConfig = {
-    likedBoost: 0.025,
-    dislikedPenalty: 0.04,
-};
+export const TRACK_PREFERENCE_SIMILARITY_BIAS: TrackPreferenceSimilarityBiasConfig =
+    {
+        likedBoost: 0.025,
+        dislikedPenalty: 0.04,
+    };
 
 export const TRACK_PREFERENCE_ORDER_BIAS: TrackPreferenceOrderBiasConfig = {
     likedLiftSlots: 1.35,
@@ -50,10 +54,13 @@ export const resolveTrackPreference = ({
 
     if (normalizedLikedAt && normalizedDislikedAt) {
         const preferLiked = normalizedLikedAt >= normalizedDislikedAt;
-        const signal: TrackPreferenceSignal =
-            preferLiked ? "thumbs_up" : "thumbs_down";
+        const signal: TrackPreferenceSignal = preferLiked
+            ? "thumbs_up"
+            : "thumbs_down";
         const state: TrackPreferenceState = preferLiked ? "liked" : "disliked";
-        const updatedAt = preferLiked ? normalizedLikedAt : normalizedDislikedAt;
+        const updatedAt = preferLiked
+            ? normalizedLikedAt
+            : normalizedDislikedAt;
         return {
             signal,
             state,
@@ -97,7 +104,7 @@ export const resolveTrackPreference = ({
 };
 
 export const normalizeTrackPreferenceSignal = (
-    value: unknown
+    value: unknown,
 ): TrackPreferenceSignal | null => {
     if (typeof value === "number") {
         if (value > 0) return "thumbs_up";
@@ -147,7 +154,7 @@ export const normalizeTrackPreferenceSignal = (
 export const applyTrackPreferenceSimilarityBias = (
     baseScore: number,
     preferenceScore: number,
-    config: TrackPreferenceSimilarityBiasConfig = TRACK_PREFERENCE_SIMILARITY_BIAS
+    config: TrackPreferenceSimilarityBiasConfig = TRACK_PREFERENCE_SIMILARITY_BIAS,
 ): number => {
     if (!Number.isFinite(baseScore) || !Number.isFinite(preferenceScore)) {
         return baseScore;
@@ -167,7 +174,7 @@ export const applyTrackPreferenceSimilarityBias = (
 export const applyTrackPreferenceOrderBias = (
     trackIds: string[],
     preferenceScores: Map<string, number>,
-    config: TrackPreferenceOrderBiasConfig = TRACK_PREFERENCE_ORDER_BIAS
+    config: TrackPreferenceOrderBiasConfig = TRACK_PREFERENCE_ORDER_BIAS,
 ): string[] => {
     if (trackIds.length <= 1 || preferenceScores.size === 0) {
         return trackIds;

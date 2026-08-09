@@ -58,7 +58,10 @@ describe("itunesService", () => {
 
         mockRedisClient.get.mockResolvedValue(null);
         mockRedisClient.setEx.mockResolvedValue("OK");
-        mockClient.get.mockResolvedValue({ data: { results: [] }, status: 200 });
+        mockClient.get.mockResolvedValue({
+            data: { results: [] },
+            status: 200,
+        });
 
         (itunesService as any).lastRequestTime = 0;
     });
@@ -95,7 +98,7 @@ describe("itunesService", () => {
         expect(mockRedisClient.setEx).toHaveBeenCalledWith(
             "itunes:search:science:3",
             2592000,
-            JSON.stringify(fresh)
+            JSON.stringify(fresh),
         );
     });
 
@@ -118,7 +121,9 @@ describe("itunesService", () => {
         expect(mockClient.get).not.toHaveBeenCalled();
 
         await jest.advanceTimersByTimeAsync(1);
-        await expect(pending).resolves.toEqual([podcast(3, "Rate Limited Show")]);
+        await expect(pending).resolves.toEqual([
+            podcast(3, "Rate Limited Show"),
+        ]);
         expect(mockClient.get).toHaveBeenCalledTimes(1);
     });
 
@@ -126,12 +131,12 @@ describe("itunesService", () => {
         const keywords = itunesService.extractSearchKeywords(
             "The Science Podcast: Space and Rockets",
             "Rockets rockets rockets! Space 2024 episode update.",
-            "Jane Space"
+            "Jane Space",
         );
 
         expect(keywords[0]).toBe("rockets");
         expect(keywords).toEqual(
-            expect.arrayContaining(["space", "science", "jane"])
+            expect.arrayContaining(["space", "science", "jane"]),
         );
         expect(keywords).not.toContain("podcast");
         expect(keywords).not.toContain("2024");
@@ -149,13 +154,13 @@ describe("itunesService", () => {
             "The Podcast Show Episode 2024",
             undefined,
             undefined,
-            3
+            3,
         );
 
         expect(result).toEqual(fallbackResults);
         expect(searchSpy).toHaveBeenCalledWith(
             "The Podcast Show Episode 2024",
-            3
+            3,
         );
     });
 
@@ -173,7 +178,7 @@ describe("itunesService", () => {
             title,
             "Neural models and research conversations",
             "Host Name",
-            2
+            2,
         );
 
         expect(searchSpy).toHaveBeenCalledWith("neural", 4);
@@ -185,8 +190,12 @@ describe("itunesService", () => {
 
     it("continues when redis cache read/write fails", async () => {
         const fresh = [podcast(20, "Resilient Podcast")];
-        mockRedisClient.get.mockRejectedValueOnce(new Error("redis read failed"));
-        mockRedisClient.setEx.mockRejectedValueOnce(new Error("redis write failed"));
+        mockRedisClient.get.mockRejectedValueOnce(
+            new Error("redis read failed"),
+        );
+        mockRedisClient.setEx.mockRejectedValueOnce(
+            new Error("redis write failed"),
+        );
         mockClient.get.mockResolvedValueOnce({
             data: { results: fresh },
             status: 200,
@@ -197,11 +206,11 @@ describe("itunesService", () => {
         expect(result).toEqual(fresh);
         expect(mockLogger.warn).toHaveBeenCalledWith(
             "Redis get error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mockLogger.warn).toHaveBeenCalledWith(
             "Redis set error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -217,7 +226,7 @@ describe("itunesService", () => {
             });
 
         await expect(itunesService.getPodcastById(31)).resolves.toEqual(
-            podcast(31, "Lookup Result")
+            podcast(31, "Lookup Result"),
         );
         (itunesService as any).lastRequestTime = 0;
         await expect(itunesService.getPodcastById(32)).resolves.toBeNull();
@@ -257,11 +266,19 @@ describe("itunesService", () => {
                             "im:name": { label: "Mapped Show" },
                             "im:artist": { label: "Mapped Host" },
                             "im:image": [
-                                { attributes: { height: "60" }, label: "https://img/60.jpg" },
-                                { attributes: { height: "170" }, label: "https://img/170.jpg" },
+                                {
+                                    attributes: { height: "60" },
+                                    label: "https://img/60.jpg",
+                                },
+                                {
+                                    attributes: { height: "170" },
+                                    label: "https://img/170.jpg",
+                                },
                             ],
                             category: { attributes: { label: "Technology" } },
-                            link: { attributes: { href: "https://itunes/show/101" } },
+                            link: {
+                                attributes: { href: "https://itunes/show/101" },
+                            },
                         },
                         {
                             id: { attributes: { "im:id": "0" } },
@@ -291,7 +308,7 @@ describe("itunesService", () => {
             },
         ]);
         expect(mockClient.get).toHaveBeenCalledWith(
-            "/us/rss/toppodcasts/genre=1301/limit=2/json"
+            "/us/rss/toppodcasts/genre=1301/limit=2/json",
         );
     });
 
@@ -302,10 +319,14 @@ describe("itunesService", () => {
                 feed: {
                     entry: {
                         id: { attributes: { "im:id": "222" } },
-                        title: { label: "Single Entry Show - Single Entry Host" },
+                        title: {
+                            label: "Single Entry Show - Single Entry Host",
+                        },
                         "im:image": [],
                         category: { attributes: { label: "Business" } },
-                        link: { attributes: { href: "https://itunes/show/222" } },
+                        link: {
+                            attributes: { href: "https://itunes/show/222" },
+                        },
                     },
                 },
             },
@@ -330,7 +351,7 @@ describe("itunesService", () => {
         expect(result).toEqual([]);
         expect(mockLogger.error).toHaveBeenCalledWith(
             "[iTunes] ERROR in requestFn:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

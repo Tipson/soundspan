@@ -9,8 +9,7 @@ const KEY_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 const ORIGINAL_SETTINGS_ENCRYPTION_KEY = process.env.SETTINGS_ENCRYPTION_KEY;
 const ORIGINAL_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-const ORIGINAL_DECRYPT_FAIL_CLOSED =
-    process.env.SETTINGS_DECRYPT_FAIL_CLOSED;
+const ORIGINAL_DECRYPT_FAIL_CLOSED = process.env.SETTINGS_DECRYPT_FAIL_CLOSED;
 
 /**
  * Reproduces the historical AES-256-CBC ("v1") write format exactly, including
@@ -157,9 +156,13 @@ describe("encryption utils", () => {
             const ct = parts[4];
             const flipped =
                 ct.slice(0, -1) + (ct.slice(-1) === "0" ? "1" : "0");
-            const tampered = [parts[0], parts[1], parts[2], parts[3], flipped].join(
-                ":",
-            );
+            const tampered = [
+                parts[0],
+                parts[1],
+                parts[2],
+                parts[3],
+                flipped,
+            ].join(":");
 
             expect(tampered).not.toBe(encrypted);
             expect(() => decrypt(tampered)).toThrow();
@@ -207,10 +210,14 @@ describe("encryption utils", () => {
         });
 
         it("fails CLOSED when a v2 ciphertext is decrypted with the wrong key", async () => {
-            const { encrypt } = await loadEncryptionModule({ settingsKey: KEY_A });
+            const { encrypt } = await loadEncryptionModule({
+                settingsKey: KEY_A,
+            });
             const encrypted = encrypt("wrong-key-check");
 
-            const { decrypt } = await loadEncryptionModule({ settingsKey: KEY_B });
+            const { decrypt } = await loadEncryptionModule({
+                settingsKey: KEY_B,
+            });
             expect(() => decrypt(encrypted)).toThrow();
         });
 
@@ -286,7 +293,9 @@ describe("encryption utils", () => {
         it("throws ERR_OSSL_BAD_DECRYPT when legacy ciphertext uses the wrong key", async () => {
             const legacy = legacyEncrypt("wrong-key-check", KEY_A);
 
-            const { decrypt } = await loadEncryptionModule({ settingsKey: KEY_B });
+            const { decrypt } = await loadEncryptionModule({
+                settingsKey: KEY_B,
+            });
 
             let thrown: unknown;
             try {

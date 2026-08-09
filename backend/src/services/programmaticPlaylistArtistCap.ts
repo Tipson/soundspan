@@ -45,7 +45,10 @@ function shuffleWithRng<T>(items: T[], rng: () => number): T[] {
     return shuffled;
 }
 
-function getArtistBucketKey(track: ArtistCapTrack, unknownFallbackKey: string): string {
+function getArtistBucketKey(
+    track: ArtistCapTrack,
+    unknownFallbackKey: string,
+): string {
     const artistId = track.album?.artist?.id;
     if (typeof artistId === "string" && artistId.trim().length > 0) {
         return `artist:${artistId}`;
@@ -61,10 +64,14 @@ function getArtistBucketKey(track: ArtistCapTrack, unknownFallbackKey: string): 
  */
 export function applyArtistCap<T extends ArtistCapTrack>(
     tracks: T[],
-    options: ApplyArtistCapOptions = {}
+    options: ApplyArtistCapOptions = {},
 ): T[] {
     const maxPerArtist = options.maxPerArtist ?? DEFAULT_MAX_PER_ARTIST;
-    if (!Number.isFinite(maxPerArtist) || maxPerArtist <= 0 || tracks.length === 0) {
+    if (
+        !Number.isFinite(maxPerArtist) ||
+        maxPerArtist <= 0 ||
+        tracks.length === 0
+    ) {
         return [];
     }
 
@@ -73,9 +80,15 @@ export function applyArtistCap<T extends ArtistCapTrack>(
     const preserveInputOrder = options.preserveInputOrder ?? false;
     const fallbackEnabled = options.fallback?.enabled ?? false;
     const hasTargetCount = Number.isFinite(options.targetCount);
-    const targetCount = hasTargetCount ?
-            Math.max(0, Math.min(tracks.length, Math.floor(options.targetCount as number)))
-        :   tracks.length;
+    const targetCount = hasTargetCount
+        ? Math.max(
+              0,
+              Math.min(
+                  tracks.length,
+                  Math.floor(options.targetCount as number),
+              ),
+          )
+        : tracks.length;
     if (targetCount === 0) {
         return [];
     }
@@ -85,8 +98,9 @@ export function applyArtistCap<T extends ArtistCapTrack>(
         unknownFallbackKey: track.id ?? `index:${index}`,
     }));
 
-    const candidates =
-        preserveInputOrder ? indexedTracks : shuffleWithRng(indexedTracks, rng);
+    const candidates = preserveInputOrder
+        ? indexedTracks
+        : shuffleWithRng(indexedTracks, rng);
     const artistCounts = new Map<string, number>();
     const selected: T[] = [];
     const selectedByIndex = new Array(candidates.length).fill(false);
@@ -96,7 +110,10 @@ export function applyArtistCap<T extends ArtistCapTrack>(
             if (selectedByIndex[i]) continue;
 
             const entry = candidates[i];
-            const bucketKey = getArtistBucketKey(entry.track, entry.unknownFallbackKey);
+            const bucketKey = getArtistBucketKey(
+                entry.track,
+                entry.unknownFallbackKey,
+            );
             const count = artistCounts.get(bucketKey) ?? 0;
             if (count >= cap) {
                 continue;
@@ -122,14 +139,14 @@ export function applyArtistCap<T extends ArtistCapTrack>(
 
     const relaxationStep = Math.max(
         1,
-        Math.floor(options.fallback?.relaxationStep ?? DEFAULT_RELAXATION_STEP)
+        Math.floor(options.fallback?.relaxationStep ?? DEFAULT_RELAXATION_STEP),
     );
     const maxRelaxedPerArtist = Math.max(
         integerCap,
         Math.floor(
             options.fallback?.maxRelaxedPerArtist ??
-                integerCap + DEFAULT_RELAXED_CAP_DELTA
-        )
+                integerCap + DEFAULT_RELAXED_CAP_DELTA,
+        ),
     );
     const refillFromExcluded =
         options.fallback?.refillFromExcludedAfterMaxRelaxation ?? false;
@@ -154,7 +171,7 @@ export function applyArtistCap<T extends ArtistCapTrack>(
     const refillCeiling = Math.max(
         maxRelaxedPerArtist,
         Math.floor(targetCount * REFILL_HARD_CEILING_SHARE),
-        1
+        1,
     );
     trySelectUpToCap(refillCeiling);
 

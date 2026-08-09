@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -81,7 +83,10 @@ jest.mock("../../config", () => ({
 }));
 
 import { prisma } from "../../utils/db";
-import { sendSubsonicError, sendSubsonicSuccess } from "../../utils/subsonicResponse";
+import {
+    sendSubsonicError,
+    sendSubsonicSuccess,
+} from "../../utils/subsonicResponse";
 import { scanQueue } from "../../workers/queues";
 import {
     handleCreatePlaylist,
@@ -154,10 +159,13 @@ describe("subsonic Tier B handlers", () => {
     const mockPlaylistCreate = prisma.playlist.create as jest.Mock;
     const mockPlaylistUpdate = prisma.playlist.update as jest.Mock;
     const mockPlaylistDelete = prisma.playlist.delete as jest.Mock;
-    const mockPlaylistItemDeleteMany = prisma.playlistItem.deleteMany as jest.Mock;
-    const mockPlaylistItemCreateMany = prisma.playlistItem.createMany as jest.Mock;
+    const mockPlaylistItemDeleteMany = prisma.playlistItem
+        .deleteMany as jest.Mock;
+    const mockPlaylistItemCreateMany = prisma.playlistItem
+        .createMany as jest.Mock;
     const mockPlaylistItemFindMany = prisma.playlistItem.findMany as jest.Mock;
-    const mockPlaylistItemAggregate = prisma.playlistItem.aggregate as jest.Mock;
+    const mockPlaylistItemAggregate = prisma.playlistItem
+        .aggregate as jest.Mock;
     const mockPlaylistItemUpdate = prisma.playlistItem.update as jest.Mock;
     const mockPlayCreateMany = prisma.play.createMany as jest.Mock;
     const mockLikedCreateMany = prisma.likedTrack.createMany as jest.Mock;
@@ -188,7 +196,10 @@ describe("subsonic Tier B handlers", () => {
     });
 
     it("creates a playlist and writes playlist items from songId values", async () => {
-        mockTrackFindMany.mockResolvedValue([{ id: "track-1" }, { id: "track-2" }]);
+        mockTrackFindMany.mockResolvedValue([
+            { id: "track-1" },
+            { id: "track-2" },
+        ]);
         mockPlaylistCreate.mockResolvedValue({ id: "playlist-1" });
 
         await handleCreatePlaylist(
@@ -298,7 +309,10 @@ describe("subsonic Tier B handlers", () => {
     });
 
     it("updates an existing playlist through createPlaylist and rewrites track order", async () => {
-        mockTrackFindMany.mockResolvedValue([{ id: "track-9" }, { id: "track-10" }]);
+        mockTrackFindMany.mockResolvedValue([
+            { id: "track-9" },
+            { id: "track-10" },
+        ]);
         mockPlaylistFindFirst.mockResolvedValue({ id: "playlist-1" });
 
         await handleCreatePlaylist(
@@ -337,8 +351,15 @@ describe("subsonic Tier B handlers", () => {
         mockPlaylistItemFindMany
             .mockResolvedValueOnce([{ id: "item-1" }, { id: "item-2" }])
             .mockResolvedValueOnce([{ trackId: "track-2" }])
-            .mockResolvedValueOnce([{ id: "item-2" }, { id: "item-3" }, { id: "item-4" }]);
-        mockTrackFindMany.mockResolvedValue([{ id: "track-3" }, { id: "track-4" }]);
+            .mockResolvedValueOnce([
+                { id: "item-2" },
+                { id: "item-3" },
+                { id: "item-4" },
+            ]);
+        mockTrackFindMany.mockResolvedValue([
+            { id: "track-3" },
+            { id: "track-4" },
+        ]);
         mockPlaylistItemAggregate.mockResolvedValue({ _max: { sort: 1 } });
 
         await handleUpdatePlaylist(
@@ -458,7 +479,9 @@ describe("subsonic Tier B handlers", () => {
 
     it("returns generic error when updatePlaylist encounters an unexpected failure", async () => {
         mockPlaylistFindFirst.mockResolvedValue({ id: "playlist-1" });
-        mockPlaylistItemFindMany.mockRejectedValueOnce(new Error("database boom"));
+        mockPlaylistItemFindMany.mockRejectedValueOnce(
+            new Error("database boom"),
+        );
 
         await handleUpdatePlaylist(
             buildReq({
@@ -502,7 +525,10 @@ describe("subsonic Tier B handlers", () => {
     });
 
     it("scrobbles only submission=true entries when mixed submission flags are provided", async () => {
-        mockTrackFindMany.mockResolvedValue([{ id: "track-1" }, { id: "track-2" }]);
+        mockTrackFindMany.mockResolvedValue([
+            { id: "track-1" },
+            { id: "track-2" },
+        ]);
 
         await handleScrobble(
             buildReq({
@@ -530,7 +556,10 @@ describe("subsonic Tier B handlers", () => {
     });
 
     it("stars and unstars track IDs using likedTrack mutations", async () => {
-        mockTrackFindMany.mockResolvedValue([{ id: "track-5" }, { id: "track-6" }]);
+        mockTrackFindMany.mockResolvedValue([
+            { id: "track-5" },
+            { id: "track-6" },
+        ]);
 
         await handleStar(
             buildReq({
@@ -951,9 +980,11 @@ describe("subsonic Tier B handlers", () => {
             },
             include: expect.any(Object),
         });
-        const playlists = (mockSendSuccess.mock.calls[0][1] as {
-            playlists: { playlist: Array<Record<string, unknown>> };
-        }).playlists.playlist;
+        const playlists = (
+            mockSendSuccess.mock.calls[0][1] as {
+                playlists: { playlist: Array<Record<string, unknown>> };
+            }
+        ).playlists.playlist;
 
         expect(playlists).toHaveLength(2);
         expect(playlists[0].id).toBe("pl-playlist-1");
@@ -1081,7 +1112,10 @@ describe("subsonic Tier B handlers", () => {
     it("returns not-authorized when deleting a foreign playlist", async () => {
         mockPlaylistFindFirst.mockResolvedValue(null);
 
-        await handleDeletePlaylist(buildReq({ id: "pl-playlist-2" }), buildRes());
+        await handleDeletePlaylist(
+            buildReq({ id: "pl-playlist-2" }),
+            buildRes(),
+        );
 
         expect(mockSendError).toHaveBeenCalledWith(
             expect.anything(),
@@ -1095,7 +1129,10 @@ describe("subsonic Tier B handlers", () => {
     it("deletes playlist owned by the requesting user", async () => {
         mockPlaylistFindFirst.mockResolvedValue({ id: "playlist-1" });
 
-        await handleDeletePlaylist(buildReq({ id: "pl-playlist-1" }), buildRes());
+        await handleDeletePlaylist(
+            buildReq({ id: "pl-playlist-1" }),
+            buildRes(),
+        );
 
         expect(mockPlaylistDelete).toHaveBeenCalledWith({
             where: {
@@ -1126,7 +1163,10 @@ describe("subsonic Tier B handlers", () => {
         mockPlaylistFindFirst.mockResolvedValue({ id: "playlist-1" });
         mockPlaylistDelete.mockRejectedValue(new Error("delete failed"));
 
-        await handleDeletePlaylist(buildReq({ id: "pl-playlist-1" }), buildRes());
+        await handleDeletePlaylist(
+            buildReq({ id: "pl-playlist-1" }),
+            buildRes(),
+        );
 
         expect(mockSendError).toHaveBeenCalledWith(
             expect.anything(),
@@ -1233,7 +1273,10 @@ describe("subsonic Tier B handlers", () => {
 
     it("returns user not found when requested user does not exist", async () => {
         await handleGetUser(
-            buildReqWithUser({}, { role: "admin", username: "admin", id: "admin-1" }),
+            buildReqWithUser(
+                {},
+                { role: "admin", username: "admin", id: "admin-1" },
+            ),
             buildRes(),
         );
 
@@ -1256,7 +1299,10 @@ describe("subsonic Tier B handlers", () => {
     it("returns user payload for admin user requests", async () => {
         mockUserFindUnique.mockResolvedValue({ username: "bob", role: "USER" });
         await handleGetUser(
-            buildReqWithUser({ username: "bob" }, { role: "admin", username: "admin", id: "admin-1" }),
+            buildReqWithUser(
+                { username: "bob" },
+                { role: "admin", username: "admin", id: "admin-1" },
+            ),
             buildRes(),
         );
 
@@ -1293,7 +1339,10 @@ describe("subsonic Tier B handlers", () => {
         await handleGetAvatar(buildReq({}), res);
 
         expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/png");
-        expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "public, max-age=86400");
+        expect(res.setHeader).toHaveBeenCalledWith(
+            "Cache-Control",
+            "public, max-age=86400",
+        );
         expect(res.status).toHaveBeenCalledWith(200);
         expect(res.send).toHaveBeenCalledWith(expect.any(Buffer));
     });
@@ -1408,8 +1457,14 @@ describe("subsonic Tier B handlers", () => {
             .mockResolvedValueOnce([{ id: "track-1" }])
             .mockResolvedValueOnce([{ id: "track-1" }]);
 
-        await handleSetRating(buildReq({ id: "tr-track-1", rating: "0" }), buildRes());
-        await handleSetRating(buildReq({ id: "tr-track-1", rating: "5" }), buildRes());
+        await handleSetRating(
+            buildReq({ id: "tr-track-1", rating: "0" }),
+            buildRes(),
+        );
+        await handleSetRating(
+            buildReq({ id: "tr-track-1", rating: "5" }),
+            buildRes(),
+        );
 
         expect(mockLikedDeleteMany).toHaveBeenCalledWith({
             where: {

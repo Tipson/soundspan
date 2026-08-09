@@ -50,7 +50,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
 
     describe("refreshUnknownMetadata", () => {
         it("returns zero counts when no unknown rows exist", async () => {
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
             expect(result).toEqual({ updated: 0, failed: 0 });
         });
 
@@ -69,7 +70,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
                 album: { title: "Real Album" },
             });
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.updated).toBe(1);
             expect(mockPrisma.trackTidal.update).toHaveBeenCalledWith({
@@ -105,13 +107,14 @@ describe("RemoteTrackMetadataRefreshService", () => {
                     album: { title: "The Roaring Silence" },
                 });
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result).toEqual({ updated: 1, failed: 0 });
             expect(mockTidalGetTrack).toHaveBeenNthCalledWith(
                 1,
                 "user-2",
-                69778330
+                69778330,
             );
             expect(mockPrisma.trackTidal.update).toHaveBeenCalledWith({
                 where: { id: "tt-fallback" },
@@ -137,7 +140,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
                 thumbnails: [{ url: "https://example.com/thumb.jpg" }],
             });
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.updated).toBe(1);
             expect(mockPrisma.trackYtMusic.update).toHaveBeenCalledWith({
@@ -158,19 +162,33 @@ describe("RemoteTrackMetadataRefreshService", () => {
                 expect.objectContaining({
                     where: expect.objectContaining({
                         OR: expect.arrayContaining([
-                            { album: { in: expect.arrayContaining(["Unknown Album", "single"]) } },
+                            {
+                                album: {
+                                    in: expect.arrayContaining([
+                                        "Unknown Album",
+                                        "single",
+                                    ]),
+                                },
+                            },
                         ]),
                     }),
-                })
+                }),
             );
             expect(mockPrisma.trackYtMusic.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
                         OR: expect.arrayContaining([
-                            { album: { in: expect.arrayContaining(["Unknown Album", "single"]) } },
+                            {
+                                album: {
+                                    in: expect.arrayContaining([
+                                        "Unknown Album",
+                                        "single",
+                                    ]),
+                                },
+                            },
                         ]),
                     }),
-                })
+                }),
             );
         });
 
@@ -180,7 +198,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
             ]);
             mockPrisma.userSettings.findMany.mockResolvedValueOnce([]);
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.updated).toBe(0);
             expect(result.failed).toBe(1);
@@ -202,7 +221,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
                 album: { title: "Unknown" },
             });
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.updated).toBe(1);
             const updateCall = mockPrisma.trackTidal.update.mock.calls[0][0];
@@ -224,7 +244,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
                 duration: 211,
             });
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(mockYtGetSong).toHaveBeenCalledWith("__public__", "v1");
             expect(result).toEqual({ updated: 1, failed: 0 });
@@ -239,7 +260,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
             ]);
             mockTidalGetTrack.mockResolvedValueOnce(null);
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.updated).toBe(0);
             expect(result.failed).toBe(1);
@@ -255,7 +277,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
             ]);
             mockTidalGetTrack.mockRejectedValueOnce(new Error("API timeout"));
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.failed).toBe(1);
             expect(result.updated).toBe(0);
@@ -267,7 +290,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
             ]);
             mockYtGetSong.mockRejectedValueOnce(new Error("Network error"));
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.failed).toBe(1);
             expect(result.updated).toBe(0);
@@ -284,7 +308,8 @@ describe("RemoteTrackMetadataRefreshService", () => {
                 thumbnails: [],
             });
 
-            const result = await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
+            const result =
+                await remoteTrackMetadataRefreshService.refreshUnknownMetadata();
 
             expect(result.failed).toBe(1);
             expect(result.updated).toBe(0);

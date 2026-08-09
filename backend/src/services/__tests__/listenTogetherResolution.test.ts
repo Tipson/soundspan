@@ -59,7 +59,7 @@ describe("listenTogetherResolution", () => {
 
         const resolved = await resolveTrackForUser(
             queueItem({ localTrackId: "local-1" }),
-            profile
+            profile,
         );
         expect(resolved).toEqual({
             available: true,
@@ -95,7 +95,7 @@ describe("listenTogetherResolution", () => {
         const resolved = await resolveTrackForUser(
             queueItem({ trackMappingId: "map-1" }),
             profile,
-            { mappingsById: new Map([["map-1", mapping]]) }
+            { mappingsById: new Map([["map-1", mapping]]) },
         );
         expect(resolved).toEqual({
             available: true,
@@ -128,7 +128,7 @@ describe("listenTogetherResolution", () => {
         const resolved = await resolveTrackForUser(
             queueItem({ trackMappingId: "map-low" }),
             profile,
-            { mappingsById: new Map([["map-low", mapping]]) }
+            { mappingsById: new Map([["map-low", mapping]]) },
         );
         expect(resolved).toEqual({
             available: false,
@@ -159,7 +159,7 @@ describe("listenTogetherResolution", () => {
         const resolved = await resolveTrackForUser(
             queueItem({ trackMappingId: "map-duration", duration: 180 }),
             profile,
-            { mappingsById: new Map([["map-duration", mapping]]) }
+            { mappingsById: new Map([["map-duration", mapping]]) },
         );
         expect(resolved).toEqual({
             available: false,
@@ -177,7 +177,7 @@ describe("listenTogetherResolution", () => {
 
         const resolved = await resolveTrackForUser(
             queueItem({ trackTidalId: "tt-direct", tidalTrackId: 444 }),
-            profile
+            profile,
         );
         expect(resolved).toEqual({
             available: false,
@@ -204,7 +204,7 @@ describe("listenTogetherResolution", () => {
 
         const resolved = await resolveTrackForUser(
             queueItem({ trackTidalId: "tt-direct", tidalTrackId: 444 }),
-            profile
+            profile,
         );
         expect(resolved).toEqual({
             available: true,
@@ -219,7 +219,7 @@ describe("listenTogetherResolution", () => {
                     trackTidalId: "tt-direct",
                     trackYtMusicId: { not: null },
                 }),
-            })
+            }),
         );
     });
 
@@ -235,7 +235,7 @@ describe("listenTogetherResolution", () => {
 
         const resolved = await resolveTrackForUser(
             queueItem({ trackTidalId: "tt-orphan", tidalTrackId: 555 }),
-            profile
+            profile,
         );
         expect(resolved).toEqual({
             available: false,
@@ -261,8 +261,11 @@ describe("listenTogetherResolution", () => {
         });
 
         const resolved = await resolveTrackForUser(
-            queueItem({ trackYtMusicId: "yt-direct", youtubeVideoId: "vid-direct" }),
-            profile
+            queueItem({
+                trackYtMusicId: "yt-direct",
+                youtubeVideoId: "vid-direct",
+            }),
+            profile,
         );
         expect(resolved).toEqual({
             available: true,
@@ -277,7 +280,7 @@ describe("listenTogetherResolution", () => {
                     trackYtMusicId: "yt-direct",
                     trackTidalId: { not: null },
                 }),
-            })
+            }),
         );
     });
 

@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -285,12 +287,10 @@ describe("subsonic metadata compatibility handlers", () => {
     });
 
     it("falls back to name lookup for top songs when artist includes hyphen", async () => {
-        mockArtistFindFirst
-            .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce({
-                id: "artist-1",
-                name: "Artist One - Live",
-            });
+        mockArtistFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+            id: "artist-1",
+            name: "Artist One - Live",
+        });
 
         await handleGetTopSongs(
             buildReq({
@@ -567,7 +567,8 @@ describe("subsonic metadata compatibility handlers", () => {
                 {
                     track: {
                         album: {
-                            coverUrl: "https://cdn.soundspan.test/covers/playlist.jpg",
+                            coverUrl:
+                                "https://cdn.soundspan.test/covers/playlist.jpg",
                         },
                     },
                 },
@@ -578,7 +579,9 @@ describe("subsonic metadata compatibility handlers", () => {
         const mockFetch = jest.fn().mockResolvedValue({
             ok: true,
             status: 200,
-            arrayBuffer: jest.fn().mockResolvedValue(Buffer.from("playlist-cover")),
+            arrayBuffer: jest
+                .fn()
+                .mockResolvedValue(Buffer.from("playlist-cover")),
             headers: {
                 get: jest.fn().mockReturnValue("image/jpeg"),
             },
@@ -628,7 +631,10 @@ describe("subsonic metadata compatibility handlers", () => {
                 },
             },
         });
-        expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/jpeg");
+        expect(res.setHeader).toHaveBeenCalledWith(
+            "Content-Type",
+            "image/jpeg",
+        );
         expect(res.status).toHaveBeenCalledWith(200);
         expect(mockSendError).not.toHaveBeenCalled();
 

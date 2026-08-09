@@ -204,6 +204,8 @@ describe("unifiedTrackResponse", () => {
         });
         expect(youtubeMissingId.provider.source).toBe("youtube");
         expect(youtubeMissingId.playback.isPlayable).toBe(false);
-        expect(youtubeMissingId.playback.reason).toBe("missing_youtube_video_id");
+        expect(youtubeMissingId.playback.reason).toBe(
+            "missing_youtube_video_id",
+        );
     });
 });

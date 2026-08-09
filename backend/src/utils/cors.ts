@@ -14,7 +14,7 @@
 export function isOriginAllowed(
     origin: string | undefined,
     allowedOrigins: boolean | string[],
-    nodeEnv: string
+    nodeEnv: string,
 ): boolean {
     // Requests with no Origin (same-origin navigations, curl, server-to-server).
     if (!origin) {

@@ -1,10 +1,9 @@
 import { jest } from "@jest/globals";
 
 type RedisClient = {
-    on: jest.MockedFunction<(
-        event: string,
-        handler: (...args: unknown[]) => void,
-    ) => RedisClient>;
+    on: jest.MockedFunction<
+        (event: string, handler: (...args: unknown[]) => void) => RedisClient
+    >;
     connect: jest.MockedFunction<() => Promise<void>>;
 };
 
@@ -39,10 +38,12 @@ describe("redisClient", () => {
 
         handlers = {};
         client = {} as RedisClient;
-        client.on = jest.fn((event: string, handler: (...args: unknown[]) => void) => {
-            handlers[event] = handler;
-            return client;
-        });
+        client.on = jest.fn(
+            (event: string, handler: (...args: unknown[]) => void) => {
+                handlers[event] = handler;
+                return client;
+            },
+        );
         client.connect = jest.fn(async () => undefined);
 
         mockCreateClient.mockReturnValue(client);
@@ -60,7 +61,7 @@ describe("redisClient", () => {
                     connectTimeout: 10_000,
                     reconnectStrategy: expect.any(Function),
                 }),
-            })
+            }),
         );
     });
 
@@ -85,10 +86,10 @@ describe("redisClient", () => {
         expect(reconnectStrategy(12)).toBe(30_000);
 
         expect(mockRedisLoggerDebug).toHaveBeenCalledWith(
-            "Redis reconnect attempt 1 – retrying in 250ms"
+            "Redis reconnect attempt 1 – retrying in 250ms",
         );
         expect(mockRedisLoggerDebug).toHaveBeenCalledWith(
-            "Redis reconnect attempt 8 – retrying in 30000ms"
+            "Redis reconnect attempt 8 – retrying in 30000ms",
         );
     });
 
@@ -96,13 +97,10 @@ describe("redisClient", () => {
         await import("../redis");
 
         expect(client.on).toHaveBeenCalledWith("error", expect.any(Function));
-        expect(client.on).toHaveBeenCalledWith(
-            "end",
-            expect.any(Function)
-        );
+        expect(client.on).toHaveBeenCalledWith("end", expect.any(Function));
         expect(client.on).toHaveBeenCalledWith(
             "reconnecting",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(client.on).toHaveBeenCalledWith("ready", expect.any(Function));
     });
@@ -111,7 +109,10 @@ describe("redisClient", () => {
         await import("../redis");
 
         expect(() => handlers.error(new Error("boom"))).not.toThrow();
-        expect(mockRedisLoggerError).toHaveBeenCalledWith("Redis error:", "boom");
+        expect(mockRedisLoggerError).toHaveBeenCalledWith(
+            "Redis error:",
+            "boom",
+        );
     });
 
     it("does not eagerly connect under Jest", async () => {
@@ -144,17 +145,17 @@ describe("redisClient", () => {
             await expect(import("../redis")).resolves.toEqual(
                 expect.objectContaining({
                     redisClient: client,
-                })
+                }),
             );
             await Promise.resolve();
 
             expect(client.connect).toHaveBeenCalledTimes(1);
             expect(mockRedisLoggerError).toHaveBeenCalledWith(
                 "Redis initial connection failed:",
-                "offline"
+                "offline",
             );
             expect(mockRedisLoggerDebug).toHaveBeenCalledWith(
-                "Redis will continue retrying in the background..."
+                "Redis will continue retrying in the background...",
             );
         } finally {
             process.env.JEST_WORKER_ID = jestWorkerId;

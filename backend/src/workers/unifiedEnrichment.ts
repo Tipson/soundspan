@@ -53,8 +53,7 @@ const ENRICHMENT_CLAIM_KEY = "enrichment:cycle:claim";
 const ENRICHMENT_CLAIM_OWNER_ID = randomUUID();
 const DEFAULT_ENRICHMENT_CLAIM_TTL_MS = 15 * 60 * 1000;
 const parsedEnrichmentClaimTtlMs = Number.parseInt(
-    process.env.ENRICHMENT_CLAIM_TTL_MS ||
-        `${DEFAULT_ENRICHMENT_CLAIM_TTL_MS}`,
+    process.env.ENRICHMENT_CLAIM_TTL_MS || `${DEFAULT_ENRICHMENT_CLAIM_TTL_MS}`,
     10,
 );
 const ENRICHMENT_CLAIM_TTL_MS =
@@ -165,7 +164,9 @@ async function withTimeout<T>(
     const timeoutPromise = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
     });
-    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+    return Promise.race([promise, timeoutPromise]).finally(() =>
+        clearTimeout(timer),
+    );
 }
 
 /**
@@ -202,7 +203,8 @@ function getEnrichmentClaimRedis(): Redis {
 }
 
 function isRetryableEnrichmentRedisError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error ?? "");
+    const message =
+        error instanceof Error ? error.message : String(error ?? "");
     return (
         message.includes("Connection is closed") ||
         message.includes("Connection is in closing state") ||
@@ -272,7 +274,9 @@ async function withEnrichmentClaimRedisRetry<T>(
 
 function isRetryableEnrichmentPrismaError(error: unknown): boolean {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(error.code);
+        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(
+            error.code,
+        );
     }
 
     if (error instanceof Prisma.PrismaClientRustPanicError) {
@@ -287,7 +291,8 @@ function isRetryableEnrichmentPrismaError(error: unknown): boolean {
         );
     }
 
-    const message = error instanceof Error ? error.message : String(error ?? "");
+    const message =
+        error instanceof Error ? error.message : String(error ?? "");
     return (
         message.includes("Response from the Engine was empty") ||
         message.includes("Engine has already exited") ||
@@ -323,10 +328,9 @@ async function withEnrichmentPrismaRetry<T>(
                 error,
             );
 
-            const delayMs =
-                isTooManyConnectionsPrismaError(error) ?
-                    1000 * attempt
-                :   250 * attempt;
+            const delayMs = isTooManyConnectionsPrismaError(error)
+                ? 1000 * attempt
+                : 250 * attempt;
             if (isTooManyConnectionsPrismaError(error)) {
                 await prisma.$disconnect().catch(() => {});
             }
@@ -445,7 +449,7 @@ export async function startUnifiedEnrichmentWorker() {
 
     if (!config.features.audioAnalysis) {
         logger.info(
-            "[Features] Audio analysis disabled (AUDIO_ANALYSIS_ENABLED=false); enrichment skips audio/vibe queueing phases (steps 3-4)"
+            "[Features] Audio analysis disabled (AUDIO_ANALYSIS_ENABLED=false); enrichment skips audio/vibe queueing phases (steps 3-4)",
         );
     }
 
@@ -480,7 +484,9 @@ export async function startUnifiedEnrichmentWorker() {
 /**
  * Stop the enrichment worker
  */
-async function waitForActiveCycleToStop(maxWaitMs = ENRICHMENT_STOP_MAX_WAIT_MS): Promise<void> {
+async function waitForActiveCycleToStop(
+    maxWaitMs = ENRICHMENT_STOP_MAX_WAIT_MS,
+): Promise<void> {
     const startedAt = Date.now();
     while (isRunning && Date.now() - startedAt < maxWaitMs) {
         await new Promise((resolve) =>
@@ -551,8 +557,7 @@ export async function runFullEnrichment(options?: {
     logger.debug("\n=== FULL ENRICHMENT: Re-enriching everything ===\n");
 
     const forceVibeRebuild = options?.forceVibeRebuild === true;
-    const forceMoodBucketBackfill =
-        options?.forceMoodBucketBackfill === true;
+    const forceMoodBucketBackfill = options?.forceMoodBucketBackfill === true;
 
     // Reset pause state when starting full enrichment
     isPaused = false;
@@ -694,8 +699,9 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
     let artistsProcessed = 0;
     let tracksProcessed = 0;
     let audioQueued = 0;
-    let startingProgress: Awaited<ReturnType<typeof getEnrichmentProgress>> | null =
-        null;
+    let startingProgress: Awaited<
+        ReturnType<typeof getEnrichmentProgress>
+    > | null = null;
     let hadOutstandingWorkAtCycleStart = true;
     let cycleHadError = false;
 
@@ -756,14 +762,22 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
             const audioResult = await runPhase("audio", executeAudioPhase);
             if (audioResult === null) {
                 consecutiveSystemFailures = 0;
-                return { artists: artistsProcessed, tracks: tracksProcessed, audioQueued: 0 };
+                return {
+                    artists: artistsProcessed,
+                    tracks: tracksProcessed,
+                    audioQueued: 0,
+                };
             }
             audioQueued = audioResult;
 
             const vibeResult = await runPhase("vibe", executeVibePhase);
             if (vibeResult === null) {
                 consecutiveSystemFailures = 0;
-                return { artists: artistsProcessed, tracks: tracksProcessed, audioQueued };
+                return {
+                    artists: artistsProcessed,
+                    tracks: tracksProcessed,
+                    audioQueued,
+                };
             }
             vibeQueued = vibeResult;
         }
@@ -773,8 +787,13 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
 
         const features = await featureDetection.getFeatures();
 
-         // Log progress (only if work was done)
-         if (artistsProcessed > 0 || tracksProcessed > 0 || audioQueued > 0 || vibeQueued > 0) {
+        // Log progress (only if work was done)
+        if (
+            artistsProcessed > 0 ||
+            tracksProcessed > 0 ||
+            audioQueued > 0 ||
+            vibeQueued > 0
+        ) {
             try {
                 const progress = await getEnrichmentProgress();
                 logger.debug(`\n[Enrichment Progress]`);
@@ -842,7 +861,11 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                 "[Enrichment] Failed to read completion progress snapshot; skipping completion-specific post-processing for this cycle:",
                 error,
             );
-            return { artists: artistsProcessed, tracks: tracksProcessed, audioQueued };
+            return {
+                artists: artistsProcessed,
+                tracks: tracksProcessed,
+                audioQueued,
+            };
         }
 
         // Clear mixes cache when core enrichment completes (artist images now available)
@@ -876,7 +899,8 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                 currentPhase: null,
             });
 
-            const stateBeforeMoodBackfill = await enrichmentStateService.getState();
+            const stateBeforeMoodBackfill =
+                await enrichmentStateService.getState();
             if (
                 stateBeforeMoodBackfill?.pendingMoodBucketBackfill &&
                 !stateBeforeMoodBackfill?.moodBucketBackfillInProgress
@@ -957,7 +981,11 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                     logger.debug(
                         "[Enrichment] Skipped completion notification (already complete at cycle start, no new work)",
                     );
-                    return { artists: artistsProcessed, tracks: tracksProcessed, audioQueued };
+                    return {
+                        artists: artistsProcessed,
+                        tracks: tracksProcessed,
+                        audioQueued,
+                    };
                 }
 
                 try {
@@ -971,9 +999,18 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                     for (const user of users) {
                         if (totalSessionFailures > 0) {
                             const parts: string[] = [];
-                            if (sessionFailureCount.artists > 0) parts.push(`${sessionFailureCount.artists} artist(s)`);
-                            if (sessionFailureCount.tracks > 0) parts.push(`${sessionFailureCount.tracks} track(s)`);
-                            if (sessionFailureCount.audio > 0) parts.push(`${sessionFailureCount.audio} audio analysis`);
+                            if (sessionFailureCount.artists > 0)
+                                parts.push(
+                                    `${sessionFailureCount.artists} artist(s)`,
+                                );
+                            if (sessionFailureCount.tracks > 0)
+                                parts.push(
+                                    `${sessionFailureCount.tracks} track(s)`,
+                                );
+                            if (sessionFailureCount.audio > 0)
+                                parts.push(
+                                    `${sessionFailureCount.audio} audio analysis`,
+                                );
 
                             await notificationService.create({
                                 userId: user.id,
@@ -1117,9 +1154,9 @@ async function enrichArtistsBatch(): Promise<number> {
                     currentBatchFailures.artists.push({
                         name: artist.name,
                         error:
-                            error instanceof Error ?
-                                error.message
-                            :   String(error),
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
                     });
 
                     // Record failure
@@ -1128,16 +1165,14 @@ async function enrichArtistsBatch(): Promise<number> {
                         entityId: artist.id,
                         entityName: artist.name,
                         errorMessage:
-                            error instanceof Error ?
-                                error.message
-                            :   String(error),
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
                         errorCode:
-                            (
-                                error instanceof Error &&
-                                error.message.includes("Timeout")
-                            ) ?
-                                "TIMEOUT_ERROR"
-                            :   "ENRICHMENT_ERROR",
+                            error instanceof Error &&
+                            error.message.includes("Timeout")
+                                ? "TIMEOUT_ERROR"
+                                : "ENRICHMENT_ERROR",
                         metadata: {
                             mbid: artist.mbid,
                         },
@@ -1235,9 +1270,9 @@ async function enrichTrackTagsBatch(): Promise<number> {
                             where: { id: track.id },
                             data: {
                                 lastfmTags:
-                                    moodTags.length > 0 ?
-                                        moodTags
-                                    :   ["_no_mood_tags"],
+                                    moodTags.length > 0
+                                        ? moodTags
+                                        : ["_no_mood_tags"],
                             },
                         });
 
@@ -1275,10 +1310,9 @@ async function enrichTrackTagsBatch(): Promise<number> {
                         entityId: track.id,
                         entityName: `${track.album.artist.name} - ${track.title}`,
                         errorMessage: error?.message || String(error),
-                        errorCode:
-                            error?.message?.includes("Timeout") ?
-                                "TIMEOUT_ERROR"
-                            :   "LASTFM_ERROR",
+                        errorCode: error?.message?.includes("Timeout")
+                            ? "TIMEOUT_ERROR"
+                            : "LASTFM_ERROR",
                         metadata: {
                             albumId: track.albumId,
                             filePath: track.filePath,
@@ -1376,11 +1410,13 @@ async function queueVibeEmbeddings(): Promise<number> {
     const tracks = await withEnrichmentPrismaRetry(
         "queueVibeEmbeddings.track.select",
         () =>
-            prisma.$queryRaw<{
-                id: string;
-                filePath: string;
-                vibeAnalysisStatus: string | null;
-            }[]>`
+            prisma.$queryRaw<
+                {
+                    id: string;
+                    filePath: string;
+                    vibeAnalysisStatus: string | null;
+                }[]
+            >`
           SELECT t.id, t."filePath", t."vibeAnalysisStatus"
           FROM "Track" t
           LEFT JOIN track_embeddings te ON t.id = te.track_id
@@ -1538,7 +1574,9 @@ async function executePodcastRefreshPhase(): Promise<number> {
 
     if (stalePodcasts.length === 0) return 0;
 
-    logger.debug(`[Enrichment] Refreshing ${stalePodcasts.length} podcast feeds...`);
+    logger.debug(
+        `[Enrichment] Refreshing ${stalePodcasts.length} podcast feeds...`,
+    );
 
     const { refreshPodcastFeed } = await import("../routes/podcasts");
     let refreshed = 0;
@@ -1553,11 +1591,16 @@ async function executePodcastRefreshPhase(): Promise<number> {
                 `Timeout refreshing podcast: ${podcast.title}`,
             );
             if (result.newEpisodesCount > 0) {
-                logger.debug(`   [Podcast] ${podcast.title}: ${result.newEpisodesCount} new episodes`);
+                logger.debug(
+                    `   [Podcast] ${podcast.title}: ${result.newEpisodesCount} new episodes`,
+                );
             }
             refreshed++;
         } catch (error) {
-            logger.error(`   [Podcast] Failed to refresh ${podcast.title}:`, error);
+            logger.error(
+                `   [Podcast] Failed to refresh ${podcast.title}:`,
+                error,
+            );
         }
     }
 
@@ -1603,7 +1646,9 @@ async function executeVibePhase(): Promise<number> {
 
     const { reset } = await vibeAnalysisCleanupService.cleanupStaleProcessing();
     if (reset > 0) {
-        logger.debug(`[ENRICHMENT] Cleaned up ${reset} stale vibe processing entries`);
+        logger.debug(
+            `[ENRICHMENT] Cleaned up ${reset} stale vibe processing entries`,
+        );
     }
 
     const result = await queueVibeEmbeddings();
@@ -1733,18 +1778,18 @@ export async function getEnrichmentProgress() {
                 artistCounts.find((s) => s.enrichmentStatus === "failed")
                     ?._count || 0,
             progress:
-                artistPending > 0 ?
-                    Math.min(artistProgress, 99)
-                :   artistProgress,
+                artistPending > 0
+                    ? Math.min(artistProgress, 99)
+                    : artistProgress,
         },
         trackTags: {
             total: trackTotal,
             enriched: trackTagsEnriched,
             pending: trackTagsPending,
             progress:
-                trackTagsPending > 0 ?
-                    Math.min(trackTagsProgress, 99)
-                :   trackTagsProgress,
+                trackTagsPending > 0
+                    ? Math.min(trackTagsProgress, 99)
+                    : trackTagsProgress,
         },
 
         // Background enrichment (non-blocking, runs in audio-analyzer container)
@@ -1755,9 +1800,9 @@ export async function getEnrichmentProgress() {
             processing: audioProcessing,
             failed: audioFailed,
             progress:
-                audioPending > 0 || audioProcessing > 0 ?
-                    Math.min(audioProgress, 99)
-                :   audioProgress,
+                audioPending > 0 || audioProcessing > 0
+                    ? Math.min(audioProgress, 99)
+                    : audioProgress,
             isBackground: true, // Flag to indicate this runs separately
         },
 
@@ -1769,9 +1814,9 @@ export async function getEnrichmentProgress() {
             processing: clapProcessing,
             failed: clapFailed,
             progress:
-                clapPending > 0 || clapProcessing > 0 || clapQueueLength > 0 ?
-                    Math.min(clapProgress, 99)
-                :   clapProgress,
+                clapPending > 0 || clapProcessing > 0 || clapQueueLength > 0
+                    ? Math.min(clapProgress, 99)
+                    : clapProgress,
             isBackground: true,
         },
 
@@ -1779,18 +1824,12 @@ export async function getEnrichmentProgress() {
         coreComplete, // True when artists + track tags are done
         isFullyComplete:
             coreComplete &&
-            (
-                !audioRequiredForFullCompletion ||
-                (audioPending === 0 && audioProcessing === 0)
-            ) &&
-            (
-                !clapRequiredForFullCompletion ||
-                (
-                    clapProcessing === 0 &&
+            (!audioRequiredForFullCompletion ||
+                (audioPending === 0 && audioProcessing === 0)) &&
+            (!clapRequiredForFullCompletion ||
+                (clapProcessing === 0 &&
                     clapQueueLength === 0 &&
-                    clapPending === 0
-                )
-            ),
+                    clapPending === 0)),
     };
 }
 
@@ -1815,93 +1854,99 @@ export async function triggerEnrichmentNow(): Promise<{
     return runEnrichmentCycleClaimed(false, "immediate enrichment cycle");
 }
 
- /**
-  * Re-run artist enrichment only (from the beginning)
-  * Resets artist statuses and starts sequential enrichment from Phase 1
-  */
- export async function reRunArtistsOnly(): Promise<{ count: number }> {
-     logger.debug("[Enrichment] Re-running artist enrichment only...");
+/**
+ * Re-run artist enrichment only (from the beginning)
+ * Resets artist statuses and starts sequential enrichment from Phase 1
+ */
+export async function reRunArtistsOnly(): Promise<{ count: number }> {
+    logger.debug("[Enrichment] Re-running artist enrichment only...");
 
-     const result = await resetArtistsOnly();
+    const result = await resetArtistsOnly();
 
-     logger.debug("[Enrichment] Starting sequential enrichment from artists phase...");
-     isPaused = false;
-     immediateEnrichmentRequested = true;
+    logger.debug(
+        "[Enrichment] Starting sequential enrichment from artists phase...",
+    );
+    isPaused = false;
+    immediateEnrichmentRequested = true;
 
-     // Run full cycle but it will stop after artists phase if paused/stopped
-     const cycleResult = await runEnrichmentCycleClaimed(
-         false,
-         "artist-only enrichment cycle",
-     );
+    // Run full cycle but it will stop after artists phase if paused/stopped
+    const cycleResult = await runEnrichmentCycleClaimed(
+        false,
+        "artist-only enrichment cycle",
+    );
 
-     return { count: result.count };
- }
+    return { count: result.count };
+}
 
- /**
-  * Re-run mood tags only (from the beginning)
-  * Resets mood tags and starts sequential enrichment from Phase 1
-  */
- export async function reRunMoodTagsOnly(): Promise<{ count: number }> {
-     logger.debug("[Enrichment] Re-running mood tags only...");
+/**
+ * Re-run mood tags only (from the beginning)
+ * Resets mood tags and starts sequential enrichment from Phase 1
+ */
+export async function reRunMoodTagsOnly(): Promise<{ count: number }> {
+    logger.debug("[Enrichment] Re-running mood tags only...");
 
-     const result = await resetMoodTagsOnly();
+    const result = await resetMoodTagsOnly();
 
-     logger.debug("[Enrichment] Starting sequential enrichment from mood tags phase...");
-     isPaused = false;
-     immediateEnrichmentRequested = true;
+    logger.debug(
+        "[Enrichment] Starting sequential enrichment from mood tags phase...",
+    );
+    isPaused = false;
+    immediateEnrichmentRequested = true;
 
-     const cycleResult = await runEnrichmentCycleClaimed(
-         false,
-         "mood-tag enrichment cycle",
-     );
+    const cycleResult = await runEnrichmentCycleClaimed(
+        false,
+        "mood-tag enrichment cycle",
+    );
 
-     return { count: result.count };
- }
+    return { count: result.count };
+}
 
- /**
-  * Re-run audio analysis only
-  * Cleans up stale jobs and queues for audio analysis
-  */
- export async function reRunAudioAnalysisOnly(): Promise<number> {
-     logger.debug("[Enrichment] Re-running audio analysis only...");
+/**
+ * Re-run audio analysis only
+ * Cleans up stale jobs and queues for audio analysis
+ */
+export async function reRunAudioAnalysisOnly(): Promise<number> {
+    logger.debug("[Enrichment] Re-running audio analysis only...");
 
-     await audioAnalysisCleanupService.cleanupStaleProcessing();
+    await audioAnalysisCleanupService.cleanupStaleProcessing();
 
-     const tracks = await prisma.track.findMany({
-         where: { analysisStatus: "pending" },
-         select: { id: true },
-     });
+    const tracks = await prisma.track.findMany({
+        where: { analysisStatus: "pending" },
+        select: { id: true },
+    });
 
-     logger.debug(`[Enrichment] Found ${tracks.length} tracks pending audio analysis`);
+    logger.debug(
+        `[Enrichment] Found ${tracks.length} tracks pending audio analysis`,
+    );
 
-     const queued = await queueAudioAnalysis();
+    const queued = await queueAudioAnalysis();
 
-     logger.debug(`[Enrichment] Queued ${queued} tracks for audio analysis`);
+    logger.debug(`[Enrichment] Queued ${queued} tracks for audio analysis`);
 
-     return queued;
- }
+    return queued;
+}
 
- /**
-  * Re-run vibe embeddings only
-  * Cleans up stale jobs and queues for vibe embeddings
-  */
+/**
+ * Re-run vibe embeddings only
+ * Cleans up stale jobs and queues for vibe embeddings
+ */
 export async function reRunVibeEmbeddingsOnly(): Promise<number> {
-     logger.debug("[Enrichment] Re-running vibe embeddings only...");
+    logger.debug("[Enrichment] Re-running vibe embeddings only...");
 
-     const features = await featureDetection.getFeatures();
-     if (!features.vibeEmbeddings) {
-         logger.debug("[Enrichment] Vibe embeddings not available, skipping");
-         return 0;
-     }
+    const features = await featureDetection.getFeatures();
+    if (!features.vibeEmbeddings) {
+        logger.debug("[Enrichment] Vibe embeddings not available, skipping");
+        return 0;
+    }
 
-     await vibeAnalysisCleanupService.cleanupStaleProcessing();
+    await vibeAnalysisCleanupService.cleanupStaleProcessing();
 
-     const queued = await queueVibeEmbeddings();
+    const queued = await queueVibeEmbeddings();
 
-     logger.debug(`[Enrichment] Queued ${queued} tracks for vibe embeddings`);
+    logger.debug(`[Enrichment] Queued ${queued} tracks for vibe embeddings`);
 
-     return queued;
- }
+    return queued;
+}
 
 export const __unifiedEnrichmentTestables = {
     withEnrichmentPrismaRetry,
@@ -1934,7 +1979,8 @@ export const __unifiedEnrichmentTestables = {
             isStopping = nextState.isStopping;
         }
         if (typeof nextState.immediateEnrichmentRequested === "boolean") {
-            immediateEnrichmentRequested = nextState.immediateEnrichmentRequested;
+            immediateEnrichmentRequested =
+                nextState.immediateEnrichmentRequested;
         }
         if (typeof nextState.consecutiveSystemFailures === "number") {
             consecutiveSystemFailures = nextState.consecutiveSystemFailures;

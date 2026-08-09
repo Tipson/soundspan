@@ -183,10 +183,7 @@ class TidalService {
             const settings = await prisma.systemSettings.findUnique({
                 where: { id: "default" },
             });
-            if (
-                !settings?.tidalAccessToken ||
-                !settings?.tidalRefreshToken
-            )
+            if (!settings?.tidalAccessToken || !settings?.tidalRefreshToken)
                 return null;
 
             let accessToken: string;
@@ -195,7 +192,9 @@ class TidalService {
                 accessToken = decrypt(settings.tidalAccessToken);
                 refreshToken = decrypt(settings.tidalRefreshToken);
                 if (!accessToken || !refreshToken) {
-                    throw new Error("Tidal credential decryption returned empty");
+                    throw new Error(
+                        "Tidal credential decryption returned empty",
+                    );
                 }
             } catch (err) {
                 if (config.settingsDecryptFailClosed) {
@@ -270,7 +269,7 @@ class TidalService {
         } catch (err: any) {
             logger.error(
                 "[TIDAL] Token refresh failed:",
-                err.response?.data || err.message
+                err.response?.data || err.message,
             );
             return false;
         }
@@ -312,8 +311,7 @@ class TidalService {
         countryCode?: string;
     }> {
         const creds = await this.getCredentials();
-        if (!creds)
-            return { valid: false };
+        if (!creds) return { valid: false };
 
         try {
             const res = await this.client.post("/auth/session", {
@@ -348,7 +346,7 @@ class TidalService {
             const res = await this.client.post(
                 "/search",
                 { query },
-                { headers: this.buildCredentialHeaders(creds) }
+                { headers: this.buildCredentialHeaders(creds) },
             );
             return res.data;
         } catch (err: any) {
@@ -369,24 +367,31 @@ class TidalService {
      */
     async findAlbum(
         artistName: string,
-        albumTitle: string
-    ): Promise<{ albumId: number; title: string; artist: string; numberOfTracks: number } | null> {
+        albumTitle: string,
+    ): Promise<{
+        albumId: number;
+        title: string;
+        artist: string;
+        numberOfTracks: number;
+    } | null> {
         try {
             const results = await this.search(`${artistName} ${albumTitle}`);
             if (!results.albums || results.albums.length === 0) return null;
 
             // Find best match — prefer exact album title match
-            const normalise = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const normalise = (s: string) =>
+                s.toLowerCase().replace(/[^a-z0-9]/g, "");
             const normAlbum = normalise(albumTitle);
             const normArtist = normalise(artistName);
 
-            const match = results.albums.find(
-                (a) =>
-                    normalise(a.title) === normAlbum &&
-                    normalise(a.artist) === normArtist
-            ) || results.albums.find(
-                (a) => normalise(a.title) === normAlbum
-            ) || results.albums[0];
+            const match =
+                results.albums.find(
+                    (a) =>
+                        normalise(a.title) === normAlbum &&
+                        normalise(a.artist) === normArtist,
+                ) ||
+                results.albums.find((a) => normalise(a.title) === normAlbum) ||
+                results.albums[0];
 
             return {
                 albumId: match.id,
@@ -404,9 +409,7 @@ class TidalService {
      * Download a single track directly to /music,
      * using the user's configured file template.
      */
-    async downloadTrack(
-        trackId: number
-    ): Promise<TidalDownloadResult> {
+    async downloadTrack(trackId: number): Promise<TidalDownloadResult> {
         const creds = await this.getCredentials();
         if (!creds) throw new Error("TIDAL not authenticated");
 
@@ -418,14 +421,13 @@ class TidalService {
                     quality: creds.quality,
                     output_template: creds.fileTemplate,
                 },
-                { headers: this.buildCredentialHeaders(creds) }
+                { headers: this.buildCredentialHeaders(creds) },
             );
             return res.data;
         } catch (err: any) {
             if (err.response?.status === 401) {
                 const refreshed = await this.refreshAccessToken();
-                if (refreshed)
-                    return this.downloadTrack(trackId);
+                if (refreshed) return this.downloadTrack(trackId);
             }
             throw err;
         }
@@ -434,9 +436,7 @@ class TidalService {
     /**
      * Download an entire album directly to /music.
      */
-    async downloadAlbum(
-        albumId: number
-    ): Promise<TidalAlbumDownloadResult> {
+    async downloadAlbum(albumId: number): Promise<TidalAlbumDownloadResult> {
         const creds = await this.getCredentials();
         if (!creds) throw new Error("TIDAL not authenticated");
 
@@ -448,14 +448,13 @@ class TidalService {
                     quality: creds.quality,
                     output_template: creds.fileTemplate,
                 },
-                { headers: this.buildCredentialHeaders(creds) }
+                { headers: this.buildCredentialHeaders(creds) },
             );
             return res.data;
         } catch (err: any) {
             if (err.response?.status === 401) {
                 const refreshed = await this.refreshAccessToken();
-                if (refreshed)
-                    return this.downloadAlbum(albumId);
+                if (refreshed) return this.downloadAlbum(albumId);
             }
             throw err;
         }

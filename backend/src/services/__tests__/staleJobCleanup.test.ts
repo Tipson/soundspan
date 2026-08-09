@@ -45,17 +45,20 @@ import { staleJobCleanupService } from "../staleJobCleanup";
 import { logger } from "../../utils/logger";
 
 const mockDiscoveryBatchFindMany = prisma.discoveryBatch.findMany as jest.Mock;
-const mockDiscoveryBatchUpdateMany = prisma.discoveryBatch.updateMany as jest.Mock;
+const mockDiscoveryBatchUpdateMany = prisma.discoveryBatch
+    .updateMany as jest.Mock;
 const mockDownloadJobFindMany = prisma.downloadJob.findMany as jest.Mock;
 const mockDownloadJobUpdateMany = prisma.downloadJob.updateMany as jest.Mock;
-const mockSpotifyImportJobFindMany = prisma.spotifyImportJob.findMany as jest.Mock;
-const mockSpotifyImportJobUpdateMany = prisma.spotifyImportJob.updateMany as jest.Mock;
+const mockSpotifyImportJobFindMany = prisma.spotifyImportJob
+    .findMany as jest.Mock;
+const mockSpotifyImportJobUpdateMany = prisma.spotifyImportJob
+    .updateMany as jest.Mock;
 
 const mockQueueClean0 = (queues as any[])[0].clean as jest.Mock;
 const mockQueueClean1 = (queues as any[])[1].clean as jest.Mock;
 
-const mockAudioCleanup = audioAnalysisCleanupService
-    .cleanupStaleProcessing as jest.Mock;
+const mockAudioCleanup =
+    audioAnalysisCleanupService.cleanupStaleProcessing as jest.Mock;
 const mockLoggerError = logger.error as jest.Mock;
 
 describe("staleJobCleanupService", () => {
@@ -131,7 +134,7 @@ describe("staleJobCleanupService", () => {
         expect(mockDiscoveryBatchUpdateMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: { in: ["batch-1", "batch-2"] } },
-            })
+            }),
         );
 
         expect(mockDownloadJobUpdateMany).toHaveBeenCalledWith(
@@ -139,17 +142,17 @@ describe("staleJobCleanupService", () => {
                 where: expect.objectContaining({
                     discoveryBatchId: { in: ["batch-1", "batch-2"] },
                 }),
-            })
+            }),
         );
         expect(mockDownloadJobUpdateMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: { in: ["job-1", "job-2"] } },
-            })
+            }),
         );
         expect(mockSpotifyImportJobUpdateMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: { in: ["spotify-1"] } },
-            })
+            }),
         );
     });
 
@@ -172,7 +175,9 @@ describe("staleJobCleanupService", () => {
             .mockResolvedValueOnce([{}]) // completed
             .mockResolvedValueOnce([]); // failed
 
-        const result = await (staleJobCleanupService as any).cleanupBullQueues();
+        const result = await (
+            staleJobCleanupService as any
+        ).cleanupBullQueues();
 
         expect(result).toEqual({
             cleaned: 1,
@@ -180,7 +185,7 @@ describe("staleJobCleanupService", () => {
         });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[STALE-CLEANUP] Error cleaning queue discovery:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -189,7 +194,9 @@ describe("staleJobCleanupService", () => {
             { id: "batch-a", status: "downloading", createdAt: new Date() },
         ]);
 
-        const result = await (staleJobCleanupService as any).cleanupDiscoveryBatches();
+        const result = await (
+            staleJobCleanupService as any
+        ).cleanupDiscoveryBatches();
 
         expect(result).toEqual({
             cleaned: 1,
@@ -201,14 +208,16 @@ describe("staleJobCleanupService", () => {
                     discoveryBatchId: { in: ["batch-a"] },
                     status: { in: ["pending", "processing"] },
                 }),
-            })
+            }),
         );
     });
 
     it("returns no-op for spotify import cleanup when nothing is stale", async () => {
         mockSpotifyImportJobFindMany.mockResolvedValue([]);
 
-        const result = await (staleJobCleanupService as any).cleanupSpotifyImportJobs();
+        const result = await (
+            staleJobCleanupService as any
+        ).cleanupSpotifyImportJobs();
 
         expect(result).toEqual({ cleaned: 0, ids: [] });
         expect(mockSpotifyImportJobUpdateMany).not.toHaveBeenCalled();

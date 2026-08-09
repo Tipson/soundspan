@@ -1,20 +1,22 @@
-import { applyArtistCap, type ArtistCapTrack } from "../services/programmaticPlaylistArtistCap";
+import {
+    applyArtistCap,
+    type ArtistCapTrack,
+} from "../services/programmaticPlaylistArtistCap";
 
 type TestTrack = ArtistCapTrack & { id: string };
 
 function makeTrack(id: string, artistId?: string): TestTrack {
     return {
         id,
-        album:
-            artistId ?
-                {
-                    artist: {
-                        id: artistId,
-                    },
-                }
-            :   {
-                    artist: {},
-                },
+        album: artistId
+            ? {
+                  artist: {
+                      id: artistId,
+                  },
+              }
+            : {
+                  artist: {},
+              },
     };
 }
 
@@ -98,8 +100,12 @@ describe("applyArtistCap", () => {
         });
 
         const selectedIds = selected.map((track) => track.id);
-        const unknownOneCount = selectedIds.filter((id) => id === "unknown-1").length;
-        const knownArtistCount = selected.filter((track) => track.album?.artist?.id === "artist-a").length;
+        const unknownOneCount = selectedIds.filter(
+            (id) => id === "unknown-1",
+        ).length;
+        const knownArtistCount = selected.filter(
+            (track) => track.album?.artist?.id === "artist-a",
+        ).length;
 
         expect(unknownOneCount).toBe(1);
         expect(knownArtistCount).toBe(1);

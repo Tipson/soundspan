@@ -172,7 +172,9 @@ export class MoodBucketService {
 
     private isRetryablePrismaError(error: unknown): boolean {
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(error.code);
+            return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(
+                error.code,
+            );
         }
 
         if (error instanceof Prisma.PrismaClientRustPanicError) {
@@ -199,7 +201,7 @@ export class MoodBucketService {
 
     private async withPrismaRetry<T>(
         operationName: string,
-        operation: () => Promise<T>
+        operation: () => Promise<T>,
     ): Promise<T> {
         let lastError: unknown;
 
@@ -221,10 +223,12 @@ export class MoodBucketService {
 
                 logger.warn(
                     `[MoodBucket] ${operationName} failed (attempt ${attempt}/${this.PRISMA_RETRY_ATTEMPTS}), retrying`,
-                    error
+                    error,
                 );
                 await prisma.$connect().catch(() => {});
-                await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+                await new Promise((resolve) =>
+                    setTimeout(resolve, 250 * attempt),
+                );
             }
         }
 
@@ -266,12 +270,12 @@ export class MoodBucketService {
                         keyScale: true,
                         moodTags: true,
                     },
-                })
+                }),
         );
 
         if (!track || track.analysisStatus !== "completed") {
             logger.debug(
-                `[MoodBucket] Track ${trackId} not analyzed yet, skipping`
+                `[MoodBucket] Track ${trackId} not analyzed yet, skipping`,
             );
             return [];
         }
@@ -295,7 +299,7 @@ export class MoodBucketService {
                         update: {
                             score,
                         },
-                    })
+                    }),
                 );
 
             // Also delete mood buckets where score dropped to 0
@@ -304,10 +308,13 @@ export class MoodBucketService {
                 .map(([mood]) =>
                     prisma.moodBucket.deleteMany({
                         where: { trackId, mood },
-                    })
+                    }),
                 );
 
-            await prisma.$transaction([...upsertOperations, ...deleteOperations]);
+            await prisma.$transaction([
+                ...upsertOperations,
+                ...deleteOperations,
+            ]);
         });
 
         const assignedMoods = Object.entries(moodScores)
@@ -317,7 +324,7 @@ export class MoodBucketService {
         logger.debug(
             `[MoodBucket] Track ${trackId} assigned to moods: ${
                 assignedMoods.join(", ") || "none"
-            }`
+            }`,
         );
 
         return assignedMoods;
@@ -331,7 +338,7 @@ export class MoodBucketService {
         const isEnhanced =
             track.analysisMode === "enhanced" &&
             track.analysisVersion?.startsWith(
-                RELIABLE_ENHANCED_ANALYSIS_VERSION_PREFIX
+                RELIABLE_ENHANCED_ANALYSIS_VERSION_PREFIX,
             ) === true;
         const scores: Record<MoodType, number> = {
             happy: 0,
@@ -346,7 +353,8 @@ export class MoodBucketService {
         };
 
         // Check if we have individual mood fields OR moodTags
-        const hasIndividualMoods = track.moodHappy !== null || track.moodSad !== null;
+        const hasIndividualMoods =
+            track.moodHappy !== null || track.moodSad !== null;
         const hasMoodTags = track.moodTags && track.moodTags.length > 0;
 
         // If we have moodTags but no individual mood fields, parse moodTags
@@ -368,7 +376,9 @@ export class MoodBucketService {
      * Calculate mood scores from moodTags array
      * Used when individual mood fields are not populated
      */
-    private calculateMoodScoresFromTags(moodTags: string[]): Record<MoodType, number> {
+    private calculateMoodScoresFromTags(
+        moodTags: string[],
+    ): Record<MoodType, number> {
         const scores: Record<MoodType, number> = {
             happy: 0,
             sad: 0,
@@ -381,7 +391,7 @@ export class MoodBucketService {
             acoustic: 0,
         };
 
-        const normalizedTags = moodTags.map(tag => tag.toLowerCase());
+        const normalizedTags = moodTags.map((tag) => tag.toLowerCase());
 
         for (const [mood, config] of Object.entries(MOOD_CONFIG)) {
             const keywords = config.moodTagKeywords;
@@ -394,7 +404,10 @@ export class MoodBucketService {
             }
 
             if (matchCount > 0) {
-                scores[mood as MoodType] = Math.min(1.0, 0.3 + (matchCount - 1) * 0.2);
+                scores[mood as MoodType] = Math.min(
+                    1.0,
+                    0.3 + (matchCount - 1) * 0.2,
+                );
             }
         }
 
@@ -407,7 +420,7 @@ export class MoodBucketService {
      */
     private evaluateMoodRules(
         track: TrackWithAnalysis,
-        rules: Record<string, any>
+        rules: Record<string, any>,
     ): number {
         let totalScore = 0;
         let ruleCount = 0;
@@ -465,7 +478,7 @@ export class MoodBucketService {
                     // Above maximum - partial credit
                     fieldScore = Math.max(
                         0,
-                        ((1 - numValue) / (1 - max)) * 0.5
+                        ((1 - numValue) / (1 - max)) * 0.5,
                     );
                 }
             }
@@ -519,7 +532,7 @@ export class MoodBucketService {
      */
     async getMoodMix(
         mood: MoodType,
-        limit: number = 15
+        limit: number = 15,
     ): Promise<{
         id: string;
         mood: string;
@@ -550,7 +563,7 @@ export class MoodBucketService {
 
         if (moodBuckets.length < this.MOOD_MIX_MIN_POOL_TRACKS) {
             logger.debug(
-                `[MoodBucket] Not enough tracks for mood ${mood}: ${moodBuckets.length}`
+                `[MoodBucket] Not enough tracks for mood ${mood}: ${moodBuckets.length}`,
             );
             return null;
         }
@@ -590,7 +603,7 @@ export class MoodBucketService {
                     refillFromExcludedAfterMaxRelaxation: true,
                 },
             }),
-            (t) => t.album.artist.id
+            (t) => t.album.artist.id,
         );
 
         const coverUrls = selectedTracks
@@ -618,7 +631,7 @@ export class MoodBucketService {
     async saveUserMoodMix(
         userId: string,
         mood: MoodType,
-        limit: number = 15
+        limit: number = 15,
     ): Promise<{
         id: string;
         mood: string;
@@ -656,7 +669,7 @@ export class MoodBucketService {
         });
 
         logger.debug(
-            `[MoodBucket] Saved ${mood} mix for user ${userId} (${mix.trackCount} tracks)`
+            `[MoodBucket] Saved ${mood} mix for user ${userId} (${mix.trackCount} tracks)`,
         );
 
         // Return with user-specific naming
@@ -716,13 +729,15 @@ export class MoodBucketService {
      * Used for initial population or after schema changes
      */
     async backfillAllTracks(
-        batchSize: number = 100
+        batchSize: number = 100,
     ): Promise<{ processed: number; assigned: number }> {
         let processed = 0;
         let assigned = 0;
         let skip = 0;
 
-        logger.debug("[MoodBucket] Starting backfill of all analyzed tracks...");
+        logger.debug(
+            "[MoodBucket] Starting backfill of all analyzed tracks...",
+        );
 
         while (true) {
             const tracks = await prisma.track.findMany({
@@ -786,10 +801,10 @@ export class MoodBucketService {
                                         update: {
                                             score: data.score,
                                         },
-                                    })
-                                )
+                                    }),
+                                ),
                             );
-                        }
+                        },
                     );
                     assigned += moodsToAssign.length;
                 }
@@ -799,12 +814,12 @@ export class MoodBucketService {
 
             skip += batchSize;
             logger.debug(
-                `[MoodBucket] Backfill progress: ${processed} tracks processed, ${assigned} mood assignments`
+                `[MoodBucket] Backfill progress: ${processed} tracks processed, ${assigned} mood assignments`,
             );
         }
 
         logger.debug(
-            `[MoodBucket] Backfill complete: ${processed} tracks processed, ${assigned} mood assignments`
+            `[MoodBucket] Backfill complete: ${processed} tracks processed, ${assigned} mood assignments`,
         );
         return { processed, assigned };
     }
@@ -817,7 +832,7 @@ export class MoodBucketService {
         await this.withPrismaRetry("clearTrackMoods.deleteMany", () =>
             prisma.moodBucket.deleteMany({
                 where: { trackId },
-            })
+            }),
         );
     }
 }
