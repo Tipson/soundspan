@@ -10,7 +10,8 @@ export const CANONICAL_MEDIA_SOURCE_VALUES = [
 ] as const;
 
 /** Canonical source identifier shared across media metadata consumers. */
-export type CanonicalMediaSource = (typeof CANONICAL_MEDIA_SOURCE_VALUES)[number];
+export type CanonicalMediaSource =
+    (typeof CANONICAL_MEDIA_SOURCE_VALUES)[number];
 
 /** Non-local media sources backed by remote providers. */
 export type RemoteMediaSource = Exclude<CanonicalMediaSource, "local">;
@@ -22,7 +23,10 @@ export type ResolvedMediaSource = Exclude<
 >;
 
 /** Canonical sources supported by segmented streaming sessions. */
-export type SegmentedStreamingSourceType = Extract<CanonicalMediaSource, "local">;
+export type SegmentedStreamingSourceType = Extract<
+    CanonicalMediaSource,
+    "local"
+>;
 
 /** Source identifiers accepted by the audio engine boundary. */
 export type AudioEngineSourceType = "local" | "tidal" | "ytmusic";
