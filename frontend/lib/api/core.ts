@@ -29,8 +29,8 @@ export type ApiData = any;
 
 // Mixin base constructor for domain modules. `any[]` is required by the TS
 // mixin pattern; scoped to this single alias.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ApiClientConstructor = abstract new (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...args: any[]
 ) => ApiClientCore;
 
