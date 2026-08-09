@@ -1,0 +1,7 @@
+package-lock.json
+*.md
+*.yml
+*.yaml
+prisma/migrations/
+src/generated/
+**/__snapshots__/
