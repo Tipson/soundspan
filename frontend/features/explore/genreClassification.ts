@@ -5,10 +5,28 @@
 
 /** Genre keywords used to split categories into moods vs genres. */
 const GENRE_KEYWORDS = new Set([
-    "pop", "rock", "hip-hop", "hip hop", "r&b", "country", "latin",
-    "electronic", "dance", "metal", "jazz", "classical", "folk",
-    "indie", "alternative", "blues", "soul", "punk", "reggae",
-    "k-pop", "j-pop", "afrobeats",
+    "pop",
+    "rock",
+    "hip-hop",
+    "hip hop",
+    "r&b",
+    "country",
+    "latin",
+    "electronic",
+    "dance",
+    "metal",
+    "jazz",
+    "classical",
+    "folk",
+    "indie",
+    "alternative",
+    "blues",
+    "soul",
+    "punk",
+    "reggae",
+    "k-pop",
+    "j-pop",
+    "afrobeats",
 ]);
 
 /**

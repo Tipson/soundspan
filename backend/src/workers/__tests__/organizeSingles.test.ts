@@ -42,10 +42,16 @@ describe("organizeSingles worker", () => {
     }
 
     it("migrates soulseek files into Singles and marks migration complete", async () => {
-        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "soundspan-org-"));
+        const tmpRoot = fs.mkdtempSync(
+            path.join(os.tmpdir(), "soundspan-org-"),
+        );
         process.env = { ...originalEnv, MUSIC_PATH: tmpRoot };
 
-        const soulseekAlbum = path.join(tmpRoot, "Soulseek", "Artist A - Album A (2020)");
+        const soulseekAlbum = path.join(
+            tmpRoot,
+            "Soulseek",
+            "Artist A - Album A (2020)",
+        );
         fs.mkdirSync(soulseekAlbum, { recursive: true });
         const sourceTrack = path.join(soulseekAlbum, "Track 1.mp3");
         fs.writeFileSync(sourceTrack, "audio");
@@ -59,7 +65,7 @@ describe("organizeSingles worker", () => {
             "Singles",
             "Artist A",
             "Album A",
-            "Track 1.mp3"
+            "Track 1.mp3",
         );
         const marker = path.join(tmpRoot, ".soulseek-migrated");
 
@@ -70,7 +76,9 @@ describe("organizeSingles worker", () => {
     });
 
     it("marks legacy slskd jobs failed and queue wrapper swallows errors", async () => {
-        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "soundspan-org-"));
+        const tmpRoot = fs.mkdtempSync(
+            path.join(os.tmpdir(), "soundspan-org-"),
+        );
         process.env = { ...originalEnv, MUSIC_PATH: tmpRoot };
 
         const { module, logger, prisma } = loadOrganizeSingles({
@@ -91,10 +99,12 @@ describe("organizeSingles worker", () => {
         const previousCwd = process.cwd();
         process.chdir(tmpRoot);
         try {
-            await expect(module.queueOrganizeSingles()).resolves.toBeUndefined();
+            await expect(
+                module.queueOrganizeSingles(),
+            ).resolves.toBeUndefined();
             expect(logger.error).toHaveBeenCalledWith(
                 "[ORGANIZE] Organization failed:",
-                "MUSIC_PATH is not set. Cannot organize downloads."
+                "MUSIC_PATH is not set. Cannot organize downloads.",
             );
         } finally {
             process.chdir(previousCwd);
@@ -102,11 +112,17 @@ describe("organizeSingles worker", () => {
     });
 
     it("skips migration work when marker already exists", async () => {
-        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "soundspan-org-"));
+        const tmpRoot = fs.mkdtempSync(
+            path.join(os.tmpdir(), "soundspan-org-"),
+        );
         process.env = { ...originalEnv, MUSIC_PATH: tmpRoot };
         fs.writeFileSync(path.join(tmpRoot, ".soulseek-migrated"), "done");
 
-        const soulseekAlbum = path.join(tmpRoot, "Soulseek", "Artist A - Album A");
+        const soulseekAlbum = path.join(
+            tmpRoot,
+            "Soulseek",
+            "Artist A - Album A",
+        );
         fs.mkdirSync(soulseekAlbum, { recursive: true });
         const sourceTrack = path.join(soulseekAlbum, "Track 1.mp3");
         fs.writeFileSync(sourceTrack, "audio");
@@ -118,22 +134,31 @@ describe("organizeSingles worker", () => {
     });
 
     it("marks migration complete when Soulseek folder is absent", async () => {
-        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "soundspan-org-"));
+        const tmpRoot = fs.mkdtempSync(
+            path.join(os.tmpdir(), "soundspan-org-"),
+        );
         process.env = { ...originalEnv, MUSIC_PATH: tmpRoot };
 
         const { module } = loadOrganizeSingles();
         await module.organizeSingles();
 
-        expect(fs.existsSync(path.join(tmpRoot, ".soulseek-migrated"))).toBe(true);
+        expect(fs.existsSync(path.join(tmpRoot, ".soulseek-migrated"))).toBe(
+            true,
+        );
     });
 
     it("falls back to MUSIC_PATH from ../.env when env var is unset", async () => {
-        const root = fs.mkdtempSync(path.join(os.tmpdir(), "soundspan-org-root-"));
+        const root = fs.mkdtempSync(
+            path.join(os.tmpdir(), "soundspan-org-root-"),
+        );
         const cwdDir = path.join(root, "repo", "backend");
         const musicDir = path.join(root, "music");
         fs.mkdirSync(cwdDir, { recursive: true });
         fs.mkdirSync(musicDir, { recursive: true });
-        fs.writeFileSync(path.join(root, "repo", ".env"), `MUSIC_PATH="${musicDir}"\n`);
+        fs.writeFileSync(
+            path.join(root, "repo", ".env"),
+            `MUSIC_PATH="${musicDir}"\n`,
+        );
 
         const previousCwd = process.cwd();
         process.chdir(cwdDir);
@@ -143,26 +168,32 @@ describe("organizeSingles worker", () => {
         try {
             const { module } = loadOrganizeSingles();
             await module.organizeSingles();
-            expect(fs.existsSync(path.join(musicDir, ".soulseek-migrated"))).toBe(true);
+            expect(
+                fs.existsSync(path.join(musicDir, ".soulseek-migrated")),
+            ).toBe(true);
         } finally {
             process.chdir(previousCwd);
         }
     });
 
     it("logs successful queue wrapper completion", async () => {
-        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "soundspan-org-"));
+        const tmpRoot = fs.mkdtempSync(
+            path.join(os.tmpdir(), "soundspan-org-"),
+        );
         process.env = { ...originalEnv, MUSIC_PATH: tmpRoot };
 
         const { module, logger } = loadOrganizeSingles();
         await module.queueOrganizeSingles();
 
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ORGANIZE] Organization complete"
+            "[ORGANIZE] Organization complete",
         );
     });
 
     it("swallows legacy cleanup lookup failures and logs warning", async () => {
-        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "soundspan-org-"));
+        const tmpRoot = fs.mkdtempSync(
+            path.join(os.tmpdir(), "soundspan-org-"),
+        );
         process.env = { ...originalEnv, MUSIC_PATH: tmpRoot };
 
         const { module, sessionLog } = loadOrganizeSingles({
@@ -173,7 +204,7 @@ describe("organizeSingles worker", () => {
         expect(sessionLog).toHaveBeenCalledWith(
             "ORGANIZE",
             expect.stringContaining("Failed to clean up legacy jobs"),
-            "WARN"
+            "WARN",
         );
     });
 });

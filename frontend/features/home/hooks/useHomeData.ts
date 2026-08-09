@@ -13,8 +13,18 @@ import { useFeatures } from "@/lib/features-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { subscribeQueryEvent } from "@/lib/query-events";
-import type { Artist, ListenedItem, Mix, PopularArtist, Podcast, Audiobook } from "../types";
-import type { LikedPlaylistSummary, DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
+import type {
+    Artist,
+    ListenedItem,
+    Mix,
+    PopularArtist,
+    Podcast,
+    Audiobook,
+} from "../types";
+import type {
+    LikedPlaylistSummary,
+    DiscoverWeeklySummary,
+} from "@/features/explore/hooks/useExploreData";
 import type { PlaylistPreview } from "@/features/home/components/FeaturedPlaylistsGrid";
 import {
     useRecentlyListenedQuery,
@@ -87,7 +97,9 @@ export function useHomeData(): UseHomeDataReturn {
     // Listen for library-updated event (fired when library scan completes)
     useEffect(() => {
         const unsubscribe = subscribeQueryEvent("library-updated", () => {
-            queryClient.refetchQueries({ queryKey: queryKeys.recentlyAdded(10) });
+            queryClient.refetchQueries({
+                queryKey: queryKeys.recentlyAdded(10),
+            });
         });
         return unsubscribe;
     }, [queryClient]);
@@ -115,7 +127,8 @@ export function useHomeData(): UseHomeDataReturn {
         useAudiobooksQuery({ limit: 10 });
 
     // ── Trending Community Playlists ────────────────────────────────────
-    const { data: shelvesData, isLoading: isCommunityPlaylistsLoading } = useYtMusicHomeShelvesQuery();
+    const { data: shelvesData, isLoading: isCommunityPlaylistsLoading } =
+        useYtMusicHomeShelvesQuery();
 
     // Mutation for refreshing mixes
     const { mutateAsync: refreshMixes, isPending: isRefreshingMixes } =
@@ -211,7 +224,9 @@ export function useHomeData(): UseHomeDataReturn {
         discoverWeekly,
         popularArtists: popularData?.artists ?? [],
         communityPlaylists,
-        recentPodcasts: Array.isArray(podcastsData) ? podcastsData.slice(0, 10) : [],
+        recentPodcasts: Array.isArray(podcastsData)
+            ? podcastsData.slice(0, 10)
+            : [],
         recentAudiobooks: Array.isArray(audiobooksData) ? audiobooksData : [],
         isLoading,
         isRefreshingMixes,

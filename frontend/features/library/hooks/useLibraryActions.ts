@@ -27,63 +27,83 @@ const formatTrackForAudio = (track: Track) => ({
 export function useLibraryActions() {
     const { playTracks, addToQueue } = useAudioControls();
 
-    const playArtist = useCallback(async (artistId: string) => {
-        try {
-            const tracksWithAlbum = await loadOwnedArtistTracksNewestFirst({
-                artistId,
-            });
+    const playArtist = useCallback(
+        async (artistId: string) => {
+            try {
+                const tracksWithAlbum = await loadOwnedArtistTracksNewestFirst({
+                    artistId,
+                });
 
-            if (tracksWithAlbum.length === 0) {
-                return;
+                if (tracksWithAlbum.length === 0) {
+                    return;
+                }
+
+                playTracks(tracksWithAlbum, 0);
+            } catch (error) {
+                sharedFrontendLogger.error("Error playing artist:", error);
             }
+        },
+        [playTracks],
+    );
 
-            playTracks(tracksWithAlbum, 0);
-        } catch (error) {
-            sharedFrontendLogger.error("Error playing artist:", error);
-        }
-    }, [playTracks]);
+    const playAlbum = useCallback(
+        async (albumId: string) => {
+            try {
+                const album = await api.getAlbum(albumId);
+                if (!album || !album.tracks || album.tracks.length === 0) {
+                    return;
+                }
 
-    const playAlbum = useCallback(async (albumId: string) => {
-        try {
-            const album = await api.getAlbum(albumId);
-            if (!album || !album.tracks || album.tracks.length === 0) {
-                return;
+                const tracksWithAlbum = album.tracks.map(
+                    (track: Record<string, unknown>) => ({
+                        ...track,
+                        album: {
+                            id: album.id,
+                            title: album.title,
+                            coverArt: album.coverArt || album.coverUrl,
+                        },
+                        artist: {
+                            id: album.artist?.id,
+                            name: album.artist?.name,
+                        },
+                    }),
+                );
+
+                playTracks(tracksWithAlbum, 0);
+            } catch (error) {
+                sharedFrontendLogger.error("Error playing album:", error);
             }
+        },
+        [playTracks],
+    );
 
-            const tracksWithAlbum = album.tracks.map((track: Record<string, unknown>) => ({
-                ...track,
-                album: {
-                    id: album.id,
-                    title: album.title,
-                    coverArt: album.coverArt || album.coverUrl,
-                },
-                artist: {
-                    id: album.artist?.id,
-                    name: album.artist?.name,
-                },
-            }));
+    const addTrackToQueue = useCallback(
+        (track: Track) => {
+            try {
+                addToQueue(formatTrackForAudio(track));
+            } catch (error) {
+                sharedFrontendLogger.error(
+                    "Error adding track to queue:",
+                    error,
+                );
+            }
+        },
+        [addToQueue],
+    );
 
-            playTracks(tracksWithAlbum, 0);
-        } catch (error) {
-            sharedFrontendLogger.error("Error playing album:", error);
-        }
-    }, [playTracks]);
-
-    const addTrackToQueue = useCallback((track: Track) => {
-        try {
-            addToQueue(formatTrackForAudio(track));
-        } catch (error) {
-            sharedFrontendLogger.error("Error adding track to queue:", error);
-        }
-    }, [addToQueue]);
-
-    const addTrackToPlaylist = useCallback(async (playlistId: string, trackId: string) => {
-        try {
-            await api.addTrackToPlaylist(playlistId, { trackId });
-        } catch (error) {
-            sharedFrontendLogger.error("Error adding track to playlist:", error);
-        }
-    }, []);
+    const addTrackToPlaylist = useCallback(
+        async (playlistId: string, trackId: string) => {
+            try {
+                await api.addTrackToPlaylist(playlistId, { trackId });
+            } catch (error) {
+                sharedFrontendLogger.error(
+                    "Error adding track to playlist:",
+                    error,
+                );
+            }
+        },
+        [],
+    );
 
     const deleteTrack = useCallback(async (id: string): Promise<void> => {
         try {
@@ -109,21 +129,24 @@ export function useLibraryActions() {
         }
     }, []);
 
-    return useMemo(() => ({
-        playArtist,
-        playAlbum,
-        addTrackToQueue,
-        addTrackToPlaylist,
-        deleteTrack,
-        deleteAlbum,
-        deleteArtist,
-    }), [
-        playArtist,
-        playAlbum,
-        addTrackToQueue,
-        addTrackToPlaylist,
-        deleteTrack,
-        deleteAlbum,
-        deleteArtist,
-    ]);
+    return useMemo(
+        () => ({
+            playArtist,
+            playAlbum,
+            addTrackToQueue,
+            addTrackToPlaylist,
+            deleteTrack,
+            deleteAlbum,
+            deleteArtist,
+        }),
+        [
+            playArtist,
+            playAlbum,
+            addTrackToQueue,
+            addTrackToPlaylist,
+            deleteTrack,
+            deleteAlbum,
+            deleteArtist,
+        ],
+    );
 }

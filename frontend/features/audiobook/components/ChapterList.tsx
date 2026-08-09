@@ -4,52 +4,52 @@ import { Card } from "@/components/ui/Card";
 import type { AudiobookChapter } from "../types";
 
 interface ChapterListProps {
-  chapters: AudiobookChapter[];
-  onSeekToChapter: (startTime: number) => void;
-  formatTime: (seconds: number) => string;
+    chapters: AudiobookChapter[];
+    onSeekToChapter: (startTime: number) => void;
+    formatTime: (seconds: number) => string;
 }
 
 /**
  * Renders the ChapterList component.
  */
 export function ChapterList({
-  chapters,
-  onSeekToChapter,
-  formatTime,
+    chapters,
+    onSeekToChapter,
+    formatTime,
 }: ChapterListProps) {
-  // Hide if >50 chapters (likely multi-file audiobook)
-  if (!chapters || chapters.length === 0 || chapters.length > 50) {
-    return null;
-  }
+    // Hide if >50 chapters (likely multi-file audiobook)
+    if (!chapters || chapters.length === 0 || chapters.length > 50) {
+        return null;
+    }
 
-  return (
-    <section>
-      <h2 className="text-2xl md:text-3xl font-bold mb-6">Chapters</h2>
-      <Card className="p-6">
-        <div className="space-y-2">
-          {chapters.map((chapter, index) => (
-            <button
-              key={chapter.id}
-              onClick={() => onSeekToChapter(chapter.start)}
-              className="w-full text-left p-3 rounded-md hover:bg-surface-hover transition-colors group"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-sm text-gray-400 mr-2">
-                    {index + 1}.
-                  </span>
-                  <span className="text-sm text-white group-hover:text-ai-hover">
-                    {chapter.title}
-                  </span>
+    return (
+        <section>
+            <h2 className="text-2xl md:text-3xl font-bold mb-6">Chapters</h2>
+            <Card className="p-6">
+                <div className="space-y-2">
+                    {chapters.map((chapter, index) => (
+                        <button
+                            key={chapter.id}
+                            onClick={() => onSeekToChapter(chapter.start)}
+                            className="w-full text-left p-3 rounded-md hover:bg-surface-hover transition-colors group"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="text-sm text-gray-400 mr-2">
+                                        {index + 1}.
+                                    </span>
+                                    <span className="text-sm text-white group-hover:text-ai-hover">
+                                        {chapter.title}
+                                    </span>
+                                </div>
+                                <span className="text-xs text-gray-400">
+                                    {formatTime(chapter.start)}
+                                </span>
+                            </div>
+                        </button>
+                    ))}
                 </div>
-                <span className="text-xs text-gray-400">
-                  {formatTime(chapter.start)}
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </Card>
-    </section>
-  );
+            </Card>
+        </section>
+    );
 }

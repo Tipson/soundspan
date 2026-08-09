@@ -1,4 +1,8 @@
-import express, { type NextFunction, type Request, type Response } from "express";
+import express, {
+    type NextFunction,
+    type Request,
+    type Response,
+} from "express";
 import request from "supertest";
 
 type AuthFailureMode = "ok" | "unauthorized" | "forbidden";
@@ -12,7 +16,7 @@ const mockRequireAuth = jest.fn(
         }
 
         return next();
-    }
+    },
 );
 
 const mockRequireAdmin = jest.fn(
@@ -22,7 +26,7 @@ const mockRequireAdmin = jest.fn(
         }
 
         return next();
-    }
+    },
 );
 
 const mockPrisma = {
@@ -161,12 +165,15 @@ describe("admin routes", () => {
         expect(response.body).toEqual({
             error: "Failed to load library health records",
         });
-        expect(mockLoggerError).toHaveBeenCalledWith("Get library health error:", error);
+        expect(mockLoggerError).toHaveBeenCalledWith(
+            "Get library health error:",
+            error,
+        );
     });
 
     it("DELETE /api/admin/library-health/:recordId deletes the specified record", async () => {
         const response = await request(app).delete(
-            "/api/admin/library-health/record-1"
+            "/api/admin/library-health/record-1",
         );
 
         expect(response.status).toBe(200);
@@ -182,7 +189,7 @@ describe("admin routes", () => {
         mockDelete.mockRejectedValueOnce({ code: "P2025" });
 
         const response = await request(app).delete(
-            "/api/admin/library-health/missing-record"
+            "/api/admin/library-health/missing-record",
         );
 
         expect(response.status).toBe(404);
@@ -207,7 +214,9 @@ describe("admin routes", () => {
             const unauthorizedResponse = await request(app)[method](path);
 
             expect(unauthorizedResponse.status).toBe(401);
-            expect(unauthorizedResponse.body).toEqual({ error: "Unauthorized" });
+            expect(unauthorizedResponse.body).toEqual({
+                error: "Unauthorized",
+            });
             expect(mockRequireAuth).toHaveBeenCalled();
             expect(mockRequireAdmin).not.toHaveBeenCalled();
             expect(mockFindMany).not.toHaveBeenCalled();
@@ -226,6 +235,6 @@ describe("admin routes", () => {
             expect(mockFindMany).not.toHaveBeenCalled();
             expect(mockCount).not.toHaveBeenCalled();
             expect(mockDelete).not.toHaveBeenCalled();
-        }
+        },
     );
 });

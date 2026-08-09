@@ -101,7 +101,8 @@ export function SyncedLyrics({
 
     const currentTimeMs = currentTime * 1000;
     const activeTimeMs = Math.max(0, currentTimeMs + LYRICS_HIGHLIGHT_LEAD_MS);
-    const activeIndex = lines.length > 0 ? findActiveLine(lines, activeTimeMs) : -1;
+    const activeIndex =
+        lines.length > 0 ? findActiveLine(lines, activeTimeMs) : -1;
 
     // Handle user scroll detection
     const handleScroll = useCallback(() => {
@@ -123,7 +124,8 @@ export function SyncedLyrics({
 
     // Auto-scroll to active line
     useEffect(() => {
-        if (userScrolling || !activeLineRef.current || !containerRef.current) return;
+        if (userScrolling || !activeLineRef.current || !containerRef.current)
+            return;
 
         lastAutoScrollRef.current = Date.now();
         activeLineRef.current.scrollIntoView({
@@ -148,7 +150,7 @@ export function SyncedLyrics({
                 onSeek(timeMs / 1000);
             }
         },
-        [onSeek]
+        [onSeek],
     );
 
     // No lyrics at all
@@ -157,7 +159,7 @@ export function SyncedLyrics({
             <div
                 className={cn(
                     "flex items-center justify-center h-full text-gray-400",
-                    className
+                    className,
                 )}
             >
                 <p className="text-sm">No lyrics available</p>
@@ -172,7 +174,7 @@ export function SyncedLyrics({
                 ref={containerRef}
                 className={cn(
                     "overflow-y-auto h-full px-4 py-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent",
-                    className
+                    className,
                 )}
             >
                 <div className="space-y-2 max-w-3xl mx-auto">
@@ -181,7 +183,7 @@ export function SyncedLyrics({
                             key={`${i}-${line}`}
                             className={cn(
                                 "text-base text-gray-300 leading-relaxed transition-colors text-center",
-                                line.trim() === "" && "h-4"
+                                line.trim() === "" && "h-4",
                             )}
                         >
                             {line || "\u00A0"}
@@ -199,7 +201,7 @@ export function SyncedLyrics({
             onScroll={handleScroll}
             className={cn(
                 "overflow-y-auto h-full px-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent",
-                className
+                className,
             )}
         >
             {/* Top padding so first line can be centered */}
@@ -215,15 +217,21 @@ export function SyncedLyrics({
                         <div
                             key={`${line.time}-${i}`}
                             ref={isActive ? activeLineRef : undefined}
-                            onClick={() => !isEmpty && handleLineClick(line.time)}
+                            onClick={() =>
+                                !isEmpty && handleLineClick(line.time)
+                            }
                             className={cn(
                                 "py-1.5 transition-all duration-300 cursor-pointer rounded-lg px-2 text-center",
                                 isEmpty && "h-6 cursor-default",
                                 !isEmpty && "hover:bg-white/5",
                                 isActive &&
                                     "text-white text-lg font-semibold scale-[1.02] origin-center",
-                                isPast && !isActive && "text-gray-400 text-base",
-                                !isPast && !isActive && "text-gray-400/60 text-base"
+                                isPast &&
+                                    !isActive &&
+                                    "text-gray-400 text-base",
+                                !isPast &&
+                                    !isActive &&
+                                    "text-gray-400/60 text-base",
                             )}
                         >
                             {line.text || "\u00A0"}

@@ -62,13 +62,10 @@ jest.mock("../../utils/redis", () => ({
 
 import router from "../mixes";
 
-function getHandler(
-    path: string,
-    method: "get" | "post" | "put" | "delete"
-) {
+function getHandler(path: string, method: "get" | "post" | "put" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -167,7 +164,7 @@ describe("mixes route runtime", () => {
         expect(unauthorizedRes.statusCode).toBe(401);
 
         redisClient.get.mockResolvedValueOnce(
-            JSON.stringify([{ id: "cached", trackIds: [], trackCount: 0 }])
+            JSON.stringify([{ id: "cached", trackIds: [], trackCount: 0 }]),
         );
         const cachedReq = { user: { id: "u1" } } as any;
         const cachedRes = createRes();
@@ -180,9 +177,9 @@ describe("mixes route runtime", () => {
         const generatedRes = createRes();
         await getMixes(generatedReq, generatedRes);
         expect(generatedRes.statusCode).toBe(200);
-        expect(programmaticPlaylistService.generateAllMixes).toHaveBeenCalledWith(
-            "u1"
-        );
+        expect(
+            programmaticPlaylistService.generateAllMixes,
+        ).toHaveBeenCalledWith("u1");
         expect(redisClient.setEx).toHaveBeenCalled();
     });
 
@@ -200,14 +197,24 @@ describe("mixes route runtime", () => {
         await generateMood(invalidParamReq, invalidParamRes);
         expect(invalidParamRes.statusCode).toBe(400);
 
-        programmaticPlaylistService.generateMoodOnDemand.mockResolvedValueOnce(null);
-        const noMixReq = { user: { id: "u1" }, body: { energy: { min: 0.5 } } } as any;
+        programmaticPlaylistService.generateMoodOnDemand.mockResolvedValueOnce(
+            null,
+        );
+        const noMixReq = {
+            user: { id: "u1" },
+            body: { energy: { min: 0.5 } },
+        } as any;
         const noMixRes = createRes();
         await generateMood(noMixReq, noMixRes);
         expect(noMixRes.statusCode).toBe(400);
-        expect(noMixRes.body.error).toBe("Not enough tracks matching your criteria");
+        expect(noMixRes.body.error).toBe(
+            "Not enough tracks matching your criteria",
+        );
 
-        const okReq = { user: { id: "u1" }, body: { energy: { min: 0.5 } } } as any;
+        const okReq = {
+            user: { id: "u1" },
+            body: { energy: { min: 0.5 } },
+        } as any;
         const okRes = createRes();
         await generateMood(okReq, okRes);
         expect(okRes.statusCode).toBe(200);
@@ -221,7 +228,9 @@ describe("mixes route runtime", () => {
 
         expect(res.statusCode).toBe(200);
         expect(Array.isArray(res.body)).toBe(true);
-        expect(res.body.some((preset: any) => preset.id === "happy")).toBe(true);
+        expect(res.body.some((preset: any) => preset.id === "happy")).toBe(
+            true,
+        );
     });
 
     it("saves mood preferences and invalidates cache", async () => {
@@ -309,7 +318,10 @@ describe("mixes route runtime", () => {
 
         const unauthorizedBackfillReq = {} as any;
         const unauthorizedBackfillRes = createRes();
-        await backfillMoodBuckets(unauthorizedBackfillReq, unauthorizedBackfillRes);
+        await backfillMoodBuckets(
+            unauthorizedBackfillReq,
+            unauthorizedBackfillRes,
+        );
         expect(unauthorizedBackfillRes.statusCode).toBe(401);
 
         const okBackfillReq = { user: { id: "admin-1" } } as any;
@@ -333,12 +345,14 @@ describe("mixes route runtime", () => {
         const refreshRes = createRes();
         await refreshMixes(refreshReq, refreshRes);
         expect(refreshRes.statusCode).toBe(200);
-        expect(programmaticPlaylistService.generateAllMixes).toHaveBeenCalledWith(
-            "u1",
-            true
-        );
+        expect(
+            programmaticPlaylistService.generateAllMixes,
+        ).toHaveBeenCalledWith("u1", true);
 
-        const saveUnauthorizedReq = { params: { id: "mix-1" }, body: {} } as any;
+        const saveUnauthorizedReq = {
+            params: { id: "mix-1" },
+            body: {},
+        } as any;
         const saveUnauthorizedRes = createRes();
         await saveMixAsPlaylist(saveUnauthorizedReq, saveUnauthorizedRes);
         expect(saveUnauthorizedRes.statusCode).toBe(401);
@@ -354,7 +368,9 @@ describe("mixes route runtime", () => {
         expect(saveMissingRes.statusCode).toBe(404);
 
         redisClient.get.mockResolvedValueOnce(
-            JSON.stringify([{ id: "mix-1", name: "Mix One", trackIds: ["t-1"] }])
+            JSON.stringify([
+                { id: "mix-1", name: "Mix One", trackIds: ["t-1"] },
+            ]),
         );
         prisma.playlist.findFirst.mockResolvedValueOnce({
             id: "pl-existing",
@@ -372,7 +388,7 @@ describe("mixes route runtime", () => {
         redisClient.get.mockResolvedValueOnce(
             JSON.stringify([
                 { id: "mix-1", name: "Mix One", trackIds: ["t-1", "t-2"] },
-            ])
+            ]),
         );
         prisma.playlist.findFirst.mockResolvedValueOnce(null);
         const saveOkReq = {
@@ -408,12 +424,18 @@ describe("mixes route runtime", () => {
                     trackIds: ["t-2", "t-1"],
                     trackCount: 2,
                 },
-            ])
+            ]),
         );
-        const singleReq = { user: { id: "u1" }, params: { id: "mix-1" } } as any;
+        const singleReq = {
+            user: { id: "u1" },
+            params: { id: "mix-1" },
+        } as any;
         const singleRes = createRes();
         await getSingleMix(singleReq, singleRes);
         expect(singleRes.statusCode).toBe(200);
-        expect(singleRes.body.tracks.map((t: any) => t.id)).toEqual(["t-2", "t-1"]);
+        expect(singleRes.body.tracks.map((t: any) => t.id)).toEqual([
+            "t-2",
+            "t-1",
+        ]);
     });
 });

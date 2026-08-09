@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-    resolveLocalAuthoritativeRecovery,
-} from "../../lib/audio-engine/recoveryPolicy";
+import { resolveLocalAuthoritativeRecovery } from "../../lib/audio-engine/recoveryPolicy";
 
 test("recovery policy keeps local player as authority over server hints", () => {
     const decision = resolveLocalAuthoritativeRecovery(
@@ -39,12 +37,10 @@ test("recovery policy uses server resume when local resume is zero", () => {
 });
 
 test("recovery policy clamps local position to non-negative when server has no resume", () => {
-    const decision = resolveLocalAuthoritativeRecovery(
-        {
-            positionSec: -7,
-            shouldPlay: true,
-        },
-    );
+    const decision = resolveLocalAuthoritativeRecovery({
+        positionSec: -7,
+        shouldPlay: true,
+    });
 
     assert.equal(decision.resumeAtSec, 0);
     assert.equal(decision.shouldPlay, true);

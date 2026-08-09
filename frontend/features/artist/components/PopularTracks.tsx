@@ -35,7 +35,9 @@ function toRowItem(track: Track): TrackRowItem {
         displayTitle: track.displayTitle,
         artistName: track.artist?.name ?? "",
         duration: track.duration,
-        coverArtUrl: track.album?.coverArt ? api.getCoverArtUrl(track.album.coverArt, 80) : null,
+        coverArtUrl: track.album?.coverArt
+            ? api.getCoverArtUrl(track.album.coverArt, 80)
+            : null,
     };
 }
 
@@ -51,13 +53,19 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
 }) => {
     const [expanded, setExpanded] = useState(false);
     const canExpand = tracks.length > POPULAR_COLLAPSED_COUNT;
-    const visibleTracks = expanded ? tracks : tracks.slice(0, POPULAR_COLLAPSED_COUNT);
+    const visibleTracks = expanded
+        ? tracks
+        : tracks.slice(0, POPULAR_COLLAPSED_COUNT);
 
     const handlePlay = useCallback(
         (track: Track) => {
-            const isYtMusic = track.streamSource === "youtube" && !!track.youtubeVideoId;
-            const isTidalTrack = track.streamSource === "tidal" && !!track.tidalTrackId;
-            const hasLocalFile = typeof track.filePath === "string" && track.filePath.trim().length > 0;
+            const isYtMusic =
+                track.streamSource === "youtube" && !!track.youtubeVideoId;
+            const isTidalTrack =
+                track.streamSource === "tidal" && !!track.tidalTrackId;
+            const hasLocalFile =
+                typeof track.filePath === "string" &&
+                track.filePath.trim().length > 0;
             const isPlayable = hasLocalFile || isTidalTrack || isYtMusic;
 
             if (!isPlayable) return;
@@ -68,12 +76,24 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
 
     const rowSlots = useCallback(
         (track: Track, _index: number, _state: RowState): TrackRowSlots => {
-            const isYtMusic = track.streamSource === "youtube" && !!track.youtubeVideoId;
-            const isTidalTrack = track.streamSource === "tidal" && !!track.tidalTrackId;
-            const hasLocalFile = typeof track.filePath === "string" && track.filePath.trim().length > 0;
+            const isYtMusic =
+                track.streamSource === "youtube" && !!track.youtubeVideoId;
+            const isTidalTrack =
+                track.streamSource === "tidal" && !!track.tidalTrackId;
+            const hasLocalFile =
+                typeof track.filePath === "string" &&
+                track.filePath.trim().length > 0;
             const isPlayable = hasLocalFile || isTidalTrack || isYtMusic;
-            const isUnowned = !track.album?.id || !track.album?.title || track.album.title === "Unknown Album";
-            const isAwaitingProviderMatch = isProviderMatching && isUnowned && !hasLocalFile && !isTidalTrack && !isYtMusic;
+            const isUnowned =
+                !track.album?.id ||
+                !track.album?.title ||
+                track.album.title === "Unknown Album";
+            const isAwaitingProviderMatch =
+                isProviderMatching &&
+                isUnowned &&
+                !hasLocalFile &&
+                !isTidalTrack &&
+                !isYtMusic;
 
             return {
                 titleBadges: (
@@ -85,16 +105,20 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                 ),
                 middleColumns: (
                     <div className="hidden md:flex items-center text-sm text-gray-400">
-                        {track.playCount !== undefined && track.playCount > 0 && (
-                            <span className="flex items-center gap-1">
-                                <Play className="w-3 h-3" />
-                                {formatNumber(track.playCount)}
-                            </span>
-                        )}
+                        {track.playCount !== undefined &&
+                            track.playCount > 0 && (
+                                <span className="flex items-center gap-1">
+                                    <Play className="w-3 h-3" />
+                                    {formatNumber(track.playCount)}
+                                </span>
+                            )}
                     </div>
                 ),
                 trailingActions: (
-                    <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div
+                        className="flex items-center justify-end gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         {track.duration > 0 && (
                             <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
                                 {formatTime(track.duration)}
@@ -112,16 +136,32 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                 track={{
                                     id: track.id,
                                     title: track.displayTitle ?? track.title,
-                                    artist: { name: track.artist?.name ?? artist.name, id: track.artist?.id ?? artist.id },
-                                    album: track.album ? { title: track.album.title ?? "", id: track.album.id, coverArt: track.album.coverArt } : { title: "" },
+                                    artist: {
+                                        name: track.artist?.name ?? artist.name,
+                                        id: track.artist?.id ?? artist.id,
+                                    },
+                                    album: track.album
+                                        ? {
+                                              title: track.album.title ?? "",
+                                              id: track.album.id,
+                                              coverArt: track.album.coverArt,
+                                          }
+                                        : { title: "" },
                                     duration: track.duration,
-                                    streamSource: track.streamSource === "tidal" || track.streamSource === "youtube" ? track.streamSource : undefined,
+                                    streamSource:
+                                        track.streamSource === "tidal" ||
+                                        track.streamSource === "youtube"
+                                            ? track.streamSource
+                                            : undefined,
                                 }}
                             />
                         )}
                     </div>
                 ),
-                rowClassName: !isPlayable && !isAwaitingProviderMatch ? "opacity-50" : undefined,
+                rowClassName:
+                    !isPlayable && !isAwaitingProviderMatch
+                        ? "opacity-50"
+                        : undefined,
             };
         },
         [artist, isProviderMatching],

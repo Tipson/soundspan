@@ -21,7 +21,7 @@ import {
 } from "../youtubeDownload";
 
 function jobStatus(
-    overrides: Partial<YtDownloadJobStatus>
+    overrides: Partial<YtDownloadJobStatus>,
 ): YtDownloadJobStatus {
     return {
         jobId: "job-1",
@@ -57,7 +57,7 @@ describe("watchYouTubeDownloadJobUntilTerminal", () => {
         const outcome = await watchYouTubeDownloadJobUntilTerminal(
             "job-1",
             getStatus,
-            { intervalMs: 1, sleep: immediateSleep }
+            { intervalMs: 1, sleep: immediateSleep },
         );
 
         expect(outcome).toBe("completed");
@@ -70,13 +70,13 @@ describe("watchYouTubeDownloadJobUntilTerminal", () => {
             .fn()
             .mockResolvedValueOnce(jobStatus({ status: "queued" }))
             .mockResolvedValueOnce(
-                jobStatus({ status: "failed", error: "Video unavailable" })
+                jobStatus({ status: "failed", error: "Video unavailable" }),
             );
 
         const outcome = await watchYouTubeDownloadJobUntilTerminal(
             "job-1",
             getStatus,
-            { intervalMs: 1, sleep: immediateSleep }
+            { intervalMs: 1, sleep: immediateSleep },
         );
 
         expect(outcome).toBe("failed");
@@ -88,7 +88,7 @@ describe("watchYouTubeDownloadJobUntilTerminal", () => {
         const outcome = await watchYouTubeDownloadJobUntilTerminal(
             "job-1",
             getStatus,
-            { intervalMs: 1, sleep: immediateSleep }
+            { intervalMs: 1, sleep: immediateSleep },
         );
 
         expect(outcome).toBe("gone");
@@ -104,7 +104,7 @@ describe("watchYouTubeDownloadJobUntilTerminal", () => {
         const outcome = await watchYouTubeDownloadJobUntilTerminal(
             "job-1",
             getStatus,
-            { intervalMs: 1, sleep: immediateSleep }
+            { intervalMs: 1, sleep: immediateSleep },
         );
 
         expect(outcome).toBe("completed");
@@ -119,7 +119,7 @@ describe("watchYouTubeDownloadJobUntilTerminal", () => {
         const outcome = await watchYouTubeDownloadJobUntilTerminal(
             "job-1",
             getStatus,
-            { intervalMs: 10, timeoutMs: 25, sleep: immediateSleep }
+            { intervalMs: 10, timeoutMs: 25, sleep: immediateSleep },
         );
 
         expect(outcome).toBe("timeout");

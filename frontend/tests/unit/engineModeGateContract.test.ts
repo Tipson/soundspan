@@ -27,13 +27,11 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const BANNED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
     {
         pattern: /resolveStreamingEngineMode\(\)\s*!==?=?\s*["']howler["']/,
-        reason:
-            'mode inequality against "howler" — use isSegmentedModeEnabled() (or the helper matching the mode you mean)',
+        reason: 'mode inequality against "howler" — use isSegmentedModeEnabled() (or the helper matching the mode you mean)',
     },
     {
         pattern: /!==\s*["']howler["']/,
-        reason:
-            'inequality against the "howler" mode literal — new modes silently satisfy this; use a semantic engine-mode helper',
+        reason: 'inequality against the "howler" mode literal — new modes silently satisfy this; use a semantic engine-mode helper',
     },
 ];
 

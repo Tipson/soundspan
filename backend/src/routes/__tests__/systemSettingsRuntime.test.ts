@@ -4,12 +4,14 @@ import { Request, Response } from "express";
 type AuthFailureMode = "ok" | "unauthorized" | "forbidden";
 const authFailureState = { mode: "ok" as AuthFailureMode };
 
-const mockRequireAuth = jest.fn(async (_req: Request, res: Response, next: () => void) => {
-    if (authFailureState.mode === "unauthorized") {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-    return next();
-});
+const mockRequireAuth = jest.fn(
+    async (_req: Request, res: Response, next: () => void) => {
+        if (authFailureState.mode === "unauthorized") {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        return next();
+    },
+);
 
 const mockRequireAdmin = jest.fn(
     async (_req: Request, res: Response, next: () => void) => {
@@ -17,7 +19,7 @@ const mockRequireAdmin = jest.fn(
             return res.status(403).json({ error: "Forbidden" });
         }
         return next();
-    }
+    },
 );
 
 jest.mock("../../middleware/auth", () => ({
@@ -140,16 +142,20 @@ import { tidalService } from "../../services/tidal";
 import { notificationService } from "../../services/notificationService";
 import { redisClient } from "../../utils/redis";
 
-const mockSystemSettingsFindUnique = prisma.systemSettings.findUnique as unknown as jest.Mock;
-const mockSystemSettingsCreate = prisma.systemSettings.create as unknown as jest.Mock;
-const mockSystemSettingsUpsert = prisma.systemSettings.upsert as unknown as jest.Mock;
-const mockAudiobookProgressDeleteMany =
-    prisma.audiobookProgress.deleteMany as unknown as jest.Mock;
+const mockSystemSettingsFindUnique = prisma.systemSettings
+    .findUnique as unknown as jest.Mock;
+const mockSystemSettingsCreate = prisma.systemSettings
+    .create as unknown as jest.Mock;
+const mockSystemSettingsUpsert = prisma.systemSettings
+    .upsert as unknown as jest.Mock;
+const mockAudiobookProgressDeleteMany = prisma.audiobookProgress
+    .deleteMany as unknown as jest.Mock;
 const mockAxiosGet = axios.get as jest.Mock;
 const mockAxiosPost = axios.post as jest.Mock;
 const mockAxiosPut = axios.put as jest.Mock;
 const mockWriteEnvFile = writeEnvFile as jest.Mock;
-const mockInvalidateSystemSettingsCache = invalidateSystemSettingsCache as jest.Mock;
+const mockInvalidateSystemSettingsCache =
+    invalidateSystemSettingsCache as jest.Mock;
 const mockQueueCleaner = queueCleaner as jest.Mocked<typeof queueCleaner>;
 const mockDecrypt = decrypt as jest.Mock;
 const mockLastFmService = lastFmService as jest.Mocked<typeof lastFmService>;
@@ -162,11 +168,11 @@ const mockSlskClientConnect = mockSlskClient.connect as jest.Mock;
 
 function getRouteHandler(
     path: string,
-    method: "get" | "post" | "patch" | "delete"
+    method: "get" | "post" | "patch" | "delete",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -193,11 +199,7 @@ function createRes() {
 const authMiddleware = (router as any).stack[0].handle;
 const adminMiddleware = (router as any).stack[1].handle;
 
-async function runWithAuth(
-    req: any,
-    res: any,
-    handler: () => Promise<void>
-) {
+async function runWithAuth(req: any, res: any, handler: () => Promise<void>) {
     await authMiddleware(req, res, async () => {
         await adminMiddleware(req, res, async () => {
             await handler();
@@ -213,7 +215,10 @@ describe("systemSettings runtime routes", () => {
     const testFanartHandler = getRouteHandler("/test-fanart", "post");
     const testLastfmHandler = getRouteHandler("/test-lastfm", "post");
     const testSoulseekHandler = getRouteHandler("/test-soulseek", "post");
-    const testAudiobookshelfHandler = getRouteHandler("/test-audiobookshelf", "post");
+    const testAudiobookshelfHandler = getRouteHandler(
+        "/test-audiobookshelf",
+        "post",
+    );
     const testSpotifyHandler = getRouteHandler("/test-spotify", "post");
     const testTidalHandler = getRouteHandler("/test-tidal", "post");
     const tidalDeviceHandler = getRouteHandler("/tidal-auth/device", "post");
@@ -267,7 +272,10 @@ describe("systemSettings runtime routes", () => {
             lastRunAt: "2026-02-17T00:00:00.000Z",
         } as any);
         mockTidalService.isSidecarHealthy.mockResolvedValue(true);
-        mockTidalService.verifySession.mockResolvedValue({ valid: true, userId: "tidal-user" } as any);
+        mockTidalService.verifySession.mockResolvedValue({
+            valid: true,
+            userId: "tidal-user",
+        } as any);
         mockTidalService.initiateDeviceAuth.mockResolvedValue({
             deviceCode: "device-code",
             userCode: "ABCD",
@@ -281,7 +289,9 @@ describe("systemSettings runtime routes", () => {
             username: "tidal-username",
         } as any);
         mockTidalService.saveTokens.mockResolvedValue(undefined as any);
-        mockNotificationService.notifySystem.mockResolvedValue(undefined as any);
+        mockNotificationService.notifySystem.mockResolvedValue(
+            undefined as any,
+        );
         mockRedisClient.keys.mockResolvedValue([]);
         mockRedisClient.del.mockResolvedValue(1 as any);
         mockAxiosGet.mockResolvedValue({ data: { version: "2.0.0" } });
@@ -290,10 +300,10 @@ describe("systemSettings runtime routes", () => {
         mockSlskClientConnect.mockImplementation(
             (
                 _options: Record<string, unknown>,
-                cb: (err: Error | null, client: unknown) => void
+                cb: (err: Error | null, client: unknown) => void,
             ) => {
                 cb(null, {});
-            }
+            },
         );
     });
 
@@ -417,14 +427,14 @@ describe("systemSettings runtime routes", () => {
                 FANART_API_KEY: "dec:stored-fanart-key",
                 OPENAI_API_KEY: "dec:stored-openai-key",
                 AUDIOBOOKSHELF_API_KEY: "dec:stored-abs-key",
-            })
+            }),
         );
         // Webhook auto-config runs with the stored key, not the empty form value
         expect(mockAxiosGet).toHaveBeenCalledWith(
             "http://lidarr:8686/api/v1/notification",
             expect.objectContaining({
                 headers: { "X-Api-Key": "dec:stored-lidarr-key" },
-            })
+            }),
         );
     });
 
@@ -444,7 +454,7 @@ describe("systemSettings runtime routes", () => {
 
         expect(res.statusCode).toBe(200);
         expect(mockWriteEnvFile).toHaveBeenCalledWith(
-            expect.objectContaining({ OPENAI_API_KEY: null })
+            expect.objectContaining({ OPENAI_API_KEY: null }),
         );
     });
 
@@ -554,7 +564,7 @@ describe("systemSettings runtime routes", () => {
                     fanartApiKey: "enc:fanart-key",
                     ytMusicClientSecret: "enc:yt-secret",
                 }),
-            })
+            }),
         );
         // TIDAL credentials are managed exclusively by the /tidal-auth flow
         const savedUpdate = mockSystemSettingsUpsert.mock.calls[0][0].update;
@@ -599,7 +609,12 @@ describe("systemSettings runtime routes", () => {
                     id: 15,
                     implementation: "Webhook",
                     name: "Legacy Hook",
-                    fields: [{ name: "url", value: "https://old/api/webhooks/lidarr" }],
+                    fields: [
+                        {
+                            name: "url",
+                            value: "https://old/api/webhooks/lidarr",
+                        },
+                    ],
                 },
             ],
         });
@@ -720,7 +735,7 @@ describe("systemSettings runtime routes", () => {
 
     it("continues saving when audiobooks cleanup fails", async () => {
         mockAudiobookProgressDeleteMany.mockRejectedValueOnce(
-            new Error("cleanup unavailable")
+            new Error("cleanup unavailable"),
         );
 
         const req = {
@@ -739,7 +754,9 @@ describe("systemSettings runtime routes", () => {
     });
 
     it("continues saving when environment sync is skipped by non-critical reason", async () => {
-        mockWriteEnvFile.mockRejectedValueOnce(new Error("filesystem unavailable"));
+        mockWriteEnvFile.mockRejectedValueOnce(
+            new Error("filesystem unavailable"),
+        );
 
         const req = {
             user: { id: "admin-1" },
@@ -758,7 +775,7 @@ describe("systemSettings runtime routes", () => {
 
     it("continues saving when Last.fm refresh key fails", async () => {
         mockLastFmService.refreshApiKey.mockRejectedValueOnce(
-            new Error("api down")
+            new Error("api down"),
         );
 
         const req = {
@@ -790,7 +807,7 @@ describe("systemSettings runtime routes", () => {
 
     it("continues successfully when env sync is skipped", async () => {
         mockWriteEnvFile.mockRejectedValue(
-            new EnvFileSyncSkippedError("containerized env")
+            new EnvFileSyncSkippedError("containerized env"),
         );
 
         const req = {
@@ -805,7 +822,9 @@ describe("systemSettings runtime routes", () => {
     });
 
     it("tests Lidarr endpoint success and connection-refused failure mapping", async () => {
-        const okReq = { body: { url: "http://lidarr:8686/", apiKey: "key" } } as any;
+        const okReq = {
+            body: { url: "http://lidarr:8686/", apiKey: "key" },
+        } as any;
         const okRes = createRes();
         await testLidarrHandler(okReq, okRes);
         expect(okRes.statusCode).toBe(200);
@@ -815,7 +834,9 @@ describe("systemSettings runtime routes", () => {
             code: "ECONNREFUSED",
             message: "connect failed",
         });
-        const failReq = { body: { url: "http://lidarr:8686", apiKey: "key" } } as any;
+        const failReq = {
+            body: { url: "http://lidarr:8686", apiKey: "key" },
+        } as any;
         const failRes = createRes();
         await testLidarrHandler(failReq, failRes);
         expect(failRes.statusCode).toBe(500);
@@ -888,7 +909,9 @@ describe("systemSettings runtime routes", () => {
             response: { status: 401 },
         } as any);
 
-        const req = { body: { url: "http://lidarr:8686", apiKey: "bad-key" } } as any;
+        const req = {
+            body: { url: "http://lidarr:8686", apiKey: "bad-key" },
+        } as any;
         const res = createRes();
 
         await testLidarrHandler(req, res);
@@ -906,7 +929,9 @@ describe("systemSettings runtime routes", () => {
             message: "request failed",
         } as any);
 
-        const req = { body: { url: "http://lidarr:8686", apiKey: "key" } } as any;
+        const req = {
+            body: { url: "http://lidarr:8686", apiKey: "key" },
+        } as any;
         const res = createRes();
 
         await testLidarrHandler(req, res);
@@ -931,17 +956,17 @@ describe("systemSettings runtime routes", () => {
         mockSlskClientConnect.mockImplementation(
             (
                 _options: Record<string, unknown>,
-                cb: (err: Error | null, client: unknown) => void
+                cb: (err: Error | null, client: unknown) => void,
             ) => {
                 cb(new Error("invalid credentials"), null);
-            }
+            },
         );
         const failReq = { body: { username: "u", password: "bad" } } as any;
         const failRes = createRes();
         await testSoulseekHandler(failReq, failRes);
         expect(failRes.statusCode).toBe(401);
         expect(failRes.body.error).toBe(
-            "Invalid Soulseek credentials or connection failed"
+            "Invalid Soulseek credentials or connection failed",
         );
     });
 
@@ -968,7 +993,7 @@ describe("systemSettings runtime routes", () => {
 
     it("returns 500 when getting settings fails", async () => {
         mockSystemSettingsFindUnique.mockRejectedValueOnce(
-            new Error("database unavailable")
+            new Error("database unavailable"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -980,7 +1005,9 @@ describe("systemSettings runtime routes", () => {
     });
 
     it("returns 500 when saving settings fails", async () => {
-        mockSystemSettingsUpsert.mockRejectedValueOnce(new Error("write failed"));
+        mockSystemSettingsUpsert.mockRejectedValueOnce(
+            new Error("write failed"),
+        );
 
         const req = { user: { id: "admin-1" }, body: {} } as any;
         const res = createRes();
@@ -992,7 +1019,7 @@ describe("systemSettings runtime routes", () => {
 
     it("returns 500 when cache clear fails", async () => {
         mockRedisClient.keys.mockRejectedValueOnce(
-            new Error("redis unavailable")
+            new Error("redis unavailable"),
         );
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -1007,7 +1034,9 @@ describe("systemSettings runtime routes", () => {
         await testOpenAiHandler(openAiMissingReq, openAiMissingRes);
         expect(openAiMissingRes.statusCode).toBe(400);
 
-        const openAiReq = { body: { apiKey: "openai-key", model: "gpt-4o-mini" } } as any;
+        const openAiReq = {
+            body: { apiKey: "openai-key", model: "gpt-4o-mini" },
+        } as any;
         const openAiRes = createRes();
         await testOpenAiHandler(openAiReq, openAiRes);
         expect(openAiRes.statusCode).toBe(200);
@@ -1019,7 +1048,9 @@ describe("systemSettings runtime routes", () => {
         await testFanartHandler(fanartReq, fanartRes);
         expect(fanartRes.statusCode).toBe(401);
 
-        mockAxiosGet.mockResolvedValueOnce({ data: { artist: { name: "The Beatles" } } });
+        mockAxiosGet.mockResolvedValueOnce({
+            data: { artist: { name: "The Beatles" } },
+        });
         const lastfmReq = { body: { lastfmApiKey: "lastfm-key" } } as any;
         const lastfmRes = createRes();
         await testLastfmHandler(lastfmReq, lastfmRes);
@@ -1034,9 +1065,14 @@ describe("systemSettings runtime routes", () => {
         expect(absRes.statusCode).toBe(200);
         expect(absRes.body.libraries).toBe(2);
 
-        mockAxiosPost.mockResolvedValueOnce({ data: { access_token: "spotify-token" } });
+        mockAxiosPost.mockResolvedValueOnce({
+            data: { access_token: "spotify-token" },
+        });
         const spotifyReq = {
-            body: { clientId: "spotify-client", clientSecret: "spotify-secret" },
+            body: {
+                clientId: "spotify-client",
+                clientSecret: "spotify-secret",
+            },
         } as any;
         const spotifyRes = createRes();
         await testSpotifyHandler(spotifyReq, spotifyRes);
@@ -1082,7 +1118,9 @@ describe("systemSettings runtime routes", () => {
             response: { data: { error: { message: "quota exceeded" } } },
         });
 
-        const req = { body: { apiKey: "openai-key", model: "gpt-4o-mini" } } as any;
+        const req = {
+            body: { apiKey: "openai-key", model: "gpt-4o-mini" },
+        } as any;
         const res = createRes();
 
         await testOpenAiHandler(req, res);
@@ -1134,7 +1172,9 @@ describe("systemSettings runtime routes", () => {
             message: "abs-down",
             response: { status: 500, data: "boom" },
         });
-        const absReq = { body: { url: "http://audiobookshelf:13378", apiKey: "abs-key" } } as any;
+        const absReq = {
+            body: { url: "http://audiobookshelf:13378", apiKey: "abs-key" },
+        } as any;
         const absRes = createRes();
         await testAudiobookshelfHandler(absReq, absRes);
         expect(absRes.statusCode).toBe(500);
@@ -1146,7 +1186,9 @@ describe("systemSettings runtime routes", () => {
             response: { status: 401 },
             message: "bad key",
         } as any);
-        const absInvalidReq = { body: { url: "http://audiobookshelf:13378", apiKey: "bad-key" } } as any;
+        const absInvalidReq = {
+            body: { url: "http://audiobookshelf:13378", apiKey: "bad-key" },
+        } as any;
         const absInvalidRes = createRes();
         await testAudiobookshelfHandler(absInvalidReq, absInvalidRes);
         expect(absInvalidRes.statusCode).toBe(401);
@@ -1255,7 +1297,7 @@ describe("systemSettings runtime routes", () => {
 
     it("handles TIDAL sidecar errors as failures", async () => {
         mockTidalService.isSidecarHealthy.mockRejectedValueOnce(
-            new Error("sidecar panic")
+            new Error("sidecar panic"),
         );
         const downReq = { body: {} } as any;
         const downRes = createRes();
@@ -1264,7 +1306,7 @@ describe("systemSettings runtime routes", () => {
         expect(downRes.body.error).toBe("Failed to test TIDAL connection");
 
         mockTidalService.isSidecarHealthy.mockRejectedValueOnce(
-            new Error("device sidecar panic")
+            new Error("device sidecar panic"),
         );
         const deviceRes = createRes();
         await tidalDeviceHandler({}, deviceRes);
@@ -1272,7 +1314,7 @@ describe("systemSettings runtime routes", () => {
         expect(deviceRes.body.error).toBe("Failed to initiate TIDAL auth");
 
         mockTidalService.pollDeviceAuth.mockRejectedValueOnce(
-            new Error("token panic")
+            new Error("token panic"),
         );
         const tokenReq = { body: { device_code: "device-code" } } as any;
         const tokenRes = createRes();
@@ -1364,12 +1406,14 @@ describe("systemSettings runtime routes", () => {
         expect(mockNotificationService.notifySystem).toHaveBeenCalledWith(
             "user-1",
             "Caches Cleared",
-            "Successfully cleared 2 cache entries"
+            "Successfully cleared 2 cache entries",
         );
     });
 
     it("returns 500 when queue cleaner start fails", async () => {
-        mockQueueCleaner.start.mockRejectedValueOnce(new Error("queue unavailable"));
+        mockQueueCleaner.start.mockRejectedValueOnce(
+            new Error("queue unavailable"),
+        );
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
         await queueStartHandler(req, res);

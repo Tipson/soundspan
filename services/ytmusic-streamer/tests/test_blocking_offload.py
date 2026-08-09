@@ -54,9 +54,7 @@ async def test_charts_offloaded_to_worker_thread(client, monkeypatch):
 
     captured = {}
     public_client = types.SimpleNamespace(
-        get_charts=lambda country: (
-            captured.__setitem__("t", threading.current_thread().name) or {}
-        )
+        get_charts=lambda country: captured.__setitem__("t", threading.current_thread().name) or {}
     )
     monkeypatch.setattr(app, "_get_public_ytmusic", lambda strategy: public_client)
 

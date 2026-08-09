@@ -1,24 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle } from "../ui";
+import {
+    SettingsSection,
+    SettingsRow,
+    SettingsInput,
+    SettingsToggle,
+} from "../ui";
 import { SystemSettings } from "../../types";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 
 interface AIServicesSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (
+        service: string,
+    ) => Promise<{ success: boolean; version?: string; error?: string }>;
     isTesting: boolean;
 }
 
 /**
  * Renders the AIServicesSection component.
  */
-export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIServicesSectionProps) {
-    const [fanartTestStatus, setFanartTestStatus] = useState<StatusType>("idle");
+export function AIServicesSection({
+    settings,
+    onUpdate,
+    onTest,
+    isTesting,
+}: AIServicesSectionProps) {
+    const [fanartTestStatus, setFanartTestStatus] =
+        useState<StatusType>("idle");
     const [fanartTestMessage, setFanartTestMessage] = useState("");
-    const [lastfmTestStatus, setLastfmTestStatus] = useState<StatusType>("idle");
+    const [lastfmTestStatus, setLastfmTestStatus] =
+        useState<StatusType>("idle");
     const [lastfmTestMessage, setLastfmTestMessage] = useState("");
 
     const handleFanartTest = async () => {
@@ -48,13 +62,13 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
     };
 
     return (
-        <SettingsSection 
-            id="ai-services" 
+        <SettingsSection
+            id="ai-services"
             title="Artwork Services"
             description="Enhance your library with high-quality artwork"
         >
             {/* Fanart.tv */}
-            <SettingsRow 
+            <SettingsRow
                 label="Enable Fanart.tv"
                 description="Enhanced artist and album artwork"
                 htmlFor="fanart-enabled"
@@ -86,7 +100,9 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
                                 className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
-                                {fanartTestStatus === "loading" ? "Testing..." : "Test Connection"}
+                                {fanartTestStatus === "loading"
+                                    ? "Testing..."
+                                    : "Test Connection"}
                             </button>
                             <InlineStatus
                                 status={fanartTestStatus}
@@ -102,10 +118,11 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="mb-4">
                     <p className="text-sm text-white/60">
-                        Last.fm is pre-configured with a default key. Add your own for higher rate limits.
+                        Last.fm is pre-configured with a default key. Add your
+                        own for higher rate limits.
                     </p>
                 </div>
-                
+
                 <SettingsRow label="Last.fm API Key (Optional)">
                     <SettingsInput
                         type="password"
@@ -125,7 +142,9 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
                                 className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
-                                {lastfmTestStatus === "loading" ? "Testing..." : "Test Connection"}
+                                {lastfmTestStatus === "loading"
+                                    ? "Testing..."
+                                    : "Test Connection"}
                             </button>
                             <InlineStatus
                                 status={lastfmTestStatus}

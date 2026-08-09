@@ -1,0 +1,19 @@
+# Configure locally with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style(contract): mechanical prettier format (no behavior change)
+1ce05a3eac86ec7254345c7450d2efbbc25575f2
+
+# style(backend): mechanical prettier format (no behavior change)
+b4264a8d148e8d013e276a4cfcecb3aa95750f1d
+
+# style(frontend): mechanical prettier format (no behavior change)
+590972e00eba54b184b86cad7078f97f26749b7f
+
+# style(python): mechanical ruff format for services sidecars
+dddc9a38db0978917c2251d2176086726923971b
+
+# style(scripts): mechanical prettier format for root scripts and json
+e43b7d02534c6787e26af611c7b85877d0924482
+
+# style: settle prettier edge-case drift to the pinned 3.8.2 output
+a90a4b9b0de9c41867137c673d932f38a6be0c32

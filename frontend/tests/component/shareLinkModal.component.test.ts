@@ -57,9 +57,8 @@ mock.module("@/lib/logger", {
 });
 
 test("ShareLinkModal renders track share fields when open", async () => {
-    const { ShareLinkModal } = await import(
-        "../../components/ui/ShareLinkModal"
-    );
+    const { ShareLinkModal } =
+        await import("../../components/ui/ShareLinkModal");
 
     const html = renderToStaticMarkup(
         React.createElement(ShareLinkModal, {
@@ -68,7 +67,7 @@ test("ShareLinkModal renders track share fields when open", async () => {
             resourceType: "track",
             resourceId: "track-1",
             resourceName: "Track One",
-        })
+        }),
     );
 
     assert.match(html, /Share Track/);
@@ -81,9 +80,8 @@ test("ShareLinkModal renders track share fields when open", async () => {
 });
 
 test("ShareLinkModal renders album share title when sharing albums", async () => {
-    const { ShareLinkModal } = await import(
-        "../../components/ui/ShareLinkModal"
-    );
+    const { ShareLinkModal } =
+        await import("../../components/ui/ShareLinkModal");
 
     const html = renderToStaticMarkup(
         React.createElement(ShareLinkModal, {
@@ -92,7 +90,7 @@ test("ShareLinkModal renders album share title when sharing albums", async () =>
             resourceType: "album",
             resourceId: "album-1",
             resourceName: "Album One",
-        })
+        }),
     );
 
     assert.match(html, /Share Album/);

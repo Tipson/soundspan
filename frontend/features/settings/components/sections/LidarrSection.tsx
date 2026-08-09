@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { SettingsRow, SettingsInput, SettingsToggle, IntegrationCard } from "../ui";
+import {
+    SettingsRow,
+    SettingsInput,
+    SettingsToggle,
+    IntegrationCard,
+} from "../ui";
 import { SystemSettings } from "../../types";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 import { Download } from "lucide-react";
@@ -9,14 +14,21 @@ import { Download } from "lucide-react";
 interface LidarrCardProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (
+        service: string,
+    ) => Promise<{ success: boolean; version?: string; error?: string }>;
     isTesting: boolean;
 }
 
 /**
  * Renders the LidarrCard component.
  */
-export function LidarrCard({ settings, onUpdate, onTest, isTesting }: LidarrCardProps) {
+export function LidarrCard({
+    settings,
+    onUpdate,
+    onTest,
+    isTesting,
+}: LidarrCardProps) {
     const [testStatus, setTestStatus] = useState<StatusType>("idle");
     const [testMessage, setTestMessage] = useState("");
 
@@ -33,10 +45,13 @@ export function LidarrCard({ settings, onUpdate, onTest, isTesting }: LidarrCard
         }
     };
 
-    const isConfigured = settings.lidarrEnabled && settings.lidarrUrl && settings.lidarrApiKey;
+    const isConfigured =
+        settings.lidarrEnabled && settings.lidarrUrl && settings.lidarrApiKey;
 
     const statusText = settings.lidarrEnabled
-        ? isConfigured ? "Enabled" : "Enabled — needs configuration"
+        ? isConfigured
+            ? "Enabled"
+            : "Enabled — needs configuration"
         : "Disabled";
 
     const statusColor: "green" | "gray" = isConfigured ? "green" : "gray";
@@ -81,11 +96,17 @@ export function LidarrCard({ settings, onUpdate, onTest, isTesting }: LidarrCard
                     <div className="inline-flex items-center gap-3">
                         <button
                             onClick={handleTest}
-                            disabled={isTesting || !settings.lidarrUrl || !settings.lidarrApiKey}
+                            disabled={
+                                isTesting ||
+                                !settings.lidarrUrl ||
+                                !settings.lidarrApiKey
+                            }
                             className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
-                            {testStatus === "loading" ? "Testing..." : "Test Connection"}
+                            {testStatus === "loading"
+                                ? "Testing..."
+                                : "Test Connection"}
                         </button>
                         <InlineStatus
                             status={testStatus}

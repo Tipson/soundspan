@@ -12,7 +12,7 @@ import {
 import type { M3UEntry } from "../../services/m3uParser";
 
 function makeCandidate(
-    overrides: Partial<LocalTrackCandidate>
+    overrides: Partial<LocalTrackCandidate>,
 ): LocalTrackCandidate {
     return {
         id: overrides.id ?? "candidate-1",
@@ -31,24 +31,28 @@ describe("trackMatching utilities", () => {
         });
 
         it("normalizes case, accents, punctuation, and whitespace", () => {
-            expect(normalizeString("  Café,   Déjà Vu!  ")).toBe("cafe deja vu");
+            expect(normalizeString("  Café,   Déjà Vu!  ")).toBe(
+                "cafe deja vu",
+            );
         });
 
         it("strips release suffixes and normalizes track titles", () => {
-            expect(normalizeTrackTitle("Song Name - 2011 Remastered Version")).toBe(
-                "song name"
-            );
+            expect(
+                normalizeTrackTitle("Song Name - 2011 Remastered Version"),
+            ).toBe("song name");
         });
 
         it("normalizes album names for matching", () => {
-            expect(normalizeAlbumForMatching(" Album Name (Deluxe Edition) ")).toBe(
-                "Album Name"
-            );
+            expect(
+                normalizeAlbumForMatching(" Album Name (Deluxe Edition) "),
+            ).toBe("Album Name");
         });
 
         it("removes live/bracket suffix patterns from raw titles", () => {
             expect(
-                stripTrackSuffix("Track Name (Live at Wembley 1986) [Remastered]")
+                stripTrackSuffix(
+                    "Track Name (Live at Wembley 1986) [Remastered]",
+                ),
             ).toBe("Track Name");
         });
     });
@@ -63,7 +67,9 @@ describe("trackMatching utilities", () => {
         });
 
         it("falls back to word-set similarity when strings are not substrings", () => {
-            expect(stringSimilarity("red blue green", "red green yellow")).toBe(50);
+            expect(stringSimilarity("red blue green", "red green yellow")).toBe(
+                50,
+            );
         });
     });
 
@@ -72,8 +78,8 @@ describe("trackMatching utilities", () => {
             expect(
                 matchTrackAgainstLibrary(
                     { artist: "Artist", title: "Track", album: "Album" },
-                    []
-                )
+                    [],
+                ),
             ).toBeNull();
         });
 
@@ -94,8 +100,8 @@ describe("trackMatching utilities", () => {
                         title: "Halo",
                         album: "I Am... Sasha Fierce",
                     },
-                    candidates
-                )
+                    candidates,
+                ),
             ).toEqual({
                 trackId: "exact-1",
                 matchType: "exact",
@@ -120,8 +126,8 @@ describe("trackMatching utilities", () => {
                         title: "Bohemian Rhapsody",
                         album: "Greatest Hits",
                     },
-                    candidates
-                )
+                    candidates,
+                ),
             ).toEqual({
                 trackId: "exact-2",
                 matchType: "exact",
@@ -146,8 +152,8 @@ describe("trackMatching utilities", () => {
                         title: "Bohemian Rhapsody",
                         album: "A Night at the Opera",
                     },
-                    candidates
-                )
+                    candidates,
+                ),
             ).toEqual({
                 trackId: "exact-3",
                 matchType: "exact",
@@ -172,8 +178,8 @@ describe("trackMatching utilities", () => {
                         title: "Song",
                         album: "()",
                     },
-                    candidates
-                )
+                    candidates,
+                ),
             ).toEqual({
                 trackId: "exact-4",
                 matchType: "exact",
@@ -200,8 +206,8 @@ describe("trackMatching utilities", () => {
             expect(
                 matchTrackAgainstLibrary(
                     { artist: "The Echoes", title: "Neon Lights" },
-                    candidates
-                )
+                    candidates,
+                ),
             ).toEqual({
                 trackId: "fuzzy-hit",
                 matchType: "fuzzy",
@@ -220,9 +226,12 @@ describe("trackMatching utilities", () => {
 
             expect(
                 matchTrackAgainstLibrary(
-                    { artist: "Completely Different", title: "Nothing Similar" },
-                    candidates
-                )
+                    {
+                        artist: "Completely Different",
+                        title: "Nothing Similar",
+                    },
+                    candidates,
+                ),
             ).toBeNull();
         });
     });

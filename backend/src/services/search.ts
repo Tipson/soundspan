@@ -129,10 +129,7 @@ export class SearchService {
                     contains: query,
                     mode: "insensitive",
                 },
-                OR: [
-                    { albums: { some: {} } },
-                    { remoteTrackCount: { gt: 0 } },
-                ],
+                OR: [{ albums: { some: {} } }, { remoteTrackCount: { gt: 0 } }],
             },
             select: {
                 id: true,
@@ -186,7 +183,7 @@ export class SearchService {
 
             if (results.length === 0) {
                 logger.debug(
-                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`
+                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
                 return this.searchArtistsFallback({ query, limit, offset });
             }
@@ -306,7 +303,7 @@ export class SearchService {
 
             if (results.length === 0) {
                 logger.debug(
-                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`
+                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
                 return this.searchAlbumsFallback({ query, limit, offset });
             }
@@ -402,7 +399,7 @@ export class SearchService {
 
             if (results.length === 0) {
                 logger.debug(
-                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`
+                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
                 return this.searchTracksFallback({ query, limit, offset });
             }
@@ -450,7 +447,7 @@ export class SearchService {
 
             if (results.length === 0) {
                 logger.debug(
-                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`
+                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
                 return this.searchPodcasts({ query, limit, offset });
             }
@@ -555,7 +552,7 @@ export class SearchService {
 
             if (results.length === 0) {
                 logger.debug(
-                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`
+                    `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
                 return this.searchEpisodesFallback({ query, limit, offset });
             }
@@ -612,7 +609,7 @@ export class SearchService {
             }
 
             logger.debug(
-                `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`
+                `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
             );
 
             return this.searchAudiobooksFallback({ query, limit, offset });
@@ -770,7 +767,7 @@ export class SearchService {
                             coverUrl: book.coverUrl
                                 ? `/audiobooks/${book.id}/cover`
                                 : null,
-                        })
+                        }),
                     );
                 }
                 return parsed;
@@ -780,7 +777,7 @@ export class SearchService {
         }
 
         logger.debug(
-            `[SEARCH]  Cache MISS for query: "${query}" - fetching from database`
+            `[SEARCH]  Cache MISS for query: "${query}" - fetching from database`,
         );
 
         const [artists, albums, tracks, podcasts, audiobooks, episodes] =
@@ -796,7 +793,9 @@ export class SearchService {
         const results = {
             artists,
             albums,
-            tracks: genre ? await this.filterTracksByGenre(tracks, genre) : tracks,
+            tracks: genre
+                ? await this.filterTracksByGenre(tracks, genre)
+                : tracks,
             podcasts,
             audiobooks,
             episodes,
@@ -817,7 +816,7 @@ export class SearchService {
      */
     async filterTracksByGenre(
         tracks: TrackSearchResult[],
-        genre: string
+        genre: string,
     ): Promise<TrackSearchResult[]> {
         if (tracks.length === 0) return [];
 
@@ -871,7 +870,9 @@ export class SearchService {
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
-                logger.debug(`[SEARCH] Cache HIT for ${type} query: "${query}"`);
+                logger.debug(
+                    `[SEARCH] Cache HIT for ${type} query: "${query}"`,
+                );
                 return JSON.parse(cached);
             }
         } catch (err) {
@@ -881,10 +882,18 @@ export class SearchService {
         // Execute single-type search
         switch (type) {
             case "artists":
-                results.artists = await this.searchArtists({ query, limit, offset });
+                results.artists = await this.searchArtists({
+                    query,
+                    limit,
+                    offset,
+                });
                 break;
             case "albums":
-                results.albums = await this.searchAlbums({ query, limit, offset });
+                results.albums = await this.searchAlbums({
+                    query,
+                    limit,
+                    offset,
+                });
                 break;
             case "tracks": {
                 let tracks = await this.searchTracks({ query, limit, offset });
@@ -895,13 +904,25 @@ export class SearchService {
                 break;
             }
             case "podcasts":
-                results.podcasts = await this.searchPodcastsFTS({ query, limit, offset });
+                results.podcasts = await this.searchPodcastsFTS({
+                    query,
+                    limit,
+                    offset,
+                });
                 break;
             case "audiobooks":
-                results.audiobooks = await this.searchAudiobooksFTS({ query, limit, offset });
+                results.audiobooks = await this.searchAudiobooksFTS({
+                    query,
+                    limit,
+                    offset,
+                });
                 break;
             case "episodes":
-                results.episodes = await this.searchEpisodes({ query, limit, offset });
+                results.episodes = await this.searchEpisodes({
+                    query,
+                    limit,
+                    offset,
+                });
                 break;
         }
 

@@ -16,15 +16,21 @@ describe("listenTogetherClusterSync", () => {
         }
         delete process.env.LISTEN_TOGETHER_STATE_SYNC_CHANNEL;
 
-        let messageHandler: ((channel: string, message: string) => void) | null =
-            null;
+        let messageHandler:
+            | ((channel: string, message: string) => void)
+            | null = null;
 
         const subClient = {
-            on: jest.fn((event: string, handler: (channel: string, message: string) => void) => {
-                if (event === "message") {
-                    messageHandler = handler;
-                }
-            }),
+            on: jest.fn(
+                (
+                    event: string,
+                    handler: (channel: string, message: string) => void,
+                ) => {
+                    if (event === "message") {
+                        messageHandler = handler;
+                    }
+                },
+            ),
             subscribe: jest.fn(async () => 1),
             unsubscribe: jest.fn(async () => 1),
             disconnect: jest.fn(),
@@ -53,7 +59,9 @@ describe("listenTogetherClusterSync", () => {
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { listenTogetherClusterSync } = require("../listenTogetherClusterSync");
+        const {
+            listenTogetherClusterSync,
+        } = require("../listenTogetherClusterSync");
 
         return {
             listenTogetherClusterSync,
@@ -70,9 +78,10 @@ describe("listenTogetherClusterSync", () => {
     }
 
     it("does nothing when disabled", async () => {
-        const { listenTogetherClusterSync, createIORedisClient } = loadClusterSync({
-            enabled: false,
-        });
+        const { listenTogetherClusterSync, createIORedisClient } =
+            loadClusterSync({
+                enabled: false,
+            });
         const handler = jest.fn();
 
         expect(listenTogetherClusterSync.isEnabled()).toBe(false);
@@ -104,19 +113,20 @@ describe("listenTogetherClusterSync", () => {
 
         expect(createIORedisClient).toHaveBeenCalledTimes(1);
         expect(subClient.subscribe).toHaveBeenCalledWith(
-            "listen-together:state-sync"
+            "listen-together:state-sync",
         );
         expect(pubClient.publish).toHaveBeenCalledWith(
             "listen-together:state-sync",
-            expect.stringContaining("\"groupId\":\"g1\"")
+            expect.stringContaining('"groupId":"g1"'),
         );
         expect(logger.info).toHaveBeenCalledWith(
-            expect.stringContaining("Enabled on channel")
+            expect.stringContaining("Enabled on channel"),
         );
     });
 
     it("dispatches only valid snapshots from other nodes", async () => {
-        const { listenTogetherClusterSync, emitMessage, logger } = loadClusterSync();
+        const { listenTogetherClusterSync, emitMessage, logger } =
+            loadClusterSync();
         const handler = jest.fn();
 
         await listenTogetherClusterSync.start(handler);
@@ -130,7 +140,7 @@ describe("listenTogetherClusterSync", () => {
                 originNodeId: "node-1",
                 snapshot: { id: "g1", playback: {}, members: [] },
                 ts: Date.now(),
-            })
+            }),
         );
         emitMessage(
             "listen-together:state-sync",
@@ -140,7 +150,7 @@ describe("listenTogetherClusterSync", () => {
                 originNodeId: "node-2",
                 snapshot: { id: "g1", playback: {}, members: [] },
                 ts: Date.now(),
-            })
+            }),
         );
         emitMessage(
             "listen-together:state-sync",
@@ -150,7 +160,7 @@ describe("listenTogetherClusterSync", () => {
                 originNodeId: "node-2",
                 snapshot: { id: "different", playback: {}, members: [] },
                 ts: Date.now(),
-            })
+            }),
         );
         const validSnapshot = { id: "g2", playback: { t: 1 }, members: [] };
         emitMessage(
@@ -161,32 +171,34 @@ describe("listenTogetherClusterSync", () => {
                 originNodeId: "node-2",
                 snapshot: validSnapshot,
                 ts: Date.now(),
-            })
+            }),
         );
 
         expect(logger.warn).toHaveBeenCalledWith(
-            "[ListenTogether/StateSync] Ignoring invalid sync message"
+            "[ListenTogether/StateSync] Ignoring invalid sync message",
         );
         expect(handler).toHaveBeenCalledTimes(1);
         expect(handler).toHaveBeenCalledWith(validSnapshot);
     });
 
     it("unsubscribes and disconnects clients on stop", async () => {
-        const { listenTogetherClusterSync, subClient, pubClient } = loadClusterSync();
+        const { listenTogetherClusterSync, subClient, pubClient } =
+            loadClusterSync();
         const handler = jest.fn();
 
         await listenTogetherClusterSync.start(handler);
         await listenTogetherClusterSync.stop();
 
         expect(subClient.unsubscribe).toHaveBeenCalledWith(
-            "listen-together:state-sync"
+            "listen-together:state-sync",
         );
         expect(subClient.disconnect).toHaveBeenCalledTimes(1);
         expect(pubClient.disconnect).toHaveBeenCalledTimes(1);
     });
 
     it("logs a warning when publishSnapshot fails", async () => {
-        const { listenTogetherClusterSync, pubClient, logger } = loadClusterSync();
+        const { listenTogetherClusterSync, pubClient, logger } =
+            loadClusterSync();
         const handler = jest.fn();
         await listenTogetherClusterSync.start(handler);
 
@@ -199,12 +211,13 @@ describe("listenTogetherClusterSync", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             "[ListenTogether/StateSync] Failed to publish snapshot for group g1",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("ignores messages when no handler is registered", async () => {
-        const { listenTogetherClusterSync, emitMessage, logger } = loadClusterSync();
+        const { listenTogetherClusterSync, emitMessage, logger } =
+            loadClusterSync();
         const handler = jest.fn();
         await listenTogetherClusterSync.start(handler);
         await listenTogetherClusterSync.stop();
@@ -217,12 +230,12 @@ describe("listenTogetherClusterSync", () => {
                 originNodeId: "node-2",
                 snapshot: { id: "g1", playback: {}, members: [] },
                 ts: Date.now(),
-            })
+            }),
         );
 
         expect(handler).not.toHaveBeenCalled();
         expect(logger.warn).not.toHaveBeenCalledWith(
-            "[ListenTogether/StateSync] Ignoring invalid sync message"
+            "[ListenTogether/StateSync] Ignoring invalid sync message",
         );
     });
 
@@ -239,18 +252,21 @@ describe("listenTogetherClusterSync", () => {
                 originNodeId: "node-2",
                 snapshot: { id: "g1", playback: {}, members: [] },
                 ts: Date.now(),
-            })
+            }),
         );
 
         expect(handler).not.toHaveBeenCalled();
     });
 
     it("still disconnects clients when unsubscribe fails during stop", async () => {
-        const { listenTogetherClusterSync, subClient, pubClient } = loadClusterSync();
+        const { listenTogetherClusterSync, subClient, pubClient } =
+            loadClusterSync();
         const handler = jest.fn();
         await listenTogetherClusterSync.start(handler);
 
-        subClient.unsubscribe.mockRejectedValueOnce(new Error("unsubscribe failed"));
+        subClient.unsubscribe.mockRejectedValueOnce(
+            new Error("unsubscribe failed"),
+        );
         await listenTogetherClusterSync.stop();
 
         expect(subClient.disconnect).toHaveBeenCalledTimes(1);

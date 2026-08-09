@@ -129,7 +129,9 @@ export default function PodcastDetailPage() {
                             sortedEpisodes={sortedEpisodes}
                             isEpisodePlaying={isEpisodePlaying}
                             isPlaying={isPlaying}
-                            onPlayEpisode={(episode) => handlePlayEpisode(episode, podcast)}
+                            onPlayEpisode={(episode) =>
+                                handlePlayEpisode(episode, podcast)
+                            }
                             onPlayPause={(episode) =>
                                 handlePlayPauseEpisode(episode, podcast)
                             }
@@ -158,7 +160,9 @@ export default function PodcastDetailPage() {
                             onPlayPause={(episode) =>
                                 handlePlayPauseEpisode(episode, podcast)
                             }
-                            onPlay={(episode) => handlePlayEpisode(episode, podcast)}
+                            onPlay={(episode) =>
+                                handlePlayEpisode(episode, podcast)
+                            }
                             onMarkComplete={handleMarkEpisodeComplete}
                         />
                     )}

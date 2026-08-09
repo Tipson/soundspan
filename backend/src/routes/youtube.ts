@@ -19,7 +19,11 @@
 import { Router, Request, Response } from "express";
 import type Bull from "bull";
 import { z } from "zod";
-import { requireAuth, requireAuthOrToken, requireAdmin } from "../middleware/auth";
+import {
+    requireAuth,
+    requireAuthOrToken,
+    requireAdmin,
+} from "../middleware/auth";
 import {
     youtubeDownloadService,
     watchYouTubeDownloadJobUntilTerminal,
@@ -60,9 +64,9 @@ router.get("/info", requireAuth, async (req: Request, res: Response) => {
             return res.status(400).json({ error: err.issues[0].message });
         }
         if (err.response?.status === 400) {
-            return res
-                .status(400)
-                .json({ error: err.response?.data?.detail || "Invalid YouTube URL" });
+            return res.status(400).json({
+                error: err.response?.data?.detail || "Invalid YouTube URL",
+            });
         }
         if (err.response?.status === 404) {
             return res.status(404).json({ error: "Video not found" });
@@ -104,33 +108,40 @@ const playlistInfoQuerySchema = z.object({
  *       502:
  *         description: Sidecar unavailable
  */
-router.get("/playlist-info", requireAuth, async (req: Request, res: Response) => {
-    try {
-        const { url } = playlistInfoQuerySchema.parse(req.query);
-        const info = await youtubeDownloadService.getPlaylistInfo(url);
-        return res.json(info);
-    } catch (err: any) {
-        if (err instanceof z.ZodError) {
-            return res.status(400).json({ error: err.issues[0].message });
-        }
-        if (err.response?.status === 422) {
-            return res.status(422).json({
-                error:
-                    err.response?.data?.detail ||
-                    "URL is not a downloadable playlist or channel",
-            });
-        }
-        if (err.response?.status === 404) {
+router.get(
+    "/playlist-info",
+    requireAuth,
+    async (req: Request, res: Response) => {
+        try {
+            const { url } = playlistInfoQuerySchema.parse(req.query);
+            const info = await youtubeDownloadService.getPlaylistInfo(url);
+            return res.json(info);
+        } catch (err: any) {
+            if (err instanceof z.ZodError) {
+                return res.status(400).json({ error: err.issues[0].message });
+            }
+            if (err.response?.status === 422) {
+                return res.status(422).json({
+                    error:
+                        err.response?.data?.detail ||
+                        "URL is not a downloadable playlist or channel",
+                });
+            }
+            if (err.response?.status === 404) {
+                return res
+                    .status(404)
+                    .json({ error: "Playlist or channel not found" });
+            }
+            logger.error(
+                "[YouTube Route] Playlist info fetch failed:",
+                err.message,
+            );
             return res
-                .status(404)
-                .json({ error: "Playlist or channel not found" });
+                .status(502)
+                .json({ error: "Failed to enumerate playlist or channel" });
         }
-        logger.error("[YouTube Route] Playlist info fetch failed:", err.message);
-        return res
-            .status(502)
-            .json({ error: "Failed to enumerate playlist or channel" });
-    }
-});
+    },
+);
 
 // ── Audio Stream Proxy ────────────────────────────────────────────
 
@@ -171,7 +182,7 @@ router.get(
             const proxyRes = await youtubeDownloadService.getStreamProxy(
                 videoId,
                 quality,
-                rangeHeader
+                rangeHeader,
             );
 
             // Forward status code and relevant headers
@@ -190,7 +201,7 @@ router.get(
 
             proxyRes.data.on("error", (streamErr: Error) => {
                 logger.warn(
-                    `[YouTube Route] Upstream stream error for ${videoId}: ${streamErr.message}`
+                    `[YouTube Route] Upstream stream error for ${videoId}: ${streamErr.message}`,
                 );
                 if (!res.headersSent) {
                     res.status(502).json({ error: "Upstream stream failed" });
@@ -213,7 +224,7 @@ router.get(
             logger.error("[YouTube Route] Stream proxy failed:", err.message);
             return res.status(500).json({ error: "Failed to stream audio" });
         }
-    }
+    },
 );
 
 // ── Download ──────────────────────────────────────────────────────
@@ -224,7 +235,10 @@ const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
 const downloadBodySchema = z.object({
     videoId: z
         .string()
-        .regex(YOUTUBE_VIDEO_ID_REGEX, "videoId must be an 11-character YouTube video id"),
+        .regex(
+            YOUTUBE_VIDEO_ID_REGEX,
+            "videoId must be an 11-character YouTube video id",
+        ),
     format: z.enum(["mp3", "opus", "flac", "m4a"]).default("mp3"),
     quality: z.enum(["LOW", "MEDIUM", "HIGH", "LOSSLESS"]).default("HIGH"),
     // Optional grouping label (playlist/channel title) for bulk runs.
@@ -269,49 +283,56 @@ const downloadBodySchema = z.object({
  *       502:
  *         description: Sidecar unavailable or rejected the download
  */
-router.post("/download", requireAuth, requireAdmin, async (req: Request, res: Response) => {
-    try {
-        const { videoId, format, quality, source, sourceKind } =
-            downloadBodySchema.parse(req.body);
-        const userId = req.user!.id;
+router.post(
+    "/download",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+        try {
+            const { videoId, format, quality, source, sourceKind } =
+                downloadBodySchema.parse(req.body);
+            const userId = req.user!.id;
 
-        logger.info(
-            `[YouTube Route] Download requested: ${videoId} (${format}, ${quality})`
-        );
+            logger.info(
+                `[YouTube Route] Download requested: ${videoId} (${format}, ${quality})`,
+            );
 
-        const job = await youtubeDownloadService.startDownload(
-            videoId,
-            format,
-            quality,
-            source,
-            sourceKind
-        );
+            const job = await youtubeDownloadService.startDownload(
+                videoId,
+                format,
+                quality,
+                source,
+                sourceKind,
+            );
 
-        if (job.status === "completed") {
-            // Idempotency hit — the file is already on disk, but it may
-            // never have been imported (failed scan, out-of-band file), so
-            // always queue a scan.
-            await enqueueLibraryScanForDownloadJob(job.jobId, userId);
-        } else {
-            watchDownloadJobAndQueueScan(job.jobId, userId);
-        }
+            if (job.status === "completed") {
+                // Idempotency hit — the file is already on disk, but it may
+                // never have been imported (failed scan, out-of-band file), so
+                // always queue a scan.
+                await enqueueLibraryScanForDownloadJob(job.jobId, userId);
+            } else {
+                watchDownloadJobAndQueueScan(job.jobId, userId);
+            }
 
-        return res.status(202).json(job);
-    } catch (err: any) {
-        if (err instanceof z.ZodError) {
-            return res.status(400).json({ error: err.issues[0].message });
-        }
-        if (err.response?.status === 400) {
-            return res.status(400).json({
-                error: err.response?.data?.detail || "Invalid download request",
+            return res.status(202).json(job);
+        } catch (err: any) {
+            if (err instanceof z.ZodError) {
+                return res.status(400).json({ error: err.issues[0].message });
+            }
+            if (err.response?.status === 400) {
+                return res.status(400).json({
+                    error:
+                        err.response?.data?.detail ||
+                        "Invalid download request",
+                });
+            }
+            logger.error("[YouTube Route] Download start failed:", err.message);
+            return res.status(502).json({
+                error: err.response?.data?.detail || "Download failed",
             });
         }
-        logger.error("[YouTube Route] Download start failed:", err.message);
-        return res
-            .status(502)
-            .json({ error: err.response?.data?.detail || "Download failed" });
-    }
-});
+    },
+);
 
 // Jobs that have already triggered a library scan, so the server-side
 // watcher and repeated status polls enqueue the scan exactly once per job.
@@ -334,7 +355,7 @@ const MAX_SCANNED_DOWNLOAD_JOB_IDS = 1000;
 export function rememberBoundedJobId(
     seen: Set<string>,
     jobId: string,
-    maxSize: number
+    maxSize: number,
 ): void {
     seen.add(jobId);
     while (seen.size > maxSize) {
@@ -425,7 +446,7 @@ async function enqueueCoalescedScanJob(userId: string): Promise<void> {
             jobId: YOUTUBE_SCAN_JOB_ID,
             removeOnComplete: true,
             removeOnFail: true,
-        }
+        },
     );
     pendingScanJob = job;
     void watchCoalescedScanJob(job);
@@ -451,11 +472,11 @@ async function watchCoalescedScanJob(job: Bull.Job): Promise<void> {
         try {
             await enqueueCoalescedScanJob(followUpUserId);
             logger.debug(
-                "[YouTube Route] Follow-up library scan queued after running scan settled"
+                "[YouTube Route] Follow-up library scan queued after running scan settled",
             );
         } catch (scanErr: any) {
             logger.warn(
-                `[YouTube Route] Failed to queue follow-up library scan: ${scanErr.message}`
+                `[YouTube Route] Failed to queue follow-up library scan: ${scanErr.message}`,
             );
         }
     }
@@ -468,7 +489,7 @@ async function watchCoalescedScanJob(job: Bull.Job): Promise<void> {
  */
 async function enqueueLibraryScanForDownloadJob(
     jobId: string,
-    userId: string
+    userId: string,
 ): Promise<void> {
     if (scannedDownloadJobIds.has(jobId)) {
         return;
@@ -476,18 +497,18 @@ async function enqueueLibraryScanForDownloadJob(
     rememberBoundedJobId(
         scannedDownloadJobIds,
         jobId,
-        MAX_SCANNED_DOWNLOAD_JOB_IDS
+        MAX_SCANNED_DOWNLOAD_JOB_IDS,
     );
     try {
         await requestCoalescedLibraryScan(userId);
         logger.debug(
-            `[YouTube Route] Library scan requested after download job ${jobId}`
+            `[YouTube Route] Library scan requested after download job ${jobId}`,
         );
     } catch (scanErr: any) {
         // Allow a later watcher tick / status poll to retry the enqueue.
         scannedDownloadJobIds.delete(jobId);
         logger.warn(
-            `[YouTube Route] Failed to queue library scan: ${scanErr.message}`
+            `[YouTube Route] Failed to queue library scan: ${scanErr.message}`,
         );
     }
 }
@@ -503,14 +524,14 @@ function watchDownloadJobAndQueueScan(jobId: string, userId: string): void {
         try {
             const outcome = await watchYouTubeDownloadJobUntilTerminal(
                 jobId,
-                (id) => youtubeDownloadService.getDownloadJobStatus(id)
+                (id) => youtubeDownloadService.getDownloadJobStatus(id),
             );
             if (outcome === "completed") {
                 await enqueueLibraryScanForDownloadJob(jobId, userId);
             }
         } catch (watchErr: any) {
             logger.warn(
-                `[YouTube Route] Download job watcher crashed for ${jobId}: ${watchErr.message}`
+                `[YouTube Route] Download job watcher crashed for ${jobId}: ${watchErr.message}`,
             );
         }
     })();
@@ -550,15 +571,11 @@ router.get(
     async (req: Request<{ jobId: string }>, res: Response) => {
         try {
             const { jobId } = req.params;
-            const job = await youtubeDownloadService.getDownloadJobStatus(
-                jobId
-            );
+            const job =
+                await youtubeDownloadService.getDownloadJobStatus(jobId);
 
             if (job.status === "completed") {
-                await enqueueLibraryScanForDownloadJob(
-                    job.jobId,
-                    req.user!.id
-                );
+                await enqueueLibraryScanForDownloadJob(job.jobId, req.user!.id);
             }
 
             return res.json(job);
@@ -570,13 +587,13 @@ router.get(
             }
             logger.error(
                 "[YouTube Route] Download status fetch failed:",
-                err.message
+                err.message,
             );
             return res
                 .status(502)
                 .json({ error: "Failed to fetch download status" });
         }
-    }
+    },
 );
 
 // ── Downloads view (list + cancel) ────────────────────────────────
@@ -595,15 +612,20 @@ router.get(
  *       502:
  *         description: Sidecar unavailable
  */
-router.get("/downloads", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
-    try {
-        const jobs = await youtubeDownloadService.listDownloads();
-        return res.json({ jobs });
-    } catch (err: any) {
-        logger.error("[YouTube Route] Downloads list failed:", err.message);
-        return res.status(502).json({ error: "Failed to list downloads" });
-    }
-});
+router.get(
+    "/downloads",
+    requireAuth,
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+        try {
+            const jobs = await youtubeDownloadService.listDownloads();
+            return res.json({ jobs });
+        } catch (err: any) {
+            logger.error("[YouTube Route] Downloads list failed:", err.message);
+            return res.status(502).json({ error: "Failed to list downloads" });
+        }
+    },
+);
 
 /**
  * @openapi
@@ -642,12 +664,13 @@ router.delete(
                     .status(404)
                     .json({ error: "Download job not found" });
             }
-            logger.error("[YouTube Route] Download cancel failed:", err.message);
-            return res
-                .status(502)
-                .json({ error: "Failed to cancel download" });
+            logger.error(
+                "[YouTube Route] Download cancel failed:",
+                err.message,
+            );
+            return res.status(502).json({ error: "Failed to cancel download" });
         }
-    }
+    },
 );
 
 export default router;

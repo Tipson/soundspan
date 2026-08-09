@@ -103,7 +103,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             {children}
 
             {/* Toast Container */}
-            <div className="fixed top-4 right-4 z-[100] space-y-2 max-w-sm w-full px-4 md:px-0" aria-live="polite" aria-atomic="false">
+            <div
+                className="fixed top-4 right-4 z-[100] space-y-2 max-w-sm w-full px-4 md:px-0"
+                aria-live="polite"
+                aria-atomic="false"
+            >
                 {toasts.map((t) => (
                     <ToastItem
                         key={t.id}
@@ -142,7 +146,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
             aria-atomic="true"
             className={cn(
                 "flex items-start gap-3 p-4 rounded-sm border shadow-2xl  animate-in slide-in-from-right duration-300",
-                styles[toast.type]
+                styles[toast.type],
             )}
         >
             <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />

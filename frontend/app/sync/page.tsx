@@ -46,7 +46,12 @@ export default function SyncPage() {
                         if (status.status === "completed") {
                             if (pollInterval) clearInterval(pollInterval);
                             setProgress(90);
-                            setCompletedSteps(["tracks", "library", "albums", "indexes"]);
+                            setCompletedSteps([
+                                "tracks",
+                                "library",
+                                "albums",
+                                "indexes",
+                            ]);
 
                             // Trigger post-scan operations
                             try {
@@ -54,7 +59,10 @@ export default function SyncPage() {
                                 setMessage("Syncing audiobooks...");
                                 await api.post("/audiobooks/sync");
                             } catch (audiobookError) {
-                                sharedFrontendLogger.error("Audiobook sync failed:", audiobookError);
+                                sharedFrontendLogger.error(
+                                    "Audiobook sync failed:",
+                                    audiobookError,
+                                );
                                 // Don't fail the whole flow if audiobook sync fails
                             }
 
@@ -76,7 +84,7 @@ export default function SyncPage() {
                         } else if (status.status === "failed") {
                             if (pollInterval) clearInterval(pollInterval);
                             setError(
-                                "Scan failed. You can skip and try again later."
+                                "Scan failed. You can skip and try again later.",
                             );
                             setSyncing(false);
                         } else {
@@ -108,14 +116,17 @@ export default function SyncPage() {
                             }
                         }
                     } catch (pollError) {
-                        sharedFrontendLogger.error("Error polling scan status:", pollError);
+                        sharedFrontendLogger.error(
+                            "Error polling scan status:",
+                            pollError,
+                        );
                     }
                 }, 1000); // Poll every second
             } catch (err: unknown) {
                 sharedFrontendLogger.error("Sync error:", err);
                 if (!mounted) return;
                 setError(
-                    "Failed to start sync. You can skip and start manually later."
+                    "Failed to start sync. You can skip and start manually later.",
                 );
                 setSyncing(false);
             }
@@ -177,7 +188,9 @@ export default function SyncPage() {
                                 </div>
                                 <div>
                                     <h2 className="text-xl font-semibold text-white">
-                                        {syncing ? "Setting Things Up" : "Ready to Go!"}
+                                        {syncing
+                                            ? "Setting Things Up"
+                                            : "Ready to Go!"}
                                     </h2>
                                     <p className="text-white/50 text-sm mt-1">
                                         {error || message}
@@ -212,7 +225,9 @@ export default function SyncPage() {
                             {/* Steps list */}
                             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/[0.06]">
                                 {steps.map((step) => {
-                                    const isComplete = completedSteps.includes(step.id);
+                                    const isComplete = completedSteps.includes(
+                                        step.id,
+                                    );
                                     return (
                                         <div
                                             key={step.id}

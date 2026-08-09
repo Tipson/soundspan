@@ -78,7 +78,7 @@ router.post("/register", async (req, res) => {
     try {
         logger.debug(
             "[ONBOARDING] Register attempt for user:",
-            req.body?.username
+            req.body?.username,
         );
         const { username, password } = registerSchema.parse(req.body);
 
@@ -214,7 +214,7 @@ router.post("/lidarr", requireAuth, requireAdmin, async (req, res) => {
                     {
                         headers: { "X-Api-Key": config.apiKey },
                         timeout: 5000,
-                    }
+                    },
                 );
 
                 if (response.status === 200) {
@@ -224,7 +224,7 @@ router.post("/lidarr", requireAuth, requireAdmin, async (req, res) => {
             } catch (error: any) {
                 logger.warn(
                     "  Lidarr connection test failed (saved anyway):",
-                    error.message
+                    error.message,
                 );
                 // Don't block - just log the warning
             }
@@ -331,7 +331,7 @@ router.post("/audiobookshelf", requireAuth, requireAdmin, async (req, res) => {
             } catch (error: any) {
                 logger.warn(
                     "  Audiobookshelf connection test failed (saved anyway):",
-                    error.message
+                    error.message,
                 );
                 // Don't block - just log the warning
             }

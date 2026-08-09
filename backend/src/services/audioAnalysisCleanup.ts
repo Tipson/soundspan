@@ -23,14 +23,14 @@ class AudioAnalysisCleanupService {
     private onSuccess(): void {
         if (this.state === "half-open") {
             logger.info(
-                `[AudioAnalysisCleanup] Circuit breaker CLOSED - recovery successful after ${this.failureCount} failures`
+                `[AudioAnalysisCleanup] Circuit breaker CLOSED - recovery successful after ${this.failureCount} failures`,
             );
             this.state = "closed";
             this.failureCount = 0;
             this.lastFailureTime = null;
         } else if (this.state === "closed" && this.failureCount > 0) {
             logger.debug(
-                "[AudioAnalysisCleanup] Resetting failure counter on success"
+                "[AudioAnalysisCleanup] Resetting failure counter on success",
             );
             this.failureCount = 0;
             this.lastFailureTime = null;
@@ -39,7 +39,7 @@ class AudioAnalysisCleanupService {
 
     private onFailure(
         resetCount: number,
-        permanentlyFailedCount: number
+        permanentlyFailedCount: number,
     ): void {
         // Count cleanup runs, not individual tracks -- a single batch of stale
         // tracks shouldn't immediately trip the breaker
@@ -49,13 +49,13 @@ class AudioAnalysisCleanupService {
         if (this.state === "half-open") {
             this.state = "open";
             logger.warn(
-                `[AudioAnalysisCleanup] Circuit breaker REOPENED - recovery attempt failed (${this.failureCount} total failures)`
+                `[AudioAnalysisCleanup] Circuit breaker REOPENED - recovery attempt failed (${this.failureCount} total failures)`,
             );
         } else if (this.failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
             this.state = "open";
             logger.warn(
                 `[AudioAnalysisCleanup] Circuit breaker OPEN - ${this.failureCount} failures in window. ` +
-                    `Pausing audio analysis queuing until analyzer shows signs of life.`
+                    `Pausing audio analysis queuing until analyzer shows signs of life.`,
             );
         }
     }
@@ -66,7 +66,7 @@ class AudioAnalysisCleanupService {
             logger.info(
                 `[AudioAnalysisCleanup] Circuit breaker HALF-OPEN - attempting recovery after ${
                     CIRCUIT_BREAKER_WINDOW_MS / 60000
-                } minute cooldown`
+                } minute cooldown`,
             );
         }
         return this.state === "open";
@@ -82,7 +82,7 @@ class AudioAnalysisCleanupService {
         recovered: number;
     }> {
         const cutoff = new Date(
-            Date.now() - STALE_THRESHOLD_MINUTES * 60 * 1000
+            Date.now() - STALE_THRESHOLD_MINUTES * 60 * 1000,
         );
 
         const staleTracks = await prisma.track.findMany({
@@ -110,7 +110,7 @@ class AudioAnalysisCleanupService {
         }
 
         logger.debug(
-            `[AudioAnalysisCleanup] Found ${staleTracks.length} stale tracks (processing > ${STALE_THRESHOLD_MINUTES} min)`
+            `[AudioAnalysisCleanup] Found ${staleTracks.length} stale tracks (processing > ${STALE_THRESHOLD_MINUTES} min)`,
         );
 
         let resetCount = 0;
@@ -121,7 +121,9 @@ class AudioAnalysisCleanupService {
             const newRetryCount = (track.analysisRetryCount || 0) + 1;
             const trackName = `${track.album.artist.name} - ${track.title}`;
 
-            const existingEmbedding = await prisma.$queryRaw<{ count: bigint }[]>`
+            const existingEmbedding = await prisma.$queryRaw<
+                { count: bigint }[]
+            >`
                 SELECT COUNT(*) as count FROM track_embeddings WHERE track_id = ${track.id}
             `;
 
@@ -136,7 +138,7 @@ class AudioAnalysisCleanupService {
                 });
 
                 logger.info(
-                    `[AudioAnalysisCleanup] Recovered stale track with existing embedding: ${trackName}`
+                    `[AudioAnalysisCleanup] Recovered stale track with existing embedding: ${trackName}`,
                 );
 
                 recoveredCount++;
@@ -167,7 +169,7 @@ class AudioAnalysisCleanupService {
                 });
 
                 logger.warn(
-                    `[AudioAnalysisCleanup] Permanently failed: ${trackName}`
+                    `[AudioAnalysisCleanup] Permanently failed: ${trackName}`,
                 );
                 permanentlyFailedCount++;
             } else {
@@ -182,7 +184,7 @@ class AudioAnalysisCleanupService {
                 });
 
                 logger.debug(
-                    `[AudioAnalysisCleanup] Reset for retry (${newRetryCount}/${MAX_RETRIES}): ${trackName}`
+                    `[AudioAnalysisCleanup] Reset for retry (${newRetryCount}/${MAX_RETRIES}): ${trackName}`,
                 );
                 resetCount++;
             }
@@ -197,10 +199,14 @@ class AudioAnalysisCleanupService {
         }
 
         logger.debug(
-            `[AudioAnalysisCleanup] Cleanup complete: ${resetCount} reset, ${permanentlyFailedCount} permanently failed, ${recoveredCount} recovered`
+            `[AudioAnalysisCleanup] Cleanup complete: ${resetCount} reset, ${permanentlyFailedCount} permanently failed, ${recoveredCount} recovered`,
         );
 
-        return { reset: resetCount, permanentlyFailed: permanentlyFailedCount, recovered: recoveredCount };
+        return {
+            reset: resetCount,
+            permanentlyFailed: permanentlyFailedCount,
+            recovered: recoveredCount,
+        };
     }
 
     async getStats(): Promise<{

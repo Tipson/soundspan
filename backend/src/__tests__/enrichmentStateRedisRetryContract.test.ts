@@ -4,7 +4,7 @@ import path from "path";
 describe("enrichment state redis retry contract", () => {
     const servicePath = path.resolve(
         __dirname,
-        "../services/enrichmentState.ts"
+        "../services/enrichmentState.ts",
     );
     const source = fs.readFileSync(servicePath, "utf8");
 
@@ -15,7 +15,7 @@ describe("enrichment state redis retry contract", () => {
         expect(source).toContain("this.recreateStateClient()");
         expect(source).toContain("ENRICHMENT_STATE_REDIS_RETRY_ATTEMPTS");
         expect(source).toContain(
-            "failed due to Redis connection closure (attempt"
+            "failed due to Redis connection closure (attempt",
         );
     });
 

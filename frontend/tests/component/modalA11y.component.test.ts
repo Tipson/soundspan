@@ -5,10 +5,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { ModalProps } from "../../components/ui/Modal";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
-const Icon = (props: Record<string, unknown>) => React.createElement("i", props);
+const Icon = (props: Record<string, unknown>) =>
+    React.createElement("i", props);
 
 mock.module("lucide-react", {
     namedExports: { X: Icon },

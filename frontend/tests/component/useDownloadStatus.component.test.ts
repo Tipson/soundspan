@@ -4,8 +4,9 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 type DownloadResponse = Array<{
     id: string;
@@ -119,7 +120,8 @@ test("download status events preserve exactly one polling chain", async (t) => {
 
 test("active downloads use five-second cadence before returning to idle cadence", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
-    apiState.getDownloads = async () => apiState.calls === 1 ? [activeDownload()] : [];
+    apiState.getDownloads = async () =>
+        apiState.calls === 1 ? [activeDownload()] : [];
     const harness = await mountDownloadStatus();
     t.after(harness.unmount);
 

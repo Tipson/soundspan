@@ -33,14 +33,28 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
         try {
             fs.writeFileSync(migrationMarker, new Date().toISOString());
         } catch (e) {
-            logger.debug("Failed to write migration marker (no soulseek dir)", e);
+            logger.debug(
+                "Failed to write migration marker (no soulseek dir)",
+                e,
+            );
         }
         return;
     }
 
-    sessionLog('ORGANIZE', '=== MIGRATING EXISTING SOULSEEK FILES TO SINGLES ===');
+    sessionLog(
+        "ORGANIZE",
+        "=== MIGRATING EXISTING SOULSEEK FILES TO SINGLES ===",
+    );
 
-    const audioExtensions = new Set(['.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav', '.aac']);
+    const audioExtensions = new Set([
+        ".mp3",
+        ".flac",
+        ".m4a",
+        ".ogg",
+        ".opus",
+        ".wav",
+        ".aac",
+    ]);
 
     // Recursively find all audio files in Soulseek folder
     async function findAudioFiles(dir: string): Promise<string[]> {
@@ -50,7 +64,7 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
             for (const entry of entries) {
                 const fullPath = path.join(dir, entry.name);
                 if (entry.isDirectory()) {
-                    files.push(...await findAudioFiles(fullPath));
+                    files.push(...(await findAudioFiles(fullPath)));
                 } else if (entry.isFile()) {
                     const ext = path.extname(entry.name).toLowerCase();
                     if (audioExtensions.has(ext)) {
@@ -67,16 +81,19 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
     const audioFiles = await findAudioFiles(soulseekDir);
 
     if (audioFiles.length === 0) {
-        sessionLog('ORGANIZE', 'No audio files found in Soulseek folder');
+        sessionLog("ORGANIZE", "No audio files found in Soulseek folder");
         try {
             fs.writeFileSync(migrationMarker, new Date().toISOString());
         } catch (e) {
-            logger.debug("Failed to write migration marker (no audio files)", e);
+            logger.debug(
+                "Failed to write migration marker (no audio files)",
+                e,
+            );
         }
         return;
     }
 
-    sessionLog('ORGANIZE', `Found ${audioFiles.length} files to migrate`);
+    sessionLog("ORGANIZE", `Found ${audioFiles.length} files to migrate`);
 
     let migrated = 0;
     for (const filePath of audioFiles) {
@@ -96,8 +113,12 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
                 if (dashIndex > 0) {
                     artist = folderName.substring(0, dashIndex).trim();
                     let albumPart = folderName.substring(dashIndex + 3).trim();
-                    albumPart = albumPart.replace(/\s*\(\d{4}\)\s*/g, " ").trim();
-                    albumPart = albumPart.replace(/\s*[\[\{][^\]\}]*[\]\}]\s*/g, " ").trim();
+                    albumPart = albumPart
+                        .replace(/\s*\(\d{4}\)\s*/g, " ")
+                        .trim();
+                    albumPart = albumPart
+                        .replace(/\s*[\[\{][^\]\}]*[\]\}]\s*/g, " ")
+                        .trim();
                     albumPart = albumPart.replace(/\s*CDDA\s*/gi, " ").trim();
                     album = albumPart || "Unknown Album";
                 } else {
@@ -106,7 +127,8 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
             }
 
             // Sanitize for filesystem
-            const sanitize = (name: string) => name.replace(/[<>:"/\\|?*]/g, "_").trim();
+            const sanitize = (name: string) =>
+                name.replace(/[<>:"/\\|?*]/g, "_").trim();
             artist = sanitize(artist);
             album = sanitize(album);
 
@@ -123,7 +145,11 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
             try {
                 fs.mkdirSync(destDir, { recursive: true });
             } catch (err: any) {
-                sessionLog('ORGANIZE', `Failed to create directory ${destDir}: ${err.message}`, 'WARN');
+                sessionLog(
+                    "ORGANIZE",
+                    `Failed to create directory ${destDir}: ${err.message}`,
+                    "WARN",
+                );
                 continue; // Skip this file, try next
             }
 
@@ -132,9 +158,16 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
             fs.unlinkSync(filePath);
             migrated++;
 
-            sessionLog('ORGANIZE', `Migrated: ${filename} -> Singles/${artist}/${album}/`);
+            sessionLog(
+                "ORGANIZE",
+                `Migrated: ${filename} -> Singles/${artist}/${album}/`,
+            );
         } catch (err: any) {
-            sessionLog('ORGANIZE', `Failed to migrate ${filePath}: ${err.message}`, 'WARN');
+            sessionLog(
+                "ORGANIZE",
+                `Failed to migrate ${filePath}: ${err.message}`,
+                "WARN",
+            );
         }
     }
 
@@ -157,7 +190,7 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
         // Remove Soulseek folder if empty
         if (fs.readdirSync(soulseekDir).length === 0) {
             fs.rmdirSync(soulseekDir);
-            sessionLog('ORGANIZE', 'Removed empty Soulseek folder');
+            sessionLog("ORGANIZE", "Removed empty Soulseek folder");
         }
     } catch (e) {
         logger.warn("Failed to clean up empty Soulseek directories", e);
@@ -170,7 +203,10 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
         logger.warn("Failed to write migration complete marker", e);
     }
 
-    sessionLog('ORGANIZE', `Migration complete: ${migrated}/${audioFiles.length} files moved to Singles`);
+    sessionLog(
+        "ORGANIZE",
+        `Migration complete: ${migrated}/${audioFiles.length} files moved to Singles`,
+    );
 }
 
 /**
@@ -191,7 +227,10 @@ async function cleanupLegacySlskdJobs(): Promise<void> {
         });
 
         if (legacyJobs.length > 0) {
-            sessionLog('ORGANIZE', `Found ${legacyJobs.length} legacy SLSKD jobs to clean up`);
+            sessionLog(
+                "ORGANIZE",
+                `Found ${legacyJobs.length} legacy SLSKD jobs to clean up`,
+            );
 
             for (const job of legacyJobs) {
                 await prisma.downloadJob.update({
@@ -202,11 +241,18 @@ async function cleanupLegacySlskdJobs(): Promise<void> {
                         completedAt: new Date(),
                     },
                 });
-                sessionLog('ORGANIZE', `Marked legacy job ${job.id} (${job.subject}) as failed`);
+                sessionLog(
+                    "ORGANIZE",
+                    `Marked legacy job ${job.id} (${job.subject}) as failed`,
+                );
             }
         }
     } catch (err: any) {
-        sessionLog('ORGANIZE', `Failed to clean up legacy jobs: ${err.message}`, 'WARN');
+        sessionLog(
+            "ORGANIZE",
+            `Failed to clean up legacy jobs: ${err.message}`,
+            "WARN",
+        );
     }
 }
 
@@ -215,7 +261,7 @@ async function cleanupLegacySlskdJobs(): Promise<void> {
  * With direct slsk-client, this mainly handles migration and cleanup
  */
 export async function organizeSingles(): Promise<void> {
-    sessionLog('ORGANIZE', '=== STARTING SINGLES ORGANIZATION ===');
+    sessionLog("ORGANIZE", "=== STARTING SINGLES ORGANIZATION ===");
 
     // Get music path from environment variable
     let musicPath = process.env.MUSIC_PATH;
@@ -236,11 +282,11 @@ export async function organizeSingles(): Promise<void> {
 
     if (!musicPath) {
         const error = "MUSIC_PATH is not set. Cannot organize downloads.";
-        sessionLog('ORGANIZE', error, 'ERROR');
+        sessionLog("ORGANIZE", error, "ERROR");
         throw new Error(error);
     }
 
-    sessionLog('ORGANIZE', `Music path: ${musicPath.replace(/\\/g, "/")}`);
+    sessionLog("ORGANIZE", `Music path: ${musicPath.replace(/\\/g, "/")}`);
 
     // Run one-time migration of existing Soulseek files
     await migrateExistingSoulseekFiles(musicPath);
@@ -248,7 +294,7 @@ export async function organizeSingles(): Promise<void> {
     // Clean up any legacy SLSKD jobs
     await cleanupLegacySlskdJobs();
 
-    sessionLog('ORGANIZE', '=== ORGANIZATION COMPLETE ===');
+    sessionLog("ORGANIZE", "=== ORGANIZATION COMPLETE ===");
 }
 
 /**

@@ -46,7 +46,7 @@ export const MAX_CONSECUTIVE_POLL_FAILURES = 5;
  * "still in progress".
  */
 export function shouldAbandonYouTubeDownloadPolling(
-    consecutiveFailures: number
+    consecutiveFailures: number,
 ): boolean {
     return consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES;
 }

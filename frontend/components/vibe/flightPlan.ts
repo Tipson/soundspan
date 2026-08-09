@@ -33,7 +33,7 @@ export function upcomingOnMapPoints(
     queue: readonly QueueItem[] | null | undefined,
     currentIndex: number,
     posOf: (id: string) => PlanPoint | null,
-    limit: number = FLIGHT_PLAN_LIMIT
+    limit: number = FLIGHT_PLAN_LIMIT,
 ): PlanPoint[] {
     if (!queue || queue.length === 0) return [];
 

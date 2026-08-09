@@ -34,7 +34,8 @@ const prisma = {
                 args.update.maxRetryAttempts ?? args.create.maxRetryAttempts,
             exclusionMonths:
                 args.update.exclusionMonths ?? args.create.exclusionMonths,
-            downloadRatio: args.update.downloadRatio ?? args.create.downloadRatio,
+            downloadRatio:
+                args.update.downloadRatio ?? args.create.downloadRatio,
             enabled: args.update.enabled ?? args.create.enabled,
         })),
         findUnique: jest.fn(async () => ({
@@ -100,29 +101,31 @@ import { prisma as dbPrisma } from "../../utils/db";
 import { lastFmService } from "../../services/lastfm";
 import { discoveryRecommendationsService } from "../../services/discovery";
 
-const mockUserDiscoverConfigUpsert = dbPrisma.userDiscoverConfig.upsert as jest.Mock;
-const mockUserDiscoverConfigFindUnique =
-    dbPrisma.userDiscoverConfig.findUnique as jest.Mock;
-const mockUserDiscoverConfigCreate =
-    dbPrisma.userDiscoverConfig.create as jest.Mock;
+const mockUserDiscoverConfigUpsert = dbPrisma.userDiscoverConfig
+    .upsert as jest.Mock;
+const mockUserDiscoverConfigFindUnique = dbPrisma.userDiscoverConfig
+    .findUnique as jest.Mock;
+const mockUserDiscoverConfigCreate = dbPrisma.userDiscoverConfig
+    .create as jest.Mock;
 const mockDiscoverExclusionFindMany = dbPrisma.discoverExclusion
     .findMany as jest.Mock;
 const mockDiscoverExclusionDeleteMany = dbPrisma.discoverExclusion
     .deleteMany as jest.Mock;
 const mockDiscoverExclusionFindFirst = dbPrisma.discoverExclusion
     .findFirst as jest.Mock;
-const mockDiscoverExclusionDelete = dbPrisma.discoverExclusion.delete as jest.Mock;
+const mockDiscoverExclusionDelete = dbPrisma.discoverExclusion
+    .delete as jest.Mock;
 const mockGetTopChartArtists = lastFmService.getTopChartArtists as jest.Mock;
 const mockClearCurrentPlaylist =
     discoveryRecommendationsService.clearCurrentPlaylist as jest.Mock;
 
 function getRouteHandler(
     path: string,
-    method: "get" | "post" | "delete" | "patch"
+    method: "get" | "post" | "delete" | "patch",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -155,7 +158,7 @@ describe("discover route runtime behavior", () => {
     const generateHandler = getRouteHandler("/generate", "post");
     const generateStatusHandler = getRouteHandler(
         "/generate/status/:jobId",
-        "get"
+        "get",
     );
     const likeHandler = getRouteHandler("/like", "post");
     const unlikeHandler = getRouteHandler("/unlike", "delete");
@@ -163,7 +166,7 @@ describe("discover route runtime behavior", () => {
     const exclusionsDeleteHandler = getRouteHandler("/exclusions", "delete");
     const exclusionsDeleteByIdHandler = getRouteHandler(
         "/exclusions/:id",
-        "delete"
+        "delete",
     );
     const cleanupLidarrHandler = getRouteHandler("/cleanup-lidarr", "post");
     const fixTaggingHandler = getRouteHandler("/fix-tagging", "post");
@@ -270,7 +273,7 @@ describe("discover route runtime behavior", () => {
                 exclusionMonths: 2,
                 downloadRatio: 1.9,
                 enabled: false,
-            })
+            }),
         );
     });
 
@@ -326,7 +329,7 @@ describe("discover route runtime behavior", () => {
         expect(discoverQueue.getJobs).toHaveBeenCalledWith(
             ["active", "waiting", "delayed"],
             0,
-            200
+            200,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
@@ -339,7 +342,7 @@ describe("discover route runtime behavior", () => {
                 failed: 0,
                 total: 100,
                 queueState: "active",
-            })
+            }),
         );
     });
 
@@ -353,7 +356,7 @@ describe("discover route runtime behavior", () => {
         expect(discoverQueue.getJobs).toHaveBeenCalledWith(
             ["active", "waiting", "delayed"],
             0,
-            200
+            200,
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -404,7 +407,7 @@ describe("discover route runtime behavior", () => {
         expect(discoverQueue.add).toHaveBeenCalledWith(
             "discover-recommendation",
             { userId: "user-1" },
-            { jobId: "discover:manual:user-1" }
+            { jobId: "discover:manual:user-1" },
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -521,7 +524,9 @@ describe("discover route runtime behavior", () => {
     });
 
     it("returns 500 when exclusions lookup fails", async () => {
-        mockDiscoverExclusionFindMany.mockRejectedValueOnce(new Error("db failed"));
+        mockDiscoverExclusionFindMany.mockRejectedValueOnce(
+            new Error("db failed"),
+        );
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -593,7 +598,7 @@ describe("discover route runtime behavior", () => {
             userId: "user-1",
         });
         mockDiscoverExclusionDelete.mockRejectedValueOnce(
-            new Error("delete failed")
+            new Error("delete failed"),
         );
 
         const req = { user: { id: "user-1" }, params: { id: "exc-2" } } as any;
@@ -638,7 +643,7 @@ describe("discover route runtime behavior", () => {
 
     it("returns a 500 error when discovery config lookup fails", async () => {
         mockUserDiscoverConfigFindUnique.mockRejectedValueOnce(
-            new Error("lookup fail")
+            new Error("lookup fail"),
         );
 
         const req = { user: { id: "user-1" } } as any;
@@ -702,7 +707,7 @@ describe("discover route runtime behavior", () => {
 
     it("returns a 500 error when discover config update fails", async () => {
         mockUserDiscoverConfigUpsert.mockRejectedValueOnce(
-            new Error("update fail")
+            new Error("update fail"),
         );
 
         const req = {

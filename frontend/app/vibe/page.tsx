@@ -86,7 +86,11 @@ function trackDataToTrack(track: TrackData) {
         id: track.id,
         title: track.title,
         artist: { name: track.artist, id: track.artistId },
-        album: { title: track.album, id: track.albumId, coverArt: track.coverUrl || undefined },
+        album: {
+            title: track.album,
+            id: track.albumId,
+            coverArt: track.coverUrl || undefined,
+        },
         duration: track.duration,
         audioFeatures: {
             energy: track.features.energy,
@@ -102,12 +106,36 @@ function trackDataToTrack(track: TrackData) {
 }
 
 const VIBE_PRESETS: VibePreset[] = [
-    { id: "chill", name: "Chill", query: "relaxing calm ambient peaceful mellow" },
-    { id: "energy", name: "High Energy", query: "energetic powerful intense driving upbeat" },
-    { id: "dark", name: "Dark", query: "dark atmospheric moody brooding cinematic" },
-    { id: "happy", name: "Feel Good", query: "happy upbeat cheerful bright positive" },
-    { id: "melancholic", name: "Melancholic", query: "sad melancholic emotional nostalgic bittersweet" },
-    { id: "electronic", name: "Electronic", query: "electronic synth digital pulsing techno" },
+    {
+        id: "chill",
+        name: "Chill",
+        query: "relaxing calm ambient peaceful mellow",
+    },
+    {
+        id: "energy",
+        name: "High Energy",
+        query: "energetic powerful intense driving upbeat",
+    },
+    {
+        id: "dark",
+        name: "Dark",
+        query: "dark atmospheric moody brooding cinematic",
+    },
+    {
+        id: "happy",
+        name: "Feel Good",
+        query: "happy upbeat cheerful bright positive",
+    },
+    {
+        id: "melancholic",
+        name: "Melancholic",
+        query: "sad melancholic emotional nostalgic bittersweet",
+    },
+    {
+        id: "electronic",
+        name: "Electronic",
+        query: "electronic synth digital pulsing techno",
+    },
 ];
 
 const FEATURE_CONFIG = [
@@ -156,16 +184,28 @@ function CoverImage({
     if (!imgSrc || hasError) {
         return (
             <div
-                className={cn("bg-surface-highlight flex items-center justify-center", className)}
+                className={cn(
+                    "bg-surface-highlight flex items-center justify-center",
+                    className,
+                )}
                 style={{ width: size, height: size }}
             >
-                <Disc3 className="text-content-disabled" style={{ width: size * 0.3, height: size * 0.3 }} />
+                <Disc3
+                    className="text-content-disabled"
+                    style={{ width: size * 0.3, height: size * 0.3 }}
+                />
             </div>
         );
     }
 
     return (
-        <div className={cn("relative overflow-hidden bg-surface-hover", className)} style={{ width: size, height: size }}>
+        <div
+            className={cn(
+                "relative overflow-hidden bg-surface-hover",
+                className,
+            )}
+            style={{ width: size, height: size }}
+        >
             <Image
                 src={imgSrc}
                 alt={title}
@@ -180,7 +220,13 @@ function CoverImage({
     );
 }
 
-function SimilarityBadge({ similarity, size = "md" }: { similarity: number; size?: "sm" | "md" | "lg" }) {
+function SimilarityBadge({
+    similarity,
+    size = "md",
+}: {
+    similarity: number;
+    size?: "sm" | "md" | "lg";
+}) {
     const percent = Math.round(similarity * 100);
     const sizeClasses = {
         sm: "w-10 h-10 text-xs",
@@ -189,11 +235,17 @@ function SimilarityBadge({ similarity, size = "md" }: { similarity: number; size
     };
 
     return (
-        <div className={cn(
-            "relative flex items-center justify-center rounded-full font-semibold",
-            sizeClasses[size],
-            percent >= 80 ? "text-success" : percent >= 60 ? "text-ai" : "text-content-muted"
-        )}>
+        <div
+            className={cn(
+                "relative flex items-center justify-center rounded-full font-semibold",
+                sizeClasses[size],
+                percent >= 80
+                    ? "text-success"
+                    : percent >= 60
+                      ? "text-ai"
+                      : "text-content-muted",
+            )}
+        >
             {/* Outer ring */}
             <svg className="absolute inset-0 w-full h-full -rotate-90">
                 <circle
@@ -232,18 +284,27 @@ function FeatureComparison({
     return (
         <div className="space-y-3">
             {FEATURE_CONFIG.map(({ key, label }) => {
-                const sVal = (source.features[key as keyof TrackFeatures] as number) || 0;
-                const mVal = (match.features[key as keyof TrackFeatures] as number) || 0;
+                const sVal =
+                    (source.features[key as keyof TrackFeatures] as number) ||
+                    0;
+                const mVal =
+                    (match.features[key as keyof TrackFeatures] as number) || 0;
                 const matchPct = Math.round((1 - Math.abs(sVal - mVal)) * 100);
 
                 return (
                     <div key={key} className="group">
                         <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-content-muted uppercase tracking-wide">{label}</span>
-                            <span className={cn(
-                                "text-xs tabular-nums transition-colors",
-                                matchPct >= 80 ? "text-success" : "text-content-disabled group-hover:text-content-muted"
-                            )}>
+                            <span className="text-xs text-content-muted uppercase tracking-wide">
+                                {label}
+                            </span>
+                            <span
+                                className={cn(
+                                    "text-xs tabular-nums transition-colors",
+                                    matchPct >= 80
+                                        ? "text-success"
+                                        : "text-content-disabled group-hover:text-content-muted",
+                                )}
+                            >
                                 {matchPct}%
                             </span>
                         </div>
@@ -282,8 +343,11 @@ function MoodGrid({ source, match }: { source: TrackData; match: TrackData }) {
     return (
         <div className="grid grid-cols-3 gap-2">
             {validMoods.map(({ key, label }) => {
-                const sVal = (source.features[key as keyof TrackFeatures] as number) || 0;
-                const mVal = (match.features[key as keyof TrackFeatures] as number) || 0;
+                const sVal =
+                    (source.features[key as keyof TrackFeatures] as number) ||
+                    0;
+                const mVal =
+                    (match.features[key as keyof TrackFeatures] as number) || 0;
                 const matchPct = Math.round((1 - Math.abs(sVal - mVal)) * 100);
 
                 return (
@@ -291,14 +355,22 @@ function MoodGrid({ source, match }: { source: TrackData; match: TrackData }) {
                         key={key}
                         className={cn(
                             "px-2.5 py-2 rounded-md text-center transition-colors",
-                            matchPct >= 80 ? "bg-success/10" : "bg-surface-hover"
+                            matchPct >= 80
+                                ? "bg-success/10"
+                                : "bg-surface-hover",
                         )}
                     >
-                        <div className="text-xs text-content-muted mb-0.5">{label}</div>
-                        <div className={cn(
-                            "text-sm font-medium tabular-nums",
-                            matchPct >= 80 ? "text-success" : "text-content-secondary"
-                        )}>
+                        <div className="text-xs text-content-muted mb-0.5">
+                            {label}
+                        </div>
+                        <div
+                            className={cn(
+                                "text-sm font-medium tabular-nums",
+                                matchPct >= 80
+                                    ? "text-success"
+                                    : "text-content-secondary",
+                            )}
+                        >
                             {matchPct}%
                         </div>
                     </div>
@@ -312,16 +384,20 @@ function TagPills({ source, match }: { source: TrackData; match: TrackData }) {
     const sourceTags = source.lastfmTags || [];
     const matchTags = match.lastfmTags || [];
     const allTags = [...new Set([...sourceTags, ...matchTags])];
-    const sharedTags = sourceTags.filter(t => matchTags.includes(t));
+    const sharedTags = sourceTags.filter((t) => matchTags.includes(t));
 
     if (allTags.length === 0) return null;
 
     return (
         <div>
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-content-muted uppercase tracking-wide">Tags</span>
+                <span className="text-xs text-content-muted uppercase tracking-wide">
+                    Tags
+                </span>
                 {sharedTags.length > 0 && (
-                    <span className="text-xs text-success">{sharedTags.length} shared</span>
+                    <span className="text-xs text-success">
+                        {sharedTags.length} shared
+                    </span>
                 )}
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -334,7 +410,7 @@ function TagPills({ source, match }: { source: TrackData; match: TrackData }) {
                                 "px-2 py-0.5 text-xs rounded-full transition-colors",
                                 isShared
                                     ? "bg-success/15 text-success ring-1 ring-success/30"
-                                    : "bg-surface-hover text-content-muted"
+                                    : "bg-surface-hover text-content-muted",
                             )}
                         >
                             {tag}
@@ -368,7 +444,9 @@ function ComparisonPanel({
             <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-brand/10 via-transparent to-ai/10" />
                 <div className="relative flex items-center justify-between px-4 py-3">
-                    <span className="text-xs font-medium text-content-muted uppercase tracking-wider">Vibe Match</span>
+                    <span className="text-xs font-medium text-content-muted uppercase tracking-wider">
+                        Vibe Match
+                    </span>
                     <button
                         onClick={onClose}
                         className="p-1 hover:bg-white/5 rounded transition-colors"
@@ -402,10 +480,16 @@ function ComparisonPanel({
                 <div className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-brand" />
-                        <span className="text-[10px] text-content-muted uppercase tracking-wider">Source</span>
+                        <span className="text-[10px] text-content-muted uppercase tracking-wider">
+                            Source
+                        </span>
                     </div>
-                    <p className="font-medium text-white text-sm truncate">{source.title}</p>
-                    <p className="text-xs text-content-secondary truncate">{source.artist}</p>
+                    <p className="font-medium text-white text-sm truncate">
+                        {source.title}
+                    </p>
+                    <p className="text-xs text-content-secondary truncate">
+                        {source.artist}
+                    </p>
                     <div className="flex gap-1.5 mt-2">
                         {source.features.bpm && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-surface-hover rounded text-content-disabled">
@@ -422,10 +506,16 @@ function ComparisonPanel({
                 <div className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-ai" />
-                        <span className="text-[10px] text-content-muted uppercase tracking-wider">Match</span>
+                        <span className="text-[10px] text-content-muted uppercase tracking-wider">
+                            Match
+                        </span>
                     </div>
-                    <p className="font-medium text-white text-sm truncate">{match.title}</p>
-                    <p className="text-xs text-content-secondary truncate">{match.artist}</p>
+                    <p className="font-medium text-white text-sm truncate">
+                        {match.title}
+                    </p>
+                    <p className="text-xs text-content-secondary truncate">
+                        {match.artist}
+                    </p>
                     <div className="flex gap-1.5 mt-2">
                         {match.features.bpm && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-surface-hover rounded text-content-disabled">
@@ -443,13 +533,17 @@ function ComparisonPanel({
 
             {/* Audio features */}
             <div className="p-4 border-b border-surface-active">
-                <h4 className="text-[10px] font-medium text-content-muted uppercase tracking-wider mb-4">Audio DNA</h4>
+                <h4 className="text-[10px] font-medium text-content-muted uppercase tracking-wider mb-4">
+                    Audio DNA
+                </h4>
                 <FeatureComparison source={source} match={match} />
             </div>
 
             {/* Mood profile */}
             <div className="p-4 border-b border-surface-active">
-                <h4 className="text-[10px] font-medium text-content-muted uppercase tracking-wider mb-3">Mood Profile</h4>
+                <h4 className="text-[10px] font-medium text-content-muted uppercase tracking-wider mb-3">
+                    Mood Profile
+                </h4>
                 <MoodGrid source={source} match={match} />
             </div>
 
@@ -486,7 +580,7 @@ function TrackRow({
                 "group grid grid-cols-[auto_1fr_auto_auto] gap-4 px-4 py-2.5 rounded-lg cursor-pointer transition-all items-center",
                 isSelected
                     ? "bg-gradient-to-r from-brand/5 to-ai/5 ring-1 ring-ai/20"
-                    : "hover:bg-surface-overlay"
+                    : "hover:bg-surface-overlay",
             )}
         >
             {/* Index / Play */}
@@ -495,7 +589,10 @@ function TrackRow({
                     {index + 1}
                 </span>
                 <button
-                    onClick={(e) => { e.stopPropagation(); onPlay(); }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onPlay();
+                    }}
                     className="hidden group-hover:block"
                 >
                     <Play className="w-4 h-4 text-white fill-white mx-auto" />
@@ -516,10 +613,12 @@ function TrackRow({
                     )}
                 </div>
                 <div className="min-w-0">
-                    <p className={cn(
-                        "text-sm font-medium truncate transition-colors",
-                        isSelected ? "text-ai" : "text-white"
-                    )}>
+                    <p
+                        className={cn(
+                            "text-sm font-medium truncate transition-colors",
+                            isSelected ? "text-ai" : "text-white",
+                        )}
+                    >
                         {track.title}
                     </p>
                     <Link
@@ -551,7 +650,11 @@ function TrackRow({
  * Renders the VibePage component.
  */
 export default function VibePage() {
-    const { vibeEmbeddings, audioAnalysis, loading: featuresLoading } = useFeatures();
+    const {
+        vibeEmbeddings,
+        audioAnalysis,
+        loading: featuresLoading,
+    } = useFeatures();
 
     if (featuresLoading) {
         return (
@@ -566,7 +669,9 @@ export default function VibePage() {
             <div className="p-6">
                 <h1 className="text-xl font-semibold text-white mb-4">Vibe</h1>
                 <div className="bg-surface-raised border border-surface-active rounded-lg p-6">
-                    <p className="text-content-secondary mb-2">Feature not available</p>
+                    <p className="text-content-secondary mb-2">
+                        Feature not available
+                    </p>
                     <p className="text-sm text-content-muted">
                         Vibe similarity requires the CLAP analyzer service.
                     </p>
@@ -580,7 +685,12 @@ export default function VibePage() {
 
 function VibePageContent() {
     const { playTracks } = useAudio();
-    const { setVibeMode, setVibeSourceFeatures, setVibeQueueIds, currentTrack } = useAudioState();
+    const {
+        setVibeMode,
+        setVibeSourceFeatures,
+        setVibeQueueIds,
+        currentTrack,
+    } = useAudioState();
     const [libraryTracks, setLibraryTracks] = useState<LibraryTrack[]>([]);
     const [sourceTrack, setSourceTrack] = useState<TrackData | null>(null);
     const [similarTracks, setSimilarTracks] = useState<TrackData[]>([]);
@@ -588,7 +698,10 @@ function VibePageContent() {
     const [isLoading, setIsLoading] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [vibeStatus, setVibeStatus] = useState<{ totalTracks: number; embeddedTracks: number } | null>(null);
+    const [vibeStatus, setVibeStatus] = useState<{
+        totalTracks: number;
+        embeddedTracks: number;
+    } | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>("comparison");
     const [vibeTab, setVibeTab] = useState<VibeTab>("explore");
     const [searchQuery, setSearchQuery] = useState<string | null>(null);
@@ -607,9 +720,12 @@ function VibePageContent() {
         }
     }, []);
 
-    const playTrack = useCallback(async (track: TrackData) => {
-        await playTracks([trackDataToTrack(track)]);
-    }, [playTracks]);
+    const playTrack = useCallback(
+        async (track: TrackData) => {
+            await playTracks([trackDataToTrack(track)]);
+        },
+        [playTracks],
+    );
 
     const playAllSimilar = useCallback(async () => {
         if (similarTracks.length === 0) return;
@@ -621,190 +737,256 @@ function VibePageContent() {
                 danceability: vibeSource.features.danceability,
                 arousal: vibeSource.features.arousal,
             });
-            const trackIds = similarTracks.map(t => t.id);
+            const trackIds = similarTracks.map((t) => t.id);
             setVibeQueueIds(trackIds);
             setVibeMode(true);
             const tracks = similarTracks.map(trackDataToTrack);
             await playTracks(tracks, 0, true);
         }
-    }, [similarTracks, sourceTrack, playTracks, setVibeMode, setVibeSourceFeatures, setVibeQueueIds]);
+    }, [
+        similarTracks,
+        sourceTrack,
+        playTracks,
+        setVibeMode,
+        setVibeSourceFeatures,
+        setVibeQueueIds,
+    ]);
 
-    const fetchTrackWithFeatures = useCallback(async (
-        trackInfo: {
+    const fetchTrackWithFeatures = useCallback(
+        async (trackInfo: {
             id: string;
             title: string;
             duration: number;
-            album: { id: string; title: string; coverUrl?: string | null; coverArt?: string | null };
+            album: {
+                id: string;
+                title: string;
+                coverUrl?: string | null;
+                coverArt?: string | null;
+            };
             artist: { id: string; name: string };
             distance?: number;
             similarity?: number;
-        }
-    ): Promise<TrackData> => {
-        const incomingCover = trackInfo.album.coverUrl || trackInfo.album.coverArt || null;
+        }): Promise<TrackData> => {
+            const incomingCover =
+                trackInfo.album.coverUrl || trackInfo.album.coverArt || null;
 
-        try {
-            const analysis = await api.getTrackAnalysis(trackInfo.id);
-            return {
-                id: trackInfo.id,
-                title: trackInfo.title,
-                artist: trackInfo.artist.name,
-                artistId: trackInfo.artist.id,
-                album: trackInfo.album.title,
-                albumId: trackInfo.album.id,
-                coverUrl: incomingCover,
-                duration: trackInfo.duration,
-                distance: trackInfo.distance,
-                similarity: trackInfo.similarity ?? (trackInfo.distance !== undefined ? distanceToSimilarity(trackInfo.distance) : undefined),
-                features: {
-                    energy: analysis.energy ?? 0.5,
-                    valence: analysis.valence ?? 0.5,
-                    arousal: analysis.arousal ?? 0.5,
-                    danceability: analysis.danceability ?? 0.5,
-                    instrumentalness: analysis.instrumentalness ?? 0.5,
-                    acousticness: analysis.acousticness ?? 0.5,
-                    speechiness: analysis.speechiness ?? 0.1,
-                    bpm: analysis.bpm,
-                    key: analysis.key ? `${analysis.key}${analysis.keyScale ? ` ${analysis.keyScale}` : ""}` : null,
-                    moodHappy: analysis.moodHappy ?? null,
-                    moodSad: analysis.moodSad ?? null,
-                    moodRelaxed: analysis.moodRelaxed ?? null,
-                    moodAggressive: analysis.moodAggressive ?? null,
-                    moodParty: analysis.moodParty ?? null,
-                    moodAcoustic: analysis.moodAcoustic ?? null,
-                    moodElectronic: analysis.moodElectronic ?? null,
-                },
-                lastfmTags: analysis.lastfmTags || [],
-                essentiaGenres: analysis.essentiaGenres || [],
-            };
-        } catch {
-            return {
-                id: trackInfo.id,
-                title: trackInfo.title,
-                artist: trackInfo.artist.name,
-                artistId: trackInfo.artist.id,
-                album: trackInfo.album.title,
-                albumId: trackInfo.album.id,
-                coverUrl: incomingCover,
-                duration: trackInfo.duration,
-                distance: trackInfo.distance,
-                similarity: trackInfo.similarity ?? (trackInfo.distance !== undefined ? distanceToSimilarity(trackInfo.distance) : undefined),
-                features: {
-                    energy: 0.5, valence: 0.5, arousal: 0.5, danceability: 0.5,
-                    instrumentalness: 0.5, acousticness: 0.5, speechiness: 0.1,
-                    bpm: null, key: null,
-                    moodHappy: null, moodSad: null, moodRelaxed: null,
-                    moodAggressive: null, moodParty: null, moodAcoustic: null, moodElectronic: null,
-                },
-                lastfmTags: [],
-                essentiaGenres: [],
-            };
-        }
-    }, []);
-
-    const loadSimilarTracks = useCallback(async (track: LibraryTrack) => {
-        setIsLoading(true);
-        setError(null);
-        setViewMode("comparison");
-        setSearchQuery(null);
-        setSelectedMatch(null);
-
-        try {
-            const result = await api.getVibeSimilarTracks(track.id, 20);
-
-            if (result.tracks.length === 0) {
-                setError("No similar tracks found. This track may not have been analyzed yet.");
-                setIsLoading(false);
-                return;
+            try {
+                const analysis = await api.getTrackAnalysis(trackInfo.id);
+                return {
+                    id: trackInfo.id,
+                    title: trackInfo.title,
+                    artist: trackInfo.artist.name,
+                    artistId: trackInfo.artist.id,
+                    album: trackInfo.album.title,
+                    albumId: trackInfo.album.id,
+                    coverUrl: incomingCover,
+                    duration: trackInfo.duration,
+                    distance: trackInfo.distance,
+                    similarity:
+                        trackInfo.similarity ??
+                        (trackInfo.distance !== undefined
+                            ? distanceToSimilarity(trackInfo.distance)
+                            : undefined),
+                    features: {
+                        energy: analysis.energy ?? 0.5,
+                        valence: analysis.valence ?? 0.5,
+                        arousal: analysis.arousal ?? 0.5,
+                        danceability: analysis.danceability ?? 0.5,
+                        instrumentalness: analysis.instrumentalness ?? 0.5,
+                        acousticness: analysis.acousticness ?? 0.5,
+                        speechiness: analysis.speechiness ?? 0.1,
+                        bpm: analysis.bpm,
+                        key: analysis.key
+                            ? `${analysis.key}${analysis.keyScale ? ` ${analysis.keyScale}` : ""}`
+                            : null,
+                        moodHappy: analysis.moodHappy ?? null,
+                        moodSad: analysis.moodSad ?? null,
+                        moodRelaxed: analysis.moodRelaxed ?? null,
+                        moodAggressive: analysis.moodAggressive ?? null,
+                        moodParty: analysis.moodParty ?? null,
+                        moodAcoustic: analysis.moodAcoustic ?? null,
+                        moodElectronic: analysis.moodElectronic ?? null,
+                    },
+                    lastfmTags: analysis.lastfmTags || [],
+                    essentiaGenres: analysis.essentiaGenres || [],
+                };
+            } catch {
+                return {
+                    id: trackInfo.id,
+                    title: trackInfo.title,
+                    artist: trackInfo.artist.name,
+                    artistId: trackInfo.artist.id,
+                    album: trackInfo.album.title,
+                    albumId: trackInfo.album.id,
+                    coverUrl: incomingCover,
+                    duration: trackInfo.duration,
+                    distance: trackInfo.distance,
+                    similarity:
+                        trackInfo.similarity ??
+                        (trackInfo.distance !== undefined
+                            ? distanceToSimilarity(trackInfo.distance)
+                            : undefined),
+                    features: {
+                        energy: 0.5,
+                        valence: 0.5,
+                        arousal: 0.5,
+                        danceability: 0.5,
+                        instrumentalness: 0.5,
+                        acousticness: 0.5,
+                        speechiness: 0.1,
+                        bpm: null,
+                        key: null,
+                        moodHappy: null,
+                        moodSad: null,
+                        moodRelaxed: null,
+                        moodAggressive: null,
+                        moodParty: null,
+                        moodAcoustic: null,
+                        moodElectronic: null,
+                    },
+                    lastfmTags: [],
+                    essentiaGenres: [],
+                };
             }
+        },
+        [],
+    );
 
-            const sourceData = await fetchTrackWithFeatures({
-                id: track.id,
-                title: track.title,
-                duration: track.duration,
-                album: {
-                    id: track.album.id,
-                    title: track.album.title,
-                    coverUrl: track.album.coverUrl,
-                    coverArt: track.album.coverArt,
-                },
-                artist: track.album.artist,
-            });
-            setSourceTrack(sourceData);
-
-            const similarWithFeatures = await Promise.all(
-                result.tracks.map(t => fetchTrackWithFeatures(t))
-            );
-            setSimilarTracks(similarWithFeatures);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load similar tracks");
-        } finally {
-            setIsLoading(false);
-        }
-    }, [fetchTrackWithFeatures]);
-
-    const handleVibeSearch = useCallback(async (query: string) => {
-        setRecentSearches(prev => {
-            const updated = [query, ...prev.filter(s => s.toLowerCase() !== query.toLowerCase())].slice(0, 5);
-            localStorage.setItem("vibe-recent-searches", JSON.stringify(updated));
-            return updated;
-        });
-
-        setIsSearching(true);
-        setError(null);
-        setViewMode("search-results");
-        setSearchQuery(query);
-        setSourceTrack(null);
-        setSelectedMatch(null);
-
-        try {
-            const result = await api.vibeSearch(query, 20);
-
-            if (result.tracks.length === 0) {
-                const threshold = result.minSimilarity ? Math.round(result.minSimilarity * 100) : 60;
-                setError(`No tracks found matching "${query}" above ${threshold}% similarity. Try a different search term.`);
-                setSimilarTracks([]);
-                setIsSearching(false);
-                return;
-            }
-
-            const tracksWithFeatures = await Promise.all(
-                result.tracks.map(t => fetchTrackWithFeatures(t))
-            );
-            setSimilarTracks(tracksWithFeatures);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Search failed");
-        } finally {
-            setIsSearching(false);
-        }
-    }, [fetchTrackWithFeatures]);
-
-    const handleSelectSearchResult = useCallback(async (track: TrackData) => {
-        setIsLoading(true);
-        setError(null);
-        setViewMode("comparison");
-
-        try {
-            const result = await api.getVibeSimilarTracks(track.id, 20);
-
-            if (result.tracks.length === 0) {
-                setError("No similar tracks found for this track.");
-                setIsLoading(false);
-                return;
-            }
-
-            setSourceTrack(track);
-
-            const similarWithFeatures = await Promise.all(
-                result.tracks.map(t => fetchTrackWithFeatures(t))
-            );
-            setSimilarTracks(similarWithFeatures);
+    const loadSimilarTracks = useCallback(
+        async (track: LibraryTrack) => {
+            setIsLoading(true);
+            setError(null);
+            setViewMode("comparison");
+            setSearchQuery(null);
             setSelectedMatch(null);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load similar tracks");
-        } finally {
-            setIsLoading(false);
-        }
-    }, [fetchTrackWithFeatures]);
+
+            try {
+                const result = await api.getVibeSimilarTracks(track.id, 20);
+
+                if (result.tracks.length === 0) {
+                    setError(
+                        "No similar tracks found. This track may not have been analyzed yet.",
+                    );
+                    setIsLoading(false);
+                    return;
+                }
+
+                const sourceData = await fetchTrackWithFeatures({
+                    id: track.id,
+                    title: track.title,
+                    duration: track.duration,
+                    album: {
+                        id: track.album.id,
+                        title: track.album.title,
+                        coverUrl: track.album.coverUrl,
+                        coverArt: track.album.coverArt,
+                    },
+                    artist: track.album.artist,
+                });
+                setSourceTrack(sourceData);
+
+                const similarWithFeatures = await Promise.all(
+                    result.tracks.map((t) => fetchTrackWithFeatures(t)),
+                );
+                setSimilarTracks(similarWithFeatures);
+            } catch (err) {
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to load similar tracks",
+                );
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [fetchTrackWithFeatures],
+    );
+
+    const handleVibeSearch = useCallback(
+        async (query: string) => {
+            setRecentSearches((prev) => {
+                const updated = [
+                    query,
+                    ...prev.filter(
+                        (s) => s.toLowerCase() !== query.toLowerCase(),
+                    ),
+                ].slice(0, 5);
+                localStorage.setItem(
+                    "vibe-recent-searches",
+                    JSON.stringify(updated),
+                );
+                return updated;
+            });
+
+            setIsSearching(true);
+            setError(null);
+            setViewMode("search-results");
+            setSearchQuery(query);
+            setSourceTrack(null);
+            setSelectedMatch(null);
+
+            try {
+                const result = await api.vibeSearch(query, 20);
+
+                if (result.tracks.length === 0) {
+                    const threshold = result.minSimilarity
+                        ? Math.round(result.minSimilarity * 100)
+                        : 60;
+                    setError(
+                        `No tracks found matching "${query}" above ${threshold}% similarity. Try a different search term.`,
+                    );
+                    setSimilarTracks([]);
+                    setIsSearching(false);
+                    return;
+                }
+
+                const tracksWithFeatures = await Promise.all(
+                    result.tracks.map((t) => fetchTrackWithFeatures(t)),
+                );
+                setSimilarTracks(tracksWithFeatures);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Search failed");
+            } finally {
+                setIsSearching(false);
+            }
+        },
+        [fetchTrackWithFeatures],
+    );
+
+    const handleSelectSearchResult = useCallback(
+        async (track: TrackData) => {
+            setIsLoading(true);
+            setError(null);
+            setViewMode("comparison");
+
+            try {
+                const result = await api.getVibeSimilarTracks(track.id, 20);
+
+                if (result.tracks.length === 0) {
+                    setError("No similar tracks found for this track.");
+                    setIsLoading(false);
+                    return;
+                }
+
+                setSourceTrack(track);
+
+                const similarWithFeatures = await Promise.all(
+                    result.tracks.map((t) => fetchTrackWithFeatures(t)),
+                );
+                setSimilarTracks(similarWithFeatures);
+                setSelectedMatch(null);
+            } catch (err) {
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to load similar tracks",
+                );
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [fetchTrackWithFeatures],
+    );
 
     const handleRandomTrack = useCallback(() => {
         if (libraryTracks.length === 0) return;
@@ -903,8 +1085,12 @@ function VibePageContent() {
     // header/search stay explore-only; the floating chip in headerSlot is the
     // way back.
     if (vibeTab === "map") {
-        return <VibeMapTab currentTrackPresent={!!currentTrack}
-            onExplore={() => setVibeTab("explore")} />;
+        return (
+            <VibeMapTab
+                currentTrackPresent={!!currentTrack}
+                onExplore={() => setVibeTab("explore")}
+            />
+        );
     }
 
     return (
@@ -931,7 +1117,9 @@ function VibePageContent() {
                 {/* Header */}
                 <div className="mb-8">
                     <div className="flex items-center justify-between mb-1">
-                        <h1 className="text-2xl font-semibold text-white tracking-tight">Vibe</h1>
+                        <h1 className="text-2xl font-semibold text-white tracking-tight">
+                            Vibe
+                        </h1>
                         <div className="flex items-center gap-1">
                             {/* Use Current Track button - only show when something is playing */}
                             {currentTrack && (
@@ -942,17 +1130,21 @@ function VibePageContent() {
                                         "flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors disabled:opacity-50",
                                         sourceTrack?.id === currentTrack.id
                                             ? "text-brand bg-brand/10"
-                                            : "text-content-muted hover:text-white hover:bg-white/5"
+                                            : "text-content-muted hover:text-white hover:bg-white/5",
                                     )}
                                     title={`Find tracks similar to "${currentTrack.title}"`}
                                 >
                                     <AudioWaveform className="w-4 h-4" />
-                                    <span className="hidden sm:inline">Now Playing</span>
+                                    <span className="hidden sm:inline">
+                                        Now Playing
+                                    </span>
                                 </button>
                             )}
                             <button
                                 onClick={handleRandomTrack}
-                                disabled={isLoading || libraryTracks.length === 0}
+                                disabled={
+                                    isLoading || libraryTracks.length === 0
+                                }
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm text-content-muted hover:text-white hover:bg-white/5 rounded-md transition-colors disabled:opacity-50"
                             >
                                 <Shuffle className="w-4 h-4" />
@@ -963,13 +1155,19 @@ function VibePageContent() {
                                 disabled={isLoading}
                                 className="p-1.5 text-content-muted hover:text-white hover:bg-white/5 rounded-md transition-colors disabled:opacity-50"
                             >
-                                <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+                                <RefreshCw
+                                    className={cn(
+                                        "w-4 h-4",
+                                        isLoading && "animate-spin",
+                                    )}
+                                />
                             </button>
                         </div>
                     </div>
                     {vibeStatus && (
                         <p className="text-sm text-content-disabled">
-                            {vibeStatus.embeddedTracks.toLocaleString()} tracks with audio fingerprints
+                            {vibeStatus.embeddedTracks.toLocaleString()} tracks
+                            with audio fingerprints
                         </p>
                     )}
 
@@ -994,251 +1192,336 @@ function VibePageContent() {
                     </div>
 
                     {/* Search — only visible in explore tab */}
-                    {vibeTab === "explore" && (<><form onSubmit={handleSearch} className="relative max-w-lg mt-5">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-content-disabled" />
-                        <input
-                            type="text"
-                            placeholder="Search by vibe... try 'dark atmospheric' or 'upbeat dance'"
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-surface-raised border border-surface-active focus:border-line-strong rounded-lg text-sm text-white placeholder-content-disabled focus:outline-none transition-colors"
-                        />
-                        {isSearching && (
-                            <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-content-disabled animate-spin" />
-                        )}
-                    </form>
-
-                    {/* Presets & Recent */}
-                    <div className="flex flex-wrap items-center gap-2 mt-4">
-                        {VIBE_PRESETS.map((preset) => (
-                            <button
-                                key={preset.id}
-                                onClick={() => handleVibeSearch(preset.query)}
-                                className="px-3 py-1.5 text-xs text-content-muted bg-surface-raised border border-surface-active hover:border-line-strong hover:text-white rounded-full transition-all hover:scale-[1.02]"
+                    {vibeTab === "explore" && (
+                        <>
+                            <form
+                                onSubmit={handleSearch}
+                                className="relative max-w-lg mt-5"
                             >
-                                {preset.name}
-                            </button>
-                        ))}
-                        {recentSearches.length > 0 && (
-                            <>
-                                <div className="w-px h-5 bg-surface-active mx-1" />
-                                {recentSearches.slice(0, 3).map((query) => (
-                                    <button
-                                        key={query}
-                                        onClick={() => handleVibeSearch(query)}
-                                        className="text-xs text-content-disabled hover:text-content-muted transition-colors"
-                                    >
-                                        {query}
-                                    </button>
-                                ))}
-                            </>
-                        )}
-                    </div>
-                </>)}
-                </div>
-
-                {vibeTab === "explore" && <>
-                {/* Error */}
-                {error && (
-                    <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-error/5 border border-error/20 rounded-lg">
-                        <AlertCircle className="w-4 h-4 text-error flex-shrink-0" />
-                        <span className="text-sm text-error">{error}</span>
-                    </div>
-                )}
-
-                {/* Loading */}
-                {(isLoading || isSearching) && !error && (
-                    <div className="flex items-center justify-center py-24">
-                        <div className="relative">
-                            <div className="w-12 h-12 rounded-full border-2 border-surface-active border-t-[#2323FF] animate-spin" />
-                        </div>
-                    </div>
-                )}
-
-                {/* Search Results */}
-                {!isLoading && !isSearching && viewMode === "search-results" && similarTracks.length > 0 && (
-                    <div>
-                        <div className="flex items-center justify-between mb-4">
-                            <div>
-                                <h2 className="text-lg font-medium text-white">
-                                    &ldquo;{searchQuery}&rdquo;
-                                </h2>
-                                <p className="text-sm text-content-disabled">
-                                    {similarTracks.length} tracks found - double-click to explore similar
-                                </p>
-                            </div>
-                            <button
-                                onClick={playAllSimilar}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-[#1db954] hover:bg-[#1ed760] text-black text-sm font-medium rounded-full transition-all hover:scale-[1.02]"
-                            >
-                                <Play className="w-4 h-4 fill-black" />
-                                Play All
-                            </button>
-                        </div>
-                        <div className="space-y-0.5">
-                            {similarTracks.map((track, i) => (
-                                <TrackRow
-                                    key={track.id}
-                                    track={track}
-                                    index={i}
-                                    onClick={() => playTrack(track)}
-                                    onDoubleClick={() => handleSelectSearchResult(track)}
-                                    onPlay={() => playTrack(track)}
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-content-disabled" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by vibe... try 'dark atmospheric' or 'upbeat dance'"
+                                    value={inputValue}
+                                    onChange={(e) =>
+                                        setInputValue(e.target.value)
+                                    }
+                                    className="w-full pl-10 pr-4 py-2.5 bg-surface-raised border border-surface-active focus:border-line-strong rounded-lg text-sm text-white placeholder-content-disabled focus:outline-none transition-colors"
                                 />
-                            ))}
-                        </div>
-                    </div>
-                )}
+                                {isSearching && (
+                                    <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-content-disabled animate-spin" />
+                                )}
+                            </form>
 
-                {/* Comparison View */}
-                {!isLoading && !isSearching && viewMode === "comparison" && sourceTrack && similarTracks.length > 0 && (
-                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
-                        {/* Track List */}
-                        <div>
-                            <div className="flex items-center justify-between mb-5">
-                                <div className="flex items-center gap-4">
-                                    <div className="relative">
-                                        <CoverImage
-                                            coverUrl={sourceTrack.coverUrl}
-                                            title={sourceTrack.title}
-                                            size={56}
-                                            className="rounded-lg"
-                                        />
-                                        <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-brand ring-2 ring-surface" />
-                                    </div>
-                                    <div>
-                                        <h2 className="font-medium text-white">Similar to</h2>
-                                        <p className="text-sm text-content-secondary">{sourceTrack.title}</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={playAllSimilar}
-                                    className="flex items-center gap-2 px-5 py-2.5 bg-[#1db954] hover:bg-[#1ed760] text-black text-sm font-medium rounded-full transition-all hover:scale-[1.02]"
-                                >
-                                    <Play className="w-4 h-4 fill-black" />
-                                    Play All
-                                </button>
-                            </div>
-                            <div className="space-y-0.5">
-                                {similarTracks.map((track, i) => (
-                                    <TrackRow
-                                        key={track.id}
-                                        track={track}
-                                        index={i}
-                                        isSelected={selectedMatch?.id === track.id}
-                                        onClick={() => setSelectedMatch(track)}
-                                        onDoubleClick={() => playTrack(track)}
-                                        onPlay={() => playTrack(track)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Comparison Panel */}
-                        <div className="hidden lg:block">
-                            <div className="sticky top-6">
-                                <AnimatePresence mode="wait">
-                                    {selectedMatch ? (
-                                        <ComparisonPanel
-                                            key={selectedMatch.id}
-                                            source={sourceTrack}
-                                            match={selectedMatch}
-                                            onClose={() => setSelectedMatch(null)}
-                                        />
-                                    ) : (
-                                        <motion.div
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            className="bg-surface-raised border border-surface-active rounded-xl p-8 text-center"
-                                        >
-                                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-brand/10 to-ai/10 flex items-center justify-center">
-                                                <Disc3 className="w-8 h-8 text-line-strong" />
-                                            </div>
-                                            <p className="text-sm text-content-disabled">
-                                                Select a track to compare audio DNA
-                                            </p>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Empty state - prompt user to start */}
-                {!isLoading && !isSearching && !error && !sourceTrack && similarTracks.length === 0 && viewMode === "comparison" && (
-                    <div className="max-w-md mx-auto text-center py-16">
-                        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-brand/10 to-ai/10 flex items-center justify-center">
-                            <AudioWaveform className="w-12 h-12 text-content-disabled" />
-                        </div>
-                        <h2 className="text-xl font-medium text-white mb-2">Explore by Vibe</h2>
-                        <p className="text-content-muted mb-8">
-                            Find tracks that sound similar to each other based on their audio characteristics.
-                        </p>
-
-                        <div className="space-y-3">
-                            {/* Use current track if playing */}
-                            {currentTrack && (
-                                <button
-                                    onClick={handleUseCurrentTrack}
-                                    className="w-full flex items-center gap-4 px-4 py-3 bg-surface-raised border border-surface-active hover:border-line-strong rounded-lg transition-all text-left group"
-                                >
-                                    <div className="w-12 h-12 rounded bg-surface-hover flex items-center justify-center flex-shrink-0">
-                                        <AudioWaveform className="w-5 h-5 text-brand" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-medium text-white truncate">
-                                            Find tracks like &ldquo;{currentTrack.title}&rdquo;
-                                        </p>
-                                        <p className="text-xs text-content-disabled">Use the currently playing track</p>
-                                    </div>
-                                </button>
-                            )}
-
-                            {/* Random track */}
-                            <button
-                                onClick={handleRandomTrack}
-                                disabled={libraryTracks.length === 0}
-                                className="w-full flex items-center gap-4 px-4 py-3 bg-surface-raised border border-surface-active hover:border-line-strong rounded-lg transition-all text-left group disabled:opacity-50"
-                            >
-                                <div className="w-12 h-12 rounded bg-surface-hover flex items-center justify-center flex-shrink-0">
-                                    <Shuffle className="w-5 h-5 text-ai" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-white">Surprise me</p>
-                                    <p className="text-xs text-content-disabled">Pick a random track from your library</p>
-                                </div>
-                            </button>
-
-                            {/* Divider */}
-                            <div className="flex items-center gap-3 py-2">
-                                <div className="flex-1 h-px bg-surface-active" />
-                                <span className="text-xs text-content-disabled">or search above</span>
-                                <div className="flex-1 h-px bg-surface-active" />
-                            </div>
-
-                            {/* Preset chips */}
-                            <div className="flex flex-wrap justify-center gap-2">
-                                {VIBE_PRESETS.slice(0, 4).map((preset) => (
+                            {/* Presets & Recent */}
+                            <div className="flex flex-wrap items-center gap-2 mt-4">
+                                {VIBE_PRESETS.map((preset) => (
                                     <button
                                         key={preset.id}
-                                        onClick={() => handleVibeSearch(preset.query)}
-                                        className="px-3 py-1.5 text-xs text-content-muted bg-surface-raised border border-surface-active hover:border-line-strong hover:text-white rounded-full transition-all"
+                                        onClick={() =>
+                                            handleVibeSearch(preset.query)
+                                        }
+                                        className="px-3 py-1.5 text-xs text-content-muted bg-surface-raised border border-surface-active hover:border-line-strong hover:text-white rounded-full transition-all hover:scale-[1.02]"
                                     >
                                         {preset.name}
                                     </button>
                                 ))}
+                                {recentSearches.length > 0 && (
+                                    <>
+                                        <div className="w-px h-5 bg-surface-active mx-1" />
+                                        {recentSearches
+                                            .slice(0, 3)
+                                            .map((query) => (
+                                                <button
+                                                    key={query}
+                                                    onClick={() =>
+                                                        handleVibeSearch(query)
+                                                    }
+                                                    className="text-xs text-content-disabled hover:text-content-muted transition-colors"
+                                                >
+                                                    {query}
+                                                </button>
+                                            ))}
+                                    </>
+                                )}
                             </div>
-                        </div>
+                        </>
+                    )}
+                </div>
 
-                        {vibeStatus && vibeStatus.embeddedTracks === 0 && (
-                            <p className="text-xs text-error mt-6">
-                                No tracks analyzed yet. Run the CLAP analyzer to enable vibe search.
-                            </p>
+                {vibeTab === "explore" && (
+                    <>
+                        {/* Error */}
+                        {error && (
+                            <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-error/5 border border-error/20 rounded-lg">
+                                <AlertCircle className="w-4 h-4 text-error flex-shrink-0" />
+                                <span className="text-sm text-error">
+                                    {error}
+                                </span>
+                            </div>
                         )}
-                    </div>
+
+                        {/* Loading */}
+                        {(isLoading || isSearching) && !error && (
+                            <div className="flex items-center justify-center py-24">
+                                <div className="relative">
+                                    <div className="w-12 h-12 rounded-full border-2 border-surface-active border-t-[#2323FF] animate-spin" />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Search Results */}
+                        {!isLoading &&
+                            !isSearching &&
+                            viewMode === "search-results" &&
+                            similarTracks.length > 0 && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h2 className="text-lg font-medium text-white">
+                                                &ldquo;{searchQuery}&rdquo;
+                                            </h2>
+                                            <p className="text-sm text-content-disabled">
+                                                {similarTracks.length} tracks
+                                                found - double-click to explore
+                                                similar
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={playAllSimilar}
+                                            className="flex items-center gap-2 px-5 py-2.5 bg-[#1db954] hover:bg-[#1ed760] text-black text-sm font-medium rounded-full transition-all hover:scale-[1.02]"
+                                        >
+                                            <Play className="w-4 h-4 fill-black" />
+                                            Play All
+                                        </button>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        {similarTracks.map((track, i) => (
+                                            <TrackRow
+                                                key={track.id}
+                                                track={track}
+                                                index={i}
+                                                onClick={() => playTrack(track)}
+                                                onDoubleClick={() =>
+                                                    handleSelectSearchResult(
+                                                        track,
+                                                    )
+                                                }
+                                                onPlay={() => playTrack(track)}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                        {/* Comparison View */}
+                        {!isLoading &&
+                            !isSearching &&
+                            viewMode === "comparison" &&
+                            sourceTrack &&
+                            similarTracks.length > 0 && (
+                                <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
+                                    {/* Track List */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-5">
+                                            <div className="flex items-center gap-4">
+                                                <div className="relative">
+                                                    <CoverImage
+                                                        coverUrl={
+                                                            sourceTrack.coverUrl
+                                                        }
+                                                        title={
+                                                            sourceTrack.title
+                                                        }
+                                                        size={56}
+                                                        className="rounded-lg"
+                                                    />
+                                                    <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-brand ring-2 ring-surface" />
+                                                </div>
+                                                <div>
+                                                    <h2 className="font-medium text-white">
+                                                        Similar to
+                                                    </h2>
+                                                    <p className="text-sm text-content-secondary">
+                                                        {sourceTrack.title}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={playAllSimilar}
+                                                className="flex items-center gap-2 px-5 py-2.5 bg-[#1db954] hover:bg-[#1ed760] text-black text-sm font-medium rounded-full transition-all hover:scale-[1.02]"
+                                            >
+                                                <Play className="w-4 h-4 fill-black" />
+                                                Play All
+                                            </button>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            {similarTracks.map((track, i) => (
+                                                <TrackRow
+                                                    key={track.id}
+                                                    track={track}
+                                                    index={i}
+                                                    isSelected={
+                                                        selectedMatch?.id ===
+                                                        track.id
+                                                    }
+                                                    onClick={() =>
+                                                        setSelectedMatch(track)
+                                                    }
+                                                    onDoubleClick={() =>
+                                                        playTrack(track)
+                                                    }
+                                                    onPlay={() =>
+                                                        playTrack(track)
+                                                    }
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Comparison Panel */}
+                                    <div className="hidden lg:block">
+                                        <div className="sticky top-6">
+                                            <AnimatePresence mode="wait">
+                                                {selectedMatch ? (
+                                                    <ComparisonPanel
+                                                        key={selectedMatch.id}
+                                                        source={sourceTrack}
+                                                        match={selectedMatch}
+                                                        onClose={() =>
+                                                            setSelectedMatch(
+                                                                null,
+                                                            )
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <motion.div
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        className="bg-surface-raised border border-surface-active rounded-xl p-8 text-center"
+                                                    >
+                                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-brand/10 to-ai/10 flex items-center justify-center">
+                                                            <Disc3 className="w-8 h-8 text-line-strong" />
+                                                        </div>
+                                                        <p className="text-sm text-content-disabled">
+                                                            Select a track to
+                                                            compare audio DNA
+                                                        </p>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                        {/* Empty state - prompt user to start */}
+                        {!isLoading &&
+                            !isSearching &&
+                            !error &&
+                            !sourceTrack &&
+                            similarTracks.length === 0 &&
+                            viewMode === "comparison" && (
+                                <div className="max-w-md mx-auto text-center py-16">
+                                    <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-brand/10 to-ai/10 flex items-center justify-center">
+                                        <AudioWaveform className="w-12 h-12 text-content-disabled" />
+                                    </div>
+                                    <h2 className="text-xl font-medium text-white mb-2">
+                                        Explore by Vibe
+                                    </h2>
+                                    <p className="text-content-muted mb-8">
+                                        Find tracks that sound similar to each
+                                        other based on their audio
+                                        characteristics.
+                                    </p>
+
+                                    <div className="space-y-3">
+                                        {/* Use current track if playing */}
+                                        {currentTrack && (
+                                            <button
+                                                onClick={handleUseCurrentTrack}
+                                                className="w-full flex items-center gap-4 px-4 py-3 bg-surface-raised border border-surface-active hover:border-line-strong rounded-lg transition-all text-left group"
+                                            >
+                                                <div className="w-12 h-12 rounded bg-surface-hover flex items-center justify-center flex-shrink-0">
+                                                    <AudioWaveform className="w-5 h-5 text-brand" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium text-white truncate">
+                                                        Find tracks like &ldquo;
+                                                        {currentTrack.title}
+                                                        &rdquo;
+                                                    </p>
+                                                    <p className="text-xs text-content-disabled">
+                                                        Use the currently
+                                                        playing track
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        )}
+
+                                        {/* Random track */}
+                                        <button
+                                            onClick={handleRandomTrack}
+                                            disabled={
+                                                libraryTracks.length === 0
+                                            }
+                                            className="w-full flex items-center gap-4 px-4 py-3 bg-surface-raised border border-surface-active hover:border-line-strong rounded-lg transition-all text-left group disabled:opacity-50"
+                                        >
+                                            <div className="w-12 h-12 rounded bg-surface-hover flex items-center justify-center flex-shrink-0">
+                                                <Shuffle className="w-5 h-5 text-ai" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium text-white">
+                                                    Surprise me
+                                                </p>
+                                                <p className="text-xs text-content-disabled">
+                                                    Pick a random track from
+                                                    your library
+                                                </p>
+                                            </div>
+                                        </button>
+
+                                        {/* Divider */}
+                                        <div className="flex items-center gap-3 py-2">
+                                            <div className="flex-1 h-px bg-surface-active" />
+                                            <span className="text-xs text-content-disabled">
+                                                or search above
+                                            </span>
+                                            <div className="flex-1 h-px bg-surface-active" />
+                                        </div>
+
+                                        {/* Preset chips */}
+                                        <div className="flex flex-wrap justify-center gap-2">
+                                            {VIBE_PRESETS.slice(0, 4).map(
+                                                (preset) => (
+                                                    <button
+                                                        key={preset.id}
+                                                        onClick={() =>
+                                                            handleVibeSearch(
+                                                                preset.query,
+                                                            )
+                                                        }
+                                                        className="px-3 py-1.5 text-xs text-content-muted bg-surface-raised border border-surface-active hover:border-line-strong hover:text-white rounded-full transition-all"
+                                                    >
+                                                        {preset.name}
+                                                    </button>
+                                                ),
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {vibeStatus &&
+                                        vibeStatus.embeddedTracks === 0 && (
+                                            <p className="text-xs text-error mt-6">
+                                                No tracks analyzed yet. Run the
+                                                CLAP analyzer to enable vibe
+                                                search.
+                                            </p>
+                                        )}
+                                </div>
+                            )}
+                    </>
                 )}
-                </>}
             </div>
         </div>
     );

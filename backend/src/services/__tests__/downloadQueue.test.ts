@@ -87,7 +87,7 @@ describe("downloadQueueManager", () => {
             "Artist One",
             11,
             22,
-            { userId: "u1", artistMbid: "artist-mbid-1", tier: "top" }
+            { userId: "u1", artistMbid: "artist-mbid-1", tier: "top" },
         );
 
         const status = manager.getStatus();
@@ -101,7 +101,9 @@ describe("downloadQueueManager", () => {
 
     it("completes downloads and triggers full refresh when queue empties", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(undefined);
+        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(
+            undefined,
+        );
         const refreshSpy = jest
             .spyOn(manager as any, "triggerFullRefresh")
             .mockResolvedValue(undefined);
@@ -119,7 +121,9 @@ describe("downloadQueueManager", () => {
 
     it("retries failed downloads before max attempts", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(undefined);
+        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(
+            undefined,
+        );
         const retrySpy = jest
             .spyOn(manager as any, "retryDownload")
             .mockResolvedValue(undefined);
@@ -159,7 +163,9 @@ describe("downloadQueueManager", () => {
 
     it("gives up after max retries, cleans up, and refreshes when done", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(undefined);
+        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(
+            undefined,
+        );
         const cleanupSpy = jest
             .spyOn(manager as any, "cleanupFailedAlbum")
             .mockResolvedValue(undefined);
@@ -266,10 +272,22 @@ describe("downloadQueueManager", () => {
 
     it("cleans stale in-memory downloads", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(undefined);
+        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(
+            undefined,
+        );
 
-        manager.addDownload("fresh", "Fresh Album", "fresh-mbid", "Fresh Artist");
-        manager.addDownload("stale", "Stale Album", "stale-mbid", "Stale Artist");
+        manager.addDownload(
+            "fresh",
+            "Fresh Album",
+            "fresh-mbid",
+            "Fresh Artist",
+        );
+        manager.addDownload(
+            "stale",
+            "Stale Album",
+            "stale-mbid",
+            "Stale Artist",
+        );
 
         const staleInfo = manager.getActiveDownloads().get("stale");
         staleInfo.startTime = Date.now() - 31 * 60 * 1000;
@@ -285,10 +303,22 @@ describe("downloadQueueManager", () => {
 
     it("returns zero when cleanupStaleDownloads finds no stale entries", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(undefined);
+        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(
+            undefined,
+        );
 
-        manager.addDownload("fresh-1", "Fresh Album 1", "fresh-mbid-1", "Artist 1");
-        manager.addDownload("fresh-2", "Fresh Album 2", "fresh-mbid-2", "Artist 2");
+        manager.addDownload(
+            "fresh-1",
+            "Fresh Album 1",
+            "fresh-mbid-1",
+            "Artist 1",
+        );
+        manager.addDownload(
+            "fresh-2",
+            "Fresh Album 2",
+            "fresh-mbid-2",
+            "Artist 2",
+        );
 
         const cleaned = manager.cleanupStaleDownloads();
 
@@ -332,7 +362,7 @@ describe("downloadQueueManager", () => {
             expect.objectContaining({
                 where: expect.objectContaining({ status: "processing" }),
                 data: expect.objectContaining({ status: "failed" }),
-            })
+            }),
         );
 
         manager.shutdown();
@@ -356,7 +386,12 @@ describe("downloadQueueManager", () => {
         const mockUpdateMany = prisma.downloadJob.updateMany as jest.Mock;
 
         mockFindMany.mockResolvedValue([
-            { id: "j1", status: "pending", lidarrRef: null, targetMbid: "mbid-1" },
+            {
+                id: "j1",
+                status: "pending",
+                lidarrRef: null,
+                targetMbid: "mbid-1",
+            },
         ]);
         mockUpdateMany.mockResolvedValue({ count: 1 });
 
@@ -372,7 +407,7 @@ describe("downloadQueueManager", () => {
                     lidarrRef: "lidarr-dl-1",
                     status: "processing",
                 }),
-            })
+            }),
         );
 
         manager.shutdown();
@@ -394,7 +429,7 @@ describe("downloadQueueManager", () => {
             expect.objectContaining({
                 userId: "user-1",
                 source: "download-queue",
-            })
+            }),
         );
 
         manager.shutdown();
@@ -431,7 +466,7 @@ describe("downloadQueueManager", () => {
             expect.objectContaining({
                 userId: "user-1",
                 source: "download-queue",
-            })
+            }),
         );
 
         manager.shutdown();
@@ -461,7 +496,7 @@ describe("downloadQueueManager", () => {
                 where: expect.objectContaining({
                     targetMbid: "mbid-empty",
                 }),
-            })
+            }),
         );
 
         manager.shutdown();
@@ -484,7 +519,9 @@ describe("downloadQueueManager", () => {
 
     it("shutdown clears timers and active state", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(undefined);
+        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(
+            undefined,
+        );
         manager.addDownload("dl-shutdown", "Album", "mbid", "Artist");
 
         manager.shutdown();
@@ -496,7 +533,9 @@ describe("downloadQueueManager", () => {
 
     it("addDownload tolerates asynchronous link failures", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockRejectedValue(new Error("link failed"));
+        jest.spyOn(manager as any, "linkDownloadJob").mockRejectedValue(
+            new Error("link failed"),
+        );
 
         manager.addDownload("dl-link-fail", "Album", "mbid", "Artist");
         await Promise.resolve();
@@ -621,7 +660,8 @@ describe("downloadQueueManager", () => {
     });
 
     it("cleanupFailedAlbum continues when album or artist removal fails", async () => {
-        const { manager, getSystemSettings, prisma, axios } = await loadHarness();
+        const { manager, getSystemSettings, prisma, axios } =
+            await loadHarness();
         const mockUpdateMany = prisma.discoveryAlbum.updateMany as jest.Mock;
 
         getSystemSettings.mockResolvedValue({
@@ -686,7 +726,9 @@ describe("downloadQueueManager", () => {
 
     it("timeout callback marks pending downloads as failed before continuing", async () => {
         const { manager } = await loadHarness();
-        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(undefined);
+        jest.spyOn(manager as any, "linkDownloadJob").mockResolvedValue(
+            undefined,
+        );
         const failSpy = jest
             .spyOn(manager as any, "failDownload")
             .mockResolvedValue(undefined);

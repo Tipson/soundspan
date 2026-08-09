@@ -114,7 +114,7 @@ export function PagedGridCarousel<T>({
                         key={pageIndex}
                         className={cn(
                             "flex-shrink-0 snap-start w-full grid",
-                            gap
+                            gap,
                         )}
                         style={{
                             gridTemplateColumns: `repeat(${columns}, 1fr)`,
@@ -125,7 +125,7 @@ export function PagedGridCarousel<T>({
                             <div key={keyExtractor(item)}>
                                 {renderItem(
                                     item,
-                                    pageIndex * itemsPerPage + itemIndex
+                                    pageIndex * itemsPerPage + itemIndex,
                                 )}
                             </div>
                         ))}
@@ -160,7 +160,7 @@ export function PagedGridCarousel<T>({
                                 "w-1.5 h-1.5 rounded-full transition-colors",
                                 index === currentPage
                                     ? "bg-white"
-                                    : "bg-white/30 hover:bg-white/50"
+                                    : "bg-white/30 hover:bg-white/50",
                             )}
                             aria-label={`Go to page ${index + 1}`}
                         />

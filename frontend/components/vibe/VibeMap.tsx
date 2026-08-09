@@ -19,5 +19,10 @@ export interface VibeMapProps {
 /** Render the interactive library embedding navigator. */
 export function VibeMap(props: VibeMapProps = {}) {
     const controller = useVibeMapController(props);
-    return <VibeMapView model={controller.view} containerRef={controller.containerRef} />;
+    return (
+        <VibeMapView
+            model={controller.view}
+            containerRef={controller.containerRef}
+        />
+    );
 }

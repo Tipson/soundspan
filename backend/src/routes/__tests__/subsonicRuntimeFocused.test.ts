@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -52,7 +54,10 @@ jest.mock("../../config", () => ({
 
 import { prisma } from "../../utils/db";
 import { scanQueue } from "../../workers/queues";
-import { sendSubsonicError, sendSubsonicSuccess } from "../../utils/subsonicResponse";
+import {
+    sendSubsonicError,
+    sendSubsonicSuccess,
+} from "../../utils/subsonicResponse";
 import {
     handleGetPlayQueue,
     handleGetPlayQueueByIndex,

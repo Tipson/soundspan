@@ -7,25 +7,25 @@ describe("worker scheduler claim contract", () => {
         const workersSource = fs.readFileSync(workersPath, "utf8");
 
         expect(workersSource).toMatch(
-            /let schedulerLockRedis: Redis = createIORedisClient\(\s*"worker-scheduler-locks",\s*jestLazyConnectOverride,?\s*\)/
-        );
-        expect(workersSource).toContain("async function runWithSchedulerClaim(");
-        expect(workersSource).toContain(
-            "async function withSchedulerClaimRedisRetry<"
+            /let schedulerLockRedis: Redis = createIORedisClient\(\s*"worker-scheduler-locks",\s*jestLazyConnectOverride,?\s*\)/,
         );
         expect(workersSource).toContain(
-            "failed due to Redis connection closure (attempt"
+            "async function runWithSchedulerClaim(",
         );
         expect(workersSource).toContain(
-            '"scheduler-claim:reconciliation-cycle"'
+            "async function withSchedulerClaimRedisRetry<",
         );
         expect(workersSource).toContain(
-            '"scheduler-claim:lidarr-cleanup-cycle"'
+            "failed due to Redis connection closure (attempt",
+        );
+        expect(workersSource).toContain(
+            '"scheduler-claim:reconciliation-cycle"',
+        );
+        expect(workersSource).toContain(
+            '"scheduler-claim:lidarr-cleanup-cycle"',
         );
         expect(workersSource).toContain('"scheduler-claim:data-integrity"');
-        expect(workersSource).toContain(
-            "SCHEDULER_CLAIM_SKIP_WARN_THRESHOLD"
-        );
+        expect(workersSource).toContain("SCHEDULER_CLAIM_SKIP_WARN_THRESHOLD");
     });
 
     it("registers queue-backed repeatable scheduler jobs", () => {
@@ -34,14 +34,10 @@ describe("worker scheduler claim contract", () => {
 
         expect(workersSource).toContain("schedulerQueue.add(");
         expect(workersSource).toContain("repeat: { every: 24 * ONE_HOUR_MS }");
+        expect(workersSource).toContain("repeat: { every: 2 * ONE_MINUTE_MS }");
+        expect(workersSource).toContain("repeat: { every: 5 * ONE_MINUTE_MS }");
         expect(workersSource).toContain(
-            "repeat: { every: 2 * ONE_MINUTE_MS }"
-        );
-        expect(workersSource).toContain(
-            "repeat: { every: 5 * ONE_MINUTE_MS }"
-        );
-        expect(workersSource).toContain(
-            'schedulerQueue.process("*", async (job: Bull.Job<any>) =>'
+            'schedulerQueue.process("*", async (job: Bull.Job<any>) =>',
         );
         expect(workersSource).toContain("await processSchedulerJob(job);");
         expect(workersSource).not.toContain("runReconciliationCycle");

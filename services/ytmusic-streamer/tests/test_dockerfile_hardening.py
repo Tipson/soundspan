@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 
-
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = SERVICE_ROOT / "Dockerfile"
 ENTRYPOINT_SCRIPT = SERVICE_ROOT / "docker-entrypoint.sh"
@@ -23,9 +22,7 @@ def test_dockerfile_uses_entrypoint_script() -> None:
         line for line in dockerfile.splitlines() if line.strip().startswith("ENTRYPOINT")
     ]
 
-    assert any(
-        "tini" in line and "docker-entrypoint.sh" in line for line in entrypoint_lines
-    )
+    assert any("tini" in line and "docker-entrypoint.sh" in line for line in entrypoint_lines)
 
 
 def test_entrypoint_script_fixes_legacy_volume_ownership() -> None:

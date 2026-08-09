@@ -4,12 +4,12 @@
  * Handles logging for discovery batch operations with database persistence.
  */
 
-import { prisma } from '../../utils/db';
-import { logger } from '../../utils/logger';
+import { prisma } from "../../utils/db";
+import { logger } from "../../utils/logger";
 
 export interface BatchLogEntry {
     timestamp: string;
-    level: 'info' | 'warn' | 'error';
+    level: "info" | "warn" | "error";
     message: string;
 }
 
@@ -24,8 +24,8 @@ export class DiscoveryBatchLogger {
      */
     async addLog(
         batchId: string,
-        level: 'info' | 'warn' | 'error',
-        message: string
+        level: "info" | "warn" | "error",
+        message: string,
     ): Promise<void> {
         try {
             const batch = await prisma.discoveryBatch.findUnique({
@@ -47,20 +47,20 @@ export class DiscoveryBatchLogger {
                 data: { logs: trimmedLogs as any },
             });
         } catch (error) {
-            logger.error('Failed to add batch log:', error);
+            logger.error("Failed to add batch log:", error);
         }
     }
 
     async info(batchId: string, message: string): Promise<void> {
-        return this.addLog(batchId, 'info', message);
+        return this.addLog(batchId, "info", message);
     }
 
     async warn(batchId: string, message: string): Promise<void> {
-        return this.addLog(batchId, 'warn', message);
+        return this.addLog(batchId, "warn", message);
     }
 
     async error(batchId: string, message: string): Promise<void> {
-        return this.addLog(batchId, 'error', message);
+        return this.addLog(batchId, "error", message);
     }
 }
 

@@ -56,7 +56,7 @@ export interface LyricsLookupContext {
 function withTimeout<T>(
     fn: () => Promise<T>,
     timeoutMs: number,
-    onTimeout: () => T
+    onTimeout: () => T,
 ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         let settled = false;
@@ -86,7 +86,7 @@ function withTimeout<T>(
 async function cacheLyrics(
     trackId: string,
     source: "lrclib" | "embedded" | "none",
-    payload: LyricsPayload
+    payload: LyricsPayload,
 ): Promise<void> {
     await prisma.trackLyrics.upsert({
         where: { trackId },
@@ -125,17 +125,25 @@ function buildExternalLyricsCacheKey(context: LyricsLookupContext): string {
 }
 
 function buildLrclibDurationCandidates(duration?: number): number[] {
-    if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) {
+    if (
+        typeof duration !== "number" ||
+        !Number.isFinite(duration) ||
+        duration <= 0
+    ) {
         return [];
     }
 
     const rounded = Math.max(1, Math.round(duration));
     return Array.from(
         new Set(
-            [rounded, rounded - 1, rounded + 1, rounded - 2, rounded + 2].filter(
-                (value) => value > 0
-            )
-        )
+            [
+                rounded,
+                rounded - 1,
+                rounded + 1,
+                rounded - 2,
+                rounded + 2,
+            ].filter((value) => value > 0),
+        ),
     );
 }
 
@@ -151,9 +159,11 @@ function scoreLrclibCandidate(
     candidate: LrclibResponse,
     artistName: string,
     trackName: string,
-    albumName?: string
+    albumName?: string,
 ): number {
-    const candidateArtist = normalizeLrclibMatchValue(candidate.artistName || "");
+    const candidateArtist = normalizeLrclibMatchValue(
+        candidate.artistName || "",
+    );
     const candidateTrack = normalizeLrclibMatchValue(candidate.trackName || "");
     const candidateAlbum = normalizeLrclibMatchValue(candidate.albumName || "");
     const targetArtist = normalizeLrclibMatchValue(artistName);
@@ -163,7 +173,10 @@ function scoreLrclibCandidate(
     let score = 0;
 
     if (candidateTrack === targetTrack) score += 6;
-    else if (candidateTrack.includes(targetTrack) || targetTrack.includes(candidateTrack))
+    else if (
+        candidateTrack.includes(targetTrack) ||
+        targetTrack.includes(candidateTrack)
+    )
         score += 2;
 
     if (candidateArtist === targetArtist) score += 5;
@@ -189,7 +202,7 @@ function scoreLrclibCandidate(
 
 async function cacheExternalLyricsResult(
     cacheKey: string,
-    result: LyricsResult
+    result: LyricsResult,
 ): Promise<void> {
     try {
         const ttlSeconds =
@@ -198,12 +211,14 @@ async function cacheExternalLyricsResult(
                 : EXTERNAL_LYRICS_CACHE_TTL_SECONDS;
         await redisClient.setEx(cacheKey, ttlSeconds, JSON.stringify(result));
     } catch (error) {
-        logger.warn(`[Lyrics] Failed to cache external lyrics result: ${error}`);
+        logger.warn(
+            `[Lyrics] Failed to cache external lyrics result: ${error}`,
+        );
     }
 }
 
 async function getExternalLyricsFromCache(
-    cacheKey: string
+    cacheKey: string,
 ): Promise<LyricsResult | null> {
     try {
         const cached = await redisClient.get(cacheKey);
@@ -263,8 +278,14 @@ async function getLrclibBackoffUntilMs(): Promise<number> {
     }
 }
 
-async function setLrclibBackoff(seconds: number, reason: string): Promise<void> {
-    const clamped = Math.max(1, Math.min(LRCLIB_MAX_BACKOFF_SECONDS, Math.floor(seconds)));
+async function setLrclibBackoff(
+    seconds: number,
+    reason: string,
+): Promise<void> {
+    const clamped = Math.max(
+        1,
+        Math.min(LRCLIB_MAX_BACKOFF_SECONDS, Math.floor(seconds)),
+    );
     const backoffUntil = Date.now() + clamped * 1000;
 
     try {
@@ -275,10 +296,10 @@ async function setLrclibBackoff(seconds: number, reason: string): Promise<void> 
         await redisClient.setEx(
             LRCLIB_BACKOFF_KEY,
             clamped,
-            String(backoffUntil)
+            String(backoffUntil),
         );
         logger.warn(
-            `[Lyrics] LRCLIB backoff enabled for ${clamped}s (${reason})`
+            `[Lyrics] LRCLIB backoff enabled for ${clamped}s (${reason})`,
         );
     } catch (error) {
         logger.warn(`[Lyrics] Failed to set LRCLIB backoff state: ${error}`);
@@ -290,23 +311,23 @@ async function shouldSkipLrclibRequest(requestLabel: string): Promise<boolean> {
     if (backoffUntil <= Date.now()) return false;
 
     logger.debug(
-        `[Lyrics] Skipping LRCLIB request during backoff for ${requestLabel}`
+        `[Lyrics] Skipping LRCLIB request during backoff for ${requestLabel}`,
     );
     return true;
 }
 
 async function applyLrclibBackoffForError(
     error: any,
-    requestLabel: string
+    requestLabel: string,
 ): Promise<void> {
     const status = error?.response?.status;
     if (status === 429) {
         const retryAfterSeconds = parseRetryAfterSeconds(
-            error?.response?.headers?.["retry-after"]
+            error?.response?.headers?.["retry-after"],
         );
         await setLrclibBackoff(
             retryAfterSeconds ?? LRCLIB_DEFAULT_429_BACKOFF_SECONDS,
-            `429 on ${requestLabel}`
+            `429 on ${requestLabel}`,
         );
         return;
     }
@@ -314,7 +335,7 @@ async function applyLrclibBackoffForError(
     if (status >= 500 && status < 600) {
         await setLrclibBackoff(
             LRCLIB_DEFAULT_5XX_BACKOFF_SECONDS,
-            `${status} on ${requestLabel}`
+            `${status} on ${requestLabel}`,
         );
     }
 }
@@ -333,7 +354,7 @@ function scheduleLrclibDispatch(): void {
             if (now < lrclibNextDispatchAt) {
                 lrclibDispatchTimer = setTimeout(
                     dispatch,
-                    lrclibNextDispatchAt - now
+                    lrclibNextDispatchAt - now,
                 );
                 return;
             }
@@ -367,7 +388,7 @@ async function acquireLrclibPermit(): Promise<() => void> {
 
 async function runLrclibRequest<T>(
     requestLabel: string,
-    request: () => Promise<T>
+    request: () => Promise<T>,
 ): Promise<T | null> {
     if (await shouldSkipLrclibRequest(requestLabel)) {
         return null;
@@ -385,7 +406,7 @@ async function resolveFromLrclib(
     artistName: string,
     trackName: string,
     duration?: number,
-    albumName?: string
+    albumName?: string,
 ): Promise<LyricsPayload | null> {
     const durationCandidates = buildLrclibDurationCandidates(duration);
     if (durationCandidates.length > 0) {
@@ -393,7 +414,7 @@ async function resolveFromLrclib(
             const result = await fetchFromLrclib(
                 artistName,
                 trackName,
-                candidateDuration
+                candidateDuration,
             );
 
             if (result && (result.syncedLyrics || result.plainLyrics)) {
@@ -402,7 +423,7 @@ async function resolveFromLrclib(
         }
     } else {
         logger.debug(
-            `[Lyrics] Skipping LRCLIB lookup for "${trackName}" by "${artistName}" because duration is missing`
+            `[Lyrics] Skipping LRCLIB lookup for "${trackName}" by "${artistName}" because duration is missing`,
         );
     }
 
@@ -416,20 +437,25 @@ async function resolveFromLrclib(
 
 async function getExternalLyrics(
     context: LyricsLookupContext,
-    logLabel: string
+    logLabel: string,
 ): Promise<LyricsResult> {
     const artistName = context.artistName?.trim();
     const trackName = context.trackName?.trim();
 
     if (!artistName || !trackName) {
-        return { syncedLyrics: null, plainLyrics: null, source: "none", synced: false };
+        return {
+            syncedLyrics: null,
+            plainLyrics: null,
+            source: "none",
+            synced: false,
+        };
     }
 
     const cacheKey = buildExternalLyricsCacheKey(context);
     const cached = await getExternalLyricsFromCache(cacheKey);
     if (cached) {
         logger.debug(
-            `[Lyrics] External cache hit for ${logLabel} (${artistName} - ${trackName})`
+            `[Lyrics] External cache hit for ${logLabel} (${artistName} - ${trackName})`,
         );
         return cached;
     }
@@ -440,15 +466,15 @@ async function getExternalLyrics(
                 artistName,
                 trackName,
                 context.duration,
-                context.albumName
+                context.albumName,
             ),
         LRCLIB_LOOKUP_TIMEOUT_MS,
         () => {
             logger.warn(
-                `[Lyrics] LRCLIB lookup timed out for ${logLabel} (${artistName} - ${trackName}) after ${LRCLIB_LOOKUP_TIMEOUT_MS}ms`
+                `[Lyrics] LRCLIB lookup timed out for ${logLabel} (${artistName} - ${trackName}) after ${LRCLIB_LOOKUP_TIMEOUT_MS}ms`,
             );
             return null;
-        }
+        },
     );
     const result: LyricsResult = lrclib
         ? {
@@ -471,7 +497,7 @@ async function getExternalLyrics(
 async function searchFromLrclib(
     artistName: string,
     trackName: string,
-    albumName?: string
+    albumName?: string,
 ): Promise<LyricsPayload | null> {
     const requestLabel = `search "${trackName}" by "${artistName}"`;
     try {
@@ -486,20 +512,20 @@ async function searchFromLrclib(
                     "User-Agent": LRCLIB_USER_AGENT,
                 },
                 timeout: 10000,
-            })
+            }),
         );
         if (!response) return null;
 
         const candidates = Array.isArray(response.data) ? response.data : [];
         if (candidates.length === 0) {
             logger.debug(
-                `[Lyrics] No LRCLIB search results for "${trackName}" by "${artistName}"`
+                `[Lyrics] No LRCLIB search results for "${trackName}" by "${artistName}"`,
             );
             return null;
         }
 
         const withLyrics = candidates.filter(
-            (candidate) => candidate?.syncedLyrics || candidate?.plainLyrics
+            (candidate) => candidate?.syncedLyrics || candidate?.plainLyrics,
         );
         if (withLyrics.length === 0) {
             return null;
@@ -512,7 +538,7 @@ async function searchFromLrclib(
                     candidate,
                     artistName,
                     trackName,
-                    albumName
+                    albumName,
                 ),
             }))
             .sort((a, b) => b.score - a.score)[0]?.candidate;
@@ -529,13 +555,13 @@ async function searchFromLrclib(
         await applyLrclibBackoffForError(error, requestLabel);
         if (error?.response?.status === 404) {
             logger.debug(
-                `[Lyrics] No LRCLIB search match for "${trackName}" by "${artistName}"`
+                `[Lyrics] No LRCLIB search match for "${trackName}" by "${artistName}"`,
             );
             return null;
         }
 
         logger.warn(
-            `[Lyrics] LRCLIB search failed for "${trackName}" by "${artistName}": ${error.message}`
+            `[Lyrics] LRCLIB search failed for "${trackName}" by "${artistName}": ${error.message}`,
         );
         return null;
     }
@@ -549,7 +575,7 @@ async function searchFromLrclib(
 async function fetchFromLrclib(
     artistName: string,
     trackName: string,
-    duration: number
+    duration: number,
 ): Promise<{ syncedLyrics: string | null; plainLyrics: string | null } | null> {
     const requestLabel = `get "${trackName}" by "${artistName}" (${duration}s)`;
     try {
@@ -564,7 +590,7 @@ async function fetchFromLrclib(
                     "User-Agent": LRCLIB_USER_AGENT,
                 },
                 timeout: 10000,
-            })
+            }),
         );
         if (!response) return null;
 
@@ -579,13 +605,13 @@ async function fetchFromLrclib(
         if (error?.response?.status === 404) {
             // No lyrics found — not an error
             logger.debug(
-                `[Lyrics] No lyrics found on LRCLIB for "${trackName}" by "${artistName}"`
+                `[Lyrics] No lyrics found on LRCLIB for "${trackName}" by "${artistName}"`,
             );
             return null;
         }
         await applyLrclibBackoffForError(error, requestLabel);
         logger.warn(
-            `[Lyrics] LRCLIB request failed for "${trackName}" by "${artistName}": ${error.message}`
+            `[Lyrics] LRCLIB request failed for "${trackName}" by "${artistName}": ${error.message}`,
         );
         return null;
     }
@@ -596,7 +622,7 @@ async function fetchFromLrclib(
  * Supports USLT (ID3v2), LYRICS (Vorbis/FLAC), and similar tags.
  */
 async function extractEmbeddedLyrics(
-    filePath: string
+    filePath: string,
 ): Promise<{ syncedLyrics: string | null; plainLyrics: string | null } | null> {
     try {
         const fs = await import("fs");
@@ -632,7 +658,9 @@ async function extractEmbeddedLyrics(
                 if (lrcLines.length > 0) {
                     return {
                         syncedLyrics: lrcLines.join("\n"),
-                        plainLyrics: entry.syncText.map((l) => l.text).join("\n"),
+                        plainLyrics: entry.syncText
+                            .map((l) => l.text)
+                            .join("\n"),
                     };
                 }
             }
@@ -653,7 +681,7 @@ async function extractEmbeddedLyrics(
         return null;
     } catch (error: any) {
         logger.warn(
-            `[Lyrics] Failed to extract embedded lyrics from "${filePath}": ${error.message}`
+            `[Lyrics] Failed to extract embedded lyrics from "${filePath}": ${error.message}`,
         );
         return null;
     }
@@ -668,7 +696,7 @@ async function extractEmbeddedLyrics(
  */
 export async function getLyrics(
     trackId: string,
-    lookupContext?: LyricsLookupContext
+    lookupContext?: LyricsLookupContext,
 ): Promise<LyricsResult> {
     const startedAt = Date.now();
 
@@ -679,7 +707,7 @@ export async function getLyrics(
 
     if (cached) {
         logger.debug(
-            `[Lyrics] Cache hit for track "${trackId}" (${Date.now() - startedAt}ms)`
+            `[Lyrics] Cache hit for track "${trackId}" (${Date.now() - startedAt}ms)`,
         );
         return {
             syncedLyrics: cached.syncedLyrics,
@@ -704,16 +732,18 @@ export async function getLyrics(
     if (!track) {
         const external = await getExternalLyrics(
             lookupContext || {},
-            `track "${trackId}"`
+            `track "${trackId}"`,
         );
         logger.debug(
-            `[Lyrics] External lookup for track "${trackId}" source=${external.source} (${Date.now() - startedAt}ms)`
+            `[Lyrics] External lookup for track "${trackId}" source=${external.source} (${Date.now() - startedAt}ms)`,
         );
         return external;
     }
 
-    const artistName = track.album.artist.name || lookupContext?.artistName || "";
-    const trackName = track.displayTitle || track.title || lookupContext?.trackName || "";
+    const artistName =
+        track.album.artist.name || lookupContext?.artistName || "";
+    const trackName =
+        track.displayTitle || track.title || lookupContext?.trackName || "";
     const albumName = track.album.title || lookupContext?.albumName;
     const trackDuration =
         typeof track.duration === "number" && track.duration > 0
@@ -727,17 +757,17 @@ export async function getLyrics(
             EMBEDDED_LOOKUP_TIMEOUT_MS,
             () => {
                 logger.warn(
-                    `[Lyrics] Embedded lyrics lookup timed out for track "${trackId}" after ${EMBEDDED_LOOKUP_TIMEOUT_MS}ms`
+                    `[Lyrics] Embedded lyrics lookup timed out for track "${trackId}" after ${EMBEDDED_LOOKUP_TIMEOUT_MS}ms`,
                 );
                 return null;
-            }
+            },
         );
         if (embedded && (embedded.syncedLyrics || embedded.plainLyrics)) {
             // Cache it
             await cacheLyrics(trackId, "embedded", embedded);
 
             logger.debug(
-                `[Lyrics] Resolved from embedded tags for track "${trackId}" (${Date.now() - startedAt}ms)`
+                `[Lyrics] Resolved from embedded tags for track "${trackId}" (${Date.now() - startedAt}ms)`,
             );
 
             return {
@@ -751,21 +781,22 @@ export async function getLyrics(
 
     // 4. Fetch from LRCLIB
     const lrclib = await withTimeout(
-        () => resolveFromLrclib(artistName, trackName, trackDuration, albumName),
+        () =>
+            resolveFromLrclib(artistName, trackName, trackDuration, albumName),
         LRCLIB_LOOKUP_TIMEOUT_MS,
         () => {
             logger.warn(
-                `[Lyrics] LRCLIB lookup timed out for track "${trackId}" after ${LRCLIB_LOOKUP_TIMEOUT_MS}ms`
+                `[Lyrics] LRCLIB lookup timed out for track "${trackId}" after ${LRCLIB_LOOKUP_TIMEOUT_MS}ms`,
             );
             return null;
-        }
+        },
     );
     if (lrclib && (lrclib.syncedLyrics || lrclib.plainLyrics)) {
         // Cache it
         await cacheLyrics(trackId, "lrclib", lrclib);
 
         logger.debug(
-            `[Lyrics] Resolved from LRCLIB for track "${trackId}" (${Date.now() - startedAt}ms)`
+            `[Lyrics] Resolved from LRCLIB for track "${trackId}" (${Date.now() - startedAt}ms)`,
         );
 
         return {
@@ -783,10 +814,15 @@ export async function getLyrics(
     });
 
     logger.debug(
-        `[Lyrics] No lyrics found for track "${trackId}" (${Date.now() - startedAt}ms)`
+        `[Lyrics] No lyrics found for track "${trackId}" (${Date.now() - startedAt}ms)`,
     );
 
-    return { syncedLyrics: null, plainLyrics: null, source: "none", synced: false };
+    return {
+        syncedLyrics: null,
+        plainLyrics: null,
+        source: "none",
+        synced: false,
+    };
 }
 
 /**

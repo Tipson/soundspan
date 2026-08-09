@@ -792,7 +792,10 @@ const handlePlayPromiseRejected = (
             {
                 kind: "telemetry",
                 event: "playback_error",
-                fields: { code: event.errorName, classification: "play_rejected" },
+                fields: {
+                    code: event.errorName,
+                    classification: "play_rejected",
+                },
             },
         ],
     };

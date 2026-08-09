@@ -5,7 +5,8 @@ const prisma = createPrismaClient();
 
 async function main() {
     const username = process.env.SOUNDSPAN_TEST_USERNAME || "predeploy";
-    const password = process.env.SOUNDSPAN_TEST_PASSWORD || "predeploy-password";
+    const password =
+        process.env.SOUNDSPAN_TEST_PASSWORD || "predeploy-password";
 
     const passwordHash = await bcrypt.hash(password, 10);
 

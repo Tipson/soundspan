@@ -4,9 +4,7 @@ import { useAudioState } from "@/lib/audio-state-context";
 import { useAudioPlayback } from "@/lib/audio-playback-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
-import {
-    useStreamBitrate,
-} from "@/hooks/useStreamBitrate";
+import { useStreamBitrate } from "@/hooks/useStreamBitrate";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -107,17 +105,28 @@ export function FullPlayer() {
 
     // Calculate vibe match score (simplified version - compares key audio features)
     const vibeMatchScore = useMemo(() => {
-        if (!vibeMode || !vibeSourceFeatures || !currentTrackFeatures) return null;
+        if (!vibeMode || !vibeSourceFeatures || !currentTrackFeatures)
+            return null;
 
         // Compare key features: energy, valence, danceability, arousal
-        const features = ['energy', 'valence', 'danceability', 'arousal'] as const;
+        const features = [
+            "energy",
+            "valence",
+            "danceability",
+            "arousal",
+        ] as const;
         const scores: number[] = [];
 
         for (const key of features) {
-            const sourceVal = vibeSourceFeatures[key as keyof typeof vibeSourceFeatures];
-            const currentVal = currentTrackFeatures[key as keyof typeof currentTrackFeatures];
+            const sourceVal =
+                vibeSourceFeatures[key as keyof typeof vibeSourceFeatures];
+            const currentVal =
+                currentTrackFeatures[key as keyof typeof currentTrackFeatures];
 
-            if (typeof sourceVal === 'number' && typeof currentVal === 'number') {
+            if (
+                typeof sourceVal === "number" &&
+                typeof currentVal === "number"
+            ) {
                 const diff = Math.abs(sourceVal - currentVal);
                 scores.push(1 - diff);
             }
@@ -144,8 +153,6 @@ export function FullPlayer() {
             0
         );
     })();
-
-
 
     // For audiobooks/podcasts, show saved progress even before playback starts
     // This provides immediate visual feedback of where the user left off
@@ -196,12 +203,15 @@ export function FullPlayer() {
         resume();
     };
 
-    const { title, subtitle, coverUrl, artistLink, mediaLink, hasMedia } = useMediaInfo(100);
-    const {
-        qualityBadge,
-    } = useStreamBitrate();
+    const { title, subtitle, coverUrl, artistLink, mediaLink, hasMedia } =
+        useMediaInfo(100);
+    const { qualityBadge } = useStreamBitrate();
 
-    const { vibeEmbeddings, showVersion, loading: featuresLoading } = useFeatures();
+    const {
+        vibeEmbeddings,
+        showVersion,
+        loading: featuresLoading,
+    } = useFeatures();
     const [isVibeLoading, setIsVibeLoading] = useState(false);
     const [isRadioLoading, setIsRadioLoading] = useState(false);
 
@@ -218,7 +228,9 @@ export function FullPlayer() {
             if (result.success && result.trackCount > 0) {
                 toast.success("Vibe mode on", {
                     description: `${result.trackCount} similar tracks queued`,
-                    icon: <AudioWaveform className="w-4 h-4 text-brand-hover" />,
+                    icon: (
+                        <AudioWaveform className="w-4 h-4 text-brand-hover" />
+                    ),
                 });
             } else {
                 toast.error("Couldn't find matching tracks");
@@ -235,17 +247,22 @@ export function FullPlayer() {
         if (!currentTrack?.artist?.id) return;
         setIsRadioLoading(true);
         try {
-            const response = await api.getRadioTracks("artist", currentTrack.artist.id);
+            const response = await api.getRadioTracks(
+                "artist",
+                currentTrack.artist.id,
+            );
             if (response.tracks && response.tracks.length > 0) {
                 const filtered = response.tracks.filter(
-                    (t: { id: string }) => t.id !== currentTrack.id
+                    (t: { id: string }) => t.id !== currentTrack.id,
                 );
                 setUpcoming(filtered);
                 toast.success(
-                    `Playing ${currentTrack.artist.name} Radio (${filtered.length} tracks)`
+                    `Playing ${currentTrack.artist.name} Radio (${filtered.length} tracks)`,
                 );
             } else {
-                toast.error("Not enough similar music in your library for artist radio");
+                toast.error(
+                    "Not enough similar music in your library for artist radio",
+                );
             }
         } catch {
             toast.error("Failed to start artist radio");
@@ -263,7 +280,9 @@ export function FullPlayer() {
     // Volume popup state
     const [showVolumePopup, setShowVolumePopup] = useState(false);
     const volumePopupRef = useRef<HTMLDivElement>(null);
-    const volumeHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const volumeHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
 
     const handleVolumeMouseEnter = useCallback(() => {
         if (volumeHoverTimeoutRef.current) {
@@ -280,28 +299,40 @@ export function FullPlayer() {
     }, []);
 
     // Click on open space toggles overlay player on/off
-    const handleBarClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        const target = e.target as HTMLElement;
-        // Only trigger on the bar container divs themselves, not any child interactive elements
-        if (target.closest("button, a, input, span, p, h4, img, svg, [role='slider'], [data-seek-zone]")) return;
-        if (!hasMedia) return;
-        if (playerMode === "overlay") {
-            returnToPreviousMode();
-        } else {
-            setPlayerMode("overlay");
-        }
-    }, [hasMedia, playerMode, setPlayerMode, returnToPreviousMode]);
+    const handleBarClick = useCallback(
+        (e: React.MouseEvent<HTMLDivElement>) => {
+            const target = e.target as HTMLElement;
+            // Only trigger on the bar container divs themselves, not any child interactive elements
+            if (
+                target.closest(
+                    "button, a, input, span, p, h4, img, svg, [role='slider'], [data-seek-zone]",
+                )
+            )
+                return;
+            if (!hasMedia) return;
+            if (playerMode === "overlay") {
+                returnToPreviousMode();
+            } else {
+                setPlayerMode("overlay");
+            }
+        },
+        [hasMedia, playerMode, setPlayerMode, returnToPreviousMode],
+    );
 
     // Close volume popup on outside click
     useEffect(() => {
         if (!showVolumePopup) return;
         const handleClickOutside = (e: MouseEvent) => {
-            if (volumePopupRef.current && !volumePopupRef.current.contains(e.target as Node)) {
+            if (
+                volumePopupRef.current &&
+                !volumePopupRef.current.contains(e.target as Node)
+            ) {
                 setShowVolumePopup(false);
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
+        return () =>
+            document.removeEventListener("mousedown", handleClickOutside);
     }, [showVolumePopup]);
 
     return (
@@ -310,7 +341,10 @@ export function FullPlayer() {
                 {/* Desktop-wide progress tracker — z above overlay (z-[9999]) so handle isn't covered.
                     pb-5 creates a generous invisible hit zone below the 4px track so the seekbar
                     is easy to grab; the hit zone also blocks handleBarClick from toggling overlay. */}
-                <div className="absolute inset-x-0 top-0 z-[10000]" data-seek-zone>
+                <div
+                    className="absolute inset-x-0 top-0 z-[10000]"
+                    data-seek-zone
+                >
                     <SeekSlider
                         progress={progress}
                         duration={duration}
@@ -329,7 +363,10 @@ export function FullPlayer() {
                 {/* Subtle top glow */}
                 <div className="absolute top-1 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
                 <div
-                    className={cn("grid grid-cols-[1fr_auto_1fr] items-center h-full px-6 pt-1", hasMedia && "cursor-pointer")}
+                    className={cn(
+                        "grid grid-cols-[1fr_auto_1fr] items-center h-full px-6 pt-1",
+                        hasMedia && "cursor-pointer",
+                    )}
                     onClick={handleBarClick}
                 >
                     {/* Artwork & Info — left-aligned, expands rightward */}
@@ -408,24 +445,24 @@ export function FullPlayer() {
                             )}
                             {/* Status badges */}
                             <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                            {/* Vibe match score when in vibe mode */}
-                            {vibeMode && vibeMatchScore !== null && (
-                                <span
-                                    className={cn(
-                                        "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                        vibeMatchScore >= 80
-                                            ? "bg-green-500/20 text-green-400"
-                                            : vibeMatchScore >= 60
-                                            ? "bg-brand/20 text-brand"
-                                            : "bg-orange-500/20 text-orange-400"
-                                    )}
-                                >
-                                    <AudioWaveform className="w-2.5 h-2.5" />
-                                    {vibeMatchScore}% match
-                                </span>
-                            )}
-                            {/* Listen Together sync indicator */}
-                            <SyncBadge />
+                                {/* Vibe match score when in vibe mode */}
+                                {vibeMode && vibeMatchScore !== null && (
+                                    <span
+                                        className={cn(
+                                            "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
+                                            vibeMatchScore >= 80
+                                                ? "bg-green-500/20 text-green-400"
+                                                : vibeMatchScore >= 60
+                                                  ? "bg-brand/20 text-brand"
+                                                  : "bg-orange-500/20 text-orange-400",
+                                        )}
+                                    >
+                                        <AudioWaveform className="w-2.5 h-2.5" />
+                                        {vibeMatchScore}% match
+                                    </span>
+                                )}
+                                {/* Listen Together sync indicator */}
+                                <SyncBadge />
                             </div>
                         </div>
                     </div>
@@ -433,7 +470,11 @@ export function FullPlayer() {
                     {/* Controls — truly centered column */}
                     <div className="flex items-center justify-center gap-4">
                         {/* Buttons */}
-                        <div className="flex items-center gap-6" role="group" aria-label="Playback controls">
+                        <div
+                            className="flex items-center gap-6"
+                            role="group"
+                            aria-label="Playback controls"
+                        >
                             {/* Shuffle */}
                             <button
                                 onClick={toggleShuffle}
@@ -441,7 +482,7 @@ export function FullPlayer() {
                                     "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
                                     isShuffle
                                         ? "text-green-500 hover:text-green-400"
-                                        : "text-gray-400 hover:text-white"
+                                        : "text-gray-400 hover:text-white",
                                 )}
                                 disabled={!hasMedia || playbackType !== "track"}
                                 aria-label="Shuffle"
@@ -481,29 +522,29 @@ export function FullPlayer() {
                                     audioError
                                         ? "bg-red-500 text-white hover:scale-110 hover:bg-red-400"
                                         : hasMedia && !isBuffering
-                                        ? "bg-white text-black hover:scale-110 shadow-lg shadow-white/20 hover:shadow-white/30"
-                                        : isBuffering
-                                        ? "bg-white/80 text-black"
-                                        : "bg-gray-700 text-gray-400 cursor-not-allowed"
+                                          ? "bg-white text-black hover:scale-110 shadow-lg shadow-white/20 hover:shadow-white/30"
+                                          : isBuffering
+                                            ? "bg-white/80 text-black"
+                                            : "bg-gray-700 text-gray-400 cursor-not-allowed",
                                 )}
                                 disabled={!hasMedia || isBuffering}
                                 aria-label={
                                     audioError
                                         ? "Retry playback"
                                         : isBuffering
-                                        ? "Buffering..."
-                                        : isPlaying
-                                        ? "Pause"
-                                        : "Play"
+                                          ? "Buffering..."
+                                          : isPlaying
+                                            ? "Pause"
+                                            : "Play"
                                 }
                                 title={
                                     audioError
                                         ? "Retry playback"
                                         : isBuffering
-                                        ? "Buffering..."
-                                        : isPlaying
-                                        ? "Pause"
-                                        : "Play"
+                                          ? "Buffering..."
+                                          : isPlaying
+                                            ? "Pause"
+                                            : "Play"
                                 }
                             >
                                 {hasMedia && !isBuffering && !audioError && (
@@ -550,23 +591,23 @@ export function FullPlayer() {
                                     "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
                                     repeatMode !== "off"
                                         ? "text-green-500 hover:text-green-400"
-                                        : "text-gray-400 hover:text-white"
+                                        : "text-gray-400 hover:text-white",
                                 )}
                                 disabled={!hasMedia || playbackType !== "track"}
                                 aria-label={
                                     repeatMode === "off"
                                         ? "Repeat off"
                                         : repeatMode === "all"
-                                        ? "Repeat all"
-                                        : "Repeat one"
+                                          ? "Repeat all"
+                                          : "Repeat one"
                                 }
                                 aria-pressed={repeatMode !== "off"}
                                 title={
                                     repeatMode === "off"
                                         ? "Repeat: Off"
                                         : repeatMode === "all"
-                                        ? "Repeat: All (loop queue)"
-                                        : "Repeat: One (play current track twice)"
+                                          ? "Repeat: All (loop queue)"
+                                          : "Repeat: One (play current track twice)"
                                 }
                             >
                                 {repeatMode === "one" ? (
@@ -575,7 +616,6 @@ export function FullPlayer() {
                                     <Repeat className="w-[18px] h-[18px]" />
                                 )}
                             </button>
-
                         </div>
                     </div>
 
@@ -595,31 +635,33 @@ export function FullPlayer() {
                         <span
                             className={cn(
                                 "text-sm font-medium tabular-nums whitespace-nowrap",
-                                hasMedia ? "text-gray-300" : "text-gray-400"
+                                hasMedia ? "text-gray-300" : "text-gray-400",
                             )}
                         >
-                            {formatTime(displayTime)}{" / "}
+                            {formatTime(displayTime)}
+                            {" / "}
                             {formatTime(duration)}
                         </span>
 
                         {/* Icon group: radio, vibe, heart, 3-dot, volume, chevron — equally spaced, vertically centered */}
                         <div className="flex items-center gap-2.5">
                             {/* Radio */}
-                            {currentTrack?.artist?.id && playbackType === "track" && (
-                                <button
-                                    onClick={handleStartRadio}
-                                    disabled={isRadioLoading}
-                                    className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
-                                    title="Start artist radio"
-                                    aria-label="Start Radio"
-                                >
-                                    {isRadioLoading ? (
-                                        <Loader2 className="w-[18px] h-[18px] animate-spin" />
-                                    ) : (
-                                        <Radio className="w-[18px] h-[18px]" />
-                                    )}
-                                </button>
-                            )}
+                            {currentTrack?.artist?.id &&
+                                playbackType === "track" && (
+                                    <button
+                                        onClick={handleStartRadio}
+                                        disabled={isRadioLoading}
+                                        className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                        title="Start artist radio"
+                                        aria-label="Start Radio"
+                                    >
+                                        {isRadioLoading ? (
+                                            <Loader2 className="w-[18px] h-[18px] animate-spin" />
+                                        ) : (
+                                            <Radio className="w-[18px] h-[18px]" />
+                                        )}
+                                    </button>
+                                )}
 
                             {/* Vibe */}
                             {!featuresLoading && vibeEmbeddings && (
@@ -630,9 +672,13 @@ export function FullPlayer() {
                                         "flex items-center justify-center w-8 h-8 transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
                                         vibeMode
                                             ? "text-brand-hover hover:text-brand-hover"
-                                            : "text-gray-400 hover:text-white"
+                                            : "text-gray-400 hover:text-white",
                                     )}
-                                    title={vibeMode ? "Turn off vibe mode" : "Match this vibe"}
+                                    title={
+                                        vibeMode
+                                            ? "Turn off vibe mode"
+                                            : "Match this vibe"
+                                    }
                                     aria-label="Match Vibe"
                                 >
                                     {isVibeLoading ? (
@@ -671,7 +717,9 @@ export function FullPlayer() {
                                 <button
                                     onClick={toggleMute}
                                     className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110"
-                                    aria-label={volume === 0 ? "Unmute" : "Mute"}
+                                    aria-label={
+                                        volume === 0 ? "Unmute" : "Mute"
+                                    }
                                 >
                                     {isMuted || volume === 0 ? (
                                         <VolumeX className="w-[18px] h-[18px]" />
@@ -684,7 +732,9 @@ export function FullPlayer() {
                                 <div
                                     className={cn(
                                         "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-1.5 py-3 bg-surface-hover border border-white/10 rounded-lg shadow-xl transition-all duration-200 overflow-hidden",
-                                        showVolumePopup ? "opacity-100 scale-100 pointer-events-auto" : "opacity-0 scale-95 pointer-events-none"
+                                        showVolumePopup
+                                            ? "opacity-100 scale-100 pointer-events-auto"
+                                            : "opacity-0 scale-95 pointer-events-none",
                                     )}
                                 >
                                     <div className="flex flex-col items-center gap-3 h-28">
@@ -698,10 +748,12 @@ export function FullPlayer() {
                                                 aria-label="Volume"
                                                 aria-valuemin={0}
                                                 aria-valuemax={100}
-                                                aria-valuenow={Math.round(volume * 100)}
+                                                aria-valuenow={Math.round(
+                                                    volume * 100,
+                                                )}
                                                 aria-valuetext={`${Math.round(volume * 100)} percent`}
                                                 style={{
-                                                    background: `linear-gradient(to right, #fff ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)`
+                                                    background: `linear-gradient(to right, #fff ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)`,
                                                 }}
                                                 className="absolute w-24 h-1 rounded-full appearance-none cursor-pointer -rotate-90 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-white/30"
                                             />
@@ -725,11 +777,19 @@ export function FullPlayer() {
                                     "flex items-center justify-center w-8 h-8 transition-all duration-200",
                                     hasMedia
                                         ? "text-gray-400 hover:text-white hover:scale-110"
-                                        : "text-gray-400 cursor-not-allowed"
+                                        : "text-gray-400 cursor-not-allowed",
                                 )}
                                 disabled={!hasMedia}
-                                aria-label={playerMode === "overlay" ? "Close overlay player" : "Open overlay player"}
-                                title={playerMode === "overlay" ? "Close overlay player" : "Open overlay player"}
+                                aria-label={
+                                    playerMode === "overlay"
+                                        ? "Close overlay player"
+                                        : "Open overlay player"
+                                }
+                                title={
+                                    playerMode === "overlay"
+                                        ? "Close overlay player"
+                                        : "Open overlay player"
+                                }
                             >
                                 {playerMode === "overlay" ? (
                                     <ChevronDown className="w-[18px] h-[18px]" />

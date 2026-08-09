@@ -67,14 +67,18 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
     const isAllLiked = useMemo(() => {
         if (trackIds.length === 0) return false;
         return prefQueries.every(
-            (q) => (q.data as TrackPreferenceResponse | undefined)?.signal === "thumbs_up"
+            (q) =>
+                (q.data as TrackPreferenceResponse | undefined)?.signal ===
+                "thumbs_up",
         );
     }, [trackIds.length, prefQueries]);
 
     const toggleLikeAll = async () => {
         if (trackIds.length === 0 || isApplying) return;
 
-        const nextSignal = isAllLiked ? "clear" as const : "thumbs_up" as const;
+        const nextSignal = isAllLiked
+            ? ("clear" as const)
+            : ("thumbs_up" as const);
         setIsApplying(true);
 
         // Snapshot previous cache values for rollback
@@ -90,7 +94,7 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
         for (const trackId of trackIds) {
             queryClient.setQueryData(
                 ["track-preference", trackId],
-                buildOptimisticTrackPreferenceResponse(trackId, nextSignal)
+                buildOptimisticTrackPreferenceResponse(trackId, nextSignal),
             );
         }
 
@@ -100,29 +104,33 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
 
             await batchProcess(trackIds, BATCH_SIZE, async (trackId) => {
                 const track = trackById.get(trackId);
-                const metadata = track ? {
-                    title: track.title,
-                    artist: track.artist,
-                    album: track.album,
-                    duration: track.duration,
-                    thumbnailUrl: track.thumbnailUrl,
-                } : undefined;
+                const metadata = track
+                    ? {
+                          title: track.title,
+                          artist: track.artist,
+                          album: track.album,
+                          duration: track.duration,
+                          thumbnailUrl: track.thumbnailUrl,
+                      }
+                    : undefined;
                 await api.setTrackPreference(trackId, nextSignal, metadata);
             });
 
-            queryClient.invalidateQueries({ queryKey: ["library", "liked-playlist"] });
+            queryClient.invalidateQueries({
+                queryKey: ["library", "liked-playlist"],
+            });
 
             if (nextSignal === "thumbs_up") {
                 toast.success(
                     trackIds.length === 1
                         ? "Liked 1 track"
-                        : `Liked ${trackIds.length} tracks`
+                        : `Liked ${trackIds.length} tracks`,
                 );
             } else {
                 toast.success(
                     trackIds.length === 1
                         ? "Cleared preference for 1 track"
-                        : `Cleared preferences for ${trackIds.length} tracks`
+                        : `Cleared preferences for ${trackIds.length} tracks`,
                 );
             }
         } catch (error) {
@@ -132,13 +140,20 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
             for (const trackId of trackIds) {
                 const prev = previousValues.get(trackId);
                 if (prev !== undefined) {
-                    queryClient.setQueryData(["track-preference", trackId], prev);
+                    queryClient.setQueryData(
+                        ["track-preference", trackId],
+                        prev,
+                    );
                 } else {
-                    queryClient.removeQueries({ queryKey: ["track-preference", trackId] });
+                    queryClient.removeQueries({
+                        queryKey: ["track-preference", trackId],
+                    });
                 }
             }
             for (const trackId of trackIds) {
-                queryClient.invalidateQueries({ queryKey: ["track-preference", trackId] });
+                queryClient.invalidateQueries({
+                    queryKey: ["track-preference", trackId],
+                });
             }
         } finally {
             setIsApplying(false);

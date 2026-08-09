@@ -7,10 +7,10 @@
  * - Processing albums before new discovery generation
  */
 
-import { prisma } from '../../utils/db';
-import { logger } from '../../utils/logger';
-import { updateArtistCounts } from '../artistCountsService';
-import { LidarrHttpClient, LidarrHttpError } from '../lidarr/lidarrHttpClient';
+import { prisma } from "../../utils/db";
+import { logger } from "../../utils/logger";
+import { updateArtistCounts } from "../artistCountsService";
+import { LidarrHttpClient, LidarrHttpError } from "../lidarr/lidarrHttpClient";
 
 export interface DiscoveryAlbumInfo {
     id: string;
@@ -43,7 +43,7 @@ export class DiscoveryAlbumLifecycle {
         if (dbAlbum) {
             await prisma.album.update({
                 where: { id: dbAlbum.id },
-                data: { location: 'LIBRARY' },
+                data: { location: "LIBRARY" },
             });
 
             await prisma.ownedAlbum.upsert({
@@ -56,7 +56,7 @@ export class DiscoveryAlbumLifecycle {
                 create: {
                     artistId: dbAlbum.artistId,
                     rgMbid: dbAlbum.rgMbid,
-                    source: 'discover_liked',
+                    source: "discover_liked",
                 },
                 update: {},
             });
@@ -64,13 +64,13 @@ export class DiscoveryAlbumLifecycle {
             await updateArtistCounts(dbAlbum.artistId);
 
             logger.debug(
-                `[DiscoveryLifecycle] Moved to library: ${album.artistName} - ${album.albumTitle}`
+                `[DiscoveryLifecycle] Moved to library: ${album.artistName} - ${album.albumTitle}`,
             );
         }
 
         await prisma.discoveryAlbum.update({
             where: { id: album.id },
-            data: { status: 'MOVED' },
+            data: { status: "MOVED" },
         });
     }
 
@@ -81,7 +81,7 @@ export class DiscoveryAlbumLifecycle {
      */
     async deleteRejectedAlbum(
         album: DiscoveryAlbumInfo,
-        settings: LidarrSettings
+        settings: LidarrSettings,
     ): Promise<void> {
         if (
             settings.lidarrEnabled &&
@@ -94,14 +94,17 @@ export class DiscoveryAlbumLifecycle {
                 apiKey: settings.lidarrApiKey,
             });
             try {
-                await client.delete(
-                    `/api/v1/album/${album.lidarrAlbumId}`,
-                    { deleteFiles: true }
-                );
+                await client.delete(`/api/v1/album/${album.lidarrAlbumId}`, {
+                    deleteFiles: true,
+                });
             } catch (error: unknown) {
-                if (error instanceof LidarrHttpError ? error.status !== 404 : true) {
+                if (
+                    error instanceof LidarrHttpError
+                        ? error.status !== 404
+                        : true
+                ) {
                     logger.debug(
-                        `[DiscoveryLifecycle] Lidarr delete failed: ${error instanceof Error ? error.message : String(error)}`
+                        `[DiscoveryLifecycle] Lidarr delete failed: ${error instanceof Error ? error.message : String(error)}`,
                     );
                 }
             }
@@ -124,11 +127,11 @@ export class DiscoveryAlbumLifecycle {
 
         await prisma.discoveryAlbum.update({
             where: { id: album.id },
-            data: { status: 'DELETED' },
+            data: { status: "DELETED" },
         });
 
         logger.debug(
-            `[DiscoveryLifecycle] Deleted: ${album.artistName} - ${album.albumTitle}`
+            `[DiscoveryLifecycle] Deleted: ${album.artistName} - ${album.albumTitle}`,
         );
     }
 
@@ -140,31 +143,37 @@ export class DiscoveryAlbumLifecycle {
      */
     async processBeforeGeneration(
         userId: string,
-        settings: LidarrSettings
+        settings: LidarrSettings,
     ): Promise<{ moved: number; deleted: number }> {
-        logger.debug(`[DiscoveryLifecycle] Processing previous discovery albums...`);
+        logger.debug(
+            `[DiscoveryLifecycle] Processing previous discovery albums...`,
+        );
 
         const discoveryAlbums = await prisma.discoveryAlbum.findMany({
             where: {
                 userId,
-                status: { in: ['ACTIVE', 'LIKED'] },
+                status: { in: ["ACTIVE", "LIKED"] },
             },
         });
 
         if (discoveryAlbums.length === 0) {
-            logger.debug(`[DiscoveryLifecycle] No previous discovery albums to process`);
+            logger.debug(
+                `[DiscoveryLifecycle] No previous discovery albums to process`,
+            );
             await prisma.unavailableAlbum.deleteMany({ where: { userId } });
             return { moved: 0, deleted: 0 };
         }
 
-        const likedAlbums = discoveryAlbums.filter((a) => a.status === 'LIKED');
-        const activeAlbums = discoveryAlbums.filter((a) => a.status === 'ACTIVE');
+        const likedAlbums = discoveryAlbums.filter((a) => a.status === "LIKED");
+        const activeAlbums = discoveryAlbums.filter(
+            (a) => a.status === "ACTIVE",
+        );
 
         logger.debug(
-            `[DiscoveryLifecycle] Found ${likedAlbums.length} liked albums to keep`
+            `[DiscoveryLifecycle] Found ${likedAlbums.length} liked albums to keep`,
         );
         logger.debug(
-            `[DiscoveryLifecycle] Found ${activeAlbums.length} non-liked albums to remove`
+            `[DiscoveryLifecycle] Found ${activeAlbums.length} non-liked albums to remove`,
         );
 
         let moved = 0;
@@ -182,7 +191,7 @@ export class DiscoveryAlbumLifecycle {
                 moved++;
             } catch (error: any) {
                 logger.error(
-                    `[DiscoveryLifecycle] Failed to move ${album.albumTitle}: ${error.message}`
+                    `[DiscoveryLifecycle] Failed to move ${album.albumTitle}: ${error.message}`,
                 );
             }
         }
@@ -197,19 +206,21 @@ export class DiscoveryAlbumLifecycle {
                         albumTitle: album.albumTitle,
                         lidarrAlbumId: album.lidarrAlbumId,
                     },
-                    settings
+                    settings,
                 );
                 deleted++;
             } catch (error: any) {
                 logger.error(
-                    `[DiscoveryLifecycle] Failed to delete ${album.albumTitle}: ${error.message}`
+                    `[DiscoveryLifecycle] Failed to delete ${album.albumTitle}: ${error.message}`,
                 );
             }
         }
 
         await prisma.unavailableAlbum.deleteMany({ where: { userId } });
 
-        logger.debug(`[DiscoveryLifecycle] Previous discovery cleanup complete`);
+        logger.debug(
+            `[DiscoveryLifecycle] Previous discovery cleanup complete`,
+        );
 
         return { moved, deleted };
     }

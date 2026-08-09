@@ -39,7 +39,7 @@ export class LidarrHttpError extends Error {
     /** Creates a safe Lidarr failure without connection details or bodies. */
     constructor(details: LidarrHttpErrorDetails) {
         super(
-            `Lidarr ${details.method} ${details.path} failed after ${details.attempts} attempt(s)`
+            `Lidarr ${details.method} ${details.path} failed after ${details.attempts} attempt(s)`,
         );
         this.name = "LidarrHttpError";
         this.status = details.status;
@@ -122,7 +122,7 @@ function readHeader(headers: unknown, name: string): unknown {
     const getter = headers.get;
     if (typeof getter === "function") return getter.call(headers, name);
     const entry = Object.entries(headers).find(
-        ([key]) => key.toLowerCase() === name.toLowerCase()
+        ([key]) => key.toLowerCase() === name.toLowerCase(),
     );
     return entry?.[1];
 }
@@ -140,7 +140,7 @@ function retryAfterMs(error: unknown, maxBackoffMs: number): number | null {
 function buildError(
     config: LidarrRequestConfig,
     error: unknown,
-    attempts: number
+    attempts: number,
 ): LidarrHttpError {
     return new LidarrHttpError({
         status: getStatus(error),
@@ -158,7 +158,9 @@ function defaultSleep(ms: number): Promise<void> {
 
 function requireInteger(value: number, minimum: number, name: string): void {
     if (!Number.isSafeInteger(value) || value < minimum) {
-        throw new Error(`${name} must be an integer greater than or equal to ${minimum}`);
+        throw new Error(
+            `${name} must be an integer greater than or equal to ${minimum}`,
+        );
     }
 }
 
@@ -198,7 +200,10 @@ function validateConnection(connection: LidarrConnection): void {
     if (!validateBaseUrl(connection.baseUrl)) {
         throw new Error("Lidarr base URL must use HTTP or HTTPS");
     }
-    if (typeof connection.apiKey !== "string" || connection.apiKey.trim() === "") {
+    if (
+        typeof connection.apiKey !== "string" ||
+        connection.apiKey.trim() === ""
+    ) {
         throw new Error("Lidarr API key must be a non-empty string");
     }
 }
@@ -210,7 +215,7 @@ function assertRelativePath(path: string): void {
 
 async function executeAttempt<T>(
     instance: AxiosInstance,
-    config: LidarrRequestConfig
+    config: LidarrRequestConfig,
 ): Promise<{ data: T; status: number }> {
     return instance.request<T>({
         method: config.method,
@@ -229,7 +234,7 @@ export class LidarrHttpClient {
     /** Creates one reusable axios instance and one concurrency limiter. */
     constructor(
         connection: LidarrConnection,
-        options: LidarrHttpClientOptions = {}
+        options: LidarrHttpClientOptions = {},
     ) {
         validateConnection(connection);
         this.options = resolveOptions(options);
@@ -248,7 +253,10 @@ export class LidarrHttpClient {
             const maxAttempts = this.options.maxRetries + 1;
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                    const response = await executeAttempt<T>(this.instance, requestConfig);
+                    const response = await executeAttempt<T>(
+                        this.instance,
+                        requestConfig,
+                    );
                     logger.debug("Lidarr HTTP request succeeded", {
                         method: requestConfig.method,
                         path: requestConfig.path,
@@ -257,8 +265,9 @@ export class LidarrHttpClient {
                     });
                     return response.data as T;
                 } catch (error: unknown) {
-                    const shouldRetry = classifyRetry(requestConfig, error)
-                        && attempt < maxAttempts;
+                    const shouldRetry =
+                        classifyRetry(requestConfig, error) &&
+                        attempt < maxAttempts;
                     if (!shouldRetry) {
                         logger.error("Lidarr HTTP request failed", {
                             method: requestConfig.method,
@@ -269,11 +278,12 @@ export class LidarrHttpClient {
                         });
                         throw buildError(requestConfig, error, attempt);
                     }
-                    const delay = retryAfterMs(error, this.options.maxBackoffMs)
-                        ?? computeBackoffMs(
+                    const delay =
+                        retryAfterMs(error, this.options.maxBackoffMs) ??
+                        computeBackoffMs(
                             attempt,
                             this.options.baseBackoffMs,
-                            this.options.maxBackoffMs
+                            this.options.maxBackoffMs,
                         );
                     logger.warn("Retrying Lidarr HTTP request", {
                         method: requestConfig.method,
@@ -316,12 +326,14 @@ export async function resolveLidarrConnection(): Promise<LidarrConnection | null
     try {
         settings = await getSystemSettings();
     } catch {
-        logger.error("Unable to read Lidarr system settings; checking environment");
+        logger.error(
+            "Unable to read Lidarr system settings; checking environment",
+        );
     }
     if (
-        settings?.lidarrEnabled
-        && settings.lidarrUrl
-        && settings.lidarrApiKey
+        settings?.lidarrEnabled &&
+        settings.lidarrUrl &&
+        settings.lidarrApiKey
     ) {
         if (!validateBaseUrl(settings.lidarrUrl)) {
             logger.warn("Configured Lidarr database URL is invalid");
@@ -342,7 +354,7 @@ export async function resolveLidarrConnection(): Promise<LidarrConnection | null
 
 /** Creates a bounded Lidarr client when a valid enabled connection is configured. */
 export async function createLidarrClient(
-    options?: LidarrHttpClientOptions
+    options?: LidarrHttpClientOptions,
 ): Promise<LidarrHttpClient | null> {
     const connection = await resolveLidarrConnection();
     if (!connection) return null;

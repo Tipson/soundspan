@@ -53,7 +53,7 @@ function inRange(v: number | null, lo: number, hi: number): boolean {
  */
 export function computeVisibilityMask(
     tracks: readonly FilterableTrack[],
-    filters: MapFilterState
+    filters: MapFilterState,
 ): Uint8Array {
     const { activeMoods, energyRange, valenceRange } = filters;
     const [eLo, eHi] = energyRange;
@@ -63,7 +63,9 @@ export function computeVisibilityMask(
         const t = tracks[i];
         const moodOk = activeMoods.has(t.dominantMood);
         mask[i] =
-            moodOk && inRange(t.energy, eLo, eHi) && inRange(t.valence, vLo, vHi)
+            moodOk &&
+            inRange(t.energy, eLo, eHi) &&
+            inRange(t.valence, vLo, vHi)
                 ? 1
                 : 0;
     }
@@ -79,7 +81,7 @@ export function countVisible(mask: Uint8Array): number {
 /** Pure: toggle `mood`'s membership in `current`; every other mood is untouched. */
 export function toggleMoodInSet(
     current: ReadonlySet<string>,
-    mood: string
+    mood: string,
 ): Set<string> {
     const next = new Set(current);
     if (next.has(mood)) next.delete(mood);
@@ -115,10 +117,10 @@ export interface UseMapFilters {
  */
 export function useMapFilters(
     tracks: readonly MapTrack[],
-    moodList: readonly string[] = DEFAULT_MOOD_LIST
+    moodList: readonly string[] = DEFAULT_MOOD_LIST,
 ): UseMapFilters {
     const [activeMoods, setActiveMoods] = useState<ReadonlySet<string>>(
-        () => new Set(moodList)
+        () => new Set(moodList),
     );
     const [energyRange, setEnergyRange] = useState<[number, number]>([0, 1]);
     const [valenceRange, setValenceRange] = useState<[number, number]>([0, 1]);
@@ -148,7 +150,7 @@ export function useMapFilters(
                 energyRange,
                 valenceRange,
             }),
-        [tracks, activeMoods, energyRange, valenceRange]
+        [tracks, activeMoods, energyRange, valenceRange],
     );
     const visibleCount = useMemo(() => countVisible(mask), [mask]);
 

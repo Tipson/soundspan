@@ -67,21 +67,41 @@ describe("logger", () => {
             },
             {
                 level: "warn",
-                expected: { debug: false, info: false, warn: true, error: true },
+                expected: {
+                    debug: false,
+                    info: false,
+                    warn: true,
+                    error: true,
+                },
             },
             {
                 level: "error",
-                expected: { debug: false, info: false, warn: false, error: true },
+                expected: {
+                    debug: false,
+                    info: false,
+                    warn: false,
+                    error: true,
+                },
             },
             {
                 level: "silent",
-                expected: { debug: false, info: false, warn: false, error: false },
+                expected: {
+                    debug: false,
+                    info: false,
+                    warn: false,
+                    error: false,
+                },
             },
         ] as const;
 
         for (const scenario of cases) {
-            const { logger, consoleDebug, consoleInfo, consoleWarn, consoleError } =
-                loadLoggerModule({ logLevel: scenario.level });
+            const {
+                logger,
+                consoleDebug,
+                consoleInfo,
+                consoleWarn,
+                consoleError,
+            } = loadLoggerModule({ logLevel: scenario.level });
 
             logger.debug("debug call");
             logger.info("info call");
@@ -89,12 +109,16 @@ describe("logger", () => {
             logger.error("error call");
 
             expect(consoleDebug.mock.calls.length).toBe(
-                scenario.expected.debug ? 1 : 0
+                scenario.expected.debug ? 1 : 0,
             );
-            expect(consoleInfo.mock.calls.length).toBe(scenario.expected.info ? 1 : 0);
-            expect(consoleWarn.mock.calls.length).toBe(scenario.expected.warn ? 1 : 0);
+            expect(consoleInfo.mock.calls.length).toBe(
+                scenario.expected.info ? 1 : 0,
+            );
+            expect(consoleWarn.mock.calls.length).toBe(
+                scenario.expected.warn ? 1 : 0,
+            );
             expect(consoleError.mock.calls.length).toBe(
-                scenario.expected.error ? 1 : 0
+                scenario.expected.error ? 1 : 0,
             );
         }
     });
@@ -144,15 +168,20 @@ describe("logger", () => {
         ] as const;
 
         for (const scenario of cases) {
-            const { logger, consoleDebug, consoleInfo, consoleWarn, consoleError } =
-                loadLoggerModule({
-                    logLevel: scenario.logLevel,
-                    nodeEnv: scenario.nodeEnv,
-                });
+            const {
+                logger,
+                consoleDebug,
+                consoleInfo,
+                consoleWarn,
+                consoleError,
+            } = loadLoggerModule({
+                logLevel: scenario.logLevel,
+                nodeEnv: scenario.nodeEnv,
+            });
 
             expect(consoleWarn).toHaveBeenCalledTimes(1);
             expect(consoleWarn).toHaveBeenCalledWith(
-                `Invalid LOG_LEVEL "${scenario.logLevel}"; falling back to "${scenario.expected.debug ? "debug" : "warn"}"`
+                `Invalid LOG_LEVEL "${scenario.logLevel}"; falling back to "${scenario.expected.debug ? "debug" : "warn"}"`,
             );
 
             logger.debug("debug call");
@@ -161,10 +190,10 @@ describe("logger", () => {
             logger.error("error call");
 
             expect(consoleDebug.mock.calls.length).toBe(
-                scenario.expected.debug ? 1 : 0
+                scenario.expected.debug ? 1 : 0,
             );
             expect(consoleInfo.mock.calls.length).toBe(
-                scenario.expected.info ? 1 : 0
+                scenario.expected.info ? 1 : 0,
             );
             expect(consoleWarn).toHaveBeenCalledTimes(2);
             expect(consoleWarn).toHaveBeenLastCalledWith("[WARN] warn call");
@@ -184,8 +213,17 @@ describe("logger", () => {
         logger.warn("almost", payload);
         logger.error("failed", new Error("nope"));
 
-        expect(consoleDebug).toHaveBeenCalledWith("[DEBUG] starting", context, payload);
-        expect(consoleInfo).toHaveBeenCalledWith("[INFO] running", 1, "two", context);
+        expect(consoleDebug).toHaveBeenCalledWith(
+            "[DEBUG] starting",
+            context,
+            payload,
+        );
+        expect(consoleInfo).toHaveBeenCalledWith(
+            "[INFO] running",
+            1,
+            "two",
+            context,
+        );
         expect(consoleWarn).toHaveBeenCalledWith("[WARN] almost", payload);
         expect(consoleError).toHaveBeenCalledWith("[ERROR] failed", {
             name: "Error",
@@ -206,7 +244,7 @@ describe("logger", () => {
 
         expect(consoleInfo).toHaveBeenCalledWith(
             "[INFO] [Worker.Scan] started",
-            { jobId: "42" }
+            { jobId: "42" },
         );
     });
 
@@ -219,15 +257,17 @@ describe("logger", () => {
             logger,
             "refresh-cache",
             async () => "ok",
-            { cacheKey: "abc" }
+            { cacheKey: "abc" },
         );
 
         expect(result).toBe("ok");
         expect(consoleDebug).toHaveBeenCalledTimes(2);
-        expect(consoleDebug.mock.calls[0][0]).toBe("[DEBUG] refresh-cache started");
+        expect(consoleDebug.mock.calls[0][0]).toBe(
+            "[DEBUG] refresh-cache started",
+        );
         expect(consoleDebug.mock.calls[0][1]).toEqual({ cacheKey: "abc" });
         expect(consoleDebug.mock.calls[1][0]).toBe(
-            "[DEBUG] refresh-cache completed"
+            "[DEBUG] refresh-cache completed",
         );
         expect(consoleDebug.mock.calls[1][1]).toMatchObject({
             cacheKey: "abc",
@@ -247,12 +287,14 @@ describe("logger", () => {
                 async () => {
                     throw new Error("boom");
                 },
-                { cacheKey: "abc" }
-            )
+                { cacheKey: "abc" },
+            ),
         ).rejects.toThrow("boom");
 
         expect(consoleError).toHaveBeenCalledTimes(1);
-        expect(consoleError.mock.calls[0][0]).toBe("[ERROR] refresh-cache failed");
+        expect(consoleError.mock.calls[0][0]).toBe(
+            "[ERROR] refresh-cache failed",
+        );
         expect(consoleError.mock.calls[0][1]).toMatchObject({
             cacheKey: "abc",
         });

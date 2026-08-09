@@ -41,7 +41,7 @@ const mockFindMany = prismaClient.listeningState.findMany as jest.Mock;
 function getHandler(method: "get" | "post", path: string) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -156,7 +156,7 @@ describe("listeningState routes runtime", () => {
                 id: "state-1",
                 userId: "u1",
                 kind: "music",
-            })
+            }),
         );
     });
 
@@ -179,7 +179,7 @@ describe("listeningState routes runtime", () => {
         expect(res.body).toEqual({ error: "Failed to update listening state" });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Update listening state error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -193,7 +193,9 @@ describe("listeningState routes runtime", () => {
 
         await getState(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(400);
-        expect(missingRes.body).toEqual({ error: "kind and entityId required" });
+        expect(missingRes.body).toEqual({
+            error: "kind and entityId required",
+        });
 
         mockFindUnique.mockResolvedValueOnce(null);
         const notFoundReq = {
@@ -222,7 +224,7 @@ describe("listeningState routes runtime", () => {
             expect.objectContaining({
                 id: "state-1",
                 entityId: "album-1",
-            })
+            }),
         );
     });
 
@@ -256,7 +258,9 @@ describe("listeningState routes runtime", () => {
         });
         expect(defaultRes.statusCode).toBe(200);
         expect(defaultRes.body).toEqual(
-            expect.arrayContaining([expect.objectContaining({ id: "state-1" })])
+            expect.arrayContaining([
+                expect.objectContaining({ id: "state-1" }),
+            ]),
         );
 
         const customReq = {

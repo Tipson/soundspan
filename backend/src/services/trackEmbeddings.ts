@@ -24,7 +24,7 @@ export interface TrackEmbeddingRow {
  * input resolves to `[]` without touching the database.
  */
 export async function fetchEmbeddingsByTrackIds(
-    trackIds: readonly string[]
+    trackIds: readonly string[],
 ): Promise<TrackEmbeddingRow[]> {
     if (trackIds.length === 0) return [];
     const rows = await prisma.$queryRaw<

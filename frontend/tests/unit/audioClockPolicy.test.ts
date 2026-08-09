@@ -135,7 +135,10 @@ test("rejected (stale-track) ticks write neither the ref nor a publish", () => {
         },
     );
 
-    assert.ok(!refWrites.includes(99.0), "rejected tick must not reach the ref");
+    assert.ok(
+        !refWrites.includes(99.0),
+        "rejected tick must not reach the ref",
+    );
     assert.ok(!published.includes(99.0), "rejected tick must not publish");
     assert.deepEqual(refWrites, [43.01, 43.26]);
     assert.deepEqual(published, [43.01]); // only the boundary crossing 42->43
@@ -157,7 +160,10 @@ test("a seek landing within the same displayed second still forces a publish", (
         },
     );
 
-    assert.ok(!refWrites.includes(43.0), "far tick during seek lock is rejected");
+    assert.ok(
+        !refWrites.includes(43.0),
+        "far tick during seek lock is rejected",
+    );
     assert.ok(!published.includes(43.0));
     assert.deepEqual(refWrites, [30.1]);
     // Publishes despite Math.floor(30.1) === Math.floor(30.0): the discontinuity

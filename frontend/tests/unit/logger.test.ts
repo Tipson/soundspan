@@ -4,7 +4,7 @@ import test from "node:test";
 type ConsoleCallMap = Record<"debug" | "info" | "warn" | "error", unknown[][]>;
 
 async function withMockedConsole(
-    run: (calls: ConsoleCallMap) => Promise<void> | void
+    run: (calls: ConsoleCallMap) => Promise<void> | void,
 ): Promise<void> {
     const calls: ConsoleCallMap = {
         debug: [],
@@ -45,7 +45,7 @@ async function withMockedConsole(
 
 async function withEnv(
     values: Record<string, string | undefined>,
-    run: () => Promise<void> | void
+    run: () => Promise<void> | void,
 ): Promise<void> {
     const previous = new Map<string, string | undefined>();
     for (const [key, value] of Object.entries(values)) {
@@ -71,7 +71,9 @@ async function withEnv(
 }
 
 async function loadLoggerModule() {
-    return import(`../../lib/logger.ts?logger-test=${Date.now()}-${Math.random()}`);
+    return import(
+        `../../lib/logger.ts?logger-test=${Date.now()}-${Math.random()}`
+    );
 }
 
 test("frontend logger defaults to info in development", async () => {
@@ -92,7 +94,7 @@ test("frontend logger defaults to info in development", async () => {
                 assert.equal(calls.warn.length, 1);
                 assert.equal(calls.error.length, 1);
             });
-        }
+        },
     );
 });
 
@@ -114,7 +116,7 @@ test("frontend logger silences all levels when NEXT_PUBLIC_LOG_LEVEL is unknown"
                 assert.equal(calls.warn.length, 0);
                 assert.equal(calls.error.length, 0);
             });
-        }
+        },
     );
 });
 
@@ -134,7 +136,7 @@ test("frontend logger scopes messages and normalizes context errors", async () =
                 assert.equal(calls.error.length, 1);
                 assert.equal(
                     calls.error[0][0],
-                    "[ERROR] [Parent.Child] failed"
+                    "[ERROR] [Parent.Child] failed",
                 );
                 const context = calls.error[0][1] as {
                     requestId: string;
@@ -145,7 +147,7 @@ test("frontend logger scopes messages and normalizes context errors", async () =
                 assert.equal(context.error.message, "boom");
                 assert.equal(typeof context.error.stack, "string");
             });
-        }
+        },
     );
 });
 
@@ -162,16 +164,29 @@ test("withFrontendLogTiming logs start and completion", async () => {
                     logger,
                     "refresh",
                     async () => "ok",
-                    { requestId: "req-2" }
+                    { requestId: "req-2" },
                 );
 
                 assert.equal(result, "ok");
                 assert.equal(calls.debug.length, 2);
-                assert.equal(calls.debug[0][0], "[DEBUG] [Timing] refresh started");
-                assert.equal(calls.debug[1][0], "[DEBUG] [Timing] refresh completed");
-                assert.equal((calls.debug[1][1] as Record<string, unknown>).requestId, "req-2");
-                assert.equal(typeof (calls.debug[1][1] as Record<string, unknown>).durationMs, "number");
+                assert.equal(
+                    calls.debug[0][0],
+                    "[DEBUG] [Timing] refresh started",
+                );
+                assert.equal(
+                    calls.debug[1][0],
+                    "[DEBUG] [Timing] refresh completed",
+                );
+                assert.equal(
+                    (calls.debug[1][1] as Record<string, unknown>).requestId,
+                    "req-2",
+                );
+                assert.equal(
+                    typeof (calls.debug[1][1] as Record<string, unknown>)
+                        .durationMs,
+                    "number",
+                );
             });
-        }
+        },
     );
 });

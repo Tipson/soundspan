@@ -6,7 +6,10 @@ import { useUserSettingsExplorePrefs } from "@/features/explore/hooks/useUserSet
 import { HomeHero } from "@/features/home/components/HomeHero";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
-import { LibraryRadioStations, useLibraryRadioData } from "@/features/home/components/LibraryRadioStations";
+import {
+    LibraryRadioStations,
+    useLibraryRadioData,
+} from "@/features/home/components/LibraryRadioStations";
 import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
 import { MadeForYouSection } from "@/features/explore/components/MadeForYouSection";
 import { MoodPills } from "@/features/explore/components/MoodPills";
@@ -81,23 +84,44 @@ export default function ExplorePage() {
 
                     {/* Quick Start Radio */}
                     <section>
-                        <SectionHeader title="Quick Start" showAllHref="/radio" badge={<LibraryBadge />} />
-                        <LibraryRadioStations stations={quickStartStations} externalLoading={isRadioLoading} />
+                        <SectionHeader
+                            title="Quick Start"
+                            showAllHref="/radio"
+                            badge={<LibraryBadge />}
+                        />
+                        <LibraryRadioStations
+                            stations={quickStartStations}
+                            externalLoading={isRadioLoading}
+                        />
                     </section>
 
                     {/* Library Genres Radio */}
                     {(genreStations.length > 0 || isRadioLoading) && (
                         <section>
-                            <SectionHeader title="Genres" showAllHref="/radio" badge={<LibraryBadge />} />
-                            <LibraryRadioStations stations={genreStations} externalLoading={isRadioLoading} />
+                            <SectionHeader
+                                title="Genres"
+                                showAllHref="/radio"
+                                badge={<LibraryBadge />}
+                            />
+                            <LibraryRadioStations
+                                stations={genreStations}
+                                externalLoading={isRadioLoading}
+                            />
                         </section>
                     )}
 
                     {/* Library Decades Radio */}
                     {(decadeStations.length > 0 || isRadioLoading) && (
                         <section>
-                            <SectionHeader title="Decades" showAllHref="/radio" badge={<LibraryBadge />} />
-                            <LibraryRadioStations stations={decadeStations} externalLoading={isRadioLoading} />
+                            <SectionHeader
+                                title="Decades"
+                                showAllHref="/radio"
+                                badge={<LibraryBadge />}
+                            />
+                            <LibraryRadioStations
+                                stations={decadeStations}
+                                externalLoading={isRadioLoading}
+                            />
                         </section>
                     )}
 
@@ -121,7 +145,10 @@ export default function ExplorePage() {
                     {/* Popular Artists */}
                     {popularArtists.length > 0 && (
                         <section>
-                            <SectionHeader title="Popular Artists" badge={<LastFmBadge />} />
+                            <SectionHeader
+                                title="Popular Artists"
+                                badge={<LastFmBadge />}
+                            />
                             <PopularArtistsGrid artists={popularArtists} />
                         </section>
                     )}

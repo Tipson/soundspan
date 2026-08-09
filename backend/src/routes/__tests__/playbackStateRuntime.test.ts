@@ -40,7 +40,7 @@ const mockDeleteMany = prismaClient.playbackState.deleteMany as jest.Mock;
 function getHandler(method: "get" | "post" | "delete", path: string) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -104,7 +104,7 @@ describe("playbackState routes runtime", () => {
             expect.objectContaining({
                 id: "state-1",
                 playbackType: "track",
-            })
+            }),
         );
     });
 
@@ -124,7 +124,9 @@ describe("playbackState routes runtime", () => {
             currentTime: 45,
         };
 
-        mockFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(legacyState);
+        mockFindUnique
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(legacyState);
         mockUpsert.mockResolvedValueOnce({ id: "migrated" });
 
         const req = {
@@ -214,7 +216,7 @@ describe("playbackState routes runtime", () => {
         expect(invalidRes.statusCode).toBe(400);
         expect(invalidRes.body).toEqual({ error: "Invalid playbackType" });
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "[PlaybackState] Invalid playbackType: video"
+            "[PlaybackState] Invalid playbackType: video",
         );
     });
 
@@ -240,7 +242,11 @@ describe("playbackState routes runtime", () => {
                         streamSource: "youtube",
                         youtubeVideoId: "yt-123",
                         artist: { id: "a1", name: "Artist A" },
-                        album: { id: "al1", title: "Album A", coverArt: "/img/a.jpg" },
+                        album: {
+                            id: "al1",
+                            title: "Album A",
+                            coverArt: "/img/a.jpg",
+                        },
                     },
                     null,
                     { title: "missing id" },
@@ -308,7 +314,7 @@ describe("playbackState routes runtime", () => {
             expect.objectContaining({
                 id: "state-2",
                 playbackType: "track",
-            })
+            }),
         );
     });
 
@@ -364,7 +370,7 @@ describe("playbackState routes runtime", () => {
                         }),
                     ],
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });
@@ -435,14 +441,14 @@ describe("playbackState routes runtime", () => {
                 podcastId: "pod-2",
                 episodeId: "ep-9",
                 coverUrl: null,
-            })
+            }),
         );
         expect(savedQueue[2]).toEqual(
             expect.objectContaining({
                 itemType: "track",
                 id: "t1",
                 title: "Queued Track",
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
     });
@@ -474,7 +480,7 @@ describe("playbackState routes runtime", () => {
         const whereArg = mockUpsert.mock.calls[0][0].where;
         expect(whereArg.userId_deviceId.deviceId).toHaveLength(128);
         expect(mockUpsert.mock.calls[0][0].update.queue).toBe(
-            (PrismaClient as any).DbNull
+            (PrismaClient as any).DbNull,
         );
         expect(res.statusCode).toBe(200);
     });
@@ -495,7 +501,7 @@ describe("playbackState routes runtime", () => {
         await postState(req, res);
 
         expect(mockUpsert.mock.calls[0][0].update).toEqual(
-            expect.not.objectContaining({ isPlaying: expect.anything() })
+            expect.not.objectContaining({ isPlaying: expect.anything() }),
         );
         expect(mockUpsert.mock.calls[0][0].update).toEqual(
             expect.not.objectContaining({
@@ -503,13 +509,13 @@ describe("playbackState routes runtime", () => {
                 currentIndex: expect.anything(),
                 isShuffle: expect.anything(),
                 currentTime: expect.anything(),
-            })
+            }),
         );
         expect(mockUpsert.mock.calls[0][0].create.isPlaying).toBe(false);
         expect(mockUpsert.mock.calls[0][0].create.currentTime).toBe(0);
         expect(mockUpsert.mock.calls[0][0].create.currentIndex).toBe(0);
         expect(mockUpsert.mock.calls[0][0].create.queue).toBe(
-            (PrismaClient as any).DbNull
+            (PrismaClient as any).DbNull,
         );
         expect(res.statusCode).toBe(200);
     });
@@ -553,6 +559,8 @@ describe("playbackState routes runtime", () => {
         const errorRes = createRes();
         await deleteState(req, errorRes);
         expect(errorRes.statusCode).toBe(500);
-        expect(errorRes.body).toEqual({ error: "Failed to delete playback state" });
+        expect(errorRes.body).toEqual({
+            error: "Failed to delete playback state",
+        });
     });
 });

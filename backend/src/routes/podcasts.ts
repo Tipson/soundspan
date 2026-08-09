@@ -2,7 +2,10 @@ import { Router } from "express";
 import { logger } from "../utils/logger";
 import { requireAuth, requireAuthOrToken } from "../middleware/auth";
 import { prisma, Prisma } from "../utils/db";
-import { rssParserService, RSSFeedNotModifiedError } from "../services/rss-parser";
+import {
+    rssParserService,
+    RSSFeedNotModifiedError,
+} from "../services/rss-parser";
 import { podcastCacheService } from "../services/podcastCache";
 import { parseRangeHeader } from "../utils/rangeParser";
 import {
@@ -32,7 +35,7 @@ async function openSafeAudioStream(
         timeoutMs: number;
         signal: AbortSignal;
         validateStatus: (status: number) => boolean;
-    }
+    },
 ): Promise<import("axios").AxiosResponse> {
     let current = await resolveSafeOutboundUrl(rawUrl);
     if (!current) throw new PodcastEgressBlockedError(rawUrl);
@@ -45,8 +48,7 @@ async function openSafeAudioStream(
             maxRedirects: 0,
             headers: opts.headers,
             validateStatus: (status) =>
-                opts.validateStatus(status) ||
-                (status >= 300 && status < 400),
+                opts.validateStatus(status) || (status >= 300 && status < 400),
         });
         if (response.status < 300) return response;
         if (response.data && typeof response.data.destroy === "function") {
@@ -68,7 +70,9 @@ async function openSafeAudioStream(
 
 function isRetryablePodcastPrismaError(error: unknown): boolean {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(error.code);
+        return ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(
+            error.code,
+        );
     }
 
     if (error instanceof Prisma.PrismaClientRustPanicError) {
@@ -83,7 +87,8 @@ function isRetryablePodcastPrismaError(error: unknown): boolean {
         );
     }
 
-    const message = error instanceof Error ? error.message : String(error ?? "");
+    const message =
+        error instanceof Error ? error.message : String(error ?? "");
     return (
         message.includes("Response from the Engine was empty") ||
         message.includes("Engine has already exited") ||
@@ -94,7 +99,7 @@ function isRetryablePodcastPrismaError(error: unknown): boolean {
 
 async function withPodcastPrismaRetry<T>(
     operationName: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
 ): Promise<T> {
     for (let attempt = 1; ; attempt += 1) {
         try {
@@ -109,7 +114,7 @@ async function withPodcastPrismaRetry<T>(
 
             logger.warn(
                 `[Podcast/Prisma] ${operationName} failed (attempt ${attempt}/${PODCAST_PRISMA_RETRY_ATTEMPTS}), retrying`,
-                error
+                error,
             );
             await prisma.$connect().catch(() => {});
             await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
@@ -127,7 +132,9 @@ function describeAxiosError(error: unknown): string {
     const status = error.response?.status;
     const message = error.message || "Unknown Axios error";
 
-    return status ? `${code} (HTTP ${status}): ${message}` : `${code}: ${message}`;
+    return status
+        ? `${code} (HTTP ${status}): ${message}`
+        : `${code}: ${message}`;
 }
 
 function resolveParsedFeedMetadata(feedData: {
@@ -135,10 +142,12 @@ function resolveParsedFeedMetadata(feedData: {
     etag?: string;
     lastModified?: string;
 }): { etag?: string; lastModified?: string } {
-    return feedData.feedMetadata ?? {
-        etag: feedData.etag,
-        lastModified: feedData.lastModified,
-    };
+    return (
+        feedData.feedMetadata ?? {
+            etag: feedData.etag,
+            lastModified: feedData.lastModified,
+        }
+    );
 }
 
 /**
@@ -162,9 +171,8 @@ function resolveParsedFeedMetadata(feedData: {
  */
 router.post("/sync-covers", requireAuth, async (req, res) => {
     try {
-        const { notificationService } = await import(
-            "../services/notificationService"
-        );
+        const { notificationService } =
+            await import("../services/notificationService");
         logger.debug(" Starting podcast cover sync...");
 
         const podcastResult = await podcastCacheService.syncAllCovers();
@@ -176,7 +184,7 @@ router.post("/sync-covers", requireAuth, async (req, res) => {
             "Podcast Covers Synced",
             `Synced ${podcastResult.synced || 0} podcast covers and ${
                 episodeResult.synced || 0
-            } episode covers`
+            } episode covers`,
         );
 
         res.json({
@@ -317,15 +325,18 @@ router.get("/discover/top", requireAuthOrToken, async (req, res) => {
         logger.debug(`\n[TOP PODCASTS] Request (limit: ${podcastLimit})`);
 
         // Simple iTunes search - same as the working search bar!
-        const itunesResponse = await axios.get("https://itunes.apple.com/search", {
-            params: {
-                term: "podcast",
-                media: "podcast",
-                entity: "podcast",
-                limit: podcastLimit,
+        const itunesResponse = await axios.get(
+            "https://itunes.apple.com/search",
+            {
+                params: {
+                    term: "podcast",
+                    media: "podcast",
+                    entity: "podcast",
+                    limit: podcastLimit,
+                },
+                timeout: ITUNES_DISCOVER_TIMEOUT_MS,
             },
-            timeout: ITUNES_DISCOVER_TIMEOUT_MS,
-        });
+        );
 
         const podcasts = itunesResponse.data.results.map((podcast: any) => ({
             id: podcast.collectionId.toString(),
@@ -344,8 +355,8 @@ router.get("/discover/top", requireAuthOrToken, async (req, res) => {
     } catch (error: unknown) {
         logger.warn(
             `[TOP PODCASTS] iTunes request failed; returning empty list. ${describeAxiosError(
-                error
-            )}`
+                error,
+            )}`,
         );
         res.json([]);
     }
@@ -411,15 +422,18 @@ router.get("/discover/genres", async (req, res) => {
 
             try {
                 // Simple iTunes search - same as the working search bar!
-                const itunesResponse = await axios.get("https://itunes.apple.com/search", {
-                    params: {
-                        term: searchTerm,
-                        media: "podcast",
-                        entity: "podcast",
-                        limit: 10,
+                const itunesResponse = await axios.get(
+                    "https://itunes.apple.com/search",
+                    {
+                        params: {
+                            term: searchTerm,
+                            media: "podcast",
+                            entity: "podcast",
+                            limit: 10,
+                        },
+                        timeout: ITUNES_DISCOVER_TIMEOUT_MS,
                     },
-                    timeout: ITUNES_DISCOVER_TIMEOUT_MS,
-                });
+                );
 
                 const podcasts = itunesResponse.data.results.map(
                     (podcast: any) => ({
@@ -433,18 +447,18 @@ router.get("/discover/genres", async (req, res) => {
                         episodeCount: podcast.trackCount || 0,
                         itunesId: podcast.collectionId,
                         isExternal: true,
-                    })
+                    }),
                 );
 
                 logger.debug(
-                    `      Found ${podcasts.length} podcasts for genre ${genreId}`
+                    `      Found ${podcasts.length} podcasts for genre ${genreId}`,
                 );
                 return { genreId, podcasts };
             } catch (error: unknown) {
                 logger.warn(
                     `       iTunes search failed for "${searchTerm}", returning empty genre list. ${describeAxiosError(
-                        error
-                    )}`
+                        error,
+                    )}`,
                 );
                 return { genreId, podcasts: [] };
             }
@@ -460,14 +474,14 @@ router.get("/discover/genres", async (req, res) => {
         }
 
         logger.debug(
-            `   Fetched podcasts for ${genreIds.length} genres (parallel)`
+            `   Fetched podcasts for ${genreIds.length} genres (parallel)`,
         );
         res.json(results);
     } catch (error: unknown) {
         logger.warn(
             `[GENRE PODCASTS] Failed to fetch genre discovery, returning empty result. ${describeAxiosError(
-                error
-            )}`
+                error,
+            )}`,
         );
         res.json({});
     }
@@ -522,7 +536,7 @@ router.get("/discover/genre/:genreId", async (req, res) => {
         const podcastOffset = parseInt(offset as string, 10);
 
         logger.debug(
-            `\n[GENRE PAGINATED] Request (genre: ${genreId}, limit: ${podcastLimit}, offset: ${podcastOffset})`
+            `\n[GENRE PAGINATED] Request (genre: ${genreId}, limit: ${podcastLimit}, offset: ${podcastOffset})`,
         );
 
         // Map genre IDs to search terms
@@ -538,22 +552,25 @@ router.get("/discover/genre/:genreId", async (req, res) => {
 
         const searchTerm = genreSearchTerms[genreId] || "podcast";
         logger.debug(
-            `    Searching for "${searchTerm}" (offset: ${podcastOffset})...`
+            `    Searching for "${searchTerm}" (offset: ${podcastOffset})...`,
         );
 
         // iTunes API doesn't support offset directly, so we request more and slice
         // This is a limitation but works for reasonable pagination
         const totalToFetch = podcastOffset + podcastLimit;
 
-        const itunesResponse = await axios.get("https://itunes.apple.com/search", {
-            params: {
-                term: searchTerm,
-                media: "podcast",
-                entity: "podcast",
-                limit: Math.min(totalToFetch, 200), // iTunes max is 200
+        const itunesResponse = await axios.get(
+            "https://itunes.apple.com/search",
+            {
+                params: {
+                    term: searchTerm,
+                    media: "podcast",
+                    entity: "podcast",
+                    limit: Math.min(totalToFetch, 200), // iTunes max is 200
+                },
+                timeout: ITUNES_DISCOVER_TIMEOUT_MS,
             },
-            timeout: ITUNES_DISCOVER_TIMEOUT_MS,
-        });
+        );
 
         const allPodcasts = itunesResponse.data.results.map((podcast: any) => ({
             id: podcast.collectionId.toString(),
@@ -570,18 +587,18 @@ router.get("/discover/genre/:genreId", async (req, res) => {
         // Slice for pagination
         const podcasts = allPodcasts.slice(
             podcastOffset,
-            podcastOffset + podcastLimit
+            podcastOffset + podcastLimit,
         );
 
         logger.debug(
-            `   Found ${podcasts.length} podcasts (total available: ${allPodcasts.length})`
+            `   Found ${podcasts.length} podcasts (total available: ${allPodcasts.length})`,
         );
         res.json(podcasts);
     } catch (error: unknown) {
         logger.warn(
             `[GENRE PAGINATED] iTunes request failed; returning empty list. ${describeAxiosError(
-                error
-            )}`
+                error,
+            )}`,
         );
         res.json([]);
     }
@@ -631,7 +648,7 @@ router.get("/preview/:itunesId", async (req, res) => {
                     entity: "podcast",
                 },
                 timeout: 5000,
-            }
+            },
         );
 
         if (
@@ -669,7 +686,7 @@ router.get("/preview/:itunesId", async (req, res) => {
         if (podcastData.feedUrl) {
             try {
                 const feedData = await rssParserService.parseFeed(
-                    podcastData.feedUrl
+                    podcastData.feedUrl,
                 );
                 description = feedData.podcast.description || "";
 
@@ -683,7 +700,7 @@ router.get("/preview/:itunesId", async (req, res) => {
                     }));
 
                 logger.debug(
-                    ` [PODCAST PREVIEW] Fetched description (${description.length} chars) and ${previewEpisodes.length} preview episodes`
+                    ` [PODCAST PREVIEW] Fetched description (${description.length} chars) and ${previewEpisodes.length} preview episodes`,
                 );
             } catch (error) {
                 logger.warn(`  Failed to fetch RSS feed for preview:`, error);
@@ -874,7 +891,7 @@ router.post("/subscribe", async (req, res) => {
         }
 
         logger.debug(
-            `\n [PODCAST] Subscribe request from ${req.user!.username}`
+            `\n [PODCAST] Subscribe request from ${req.user!.username}`,
         );
         logger.debug(`   Feed URL: ${feedUrl || "N/A"}`);
         logger.debug(`   iTunes ID: ${itunesId || "N/A"}`);
@@ -888,7 +905,7 @@ router.post("/subscribe", async (req, res) => {
                 "https://itunes.apple.com/lookup",
                 {
                     params: { id: itunesId, entity: "podcast" },
-                }
+                },
             );
 
             if (
@@ -906,7 +923,9 @@ router.post("/subscribe", async (req, res) => {
 
         const safeFeedUrl = normalizeSafeOutboundUrl(finalFeedUrl);
         if (!safeFeedUrl) {
-            return res.status(400).json({ error: "Invalid or private feed URL" });
+            return res
+                .status(400)
+                .json({ error: "Invalid or private feed URL" });
         }
         finalFeedUrl = safeFeedUrl;
 
@@ -1160,7 +1179,7 @@ router.get("/:id/refresh", async (req, res) => {
         const result = await refreshPodcastFeed(id);
 
         logger.debug(
-            `   Refresh complete. ${result.newEpisodesCount} new episodes added.`
+            `   Refresh complete. ${result.newEpisodesCount} new episodes added.`,
         );
 
         res.json({
@@ -1315,7 +1334,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
             logger.debug(
                 `   Episode DB: mimeType="${
                     episode.mimeType || "unknown"
-                }" fileSize=${episode.fileSize || 0}`
+                }" fileSize=${episode.fileSize || 0}`,
             );
         }
 
@@ -1353,7 +1372,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                         start = Math.max(0, fileSize - clampWindowBytes);
                         end = fileSize - 1;
                         logger.debug(
-                            `    Invalid range, clamping to last ${fileSize - start} bytes`
+                            `    Invalid range, clamping to last ${fileSize - start} bytes`,
                         );
                     } else {
                         start = parsed.start;
@@ -1363,7 +1382,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                     const chunkSize = end - start + 1;
 
                     logger.debug(
-                        `    Serving range: bytes ${start}-${end}/${fileSize}`
+                        `    Serving range: bytes ${start}-${end}/${fileSize}`,
                     );
 
                     res.writeHead(206, {
@@ -1429,7 +1448,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
             } catch (err: any) {
                 logger.error(
                     "    Failed to stream from cache, falling back to RSS:",
-                    err.message
+                    err.message,
                 );
                 // Fall through to RSS streaming only if cache fails
             }
@@ -1449,7 +1468,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
         if (!fileSize) {
             try {
                 const safeHeadUrl = await resolveSafeOutboundUrl(
-                    episode.audioUrl
+                    episode.audioUrl,
                 );
                 if (!safeHeadUrl) {
                     throw new PodcastEgressBlockedError(episode.audioUrl);
@@ -1460,7 +1479,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                 });
                 // axios >=1.18 types indexed header access as a union; coerce to string.
                 fileSize = parseInt(
-                    String(headResponse.headers["content-length"] ?? "0")
+                    String(headResponse.headers["content-length"] ?? "0"),
                 );
                 if (Number.isFinite(fileSize) && fileSize > 0) {
                     await prisma.podcastEpisode.update({
@@ -1486,7 +1505,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
             const chunkSize = end - start + 1;
 
             logger.debug(
-                `    Range request: bytes=${start}-${end}/${fileSize}`
+                `    Range request: bytes=${start}-${end}/${fileSize}`,
             );
 
             const controller = new AbortController();
@@ -1511,13 +1530,13 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                 // if we try to wrap it in a 206.
                 if (response.status === 200) {
                     logger.debug(
-                        `    Upstream returned 200 OK (ignored Range), streaming full response`
+                        `    Upstream returned 200 OK (ignored Range), streaming full response`,
                     );
                     res.writeHead(200, {
                         "Content-Type": episode.mimeType || "audio/mpeg",
                         "Accept-Ranges": "bytes",
                         "Content-Length": String(
-                            response.headers["content-length"] || fileSize
+                            response.headers["content-length"] || fileSize,
                         ),
                         "Cache-Control": "public, max-age=3600",
                     });
@@ -1564,15 +1583,14 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                 logger.debug(
                     `    Range request failed (${
                         rangeError.response?.status || rangeError.message
-                    }), falling back to full stream`
+                    }), falling back to full stream`,
                 );
 
                 // Stream full file instead - browser will handle seeking locally
                 const response = await openSafeAudioStream(episode.audioUrl, {
                     timeoutMs: 60000,
                     signal: controller.signal,
-                    validateStatus: (status) =>
-                        status >= 200 && status < 300,
+                    validateStatus: (status) => status >= 200 && status < 300,
                 });
 
                 const contentLength = response.headers["content-length"];
@@ -1591,7 +1609,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                     // Client disconnect errors are expected during seeking
                     if ((err as any).code !== "ERR_STREAM_PREMATURE_CLOSE") {
                         logger.debug(
-                            `    RSS fallback stream error: ${err.message}`
+                            `    RSS fallback stream error: ${err.message}`,
                         );
                     }
                     if (!res.writableEnded) {
@@ -1621,8 +1639,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                 const response = await openSafeAudioStream(episode.audioUrl, {
                     timeoutMs: 60000,
                     signal: controller.signal,
-                    validateStatus: (status) =>
-                        status >= 200 && status < 300,
+                    validateStatus: (status) => status >= 200 && status < 300,
                 });
 
                 const contentLength = response.headers["content-length"];
@@ -1641,7 +1658,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
                     // Client disconnect errors are expected during seeking
                     if ((err as any).code !== "ERR_STREAM_PREMATURE_CLOSE") {
                         logger.debug(
-                            `    RSS full stream error: ${err.message}`
+                            `    RSS full stream error: ${err.message}`,
                         );
                     }
                     if (!res.writableEnded) {
@@ -1666,10 +1683,7 @@ router.get("/:podcastId/episodes/:episodeId/stream", async (req, res) => {
         }
     } catch (error: any) {
         logger.error("\n [PODCAST STREAM] Error:", error.message);
-        if (
-            error instanceof PodcastEgressBlockedError &&
-            !res.headersSent
-        ) {
+        if (error instanceof PodcastEgressBlockedError && !res.headersSent) {
             res.status(502).json({
                 error: "Upstream audio source not allowed",
             });
@@ -1903,7 +1917,7 @@ router.get("/:id/similar", async (req, res) => {
 
             if (cachedRecommendations.length > 0) {
                 logger.debug(
-                    `   Using ${cachedRecommendations.length} cached recommendations`
+                    `   Using ${cachedRecommendations.length} cached recommendations`,
                 );
                 return res.json(
                     cachedRecommendations.map((rec) => ({
@@ -1917,7 +1931,7 @@ router.get("/:id/similar", async (req, res) => {
                         itunesId: rec.itunesId,
                         isExternal: true,
                         score: rec.score,
-                    }))
+                    })),
                 );
             }
 
@@ -1927,7 +1941,7 @@ router.get("/:id/similar", async (req, res) => {
             const recommendations = await itunesService.getSimilarPodcasts(
                 podcast.title,
                 podcast.description ?? undefined,
-                podcast.author ?? undefined
+                podcast.author ?? undefined,
             );
 
             logger.debug(`   Found ${recommendations.length} similar podcasts`);
@@ -1959,7 +1973,7 @@ router.get("/:id/similar", async (req, res) => {
                 });
 
                 logger.debug(
-                    `   Cached ${recommendations.length} recommendations`
+                    `   Cached ${recommendations.length} recommendations`,
                 );
 
                 return res.json(
@@ -1974,7 +1988,7 @@ router.get("/:id/similar", async (req, res) => {
                         itunesId: rec.collectionId,
                         isExternal: true,
                         score: recommendations.length - index,
-                    }))
+                    })),
                 );
             }
         } catch (error: any) {
@@ -2065,7 +2079,7 @@ router.get("/:id/cover", async (req, res) => {
         if (podcast.localCoverPath) {
             res.setHeader(
                 "Cache-Control",
-                "public, max-age=31536000, immutable"
+                "public, max-age=31536000, immutable",
             );
             res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
             return res.sendFile(podcast.localCoverPath);
@@ -2158,7 +2172,7 @@ router.get("/episodes/:episodeId/cover", async (req, res) => {
         if (episode.localCoverPath) {
             res.setHeader(
                 "Cache-Control",
-                "public, max-age=31536000, immutable"
+                "public, max-age=31536000, immutable",
             );
             res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
             return res.sendFile(episode.localCoverPath);
@@ -2182,10 +2196,12 @@ router.get("/episodes/:episodeId/cover", async (req, res) => {
  * Refresh a single podcast feed -- shared logic used by both the route handler
  * and the enrichment worker's automatic refresh phase.
  */
-export async function refreshPodcastFeed(podcastId: string): Promise<{ newEpisodesCount: number; totalEpisodes: number }> {
+export async function refreshPodcastFeed(
+    podcastId: string,
+): Promise<{ newEpisodesCount: number; totalEpisodes: number }> {
     const podcast = await withPodcastPrismaRetry(
         "refreshPodcastFeed.podcast.findUnique",
-        () => prisma.podcast.findUnique({ where: { id: podcastId } })
+        () => prisma.podcast.findUnique({ where: { id: podcastId } }),
     );
     if (!podcast) throw new Error(`Podcast ${podcastId} not found`);
 
@@ -2203,20 +2219,24 @@ export async function refreshPodcastFeed(podcastId: string): Promise<{ newEpisod
             podcast.feedUrl,
             Object.keys(requestHeaders).length > 0
                 ? { headers: requestHeaders }
-                : {}
+                : {},
         );
     } catch (error) {
         if (error instanceof RSSFeedNotModifiedError) {
-            await withPodcastPrismaRetry("refreshPodcastFeed.podcast.update", () =>
-                prisma.podcast.update({
-                    where: { id: podcastId },
-                    data: {
-                        feedEtag: error.etag ?? podcast.feedEtag ?? null,
-                        feedLastModified:
-                            error.lastModified ?? podcast.feedLastModified ?? null,
-                        lastRefreshed: new Date(),
-                    },
-                })
+            await withPodcastPrismaRetry(
+                "refreshPodcastFeed.podcast.update",
+                () =>
+                    prisma.podcast.update({
+                        where: { id: podcastId },
+                        data: {
+                            feedEtag: error.etag ?? podcast.feedEtag ?? null,
+                            feedLastModified:
+                                error.lastModified ??
+                                podcast.feedLastModified ??
+                                null,
+                            lastRefreshed: new Date(),
+                        },
+                    }),
             );
 
             return {
@@ -2234,7 +2254,7 @@ export async function refreshPodcastFeed(podcastId: string): Promise<{ newEpisod
                 data: {
                     lastRefreshed: new Date(),
                 },
-            })
+            }),
         );
 
         return {
@@ -2261,7 +2281,7 @@ export async function refreshPodcastFeed(podcastId: string): Promise<{ newEpisod
                 feedLastModified: feedMetadata.lastModified ?? null,
                 lastRefreshed: new Date(),
             },
-        })
+        }),
     );
 
     if (episodes.length === 0) {
@@ -2287,10 +2307,13 @@ export async function refreshPodcastFeed(podcastId: string): Promise<{ newEpisod
                     mimeType: ep.mimeType,
                 })),
                 skipDuplicates: true,
-            })
+            }),
     );
 
-    return { newEpisodesCount: createResult.count, totalEpisodes: episodes.length };
+    return {
+        newEpisodesCount: createResult.count,
+        totalEpisodes: episodes.length,
+    };
 }
 
 interface RefreshAllResult {
@@ -2306,7 +2329,7 @@ interface RefreshAllResult {
  * the remaining feeds.
  */
 export async function refreshAllPodcastFeeds(
-    userId: string
+    userId: string,
 ): Promise<{ total: number; results: RefreshAllResult[] }> {
     const subscriptions = await prisma.podcastSubscription.findMany({
         where: { userId },
@@ -2330,7 +2353,7 @@ export async function refreshAllPodcastFeeds(
         } catch (error: any) {
             logger.error(
                 `[Podcast] Refresh-all failed for ${sub.podcastId}:`,
-                error
+                error,
             );
             results.push({
                 podcastId: sub.podcastId,
@@ -2364,7 +2387,7 @@ router.post("/refresh-all", requireAuth, async (req, res) => {
         const result = await refreshAllPodcastFeeds(req.user!.id);
         const totalNew = result.results.reduce(
             (sum, r) => sum + r.newEpisodesCount,
-            0
+            0,
         );
         const failed = result.results.filter((r) => !r.success).length;
 

@@ -57,11 +57,13 @@ function toPosixRelativePath(filePath: string): string {
 
 function shouldExclude(relativePath: string, isDirectory: boolean): boolean {
     const segments = relativePath.split("/");
-    return segments.includes("__tests__")
-        || relativePath === "config.ts"
-        || relativePath === "config"
-        || relativePath.startsWith("config/")
-        || (!isDirectory && relativePath.endsWith(".test.ts"));
+    return (
+        segments.includes("__tests__") ||
+        relativePath === "config.ts" ||
+        relativePath === "config" ||
+        relativePath.startsWith("config/") ||
+        (!isDirectory && relativePath.endsWith(".test.ts"))
+    );
 }
 
 function findProcessEnvOffenders(): string[] {
@@ -77,7 +79,11 @@ function findProcessEnvOffenders(): string[] {
 
         const entries = fs.readdirSync(directory, { withFileTypes: true });
         expect(entries.length).toBeLessThanOrEqual(MAX_DIRECTORY_ENTRIES);
-        for (let index = 0; index < entries.length && index < MAX_DIRECTORY_ENTRIES; index += 1) {
+        for (
+            let index = 0;
+            index < entries.length && index < MAX_DIRECTORY_ENTRIES;
+            index += 1
+        ) {
             const entry = entries[index];
             expect(entry).toBeDefined();
             if (entry === undefined) continue;
@@ -88,7 +94,8 @@ function findProcessEnvOffenders(): string[] {
             if (entry.isDirectory()) worklist.push(absolutePath);
             if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
 
-            const source = fs.readFileSync(absolutePath, "utf8")
+            const source = fs
+                .readFileSync(absolutePath, "utf8")
                 .replaceAll("process.env.npm_package_version", "");
             if (source.includes("process.env")) offenders.push(relativePath);
         }
@@ -103,12 +110,14 @@ describe("backend config boundary", () => {
     test("no new process.env reads outside the config boundary", () => {
         const offenders = findProcessEnvOffenders();
         const allowlist: readonly string[] = [...ALLOWLIST].sort();
-        const unexpected = offenders.filter((offender) => !allowlist.includes(offender));
+        const unexpected = offenders.filter(
+            (offender) => !allowlist.includes(offender),
+        );
 
         if (unexpected.length > 0) {
             throw new Error(
-                `Unexpected process.env reads:\n${unexpected.join("\n")}\n`
-                + "Route these reads through backend/src/config.ts."
+                `Unexpected process.env reads:\n${unexpected.join("\n")}\n` +
+                    "Route these reads through backend/src/config.ts.",
             );
         }
     });
@@ -116,12 +125,14 @@ describe("backend config boundary", () => {
     test("the config-boundary allowlist has no stale entries", () => {
         const offenders = findProcessEnvOffenders();
         const allowlist: readonly string[] = [...ALLOWLIST].sort();
-        const staleEntries = allowlist.filter((entry) => !offenders.includes(entry));
+        const staleEntries = allowlist.filter(
+            (entry) => !offenders.includes(entry),
+        );
 
         if (staleEntries.length > 0) {
             throw new Error(
-                `Stale config-boundary allowlist entries:\n${staleEntries.join("\n")}\n`
-                + "Remove these entries from ALLOWLIST."
+                `Stale config-boundary allowlist entries:\n${staleEntries.join("\n")}\n` +
+                    "Remove these entries from ALLOWLIST.",
             );
         }
     });

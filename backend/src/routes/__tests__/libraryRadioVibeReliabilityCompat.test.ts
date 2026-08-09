@@ -189,7 +189,7 @@ const mockDislikedEntityFindMany = prisma.dislikedEntity.findMany as jest.Mock;
 
 function getGetHandler(path: string, stackIndex = 0) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -358,7 +358,7 @@ describe("library vibe radio reliability compatibility", () => {
                 sourceFeatures: expect.objectContaining({
                     analysisMode: "standard",
                 }),
-            })
+            }),
         );
         expect(mockTrackFindMany).toHaveBeenCalled();
         expect(mockTrackFindMany.mock.calls[0][0]).toEqual(
@@ -366,7 +366,7 @@ describe("library vibe radio reliability compatibility", () => {
                 select: expect.objectContaining({
                     analysisVersion: true,
                 }),
-            })
+            }),
         );
     });
 
@@ -488,7 +488,7 @@ describe("library vibe radio reliability compatibility", () => {
                     analysisMode: "enhanced",
                     bpm: 128,
                 }),
-            })
+            }),
         );
     });
 
@@ -597,7 +597,7 @@ describe("library vibe radio reliability compatibility", () => {
                 sourceFeatures: expect.objectContaining({
                     analysisMode: "standard",
                 }),
-            })
+            }),
         );
         expect(mockTrackFindMany).toHaveBeenCalledTimes(2);
         expect(mockTrackFindMany.mock.calls[0][0]).toEqual(
@@ -606,13 +606,16 @@ describe("library vibe radio reliability compatibility", () => {
                     album: { artistId: "artist-source" },
                     id: { notIn: ["source-track-noaudio"] },
                 }),
-            })
+            }),
         );
     });
 
     it("uses shuffled non-vibe radio ordering and tolerates tracks without artist ids", async () => {
         mockTrackFindMany
-            .mockResolvedValueOnce([{ id: "all-track-1" }, { id: "all-track-2" }])
+            .mockResolvedValueOnce([
+                { id: "all-track-1" },
+                { id: "all-track-2" },
+            ])
             .mockResolvedValueOnce([]) // GH #46 diversify: pool artist lookup
             .mockResolvedValueOnce([
                 {

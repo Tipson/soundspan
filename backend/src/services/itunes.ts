@@ -44,7 +44,7 @@ class ItunesService {
     private async cachedRequest<T>(
         cacheKey: string,
         requestFn: () => Promise<T>,
-        ttlSeconds = 604800 // 7 days default
+        ttlSeconds = 604800, // 7 days default
     ): Promise<T> {
         try {
             const cached = await redisClient.get(cacheKey);
@@ -70,10 +70,7 @@ class ItunesService {
     /**
      * Search for podcasts by term
      */
-    async searchPodcasts(
-        term: string,
-        limit = 20
-    ): Promise<ItunesPodcast[]> {
+    async searchPodcasts(term: string, limit = 20): Promise<ItunesPodcast[]> {
         const cacheKey = `itunes:search:${term}:${limit}`;
 
         return this.cachedRequest(
@@ -90,7 +87,7 @@ class ItunesService {
 
                 return response.data.results || [];
             },
-            2592000 // 30 days - podcast catalog changes slowly
+            2592000, // 30 days - podcast catalog changes slowly
         );
     }
 
@@ -113,7 +110,7 @@ class ItunesService {
                 const results = response.data.results || [];
                 return results.length > 0 ? results[0] : null;
             },
-            2592000 // 30 days
+            2592000, // 30 days
         );
     }
 
@@ -123,7 +120,7 @@ class ItunesService {
     extractSearchKeywords(
         title: string,
         description?: string,
-        author?: string
+        author?: string,
     ): string[] {
         const commonWords = new Set([
             "the",
@@ -201,9 +198,7 @@ class ItunesService {
         // Extract words, filter common words, and count occurrences
         const words = text.split(/\s+/).filter((word) => {
             return (
-                word.length > 3 &&
-                !commonWords.has(word) &&
-                !/^\d+$/.test(word) // Remove pure numbers
+                word.length > 3 && !commonWords.has(word) && !/^\d+$/.test(word) // Remove pure numbers
             );
         });
 
@@ -230,19 +225,19 @@ class ItunesService {
         title: string,
         description?: string,
         author?: string,
-        limit = 10
+        limit = 10,
     ): Promise<ItunesPodcast[]> {
         const keywords = this.extractSearchKeywords(title, description, author);
 
         if (keywords.length === 0) {
             logger.debug(
-                "No keywords extracted for similar podcast search, falling back to title"
+                "No keywords extracted for similar podcast search, falling back to title",
             );
             return this.searchPodcasts(title, limit);
         }
 
         logger.debug(
-            ` Searching for similar podcasts using keywords: ${keywords.join(", ")}`
+            ` Searching for similar podcasts using keywords: ${keywords.join(", ")}`,
         );
 
         // Search using the top keyword (most relevant)
@@ -252,19 +247,23 @@ class ItunesService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const results = await this.searchPodcasts(searchTerm, limit * 2);
+                const results = await this.searchPodcasts(
+                    searchTerm,
+                    limit * 2,
+                );
 
                 // Filter out the original podcast (by title similarity)
                 const titleLower = title.toLowerCase();
                 const filtered = results.filter((podcast) => {
-                    const podcastTitleLower = podcast.collectionName.toLowerCase();
+                    const podcastTitleLower =
+                        podcast.collectionName.toLowerCase();
                     // Exclude if titles are very similar (likely same podcast)
                     return !podcastTitleLower.includes(titleLower.slice(0, 20));
                 });
 
                 return filtered.slice(0, limit);
             },
-            2592000 // 30 days
+            2592000, // 30 days
         );
     }
 
@@ -274,9 +273,11 @@ class ItunesService {
      */
     async getTopPodcastsByGenre(
         genreId: number,
-        limit = 20
+        limit = 20,
     ): Promise<ItunesPodcast[]> {
-        logger.debug(`[iTunes SERVICE] getTopPodcastsByGenre called with genre=${genreId}, limit=${limit}`);
+        logger.debug(
+            `[iTunes SERVICE] getTopPodcastsByGenre called with genre=${genreId}, limit=${limit}`,
+        );
         const cacheKey = `itunes:genre:${genreId}:${limit}`;
         logger.debug(`[iTunes SERVICE] Cache key: ${cacheKey}`);
 
@@ -284,57 +285,93 @@ class ItunesService {
             cacheKey,
             async () => {
                 try {
-                    logger.debug(`[iTunes] Fetching genre ${genreId} from RSS feed...`);
+                    logger.debug(
+                        `[iTunes] Fetching genre ${genreId} from RSS feed...`,
+                    );
 
                     // Use iTunes RSS feed for top podcasts by genre
                     const response = await this.client.get(
-                        `/us/rss/toppodcasts/genre=${genreId}/limit=${limit}/json`
+                        `/us/rss/toppodcasts/genre=${genreId}/limit=${limit}/json`,
                     );
 
-                logger.debug(`[iTunes] Response status: ${response.status}`);
-                logger.debug(`[iTunes] Has feed data: ${!!response.data?.feed}`);
-                logger.debug(`[iTunes] Entries count: ${response.data?.feed?.entry?.length || 0}`);
+                    logger.debug(
+                        `[iTunes] Response status: ${response.status}`,
+                    );
+                    logger.debug(
+                        `[iTunes] Has feed data: ${!!response.data?.feed}`,
+                    );
+                    logger.debug(
+                        `[iTunes] Entries count: ${response.data?.feed?.entry?.length || 0}`,
+                    );
 
-                const entries = response.data?.feed?.entry || [];
+                    const entries = response.data?.feed?.entry || [];
 
-                // If only one entry, it might not be an array
-                const entriesArray = Array.isArray(entries) ? entries : [entries];
+                    // If only one entry, it might not be an array
+                    const entriesArray = Array.isArray(entries)
+                        ? entries
+                        : [entries];
 
-                logger.debug(`[iTunes] Processing ${entriesArray.length} entries`);
+                    logger.debug(
+                        `[iTunes] Processing ${entriesArray.length} entries`,
+                    );
 
-                // Convert RSS feed format to our podcast format
-                const podcasts = entriesArray.map((entry: any) => {
-                    const podcast = {
-                        collectionId: parseInt(entry.id?.attributes?.["im:id"] || "0", 10),
-                        collectionName: entry["im:name"]?.label || entry.title?.label?.split(" - ")[0] || "Unknown",
-                        artistName: entry["im:artist"]?.label || entry.title?.label?.split(" - ")[1] || "Unknown",
-                        artworkUrl600: entry["im:image"]?.find((img: any) => img.attributes?.height === "170")?.label,
-                        artworkUrl100: entry["im:image"]?.find((img: any) => img.attributes?.height === "60")?.label,
-                        feedUrl: "", // RSS feed doesn't include feed URL
-                        genres: entry.category ? [entry.category.attributes?.label] : [],
-                        trackCount: 0,
-                        primaryGenreName: entry.category?.attributes?.label,
-                        collectionViewUrl: entry.link?.attributes?.href,
-                    };
-                    logger.debug(`[iTunes] Mapped podcast: ${podcast.collectionName} (ID: ${podcast.collectionId})`);
-                    return podcast;
-                }).filter((p: any) => p.collectionId > 0); // Filter out invalid entries
+                    // Convert RSS feed format to our podcast format
+                    const podcasts = entriesArray
+                        .map((entry: any) => {
+                            const podcast = {
+                                collectionId: parseInt(
+                                    entry.id?.attributes?.["im:id"] || "0",
+                                    10,
+                                ),
+                                collectionName:
+                                    entry["im:name"]?.label ||
+                                    entry.title?.label?.split(" - ")[0] ||
+                                    "Unknown",
+                                artistName:
+                                    entry["im:artist"]?.label ||
+                                    entry.title?.label?.split(" - ")[1] ||
+                                    "Unknown",
+                                artworkUrl600: entry["im:image"]?.find(
+                                    (img: any) =>
+                                        img.attributes?.height === "170",
+                                )?.label,
+                                artworkUrl100: entry["im:image"]?.find(
+                                    (img: any) =>
+                                        img.attributes?.height === "60",
+                                )?.label,
+                                feedUrl: "", // RSS feed doesn't include feed URL
+                                genres: entry.category
+                                    ? [entry.category.attributes?.label]
+                                    : [],
+                                trackCount: 0,
+                                primaryGenreName:
+                                    entry.category?.attributes?.label,
+                                collectionViewUrl: entry.link?.attributes?.href,
+                            };
+                            logger.debug(
+                                `[iTunes] Mapped podcast: ${podcast.collectionName} (ID: ${podcast.collectionId})`,
+                            );
+                            return podcast;
+                        })
+                        .filter((p: any) => p.collectionId > 0); // Filter out invalid entries
 
-                    logger.debug(`[iTunes] Returning ${podcasts.length} valid podcasts`);
+                    logger.debug(
+                        `[iTunes] Returning ${podcasts.length} valid podcasts`,
+                    );
                     return podcasts;
                 } catch (error) {
                     logger.error(`[iTunes] ERROR in requestFn:`, error);
                     return [];
                 }
             },
-            2592000 // 30 days
+            2592000, // 30 days
         );
 
-        logger.debug(`[iTunes SERVICE] cachedRequest returned ${result.length} podcasts`);
+        logger.debug(
+            `[iTunes SERVICE] cachedRequest returned ${result.length} podcasts`,
+        );
         return result;
     }
 }
-
-
 
 export const itunesService = new ItunesService();

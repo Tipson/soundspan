@@ -49,13 +49,19 @@ test("unknown keys do not resolve a seek time", () => {
 
 test("invalid durations do not resolve a seek time", () => {
     for (const duration of [0, Number.NaN, Number.POSITIVE_INFINITY]) {
-        assert.equal(resolveSeekTime("ArrowRight", { currentTime: 30, duration }), null);
+        assert.equal(
+            resolveSeekTime("ArrowRight", { currentTime: 30, duration }),
+            null,
+        );
     }
 });
 
 test("a non-finite current time does not resolve a seek time", () => {
     assert.equal(
-        resolveSeekTime("ArrowRight", { currentTime: Number.NaN, duration: 200 }),
+        resolveSeekTime("ArrowRight", {
+            currentTime: Number.NaN,
+            duration: 200,
+        }),
         null,
     );
 });

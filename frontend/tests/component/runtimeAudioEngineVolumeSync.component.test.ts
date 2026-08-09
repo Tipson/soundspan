@@ -85,7 +85,7 @@ class FakeAudioEngine implements AudioEngine {
 
     quarantineRepresentation(
         representationId: string,
-        cooldownMs: number
+        cooldownMs: number,
     ): AudioEngineRepresentationFailoverResult | null {
         this.quarantineRepresentationCalls.push({
             representationId,
@@ -100,7 +100,7 @@ class FakeAudioEngine implements AudioEngine {
 
     on<T extends AudioEngineEventType>(
         event: T,
-        handler: AudioEngineEventHandler<T>
+        handler: AudioEngineEventHandler<T>,
     ) {
         let eventHandlers = this.handlers.get(event);
         if (!eventHandlers) {
@@ -112,11 +112,9 @@ class FakeAudioEngine implements AudioEngine {
 
     off<T extends AudioEngineEventType>(
         event: T,
-        handler: AudioEngineEventHandler<T>
+        handler: AudioEngineEventHandler<T>,
     ) {
-        this.handlers
-            .get(event)
-            ?.delete(handler as (payload: unknown) => void);
+        this.handlers.get(event)?.delete(handler as (payload: unknown) => void);
     }
 
     destroy() {
@@ -468,8 +466,10 @@ test("forwards representation quarantine to active DASH engine", async () => {
 test("falls back safely when active engine does not expose segmented helpers", () => {
     let currentTime = 0;
     const howlerEngine = {
-        load: (_source: AudioEngineSource | string, _options?: AudioEngineLoadOptions) =>
-            undefined,
+        load: (
+            _source: AudioEngineSource | string,
+            _options?: AudioEngineLoadOptions,
+        ) => undefined,
         play: () => undefined,
         pause: () => undefined,
         stop: () => undefined,
@@ -481,10 +481,14 @@ test("falls back safely when active engine does not expose segmented helpers", (
         getCurrentTime: () => currentTime,
         getDuration: () => 0,
         isPlaying: () => false,
-        on: (_event: AudioEngineEventType, _handler: (payload: unknown) => void) =>
-            undefined,
-        off: (_event: AudioEngineEventType, _handler: (payload: unknown) => void) =>
-            undefined,
+        on: (
+            _event: AudioEngineEventType,
+            _handler: (payload: unknown) => void,
+        ) => undefined,
+        off: (
+            _event: AudioEngineEventType,
+            _handler: (payload: unknown) => void,
+        ) => undefined,
     } as AudioEngine;
     const runtimeEngine = new HybridRuntimeAudioEngine({
         howlerEngine,
@@ -505,8 +509,10 @@ test("uses safe helper fallbacks when active DASH engine lacks optional helper A
     const howlerEngine = new FakeAudioEngine();
     let activeTimeSec = 0;
     const minimalVideoJsEngine = {
-        load: (_source: AudioEngineSource | string, _options?: AudioEngineLoadOptions) =>
-            undefined,
+        load: (
+            _source: AudioEngineSource | string,
+            _options?: AudioEngineLoadOptions,
+        ) => undefined,
         play: () => undefined,
         pause: () => undefined,
         stop: () => undefined,
@@ -518,10 +524,14 @@ test("uses safe helper fallbacks when active DASH engine lacks optional helper A
         getCurrentTime: () => activeTimeSec,
         getDuration: () => 0,
         isPlaying: () => false,
-        on: (_event: AudioEngineEventType, _handler: (payload: unknown) => void) =>
-            undefined,
-        off: (_event: AudioEngineEventType, _handler: (payload: unknown) => void) =>
-            undefined,
+        on: (
+            _event: AudioEngineEventType,
+            _handler: (payload: unknown) => void,
+        ) => undefined,
+        off: (
+            _event: AudioEngineEventType,
+            _handler: (payload: unknown) => void,
+        ) => undefined,
     } as AudioEngine;
     const runtimeEngine = new HybridRuntimeAudioEngine({
         howlerEngine,

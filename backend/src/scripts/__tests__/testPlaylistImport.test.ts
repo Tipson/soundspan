@@ -82,10 +82,10 @@ describe("testPlaylistImport script", () => {
 
         expect(generatePreview).not.toHaveBeenCalled();
         expect(loggedText(logSpy)).toContain(
-            "Usage: npx ts-node src/scripts/testPlaylistImport.ts <spotify-playlist-url>"
+            "Usage: npx ts-node src/scripts/testPlaylistImport.ts <spotify-playlist-url>",
         );
         expect(loggedText(logSpy)).toContain(
-            "Example: npx ts-node src/scripts/testPlaylistImport.ts https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+            "Example: npx ts-node src/scripts/testPlaylistImport.ts https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
         );
         expect(exitSpy).toHaveBeenCalledWith(1);
         expect(loggedText(errorSpy)).toContain("process.exit:1");
@@ -142,17 +142,21 @@ describe("testPlaylistImport script", () => {
 
     it("logs import preview errors and exits with status code 1", async () => {
         const previewFailure = new Error("Preview generation failed");
-        const { generatePreview, errorSpy, exitSpy } = setupPlaylistImportScript({
-            playlistUrl: "https://open.spotify.com/playlist/failing-list",
-            previewError: previewFailure,
-        });
+        const { generatePreview, errorSpy, exitSpy } =
+            setupPlaylistImportScript({
+                playlistUrl: "https://open.spotify.com/playlist/failing-list",
+                previewError: previewFailure,
+            });
 
         await importScriptEntrypoint();
 
         expect(generatePreview).toHaveBeenCalledWith(
-            "https://open.spotify.com/playlist/failing-list"
+            "https://open.spotify.com/playlist/failing-list",
         );
-        expect(errorSpy).toHaveBeenCalledWith("\nError:", previewFailure.message);
+        expect(errorSpy).toHaveBeenCalledWith(
+            "\nError:",
+            previewFailure.message,
+        );
         expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
@@ -207,7 +211,7 @@ describe("testPlaylistImport script", () => {
         await importScriptEntrypoint();
 
         expect(loggedText(logSpy)).toContain(
-            "GOOD: Only 2.0% tracks have Unknown Album"
+            "GOOD: Only 2.0% tracks have Unknown Album",
         );
         expect(exitSpy).not.toHaveBeenCalled();
     });

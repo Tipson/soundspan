@@ -27,10 +27,13 @@ export function DownloadPreferencesSection({
         settings.soulseekPassword.trim() !== "";
 
     const isTidalConfigured =
-        settings.tidalEnabled === true &&
-        settings.tidalConnected === true;
+        settings.tidalEnabled === true && settings.tidalConnected === true;
 
-    const configuredCount = [isLidarrConfigured, isSoulseekConfigured, isTidalConfigured].filter(Boolean).length;
+    const configuredCount = [
+        isLidarrConfigured,
+        isSoulseekConfigured,
+        isTidalConfigured,
+    ].filter(Boolean).length;
     const isDisabled = configuredCount === 0;
 
     // Auto-select the only configured service as the download source
@@ -39,20 +42,38 @@ export function DownloadPreferencesSection({
             const autoSource = isTidalConfigured
                 ? "tidal"
                 : isLidarrConfigured
-                    ? "lidarr"
-                    : "soulseek";
+                  ? "lidarr"
+                  : "soulseek";
             if (settings.downloadSource !== autoSource) {
-                onUpdate({ downloadSource: autoSource as "soulseek" | "lidarr" | "tidal" });
+                onUpdate({
+                    downloadSource: autoSource as
+                        | "soulseek"
+                        | "lidarr"
+                        | "tidal",
+                });
             }
         }
-    }, [configuredCount, isTidalConfigured, isLidarrConfigured, isSoulseekConfigured, settings.downloadSource, onUpdate]);
+    }, [
+        configuredCount,
+        isTidalConfigured,
+        isLidarrConfigured,
+        isSoulseekConfigured,
+        settings.downloadSource,
+        onUpdate,
+    ]);
 
     // Build primary source options based on what's configured
     const getSourceOptions = () => {
         const options = [];
-        if (isSoulseekConfigured) options.push({ value: "soulseek", label: "Soulseek (Per-track)" });
-        if (isLidarrConfigured) options.push({ value: "lidarr", label: "Lidarr (Full albums)" });
-        if (isTidalConfigured) options.push({ value: "tidal", label: "TIDAL (Per-track / album)" });
+        if (isSoulseekConfigured)
+            options.push({ value: "soulseek", label: "Soulseek (Per-track)" });
+        if (isLidarrConfigured)
+            options.push({ value: "lidarr", label: "Lidarr (Full albums)" });
+        if (isTidalConfigured)
+            options.push({
+                value: "tidal",
+                label: "TIDAL (Per-track / album)",
+            });
         if (options.length === 0) {
             options.push({ value: "soulseek", label: "Soulseek (Per-track)" });
         }
@@ -92,8 +113,11 @@ export function DownloadPreferencesSection({
                     value={settings.downloadSource || "soulseek"}
                     onChange={(v) =>
                         onUpdate({
-                            downloadSource: v as "soulseek" | "lidarr" | "tidal",
-                            primaryFailureFallback: "none"
+                            downloadSource: v as
+                                | "soulseek"
+                                | "lidarr"
+                                | "tidal",
+                            primaryFailureFallback: "none",
                         })
                     }
                     options={getSourceOptions()}
@@ -113,7 +137,11 @@ export function DownloadPreferencesSection({
                     value={settings.primaryFailureFallback || "none"}
                     onChange={(v) =>
                         onUpdate({
-                            primaryFailureFallback: v as "none" | "lidarr" | "soulseek" | "tidal",
+                            primaryFailureFallback: v as
+                                | "none"
+                                | "lidarr"
+                                | "soulseek"
+                                | "tidal",
                         })
                     }
                     options={getFallbackOptions()}
@@ -126,7 +154,9 @@ export function DownloadPreferencesSection({
                 description="Number of simultaneous downloads when using Soulseek (1-10)"
             >
                 <SettingsSelect
-                    value={settings.soulseekConcurrentDownloads?.toString() || "4"}
+                    value={
+                        settings.soulseekConcurrentDownloads?.toString() || "4"
+                    }
                     onChange={(v) =>
                         onUpdate({
                             soulseekConcurrentDownloads: parseInt(v),

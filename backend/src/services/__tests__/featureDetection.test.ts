@@ -53,7 +53,7 @@ describe("featureDetection service", () => {
             [
                 "/app/audio-analyzer/analyzer.py",
                 "/app/audio-analyzer-clap/analyzer.py",
-            ].includes(String(candidate))
+            ].includes(String(candidate)),
         );
 
         await expect(service.getFeatures()).resolves.toEqual({
@@ -113,18 +113,18 @@ describe("featureDetection service", () => {
         });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[FEATURE-DETECTION] Error checking MusicCNN:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[FEATURE-DETECTION] Error checking CLAP:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
     it("uses cache until invalidated", async () => {
         const service = await loadService();
         mockExistsSync.mockImplementation((candidate: string) =>
-            String(candidate).includes("audio-analyzer")
+            String(candidate).includes("audio-analyzer"),
         );
 
         const first = await service.getFeatures();

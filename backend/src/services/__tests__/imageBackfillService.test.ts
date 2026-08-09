@@ -49,7 +49,8 @@ describe("imageBackfill service", () => {
             },
         }));
 
-        const mod = require("../imageBackfill") as typeof import("../imageBackfill");
+        const mod =
+            require("../imageBackfill") as typeof import("../imageBackfill");
 
         return {
             mod,
@@ -119,7 +120,11 @@ describe("imageBackfill service", () => {
         } = loadModule();
 
         artistFindMany.mockResolvedValue([
-            { id: "artist-1", name: "Artist One", heroUrl: "http://example/one.jpg" },
+            {
+                id: "artist-1",
+                name: "Artist One",
+                heroUrl: "http://example/one.jpg",
+            },
         ]);
         artistUpdate.mockResolvedValue({});
         redisSetEx.mockResolvedValue("OK");
@@ -139,7 +144,7 @@ describe("imageBackfill service", () => {
         await mod.backfillAlbumCovers();
 
         expect(logger.warn).toHaveBeenCalledWith(
-            "[ImageBackfill] Backfill already in progress"
+            "[ImageBackfill] Backfill already in progress",
         );
         expect(albumFindMany).not.toHaveBeenCalled();
 
@@ -159,13 +164,27 @@ describe("imageBackfill service", () => {
         } = loadModule();
 
         artistFindMany.mockResolvedValue([
-            { id: "a-skip", name: "Skip Artist", heroUrl: "http://native/skip.jpg" },
+            {
+                id: "a-skip",
+                name: "Skip Artist",
+                heroUrl: "http://native/skip.jpg",
+            },
             { id: "a-ok", name: "Good Artist", heroUrl: "http://good/ok.jpg" },
-            { id: "a-null", name: "Null Artist", heroUrl: "http://null/fail.jpg" },
-            { id: "a-err", name: "Err Artist", heroUrl: "http://err/error.jpg" },
+            {
+                id: "a-null",
+                name: "Null Artist",
+                heroUrl: "http://null/fail.jpg",
+            },
+            {
+                id: "a-err",
+                name: "Err Artist",
+                heroUrl: "http://err/error.jpg",
+            },
         ]);
 
-        isNativePath.mockImplementation((url: string) => url.includes("/native/"));
+        isNativePath.mockImplementation((url: string) =>
+            url.includes("/native/"),
+        );
         downloadAndStoreImage.mockImplementation(async (url: string) => {
             if (url.includes("/good/")) return "/images/a-ok.jpg";
             if (url.includes("/null/")) return null;
@@ -184,16 +203,16 @@ describe("imageBackfill service", () => {
         expect(redisSetEx).toHaveBeenCalledWith(
             "hero:a-ok",
             604800,
-            "/images/a-ok.jpg"
+            "/images/a-ok.jpg",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ImageBackfill] Downloaded image for Good Artist"
+            "[ImageBackfill] Downloaded image for Good Artist",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ImageBackfill] Failed to download image for Null Artist"
+            "[ImageBackfill] Failed to download image for Null Artist",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ImageBackfill] Error processing Err Artist: download failed"
+            "[ImageBackfill] Error processing Err Artist: download failed",
         );
         expect(mod.getImageBackfillProgress()).toEqual({
             total: 4,
@@ -214,7 +233,7 @@ describe("imageBackfill service", () => {
                 id: `artist-${i}`,
                 name: `Artist ${i}`,
                 heroUrl: `http://native/${i}.jpg`,
-            }))
+            })),
         );
         isNativePath.mockReturnValue(true);
 
@@ -241,7 +260,7 @@ describe("imageBackfill service", () => {
                 id: `album-${i}`,
                 title: `Album ${i}`,
                 coverUrl: `http://native/${i}.jpg`,
-            }))
+            })),
         );
         isNativePath.mockReturnValue(true);
 
@@ -271,13 +290,27 @@ describe("imageBackfill service", () => {
         } = loadModule();
 
         albumFindMany.mockResolvedValue([
-            { id: "b-skip", title: "Skip Album", coverUrl: "http://native/skip.jpg" },
+            {
+                id: "b-skip",
+                title: "Skip Album",
+                coverUrl: "http://native/skip.jpg",
+            },
             { id: "b-ok", title: "Good Album", coverUrl: "http://good/ok.jpg" },
-            { id: "b-null", title: "Null Album", coverUrl: "http://null/fail.jpg" },
-            { id: "b-err", title: "Err Album", coverUrl: "http://err/error.jpg" },
+            {
+                id: "b-null",
+                title: "Null Album",
+                coverUrl: "http://null/fail.jpg",
+            },
+            {
+                id: "b-err",
+                title: "Err Album",
+                coverUrl: "http://err/error.jpg",
+            },
         ]);
 
-        isNativePath.mockImplementation((url: string) => url.includes("/native/"));
+        isNativePath.mockImplementation((url: string) =>
+            url.includes("/native/"),
+        );
         downloadAndStoreImage.mockImplementation(async (url: string) => {
             if (url.includes("/good/")) return "/images/b-ok.jpg";
             if (url.includes("/null/")) return null;
@@ -296,13 +329,13 @@ describe("imageBackfill service", () => {
         expect(redisSetEx).toHaveBeenCalledWith(
             "album-cover:b-ok",
             2592000,
-            "/images/b-ok.jpg"
+            "/images/b-ok.jpg",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ImageBackfill] Downloaded cover for Good Album"
+            "[ImageBackfill] Downloaded cover for Good Album",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "[ImageBackfill] Error processing Err Album: album download failed"
+            "[ImageBackfill] Error processing Err Album: album download failed",
         );
         expect(mod.getImageBackfillProgress()).toEqual({
             total: 4,
@@ -337,7 +370,8 @@ describe("imageBackfill service", () => {
         isNativePath.mockReturnValue(false);
         redisSetEx.mockResolvedValue("OK");
         downloadAndStoreImage.mockImplementation(
-            async (_url: string, id: string, type: string) => `/${type}/${id}.jpg`
+            async (_url: string, id: string, type: string) =>
+                `/${type}/${id}.jpg`,
         );
 
         await mod.backfillAllImages();
@@ -346,13 +380,13 @@ describe("imageBackfill service", () => {
             1,
             "http://good/a1.jpg",
             "a1",
-            "artist"
+            "artist",
         );
         expect(downloadAndStoreImage).toHaveBeenNthCalledWith(
             2,
             "http://good/b1.jpg",
             "b1",
-            "album"
+            "album",
         );
         expect(artistUpdate).toHaveBeenCalledTimes(1);
         expect(albumUpdate).toHaveBeenCalledTimes(1);

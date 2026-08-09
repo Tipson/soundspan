@@ -7,6 +7,19 @@ const wait = async (durationMs: number): Promise<void> => {
     });
 };
 
+const waitForMicrotaskCondition = async (
+    predicate: () => boolean,
+    message: string,
+): Promise<void> => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+        if (predicate()) {
+            return;
+        }
+        await Promise.resolve();
+    }
+    throw new Error(message);
+};
+
 const createMockFfmpegProcess = () => {
     const processEmitter = new EventEmitter() as EventEmitter & {
         stdout: EventEmitter;
@@ -148,7 +161,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("starts DASH generation in the background without blocking ensure", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
 
         mocks.mockBuildDashCacheKey.mockReturnValue("cache-bg");
@@ -157,21 +171,30 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-bg",
             manifestPath: "/tmp/cache-bg/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
-        const result = await Promise.race([
-            segmentedSegmentService.ensureLocalDashSegments({
+        let ensureSettled = false;
+        const ensurePromise = segmentedSegmentService
+            .ensureLocalDashSegments({
                 trackId: "track-bg",
                 sourcePath: "/music/track-bg.flac",
                 sourceModified: new Date("2026-02-20T00:00:00.000Z"),
                 quality: "medium",
-            }),
-            wait(40).then(() => "timeout"),
-        ]);
+            })
+            .finally(() => {
+                ensureSettled = true;
+            });
 
-        expect(result).not.toBe("timeout");
+        await waitForMicrotaskCondition(
+            () => ensureSettled,
+            "background DASH generation blocked ensure",
+        );
+        const result = await ensurePromise;
+
         expect(result).toEqual({
             cacheKey: "cache-bg",
             outputDir: "/tmp/cache-bg",
@@ -187,7 +210,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("falls back to local ensure rebuild when a distributed lock is already held", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-lock-held";
         const ffmpegProcess = createMockFfmpegProcess();
 
@@ -198,7 +222,9 @@ describe("segmentedSegmentService", () => {
             outputDir: `/tmp/${cacheKey}`,
             manifestPath: `/tmp/${cacheKey}/manifest.mpd`,
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
@@ -231,11 +257,18 @@ describe("segmentedSegmentService", () => {
     });
 
     it("keeps local-only hasInFlightBuild behavior while reporting distributed lock presence", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-distributed-inflight-only";
         const lockKey = `segmented-streaming:dash-build-lock:${cacheKey}`;
 
-        await mocks.mockBuildLockSet(lockKey, "remote-lock-token", "EX", 30, "NX");
+        await mocks.mockBuildLockSet(
+            lockKey,
+            "remote-lock-token",
+            "EX",
+            30,
+            "NX",
+        );
 
         expect(segmentedSegmentService.hasInFlightBuild(cacheKey)).toBe(false);
         await expect(
@@ -248,7 +281,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("short-circuits distributed lock checks when local build is already in-flight", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-local-inflight";
         (segmentedSegmentService as any).inFlightBuilds.set(
             cacheKey,
@@ -275,7 +309,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("falls back to local in-flight status when distributed lock presence check errors", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-lock-exists-error-fallback";
 
         mocks.mockBuildLockExists.mockRejectedValueOnce(
@@ -292,11 +327,14 @@ describe("segmentedSegmentService", () => {
     });
 
     it("falls back to local guard when distributed lock acquisition errors", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
         const cacheKey = "cache-lock-error-fallback";
 
-        mocks.mockBuildLockSet.mockRejectedValueOnce(new Error("lock backend down"));
+        mocks.mockBuildLockSet.mockRejectedValueOnce(
+            new Error("lock backend down"),
+        );
         mocks.mockBuildDashCacheKey.mockReturnValue(cacheKey);
         mocks.mockGetDashAssetPaths.mockReturnValue({
             cacheKey,
@@ -331,7 +369,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("releases distributed ensure lock after background generation settles", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
         const cacheKey = "cache-lock-release";
 
@@ -369,7 +408,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("allows local rebuild fallback across independent service instances on lock conflict", async () => {
-        const { SegmentedSegmentService, mocks } = await resolveSegmentService();
+        const { SegmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const serviceA = new SegmentedSegmentService();
         const serviceB = new SegmentedSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
@@ -420,7 +460,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("schedules prune checks even on DASH cache hits", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
 
         mocks.mockBuildDashCacheKey.mockReturnValue("cache-hit");
         mocks.mockGetDashAssetPaths.mockReturnValue({
@@ -429,9 +470,10 @@ describe("segmentedSegmentService", () => {
             manifestPath: "/tmp/cache-hit/manifest.mpd",
         });
         mocks.mockHasDashManifest.mockResolvedValue(true);
-        jest
-            .spyOn(segmentedSegmentService as any, "validateCachedDashAssetIfNeeded")
-            .mockResolvedValue(true);
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateCachedDashAssetIfNeeded",
+        ).mockResolvedValue(true);
 
         const result = await segmentedSegmentService.ensureLocalDashSegments({
             trackId: "track-hit",
@@ -452,7 +494,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("queues async repair when cache validation is degraded but still usable", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-hit-degraded";
         const ensureInput = {
             trackId: "track-hit-degraded",
@@ -468,22 +511,25 @@ describe("segmentedSegmentService", () => {
             manifestPath: `/tmp/${cacheKey}/manifest.mpd`,
         });
         mocks.mockHasDashManifest.mockResolvedValue(true);
-        jest
-            .spyOn(segmentedSegmentService as any, "validateCachedDashAssetIfNeeded")
-            .mockResolvedValue(true);
-        (segmentedSegmentService as any).recoverableValidationFailures.set(cacheKey, {
-            reason: "segment_too_small",
-            segmentName: "chunk-0-00275.m4s",
-            segmentCount: 558,
-            detectedAtMs: Date.now() - 200,
-        });
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateCachedDashAssetIfNeeded",
+        ).mockResolvedValue(true);
+        (segmentedSegmentService as any).recoverableValidationFailures.set(
+            cacheKey,
+            {
+                reason: "segment_too_small",
+                segmentName: "chunk-0-00275.m4s",
+                segmentCount: 558,
+                detectedAtMs: Date.now() - 200,
+            },
+        );
         const repairSpy = jest
             .spyOn(segmentedSegmentService, "forceRegenerateDashSegments")
             .mockResolvedValue(undefined);
 
-        const result = await segmentedSegmentService.ensureLocalDashSegments(
-            ensureInput,
-        );
+        const result =
+            await segmentedSegmentService.ensureLocalDashSegments(ensureInput);
 
         expect(result).toEqual({
             cacheKey,
@@ -500,7 +546,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("does not block cache-hit startup while background full validation runs", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-hit-background";
         const ensureInput = {
             trackId: "track-hit-background",
@@ -524,7 +571,8 @@ describe("segmentedSegmentService", () => {
         const validateSpy = jest
             .spyOn(segmentedSegmentService as any, "validateDashAssetFiles")
             .mockImplementation(async (...args: unknown[]) => {
-                const mode = (args[1] as "startup" | "full" | undefined) ?? "full";
+                const mode =
+                    (args[1] as "startup" | "full" | undefined) ?? "full";
                 if (mode === "startup") {
                     return {
                         valid: true,
@@ -538,12 +586,19 @@ describe("segmentedSegmentService", () => {
                 };
             });
 
-        const result = await Promise.race([
-            segmentedSegmentService.ensureLocalDashSegments(ensureInput),
-            wait(40).then(() => "timeout"),
-        ]);
+        let ensureSettled = false;
+        const ensurePromise = segmentedSegmentService
+            .ensureLocalDashSegments(ensureInput)
+            .finally(() => {
+                ensureSettled = true;
+            });
 
-        expect(result).not.toBe("timeout");
+        await waitForMicrotaskCondition(
+            () => ensureSettled,
+            "background full validation blocked cache-hit startup",
+        );
+        const result = await ensurePromise;
+
         expect(result).toEqual({
             cacheKey,
             outputDir: `/tmp/${cacheKey}`,
@@ -560,7 +615,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("quarantines and repairs cache keys when background full validation fails", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-hit-background-invalid";
         const ensureInput = {
             trackId: "track-hit-background-invalid",
@@ -579,7 +635,8 @@ describe("segmentedSegmentService", () => {
         const validateSpy = jest
             .spyOn(segmentedSegmentService as any, "validateDashAssetFiles")
             .mockImplementation(async (...args: unknown[]) => {
-                const mode = (args[1] as "startup" | "full" | undefined) ?? "full";
+                const mode =
+                    (args[1] as "startup" | "full" | undefined) ?? "full";
                 if (mode === "startup") {
                     return {
                         valid: true,
@@ -597,7 +654,8 @@ describe("segmentedSegmentService", () => {
             .spyOn(segmentedSegmentService, "forceRegenerateDashSegments")
             .mockResolvedValue(undefined);
 
-        const result = await segmentedSegmentService.ensureLocalDashSegments(ensureInput);
+        const result =
+            await segmentedSegmentService.ensureLocalDashSegments(ensureInput);
 
         expect(result).toEqual({
             cacheKey,
@@ -610,9 +668,9 @@ describe("segmentedSegmentService", () => {
 
         expect(validateSpy).toHaveBeenCalledWith(cacheKey, "startup");
         expect(validateSpy).toHaveBeenCalledWith(cacheKey, "full");
-        expect((segmentedSegmentService as any).invalidCacheKeys.has(cacheKey)).toBe(
-            true,
-        );
+        expect(
+            (segmentedSegmentService as any).invalidCacheKeys.has(cacheKey),
+        ).toBe(true);
         expect(repairSpy).toHaveBeenCalledTimes(1);
         expect(repairSpy).toHaveBeenCalledWith({
             ...ensureInput,
@@ -621,7 +679,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("does not trigger duplicate rebuild during failure completion observers", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
         const cacheKey = "cache-race";
         const buildInput = {
@@ -644,16 +703,20 @@ describe("segmentedSegmentService", () => {
         await segmentedSegmentService.ensureLocalDashSegments(buildInput);
         await wait(0);
 
-        const inFlightPromise = (segmentedSegmentService as any).inFlightBuilds.get(
-            cacheKey,
-        ) as Promise<unknown>;
+        const inFlightPromise = (
+            segmentedSegmentService as any
+        ).inFlightBuilds.get(cacheKey) as Promise<unknown>;
         expect(inFlightPromise).toBeDefined();
 
         const observer = inFlightPromise.finally(async () => {
-            const buildFailure = segmentedSegmentService.getBuildFailure(cacheKey);
-            const hasInFlight = segmentedSegmentService.hasInFlightBuild(cacheKey);
+            const buildFailure =
+                segmentedSegmentService.getBuildFailure(cacheKey);
+            const hasInFlight =
+                segmentedSegmentService.hasInFlightBuild(cacheKey);
             if (!buildFailure && !hasInFlight) {
-                await segmentedSegmentService.ensureLocalDashSegments(buildInput);
+                await segmentedSegmentService.ensureLocalDashSegments(
+                    buildInput,
+                );
             }
         });
 
@@ -662,14 +725,15 @@ describe("segmentedSegmentService", () => {
         await wait(0);
 
         expect(segmentedSegmentService.hasInFlightBuild(cacheKey)).toBe(false);
-        expect(segmentedSegmentService.getBuildFailure(cacheKey)).toBeInstanceOf(
-            Error,
-        );
+        expect(
+            segmentedSegmentService.getBuildFailure(cacheKey),
+        ).toBeInstanceOf(Error);
         expect(mocks.mockSpawn).toHaveBeenCalledTimes(1);
     });
 
     it("keeps existing DASH assets available until staged force-regenerate promote", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-live";
         const outputDir = `/tmp/${cacheKey}`;
         let releaseStagedGeneration: (() => void) | undefined;
@@ -678,11 +742,13 @@ describe("segmentedSegmentService", () => {
         });
 
         mocks.mockBuildDashCacheKey.mockReturnValue(cacheKey);
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
 
         const generateSpy = jest
@@ -731,8 +797,9 @@ describe("segmentedSegmentService", () => {
         releaseStagedGeneration?.();
         await wait(0);
 
-        const stagedCacheKey = (generateSpy.mock.calls[0][0] as { cacheKey: string })
-            .cacheKey;
+        const stagedCacheKey = (
+            generateSpy.mock.calls[0][0] as { cacheKey: string }
+        ).cacheKey;
         expect(stagedCacheKey).not.toBe(cacheKey);
         expect(validateSpy).toHaveBeenCalledWith(stagedCacheKey);
         expect(renameSpy).toHaveBeenCalledTimes(2);
@@ -749,16 +816,19 @@ describe("segmentedSegmentService", () => {
     });
 
     it("cleans staged force-regenerate artifacts on failure without deleting live assets", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-failure";
         const generationError = new Error("regeneration failed");
 
         mocks.mockBuildDashCacheKey.mockReturnValue(cacheKey);
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
 
         const generateSpy = jest
@@ -782,8 +852,9 @@ describe("segmentedSegmentService", () => {
         });
         await wait(0);
 
-        const stagedCacheKey = (generateSpy.mock.calls[0][0] as { cacheKey: string })
-            .cacheKey;
+        const stagedCacheKey = (
+            generateSpy.mock.calls[0][0] as { cacheKey: string }
+        ).cacheKey;
 
         expect(renameSpy).not.toHaveBeenCalled();
         expect(validateSpy).not.toHaveBeenCalled();
@@ -796,7 +867,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("normalizes non-Error force-regeneration failures into Error instances", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-non-error";
 
         mocks.mockBuildDashCacheKey.mockReturnValue(cacheKey);
@@ -825,7 +897,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("chunks local original lossless tracks as FLAC fMP4-DASH (no lossy bitrate)", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
         const readManifestSpy = jest
             .spyOn(fsPromises, "readFile")
@@ -841,7 +914,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-original",
             manifestPath: "/tmp/cache-original/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
@@ -882,7 +957,9 @@ describe("segmentedSegmentService", () => {
         expect(ffmpegArgs).toContain("-remove_at_exit");
         expect(ffmpegArgs).toContain("-start_number");
         expect(ffmpegArgs).toContain("init-$RepresentationID$.m4s");
-        expect(ffmpegArgs).toContain("chunk-$RepresentationID$-$Number%05d$.m4s");
+        expect(ffmpegArgs).toContain(
+            "chunk-$RepresentationID$-$Number%05d$.m4s",
+        );
         expect(ffmpegArgs).not.toContain("128k");
 
         ffmpegProcess.emit("close", 0);
@@ -899,7 +976,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("uses startup DASH capability probe to skip unsupported ffmpeg flags", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const dashProbeProcess = createMockFfmpegProcess();
         const remoteProbeProcess = createMockFfmpegProcess();
         const ffmpegProcess = createMockFfmpegProcess();
@@ -909,7 +987,8 @@ describe("segmentedSegmentService", () => {
             .mockReturnValueOnce(remoteProbeProcess)
             .mockReturnValueOnce(ffmpegProcess);
 
-        const probePromise = segmentedSegmentService.initializeDashCapabilityProbe();
+        const probePromise =
+            segmentedSegmentService.initializeDashCapabilityProbe();
         dashProbeProcess.stdout.emit(
             "data",
             Buffer.from(
@@ -932,7 +1011,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-probed",
             manifestPath: "/tmp/cache-probed/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
 
         await segmentedSegmentService.ensureLocalDashSegments({
@@ -953,7 +1034,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("retries generation without -streaming when ffmpeg build does not support it", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const firstFfmpegProcess = createMockFfmpegProcess();
         const secondFfmpegProcess = createMockFfmpegProcess();
 
@@ -963,7 +1045,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-compat",
             manifestPath: "/tmp/cache-compat/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn
             .mockReturnValueOnce(firstFfmpegProcess)
@@ -1002,7 +1086,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("keeps AAC transcoding for non-original quality selections", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
 
         mocks.mockBuildDashCacheKey.mockReturnValue("cache-high");
@@ -1011,7 +1096,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-high",
             manifestPath: "/tmp/cache-high/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
@@ -1039,7 +1126,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("retries generation without -ldash when ffmpeg build does not support it", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const firstFfmpegProcess = createMockFfmpegProcess();
         const secondFfmpegProcess = createMockFfmpegProcess();
 
@@ -1049,7 +1137,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-ldash-compat",
             manifestPath: "/tmp/cache-ldash-compat/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn
             .mockReturnValueOnce(firstFfmpegProcess)
@@ -1088,7 +1178,8 @@ describe("segmentedSegmentService", () => {
 
     it("uses SEGMENTED_LOCAL_SEG_DURATION_SEC for local DASH generation", async () => {
         process.env.SEGMENTED_LOCAL_SEG_DURATION_SEC = "0.5";
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
 
         mocks.mockBuildDashCacheKey.mockReturnValue("cache-local-seg-duration");
@@ -1097,7 +1188,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-local-seg-duration",
             manifestPath: "/tmp/cache-local-seg-duration/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
@@ -1120,16 +1213,21 @@ describe("segmentedSegmentService", () => {
 
     it("uses a 1-second local DASH segment default when env override is unset", async () => {
         delete process.env.SEGMENTED_LOCAL_SEG_DURATION_SEC;
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
 
-        mocks.mockBuildDashCacheKey.mockReturnValue("cache-local-default-seg-duration");
+        mocks.mockBuildDashCacheKey.mockReturnValue(
+            "cache-local-default-seg-duration",
+        );
         mocks.mockGetDashAssetPaths.mockReturnValue({
             cacheKey: "cache-local-default-seg-duration",
             outputDir: "/tmp/cache-local-default-seg-duration",
             manifestPath: "/tmp/cache-local-default-seg-duration/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
@@ -1152,7 +1250,8 @@ describe("segmentedSegmentService", () => {
 
     it("adds reconnect-safe ffmpeg input args for remote DASH sources", async () => {
         process.env.SEGMENTED_LOCAL_SEG_DURATION_SEC = "0.5";
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
 
         mocks.mockBuildDashCacheKey.mockReturnValue("cache-remote");
@@ -1161,7 +1260,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-remote",
             manifestPath: "/tmp/cache-remote/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
@@ -1193,7 +1294,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("retries remote generation without unsupported reconnect flag", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const firstFfmpegProcess = createMockFfmpegProcess();
         const secondFfmpegProcess = createMockFfmpegProcess();
 
@@ -1203,7 +1305,9 @@ describe("segmentedSegmentService", () => {
             outputDir: "/tmp/cache-remote-compat",
             manifestPath: "/tmp/cache-remote-compat/manifest.mpd",
         });
-        mocks.mockHasDashManifest.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.mockHasDashManifest
+            .mockResolvedValueOnce(false)
+            .mockResolvedValue(true);
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn
             .mockReturnValueOnce(firstFfmpegProcess)
@@ -1242,7 +1346,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("returns cached paths while an identical ensure request is already building", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const ffmpegProcess = createMockFfmpegProcess();
         const cacheKey = "cache-inflight-paths";
         const ensureInput = {
@@ -1288,7 +1393,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("invalidates and removes a cache key marked invalid before rebuilding", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-invalidated";
 
         mocks.mockBuildDashCacheKey.mockReturnValue(cacheKey);
@@ -1323,7 +1429,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("skips force regenerate when the same cache key is already in-flight", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-inflight";
         let resolveGeneration:
             | ((value: {
@@ -1352,7 +1459,10 @@ describe("segmentedSegmentService", () => {
         });
 
         const generateForceSpy = jest
-            .spyOn(segmentedSegmentService as any, "generateForceRegeneratedDashAsset")
+            .spyOn(
+                segmentedSegmentService as any,
+                "generateForceRegeneratedDashAsset",
+            )
             .mockReturnValue(generationPromise);
 
         await segmentedSegmentService.forceRegenerateDashSegments({
@@ -1381,7 +1491,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("skips force regenerate when distributed lock acquisition returns conflict", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-lock-conflict";
 
         mocks.mockBuildLockSet.mockResolvedValueOnce(null);
@@ -1409,7 +1520,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("releases distributed force-regenerate lock after completion", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-lock-release";
 
         mocks.mockBuildDashCacheKey.mockReturnValue(cacheKey);
@@ -1449,24 +1561,33 @@ describe("segmentedSegmentService", () => {
     });
 
     it("throws when staged regeneration validation fails", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-validation-fail";
 
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
 
-        jest.spyOn(segmentedSegmentService as any, "generateDashAsset").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "generateDashAsset",
+        ).mockResolvedValue({
             cacheKey,
             outputDir: `/tmp/${cacheKey}`,
             manifestPath: `/tmp/${cacheKey}/manifest.mpd`,
             manifestProfile: "steady_state_dual",
             quality: "medium",
         });
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
             valid: false,
             reason: "segments_missing",
             segmentCount: 0,
@@ -1486,24 +1607,33 @@ describe("segmentedSegmentService", () => {
     });
 
     it("uses unknown validation reason when staged regeneration validation omits reason", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-validation-unknown";
 
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
 
-        jest.spyOn(segmentedSegmentService as any, "generateDashAsset").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "generateDashAsset",
+        ).mockResolvedValue({
             cacheKey,
             outputDir: `/tmp/${cacheKey}`,
             manifestPath: `/tmp/${cacheKey}/manifest.mpd`,
             manifestProfile: "steady_state_dual",
             quality: "medium",
         });
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
             valid: false,
             reason: undefined,
             segmentCount: 0,
@@ -1523,30 +1653,41 @@ describe("segmentedSegmentService", () => {
     });
 
     it("promotes staged assets directly when no live output directory exists", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-no-live";
 
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
-        jest.spyOn(segmentedSegmentService as any, "generateDashAsset").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "generateDashAsset",
+        ).mockResolvedValue({
             cacheKey,
             outputDir: `/tmp/${cacheKey}`,
             manifestPath: `/tmp/${cacheKey}/manifest.mpd`,
             manifestProfile: "steady_state_dual",
             quality: "medium",
         });
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
             valid: true,
             segmentCount: 2,
         });
         jest.spyOn(fsPromises, "access").mockRejectedValue(
             Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
         );
-        const renameSpy = jest.spyOn(fsPromises, "rename").mockResolvedValue(undefined);
+        const renameSpy = jest
+            .spyOn(fsPromises, "rename")
+            .mockResolvedValue(undefined);
 
         await expect(
             (segmentedSegmentService as any).generateForceRegeneratedDashAsset({
@@ -1569,25 +1710,34 @@ describe("segmentedSegmentService", () => {
     });
 
     it("attempts rollback restore when staged promote fails after backing up live assets", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-rollback";
         const outputDir = `/tmp/${cacheKey}`;
         const promoteError = new Error("promote failed");
 
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
-        jest.spyOn(segmentedSegmentService as any, "generateDashAsset").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "generateDashAsset",
+        ).mockResolvedValue({
             cacheKey,
             outputDir,
             manifestPath: `${outputDir}/manifest.mpd`,
             manifestProfile: "steady_state_dual",
             quality: "medium",
         });
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
             valid: true,
             segmentCount: 2,
         });
@@ -1597,13 +1747,19 @@ describe("segmentedSegmentService", () => {
             .mockImplementation(async (fromPath, toPath) => {
                 const from = String(fromPath);
                 const to = String(toPath);
-                if (from === outputDir && to.startsWith(`${outputDir}.previous.`)) {
+                if (
+                    from === outputDir &&
+                    to.startsWith(`${outputDir}.previous.`)
+                ) {
                     return;
                 }
                 throw promoteError;
             });
         const restoreSpy = jest
-            .spyOn(segmentedSegmentService as any, "tryRestoreForceRegenerateBackup")
+            .spyOn(
+                segmentedSegmentService as any,
+                "tryRestoreForceRegenerateBackup",
+            )
             .mockResolvedValue(undefined);
 
         await expect(
@@ -1623,25 +1779,34 @@ describe("segmentedSegmentService", () => {
     });
 
     it("throws promote failure without rollback when no live backup was created", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-promote-no-backup";
         const outputDir = `/tmp/${cacheKey}`;
         const promoteError = new Error("promote failed without backup");
 
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
-        jest.spyOn(segmentedSegmentService as any, "generateDashAsset").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "generateDashAsset",
+        ).mockResolvedValue({
             cacheKey,
             outputDir,
             manifestPath: `${outputDir}/manifest.mpd`,
             manifestProfile: "steady_state_dual",
             quality: "medium",
         });
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
             valid: true,
             segmentCount: 2,
         });
@@ -1669,29 +1834,40 @@ describe("segmentedSegmentService", () => {
     });
 
     it("continues successfully when backup cleanup after promote fails", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-backup-cleanup";
         const outputDir = `/tmp/${cacheKey}`;
 
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
+        );
         mocks.mockRemoveDashAsset.mockResolvedValue(undefined);
-        jest.spyOn(segmentedSegmentService as any, "generateDashAsset").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "generateDashAsset",
+        ).mockResolvedValue({
             cacheKey,
             outputDir,
             manifestPath: `${outputDir}/manifest.mpd`,
             manifestProfile: "steady_state_dual",
             quality: "medium",
         });
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue({
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
             valid: true,
             segmentCount: 2,
         });
         jest.spyOn(fsPromises, "access").mockResolvedValue(undefined);
-        const renameSpy = jest.spyOn(fsPromises, "rename").mockResolvedValue(undefined);
+        const renameSpy = jest
+            .spyOn(fsPromises, "rename")
+            .mockResolvedValue(undefined);
         const rmSpy = jest
             .spyOn(fsPromises, "rm")
             .mockRejectedValue(new Error("cleanup failed"));
@@ -1719,19 +1895,25 @@ describe("segmentedSegmentService", () => {
     });
 
     it("keeps original regeneration error when staged cleanup itself also fails", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-force-cleanup-error";
         const generationError = new Error("generation failed");
 
-        mocks.mockGetDashAssetPaths.mockImplementation((requestedCacheKey: string) => ({
-            cacheKey: requestedCacheKey,
-            outputDir: `/tmp/${requestedCacheKey}`,
-            manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
-        }));
-        mocks.mockRemoveDashAsset.mockRejectedValue(new Error("cleanup failed"));
-        jest.spyOn(segmentedSegmentService as any, "generateDashAsset").mockRejectedValue(
-            generationError,
+        mocks.mockGetDashAssetPaths.mockImplementation(
+            (requestedCacheKey: string) => ({
+                cacheKey: requestedCacheKey,
+                outputDir: `/tmp/${requestedCacheKey}`,
+                manifestPath: `/tmp/${requestedCacheKey}/manifest.mpd`,
+            }),
         );
+        mocks.mockRemoveDashAsset.mockRejectedValue(
+            new Error("cleanup failed"),
+        );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "generateDashAsset",
+        ).mockRejectedValue(generationError);
 
         await expect(
             (segmentedSegmentService as any).generateForceRegeneratedDashAsset({
@@ -1748,7 +1930,9 @@ describe("segmentedSegmentService", () => {
 
     it("restores live assets from backup when rollback rename succeeds", async () => {
         const { segmentedSegmentService } = await resolveSegmentService();
-        const renameSpy = jest.spyOn(fsPromises, "rename").mockResolvedValue(undefined);
+        const renameSpy = jest
+            .spyOn(fsPromises, "rename")
+            .mockResolvedValue(undefined);
 
         await expect(
             (segmentedSegmentService as any).tryRestoreForceRegenerateBackup({
@@ -1768,7 +1952,9 @@ describe("segmentedSegmentService", () => {
 
     it("swallows rollback restore errors and keeps regeneration flow moving", async () => {
         const { segmentedSegmentService } = await resolveSegmentService();
-        jest.spyOn(fsPromises, "rename").mockRejectedValue(new Error("restore failed"));
+        jest.spyOn(fsPromises, "rename").mockRejectedValue(
+            new Error("restore failed"),
+        );
 
         await expect(
             (segmentedSegmentService as any).tryRestoreForceRegenerateBackup({
@@ -1783,7 +1969,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("deduplicates background cache validation while one validation is already in-flight", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-validation-dedupe";
         let releaseValidation: ((result: boolean) => void) | undefined;
         const validationGate = new Promise<boolean>((resolve) => {
@@ -1801,18 +1988,20 @@ describe("segmentedSegmentService", () => {
             .spyOn(segmentedSegmentService as any, "validateCachedDashAsset")
             .mockReturnValue(validationGate);
 
-        const firstEnsurePromise = segmentedSegmentService.ensureLocalDashSegments({
-            trackId: "track-validation-dedupe",
-            sourcePath: "/music/track-validation-dedupe.flac",
-            sourceModified: new Date("2026-02-20T00:00:00.000Z"),
-            quality: "medium",
-        });
-        const secondEnsurePromise = segmentedSegmentService.ensureLocalDashSegments({
-            trackId: "track-validation-dedupe",
-            sourcePath: "/music/track-validation-dedupe.flac",
-            sourceModified: new Date("2026-02-20T00:00:00.000Z"),
-            quality: "medium",
-        });
+        const firstEnsurePromise =
+            segmentedSegmentService.ensureLocalDashSegments({
+                trackId: "track-validation-dedupe",
+                sourcePath: "/music/track-validation-dedupe.flac",
+                sourceModified: new Date("2026-02-20T00:00:00.000Z"),
+                quality: "medium",
+            });
+        const secondEnsurePromise =
+            segmentedSegmentService.ensureLocalDashSegments({
+                trackId: "track-validation-dedupe",
+                sourcePath: "/music/track-validation-dedupe.flac",
+                sourceModified: new Date("2026-02-20T00:00:00.000Z"),
+                quality: "medium",
+            });
 
         await wait(0);
         expect(validateSpy).toHaveBeenCalledTimes(1);
@@ -1842,12 +2031,13 @@ describe("segmentedSegmentService", () => {
         const { segmentedSegmentService } = await resolveSegmentService();
         const cacheKey = "cache-validate-ok";
 
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue(
-            {
-                valid: true,
-                segmentCount: 3,
-            },
-        );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
+            valid: true,
+            segmentCount: 3,
+        });
 
         await expect(
             (segmentedSegmentService as any).validateCachedDashAsset({
@@ -1857,23 +2047,24 @@ describe("segmentedSegmentService", () => {
                 sourceKind: "local",
             }),
         ).resolves.toBe(true);
-        expect((segmentedSegmentService as any).invalidCacheKeys.has(cacheKey)).toBe(
-            false,
-        );
+        expect(
+            (segmentedSegmentService as any).invalidCacheKeys.has(cacheKey),
+        ).toBe(false);
     });
 
     it("marks cache key invalid when cached asset validation fails", async () => {
         const { segmentedSegmentService } = await resolveSegmentService();
         const cacheKey = "cache-validate-invalid";
 
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue(
-            {
-                valid: false,
-                reason: "segment_too_small",
-                segmentCount: 1,
-                segmentName: "chunk-0-00001.m4s",
-            },
-        );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
+            valid: false,
+            reason: "segment_too_small",
+            segmentCount: 1,
+            segmentName: "chunk-0-00001.m4s",
+        });
 
         await expect(
             (segmentedSegmentService as any).validateCachedDashAsset({
@@ -1883,23 +2074,24 @@ describe("segmentedSegmentService", () => {
                 sourceKind: "local",
             }),
         ).resolves.toBe(false);
-        expect((segmentedSegmentService as any).invalidCacheKeys.has(cacheKey)).toBe(
-            true,
-        );
+        expect(
+            (segmentedSegmentService as any).invalidCacheKeys.has(cacheKey),
+        ).toBe(true);
     });
 
     it("keeps cache usable and records recoverable failure for non-startup segment_too_small", async () => {
         const { segmentedSegmentService } = await resolveSegmentService();
         const cacheKey = "cache-validate-recoverable";
 
-        jest.spyOn(segmentedSegmentService as any, "validateDashAssetFiles").mockResolvedValue(
-            {
-                valid: false,
-                reason: "segment_too_small",
-                segmentCount: 558,
-                segmentName: "chunk-0-00275.m4s",
-            },
-        );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "validateDashAssetFiles",
+        ).mockResolvedValue({
+            valid: false,
+            reason: "segment_too_small",
+            segmentCount: 558,
+            segmentName: "chunk-0-00275.m4s",
+        });
 
         await expect(
             (segmentedSegmentService as any).validateCachedDashAsset({
@@ -1909,9 +2101,9 @@ describe("segmentedSegmentService", () => {
                 sourceKind: "local",
             }),
         ).resolves.toBe(true);
-        expect((segmentedSegmentService as any).invalidCacheKeys.has(cacheKey)).toBe(
-            false,
-        );
+        expect(
+            (segmentedSegmentService as any).invalidCacheKeys.has(cacheKey),
+        ).toBe(false);
         expect(
             (segmentedSegmentService as any).recoverableValidationFailures.has(
                 cacheKey,
@@ -1920,7 +2112,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("uses startup-fast validation for init and first startup chunks only", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-startup-fast-validation";
 
         mocks.mockHasDashManifest.mockResolvedValue(true);
@@ -1935,16 +2128,19 @@ describe("segmentedSegmentService", () => {
             outputDir: `/tmp/${cacheKey}`,
             manifestPath: `/tmp/${cacheKey}/manifest.mpd`,
         });
-        jest.spyOn(fsPromises, "stat").mockImplementation(async (targetPath: unknown) => {
-            const fileName = String(targetPath).split("/").pop() ?? "";
-            return {
-                isFile: () => true,
-                size: fileName === "chunk-1-00420.m4s" ? 8 : 1024,
-            } as unknown as Awaited<ReturnType<typeof fsPromises.stat>>;
-        });
-        jest.spyOn(segmentedSegmentService as any, "readSegmentProbeBytes").mockResolvedValue(
-            Buffer.from("...moof...mdat..."),
+        jest.spyOn(fsPromises, "stat").mockImplementation(
+            async (targetPath: unknown) => {
+                const fileName = String(targetPath).split("/").pop() ?? "";
+                return {
+                    isFile: () => true,
+                    size: fileName === "chunk-1-00420.m4s" ? 8 : 1024,
+                } as unknown as Awaited<ReturnType<typeof fsPromises.stat>>;
+            },
         );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "readSegmentProbeBytes",
+        ).mockResolvedValue(Buffer.from("...moof...mdat..."));
 
         await expect(
             (segmentedSegmentService as any).validateDashAssetFiles(
@@ -1956,7 +2152,10 @@ describe("segmentedSegmentService", () => {
             segmentCount: 4,
         });
         await expect(
-            (segmentedSegmentService as any).validateDashAssetFiles(cacheKey, "full"),
+            (segmentedSegmentService as any).validateDashAssetFiles(
+                cacheKey,
+                "full",
+            ),
         ).resolves.toEqual({
             valid: false,
             reason: "segment_too_small",
@@ -1966,11 +2165,14 @@ describe("segmentedSegmentService", () => {
     });
 
     it("returns manifest_missing when validating cached assets without a manifest", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         mocks.mockHasDashManifest.mockResolvedValue(false);
 
         await expect(
-            (segmentedSegmentService as any).validateDashAssetFiles("cache-no-manifest"),
+            (segmentedSegmentService as any).validateDashAssetFiles(
+                "cache-no-manifest",
+            ),
         ).resolves.toEqual({
             valid: false,
             reason: "manifest_missing",
@@ -1979,12 +2181,15 @@ describe("segmentedSegmentService", () => {
     });
 
     it("returns segments_missing when validating cached assets with no segments", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         mocks.mockHasDashManifest.mockResolvedValue(true);
         mocks.mockListDashSegments.mockResolvedValue([]);
 
         await expect(
-            (segmentedSegmentService as any).validateDashAssetFiles("cache-no-segments"),
+            (segmentedSegmentService as any).validateDashAssetFiles(
+                "cache-no-segments",
+            ),
         ).resolves.toEqual({
             valid: false,
             reason: "segments_missing",
@@ -1993,7 +2198,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("returns segment_not_file when a listed segment path is not a file", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-segment-not-file";
         const segmentName = "chunk-0-00001.m4s";
 
@@ -2020,7 +2226,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("returns segment_too_small when a segment is below minimum byte size", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-segment-too-small";
         const segmentName = "chunk-0-00001.m4s";
 
@@ -2047,7 +2254,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("skips probe checks for init and non-m4s segments and still validates", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-skip-probe";
 
         mocks.mockHasDashManifest.mockResolvedValue(true);
@@ -2079,7 +2287,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("returns segment_missing_moof when media segment probe bytes omit moof box", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-missing-moof";
         const segmentName = "chunk-0-00001.m4s";
 
@@ -2094,9 +2303,10 @@ describe("segmentedSegmentService", () => {
             isFile: () => true,
             size: 1024,
         } as unknown as Awaited<ReturnType<typeof fsPromises.stat>>);
-        jest.spyOn(segmentedSegmentService as any, "readSegmentProbeBytes").mockResolvedValue(
-            Buffer.from("...mdat..."),
-        );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "readSegmentProbeBytes",
+        ).mockResolvedValue(Buffer.from("...mdat..."));
 
         await expect(
             (segmentedSegmentService as any).validateDashAssetFiles(cacheKey),
@@ -2109,7 +2319,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("returns segment_missing_mdat when media segment probe bytes omit mdat box", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-missing-mdat";
         const segmentName = "chunk-0-00001.m4s";
 
@@ -2124,9 +2335,10 @@ describe("segmentedSegmentService", () => {
             isFile: () => true,
             size: 1024,
         } as unknown as Awaited<ReturnType<typeof fsPromises.stat>>);
-        jest.spyOn(segmentedSegmentService as any, "readSegmentProbeBytes").mockResolvedValue(
-            Buffer.from("...moof..."),
-        );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "readSegmentProbeBytes",
+        ).mockResolvedValue(Buffer.from("...moof..."));
 
         await expect(
             (segmentedSegmentService as any).validateDashAssetFiles(cacheKey),
@@ -2139,7 +2351,8 @@ describe("segmentedSegmentService", () => {
     });
 
     it("accepts m4s probe bytes that contain both moof and mdat boxes", async () => {
-        const { segmentedSegmentService, mocks } = await resolveSegmentService();
+        const { segmentedSegmentService, mocks } =
+            await resolveSegmentService();
         const cacheKey = "cache-valid-probe";
 
         mocks.mockHasDashManifest.mockResolvedValue(true);
@@ -2153,9 +2366,10 @@ describe("segmentedSegmentService", () => {
             isFile: () => true,
             size: 1024,
         } as unknown as Awaited<ReturnType<typeof fsPromises.stat>>);
-        jest.spyOn(segmentedSegmentService as any, "readSegmentProbeBytes").mockResolvedValue(
-            Buffer.from("...moof...mdat..."),
-        );
+        jest.spyOn(
+            segmentedSegmentService as any,
+            "readSegmentProbeBytes",
+        ).mockResolvedValue(Buffer.from("...moof...mdat..."));
 
         await expect(
             (segmentedSegmentService as any).validateDashAssetFiles(cacheKey),

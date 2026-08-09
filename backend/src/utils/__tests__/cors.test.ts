@@ -4,7 +4,7 @@ describe("isOriginAllowed", () => {
     it("allows requests with no origin (same-origin, curl, server-to-server)", () => {
         expect(isOriginAllowed(undefined, [], "production")).toBe(true);
         expect(isOriginAllowed("", ["https://app.example"], "production")).toBe(
-            true
+            true,
         );
     });
 
@@ -13,22 +13,22 @@ describe("isOriginAllowed", () => {
         // arbitrary origins while credentials are enabled. Operators opt back
         // into the legacy permissive behavior with CORS_ALLOW_ALL=true, which
         // config.ts resolves to `allowedOrigins: true`.
-        expect(isOriginAllowed("https://anything.example", [], "production")).toBe(
-            false
-        );
+        expect(
+            isOriginAllowed("https://anything.example", [], "production"),
+        ).toBe(false);
         expect(isOriginAllowed("https://anything.example", [], "test")).toBe(
-            false
+            false,
         );
     });
 
     it("allows all origins when explicitly set to true or in development", () => {
         // `true` is the resolved CORS_ALLOW_ALL / legacy opt-out value.
-        expect(isOriginAllowed("https://anything.example", true, "production")).toBe(
-            true
-        );
-        expect(isOriginAllowed("https://anything.example", [], "development")).toBe(
-            true
-        );
+        expect(
+            isOriginAllowed("https://anything.example", true, "production"),
+        ).toBe(true);
+        expect(
+            isOriginAllowed("https://anything.example", [], "development"),
+        ).toBe(true);
     });
 
     it("enforces a configured allowlist: allows listed origins", () => {
@@ -36,8 +36,8 @@ describe("isOriginAllowed", () => {
             isOriginAllowed(
                 "https://app.example",
                 ["https://app.example", "https://admin.example"],
-                "production"
-            )
+                "production",
+            ),
         ).toBe(true);
     });
 
@@ -46,8 +46,8 @@ describe("isOriginAllowed", () => {
             isOriginAllowed(
                 "https://evil.example",
                 ["https://app.example"],
-                "production"
-            )
+                "production",
+            ),
         ).toBe(false);
     });
 });

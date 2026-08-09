@@ -21,7 +21,7 @@ export interface PositionableTrack {
 
 /** Natural layout: the raw projection coordinates, index-aligned. */
 export function buildPositions(
-    tracks: readonly PositionableTrack[]
+    tracks: readonly PositionableTrack[],
 ): Float32Array {
     const out = new Float32Array(tracks.length * 2);
     for (let i = 0; i < tracks.length; i++) {
@@ -38,7 +38,7 @@ export function buildPositions(
  * an empty buffer.
  */
 export function computeSpreadPositions(
-    tracks: readonly PositionableTrack[]
+    tracks: readonly PositionableTrack[],
 ): Float32Array {
     const n = tracks.length;
     const out = new Float32Array(n * 2);
@@ -73,7 +73,7 @@ export function lerpPositions(
     a: Float32Array,
     b: Float32Array,
     t: number,
-    out: Float32Array
+    out: Float32Array,
 ): Float32Array {
     const n = Math.min(a.length, b.length, out.length);
     if (t <= 0) {

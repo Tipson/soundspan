@@ -17,16 +17,10 @@ jest.mock("../../middleware/auth", () => ({
 }));
 
 jest.mock("../../middleware/rateLimiter", () => ({
-    ytMusicSearchLimiter: (
-        _req: Request,
-        _res: Response,
-        next: NextFunction
-    ) => next(),
-    ytMusicStreamLimiter: (
-        _req: Request,
-        _res: Response,
-        next: NextFunction
-    ) => next(),
+    ytMusicSearchLimiter: (_req: Request, _res: Response, next: NextFunction) =>
+        next(),
+    ytMusicStreamLimiter: (_req: Request, _res: Response, next: NextFunction) =>
+        next(),
 }));
 
 jest.mock("../../utils/logger", () => ({
@@ -66,7 +60,7 @@ const normalizeYtMusicStreamQuality = jest.fn(
             normalized === "lossless"
             ? normalized
             : undefined;
-    }
+    },
 );
 
 jest.mock("../../services/youtubeMusic", () => ({
@@ -90,7 +84,7 @@ jest.mock("../../utils/db", () => ({
 }));
 
 const decrypt = jest.fn((value: string | null) =>
-    typeof value === "string" ? value.replace(/^enc:/, "") : null
+    typeof value === "string" ? value.replace(/^enc:/, "") : null,
 );
 jest.mock("../../utils/encryption", () => ({
     encrypt: jest.fn((value: string) => `enc:${value}`),
@@ -145,7 +139,7 @@ describe("youtubeMusic routes branch coverage", () => {
         ytMusicService.findMatchForTrack.mockResolvedValue({ videoId: "v1" });
 
         prisma.userSettings.findUnique.mockResolvedValue({
-            ytMusicOAuthJson: "enc:{\"token\":\"x\"}",
+            ytMusicOAuthJson: 'enc:{"token":"x"}',
             ytMusicQuality: "LOW",
         });
     });
@@ -162,18 +156,29 @@ describe("youtubeMusic routes branch coverage", () => {
     });
 
     it("uses __public__ for album when OAuth credentials are missing", async () => {
-        ytMusicService.getAuthStatus.mockResolvedValueOnce({ authenticated: false });
-        prisma.userSettings.findUnique.mockResolvedValueOnce({ ytMusicOAuthJson: null });
+        ytMusicService.getAuthStatus.mockResolvedValueOnce({
+            authenticated: false,
+        });
+        prisma.userSettings.findUnique.mockResolvedValueOnce({
+            ytMusicOAuthJson: null,
+        });
 
         const res = await request(app).get("/api/ytmusic/album/alb-1");
 
         expect(res.status).toBe(200);
-        expect(ytMusicService.getAlbum).toHaveBeenCalledWith("__public__", "alb-1");
+        expect(ytMusicService.getAlbum).toHaveBeenCalledWith(
+            "__public__",
+            "alb-1",
+        );
     });
 
     it("rejects library when user OAuth is missing/expired", async () => {
-        ytMusicService.getAuthStatus.mockResolvedValueOnce({ authenticated: false });
-        prisma.userSettings.findUnique.mockResolvedValueOnce({ ytMusicOAuthJson: null });
+        ytMusicService.getAuthStatus.mockResolvedValueOnce({
+            authenticated: false,
+        });
+        prisma.userSettings.findUnique.mockResolvedValueOnce({
+            ytMusicOAuthJson: null,
+        });
 
         const res = await request(app).get("/api/ytmusic/library/songs");
 
@@ -183,7 +188,9 @@ describe("youtubeMusic routes branch coverage", () => {
     });
 
     it("rejects library when encrypted OAuth cannot be decrypted", async () => {
-        ytMusicService.getAuthStatus.mockResolvedValueOnce({ authenticated: false });
+        ytMusicService.getAuthStatus.mockResolvedValueOnce({
+            authenticated: false,
+        });
         prisma.userSettings.findUnique.mockResolvedValueOnce({
             ytMusicOAuthJson: "enc:broken",
         });
@@ -196,12 +203,14 @@ describe("youtubeMusic routes branch coverage", () => {
     });
 
     it("returns unauthorized when OAuth restore throws", async () => {
-        ytMusicService.getAuthStatus.mockResolvedValueOnce({ authenticated: false });
+        ytMusicService.getAuthStatus.mockResolvedValueOnce({
+            authenticated: false,
+        });
         prisma.userSettings.findUnique.mockResolvedValueOnce({
-            ytMusicOAuthJson: "enc:{\"refresh_token\":\"r\"}",
+            ytMusicOAuthJson: 'enc:{"refresh_token":"r"}',
         });
         ytMusicService.restoreOAuthWithCredentials.mockRejectedValueOnce(
-            new Error("restore failed")
+            new Error("restore failed"),
         );
 
         const res = await request(app).get("/api/ytmusic/library/albums");
@@ -211,21 +220,25 @@ describe("youtubeMusic routes branch coverage", () => {
     });
 
     it("falls back to default stream quality when stored quality is invalid", async () => {
-        prisma.userSettings.findUnique.mockResolvedValueOnce({ ytMusicQuality: "ULTRA" });
+        prisma.userSettings.findUnique.mockResolvedValueOnce({
+            ytMusicQuality: "ULTRA",
+        });
 
-        const res = await request(app).get("/api/ytmusic/stream-info/video-1?quality=   ");
+        const res = await request(app).get(
+            "/api/ytmusic/stream-info/video-1?quality=   ",
+        );
 
         expect(res.status).toBe(200);
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
             "user-1",
             "video-1",
-            "high"
+            "high",
         );
     });
 
     it("falls back to default stream quality on user settings read failure", async () => {
         prisma.userSettings.findUnique.mockRejectedValueOnce(
-            new Error("db unavailable")
+            new Error("db unavailable"),
         );
 
         const res = await request(app).get("/api/ytmusic/stream-info/video-1");
@@ -234,23 +247,23 @@ describe("youtubeMusic routes branch coverage", () => {
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
             "user-1",
             "video-1",
-            "high"
+            "high",
         );
     });
 
     it("keeps explicit requested quality string without DB lookup", async () => {
         const res = await request(app).get(
-            "/api/ytmusic/stream-info/video-1?quality=  custom-quality  "
+            "/api/ytmusic/stream-info/video-1?quality=  custom-quality  ",
         );
 
         expect(res.status).toBe(200);
         expect(prisma.userSettings.findUnique).not.toHaveBeenCalledWith(
-            expect.objectContaining({ select: { ytMusicQuality: true } })
+            expect.objectContaining({ select: { ytMusicQuality: true } }),
         );
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
             "user-1",
             "video-1",
-            "custom-quality"
+            "custom-quality",
         );
     });
 
@@ -303,7 +316,10 @@ describe("youtubeMusic routes branch coverage", () => {
     it("returns song details for authenticated browse path", async () => {
         const res = await request(app).get("/api/ytmusic/song/video-1");
         expect(res.status).toBe(200);
-        expect(ytMusicService.getSong).toHaveBeenCalledWith("user-1", "video-1");
+        expect(ytMusicService.getSong).toHaveBeenCalledWith(
+            "user-1",
+            "video-1",
+        );
     });
 
     it("maps public stream-info 451 and generic failures", async () => {
@@ -311,17 +327,19 @@ describe("youtubeMusic routes branch coverage", () => {
             response: { status: 451 },
         });
         const ageRestricted = await request(app).get(
-            "/api/ytmusic/stream-info-public/video-1"
+            "/api/ytmusic/stream-info-public/video-1",
         );
         expect(ageRestricted.status).toBe(451);
         expect(ageRestricted.body.error).toBe("age_restricted");
 
         ytMusicService.getStreamInfo.mockRejectedValueOnce(new Error("boom"));
         const genericError = await request(app).get(
-            "/api/ytmusic/stream-info-public/video-1"
+            "/api/ytmusic/stream-info-public/video-1",
         );
         expect(genericError.status).toBe(500);
-        expect(genericError.body).toEqual({ error: "Failed to get stream info" });
+        expect(genericError.body).toEqual({
+            error: "Failed to get stream info",
+        });
     });
 
     it("handles public stream proxy error callback and exception mapping", async () => {
@@ -342,7 +360,7 @@ describe("youtubeMusic routes branch coverage", () => {
         });
 
         const upstreamErrorRes = await request(app).get(
-            "/api/ytmusic/stream-public/video-1"
+            "/api/ytmusic/stream-public/video-1",
         );
         expect(upstreamErrorRes.status).toBe(502);
 
@@ -363,38 +381,55 @@ describe("youtubeMusic routes branch coverage", () => {
             data: syntheticStream,
         });
         const headersSentRes = await request(app).get(
-            "/api/ytmusic/stream-public/video-2"
+            "/api/ytmusic/stream-public/video-2",
         );
         expect(headersSentRes.status).toBe(200);
 
         ytMusicService.getStreamProxy.mockRejectedValueOnce({
             response: { status: 404 },
         });
-        const notFound = await request(app).get("/api/ytmusic/stream-public/missing");
+        const notFound = await request(app).get(
+            "/api/ytmusic/stream-public/missing",
+        );
         expect(notFound.status).toBe(404);
 
         ytMusicService.getStreamProxy.mockRejectedValueOnce({
             response: { status: 451 },
         });
-        const restricted = await request(app).get("/api/ytmusic/stream-public/age");
+        const restricted = await request(app).get(
+            "/api/ytmusic/stream-public/age",
+        );
         expect(restricted.status).toBe(451);
 
-        ytMusicService.getStreamProxy.mockRejectedValueOnce(new Error("proxy failed"));
-        const generic = await request(app).get("/api/ytmusic/stream-public/video-3");
+        ytMusicService.getStreamProxy.mockRejectedValueOnce(
+            new Error("proxy failed"),
+        );
+        const generic = await request(app).get(
+            "/api/ytmusic/stream-public/video-3",
+        );
         expect(generic.status).toBe(500);
         expect(generic.body).toEqual({ error: "Failed to stream audio" });
     });
 
     it("skips DB restore when sidecar already reports authenticated", async () => {
-        ytMusicService.getAuthStatus.mockResolvedValueOnce({ authenticated: true });
+        ytMusicService.getAuthStatus.mockResolvedValueOnce({
+            authenticated: true,
+        });
 
-        const res = await request(app).get("/api/ytmusic/library/songs?limit=5");
+        const res = await request(app).get(
+            "/api/ytmusic/library/songs?limit=5",
+        );
 
         expect(res.status).toBe(200);
-        expect(ytMusicService.getLibrarySongs).toHaveBeenCalledWith("user-1", 5);
-        expect(ytMusicService.restoreOAuthWithCredentials).not.toHaveBeenCalled();
+        expect(ytMusicService.getLibrarySongs).toHaveBeenCalledWith(
+            "user-1",
+            5,
+        );
+        expect(
+            ytMusicService.restoreOAuthWithCredentials,
+        ).not.toHaveBeenCalled();
         expect(prisma.userSettings.findUnique).not.toHaveBeenCalledWith(
-            expect.objectContaining({ select: { ytMusicOAuthJson: true } })
+            expect.objectContaining({ select: { ytMusicOAuthJson: true } }),
         );
     });
 });

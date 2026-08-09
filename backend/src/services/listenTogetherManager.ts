@@ -178,7 +178,7 @@ function clampIndex(index: number, length: number): number {
 
 function truncateQueueItemsToAvailableCapacity(
     queueLength: number,
-    items: SyncQueueItem[]
+    items: SyncQueueItem[],
 ): SyncQueueItem[] {
     const remainingCapacity = Math.max(0, MAX_QUEUE_SIZE - queueLength);
     return remainingCapacity > 0 ? items.slice(0, remainingCapacity) : [];
@@ -206,7 +206,7 @@ function currentTrackId(pb: GroupPlayback): string | null {
 function shouldApplyIncomingPlayback(
     existing: GroupState | undefined,
     incomingStateVersion: number,
-    incomingServerTime: number
+    incomingServerTime: number,
 ): boolean {
     if (!existing) return true;
 
@@ -238,10 +238,27 @@ export interface ManagerCallbacks {
     onGroupState(groupId: string, snapshot: GroupSnapshot): void;
     onPlaybackDelta(groupId: string, delta: PlaybackDelta): void;
     onQueueDelta(groupId: string, delta: QueueDelta): void;
-    onWaiting(groupId: string, data: { trackId: string | null; currentIndex: number }): void;
-    onPlayAt(groupId: string, data: { positionMs: number; serverTime: number; stateVersion: number }): void;
-    onMemberJoined(groupId: string, member: { userId: string; username: string }): void;
-    onMemberLeft(groupId: string, data: { userId: string; username: string; newHostUserId?: string; newHostUsername?: string }): void;
+    onWaiting(
+        groupId: string,
+        data: { trackId: string | null; currentIndex: number },
+    ): void;
+    onPlayAt(
+        groupId: string,
+        data: { positionMs: number; serverTime: number; stateVersion: number },
+    ): void;
+    onMemberJoined(
+        groupId: string,
+        member: { userId: string; username: string },
+    ): void;
+    onMemberLeft(
+        groupId: string,
+        data: {
+            userId: string;
+            username: string;
+            newHostUserId?: string;
+            newHostUsername?: string;
+        },
+    ): void;
     onGroupEnded(groupId: string, reason: string): void;
 }
 
@@ -272,12 +289,18 @@ class GroupManager {
             currentTimeMs: number;
             stateVersion: number;
             createdAt: Date;
-            members: Array<{ userId: string; username: string; isHost: boolean; joinedAt: Date }>;
+            members: Array<{
+                userId: string;
+                username: string;
+                isHost: boolean;
+                joinedAt: Date;
+            }>;
         },
     ): GroupState {
-        const queue = opts.queue.length > MAX_QUEUE_SIZE
-            ? opts.queue.slice(0, MAX_QUEUE_SIZE)
-            : opts.queue;
+        const queue =
+            opts.queue.length > MAX_QUEUE_SIZE
+                ? opts.queue.slice(0, MAX_QUEUE_SIZE)
+                : opts.queue;
         const safeIndex = clampIndex(opts.currentIndex, queue.length);
         const now = Date.now();
 
@@ -302,7 +325,11 @@ class GroupManager {
             groupType: opts.groupType,
             visibility: opts.visibility,
             hostUserId: opts.hostUserId,
-            syncState: opts.isPlaying ? "playing" : queue.length > 0 ? "paused" : "idle",
+            syncState: opts.isPlaying
+                ? "playing"
+                : queue.length > 0
+                  ? "paused"
+                  : "idle",
             playback: {
                 queue,
                 currentIndex: safeIndex,
@@ -321,7 +348,9 @@ class GroupManager {
         };
 
         this.groups.set(id, group);
-        log.debug(`Hydrated group ${id} with ${opts.members.length} members, queue=${queue.length}`);
+        log.debug(
+            `Hydrated group ${id} with ${opts.members.length} members, queue=${queue.length}`,
+        );
         return group;
     }
 
@@ -347,7 +376,9 @@ class GroupManager {
         const activeTrack = opts.queue[safeIndex];
         const maxTrackMs = activeTrack ? activeTrack.duration * 1000 : 0;
         const initialPositionMs = clamp(opts.currentTimeMs ?? 0, 0, maxTrackMs);
-        const initialIsPlaying = Boolean(opts.isPlaying && opts.queue.length > 0);
+        const initialIsPlaying = Boolean(
+            opts.isPlaying && opts.queue.length > 0,
+        );
 
         const members = new Map<string, GroupMember>();
         members.set(opts.hostUserId, {
@@ -372,8 +403,8 @@ class GroupManager {
                 opts.queue.length === 0
                     ? "idle"
                     : initialIsPlaying
-                    ? "playing"
-                    : "paused",
+                      ? "playing"
+                      : "paused",
             playback: {
                 queue: opts.queue,
                 currentIndex: safeIndex,
@@ -392,7 +423,9 @@ class GroupManager {
         };
 
         this.groups.set(id, group);
-        log.info(`Created group ${id} "${opts.name}" hosted by ${opts.hostUsername}`);
+        log.info(
+            `Created group ${id} "${opts.name}" hosted by ${opts.hostUsername}`,
+        );
         return group;
     }
 
@@ -489,7 +522,11 @@ class GroupManager {
     // Member management
     // -----------------------------------------------------------------------
 
-    addMember(groupId: string, userId: string, username: string): GroupSnapshot {
+    addMember(
+        groupId: string,
+        userId: string,
+        username: string,
+    ): GroupSnapshot {
         const group = this.requireGroup(groupId);
 
         // If already a member, just update
@@ -520,7 +557,10 @@ class GroupManager {
         return this.snapshot(group);
     }
 
-    removeMember(groupId: string, userId: string): { ended: boolean; newHostUserId?: string; newHostUsername?: string } {
+    removeMember(
+        groupId: string,
+        userId: string,
+    ): { ended: boolean; newHostUserId?: string; newHostUsername?: string } {
         const group = this.requireGroup(groupId);
         const member = group.members.get(userId);
         if (!member) return { ended: false };
@@ -545,13 +585,19 @@ class GroupManager {
 
         if (wasHost) {
             // Transfer host: alphabetical by username, then by join order
-            const candidates = Array.from(group.members.values()).sort((a, b) => {
-                const nameComp = a.username.localeCompare(b.username, undefined, {
-                    sensitivity: "accent",
-                });
-                if (nameComp !== 0) return nameComp;
-                return a.joinedAt.getTime() - b.joinedAt.getTime();
-            });
+            const candidates = Array.from(group.members.values()).sort(
+                (a, b) => {
+                    const nameComp = a.username.localeCompare(
+                        b.username,
+                        undefined,
+                        {
+                            sensitivity: "accent",
+                        },
+                    );
+                    if (nameComp !== 0) return nameComp;
+                    return a.joinedAt.getTime() - b.joinedAt.getTime();
+                },
+            );
 
             const nextHost = candidates[0];
             if (nextHost) {
@@ -561,11 +607,18 @@ class GroupManager {
                 group.hostUserId = nextHost.userId;
                 newHostUserId = nextHost.userId;
                 newHostUsername = nextHost.username;
-                log.info(`Host transferred in group ${groupId}: ${username} -> ${nextHost.username}`);
+                log.info(
+                    `Host transferred in group ${groupId}: ${username} -> ${nextHost.username}`,
+                );
             }
         }
 
-        this.callbacks?.onMemberLeft(groupId, { userId, username, newHostUserId, newHostUsername });
+        this.callbacks?.onMemberLeft(groupId, {
+            userId,
+            username,
+            newHostUserId,
+            newHostUsername,
+        });
         this.broadcastState(group);
 
         // If we were in a waiting gate, check if everyone remaining is ready
@@ -587,7 +640,8 @@ class GroupManager {
         if (waitingDelta) return waitingDelta;
 
         const pb = group.playback;
-        if (pb.queue.length === 0) throw new GroupError("INVALID", "Queue is empty");
+        if (pb.queue.length === 0)
+            throw new GroupError("INVALID", "Queue is empty");
 
         pb.isPlaying = true;
         pb.lastPositionUpdate = Date.now();
@@ -659,7 +713,8 @@ class GroupManager {
         this.ensureNoPendingTrackChange(group);
 
         const pb = group.playback;
-        if (pb.queue.length === 0) throw new GroupError("INVALID", "Queue is empty");
+        if (pb.queue.length === 0)
+            throw new GroupError("INVALID", "Queue is empty");
 
         const newIndex = clampIndex(index, pb.queue.length);
         const trackChanged = newIndex !== pb.currentIndex;
@@ -701,14 +756,21 @@ class GroupManager {
         return { snapshot: this.snapshot(group), waiting: true };
     }
 
-    next(groupId: string, userId: string): { snapshot: GroupSnapshot; waiting: boolean } {
+    next(
+        groupId: string,
+        userId: string,
+    ): { snapshot: GroupSnapshot; waiting: boolean } {
         const group = this.requireGroup(groupId);
         const pb = group.playback;
-        const nextIndex = pb.currentIndex + 1 < pb.queue.length ? pb.currentIndex + 1 : 0;
+        const nextIndex =
+            pb.currentIndex + 1 < pb.queue.length ? pb.currentIndex + 1 : 0;
         return this.setTrack(groupId, userId, nextIndex, true);
     }
 
-    previous(groupId: string, userId: string): { snapshot: GroupSnapshot; waiting: boolean } {
+    previous(
+        groupId: string,
+        userId: string,
+    ): { snapshot: GroupSnapshot; waiting: boolean } {
         const group = this.requireGroup(groupId);
         const pb = group.playback;
 
@@ -718,7 +780,8 @@ class GroupManager {
             return this.setTrack(groupId, userId, pb.currentIndex, true);
         }
 
-        const prevIndex = pb.currentIndex > 0 ? pb.currentIndex - 1 : pb.queue.length - 1;
+        const prevIndex =
+            pb.currentIndex > 0 ? pb.currentIndex - 1 : pb.queue.length - 1;
         return this.setTrack(groupId, userId, prevIndex, true);
     }
 
@@ -737,7 +800,7 @@ class GroupManager {
     setUnavailableIndices(
         groupId: string,
         userId: string,
-        unavailableIndices: Iterable<number>
+        unavailableIndices: Iterable<number>,
     ): void {
         const group = this.groups.get(groupId);
         if (!group) return;
@@ -756,7 +819,11 @@ class GroupManager {
     // Queue operations
     // -----------------------------------------------------------------------
 
-    modifyQueue(groupId: string, userId: string, action: QueueAction): QueueDelta {
+    modifyQueue(
+        groupId: string,
+        userId: string,
+        action: QueueAction,
+    ): QueueDelta {
         const group = this.requireGroup(groupId);
         this.requireQueueEdit(group, userId);
 
@@ -767,7 +834,7 @@ class GroupManager {
             case "add": {
                 const acceptedItems = truncateQueueItemsToAvailableCapacity(
                     pb.queue.length,
-                    action.items
+                    action.items,
                 );
                 if (acceptedItems.length === 0) {
                     return this.queueDelta(group);
@@ -784,7 +851,7 @@ class GroupManager {
             case "insert-next": {
                 const acceptedItems = truncateQueueItemsToAvailableCapacity(
                     pb.queue.length,
-                    action.items
+                    action.items,
                 );
                 if (acceptedItems.length === 0) {
                     return this.queueDelta(group);
@@ -816,7 +883,10 @@ class GroupManager {
                     pb.currentIndex--;
                 } else if (action.index === pb.currentIndex) {
                     // Current track was removed — clamp and reset position
-                    pb.currentIndex = clampIndex(pb.currentIndex, pb.queue.length);
+                    pb.currentIndex = clampIndex(
+                        pb.currentIndex,
+                        pb.queue.length,
+                    );
                     pb.positionMs = 0;
                     pb.lastPositionUpdate = Date.now();
                 }
@@ -824,7 +894,10 @@ class GroupManager {
                 break;
             }
             case "reorder": {
-                throw new GroupError("NOT_ALLOWED", "Queue reordering is disabled in Listen Together");
+                throw new GroupError(
+                    "NOT_ALLOWED",
+                    "Queue reordering is disabled in Listen Together",
+                );
             }
             case "clear": {
                 pb.queue = [];
@@ -859,7 +932,10 @@ class GroupManager {
         const group = this.requireGroup(groupId);
         const member = group.members.get(userId);
         if (!member?.isHost) {
-            throw new GroupError("NOT_ALLOWED", "Only the host can end the group");
+            throw new GroupError(
+                "NOT_ALLOWED",
+                "Only the host can end the group",
+            );
         }
         this.endGroupInternal(group, "Host ended the group");
     }
@@ -934,16 +1010,26 @@ class GroupManager {
         const rawQueue = Array.isArray(snapshot.playback?.queue)
             ? snapshot.playback.queue
             : [];
-        const incomingQueue = rawQueue.length > MAX_QUEUE_SIZE
-            ? rawQueue.slice(0, MAX_QUEUE_SIZE)
-            : rawQueue;
+        const incomingQueue =
+            rawQueue.length > MAX_QUEUE_SIZE
+                ? rawQueue.slice(0, MAX_QUEUE_SIZE)
+                : rawQueue;
         const incomingIndex = clampIndex(
             snapshot.playback?.currentIndex ?? 0,
-            incomingQueue.length
+            incomingQueue.length,
         );
-        const incomingPositionMs = Math.max(0, snapshot.playback?.positionMs ?? 0);
-        const incomingServerTime = Math.max(0, snapshot.playback?.serverTime ?? now);
-        const incomingStateVersion = Math.max(0, snapshot.playback?.stateVersion ?? 0);
+        const incomingPositionMs = Math.max(
+            0,
+            snapshot.playback?.positionMs ?? 0,
+        );
+        const incomingServerTime = Math.max(
+            0,
+            snapshot.playback?.serverTime ?? now,
+        );
+        const incomingStateVersion = Math.max(
+            0,
+            snapshot.playback?.stateVersion ?? 0,
+        );
         const incomingIsPlaying = Boolean(snapshot.playback?.isPlaying);
         const incomingReadyDeadlineMs =
             typeof snapshot.readyDeadlineMs === "number" &&
@@ -953,7 +1039,7 @@ class GroupManager {
         const applyIncomingPlayback = shouldApplyIncomingPlayback(
             existing,
             incomingStateVersion,
-            incomingServerTime
+            incomingServerTime,
         );
 
         const members = new Map<string, GroupMember>();
@@ -973,27 +1059,28 @@ class GroupManager {
         }
 
         const existingPlayback = existing?.playback;
-        const playback: GroupPlayback = applyIncomingPlayback || !existingPlayback
-            ? {
-                  queue: incomingQueue,
-                  currentIndex: incomingIndex,
-                  isPlaying: incomingIsPlaying,
-                  positionMs: incomingPositionMs,
-                  // Preserve server-relative elapsed playback behavior.
-                  lastPositionUpdate:
-                      incomingIsPlaying && incomingServerTime > 0
-                          ? incomingServerTime
-                          : now,
-                  stateVersion: incomingStateVersion,
-              }
-            : {
-                  queue: existingPlayback.queue,
-                  currentIndex: existingPlayback.currentIndex,
-                  isPlaying: existingPlayback.isPlaying,
-                  positionMs: existingPlayback.positionMs,
-                  lastPositionUpdate: existingPlayback.lastPositionUpdate,
-                  stateVersion: existingPlayback.stateVersion,
-              };
+        const playback: GroupPlayback =
+            applyIncomingPlayback || !existingPlayback
+                ? {
+                      queue: incomingQueue,
+                      currentIndex: incomingIndex,
+                      isPlaying: incomingIsPlaying,
+                      positionMs: incomingPositionMs,
+                      // Preserve server-relative elapsed playback behavior.
+                      lastPositionUpdate:
+                          incomingIsPlaying && incomingServerTime > 0
+                              ? incomingServerTime
+                              : now,
+                      stateVersion: incomingStateVersion,
+                  }
+                : {
+                      queue: existingPlayback.queue,
+                      currentIndex: existingPlayback.currentIndex,
+                      isPlaying: existingPlayback.isPlaying,
+                      positionMs: existingPlayback.positionMs,
+                      lastPositionUpdate: existingPlayback.lastPositionUpdate,
+                      stateVersion: existingPlayback.stateVersion,
+                  };
 
         const syncState: GroupSyncState =
             applyIncomingPlayback || !existing
@@ -1002,8 +1089,8 @@ class GroupManager {
         const readyDeadlineMs =
             syncState === "waiting"
                 ? applyIncomingPlayback || !existing
-                    ? incomingReadyDeadlineMs ?? now + READY_GATE_TIMEOUT_MS
-                    : existingReadyDeadlineMs ?? now + READY_GATE_TIMEOUT_MS
+                    ? (incomingReadyDeadlineMs ?? now + READY_GATE_TIMEOUT_MS)
+                    : (existingReadyDeadlineMs ?? now + READY_GATE_TIMEOUT_MS)
                 : null;
 
         const group: GroupState = {
@@ -1045,15 +1132,20 @@ class GroupManager {
 
     private requireControl(group: GroupState, userId: string): void {
         const member = group.members.get(userId);
-        if (!member) throw new GroupError("NOT_MEMBER", "Not a member of this group");
+        if (!member)
+            throw new GroupError("NOT_MEMBER", "Not a member of this group");
         if (group.hostUserId !== userId) {
-            throw new GroupError("NOT_ALLOWED", "Only the host can control playback");
+            throw new GroupError(
+                "NOT_ALLOWED",
+                "Only the host can control playback",
+            );
         }
     }
 
     private requireQueueEdit(group: GroupState, userId: string): void {
         const member = group.members.get(userId);
-        if (!member) throw new GroupError("NOT_MEMBER", "Not a member of this group");
+        if (!member)
+            throw new GroupError("NOT_MEMBER", "Not a member of this group");
     }
 
     private playbackDelta(group: GroupState): PlaybackDelta {
@@ -1103,7 +1195,9 @@ class GroupManager {
         }
 
         // All ready — start playback!
-        log.debug(`Ready gate passed for group ${group.id}: all ${connectedUserIds.size} members ready`);
+        log.debug(
+            `Ready gate passed for group ${group.id}: all ${connectedUserIds.size} members ready`,
+        );
         this.forcePlay(group);
         return true;
     }
@@ -1125,7 +1219,7 @@ class GroupManager {
         if (group.syncState === "waiting") {
             throw new GroupError(
                 "CONFLICT",
-                "Track change already in progress"
+                "Track change already in progress",
             );
         }
     }
@@ -1136,10 +1230,7 @@ class GroupManager {
         return this.playbackDelta(group);
     }
 
-    private armReadyGateTimer(
-        group: GroupState,
-        deadlineMs: number
-    ): void {
+    private armReadyGateTimer(group: GroupState, deadlineMs: number): void {
         this.clearReadyGateTimer(group);
 
         const now = Date.now();
@@ -1168,7 +1259,7 @@ class GroupManager {
 
     private rearmReadyGateFromDeadline(
         group: GroupState,
-        deadlineMs: number
+        deadlineMs: number,
     ): void {
         if (deadlineMs <= Date.now()) {
             this.forcePlay(group);
@@ -1223,13 +1314,18 @@ class GroupManager {
         const stale: string[] = [];
 
         for (const [userId, member] of group.members) {
-            if (member.socketIds.size === 0 && now - member.lastSeen > STALE_MEMBER_MS) {
+            if (
+                member.socketIds.size === 0 &&
+                now - member.lastSeen > STALE_MEMBER_MS
+            ) {
                 stale.push(userId);
             }
         }
 
         if (stale.length > 0) {
-            log.debug(`Cleaning up ${stale.length} stale members from group ${groupId}`);
+            log.debug(
+                `Cleaning up ${stale.length} stale members from group ${groupId}`,
+            );
         }
         for (const userId of stale) {
             this.removeMember(groupId, userId);

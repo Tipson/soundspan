@@ -28,8 +28,7 @@ const DEFAULT_SEGMENTED_STREAMING_DASH_BUILD_LOCK_TTL_MS =
 const SEGMENTED_STREAMING_DASH_BUILD_LOCK_PREFIX =
     process.env.SEGMENTED_STREAMING_DASH_BUILD_LOCK_PREFIX ||
     "segmented-streaming:dash-build-lock";
-const SEGMENTED_LOCAL_SEG_DURATION_SEC_ENV =
-    "SEGMENTED_LOCAL_SEG_DURATION_SEC";
+const SEGMENTED_LOCAL_SEG_DURATION_SEC_ENV = "SEGMENTED_LOCAL_SEG_DURATION_SEC";
 const SEGMENTED_DASH_BUILD_LOCK_TTL_MS_ENV =
     "SEGMENTED_STREAMING_DASH_BUILD_LOCK_TTL_MS";
 const DEFAULT_LOCAL_SEGMENT_DURATION_SEC = 1;
@@ -97,17 +96,14 @@ const REMOTE_INPUT_UNRECOGNIZED_OPTION_PATTERNS = {
         /Unrecognized option 'reconnect_on_network_error'\./i,
     "-reconnect_on_http_error":
         /Unrecognized option 'reconnect_on_http_error'\./i,
-    "-reconnect_delay_max":
-        /Unrecognized option 'reconnect_delay_max'\./i,
+    "-reconnect_delay_max": /Unrecognized option 'reconnect_delay_max'\./i,
     "-rw_timeout": /Unrecognized option 'rw_timeout'\./i,
 } as const;
 const REMOTE_INPUT_HELP_OPTION_PATTERNS = {
     "-reconnect": /(^|\n)\s*-?reconnect\b/im,
     "-reconnect_streamed": /(^|\n)\s*-?reconnect_streamed\b/im,
-    "-reconnect_on_network_error":
-        /(^|\n)\s*-?reconnect_on_network_error\b/im,
-    "-reconnect_on_http_error":
-        /(^|\n)\s*-?reconnect_on_http_error\b/im,
+    "-reconnect_on_network_error": /(^|\n)\s*-?reconnect_on_network_error\b/im,
+    "-reconnect_on_http_error": /(^|\n)\s*-?reconnect_on_http_error\b/im,
     "-reconnect_delay_max": /(^|\n)\s*-?reconnect_delay_max\b/im,
     "-rw_timeout": /(^|\n)\s*-?rw_timeout\b/im,
 } as const;
@@ -247,8 +243,8 @@ const dashBuildLockNodeId = randomUUID();
 const dashBuildLockRedisClient: DashBuildLockClient | null =
     SEGMENTED_STREAMING_DASH_BUILD_LOCK_ENABLED
         ? (createIORedisClient(
-            "segmented-streaming-dash-build-locks",
-        ) as unknown as DashBuildLockClient)
+              "segmented-streaming-dash-build-locks",
+          ) as unknown as DashBuildLockClient)
         : null;
 
 const resolveSourceKind = (sourcePath: string): "local" | "remote" =>
@@ -354,7 +350,10 @@ export interface DashBuildInFlightStatus {
  * Represents the SegmentedSegmentService class.
  */
 export class SegmentedSegmentService {
-    private readonly inFlightBuilds = new Map<string, Promise<LocalDashSegmentAsset>>();
+    private readonly inFlightBuilds = new Map<
+        string,
+        Promise<LocalDashSegmentAsset>
+    >();
     private readonly inFlightValidations = new Map<string, Promise<boolean>>();
     private readonly failedBuilds = new Map<
         string,
@@ -405,7 +404,8 @@ export class SegmentedSegmentService {
         };
         const ensureStartedAtMs = Date.now();
         const cacheKey = this.buildDashCacheKey(normalizedInput);
-        const paths = segmentedStreamingCacheService.getDashAssetPaths(cacheKey);
+        const paths =
+            segmentedStreamingCacheService.getDashAssetPaths(cacheKey);
         const sourceKind = resolveSourceKind(input.sourcePath);
         segmentedStreamingCacheService.scheduleDashCachePrune();
         const existingBuild = this.inFlightBuilds.get(cacheKey);
@@ -426,21 +426,21 @@ export class SegmentedSegmentService {
         }
 
         const manifestCheckStartedAtMs = Date.now();
-        const hasManifest = await segmentedStreamingCacheService.hasDashManifest(
-            cacheKey,
-        );
+        const hasManifest =
+            await segmentedStreamingCacheService.hasDashManifest(cacheKey);
         const cacheKeyMarkedInvalid = this.invalidCacheKeys.has(cacheKey);
 
         if (hasManifest && !cacheKeyMarkedInvalid) {
-            const cacheValidationPassed = await this.validateCachedDashAssetIfNeeded({
-                cacheKey,
-                trackId: input.trackId,
-                quality: input.quality,
-                manifestProfile: normalizedInput.manifestProfile,
-                sourceKind,
-                mode: "startup",
-                phase: "foreground",
-            });
+            const cacheValidationPassed =
+                await this.validateCachedDashAssetIfNeeded({
+                    cacheKey,
+                    trackId: input.trackId,
+                    quality: input.quality,
+                    manifestProfile: normalizedInput.manifestProfile,
+                    sourceKind,
+                    mode: "startup",
+                    phase: "foreground",
+                });
             const recoverableValidationFailure =
                 this.recoverableValidationFailures.get(cacheKey);
             if (cacheValidationPassed) {
@@ -465,13 +465,16 @@ export class SegmentedSegmentService {
                     sourceKind,
                     cacheKey,
                     validationMode: "startup",
-                    manifestCheckMs: segmentedTraceDurationMs(manifestCheckStartedAtMs),
+                    manifestCheckMs: segmentedTraceDurationMs(
+                        manifestCheckStartedAtMs,
+                    ),
                     ...(recoverableValidationFailure
                         ? {
-                            validationReason: recoverableValidationFailure.reason,
-                            validationSegmentName:
-                                recoverableValidationFailure.segmentName,
-                        }
+                              validationReason:
+                                  recoverableValidationFailure.reason,
+                              validationSegmentName:
+                                  recoverableValidationFailure.segmentName,
+                          }
                         : {}),
                     totalMs: segmentedTraceDurationMs(ensureStartedAtMs),
                 });
@@ -510,7 +513,8 @@ export class SegmentedSegmentService {
                                 manifestCheckStartedAtMs,
                             ),
                             fallbackToLocalBuild: true,
-                            totalMs: segmentedTraceDurationMs(ensureStartedAtMs),
+                            totalMs:
+                                segmentedTraceDurationMs(ensureStartedAtMs),
                         },
                     );
                 }
@@ -518,7 +522,8 @@ export class SegmentedSegmentService {
                 acquiredBuildLock = lockAcquireResult.lock;
             }
 
-            const existingBuildAfterLockCheck = this.inFlightBuilds.get(cacheKey);
+            const existingBuildAfterLockCheck =
+                this.inFlightBuilds.get(cacheKey);
             if (existingBuildAfterLockCheck) {
                 logSegmentedStreamingTrace("asset.ensure.inflight_active", {
                     trackId: input.trackId,
@@ -539,7 +544,9 @@ export class SegmentedSegmentService {
                 this.invalidCacheKeys.delete(cacheKey);
                 this.clearValidationMicrocacheForCacheKey(cacheKey);
                 this.recoverableValidationFailures.delete(cacheKey);
-                this.recoverableValidationRepairCooldownUntilMs.delete(cacheKey);
+                this.recoverableValidationRepairCooldownUntilMs.delete(
+                    cacheKey,
+                );
                 this.invalidValidationRepairCooldownUntilMs.delete(cacheKey);
                 await segmentedStreamingCacheService.removeDashAsset(cacheKey);
                 logSegmentedStreamingTrace("asset.ensure.cache_invalidated", {
@@ -565,8 +572,12 @@ export class SegmentedSegmentService {
                     this.invalidCacheKeys.delete(cacheKey);
                     this.clearValidationMicrocacheForCacheKey(cacheKey);
                     this.recoverableValidationFailures.delete(cacheKey);
-                    this.recoverableValidationRepairCooldownUntilMs.delete(cacheKey);
-                    this.invalidValidationRepairCooldownUntilMs.delete(cacheKey);
+                    this.recoverableValidationRepairCooldownUntilMs.delete(
+                        cacheKey,
+                    );
+                    this.invalidValidationRepairCooldownUntilMs.delete(
+                        cacheKey,
+                    );
                     logSegmentedStreamingTrace("asset.ensure.generated", {
                         trackId: input.trackId,
                         quality: input.quality,
@@ -579,7 +590,9 @@ export class SegmentedSegmentService {
                 })
                 .catch((error) => {
                     const resolvedError =
-                        error instanceof Error ? error : new Error(String(error));
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error));
                     this.clearValidationMicrocacheForCacheKey(cacheKey);
                     this.failedBuilds.set(cacheKey, {
                         error: resolvedError,
@@ -685,17 +698,21 @@ export class SegmentedSegmentService {
         const cacheKey = this.buildDashCacheKey(normalizedInput);
         const existingBuild = this.inFlightBuilds.get(cacheKey);
         if (existingBuild) {
-            logSegmentedStreamingTrace("asset.force_regenerate.inflight_skipped", {
-                trackId: input.trackId,
-                quality: input.quality,
-                manifestProfile: normalizedInput.manifestProfile,
-                cacheKey,
-            });
+            logSegmentedStreamingTrace(
+                "asset.force_regenerate.inflight_skipped",
+                {
+                    trackId: input.trackId,
+                    quality: input.quality,
+                    manifestProfile: normalizedInput.manifestProfile,
+                    cacheKey,
+                },
+            );
             return;
         }
 
         const sourceKind = resolveSourceKind(input.sourcePath);
-        const paths = segmentedStreamingCacheService.getDashAssetPaths(cacheKey);
+        const paths =
+            segmentedStreamingCacheService.getDashAssetPaths(cacheKey);
         let acquiredBuildLock: DashBuildLock | null = null;
         let releaseBuildLockWithTrackedPromise = false;
 
@@ -727,14 +744,18 @@ export class SegmentedSegmentService {
                 acquiredBuildLock = lockAcquireResult.lock;
             }
 
-            const existingBuildAfterLockCheck = this.inFlightBuilds.get(cacheKey);
+            const existingBuildAfterLockCheck =
+                this.inFlightBuilds.get(cacheKey);
             if (existingBuildAfterLockCheck) {
-                logSegmentedStreamingTrace("asset.force_regenerate.inflight_skipped", {
-                    trackId: input.trackId,
-                    quality: input.quality,
-                    manifestProfile: normalizedInput.manifestProfile,
-                    cacheKey,
-                });
+                logSegmentedStreamingTrace(
+                    "asset.force_regenerate.inflight_skipped",
+                    {
+                        trackId: input.trackId,
+                        quality: input.quality,
+                        manifestProfile: normalizedInput.manifestProfile,
+                        cacheKey,
+                    },
+                );
                 return;
             }
 
@@ -756,20 +777,29 @@ export class SegmentedSegmentService {
                     this.invalidCacheKeys.delete(cacheKey);
                     this.markCacheValidationMicrocacheHit(cacheKey, "full");
                     this.recoverableValidationFailures.delete(cacheKey);
-                    this.recoverableValidationRepairCooldownUntilMs.delete(cacheKey);
-                    this.invalidValidationRepairCooldownUntilMs.delete(cacheKey);
-                    logSegmentedStreamingTrace("asset.force_regenerate.completed", {
-                        trackId: input.trackId,
-                        quality: input.quality,
-                        manifestProfile: normalizedInput.manifestProfile,
-                        sourceKind,
+                    this.recoverableValidationRepairCooldownUntilMs.delete(
                         cacheKey,
-                    });
+                    );
+                    this.invalidValidationRepairCooldownUntilMs.delete(
+                        cacheKey,
+                    );
+                    logSegmentedStreamingTrace(
+                        "asset.force_regenerate.completed",
+                        {
+                            trackId: input.trackId,
+                            quality: input.quality,
+                            manifestProfile: normalizedInput.manifestProfile,
+                            sourceKind,
+                            cacheKey,
+                        },
+                    );
                     return asset;
                 })
                 .catch((error) => {
                     const resolvedError =
-                        error instanceof Error ? error : new Error(String(error));
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error));
                     this.clearValidationMicrocacheForCacheKey(cacheKey);
                     this.failedBuilds.set(cacheKey, {
                         error: resolvedError,
@@ -821,7 +851,8 @@ export class SegmentedSegmentService {
         const manifestProfile = resolveSegmentedDashManifestProfile(
             input.manifestProfile,
         );
-        const cacheIdentity = input.cacheIdentity?.trim() ||
+        const cacheIdentity =
+            input.cacheIdentity?.trim() ||
             `${input.trackId}:${input.sourcePath}:${input.sourceModified.toISOString()}:manifest_profile:${manifestProfile}`;
         return segmentedStreamingCacheService.buildDashCacheKey({
             trackId: input.trackId,
@@ -836,7 +867,9 @@ export class SegmentedSegmentService {
         return `${SEGMENTED_STREAMING_DASH_BUILD_LOCK_PREFIX}:${cacheKey}`;
     }
 
-    private async hasDistributedDashBuildLock(cacheKey: string): Promise<boolean> {
+    private async hasDistributedDashBuildLock(
+        cacheKey: string,
+    ): Promise<boolean> {
         if (!this.buildLockRedisClient) {
             return false;
         }
@@ -875,7 +908,10 @@ export class SegmentedSegmentService {
 
         const lockKey = this.buildDashBuildLockKey(params.cacheKey);
         const lockToken = `${dashBuildLockNodeId}:${Date.now()}:${Math.random()}`;
-        const lockTtlSeconds = Math.max(1, Math.ceil(DASH_BUILD_LOCK_TTL_MS / 1000));
+        const lockTtlSeconds = Math.max(
+            1,
+            Math.ceil(DASH_BUILD_LOCK_TTL_MS / 1000),
+        );
 
         try {
             const acquired = await this.buildLockRedisClient.set(
@@ -968,9 +1004,8 @@ export class SegmentedSegmentService {
         const operationId = buildForceRegenerateOperationId();
         const stagingCacheKey = `${params.cacheKey}.${FORCE_REGENERATE_STAGING_SUFFIX}.${operationId}`;
         const backupOutputDir = `${params.outputDir}.${FORCE_REGENERATE_BACKUP_SUFFIX}.${operationId}`;
-        const stagingPaths = segmentedStreamingCacheService.getDashAssetPaths(
-            stagingCacheKey,
-        );
+        const stagingPaths =
+            segmentedStreamingCacheService.getDashAssetPaths(stagingCacheKey);
         let promoted = false;
         let liveMovedToBackup = false;
 
@@ -985,9 +1020,8 @@ export class SegmentedSegmentService {
                 manifestPath: stagingPaths.manifestPath,
             });
 
-            const stagedValidationResult = await this.validateDashAssetFiles(
-                stagingCacheKey,
-            );
+            const stagedValidationResult =
+                await this.validateDashAssetFiles(stagingCacheKey);
             if (!stagedValidationResult.valid) {
                 throw new Error(
                     `DASH staged regeneration validation failed (${stagedValidationResult.reason ?? "unknown"})`,
@@ -1001,7 +1035,10 @@ export class SegmentedSegmentService {
             }
 
             try {
-                await fsPromises.rename(stagingPaths.outputDir, params.outputDir);
+                await fsPromises.rename(
+                    stagingPaths.outputDir,
+                    params.outputDir,
+                );
                 promoted = true;
             } catch (error) {
                 if (liveMovedToBackup) {
@@ -1072,21 +1109,30 @@ export class SegmentedSegmentService {
         cacheKey: string;
     }): Promise<void> {
         try {
-            await fsPromises.rename(params.backupOutputDir, params.liveOutputDir);
-            logSegmentedStreamingTrace("asset.force_regenerate.rollback_restored", {
-                trackId: params.trackId,
-                quality: params.quality,
-                sourceKind: params.sourceKind,
-                cacheKey: params.cacheKey,
-            });
+            await fsPromises.rename(
+                params.backupOutputDir,
+                params.liveOutputDir,
+            );
+            logSegmentedStreamingTrace(
+                "asset.force_regenerate.rollback_restored",
+                {
+                    trackId: params.trackId,
+                    quality: params.quality,
+                    sourceKind: params.sourceKind,
+                    cacheKey: params.cacheKey,
+                },
+            );
         } catch (restoreError) {
-            logSegmentedStreamingTrace("asset.force_regenerate.rollback_error", {
-                trackId: params.trackId,
-                quality: params.quality,
-                sourceKind: params.sourceKind,
-                cacheKey: params.cacheKey,
-                ...toSegmentedTraceErrorFields(restoreError),
-            });
+            logSegmentedStreamingTrace(
+                "asset.force_regenerate.rollback_error",
+                {
+                    trackId: params.trackId,
+                    quality: params.quality,
+                    sourceKind: params.sourceKind,
+                    cacheKey: params.cacheKey,
+                    ...toSegmentedTraceErrorFields(restoreError),
+                },
+            );
             logger.error(
                 "[SegmentedStreaming] Failed to restore prior DASH assets after regeneration promote error",
                 {
@@ -1108,7 +1154,9 @@ export class SegmentedSegmentService {
         }
     }
 
-    private resolveValidationSuccessTtlMs(mode: DashAssetValidationMode): number {
+    private resolveValidationSuccessTtlMs(
+        mode: DashAssetValidationMode,
+    ): number {
         if (mode === "full") {
             return FULL_CACHE_VALIDATION_SUCCESS_TTL_MS;
         }
@@ -1143,7 +1191,8 @@ export class SegmentedSegmentService {
         mode: DashAssetValidationMode,
     ): boolean {
         const microcacheKey = this.buildValidationMicrocacheKey(cacheKey, mode);
-        const expiresAtMs = this.validCacheValidationMicrocache.get(microcacheKey);
+        const expiresAtMs =
+            this.validCacheValidationMicrocache.get(microcacheKey);
         if (expiresAtMs === undefined) {
             return false;
         }
@@ -1195,7 +1244,9 @@ export class SegmentedSegmentService {
             params.cacheKey,
             mode,
         );
-        const existingValidation = this.inFlightValidations.get(inFlightValidationKey);
+        const existingValidation = this.inFlightValidations.get(
+            inFlightValidationKey,
+        );
         if (existingValidation) {
             return await existingValidation;
         }
@@ -1212,7 +1263,9 @@ export class SegmentedSegmentService {
                 this.recoverableValidationRepairCooldownUntilMs.delete(
                     params.cacheKey,
                 );
-                this.invalidValidationRepairCooldownUntilMs.delete(params.cacheKey);
+                this.invalidValidationRepairCooldownUntilMs.delete(
+                    params.cacheKey,
+                );
                 logSegmentedStreamingTrace("asset.validate.cache_error", {
                     trackId: params.trackId,
                     quality: params.quality,
@@ -1255,7 +1308,9 @@ export class SegmentedSegmentService {
             this.invalidCacheKeys.delete(params.cacheKey);
             this.markCacheValidationMicrocacheHit(params.cacheKey, mode);
             this.recoverableValidationFailures.delete(params.cacheKey);
-            this.recoverableValidationRepairCooldownUntilMs.delete(params.cacheKey);
+            this.recoverableValidationRepairCooldownUntilMs.delete(
+                params.cacheKey,
+            );
             this.invalidValidationRepairCooldownUntilMs.delete(params.cacheKey);
             logSegmentedStreamingTrace("asset.validate.cache_ok", {
                 trackId: params.trackId,
@@ -1336,7 +1391,10 @@ export class SegmentedSegmentService {
         }
 
         const normalizedSegmentName = segmentName.trim().toLowerCase();
-        if (!normalizedSegmentName || normalizedSegmentName.startsWith("init-")) {
+        if (
+            !normalizedSegmentName ||
+            normalizedSegmentName.startsWith("init-")
+        ) {
             return true;
         }
 
@@ -1404,16 +1462,19 @@ export class SegmentedSegmentService {
                 }
             })
             .catch((error) => {
-                logSegmentedStreamingTrace("asset.ensure.cache_validation_error", {
-                    trackId: params.input.trackId,
-                    quality: params.input.quality,
-                    manifestProfile: params.input.manifestProfile,
-                    sourceKind: params.sourceKind,
-                    cacheKey: params.cacheKey,
-                    validationMode: "full",
-                    validationPhase: "background",
-                    ...toSegmentedTraceErrorFields(error),
-                });
+                logSegmentedStreamingTrace(
+                    "asset.ensure.cache_validation_error",
+                    {
+                        trackId: params.input.trackId,
+                        quality: params.input.quality,
+                        manifestProfile: params.input.manifestProfile,
+                        sourceKind: params.sourceKind,
+                        cacheKey: params.cacheKey,
+                        validationMode: "full",
+                        validationPhase: "background",
+                        ...toSegmentedTraceErrorFields(error),
+                    },
+                );
             });
     }
 
@@ -1424,7 +1485,8 @@ export class SegmentedSegmentService {
     }): void {
         const now = Date.now();
         const cooldownUntilMs =
-            this.invalidValidationRepairCooldownUntilMs.get(params.cacheKey) ?? 0;
+            this.invalidValidationRepairCooldownUntilMs.get(params.cacheKey) ??
+            0;
         if (cooldownUntilMs > now) {
             return;
         }
@@ -1442,14 +1504,17 @@ export class SegmentedSegmentService {
         });
 
         void this.forceRegenerateDashSegments(params.input).catch((error) => {
-            logSegmentedStreamingTrace("asset.ensure.cache_invalid_repair_error", {
-                trackId: params.input.trackId,
-                quality: params.input.quality,
-                manifestProfile: params.input.manifestProfile,
-                sourceKind: params.sourceKind,
-                cacheKey: params.cacheKey,
-                ...toSegmentedTraceErrorFields(error),
-            });
+            logSegmentedStreamingTrace(
+                "asset.ensure.cache_invalid_repair_error",
+                {
+                    trackId: params.input.trackId,
+                    quality: params.input.quality,
+                    manifestProfile: params.input.manifestProfile,
+                    sourceKind: params.sourceKind,
+                    cacheKey: params.cacheKey,
+                    ...toSegmentedTraceErrorFields(error),
+                },
+            );
         });
     }
 
@@ -1461,7 +1526,9 @@ export class SegmentedSegmentService {
     }): void {
         const now = Date.now();
         const cooldownUntilMs =
-            this.recoverableValidationRepairCooldownUntilMs.get(params.cacheKey) ?? 0;
+            this.recoverableValidationRepairCooldownUntilMs.get(
+                params.cacheKey,
+            ) ?? 0;
         if (cooldownUntilMs > now) {
             return;
         }
@@ -1501,15 +1568,15 @@ export class SegmentedSegmentService {
         representationId: string;
         extension: DashSegmentFileExtension;
     } | null {
-        let fallbackTarget:
-            | {
-                representationId: string;
-                extension: DashSegmentFileExtension;
-            }
-            | null = null;
+        let fallbackTarget: {
+            representationId: string;
+            extension: DashSegmentFileExtension;
+        } | null = null;
 
         for (const segmentName of segmentNames) {
-            const match = segmentName.match(/^init-([A-Za-z0-9_-]+)\.(m4s|webm)$/i);
+            const match = segmentName.match(
+                /^init-([A-Za-z0-9_-]+)\.(m4s|webm)$/i,
+            );
             if (!match) {
                 continue;
             }
@@ -1596,9 +1663,8 @@ export class SegmentedSegmentService {
         cacheKey: string,
         mode: DashAssetValidationMode = "full",
     ): Promise<DashAssetValidationResult> {
-        const manifestExists = await segmentedStreamingCacheService.hasDashManifest(
-            cacheKey,
-        );
+        const manifestExists =
+            await segmentedStreamingCacheService.hasDashManifest(cacheKey);
         if (!manifestExists) {
             return {
                 valid: false,
@@ -1607,9 +1673,8 @@ export class SegmentedSegmentService {
             };
         }
 
-        const segmentNames = await segmentedStreamingCacheService.listDashSegments(
-            cacheKey,
-        );
+        const segmentNames =
+            await segmentedStreamingCacheService.listDashSegments(cacheKey);
         if (segmentNames.length === 0) {
             return {
                 valid: false,
@@ -1618,12 +1683,14 @@ export class SegmentedSegmentService {
             };
         }
 
-        const outputDir = segmentedStreamingCacheService.getDashAssetPaths(
-            cacheKey,
-        ).outputDir;
+        const outputDir =
+            segmentedStreamingCacheService.getDashAssetPaths(
+                cacheKey,
+            ).outputDir;
 
         if (mode === "startup") {
-            const startupTarget = this.resolveStartupSegmentTarget(segmentNames);
+            const startupTarget =
+                this.resolveStartupSegmentTarget(segmentNames);
             if (!startupTarget) {
                 return {
                     valid: false,
@@ -1691,7 +1758,9 @@ export class SegmentedSegmentService {
     private async readSegmentProbeBytes(segmentPath: string): Promise<Buffer> {
         const fileHandle = await fsPromises.open(segmentPath, "r");
         try {
-            const probeBuffer = Buffer.alloc(DASH_SEGMENT_VALIDATION_SCAN_BYTES);
+            const probeBuffer = Buffer.alloc(
+                DASH_SEGMENT_VALIDATION_SCAN_BYTES,
+            );
             const { bytesRead } = await fileHandle.read(
                 probeBuffer,
                 0,
@@ -1741,13 +1810,16 @@ export class SegmentedSegmentService {
     private async probeRemoteInputCapabilities(): Promise<void> {
         const probeStartedAtMs = Date.now();
         try {
-            const probeOutput = await this.runRemoteInputCapabilityProbeCommand();
+            const probeOutput =
+                await this.runRemoteInputCapabilityProbeCommand();
             const discoveredUnsupported: RemoteInputCompatibilityFlag[] = [];
             const flags = Object.keys(
                 REMOTE_INPUT_HELP_OPTION_PATTERNS,
             ) as RemoteInputCompatibilityFlag[];
             for (const flag of flags) {
-                if (!REMOTE_INPUT_HELP_OPTION_PATTERNS[flag].test(probeOutput)) {
+                if (
+                    !REMOTE_INPUT_HELP_OPTION_PATTERNS[flag].test(probeOutput)
+                ) {
                     this.unsupportedRemoteInputFlags.add(flag);
                     discoveredUnsupported.push(flag);
                 }
@@ -1927,7 +1999,11 @@ export class SegmentedSegmentService {
                 DASH_CODEC_ATTRIBUTE_FLAC_CANONICAL,
             );
             if (normalizedManifest !== manifest) {
-                await fsPromises.writeFile(manifestPath, normalizedManifest, "utf8");
+                await fsPromises.writeFile(
+                    manifestPath,
+                    normalizedManifest,
+                    "utf8",
+                );
             }
         } catch (error) {
             logger.warn(
@@ -1952,7 +2028,9 @@ export class SegmentedSegmentService {
         const generationStartedAtMs = Date.now();
         const sourceKind = resolveSourceKind(params.sourcePath);
         const ensureDirStartedAtMs = Date.now();
-        await segmentedStreamingCacheService.ensureDashAssetDirectory(params.cacheKey);
+        await segmentedStreamingCacheService.ensureDashAssetDirectory(
+            params.cacheKey,
+        );
         const ensureDirMs = segmentedTraceDurationMs(ensureDirStartedAtMs);
 
         const bitrate = DASH_QUALITY_BITRATES[params.quality];
@@ -2033,7 +2111,8 @@ export class SegmentedSegmentService {
             segmentContainer: encodingPlan.segmentContainer,
             segmentDurationSec,
             representationCount: encodingPlan.representations.length,
-            fallbackBitrateKbps: encodingPlan.fallbackRepresentation?.bitrateKbps,
+            fallbackBitrateKbps:
+                encodingPlan.fallbackRepresentation?.bitrateKbps,
             fallbackCodec: encodingPlan.fallbackRepresentation?.audioCodec,
             ensureDirMs,
         });
@@ -2048,7 +2127,11 @@ export class SegmentedSegmentService {
             ffmpegArgs,
         });
 
-        if (!(await segmentedStreamingCacheService.hasDashManifest(params.cacheKey))) {
+        if (
+            !(await segmentedStreamingCacheService.hasDashManifest(
+                params.cacheKey,
+            ))
+        ) {
             logSegmentedStreamingTrace("asset.generate.missing_manifest", {
                 trackId: params.trackId,
                 quality: params.quality,
@@ -2057,7 +2140,9 @@ export class SegmentedSegmentService {
                 cacheKey: params.cacheKey,
                 totalMs: segmentedTraceDurationMs(generationStartedAtMs),
             });
-            throw new Error("DASH segment generation completed without manifest");
+            throw new Error(
+                "DASH segment generation completed without manifest",
+            );
         }
 
         await this.normalizeDashManifestCodecCasing(params.manifestPath);
@@ -2117,16 +2202,22 @@ export class SegmentedSegmentService {
                 if (this.isRemoteInputCompatibilityFlag(unsupportedFlag)) {
                     this.unsupportedRemoteInputFlags.add(unsupportedFlag);
                 }
-                ffmpegArgs = removeFfmpegFlagWithValue(ffmpegArgs, unsupportedFlag);
-                logSegmentedStreamingTrace("asset.generate.ffmpeg_retry_without_flag", {
-                    trackId: params.trackId,
-                    quality: params.quality,
-                    manifestProfile: params.manifestProfile,
-                    sourceKind: params.sourceKind,
-                    cacheKey: params.cacheKey,
-                    removedFlag: unsupportedFlag,
-                    fallbackAttempt: attemptedFallbackFlags.size,
-                });
+                ffmpegArgs = removeFfmpegFlagWithValue(
+                    ffmpegArgs,
+                    unsupportedFlag,
+                );
+                logSegmentedStreamingTrace(
+                    "asset.generate.ffmpeg_retry_without_flag",
+                    {
+                        trackId: params.trackId,
+                        quality: params.quality,
+                        manifestProfile: params.manifestProfile,
+                        sourceKind: params.sourceKind,
+                        cacheKey: params.cacheKey,
+                        removedFlag: unsupportedFlag,
+                        fallbackAttempt: attemptedFallbackFlags.size,
+                    },
+                );
             }
         }
     }
@@ -2156,10 +2247,14 @@ export class SegmentedSegmentService {
     }): Promise<void> {
         const ffmpegStartedAtMs = Date.now();
         await new Promise<void>((resolve, reject) => {
-            const ffmpegProc = spawn(SEGMENTED_FFMPEG_BINARY_PATH, params.ffmpegArgs, {
-                cwd: params.outputDir,
-                stdio: ["ignore", "ignore", "pipe"],
-            });
+            const ffmpegProc = spawn(
+                SEGMENTED_FFMPEG_BINARY_PATH,
+                params.ffmpegArgs,
+                {
+                    cwd: params.outputDir,
+                    stdio: ["ignore", "ignore", "pipe"],
+                },
+            );
 
             let stderrBuffer = "";
             const timeoutId = setTimeout(() => {
@@ -2184,29 +2279,36 @@ export class SegmentedSegmentService {
 
             ffmpegProc.on("error", (error) => {
                 clearTimeout(timeoutId);
-                logSegmentedStreamingTrace("asset.generate.ffmpeg_spawn_error", {
-                    trackId: params.trackId,
-                    quality: params.quality,
-                    manifestProfile: params.manifestProfile,
-                    sourceKind: params.sourceKind,
-                    cacheKey: params.cacheKey,
-                    ffmpegMs: segmentedTraceDurationMs(ffmpegStartedAtMs),
-                    ...toSegmentedTraceErrorFields(error),
-                });
-                reject(error);
-            });
-
-            ffmpegProc.on("close", (code) => {
-                clearTimeout(timeoutId);
-                if (code === 0) {
-                    logSegmentedStreamingTrace("asset.generate.ffmpeg_success", {
+                logSegmentedStreamingTrace(
+                    "asset.generate.ffmpeg_spawn_error",
+                    {
                         trackId: params.trackId,
                         quality: params.quality,
                         manifestProfile: params.manifestProfile,
                         sourceKind: params.sourceKind,
                         cacheKey: params.cacheKey,
                         ffmpegMs: segmentedTraceDurationMs(ffmpegStartedAtMs),
-                    });
+                        ...toSegmentedTraceErrorFields(error),
+                    },
+                );
+                reject(error);
+            });
+
+            ffmpegProc.on("close", (code) => {
+                clearTimeout(timeoutId);
+                if (code === 0) {
+                    logSegmentedStreamingTrace(
+                        "asset.generate.ffmpeg_success",
+                        {
+                            trackId: params.trackId,
+                            quality: params.quality,
+                            manifestProfile: params.manifestProfile,
+                            sourceKind: params.sourceKind,
+                            cacheKey: params.cacheKey,
+                            ffmpegMs:
+                                segmentedTraceDurationMs(ffmpegStartedAtMs),
+                        },
+                    );
                     resolve();
                     return;
                 }
@@ -2276,22 +2378,22 @@ export class SegmentedSegmentService {
         const targetRepresentation: DashAudioRepresentation =
             isOriginalLocalLosslessTarget
                 ? {
-                    audioCodec: "flac",
-                    bitrateKbps: null,
-                    useExperimentalMuxing: true,
-                }
+                      audioCodec: "flac",
+                      bitrateKbps: null,
+                      useExperimentalMuxing: true,
+                  }
                 : {
-                    audioCodec: "aac",
-                    bitrateKbps: params.bitrateKbps,
-                    useExperimentalMuxing: false,
-                };
+                      audioCodec: "aac",
+                      bitrateKbps: params.bitrateKbps,
+                      useExperimentalMuxing: false,
+                  };
         const fallbackRepresentation =
             params.manifestProfile === "startup_single"
                 ? null
                 : this.resolveSteadyStateFallbackRepresentation(
-                    params.quality,
-                    targetRepresentation,
-                );
+                      params.quality,
+                      targetRepresentation,
+                  );
         const representations = fallbackRepresentation
             ? [targetRepresentation, fallbackRepresentation]
             : [targetRepresentation];
@@ -2310,7 +2412,10 @@ export class SegmentedSegmentService {
         quality: SegmentedDashQuality,
         targetRepresentation: DashAudioRepresentation,
     ): DashAudioRepresentation {
-        if (quality === "original" && targetRepresentation.audioCodec === "flac") {
+        if (
+            quality === "original" &&
+            targetRepresentation.audioCodec === "flac"
+        ) {
             return {
                 audioCodec: "aac",
                 bitrateKbps: DASH_QUALITY_BITRATES.high,

@@ -18,7 +18,10 @@ describe("listen together multi-pod continuity", () => {
     const createdGroupIds: string[] = [];
 
     afterEach(() => {
-        for (const groupId of createdGroupIds.splice(0, createdGroupIds.length)) {
+        for (const groupId of createdGroupIds.splice(
+            0,
+            createdGroupIds.length,
+        )) {
             groupManager.remove(groupId);
         }
     });
@@ -46,12 +49,12 @@ describe("listen together multi-pod continuity", () => {
         expect(snapshot).toBeDefined();
 
         const remoteSnapshot = JSON.parse(
-            JSON.stringify(snapshot)
+            JSON.stringify(snapshot),
         ) as GroupSnapshot;
         remoteSnapshot.members = remoteSnapshot.members.map((member) =>
             member.userId === "member-2"
                 ? { ...member, isConnected: false }
-                : member
+                : member,
         );
 
         groupManager.applyExternalSnapshot(remoteSnapshot);
@@ -89,7 +92,9 @@ describe("listen together multi-pod continuity", () => {
         const beforeRestart = groupManager.snapshotById(groupId);
         expect(beforeRestart).toBeDefined();
         expect(beforeRestart!.playback.isPlaying).toBe(true);
-        expect(beforeRestart!.playback.positionMs).toBeGreaterThanOrEqual(42_000);
+        expect(beforeRestart!.playback.positionMs).toBeGreaterThanOrEqual(
+            42_000,
+        );
 
         // Simulate pod replacement: in-memory state is lost on old pod.
         groupManager.remove(groupId);
@@ -100,13 +105,17 @@ describe("listen together multi-pod continuity", () => {
 
         const restored = groupManager.snapshotById(groupId);
         expect(restored).toBeDefined();
-        expect(restored!.playback.trackId).toBe(beforeRestart!.playback.trackId);
-        expect(restored!.playback.currentIndex).toBe(
-            beforeRestart!.playback.currentIndex
+        expect(restored!.playback.trackId).toBe(
+            beforeRestart!.playback.trackId,
         );
-        expect(restored!.playback.isPlaying).toBe(beforeRestart!.playback.isPlaying);
+        expect(restored!.playback.currentIndex).toBe(
+            beforeRestart!.playback.currentIndex,
+        );
+        expect(restored!.playback.isPlaying).toBe(
+            beforeRestart!.playback.isPlaying,
+        );
         expect(restored!.playback.stateVersion).toBe(
-            beforeRestart!.playback.stateVersion
+            beforeRestart!.playback.stateVersion,
         );
         expect(restored!.members.length).toBe(beforeRestart!.members.length);
 
@@ -115,7 +124,7 @@ describe("listen together multi-pod continuity", () => {
         const afterPause = groupManager.snapshotById(groupId);
         expect(afterPause?.playback.isPlaying).toBe(false);
         expect(afterPause?.playback.stateVersion).toBeGreaterThan(
-            beforeRestart!.playback.stateVersion
+            beforeRestart!.playback.stateVersion,
         );
     });
 
@@ -162,7 +171,7 @@ describe("listen together multi-pod continuity", () => {
         expect(podBSnapshot!.playback.currentIndex).toBe(1);
         expect(podBSnapshot!.playback.isPlaying).toBe(false);
         expect(podBSnapshot!.playback.stateVersion).toBeGreaterThan(
-            podASnapshot!.playback.stateVersion
+            podASnapshot!.playback.stateVersion,
         );
 
         // Pod B is replaced; Pod C restores and must continue from latest state.
@@ -175,7 +184,7 @@ describe("listen together multi-pod continuity", () => {
         expect(restored!.playback.currentIndex).toBe(1);
         expect(restored!.playback.isPlaying).toBe(false);
         expect(restored!.playback.stateVersion).toBe(
-            podBSnapshot!.playback.stateVersion
+            podBSnapshot!.playback.stateVersion,
         );
 
         groupManager.play(groupId, hostUserId);
@@ -185,7 +194,7 @@ describe("listen together multi-pod continuity", () => {
         const afterReady = groupManager.snapshotById(groupId);
         expect(afterReady?.playback.isPlaying).toBe(true);
         expect(afterReady?.playback.stateVersion).toBeGreaterThan(
-            podBSnapshot!.playback.stateVersion
+            podBSnapshot!.playback.stateVersion,
         );
     });
 });

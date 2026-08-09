@@ -13,7 +13,7 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
 function buildForwardEpisodeQueue(
     selectedEpisode: Episode,
-    podcast: Podcast
+    podcast: Podcast,
 ): Episode[] {
     const episodesByDate = [...podcast.episodes].sort((a, b) => {
         const timeA = new Date(a.publishedAt).getTime();
@@ -26,7 +26,7 @@ function buildForwardEpisodeQueue(
     }
 
     const selectedIndex = episodesByDate.findIndex(
-        (episode) => episode.id === selectedEpisode.id
+        (episode) => episode.id === selectedEpisode.id,
     );
 
     if (selectedIndex === -1) {
@@ -56,22 +56,28 @@ export function usePodcastActions(podcastId: string) {
             try {
                 const response = await api.subscribePodcast(
                     previewData.feedUrl!,
-                    previewData.itunesId
+                    previewData.itunesId,
                 );
 
                 if (response.success && response.podcast?.id) {
                     // Invalidate podcasts cache so the list refreshes
-                    queryClient.invalidateQueries({ queryKey: queryKeys.podcasts() });
+                    queryClient.invalidateQueries({
+                        queryKey: queryKeys.podcasts(),
+                    });
                     router.push(`/podcasts/${response.podcast.id}`);
                 }
             } catch (error: unknown) {
                 sharedFrontendLogger.error("Subscribe error:", error);
-                alert(error instanceof Error ? error.message : "Failed to subscribe to podcast");
+                alert(
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to subscribe to podcast",
+                );
             } finally {
                 setIsSubscribing(false);
             }
         },
-        [router, queryClient]
+        [router, queryClient],
     );
 
     const handleRemovePodcast = useCallback(async () => {
@@ -89,18 +95,16 @@ export function usePodcastActions(podcastId: string) {
         (episode: Episode, podcast: Podcast) => {
             // Forward-only episode context: the selected episode plus newer
             // episodes become the unified mixed-media queue.
-            const episodeQueue = buildForwardEpisodeQueue(
-                episode,
-                podcast
-            ).map((queuedEpisode) =>
-                buildEpisodeQueueItem({
-                    podcastId,
-                    episodeId: queuedEpisode.id,
-                    title: queuedEpisode.title,
-                    podcastTitle: podcast.title,
-                    coverUrl: podcast.coverUrl ?? null,
-                    duration: queuedEpisode.duration,
-                })
+            const episodeQueue = buildForwardEpisodeQueue(episode, podcast).map(
+                (queuedEpisode) =>
+                    buildEpisodeQueueItem({
+                        podcastId,
+                        episodeId: queuedEpisode.id,
+                        title: queuedEpisode.title,
+                        podcastTitle: podcast.title,
+                        coverUrl: podcast.coverUrl ?? null,
+                        duration: queuedEpisode.duration,
+                    }),
             );
 
             playPodcast(
@@ -112,10 +116,10 @@ export function usePodcastActions(podcastId: string) {
                     duration: episode.duration,
                     progress: episode.progress || null,
                 },
-                { episodeQueue }
+                { episodeQueue },
             );
         },
-        [podcastId, playPodcast]
+        [podcastId, playPodcast],
     );
 
     const handlePlayPauseEpisode = useCallback(
@@ -131,14 +135,21 @@ export function usePodcastActions(podcastId: string) {
                 handlePlayEpisode(episode, podcast);
             }
         },
-        [podcastId, currentPodcast, isPlaying, pause, resume, handlePlayEpisode]
+        [
+            podcastId,
+            currentPodcast,
+            isPlaying,
+            pause,
+            resume,
+            handlePlayEpisode,
+        ],
     );
 
     const isEpisodePlaying = useCallback(
         (episodeId: string) => {
             return currentPodcast?.id === `${podcastId}:${episodeId}`;
         },
-        [podcastId, currentPodcast]
+        [podcastId, currentPodcast],
     );
 
     const handleMarkEpisodeComplete = useCallback(
@@ -150,22 +161,25 @@ export function usePodcastActions(podcastId: string) {
                     episodeId,
                     duration,
                     duration,
-                    true
+                    true,
                 );
-                
+
                 // Invalidate podcast query to refresh UI
                 queryClient.invalidateQueries({
-                    queryKey: queryKeys.podcast(podcastId)
+                    queryKey: queryKeys.podcast(podcastId),
                 });
-                
+
                 // Dispatch event for real-time UI updates
                 dispatchQueryEvent("podcast-progress-updated");
             } catch (error) {
-                sharedFrontendLogger.error("Failed to mark episode as complete:", error);
+                sharedFrontendLogger.error(
+                    "Failed to mark episode as complete:",
+                    error,
+                );
                 throw error;
             }
         },
-        [podcastId, queryClient]
+        [podcastId, queryClient],
     );
 
     return {

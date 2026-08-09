@@ -6,7 +6,7 @@ describe("listen together reconnect SLO contract", () => {
         __dirname,
         "..",
         "services",
-        "listenTogetherSocket.ts"
+        "listenTogetherSocket.ts",
     );
     const source = fs.readFileSync(socketServicePath, "utf8");
 

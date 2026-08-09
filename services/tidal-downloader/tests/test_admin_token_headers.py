@@ -75,9 +75,7 @@ async def test_search_accepts_bearer_header(client, api_recorder):
 
 
 @pytest.mark.anyio
-async def test_search_legacy_query_params_warn_deprecated(
-    client, api_recorder, caplog
-):
+async def test_search_legacy_query_params_warn_deprecated(client, api_recorder, caplog):
     """Legacy search credential query parameters work with a warning."""
     with caplog.at_level(logging.WARNING):
         resp = await client.post(

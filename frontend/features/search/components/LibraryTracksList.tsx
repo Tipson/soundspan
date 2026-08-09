@@ -25,14 +25,19 @@ function toRowItem(track: LibraryTrack): TrackRowItem {
         displayTitle: track.displayTitle,
         artistName: track.album.artist.name,
         duration: track.duration,
-        coverArtUrl: track.album.coverUrl ? api.getCoverArtUrl(track.album.coverUrl, 48) : null,
+        coverArtUrl: track.album.coverUrl
+            ? api.getCoverArtUrl(track.album.coverUrl, 48)
+            : null,
     };
 }
 
 /**
  * Renders the LibraryTracksList component.
  */
-export function LibraryTracksList({ tracks, limit = 10 }: LibraryTracksListProps) {
+export function LibraryTracksList({
+    tracks,
+    limit = 10,
+}: LibraryTracksListProps) {
     const { currentTrack } = useAudioState();
     const { isPlaying } = usePlaybackStatus();
     const { playTracks, pause, resume } = useAudioControls();
@@ -54,8 +59,15 @@ export function LibraryTracksList({ tracks, limit = 10 }: LibraryTracksListProps
                     title: t.title,
                     displayTitle: t.displayTitle,
                     duration: t.duration,
-                    artist: { id: t.album.artist.id, name: t.album.artist.name },
-                    album: { id: t.album.id, title: t.album.title, coverArt: t.album.coverUrl },
+                    artist: {
+                        id: t.album.artist.id,
+                        name: t.album.artist.name,
+                    },
+                    album: {
+                        id: t.album.id,
+                        title: t.album.title,
+                        coverArt: t.album.coverUrl,
+                    },
                 }));
                 playTracks(formattedTracks, index);
             }
@@ -64,14 +76,19 @@ export function LibraryTracksList({ tracks, limit = 10 }: LibraryTracksListProps
     );
 
     const rowSlots = useCallback(
-        (track: LibraryTrack, index: number, state: RowState): TrackRowSlots => {
+        (
+            track: LibraryTrack,
+            index: number,
+            _state: RowState,
+        ): TrackRowSlots => {
             const isCurrentTrack = currentTrack?.id === track.id;
             const isPlayingThis = isCurrentTrack && isPlaying;
-            const artistHref = getArtistHref({
-                id: track.album.artist.id,
-                mbid: track.album.artist.mbid,
-                name: track.album.artist.name,
-            }) || "/artist";
+            const artistHref =
+                getArtistHref({
+                    id: track.album.artist.id,
+                    mbid: track.album.artist.mbid,
+                    name: track.album.artist.name,
+                }) || "/artist";
 
             return {
                 leadingColumn: (

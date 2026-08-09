@@ -21,7 +21,7 @@ import {
     expandQueryWithVocabulary,
     rerankWithFeatures,
     loadVocabulary,
-    VocabTerm
+    VocabTerm,
 } from "../services/vibeVocabulary";
 import {
     CALIBRATION_MIN_EMBEDDED_TRACKS,
@@ -30,7 +30,12 @@ import {
     parseCachedCalibration,
     type CalibrationPayload,
 } from "../services/vibeCalibration";
-import { MOOD_CONFIG, VALID_MOODS, MoodType, MOOD_BUCKET_MIN_SCORE } from "../services/moodBucketService";
+import {
+    MOOD_CONFIG,
+    VALID_MOODS,
+    MoodType,
+    MOOD_BUCKET_MIN_SCORE,
+} from "../services/moodBucketService";
 import { fetchEmbeddingsByTrackIds } from "../services/trackEmbeddings";
 import { parseJourneyRequest } from "./vibeJourneyRequest";
 import { sendRouteError, sendInternalRouteError } from "./routeErrorResponse";
@@ -67,7 +72,7 @@ interface TextSearchResult {
 
 async function buildTrackPreferenceScoreMapForUser(
     userId: string | undefined,
-    trackIds: string[]
+    trackIds: string[],
 ): Promise<Map<string, number>> {
     if (!userId || trackIds.length === 0) {
         return new Map<string, number>();
@@ -77,9 +82,9 @@ async function buildTrackPreferenceScoreMapForUser(
         new Set(
             trackIds.filter(
                 (trackId): trackId is string =>
-                    typeof trackId === "string" && trackId.length > 0
-            )
-        )
+                    typeof trackId === "string" && trackId.length > 0,
+            ),
+        ),
     );
     if (uniqueTrackIds.length === 0) {
         return new Map<string, number>();
@@ -149,15 +154,19 @@ async function buildTrackPreferenceScoreMapForUser(
  *       401:
  *         description: Not authenticated
  */
-router.get("/map", requireAuth, asyncHandler(async (_req, res) => {
-    try {
-        const mapData = await computeMapProjection();
-        res.json(mapData);
-    } catch (error: any) {
-        logger.error("Vibe map error:", error);
-        sendInternalRouteError(res, "Failed to compute map projection");
-    }
-}));
+router.get(
+    "/map",
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+        try {
+            const mapData = await computeMapProjection();
+            res.json(mapData);
+        } catch (error: any) {
+            logger.error("Vibe map error:", error);
+            sendInternalRouteError(res, "Failed to compute map projection");
+        }
+    }),
+);
 
 /**
  * Fetch a single track's CLAP embedding from pgvector.
@@ -180,10 +189,7 @@ function lerpEmbedding(a: number[], b: number[], t: number): number[] {
 /**
  * Weighted average of multiple embeddings.
  */
-function blendEmbeddings(
-    embeddings: number[][],
-    weights: number[]
-): number[] {
+function blendEmbeddings(embeddings: number[][], weights: number[]): number[] {
     const dim = embeddings[0].length;
     const totalWeight = weights.reduce((s, w) => s + w, 0);
     const result = new Array<number>(dim).fill(0);
@@ -214,7 +220,7 @@ interface NearestTrackRow {
 async function findNearestToEmbedding(
     embedding: number[],
     limit: number,
-    excludeIds: string[] = []
+    excludeIds: string[] = [],
 ): Promise<NearestTrackRow[]> {
     if (excludeIds.length > 0) {
         return runAnnQuery<NearestTrackRow[]>(Prisma.sql`
@@ -255,7 +261,11 @@ function formatNearestTrack(row: NearestTrackRow) {
         title: row.title,
         distance: row.distance,
         similarity: Math.max(0, 1 - row.distance / 2),
-        album: { id: row.albumId, title: row.albumTitle, coverUrl: row.albumCoverUrl },
+        album: {
+            id: row.albumId,
+            title: row.albumTitle,
+            coverUrl: row.albumCoverUrl,
+        },
         artist: { id: row.artistId, name: row.artistName },
         // Mirrors GET /api/vibe/similar/:trackId's audioFeatures shape so the
         // map/journey/path UI can render the same energy/valence/danceability/
@@ -279,7 +289,7 @@ async function walkEmbeddingSteps(
     fromEmbed: number[],
     targetEmbed: number[],
     tValues: number[],
-    initialExcludeIds: string[]
+    initialExcludeIds: string[],
 ): Promise<ReturnType<typeof formatNearestTrack>[]> {
     const usedIds = new Set(initialExcludeIds);
     const stepResults: ReturnType<typeof formatNearestTrack>[] = [];
@@ -295,7 +305,7 @@ async function walkEmbeddingSteps(
         const nearest = await findNearestToEmbedding(
             interpolated,
             5,
-            Array.from(usedIds)
+            Array.from(usedIds),
         );
         if (nearest.length > 0) {
             const pick = nearest[0];
@@ -348,53 +358,65 @@ async function walkEmbeddingSteps(
  *       401:
  *         description: Not authenticated
  */
-router.get("/path", requireAuth, asyncHandler(async (req, res) => {
-    try {
-        const fromId = req.query.from as string;
-        const toId = req.query.to as string;
+router.get(
+    "/path",
+    requireAuth,
+    asyncHandler(async (req, res) => {
+        try {
+            const fromId = req.query.from as string;
+            const toId = req.query.to as string;
 
-        if (!fromId || !toId) {
-            return sendRouteError(
-                res,
-                400,
-                "Both 'from' and 'to' track IDs are required"
+            if (!fromId || !toId) {
+                return sendRouteError(
+                    res,
+                    400,
+                    "Both 'from' and 'to' track IDs are required",
+                );
+            }
+
+            const steps = Math.min(
+                Math.max(1, parseInt(req.query.steps as string) || 5),
+                20,
             );
+
+            const [fromEmbed, toEmbed] = await Promise.all([
+                fetchTrackEmbedding(fromId),
+                fetchTrackEmbedding(toId),
+            ]);
+
+            if (!fromEmbed) {
+                return sendRouteError(
+                    res,
+                    404,
+                    "Starting track has no embedding",
+                );
+            }
+            if (!toEmbed) {
+                return sendRouteError(
+                    res,
+                    404,
+                    "Ending track has no embedding",
+                );
+            }
+
+            const tValues = Array.from(
+                { length: steps },
+                (_, idx) => (idx + 1) / (steps + 1),
+            );
+            const stepResults = await walkEmbeddingSteps(
+                fromEmbed,
+                toEmbed,
+                tValues,
+                [fromId, toId],
+            );
+
+            res.json({ from: fromId, to: toId, steps: stepResults });
+        } catch (error: any) {
+            logger.error("Vibe path error:", error);
+            sendInternalRouteError(res, "Failed to compute song path");
         }
-
-        const steps = Math.min(
-            Math.max(1, parseInt(req.query.steps as string) || 5),
-            20
-        );
-
-        const [fromEmbed, toEmbed] = await Promise.all([
-            fetchTrackEmbedding(fromId),
-            fetchTrackEmbedding(toId),
-        ]);
-
-        if (!fromEmbed) {
-            return sendRouteError(res, 404, "Starting track has no embedding");
-        }
-        if (!toEmbed) {
-            return sendRouteError(res, 404, "Ending track has no embedding");
-        }
-
-        const tValues = Array.from(
-            { length: steps },
-            (_, idx) => (idx + 1) / (steps + 1)
-        );
-        const stepResults = await walkEmbeddingSteps(
-            fromEmbed,
-            toEmbed,
-            tValues,
-            [fromId, toId]
-        );
-
-        res.json({ from: fromId, to: toId, steps: stepResults });
-    } catch (error: any) {
-        logger.error("Vibe path error:", error);
-        sendInternalRouteError(res, "Failed to compute song path");
-    }
-}));
+    }),
+);
 
 const MIN_MOOD_BUCKET_TRACKS = 5;
 const MOOD_BUCKET_POOL_LIMIT = 50;
@@ -415,7 +437,7 @@ type JourneyTrackDestinationResult =
  * final waypoint built from the Track row itself.
  */
 async function resolveTrackDestination(
-    toTrackId: string
+    toTrackId: string,
 ): Promise<JourneyTrackDestinationResult> {
     const toEmbed = await fetchTrackEmbedding(toTrackId);
     if (!toEmbed) {
@@ -500,7 +522,7 @@ async function resolveMoodCentroid(mood: MoodType): Promise<number[] | null> {
     const embeddings = rows.map((row) => row.embedding);
     return blendEmbeddings(
         embeddings,
-        embeddings.map(() => 1)
+        embeddings.map(() => 1),
     );
 }
 
@@ -513,19 +535,19 @@ async function computeTrackJourney(
     toTrackId: string,
     fromEmbed: number[],
     steps: number,
-    excludeTrackIds: string[]
+    excludeTrackIds: string[],
 ): Promise<JourneyComputation> {
     const destination = await resolveTrackDestination(toTrackId);
     if (!destination.ok) return destination;
     const tValues = Array.from(
         { length: steps - 1 },
-        (_, index) => (index + 1) / steps
+        (_, index) => (index + 1) / steps,
     );
     const intermediate = await walkEmbeddingSteps(
         fromEmbed,
         destination.value.embedding,
         tValues,
-        [fromTrackId, toTrackId, ...excludeTrackIds]
+        [fromTrackId, toTrackId, ...excludeTrackIds],
     );
     return {
         ok: true,
@@ -542,7 +564,7 @@ type AlchemyEmbeddingResult =
     | { ok: false; missingTrackId: string };
 
 async function fetchAlchemyEmbeddings(
-    trackIds: string[]
+    trackIds: string[],
 ): Promise<AlchemyEmbeddingResult> {
     const embeddings: number[][] = [];
     for (const trackId of trackIds) {
@@ -565,7 +587,7 @@ async function computeMoodJourney(
     mood: MoodType,
     fromEmbed: number[],
     steps: number,
-    excludeTrackIds: string[]
+    excludeTrackIds: string[],
 ): Promise<JourneyComputation> {
     const centroid = await resolveMoodCentroid(mood);
     if (!centroid) {
@@ -577,7 +599,7 @@ async function computeMoodJourney(
     }
     const tValues = Array.from(
         { length: steps },
-        (_, index) => (index + 1) / steps
+        (_, index) => (index + 1) / steps,
     );
     const waypoints = await walkEmbeddingSteps(fromEmbed, centroid, tValues, [
         fromTrackId,
@@ -612,14 +634,14 @@ async function handleJourney(req: Request, res: Response) {
                       toTrackId,
                       fromEmbed,
                       steps,
-                      excludeTrackIds
+                      excludeTrackIds,
                   )
                 : await computeMoodJourney(
                       fromTrackId,
                       mood as MoodType,
                       fromEmbed,
                       steps,
-                      excludeTrackIds
+                      excludeTrackIds,
                   );
         if (!result.ok) {
             return sendRouteError(res, result.status, result.error);
@@ -711,32 +733,36 @@ router.post("/journey", requireAuth, asyncHandler(handleJourney));
  *       401:
  *         description: Not authenticated
  */
-router.get("/moods", requireAuth, asyncHandler(async (_req, res) => {
-    try {
-        const grouped = await prisma.moodBucket.groupBy({
-            by: ["mood"],
-            where: {
-                score: { gte: MOOD_BUCKET_MIN_SCORE },
-                track: { embedding: { isNot: null } },
-            },
-            _count: { _all: true },
-        });
+router.get(
+    "/moods",
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+        try {
+            const grouped = await prisma.moodBucket.groupBy({
+                by: ["mood"],
+                where: {
+                    score: { gte: MOOD_BUCKET_MIN_SCORE },
+                    track: { embedding: { isNot: null } },
+                },
+                _count: { _all: true },
+            });
 
-        const countsByMood = new Map(
-            grouped.map((row) => [row.mood, row._count._all])
-        );
+            const countsByMood = new Map(
+                grouped.map((row) => [row.mood, row._count._all]),
+            );
 
-        res.json(
-            VALID_MOODS.map((mood) => ({
-                mood,
-                trackCount: countsByMood.get(mood) ?? 0,
-            }))
-        );
-    } catch (error: any) {
-        logger.error("Vibe moods error:", error);
-        sendInternalRouteError(res, "Failed to list moods");
-    }
-}));
+            res.json(
+                VALID_MOODS.map((mood) => ({
+                    mood,
+                    trackCount: countsByMood.get(mood) ?? 0,
+                })),
+            );
+        } catch (error: any) {
+            logger.error("Vibe moods error:", error);
+            sendInternalRouteError(res, "Failed to list moods");
+        }
+    }),
+);
 
 /**
  * @openapi
@@ -784,86 +810,91 @@ router.get("/moods", requireAuth, asyncHandler(async (_req, res) => {
  *       401:
  *         description: Not authenticated
  */
-router.post("/alchemy", requireAuth, asyncHandler(async (req, res) => {
-    try {
-        const { trackIds, weights, limit: requestedLimit } = req.body;
+router.post(
+    "/alchemy",
+    requireAuth,
+    asyncHandler(async (req, res) => {
+        try {
+            const { trackIds, weights, limit: requestedLimit } = req.body;
 
-        if (!Array.isArray(trackIds) || trackIds.length < 2) {
-            return sendRouteError(
-                res,
-                400,
-                "At least 2 track IDs are required for alchemy"
+            if (!Array.isArray(trackIds) || trackIds.length < 2) {
+                return sendRouteError(
+                    res,
+                    400,
+                    "At least 2 track IDs are required for alchemy",
+                );
+            }
+
+            if (trackIds.length > 10) {
+                return sendRouteError(
+                    res,
+                    400,
+                    "Maximum 10 ingredient tracks allowed",
+                );
+            }
+
+            const limit = Math.min(Math.max(1, requestedLimit || 20), 100);
+
+            const embeddingResult = await fetchAlchemyEmbeddings(trackIds);
+            if (!embeddingResult.ok) {
+                return sendRouteError(
+                    res,
+                    404,
+                    `Track ${embeddingResult.missingTrackId} has no embedding`,
+                );
+            }
+            const effectiveWeights = resolveAlchemyWeights(trackIds, weights);
+
+            // Flooring negatives at 0 above still allows every weight to be 0 (e.g.
+            // [0, 0]), which makes blendEmbeddings divide by a zero totalWeight and
+            // fill the blended vector with NaN — pgvector rejects a NaN-bearing
+            // vector, so that request would otherwise reach findNearestToEmbedding
+            // and surface as an opaque 500. Reject it explicitly instead.
+            const weightSum = effectiveWeights.reduce((s, w) => s + w, 0);
+            if (!Number.isFinite(weightSum) || weightSum <= 0) {
+                return sendRouteError(
+                    res,
+                    400,
+                    "weights must sum to a positive value",
+                );
+            }
+
+            const blended = blendEmbeddings(
+                embeddingResult.embeddings,
+                effectiveWeights,
             );
-        }
-
-        if (trackIds.length > 10) {
-            return sendRouteError(
-                res,
-                400,
-                "Maximum 10 ingredient tracks allowed"
+            const nearest = await findNearestToEmbedding(
+                blended,
+                limit,
+                trackIds,
             );
+
+            res.json({
+                ingredients: trackIds,
+                weights: effectiveWeights,
+                tracks: nearest.map(formatNearestTrack),
+            });
+        } catch (error: any) {
+            logger.error("Vibe alchemy error:", error);
+            sendInternalRouteError(res, "Failed to compute alchemy blend");
         }
-
-        const limit = Math.min(
-            Math.max(1, requestedLimit || 20),
-            100
-        );
-
-        const embeddingResult = await fetchAlchemyEmbeddings(trackIds);
-        if (!embeddingResult.ok) {
-            return sendRouteError(
-                res,
-                404,
-                `Track ${embeddingResult.missingTrackId} has no embedding`
-            );
-        }
-        const effectiveWeights = resolveAlchemyWeights(trackIds, weights);
-
-        // Flooring negatives at 0 above still allows every weight to be 0 (e.g.
-        // [0, 0]), which makes blendEmbeddings divide by a zero totalWeight and
-        // fill the blended vector with NaN — pgvector rejects a NaN-bearing
-        // vector, so that request would otherwise reach findNearestToEmbedding
-        // and surface as an opaque 500. Reject it explicitly instead.
-        const weightSum = effectiveWeights.reduce((s, w) => s + w, 0);
-        if (!Number.isFinite(weightSum) || weightSum <= 0) {
-            return sendRouteError(
-                res,
-                400,
-                "weights must sum to a positive value"
-            );
-        }
-
-        const blended = blendEmbeddings(
-            embeddingResult.embeddings,
-            effectiveWeights
-        );
-        const nearest = await findNearestToEmbedding(blended, limit, trackIds);
-
-        res.json({
-            ingredients: trackIds,
-            weights: effectiveWeights,
-            tracks: nearest.map(formatNearestTrack),
-        });
-    } catch (error: any) {
-        logger.error("Vibe alchemy error:", error);
-        sendInternalRouteError(res, "Failed to compute alchemy blend");
-    }
-}));
+    }),
+);
 
 type SimilarTrack = Awaited<ReturnType<typeof findSimilarTracks>>[number];
 
 async function applySimilarTrackPreferenceWeighting(
     userId: string | undefined,
-    tracks: SimilarTrack[]
+    tracks: SimilarTrack[],
 ): Promise<SimilarTrack[]> {
     const scores = await buildTrackPreferenceScoreMapForUser(
         userId,
-        tracks.map((track) => track.id)
+        tracks.map((track) => track.id),
     );
     if (scores.size === 0) return tracks;
     const ordering = applyTrackPreferenceOrderBias(
         tracks.map((track) => track.id),
-        scores
+        scores,
     );
     const trackById = new Map(tracks.map((track) => [track.id, track]));
     const weighted = ordering
@@ -877,13 +908,13 @@ async function applySimilarTrackPreferenceWeighting(
                     1,
                     applyTrackPreferenceSimilarityBias(
                         track.similarity,
-                        scores.get(track.id) ?? 0
-                    )
-                )
+                        scores.get(track.id) ?? 0,
+                    ),
+                ),
             ),
         }));
     logger.debug(
-        `[Vibe] Applied light preference weighting using ${scores.size} track preferences`
+        `[Vibe] Applied light preference weighting using ${scores.size} track preferences`,
     );
     return weighted;
 }
@@ -983,46 +1014,57 @@ function formatSimilarTrack(track: SimilarTrack) {
  *       401:
  *         description: Not authenticated
  */
-router.get<{ trackId: string }>("/similar/:trackId", requireAuth, asyncHandler(async (req, res) => {
-    try {
-        const { trackId } = req.params;
-        const userId = req.user?.id;
-        const limit = Math.min(
-            Math.max(1, parseInt(req.query.limit as string) || 20),
-            100
-        );
+router.get<{ trackId: string }>(
+    "/similar/:trackId",
+    requireAuth,
+    asyncHandler(async (req, res) => {
+        try {
+            const { trackId } = req.params;
+            const userId = req.user?.id;
+            const limit = Math.min(
+                Math.max(1, parseInt(req.query.limit as string) || 20),
+                100,
+            );
 
-        const tracks = await findSimilarTracks(trackId, limit);
-        const weightedTracks = await applySimilarTrackPreferenceWeighting(
-            userId,
-            tracks
-        );
+            const tracks = await findSimilarTracks(trackId, limit);
+            const weightedTracks = await applySimilarTrackPreferenceWeighting(
+                userId,
+                tracks,
+            );
 
-        if (weightedTracks.length === 0) {
-            return sendRouteError(res, 404, "No similar tracks found");
+            if (weightedTracks.length === 0) {
+                return sendRouteError(res, 404, "No similar tracks found");
+            }
+
+            // Fetch source track audio features for vibe match comparison
+            const sourceTrack = await prisma.track.findUnique({
+                where: { id: trackId },
+                select: {
+                    energy: true,
+                    valence: true,
+                    danceability: true,
+                    arousal: true,
+                },
+            });
+
+            res.json({
+                sourceTrackId: trackId,
+                sourceFeatures: sourceTrack
+                    ? {
+                          energy: sourceTrack.energy,
+                          valence: sourceTrack.valence,
+                          danceability: sourceTrack.danceability,
+                          arousal: sourceTrack.arousal,
+                      }
+                    : null,
+                tracks: weightedTracks.map(formatSimilarTrack),
+            });
+        } catch (error: any) {
+            logger.error("Hybrid similarity error:", error);
+            sendInternalRouteError(res, "Failed to find similar tracks");
         }
-
-        // Fetch source track audio features for vibe match comparison
-        const sourceTrack = await prisma.track.findUnique({
-            where: { id: trackId },
-            select: { energy: true, valence: true, danceability: true, arousal: true },
-        });
-
-        res.json({
-            sourceTrackId: trackId,
-            sourceFeatures: sourceTrack ? {
-                energy: sourceTrack.energy,
-                valence: sourceTrack.valence,
-                danceability: sourceTrack.danceability,
-                arousal: sourceTrack.arousal,
-            } : null,
-            tracks: weightedTracks.map(formatSimilarTrack),
-        });
-    } catch (error: any) {
-        logger.error("Hybrid similarity error:", error);
-        sendInternalRouteError(res, "Failed to find similar tracks");
-    }
-}));
+    }),
+);
 
 // Convert CLAP cosine distance (0-2 range) to similarity percentage (0-1)
 // distance 0 = identical, distance 1 = orthogonal, distance 2 = opposite
@@ -1032,7 +1074,7 @@ function distanceToSimilarity(distance: number): number {
 
 // Minimum similarity threshold for search results
 // 0.65 = 65% match, meaning distance <= 0.7
-const MIN_SEARCH_SIMILARITY = 0.60;
+const MIN_SEARCH_SIMILARITY = 0.6;
 
 interface TextEmbedResponsePayload {
     requestId: string;
@@ -1103,95 +1145,106 @@ interface TextEmbedResponsePayload {
  *       504:
  *         description: Text embedding service unavailable
  */
-router.post("/search", requireAuth, asyncHandler(async (req, res) => {
-    try {
-        const { query, limit: requestedLimit, minSimilarity } = req.body;
-
-        if (!query || typeof query !== "string" || query.trim().length < 2) {
-            return sendRouteError(
-                res,
-                400,
-                "Query must be at least 2 characters"
-            );
-        }
-
-        const limit = Math.min(
-            Math.max(1, requestedLimit || 20),
-            100
-        );
-
-        // Allow override but default to MIN_SEARCH_SIMILARITY
-        const similarityThreshold = typeof minSimilarity === "number"
-            ? Math.max(0, Math.min(1, minSimilarity))
-            : MIN_SEARCH_SIMILARITY;
-
-        // Convert similarity threshold to max distance
-        // similarity = 1 - (distance / 2), so distance = 2 * (1 - similarity)
-        const maxDistance = 2 * (1 - similarityThreshold);
-
-        const requestId = randomUUID();
-        const responseKey = `${TEXT_EMBED_RESPONSE_PREFIX}${requestId}`;
-        const normalizedQuery = query.trim();
-
+router.post(
+    "/search",
+    requireAuth,
+    asyncHandler(async (req, res) => {
         try {
-            // Queue text-embedding request via Redis Streams to ensure a single
-            // CLAP replica claims and processes each request.
-            await redisClient.xAdd(
-                TEXT_EMBED_REQUEST_STREAM,
-                "*",
-                {
+            const { query, limit: requestedLimit, minSimilarity } = req.body;
+
+            if (
+                !query ||
+                typeof query !== "string" ||
+                query.trim().length < 2
+            ) {
+                return sendRouteError(
+                    res,
+                    400,
+                    "Query must be at least 2 characters",
+                );
+            }
+
+            const limit = Math.min(Math.max(1, requestedLimit || 20), 100);
+
+            // Allow override but default to MIN_SEARCH_SIMILARITY
+            const similarityThreshold =
+                typeof minSimilarity === "number"
+                    ? Math.max(0, Math.min(1, minSimilarity))
+                    : MIN_SEARCH_SIMILARITY;
+
+            // Convert similarity threshold to max distance
+            // similarity = 1 - (distance / 2), so distance = 2 * (1 - similarity)
+            const maxDistance = 2 * (1 - similarityThreshold);
+
+            const requestId = randomUUID();
+            const responseKey = `${TEXT_EMBED_RESPONSE_PREFIX}${requestId}`;
+            const normalizedQuery = query.trim();
+
+            try {
+                // Queue text-embedding request via Redis Streams to ensure a single
+                // CLAP replica claims and processes each request.
+                await redisClient.xAdd(TEXT_EMBED_REQUEST_STREAM, "*", {
                     requestId,
                     text: normalizedQuery,
                     responseKey,
+                });
+
+                // Wait for response from the CLAP worker.
+                const response = await redisClient.blPop(
+                    responseKey,
+                    TEXT_EMBED_TIMEOUT_SECONDS,
+                );
+
+                if (!response?.element) {
+                    throw new Error("Text embedding request timed out");
                 }
-            );
 
-            // Wait for response from the CLAP worker.
-            const response = await redisClient.blPop(
-                responseKey,
-                TEXT_EMBED_TIMEOUT_SECONDS
-            );
+                let payload: TextEmbedResponsePayload;
+                try {
+                    payload = JSON.parse(
+                        response.element,
+                    ) as TextEmbedResponsePayload;
+                } catch (_error) {
+                    throw new Error("Invalid response from analyzer");
+                }
 
-            if (!response?.element) {
-                throw new Error("Text embedding request timed out");
-            }
+                if (payload.error) {
+                    throw new Error(payload.error);
+                }
 
-            let payload: TextEmbedResponsePayload;
-            try {
-                payload = JSON.parse(response.element) as TextEmbedResponsePayload;
-            } catch (_error) {
-                throw new Error("Invalid response from analyzer");
-            }
+                if (!Array.isArray(payload.embedding)) {
+                    throw new Error("Invalid response from analyzer");
+                }
 
-            if (payload.error) {
-                throw new Error(payload.error);
-            }
+                const textEmbedding = payload.embedding;
 
-            if (!Array.isArray(payload.embedding)) {
-                throw new Error("Invalid response from analyzer");
-            }
+                // Query expansion with vocabulary
+                const vocab = getVocabulary();
+                let searchEmbedding = textEmbedding;
+                let genreConfidence = 0;
+                let matchedTerms: VocabTerm[] = [];
 
-            const textEmbedding = payload.embedding;
+                if (vocab) {
+                    const expansion = expandQueryWithVocabulary(
+                        textEmbedding,
+                        normalizedQuery,
+                        vocab,
+                    );
+                    searchEmbedding = expansion.embedding;
+                    genreConfidence = expansion.genreConfidence;
+                    matchedTerms = expansion.matchedTerms;
 
-            // Query expansion with vocabulary
-            const vocab = getVocabulary();
-            let searchEmbedding = textEmbedding;
-            let genreConfidence = 0;
-            let matchedTerms: VocabTerm[] = [];
+                    logger.info(
+                        `[VIBE-SEARCH] Query "${normalizedQuery}" expanded with terms: ${matchedTerms.map((t) => t.name).join(", ") || "none"}, genre confidence: ${(genreConfidence * 100).toFixed(0)}%`,
+                    );
+                }
 
-            if (vocab) {
-                const expansion = expandQueryWithVocabulary(textEmbedding, normalizedQuery, vocab);
-                searchEmbedding = expansion.embedding;
-                genreConfidence = expansion.genreConfidence;
-                matchedTerms = expansion.matchedTerms;
-
-                logger.info(`[VIBE-SEARCH] Query "${normalizedQuery}" expanded with terms: ${matchedTerms.map(t => t.name).join(", ") || "none"}, genre confidence: ${(genreConfidence * 100).toFixed(0)}%`);
-            }
-
-            // Query for similar tracks using the (possibly expanded) embedding
-            // Fetch more candidates for re-ranking (3x limit)
-            // Filter by max distance to exclude poor matches
-            const similarTracks = await runAnnQuery<TextSearchResult[]>(Prisma.sql`
+                // Query for similar tracks using the (possibly expanded) embedding
+                // Fetch more candidates for re-ranking (3x limit)
+                // Filter by max distance to exclude poor matches
+                const similarTracks = await runAnnQuery<
+                    TextSearchResult[]
+                >(Prisma.sql`
                 SELECT
                     t.id,
                     t.title,
@@ -1219,72 +1272,98 @@ router.post("/search", requireAuth, asyncHandler(async (req, res) => {
                 LIMIT ${limit * 3}
             `);
 
-            logger.info(`Vibe search "${normalizedQuery}": found ${similarTracks.length} candidates above ${Math.round(similarityThreshold * 100)}% similarity (max distance: ${maxDistance.toFixed(2)})`);
+                logger.info(
+                    `Vibe search "${normalizedQuery}": found ${similarTracks.length} candidates above ${Math.round(similarityThreshold * 100)}% similarity (max distance: ${maxDistance.toFixed(2)})`,
+                );
 
-            // Re-rank using audio features if we have vocabulary matches
-            let rankedTracks: typeof similarTracks | ReturnType<typeof rerankWithFeatures<TextSearchResult>> = similarTracks;
-            if (vocab && matchedTerms.length > 0) {
-                const reranked = rerankWithFeatures(similarTracks, matchedTerms, genreConfidence);
-                rankedTracks = reranked.slice(0, limit);
+                // Re-rank using audio features if we have vocabulary matches
+                let rankedTracks:
+                    | typeof similarTracks
+                    | ReturnType<typeof rerankWithFeatures<TextSearchResult>> =
+                    similarTracks;
+                if (vocab && matchedTerms.length > 0) {
+                    const reranked = rerankWithFeatures(
+                        similarTracks,
+                        matchedTerms,
+                        genreConfidence,
+                    );
+                    rankedTracks = reranked.slice(0, limit);
 
-                logger.info(`[VIBE-SEARCH] Re-ranked ${similarTracks.length} candidates, top result: ${rankedTracks[0]?.title || "none"}`);
-            } else {
-                rankedTracks = similarTracks.slice(0, limit);
-            }
-
-            // If we have results, log the similarity range
-            if (rankedTracks.length > 0) {
-                const first = rankedTracks[0];
-                const last = rankedTracks[rankedTracks.length - 1];
-                const bestSim = "finalScore" in first ? first.finalScore : distanceToSimilarity(first.distance);
-                const worstSim = "finalScore" in last ? last.finalScore : distanceToSimilarity(last.distance);
-                logger.info(`Vibe search similarity range: ${Math.round(bestSim * 100)}% - ${Math.round(worstSim * 100)}%`);
-            }
-
-            const tracks = rankedTracks.map((row) => ({
-                id: row.id,
-                title: row.title,
-                duration: row.duration,
-                trackNo: row.trackNo,
-                distance: row.distance,
-                similarity: "finalScore" in row ? row.finalScore : distanceToSimilarity(row.distance),
-                album: {
-                    id: row.albumId,
-                    title: row.albumTitle,
-                    coverUrl: row.albumCoverUrl,
-                },
-                artist: {
-                    id: row.artistId,
-                    name: row.artistName,
-                },
-            }));
-
-            res.json({
-                query: normalizedQuery,
-                tracks,
-                minSimilarity: similarityThreshold,
-                totalAboveThreshold: tracks.length,
-                debug: {
-                    matchedTerms: matchedTerms.map(t => t.name),
-                    genreConfidence,
-                    featureWeight: matchedTerms.length > 0 ? 0.2 + (genreConfidence * 0.5) : 0
+                    logger.info(
+                        `[VIBE-SEARCH] Re-ranked ${similarTracks.length} candidates, top result: ${rankedTracks[0]?.title || "none"}`,
+                    );
+                } else {
+                    rankedTracks = similarTracks.slice(0, limit);
                 }
-            });
-        } finally {
-            await redisClient.del(responseKey).catch(() => {});
+
+                // If we have results, log the similarity range
+                if (rankedTracks.length > 0) {
+                    const first = rankedTracks[0];
+                    const last = rankedTracks[rankedTracks.length - 1];
+                    const bestSim =
+                        "finalScore" in first
+                            ? first.finalScore
+                            : distanceToSimilarity(first.distance);
+                    const worstSim =
+                        "finalScore" in last
+                            ? last.finalScore
+                            : distanceToSimilarity(last.distance);
+                    logger.info(
+                        `Vibe search similarity range: ${Math.round(bestSim * 100)}% - ${Math.round(worstSim * 100)}%`,
+                    );
+                }
+
+                const tracks = rankedTracks.map((row) => ({
+                    id: row.id,
+                    title: row.title,
+                    duration: row.duration,
+                    trackNo: row.trackNo,
+                    distance: row.distance,
+                    similarity:
+                        "finalScore" in row
+                            ? row.finalScore
+                            : distanceToSimilarity(row.distance),
+                    album: {
+                        id: row.albumId,
+                        title: row.albumTitle,
+                        coverUrl: row.albumCoverUrl,
+                    },
+                    artist: {
+                        id: row.artistId,
+                        name: row.artistName,
+                    },
+                }));
+
+                res.json({
+                    query: normalizedQuery,
+                    tracks,
+                    minSimilarity: similarityThreshold,
+                    totalAboveThreshold: tracks.length,
+                    debug: {
+                        matchedTerms: matchedTerms.map((t) => t.name),
+                        genreConfidence,
+                        featureWeight:
+                            matchedTerms.length > 0
+                                ? 0.2 + genreConfidence * 0.5
+                                : 0,
+                    },
+                });
+            } finally {
+                await redisClient.del(responseKey).catch(() => {});
+            }
+        } catch (error: any) {
+            logger.error("Vibe text search error:", error);
+            if (error.message?.includes("timed out")) {
+                return sendRouteError(
+                    res,
+                    504,
+                    "Text embedding service unavailable",
+                );
+            }
+            sendInternalRouteError(res, "Failed to search tracks by vibe");
         }
-    } catch (error: any) {
-        logger.error("Vibe text search error:", error);
-        if (error.message?.includes("timed out")) {
-            return sendRouteError(
-                res,
-                504,
-                "Text embedding service unavailable"
-            );
-        }
-        sendInternalRouteError(res, "Failed to search tracks by vibe");
-    }
-}));
+    }),
+);
 
 /**
  * @openapi
@@ -1316,30 +1395,35 @@ router.post("/search", requireAuth, asyncHandler(async (req, res) => {
  *       401:
  *         description: Not authenticated
  */
-router.get("/status", requireAuth, asyncHandler(async (req, res) => {
-    try {
-        const totalTracks = await prisma.track.count();
+router.get(
+    "/status",
+    requireAuth,
+    asyncHandler(async (req, res) => {
+        try {
+            const totalTracks = await prisma.track.count();
 
-        const embeddedTracks = await prisma.$queryRaw<{ count: bigint }[]>`
+            const embeddedTracks = await prisma.$queryRaw<{ count: bigint }[]>`
             SELECT COUNT(*) as count FROM track_embeddings
         `;
 
-        const embeddedCount = Number(embeddedTracks[0]?.count || 0);
-        const progress = totalTracks > 0
-            ? Math.round((embeddedCount / totalTracks) * 100)
-            : 0;
+            const embeddedCount = Number(embeddedTracks[0]?.count || 0);
+            const progress =
+                totalTracks > 0
+                    ? Math.round((embeddedCount / totalTracks) * 100)
+                    : 0;
 
-        res.json({
-            totalTracks,
-            embeddedTracks: embeddedCount,
-            progress,
-            isComplete: embeddedCount >= totalTracks && totalTracks > 0,
-        });
-    } catch (error: any) {
-        logger.error("Vibe status error:", error);
-        sendInternalRouteError(res, "Failed to get embedding status");
-    }
-}));
+            res.json({
+                totalTracks,
+                embeddedTracks: embeddedCount,
+                progress,
+                isComplete: embeddedCount >= totalTracks && totalTracks > 0,
+            });
+        } catch (error: any) {
+            logger.error("Vibe status error:", error);
+            sendInternalRouteError(res, "Failed to get embedding status");
+        }
+    }),
+);
 
 const CALIBRATION_CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h
 const CALIBRATION_CACHE_KEY_PREFIX = "vibe:calibration:v1:";
@@ -1355,7 +1439,7 @@ const CALIBRATION_CACHE_KEY_PREFIX = "vibe:calibration:v1:";
 const calibrationInFlight = new Map<string, Promise<CalibrationPayload>>();
 
 async function getCachedOrComputeCalibration(
-    cacheKey: string
+    cacheKey: string,
 ): Promise<CalibrationPayload> {
     const cached = await redisClient.get(cacheKey);
     if (cached) {
@@ -1373,7 +1457,7 @@ async function getCachedOrComputeCalibration(
                 await redisClient.setEx(
                     cacheKey,
                     CALIBRATION_CACHE_TTL_SECONDS,
-                    JSON.stringify(payload)
+                    JSON.stringify(payload),
                 );
                 return payload;
             })
@@ -1426,13 +1510,20 @@ async function getCalibrationResponse() {
  *       401:
  *         description: Not authenticated
  */
-router.get("/calibration", requireAuth, asyncHandler(async (_req, res) => {
-    try {
-        return res.json(await getCalibrationResponse());
-    } catch (error: any) {
-        logger.error("Vibe calibration error:", error);
-        return sendInternalRouteError(res, "Failed to compute vibe calibration");
-    }
-}));
+router.get(
+    "/calibration",
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+        try {
+            return res.json(await getCalibrationResponse());
+        } catch (error: any) {
+            logger.error("Vibe calibration error:", error);
+            return sendInternalRouteError(
+                res,
+                "Failed to compute vibe calibration",
+            );
+        }
+    }),
+);
 
 export default router;

@@ -49,7 +49,7 @@ export function dedupePreserveOrder(ids: readonly string[]): string[] {
  */
 export async function saveTracksAsPlaylist(
     name: string,
-    trackIds: readonly string[]
+    trackIds: readonly string[],
 ): Promise<SaveTracksAsPlaylistResult> {
     const deduped = dedupePreserveOrder(trackIds);
     const playlist = await api.createPlaylist(name);
@@ -96,7 +96,7 @@ export interface SaveResultMessage {
  */
 export function describeSaveResult(
     name: string,
-    result: SaveTracksAsPlaylistResult
+    result: SaveTracksAsPlaylistResult,
 ): SaveResultMessage {
     const failed = result.failedTrackIds.length;
     if (failed === 0) {

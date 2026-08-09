@@ -80,7 +80,9 @@ export function ConfirmDialog({
                 >
                     <AlertTriangle className={`w-6 h-6 ${styles.icon}`} />
                 </div>
-                <p className="flex-1 min-w-0 text-sm text-gray-400">{message}</p>
+                <p className="flex-1 min-w-0 text-sm text-gray-400">
+                    {message}
+                </p>
             </div>
         </Modal>
     );

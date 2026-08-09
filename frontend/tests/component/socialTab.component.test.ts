@@ -31,14 +31,8 @@ const state = {
 const Icon = () => React.createElement("i");
 
 mock.module("next/image", {
-    defaultExport: ({
-        src,
-        alt,
-        ...rest
-    }: {
-        src: string;
-        alt: string;
-    }) => React.createElement("img", { src, alt, ...rest }),
+    defaultExport: ({ src, alt, ...rest }: { src: string; alt: string }) =>
+        React.createElement("img", { src, alt, ...rest }),
 });
 
 mock.module("next/link", {
@@ -95,9 +89,7 @@ beforeEach(() => {
 test("renders unavailable state when initial fetch fails", async () => {
     state.error = new Error("network");
 
-    const { SocialTab } = await import(
-        "../../components/activity/SocialTab"
-    );
+    const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /Social status unavailable/);
@@ -106,9 +98,7 @@ test("renders unavailable state when initial fetch fails", async () => {
 test("renders loading spinner when query is still loading and no users are present", async () => {
     state.isLoading = true;
 
-    const { SocialTab } = await import(
-        "../../components/activity/SocialTab"
-    );
+    const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /animate-spin/);
@@ -116,9 +106,7 @@ test("renders loading spinner when query is still loading and no users are prese
 });
 
 test("renders empty state when there are no users and no request error", async () => {
-    const { SocialTab } = await import(
-        "../../components/activity/SocialTab"
-    );
+    const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /No one online/);
@@ -139,9 +127,7 @@ test("keeps rendering social users when a refetch error occurs", async () => {
     ];
     state.error = new Error("transient");
 
-    const { SocialTab } = await import(
-        "../../components/activity/SocialTab"
-    );
+    const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /Listener/);
@@ -170,9 +156,7 @@ test("renders paused track details with cover art, listen-together badge, and pl
         },
     ];
 
-    const { SocialTab } = await import(
-        "../../components/activity/SocialTab"
-    );
+    const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /1 online/);
@@ -209,9 +193,7 @@ test("renders playing state with song and artist links when ids are present", as
         },
     ];
 
-    const { SocialTab } = await import(
-        "../../components/activity/SocialTab"
-    );
+    const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /Playing/);
@@ -242,9 +224,7 @@ test("renders idle users as not currently playing", async () => {
         },
     ];
 
-    const { SocialTab } = await import(
-        "../../components/activity/SocialTab"
-    );
+    const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /Idle/);
@@ -306,9 +286,8 @@ test("formats last seen timestamps for now, minutes, hours, today, and invalid d
     ];
 
     try {
-        const { SocialTab } = await import(
-            "../../components/activity/SocialTab"
-        );
+        const { SocialTab } =
+            await import("../../components/activity/SocialTab");
         const html = renderToStaticMarkup(React.createElement(SocialTab));
 
         assert.match(html, />now</);

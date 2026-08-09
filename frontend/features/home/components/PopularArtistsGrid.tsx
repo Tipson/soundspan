@@ -4,7 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { Music } from "lucide-react";
 import { api } from "@/lib/api";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { memo } from "react";
 
 interface PopularArtist {
@@ -29,12 +32,12 @@ interface PopularArtistCardProps {
     index: number;
 }
 
-const PopularArtistCard = memo(function PopularArtistCard({ 
-    artist, 
-    index 
+const PopularArtistCard = memo(function PopularArtistCard({
+    artist,
+    index,
 }: PopularArtistCardProps) {
     const imageUrl = getProxiedImageUrl(artist.image);
-    
+
     return (
         <CarouselItem>
             <Link
@@ -71,7 +74,7 @@ const PopularArtistCard = memo(function PopularArtistCard({
 });
 
 export const PopularArtistsGrid = memo(function PopularArtistsGrid({
-    artists
+    artists,
 }: PopularArtistsGridProps) {
     return (
         <HorizontalCarousel>

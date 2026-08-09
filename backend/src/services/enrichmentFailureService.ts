@@ -71,10 +71,10 @@ class EnrichmentFailureService {
             // Update existing failure - cap retry count at maxRetries to prevent unbounded increment
             const newRetryCount = Math.min(
                 existing.retryCount + 1,
-                existing.maxRetries
+                existing.maxRetries,
             );
 
-            return await prisma.enrichmentFailure.update({
+            return (await prisma.enrichmentFailure.update({
                 where: { id: existing.id },
                 data: {
                     errorMessage,
@@ -85,10 +85,10 @@ class EnrichmentFailureService {
                         ? JSON.parse(JSON.stringify(metadata))
                         : existing.metadata,
                 },
-            }) as EnrichmentFailure;
+            })) as EnrichmentFailure;
         } else {
             // Create new failure
-            return await prisma.enrichmentFailure.create({
+            return (await prisma.enrichmentFailure.create({
                 data: {
                     entityType,
                     entityId,
@@ -101,7 +101,7 @@ class EnrichmentFailureService {
                         ? JSON.parse(JSON.stringify(metadata))
                         : null,
                 },
-            }) as EnrichmentFailure;
+            })) as EnrichmentFailure;
         }
     }
 
@@ -157,24 +157,37 @@ class EnrichmentFailureService {
         vibe: number;
         total: number;
     }> {
-        const [artistCount, trackCount, audioCount, vibeCount] = await Promise.all([
-            prisma.enrichmentFailure.count({
-                where: {
-                    entityType: "artist",
-                    resolved: false,
-                    skipped: false,
-                },
-            }),
-            prisma.enrichmentFailure.count({
-                where: { entityType: "track", resolved: false, skipped: false },
-            }),
-            prisma.enrichmentFailure.count({
-                where: { entityType: "audio", resolved: false, skipped: false },
-            }),
-            prisma.enrichmentFailure.count({
-                where: { entityType: "vibe", resolved: false, skipped: false },
-            }),
-        ]);
+        const [artistCount, trackCount, audioCount, vibeCount] =
+            await Promise.all([
+                prisma.enrichmentFailure.count({
+                    where: {
+                        entityType: "artist",
+                        resolved: false,
+                        skipped: false,
+                    },
+                }),
+                prisma.enrichmentFailure.count({
+                    where: {
+                        entityType: "track",
+                        resolved: false,
+                        skipped: false,
+                    },
+                }),
+                prisma.enrichmentFailure.count({
+                    where: {
+                        entityType: "audio",
+                        resolved: false,
+                        skipped: false,
+                    },
+                }),
+                prisma.enrichmentFailure.count({
+                    where: {
+                        entityType: "vibe",
+                        resolved: false,
+                        skipped: false,
+                    },
+                }),
+            ]);
 
         return {
             artist: artistCount,
@@ -189,9 +202,9 @@ class EnrichmentFailureService {
      * Get a single failure by ID
      */
     async getFailure(id: string): Promise<EnrichmentFailure | null> {
-        return await prisma.enrichmentFailure.findUnique({
+        return (await prisma.enrichmentFailure.findUnique({
             where: { id },
-        }) as unknown as EnrichmentFailure | null;
+        })) as unknown as EnrichmentFailure | null;
     }
 
     /**
@@ -252,7 +265,9 @@ class EnrichmentFailureService {
     /**
      * Clear all unresolved failures (optionally filtered by type)
      */
-    async clearAllFailures(entityType?: "artist" | "track" | "audio" | "vibe"): Promise<number> {
+    async clearAllFailures(
+        entityType?: "artist" | "track" | "audio" | "vibe",
+    ): Promise<number> {
         const where: any = {
             resolved: false,
             skipped: false,
@@ -264,7 +279,9 @@ class EnrichmentFailureService {
 
         const result = await prisma.enrichmentFailure.deleteMany({ where });
 
-        logger.info(`Cleared ${result.count} enrichment failures${entityType ? ` of type ${entityType}` : ""}`);
+        logger.info(
+            `Cleared ${result.count} enrichment failures${entityType ? ` of type ${entityType}` : ""}`,
+        );
 
         return result.count;
     }
@@ -286,7 +303,7 @@ class EnrichmentFailureService {
         });
 
         logger.debug(
-            `[Enrichment Failures] Cleaned up ${result.count} old resolved failures`
+            `[Enrichment Failures] Cleaned up ${result.count} old resolved failures`,
         );
         return result.count;
     }
@@ -296,7 +313,7 @@ class EnrichmentFailureService {
      */
     async hasExceededRetries(
         entityType: string,
-        entityId: string
+        entityId: string,
     ): Promise<boolean> {
         const failure = await prisma.enrichmentFailure.findUnique({
             where: {
@@ -367,39 +384,41 @@ class EnrichmentFailureService {
         if (toResolve.length > 0) {
             await this.resolveFailures(toResolve);
             logger.debug(
-                `[Enrichment Failures] Cleaned up ${toResolve.length} orphaned failures`
+                `[Enrichment Failures] Cleaned up ${toResolve.length} orphaned failures`,
             );
         }
 
         return { cleaned: toResolve.length, checked: failures.length };
     }
 
-     /**
-      * Resolve failure records for an entity (track/artist) that succeeded.
-      * Used when a track's vibe embedding succeeds after previous failures.
-      */
-     async resolveByEntity(entityType: "vibe" | "audio", entityId: string): Promise<boolean> {
-         const result = await prisma.enrichmentFailure.updateMany({
-             where: {
-                 entityType,
-                 entityId,
-                 resolved: false,
-             },
-             data: {
-                 resolved: true,
-                 resolvedAt: new Date(),
-             },
-         });
+    /**
+     * Resolve failure records for an entity (track/artist) that succeeded.
+     * Used when a track's vibe embedding succeeds after previous failures.
+     */
+    async resolveByEntity(
+        entityType: "vibe" | "audio",
+        entityId: string,
+    ): Promise<boolean> {
+        const result = await prisma.enrichmentFailure.updateMany({
+            where: {
+                entityType,
+                entityId,
+                resolved: false,
+            },
+            data: {
+                resolved: true,
+                resolvedAt: new Date(),
+            },
+        });
 
-         if (result.count > 0) {
-             logger.debug(
-                 `[Enrichment Failures] Resolved ${result.count} failures for ${entityType}:${entityId}`
-             );
-         }
+        if (result.count > 0) {
+            logger.debug(
+                `[Enrichment Failures] Resolved ${result.count} failures for ${entityType}:${entityId}`,
+            );
+        }
 
-         return result.count > 0;
-     }
-
+        return result.count > 0;
+    }
 }
 
 // Singleton instance

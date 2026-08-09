@@ -26,11 +26,11 @@ const NON_LIBRARY_TRACK_ID_PREFIXES = ["yt:", "yt-", "tidal:"];
  * 404 for such ids — the track exists, just not in the local library.
  */
 export function isNonLibraryTrackId(
-    trackId: string | null | undefined
+    trackId: string | null | undefined,
 ): boolean {
     if (typeof trackId !== "string") return false;
     return NON_LIBRARY_TRACK_ID_PREFIXES.some((prefix) =>
-        trackId.startsWith(prefix)
+        trackId.startsWith(prefix),
     );
 }
 
@@ -42,7 +42,7 @@ export function isNonLibraryTrackId(
  */
 export function findRemoteQueueTrackForRestore<T extends RestorableQueueTrack>(
     trackId: string | null | undefined,
-    serverQueue: readonly T[] | null | undefined
+    serverQueue: readonly T[] | null | undefined,
 ): T | null {
     if (typeof trackId !== "string" || !trackId.trim()) return null;
     if (!Array.isArray(serverQueue) || serverQueue.length === 0) return null;
@@ -90,7 +90,9 @@ export interface ServerPlaybackPollDecision {
     reason: ServerPlaybackPollDecisionReason;
 }
 
-function toQueueTrackIds(queue: readonly QueueTrackIdentity[] | null | undefined): string[] {
+function toQueueTrackIds(
+    queue: readonly QueueTrackIdentity[] | null | undefined,
+): string[] {
     if (!Array.isArray(queue) || queue.length === 0) {
         return [];
     }
@@ -115,7 +117,7 @@ function toQueueTrackIds(queue: readonly QueueTrackIdentity[] | null | undefined
  */
 export function queuesMatchByTrackId(
     localQueue: readonly QueueTrackIdentity[] | null | undefined,
-    serverQueue: readonly QueueTrackIdentity[] | null | undefined
+    serverQueue: readonly QueueTrackIdentity[] | null | undefined,
 ): boolean {
     const localIds = toQueueTrackIds(localQueue);
     const serverIds = toQueueTrackIds(serverQueue);
@@ -138,7 +140,7 @@ export function queuesMatchByTrackId(
  */
 export function isServerQueueTruncatedPrefix(
     localQueue: readonly QueueTrackIdentity[] | null | undefined,
-    serverQueue: readonly QueueTrackIdentity[] | null | undefined
+    serverQueue: readonly QueueTrackIdentity[] | null | undefined,
 ): boolean {
     const localIds = toQueueTrackIds(localQueue);
     const serverIds = toQueueTrackIds(serverQueue);
@@ -165,7 +167,7 @@ export function isServerQueueTruncatedPrefix(
  */
 export function normalizeQueueIndex(
     index: unknown,
-    queueLength: number
+    queueLength: number,
 ): number {
     const safeQueueLength = Number.isFinite(queueLength)
         ? Math.max(0, Math.trunc(queueLength))
@@ -179,7 +181,9 @@ export function normalizeQueueIndex(
         typeof index === "number"
             ? index
             : Number.parseInt(String(index ?? "0"), 10);
-    const safeIndex = Number.isFinite(parsedIndex) ? Math.trunc(parsedIndex) : 0;
+    const safeIndex = Number.isFinite(parsedIndex)
+        ? Math.trunc(parsedIndex)
+        : 0;
 
     return Math.min(Math.max(0, safeIndex), safeQueueLength - 1);
 }
@@ -188,7 +192,7 @@ export function normalizeQueueIndex(
  * Executes resolveServerPlaybackPollDecision.
  */
 export function resolveServerPlaybackPollDecision(
-    input: ServerPlaybackPollDecisionInput
+    input: ServerPlaybackPollDecisionInput,
 ): ServerPlaybackPollDecision {
     if (
         input.localLastSaveAtMs > 0 &&
@@ -228,8 +232,11 @@ export function resolveServerPlaybackPollDecision(
 
         if (input.serverPlaybackType === "track" && input.serverMediaId) {
             const localQueueIds = toQueueTrackIds(input.localQueue);
-            const localCurrentPosition = localQueueIds.indexOf(localActiveTrackId);
-            const serverMediaPosition = localQueueIds.indexOf(input.serverMediaId);
+            const localCurrentPosition =
+                localQueueIds.indexOf(localActiveTrackId);
+            const serverMediaPosition = localQueueIds.indexOf(
+                input.serverMediaId,
+            );
 
             if (
                 localCurrentPosition >= 0 &&

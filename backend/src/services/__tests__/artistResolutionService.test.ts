@@ -23,9 +23,7 @@ jest.mock("../../utils/logger", () => ({
     },
 }));
 
-import {
-    resolveArtistForRemoteTrack,
-} from "../artistResolutionService";
+import { resolveArtistForRemoteTrack } from "../artistResolutionService";
 
 describe("artistResolutionService", () => {
     beforeEach(() => {
@@ -85,7 +83,7 @@ describe("artistResolutionService", () => {
             });
 
             const result = await resolveArtistForRemoteTrack(
-                "Radiohead feat. Thom Yorke"
+                "Radiohead feat. Thom Yorke",
             );
             expect(result.id).toBe("artist-1");
             expect(result.name).toBe("Radiohead");
@@ -133,7 +131,8 @@ describe("artistResolutionService", () => {
                 name: "Brand New Artist",
             });
 
-            const result = await resolveArtistForRemoteTrack("Brand New Artist");
+            const result =
+                await resolveArtistForRemoteTrack("Brand New Artist");
             expect(result.id).toBe("new-artist-id");
             expect(result.created).toBe(true);
         });

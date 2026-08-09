@@ -43,7 +43,7 @@ export interface ResolveEpisodeStartPositionInput {
  * resumable progress.
  */
 export function resolveEpisodeStartPosition(
-    input: ResolveEpisodeStartPositionInput
+    input: ResolveEpisodeStartPositionInput,
 ): { startAt: number } | null {
     const { itemId, activeMediaId, progress, duration } = input;
     if (activeMediaId !== itemId) return null;
@@ -51,7 +51,7 @@ export function resolveEpisodeStartPosition(
 
     const startAt = clampPlaybackTimeToUpperBound(
         progress.currentTime,
-        duration || progress.currentTime
+        duration || progress.currentTime,
     );
     return { startAt };
 }
@@ -88,7 +88,7 @@ export interface ResolveEpisodeProgressSaveOnSwitchInput {
  * naturally (the ended handler owns the finished save).
  */
 export function resolveEpisodeProgressSaveOnSwitch(
-    input: ResolveEpisodeProgressSaveOnSwitchInput
+    input: ResolveEpisodeProgressSaveOnSwitchInput,
 ): {
     podcastId: string;
     episodeId: string;
@@ -111,7 +111,10 @@ export function resolveEpisodeProgressSaveOnSwitch(
     if (!podcastId || !episodeId) return null;
 
     const duration = engineDuration || episodeDuration || 0;
-    if (duration > 0 && currentTime >= duration - EPISODE_END_SAVE_EPSILON_SEC) {
+    if (
+        duration > 0 &&
+        currentTime >= duration - EPISODE_END_SAVE_EPSILON_SEC
+    ) {
         return null;
     }
 

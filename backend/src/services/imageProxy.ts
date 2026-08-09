@@ -17,9 +17,8 @@ export const MAX_EXTERNAL_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB
 /**
  * Normalizes a remote image URL with the shared outbound safety policy.
  */
-export const normalizeExternalImageUrl = (
-    rawUrl: string
-): string | null => normalizeSafeOutboundUrl(rawUrl);
+export const normalizeExternalImageUrl = (rawUrl: string): string | null =>
+    normalizeSafeOutboundUrl(rawUrl);
 
 export type ExternalImageResult =
     | {
@@ -46,7 +45,11 @@ async function fetchWithSafeRedirects(options: {
     const { url, timeoutMs, maxRedirects } = options;
     let currentUrl = url;
 
-    for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
+    for (
+        let redirectCount = 0;
+        redirectCount <= maxRedirects;
+        redirectCount += 1
+    ) {
         const response = await fetch(currentUrl, {
             headers: {
                 "User-Agent": BRAND_USER_AGENT,
@@ -64,7 +67,7 @@ async function fetchWithSafeRedirects(options: {
         const redirectedUrl = new URL(location, currentUrl).toString();
         const normalizedRedirect = await resolveSafeOutboundRedirectTarget(
             location,
-            currentUrl
+            currentUrl,
         );
         if (!normalizedRedirect) {
             return {
@@ -94,7 +97,7 @@ async function fetchWithSafeRedirects(options: {
  */
 async function readBodyWithByteCap(
     response: Response,
-    maxBytes: number
+    maxBytes: number,
 ): Promise<Buffer | null> {
     const declaredLength = Number(response.headers.get("content-length"));
     if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
@@ -185,7 +188,10 @@ export async function fetchExternalImage(options: {
                 const message = `${response.status} ${response.statusText}`;
                 if (response.status >= 500 && attempt < maxRetries) {
                     await new Promise((resolve) =>
-                        setTimeout(resolve, Math.min(500 * 2 ** (attempt - 1), 4000))
+                        setTimeout(
+                            resolve,
+                            Math.min(500 * 2 ** (attempt - 1), 4000),
+                        ),
                     );
                     continue;
                 }
@@ -220,7 +226,10 @@ export async function fetchExternalImage(options: {
             lastError = error;
             if (attempt < maxRetries) {
                 await new Promise((resolve) =>
-                    setTimeout(resolve, Math.min(500 * 2 ** (attempt - 1), 4000))
+                    setTimeout(
+                        resolve,
+                        Math.min(500 * 2 ** (attempt - 1), 4000),
+                    ),
                 );
                 continue;
             }
@@ -232,6 +241,8 @@ export async function fetchExternalImage(options: {
         url: safeUrl,
         status: "fetch_error",
         message:
-            lastError instanceof Error ? lastError.message : "Unknown fetch error",
+            lastError instanceof Error
+                ? lastError.message
+                : "Unknown fetch error",
     };
 }

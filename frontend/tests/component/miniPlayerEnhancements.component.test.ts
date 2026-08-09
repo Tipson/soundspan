@@ -16,9 +16,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 // Shared mutable state
 const state = {
-    currentTrack: null as { id: string; title: string; streamSource?: string; duration?: number } | null,
-    currentAudiobook: null as { id: string; title: string; duration?: number } | null,
-    currentPodcast: null as { id: string; title: string; duration?: number } | null,
+    currentTrack: null as {
+        id: string;
+        title: string;
+        streamSource?: string;
+        duration?: number;
+    } | null,
+    currentAudiobook: null as {
+        id: string;
+        title: string;
+        duration?: number;
+    } | null,
+    currentPodcast: null as {
+        id: string;
+        title: string;
+        duration?: number;
+    } | null,
     playbackType: "track" as "track" | "audiobook" | "podcast" | null,
     isPlaying: false,
     isBuffering: false,
@@ -28,11 +41,15 @@ const state = {
     isMobile: true,
     isTablet: false,
     playerMode: "mini" as string,
-    qualityBadge: null as { variant: "tidal" | "youtube" | "local"; label: string } | null,
+    qualityBadge: null as {
+        variant: "tidal" | "youtube" | "local";
+        label: string;
+    } | null,
 };
 
 // Stub icon component
-const Icon = (props: Record<string, unknown>) => React.createElement("i", props);
+const Icon = (props: Record<string, unknown>) =>
+    React.createElement("i", props);
 
 // Mock lucide-react
 mock.module("lucide-react", {
@@ -59,7 +76,8 @@ mock.module("@/utils/cn", {
 mock.module("@/utils/formatTime", {
     namedExports: {
         clampTime: (time: number) => time,
-        formatTime: (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`,
+        formatTime: (s: number) =>
+            `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`,
     },
 });
 
@@ -92,7 +110,10 @@ mock.module("@/hooks/useMediaInfo", {
             title: state.currentTrack?.title ?? "Unknown",
             subtitle: "Test Artist",
             coverUrl: null,
-            hasMedia: !!state.currentTrack || !!state.currentAudiobook || !!state.currentPodcast,
+            hasMedia:
+                !!state.currentTrack ||
+                !!state.currentAudiobook ||
+                !!state.currentPodcast,
         }),
     },
 });
@@ -123,15 +144,23 @@ mock.module("@/hooks/useMediaQuery", {
 // Mock next/image
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 // Mock framer-motion (motion.div renders as plain div)
 mock.module("framer-motion", {
     namedExports: {
         motion: {
-            div: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) =>
-                React.createElement("div", props, children),
+            div: ({
+                children,
+                ...props
+            }: {
+                children?: React.ReactNode;
+                [key: string]: unknown;
+            }) => React.createElement("div", props, children),
         },
     },
 });
@@ -178,7 +207,14 @@ mock.module("@/components/player/SyncBadge", {
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
         TrackPreferenceButtons: (props: { trackId: string }) =>
-            React.createElement("div", { "data-testid": "track-pref-buttons", "data-track-id": props.trackId }, "thumbs"),
+            React.createElement(
+                "div",
+                {
+                    "data-testid": "track-pref-buttons",
+                    "data-track-id": props.trackId,
+                },
+                "thumbs",
+            ),
     },
 });
 
@@ -213,7 +249,11 @@ test("MiniPlayer renders thumbs-up (TrackPreferenceButtons) for tracks", async (
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
 
     // Should render TrackPreferenceButtons with the track id
-    assert.match(html, /track-pref-buttons/, "Should render TrackPreferenceButtons");
+    assert.match(
+        html,
+        /track-pref-buttons/,
+        "Should render TrackPreferenceButtons",
+    );
     assert.match(html, /data-track-id="t1"/, "Should pass correct track ID");
 });
 
@@ -232,7 +272,11 @@ test("MiniPlayer does not render Next/thumbs when no media playing", async () =>
 
 test("MiniPlayer does not render thumbs for audiobook playback", async () => {
     state.currentTrack = null;
-    state.currentAudiobook = { id: "ab1", title: "Test Audiobook", duration: 3600 };
+    state.currentAudiobook = {
+        id: "ab1",
+        title: "Test Audiobook",
+        duration: 3600,
+    };
     state.playbackType = "audiobook";
 
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
@@ -240,9 +284,17 @@ test("MiniPlayer does not render thumbs for audiobook playback", async () => {
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
 
     // Should still render the player (audiobook is media)
-    assert.match(html, /Test Audiobook|Playback controls/, "Should render MiniPlayer for audiobook");
+    assert.match(
+        html,
+        /Test Audiobook|Playback controls/,
+        "Should render MiniPlayer for audiobook",
+    );
     // But should NOT render TrackPreferenceButtons for audiobooks
-    assert.doesNotMatch(html, /track-pref-buttons/, "Should not render thumbs for audiobook");
+    assert.doesNotMatch(
+        html,
+        /track-pref-buttons/,
+        "Should not render thumbs for audiobook",
+    );
 });
 
 test("MiniPlayer renders playback quality badge label with shared badge component", async () => {
@@ -255,11 +307,11 @@ test("MiniPlayer renders playback quality badge label with shared badge componen
     assert.match(
         html,
         /FLAC · 24\/96kHz/,
-        "Should render shared quality badge label text"
+        "Should render shared quality badge label text",
     );
     assert.match(
         html,
         /bg-\[#00BFFF\]\/20 text-\[#00BFFF\]/,
-        "Should apply tidal badge style classes"
+        "Should apply tidal badge style classes",
     );
 });

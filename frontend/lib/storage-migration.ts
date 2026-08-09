@@ -10,7 +10,7 @@ export interface MigratingStorageKey {
  */
 export function createMigratingStorageKey(
     suffix: string,
-    legacySuffix?: string
+    legacySuffix?: string,
 ): MigratingStorageKey {
     const current = `${BRAND_SLUG}_${suffix}`;
     return {
@@ -27,25 +27,27 @@ export function createMigratingStorageKey(
  */
 export function createExplicitMigratingStorageKey(
     current: string,
-    legacy: string
+    legacy: string,
 ): MigratingStorageKey {
     return { current, legacy };
 }
 
 export const PODCAST_DEBUG_STORAGE_KEY = createExplicitMigratingStorageKey(
     "soundspanPodcastDebug",
-    "soundspanPodcastDebug"
+    "soundspanPodcastDebug",
 );
 
 export const OVERLAY_ACTIVE_TAB_STORAGE_KEY = createExplicitMigratingStorageKey(
     "soundspan.overlay.activeTab",
-    "soundspan.overlay.activeTab"
+    "soundspan.overlay.activeTab",
 );
 
 /**
  * Executes readMigratingStorageItem.
  */
-export function readMigratingStorageItem(key: MigratingStorageKey): string | null {
+export function readMigratingStorageItem(
+    key: MigratingStorageKey,
+): string | null {
     if (typeof window === "undefined") {
         return null;
     }
@@ -79,7 +81,7 @@ export function readMigratingStorageItem(key: MigratingStorageKey): string | nul
  */
 export function writeMigratingStorageItem(
     key: MigratingStorageKey,
-    value: string
+    value: string,
 ): void {
     if (typeof window === "undefined") {
         return;

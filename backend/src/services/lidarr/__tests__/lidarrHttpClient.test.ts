@@ -35,7 +35,7 @@ const mockSleep = jest.fn<Promise<void>, [number]>(() => Promise.resolve());
 const mockGetSystemSettings = getSystemSettings as jest.Mock;
 
 function createClient(
-    options: ConstructorParameters<typeof LidarrHttpClient>[1] = {}
+    options: ConstructorParameters<typeof LidarrHttpClient>[1] = {},
 ): LidarrHttpClient {
     return new LidarrHttpClient(
         { baseUrl: BASE_URL, apiKey: API_KEY },
@@ -45,7 +45,7 @@ function createClient(
             maxBackoffMs: 10,
             sleep: mockSleep,
             ...options,
-        }
+        },
     );
 }
 
@@ -76,12 +76,15 @@ describe("LidarrHttpClient", () => {
     });
 
     it("returns response data through one configured axios instance", async () => {
-        mockRequest.mockResolvedValueOnce({ data: { records: [1] }, status: 200 });
+        mockRequest.mockResolvedValueOnce({
+            data: { records: [1] },
+            status: 200,
+        });
         const client = createClient();
 
-        await expect(client.get<{ records: number[] }>("/api/v1/queue")).resolves.toEqual(
-            { records: [1] }
-        );
+        await expect(
+            client.get<{ records: number[] }>("/api/v1/queue"),
+        ).resolves.toEqual({ records: [1] });
 
         expect(mockAxiosCreate).toHaveBeenCalledTimes(1);
         expect(mockAxiosCreate).toHaveBeenCalledWith({
@@ -104,8 +107,9 @@ describe("LidarrHttpClient", () => {
             .mockRejectedValueOnce(httpError(503))
             .mockResolvedValueOnce({ data: { ok: true }, status: 200 });
 
-        await expect(createClient().get<{ ok: boolean }>("/api/v1/system/status"))
-            .resolves.toEqual({ ok: true });
+        await expect(
+            createClient().get<{ ok: boolean }>("/api/v1/system/status"),
+        ).resolves.toEqual({ ok: true });
         expect(mockRequest).toHaveBeenCalledTimes(2);
         expect(mockSleep).toHaveBeenCalledTimes(1);
         expect(logger.warn).toHaveBeenCalledTimes(1);
@@ -128,7 +132,9 @@ describe("LidarrHttpClient", () => {
         await promise.catch((error: unknown) => {
             expect(error).toBeInstanceOf(LidarrHttpError);
             expect((error as Error).message).not.toContain(API_KEY);
-            expect((error as Error).message).not.toContain("lidarr.internal.example");
+            expect((error as Error).message).not.toContain(
+                "lidarr.internal.example",
+            );
         });
         expect(mockRequest).toHaveBeenCalledTimes(3);
         expect(logger.warn).toHaveBeenCalledTimes(2);
@@ -138,7 +144,9 @@ describe("LidarrHttpClient", () => {
     it("does not retry a non-transient status", async () => {
         mockRequest.mockRejectedValue(httpError(404));
 
-        await expect(createClient().get("/api/v1/artist/1")).rejects.toMatchObject({
+        await expect(
+            createClient().get("/api/v1/artist/1"),
+        ).rejects.toMatchObject({
             isTransient: false,
             attempts: 1,
             status: 404,
@@ -151,29 +159,33 @@ describe("LidarrHttpClient", () => {
         mockRequest.mockRejectedValue(httpError(503));
         const client = createClient({ maxRetries: 1 });
 
-        await expect(client.post("/api/v1/command", { name: "scan" }))
-            .rejects.toMatchObject({ attempts: 1, isTransient: true });
+        await expect(
+            client.post("/api/v1/command", { name: "scan" }),
+        ).rejects.toMatchObject({ attempts: 1, isTransient: true });
         expect(mockRequest).toHaveBeenCalledTimes(1);
 
         mockRequest.mockClear();
-        await expect(client.request({
-            method: "POST",
-            path: "/api/v1/command",
-            data: { name: "scan" },
-            retryable: true,
-        })).rejects.toMatchObject({ attempts: 2, isTransient: true });
+        await expect(
+            client.request({
+                method: "POST",
+                path: "/api/v1/command",
+                data: { name: "scan" },
+                retryable: true,
+            }),
+        ).rejects.toMatchObject({ attempts: 2, isTransient: true });
         expect(mockRequest).toHaveBeenCalledTimes(2);
     });
 
     it("retries no-response timeouts and reports no status on exhaustion", async () => {
         mockRequest.mockRejectedValue({ code: "ECONNABORTED" });
 
-        await expect(createClient({ maxRetries: 1 }).get("/api/v1/queue"))
-            .rejects.toMatchObject({
-                isTransient: true,
-                attempts: 2,
-                status: undefined,
-            });
+        await expect(
+            createClient({ maxRetries: 1 }).get("/api/v1/queue"),
+        ).rejects.toMatchObject({
+            isTransient: true,
+            attempts: 2,
+            status: undefined,
+        });
         expect(mockRequest).toHaveBeenCalledTimes(2);
     });
 
@@ -182,8 +194,9 @@ describe("LidarrHttpClient", () => {
             .mockRejectedValueOnce(httpError(429, { "retry-after": "60" }))
             .mockResolvedValueOnce({ data: "ok", status: 200 });
 
-        await expect(createClient({ maxBackoffMs: 25 }).get("/api/v1/queue"))
-            .resolves.toBe("ok");
+        await expect(
+            createClient({ maxBackoffMs: 25 }).get("/api/v1/queue"),
+        ).resolves.toBe("ok");
         expect(mockSleep).toHaveBeenCalledWith(25);
     });
 
@@ -191,17 +204,20 @@ describe("LidarrHttpClient", () => {
         let inFlight = 0;
         let maximumInFlight = 0;
         const releases: Array<() => void> = [];
-        mockRequest.mockImplementation(() => new Promise((resolve) => {
-            inFlight += 1;
-            maximumInFlight = Math.max(maximumInFlight, inFlight);
-            releases.push(() => {
-                inFlight -= 1;
-                resolve({ data: "done", status: 200 });
-            });
-        }));
+        mockRequest.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    inFlight += 1;
+                    maximumInFlight = Math.max(maximumInFlight, inFlight);
+                    releases.push(() => {
+                        inFlight -= 1;
+                        resolve({ data: "done", status: 200 });
+                    });
+                }),
+        );
         const client = createClient({ concurrency: 2 });
         const requests = Array.from({ length: 5 }, (_, index) =>
-            client.get<string>(`/api/v1/item/${index}`)
+            client.get<string>(`/api/v1/item/${index}`),
         );
 
         await flushPromises();
@@ -214,22 +230,28 @@ describe("LidarrHttpClient", () => {
         expect(inFlight).toBe(1);
         releases.splice(0).forEach((release) => release());
 
-        await expect(Promise.all(requests)).resolves.toEqual(Array(5).fill("done"));
+        await expect(Promise.all(requests)).resolves.toEqual(
+            Array(5).fill("done"),
+        );
         expect(maximumInFlight).toBe(2);
     });
 
     it("rejects invalid connection, options, and paths", async () => {
-        expect(() => new LidarrHttpClient({ baseUrl: "ftp://x", apiKey: "k" }))
-            .toThrow("Lidarr base URL must use HTTP or HTTPS");
-        expect(() => new LidarrHttpClient({ baseUrl: "http://h", apiKey: "" }))
-            .toThrow("Lidarr API key must be a non-empty string");
+        expect(
+            () => new LidarrHttpClient({ baseUrl: "ftp://x", apiKey: "k" }),
+        ).toThrow("Lidarr base URL must use HTTP or HTTPS");
+        expect(
+            () => new LidarrHttpClient({ baseUrl: "http://h", apiKey: "" }),
+        ).toThrow("Lidarr API key must be a non-empty string");
         expect(() => createClient({ maxRetries: -1 })).toThrow();
         expect(() => createClient({ concurrency: 0 })).toThrow();
 
-        await expect(createClient().get("api/v1/queue"))
-            .rejects.toThrow("Lidarr request path must start with /");
-        await expect(createClient().get("//untrusted.example/api/v1/queue"))
-            .rejects.toThrow("Lidarr request path must be relative");
+        await expect(createClient().get("api/v1/queue")).rejects.toThrow(
+            "Lidarr request path must start with /",
+        );
+        await expect(
+            createClient().get("//untrusted.example/api/v1/queue"),
+        ).rejects.toThrow("Lidarr request path must be relative");
         expect(mockRequest).not.toHaveBeenCalled();
     });
 });
@@ -277,7 +299,9 @@ describe("resolveLidarrConnection", () => {
     });
 
     it("falls back to enabled environment settings after a database read error", async () => {
-        mockGetSystemSettings.mockRejectedValue(new Error("database unavailable"));
+        mockGetSystemSettings.mockRejectedValue(
+            new Error("database unavailable"),
+        );
         Object.assign(config, {
             lidarr: {
                 enabled: true,

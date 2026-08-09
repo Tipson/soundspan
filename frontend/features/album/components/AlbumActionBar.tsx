@@ -66,29 +66,31 @@ export function AlbumActionBar({
 }: AlbumActionBarProps) {
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
-    const isOwned = album.owned !== undefined ? album.owned : source === "library";
-    const showDownload = downloadsEnabled && !isOwned && (album.mbid || album.rgMbid);
+    const isOwned =
+        album.owned !== undefined ? album.owned : source === "library";
+    const showDownload =
+        downloadsEnabled && !isOwned && (album.mbid || album.rgMbid);
     const albumMbid = album.rgMbid || album.mbid || album.id;
     const showPause = isPlaying && isPlayingThisAlbum;
     const hasLockedControls = isOwned || showDownload;
-    const lockMessage = "Listen Together is active — use Add to Queue to add tracks to the shared session.";
+    const lockMessage =
+        "Listen Together is active — use Add to Queue to add tracks to the shared session.";
     const canShowAddAllToQueue = Boolean(onAddAllToQueue);
     const canShowAddToPlaylist = isOwned;
     const canShowAlbumPreference = isOwned && Boolean(onToggleAlbumLike);
     const canShareAlbum = Boolean(album.id);
-    const hasActionControls =
-        isInListenTogetherGroup
-            ? hasLockedControls ||
-                canShowAddAllToQueue ||
-                canShowAddToPlaylist ||
-                canShowAlbumPreference ||
-                canShareAlbum
-            : isOwned ||
-                showDownload ||
-                canShowAddAllToQueue ||
-                canShowAddToPlaylist ||
-                canShowAlbumPreference ||
-                canShareAlbum;
+    const hasActionControls = isInListenTogetherGroup
+        ? hasLockedControls ||
+          canShowAddAllToQueue ||
+          canShowAddToPlaylist ||
+          canShowAlbumPreference ||
+          canShareAlbum
+        : isOwned ||
+          showDownload ||
+          canShowAddAllToQueue ||
+          canShowAddToPlaylist ||
+          canShowAlbumPreference ||
+          canShareAlbum;
     const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
         usePlayButtonFeedback();
 
@@ -125,7 +127,11 @@ export function AlbumActionBar({
                                             ) : (
                                                 <Play className="w-5 h-5 fill-current ml-0.5" />
                                             )}
-                                            <span>{showPause ? "Pause" : "Play All"}</span>
+                                            <span>
+                                                {showPause
+                                                    ? "Pause"
+                                                    : "Play All"}
+                                            </span>
                                         </button>
 
                                         <button
@@ -146,13 +152,16 @@ export function AlbumActionBar({
                                             onClick={handleLockedAction}
                                             className={cn(
                                                 "flex items-center gap-2 px-5 py-2.5 rounded-full font-medium border border-white/15 bg-white/10 text-white/40",
-                                                isPendingDownload && "opacity-70"
+                                                isPendingDownload &&
+                                                    "opacity-70",
                                             )}
                                             title={lockMessage}
                                         >
                                             <Download className="w-4 h-4" />
                                             <span>
-                                                {isPendingDownload ? "Downloading..." : "Download"}
+                                                {isPendingDownload
+                                                    ? "Downloading..."
+                                                    : "Download"}
                                             </span>
                                         </button>
                                         <button
@@ -170,90 +179,98 @@ export function AlbumActionBar({
                         ) : null
                     ) : (
                         <>
-                    {/* Play Button - only for owned albums */}
-                    {isOwned && (
-                        <>
-                            <button
-                                type="button"
-                                onClick={handlePlayPauseClick}
-                                className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
-                                style={{ backgroundColor: BRAND_PLAY }}
-                            >
-                                {showPlaySpinner ? (
-                                    <Loader2 className="w-5 h-5 animate-spin text-black" />
-                                ) : showPause ? (
-                                    <Pause className="w-5 h-5 fill-current text-black" />
-                                ) : (
-                                    <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                                )}
-                                <span>{showPause ? "Pause" : "Play All"}</span>
-                            </button>
+                            {/* Play Button - only for owned albums */}
+                            {isOwned && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={handlePlayPauseClick}
+                                        className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
+                                        style={{ backgroundColor: BRAND_PLAY }}
+                                    >
+                                        {showPlaySpinner ? (
+                                            <Loader2 className="w-5 h-5 animate-spin text-black" />
+                                        ) : showPause ? (
+                                            <Pause className="w-5 h-5 fill-current text-black" />
+                                        ) : (
+                                            <Play className="w-5 h-5 fill-current text-black ml-0.5" />
+                                        )}
+                                        <span>
+                                            {showPause ? "Pause" : "Play All"}
+                                        </span>
+                                    </button>
 
-                            {/* Shuffle Button */}
-                             <button
-                                 type="button"
-                                 onClick={onShuffle}
-                                 className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                                 title="Shuffle play"
-                             >
-                                 <Shuffle className="w-5 h-5" />
-                             </button>
+                                    {/* Shuffle Button */}
+                                    <button
+                                        type="button"
+                                        onClick={onShuffle}
+                                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                                        title="Shuffle play"
+                                    >
+                                        <Shuffle className="w-5 h-5" />
+                                    </button>
 
-                            {canShareAlbum && (
-                                <button
-                                    type="button"
-                                    onClick={() => setShowShareModal(true)}
-                                    className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                                    title="Share album"
-                                >
-                                    <Share2 className="w-5 h-5" />
-                                </button>
+                                    {canShareAlbum && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setShowShareModal(true)
+                                            }
+                                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                                            title="Share album"
+                                        >
+                                            <Share2 className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </>
                             )}
-                         </>
-                     )}
 
-                    {/* Download Album Button - prominent for unowned */}
-                    {showDownload && (
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={onDownloadAlbum}
-                                disabled={isPendingDownload}
-                                className={cn(
-                                    "flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all",
-                                    isPendingDownload
-                                        ? "bg-white/5 text-white/50 cursor-not-allowed"
-                                        : "bg-brand-hover hover:bg-brand text-black hover:scale-105"
-                                )}
-                                title="Auto-download best release"
-                            >
-                                <Download className="w-4 h-4" />
-                                <span>
-                                    {isPendingDownload ? "Downloading..." : "Download"}
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowReleaseModal(true)}
-                                disabled={isPendingDownload}
-                                className={cn(
-                                    "flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all",
-                                    isPendingDownload
-                                        ? "bg-white/5 text-white/50 cursor-not-allowed"
-                                        : "bg-brand-hover hover:bg-brand text-black hover:scale-105"
-                                )}
-                                title="Search and select a specific release"
-                            >
-                                <Search className="w-4 h-4" />
-                                <span>Search</span>
-                            </button>
-                        </div>
-                    )}
+                            {/* Download Album Button - prominent for unowned */}
+                            {showDownload && (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={onDownloadAlbum}
+                                        disabled={isPendingDownload}
+                                        className={cn(
+                                            "flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all",
+                                            isPendingDownload
+                                                ? "bg-white/5 text-white/50 cursor-not-allowed"
+                                                : "bg-brand-hover hover:bg-brand text-black hover:scale-105",
+                                        )}
+                                        title="Auto-download best release"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        <span>
+                                            {isPendingDownload
+                                                ? "Downloading..."
+                                                : "Download"}
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setShowReleaseModal(true)
+                                        }
+                                        disabled={isPendingDownload}
+                                        className={cn(
+                                            "flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all",
+                                            isPendingDownload
+                                                ? "bg-white/5 text-white/50 cursor-not-allowed"
+                                                : "bg-brand-hover hover:bg-brand text-black hover:scale-105",
+                                        )}
+                                        title="Search and select a specific release"
+                                    >
+                                        <Search className="w-4 h-4" />
+                                        <span>Search</span>
+                                    </button>
+                                </div>
+                            )}
                         </>
                     )}
 
                     {/* Add to Queue Button */}
-                     {onAddAllToQueue && (
+                    {onAddAllToQueue && (
                         <button
                             type="button"
                             onClick={onAddAllToQueue}
@@ -261,8 +278,8 @@ export function AlbumActionBar({
                             title="Add all to queue"
                         >
                             <ListMusic className="w-5 h-5" />
-                         </button>
-                     )}
+                        </button>
+                    )}
 
                     {!isOwned && canShareAlbum && (
                         <button
@@ -296,18 +313,27 @@ export function AlbumActionBar({
                                     disabled={isApplyingAlbumPreference}
                                     className={cn(
                                         "h-8 w-8 rounded-full flex items-center justify-center transition-colors",
-                                        isApplyingAlbumPreference ?
-                                            "cursor-not-allowed text-white/35"
-                                        : isAlbumLiked ?
-                                            "text-brand hover:bg-white/10"
-                                        :   "text-white/60 hover:bg-white/10 hover:text-white"
+                                        isApplyingAlbumPreference
+                                            ? "cursor-not-allowed text-white/35"
+                                            : isAlbumLiked
+                                              ? "text-brand hover:bg-white/10"
+                                              : "text-white/60 hover:bg-white/10 hover:text-white",
                                     )}
-                                    title={isAlbumLiked ? "Remove like from all tracks" : "Like every track on this album"}
+                                    title={
+                                        isAlbumLiked
+                                            ? "Remove like from all tracks"
+                                            : "Like every track on this album"
+                                    }
                                 >
                                     {isApplyingAlbumPreference ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        <Heart className={cn("h-4 w-4", isAlbumLiked && "fill-current")} />
+                                        <Heart
+                                            className={cn(
+                                                "h-4 w-4",
+                                                isAlbumLiked && "fill-current",
+                                            )}
+                                        />
                                     )}
                                 </button>
                             )}
@@ -317,9 +343,7 @@ export function AlbumActionBar({
             )}
 
             {isInListenTogetherGroup && hasLockedControls && (
-                <p className="text-xs text-white/40">
-                    {lockMessage}
-                </p>
+                <p className="text-xs text-white/40">{lockMessage}</p>
             )}
 
             {showDownload && (

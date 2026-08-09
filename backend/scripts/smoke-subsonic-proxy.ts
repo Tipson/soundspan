@@ -1,7 +1,8 @@
 type JsonRecord = Record<string, unknown>;
 
 const backendBaseUrl = process.env.BACKEND_BASE_URL ?? "http://127.0.0.1:3006";
-const frontendBaseUrl = process.env.FRONTEND_BASE_URL ?? "http://127.0.0.1:3030";
+const frontendBaseUrl =
+    process.env.FRONTEND_BASE_URL ?? "http://127.0.0.1:3030";
 
 function assertCondition(condition: unknown, message: string): void {
     if (!condition) {
@@ -28,7 +29,10 @@ async function fetchJson(url: string): Promise<JsonRecord> {
     return body;
 }
 
-async function checkSubsonicEnvelope(baseUrl: string, label: string): Promise<void> {
+async function checkSubsonicEnvelope(
+    baseUrl: string,
+    label: string,
+): Promise<void> {
     const url = new URL("/rest/ping.view", baseUrl);
     url.searchParams.set("f", "json");
 

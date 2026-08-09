@@ -55,7 +55,7 @@ const mockStaleJobCleanup = staleJobCleanupService.cleanupAll as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) throw new Error(`GET route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -63,7 +63,8 @@ function getGetHandler(path: string) {
 
 function getPostHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.post
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.post,
     );
     if (!layer) throw new Error(`POST route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -119,7 +120,7 @@ describe("settings displayName compatibility", () => {
             expect.objectContaining({
                 userId: "user-1",
                 displayName: "Jane Doe",
-            })
+            }),
         );
         expect(mockUserSettingsCreate).not.toHaveBeenCalled();
     });
@@ -166,7 +167,7 @@ describe("settings displayName compatibility", () => {
                 offlineEnabled: false,
                 maxCacheSizeMb: 5120,
                 displayName: "Jane Doe",
-            })
+            }),
         );
     });
 
@@ -212,14 +213,16 @@ describe("settings displayName compatibility", () => {
         });
         expect(mockUserSettingsUpsert).toHaveBeenCalledWith(
             expect.objectContaining({
-                update: expect.objectContaining({ playbackQuality: "original" }),
-            })
+                update: expect.objectContaining({
+                    playbackQuality: "original",
+                }),
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
             expect.objectContaining({
                 displayName: "Mary-Jane Doe",
-            })
+            }),
         );
     });
 
@@ -236,7 +239,7 @@ describe("settings displayName compatibility", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: "Invalid settings",
-            })
+            }),
         );
         expect(mockUserUpdate).not.toHaveBeenCalled();
         expect(mockUserSettingsUpsert).not.toHaveBeenCalled();
@@ -273,7 +276,7 @@ describe("settings displayName compatibility", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 displayName: null,
-            })
+            }),
         );
     });
 
@@ -308,14 +311,14 @@ describe("settings displayName compatibility", () => {
                     shareOnlinePresence: true,
                     shareListeningStatus: true,
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
             expect.objectContaining({
                 shareOnlinePresence: true,
                 shareListeningStatus: true,
-            })
+            }),
         );
     });
 
@@ -352,7 +355,7 @@ describe("settings displayName compatibility", () => {
             expect.objectContaining({
                 userId: "user-1",
                 playbackQuality: "original",
-            })
+            }),
         );
     });
 
@@ -428,18 +431,20 @@ describe("settings displayName compatibility", () => {
         expect(mockUserSettingsUpsert).toHaveBeenCalledWith(
             expect.objectContaining({
                 update: expect.objectContaining({ showTidalExplore: false }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
             expect.objectContaining({
                 showTidalExplore: false,
-            })
+            }),
         );
     });
 
     it("returns 500 when cleanup-stale-jobs fails", async () => {
-        mockStaleJobCleanup.mockRejectedValue(new Error("cleanup service unavailable"));
+        mockStaleJobCleanup.mockRejectedValue(
+            new Error("cleanup service unavailable"),
+        );
 
         const req = { user: { id: "admin-1" } } as any;
         const res = createRes();

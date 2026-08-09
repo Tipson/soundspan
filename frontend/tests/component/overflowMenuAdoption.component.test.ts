@@ -63,7 +63,8 @@ mock.module("lucide-react", {
 // Mock formatTime
 mock.module("@/utils/formatTime", {
     namedExports: {
-        formatTime: (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`,
+        formatTime: (s: number) =>
+            `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`,
     },
 });
 
@@ -194,7 +195,11 @@ mock.module("@/hooks/useQueries", {
                             id: "track-1",
                             title: "Track One",
                             duration: 200,
-                            album: { title: "Album One", coverArt: null, artist: { name: "Artist One", id: "a1" } },
+                            album: {
+                                title: "Album One",
+                                coverArt: null,
+                                artist: { name: "Artist One", id: "a1" },
+                            },
                         },
                     },
                 ],
@@ -232,21 +237,27 @@ mock.module("@tanstack/react-query", {
 // Mock shuffle
 mock.module("@/utils/shuffle", {
     namedExports: {
-        shuffleArray: <T,>(arr: T[]) => arr,
+        shuffleArray: <T>(arr: T[]) => arr,
     },
 });
 
 // Mock next/image
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 // Mock CachedImage
 mock.module("@/components/ui/CachedImage", {
     namedExports: {
         CachedImage: (props: Record<string, unknown>) =>
-            React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+            React.createElement("img", {
+                src: props.src as string,
+                alt: props.alt as string,
+            }),
     },
 });
 
@@ -295,7 +306,11 @@ mock.module("@/components/ui/TidalBadge", {
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
         TrackPreferenceButtons: () =>
-            React.createElement("div", { "data-testid": "track-pref-buttons" }, "thumbs"),
+            React.createElement(
+                "div",
+                { "data-testid": "track-pref-buttons" },
+                "thumbs",
+            ),
     },
 });
 
@@ -310,22 +325,31 @@ beforeEach(() => {
 // ─── 2.1 Library Songs (TracksList) ─────────────────────────────────
 
 test("Library TracksList renders TrackOverflowMenu trigger on each row", async () => {
-    const { TracksList } = await import(
-        "../../features/library/components/TracksList"
-    );
+    const { TracksList } =
+        await import("../../features/library/components/TracksList");
 
     const tracks = [
         {
             id: "t1",
             title: "Song A",
             duration: 180,
-            album: { id: "al1", title: "Album A", coverArt: null, artist: { id: "ar1", name: "Artist A" } },
+            album: {
+                id: "al1",
+                title: "Album A",
+                coverArt: null,
+                artist: { id: "ar1", name: "Artist A" },
+            },
         },
         {
             id: "t2",
             title: "Song B",
             duration: 200,
-            album: { id: "al2", title: "Album B", coverArt: null, artist: { id: "ar2", name: "Artist B" } },
+            album: {
+                id: "al2",
+                title: "Album B",
+                coverArt: null,
+                artist: { id: "ar2", name: "Artist B" },
+            },
         },
     ];
 
@@ -335,29 +359,41 @@ test("Library TracksList renders TrackOverflowMenu trigger on each row", async (
             onPlay: () => undefined,
             onDelete: () => undefined,
             canDelete: true,
-        })
+        }),
     );
 
     // Should have overflow menu triggers (aria-haspopup="menu" is unique per trigger button)
     const triggerMatches = html.match(/aria-haspopup="menu"/g);
     assert.ok(triggerMatches, "Should render overflow menu triggers");
-    assert.equal(triggerMatches!.length, 2, "Should have one trigger per track row");
+    assert.equal(
+        triggerMatches!.length,
+        2,
+        "Should have one trigger per track row",
+    );
 
     // Should have "Track actions" aria-label
-    assert.match(html, /Track actions/, "Should use TrackOverflowMenu component");
+    assert.match(
+        html,
+        /Track actions/,
+        "Should use TrackOverflowMenu component",
+    );
 });
 
 test("Library TracksList no longer renders inline Add to Queue / Add to Playlist buttons", async () => {
-    const { TracksList } = await import(
-        "../../features/library/components/TracksList"
-    );
+    const { TracksList } =
+        await import("../../features/library/components/TracksList");
 
     const tracks = [
         {
             id: "t1",
             title: "Song A",
             duration: 180,
-            album: { id: "al1", title: "Album A", coverArt: null, artist: { id: "ar1", name: "Artist A" } },
+            album: {
+                id: "al1",
+                title: "Album A",
+                coverArt: null,
+                artist: { id: "ar1", name: "Artist A" },
+            },
         },
     ];
 
@@ -367,21 +403,28 @@ test("Library TracksList no longer renders inline Add to Queue / Add to Playlist
             onPlay: () => undefined,
             onDelete: () => undefined,
             canDelete: false,
-        })
+        }),
     );
 
     // Old inline buttons had these titles - they should NOT appear as standalone buttons now
     // (they'll be inside the overflow menu which is closed on initial render)
-    assert.doesNotMatch(html, /title="Add to Queue"/, "Should not have standalone Add to Queue button");
-    assert.doesNotMatch(html, /title="Add to Playlist"/, "Should not have standalone Add to Playlist button");
+    assert.doesNotMatch(
+        html,
+        /title="Add to Queue"/,
+        "Should not have standalone Add to Queue button",
+    );
+    assert.doesNotMatch(
+        html,
+        /title="Add to Playlist"/,
+        "Should not have standalone Add to Playlist button",
+    );
 });
 
 // ─── 2.2 Discover Weekly (TrackList) ─────────────────────────────────
 
 test("Discover TrackList renders TrackOverflowMenu trigger on each row", async () => {
-    const { TrackList } = await import(
-        "../../features/discover/components/TrackList"
-    );
+    const { TrackList } =
+        await import("../../features/discover/components/TrackList");
 
     const tracks = [
         {
@@ -408,20 +451,23 @@ test("Discover TrackList renders TrackOverflowMenu trigger on each row", async (
             isPlaying: false,
             onPlayTrack: () => undefined,
             onTogglePlay: () => undefined,
-        })
+        }),
     );
 
     // Should have a "Track actions" trigger from TrackOverflowMenu
     assert.match(html, /Track actions/, "Should render overflow menu trigger");
-    assert.match(html, /aria-haspopup="menu"/, "Should use TrackOverflowMenu component");
+    assert.match(
+        html,
+        /aria-haspopup="menu"/,
+        "Should use TrackOverflowMenu component",
+    );
 });
 
 // ─── 2.4 Album TrackList ─────────────────────────────────────────────
 
 test("Album TrackList renders TrackOverflowMenu trigger instead of inline menu", async () => {
-    const { TrackList } = await import(
-        "../../features/album/components/TrackList"
-    );
+    const { TrackList } =
+        await import("../../features/album/components/TrackList");
 
     const album = {
         id: "album-1",
@@ -453,10 +499,14 @@ test("Album TrackList renders TrackOverflowMenu trigger instead of inline menu",
             previewTrack: null,
             previewPlaying: false,
             onPreview: () => undefined,
-        })
+        }),
     );
 
     // Should have "Track actions" from TrackOverflowMenu component
     assert.match(html, /Track actions/, "Should render overflow menu trigger");
-    assert.match(html, /aria-haspopup="menu"/, "Should use TrackOverflowMenu component");
+    assert.match(
+        html,
+        /aria-haspopup="menu"/,
+        "Should use TrackOverflowMenu component",
+    );
 });

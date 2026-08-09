@@ -114,9 +114,13 @@ jest.mock("../../utils/db", () => ({
     prisma: mockPrisma,
 }));
 
-jest.mock("music-metadata", () => ({
-    parseFile: mockParseFile,
-}), { virtual: true });
+jest.mock(
+    "music-metadata",
+    () => ({
+        parseFile: mockParseFile,
+    }),
+    { virtual: true },
+);
 
 jest.mock("../../utils/rangeParser", () => ({
     parseRangeHeader: mockParseRangeHeader,
@@ -140,10 +144,7 @@ jest.mock("fluent-ffmpeg", () => ({
     }),
 }));
 
-import {
-    AudioStreamingService,
-    QUALITY_SETTINGS,
-} from "../audioStreaming";
+import { AudioStreamingService, QUALITY_SETTINGS } from "../audioStreaming";
 import { AppError, ErrorCategory, ErrorCode } from "../../utils/errors";
 
 type MockReadStream = {
@@ -268,7 +269,7 @@ describe("AudioStreamingService", () => {
                 "track-1",
                 "original",
                 new Date("2025-01-01T00:00:00.000Z"),
-                "/music/source.flac"
+                "/music/source.flac",
             );
 
             expect(result).toEqual({
@@ -302,7 +303,7 @@ describe("AudioStreamingService", () => {
                 "track-1",
                 "high",
                 new Date("2024-01-01T00:00:00.000Z"),
-                "/music/source.flac"
+                "/music/source.flac",
             );
 
             expect(result).toEqual({
@@ -331,14 +332,16 @@ describe("AudioStreamingService", () => {
                 sourceModified: new Date("2024-01-01T00:00:00.000Z"),
                 lastAccessed: new Date("2024-01-02T00:00:00.000Z"),
             });
-            mockParseFile.mockResolvedValueOnce({ format: { bitrate: 512000 } });
+            mockParseFile.mockResolvedValueOnce({
+                format: { bitrate: 512000 },
+            });
 
             const sourceModified = new Date("2025-01-01T00:00:00.000Z");
             const result = await service.getStreamFilePath(
                 "track-2",
                 "high",
                 sourceModified,
-                "/music/source.flac"
+                "/music/source.flac",
             );
 
             expect(mockPrisma.transcodedFile.delete).toHaveBeenCalledWith({
@@ -349,7 +352,7 @@ describe("AudioStreamingService", () => {
                 "track-2",
                 "high",
                 "/music/source.flac",
-                sourceModified
+                sourceModified,
             );
             expect(result).toEqual({
                 filePath: "/cache/new-file.mp3",
@@ -361,13 +364,15 @@ describe("AudioStreamingService", () => {
             const service = createService();
             const transcodeSpy = jest.spyOn(service as any, "transcodeToCache");
 
-            mockParseFile.mockResolvedValueOnce({ format: { bitrate: 192000 } });
+            mockParseFile.mockResolvedValueOnce({
+                format: { bitrate: 192000 },
+            });
 
             const result = await service.getStreamFilePath(
                 "track-3",
                 "high",
                 new Date("2025-01-01T00:00:00.000Z"),
-                "/music/source.m4a"
+                "/music/source.m4a",
             );
 
             expect(result).toEqual({
@@ -383,9 +388,13 @@ describe("AudioStreamingService", () => {
             const transcodeSpy = jest
                 .spyOn(service as any, "transcodeToCache")
                 .mockResolvedValue("/cache/fallback.mp3");
-            const evictSpy = jest.spyOn(service, "evictCache").mockResolvedValue();
+            const evictSpy = jest
+                .spyOn(service, "evictCache")
+                .mockResolvedValue();
 
-            mockParseFile.mockRejectedValueOnce(new Error("metadata unavailable"));
+            mockParseFile.mockRejectedValueOnce(
+                new Error("metadata unavailable"),
+            );
             const oneGb = 1024 * 1024 * 1024;
             mockPrisma.transcodedFile.findMany.mockResolvedValueOnce([
                 { cacheSize: Math.floor(oneGb * 1.95) },
@@ -395,19 +404,19 @@ describe("AudioStreamingService", () => {
                 "track-4",
                 "high",
                 new Date("2025-01-01T00:00:00.000Z"),
-                "/music/source.flac"
+                "/music/source.flac",
             );
 
             expect(mockLogger.warn).toHaveBeenCalledWith(
                 "[STREAM] Failed to read source metadata, will transcode anyway:",
-                expect.any(Error)
+                expect.any(Error),
             );
             expect(evictSpy).toHaveBeenCalledWith(1.6);
             expect(transcodeSpy).toHaveBeenCalledWith(
                 "track-4",
                 "high",
                 "/music/source.flac",
-                new Date("2025-01-01T00:00:00.000Z")
+                new Date("2025-01-01T00:00:00.000Z"),
             );
             expect(result).toEqual({
                 filePath: "/cache/fallback.mp3",
@@ -427,7 +436,7 @@ describe("AudioStreamingService", () => {
                 "track-success",
                 "high",
                 "/music/source.flac",
-                sourceModified
+                sourceModified,
             );
 
             const expectedHash = crypto
@@ -440,13 +449,17 @@ describe("AudioStreamingService", () => {
             expect(result).toBe(expectedPath);
             expect(mockFfmpeg).toHaveBeenCalledWith("/music/source.flac");
             expect(ffmpegControl.lastCommand.audioBitrate).toHaveBeenCalledWith(
-                QUALITY_SETTINGS.high.bitrate
+                QUALITY_SETTINGS.high.bitrate,
             );
             expect(ffmpegControl.lastCommand.audioCodec).toHaveBeenCalledWith(
-                "libmp3lame"
+                "libmp3lame",
             );
-            expect(ffmpegControl.lastCommand.format).toHaveBeenCalledWith("mp3");
-            expect(ffmpegControl.lastCommand.save).toHaveBeenCalledWith(expectedPath);
+            expect(ffmpegControl.lastCommand.format).toHaveBeenCalledWith(
+                "mp3",
+            );
+            expect(ffmpegControl.lastCommand.save).toHaveBeenCalledWith(
+                expectedPath,
+            );
             expect(mockPrisma.transcodedFile.upsert).toHaveBeenCalledWith({
                 where: {
                     trackId_quality: {
@@ -480,8 +493,8 @@ describe("AudioStreamingService", () => {
                     "track-fatal",
                     "high",
                     "/music/source.flac",
-                    new Date("2025-01-10T00:00:00.000Z")
-                )
+                    new Date("2025-01-10T00:00:00.000Z"),
+                ),
             ).rejects.toMatchObject({
                 name: "AppError",
                 code: ErrorCode.FFMPEG_NOT_FOUND,
@@ -499,8 +512,8 @@ describe("AudioStreamingService", () => {
                     "track-recoverable",
                     "high",
                     "/music/source.flac",
-                    new Date("2025-01-10T00:00:00.000Z")
-                )
+                    new Date("2025-01-10T00:00:00.000Z"),
+                ),
             ).rejects.toMatchObject({
                 name: "AppError",
                 code: ErrorCode.TRANSCODE_FAILED,
@@ -512,7 +525,7 @@ describe("AudioStreamingService", () => {
             const service = createService();
             mockFsStat.mockResolvedValueOnce({ size: 100 });
             mockPrisma.transcodedFile.upsert.mockRejectedValueOnce(
-                new Error("db write failed")
+                new Error("db write failed"),
             );
 
             await expect(
@@ -520,8 +533,8 @@ describe("AudioStreamingService", () => {
                     "track-db",
                     "high",
                     "/music/source.flac",
-                    new Date("2025-01-10T00:00:00.000Z")
-                )
+                    new Date("2025-01-10T00:00:00.000Z"),
+                ),
             ).rejects.toMatchObject({
                 name: "AppError",
                 code: ErrorCode.DB_QUERY_ERROR,
@@ -538,8 +551,8 @@ describe("AudioStreamingService", () => {
                     "track-throw",
                     "high",
                     "/music/source.flac",
-                    new Date("2025-01-10T00:00:00.000Z")
-                )
+                    new Date("2025-01-10T00:00:00.000Z"),
+                ),
             ).rejects.toMatchObject({
                 name: "AppError",
                 code: ErrorCode.FFMPEG_NOT_FOUND,
@@ -555,8 +568,8 @@ describe("AudioStreamingService", () => {
                     "track-invalid",
                     "original",
                     "/music/source.flac",
-                    new Date("2025-01-10T00:00:00.000Z")
-                )
+                    new Date("2025-01-10T00:00:00.000Z"),
+                ),
             ).rejects.toMatchObject({
                 name: "AppError",
                 code: ErrorCode.INVALID_CONFIG,
@@ -574,8 +587,8 @@ describe("AudioStreamingService", () => {
                     "track-instance",
                     "high",
                     "/music/source.flac",
-                    new Date("2025-01-10T00:00:00.000Z")
-                )
+                    new Date("2025-01-10T00:00:00.000Z"),
+                ),
             ).rejects.toBeInstanceOf(AppError);
         });
 
@@ -589,13 +602,13 @@ describe("AudioStreamingService", () => {
                 "track-dedup",
                 "high",
                 "/music/source.flac",
-                sourceModified
+                sourceModified,
             );
             const p2 = (service as any).transcodeToCache(
                 "track-dedup",
                 "high",
                 "/music/source.flac",
-                sourceModified
+                sourceModified,
             );
 
             const [r1, r2] = await Promise.all([p1, p2]);
@@ -603,7 +616,7 @@ describe("AudioStreamingService", () => {
             expect(r1).toBe(r2);
             // ffmpeg should only be invoked once for the deduplicated pair
             const ffmpegCallsForDedup = mockFfmpeg.mock.calls.filter(
-                (call: any[]) => call[0] === "/music/source.flac"
+                (call: any[]) => call[0] === "/music/source.flac",
             );
             expect(ffmpegCallsForDedup).toHaveLength(1);
             expect(mockPrisma.transcodedFile.upsert).toHaveBeenCalledTimes(1);
@@ -619,8 +632,8 @@ describe("AudioStreamingService", () => {
                     "track-retry",
                     "high",
                     "/music/source.flac",
-                    new Date("2025-01-10T00:00:00.000Z")
-                )
+                    new Date("2025-01-10T00:00:00.000Z"),
+                ),
             ).rejects.toMatchObject({ name: "AppError" });
 
             // After failure, inflight map should be cleared so a retry can proceed
@@ -631,7 +644,7 @@ describe("AudioStreamingService", () => {
                 "track-retry",
                 "high",
                 "/music/source.flac",
-                new Date("2025-01-10T00:00:00.000Z")
+                new Date("2025-01-10T00:00:00.000Z"),
             );
 
             expect(result).toBeDefined();
@@ -701,12 +714,18 @@ describe("AudioStreamingService", () => {
 
             expect(mockFsUnlink).toHaveBeenCalledWith("/cache/oldest.mp3");
             expect(mockFsUnlink).toHaveBeenCalledWith("/cache/older.mp3");
-            expect(mockPrisma.transcodedFile.delete).toHaveBeenNthCalledWith(1, {
-                where: { id: "oldest" },
-            });
-            expect(mockPrisma.transcodedFile.delete).toHaveBeenNthCalledWith(2, {
-                where: { id: "older" },
-            });
+            expect(mockPrisma.transcodedFile.delete).toHaveBeenNthCalledWith(
+                1,
+                {
+                    where: { id: "oldest" },
+                },
+            );
+            expect(mockPrisma.transcodedFile.delete).toHaveBeenNthCalledWith(
+                2,
+                {
+                    where: { id: "older" },
+                },
+            );
             expect(mockPrisma.transcodedFile.delete).toHaveBeenCalledTimes(2);
         });
     });
@@ -722,7 +741,9 @@ describe("AudioStreamingService", () => {
         it("falls back to audio/mpeg for unknown extensions", () => {
             const service = createService();
 
-            expect(service.getMimeType("/music/song.unknown")).toBe("audio/mpeg");
+            expect(service.getMimeType("/music/song.unknown")).toBe(
+                "audio/mpeg",
+            );
         });
     });
 
@@ -746,7 +767,7 @@ describe("AudioStreamingService", () => {
                 req,
                 res as any,
                 "/music/song.flac",
-                "audio/flac"
+                "audio/flac",
             );
 
             expect(mockParseRangeHeader).not.toHaveBeenCalled();
@@ -761,7 +782,7 @@ describe("AudioStreamingService", () => {
             });
             expect(mockFsCreateReadStream).toHaveBeenCalledWith(
                 "/music/song.flac",
-                { start: 0, end: 999 }
+                { start: 0, end: 999 },
             );
             // pipeline() owns piping + teardown of both streams.
             expect(mockPipeline).toHaveBeenCalledWith(stream, res);
@@ -786,14 +807,14 @@ describe("AudioStreamingService", () => {
                 req,
                 res as any,
                 "/music/song.flac",
-                "audio/flac"
+                "audio/flac",
             );
 
             expect(res.set).toHaveBeenCalledWith(
                 expect.objectContaining({
                     "Access-Control-Allow-Origin": "https://client.example",
                     "Access-Control-Allow-Credentials": "true",
-                })
+                }),
             );
         });
 
@@ -816,13 +837,13 @@ describe("AudioStreamingService", () => {
                 req,
                 res as any,
                 "/music/song.flac",
-                "audio/flac"
+                "audio/flac",
             );
 
             const headers = res.set.mock.calls[0][0];
             expect(headers).not.toHaveProperty("Access-Control-Allow-Origin");
             expect(headers).not.toHaveProperty(
-                "Access-Control-Allow-Credentials"
+                "Access-Control-Allow-Credentials",
             );
             // The stream itself is still served; only the credentialed CORS
             // reflection is withheld.
@@ -853,10 +874,13 @@ describe("AudioStreamingService", () => {
                 req,
                 res as any,
                 "/music/song.flac",
-                "audio/flac"
+                "audio/flac",
             );
 
-            expect(mockParseRangeHeader).toHaveBeenCalledWith("bytes=100-199", 1000);
+            expect(mockParseRangeHeader).toHaveBeenCalledWith(
+                "bytes=100-199",
+                1000,
+            );
             expect(res.status).toHaveBeenCalledWith(206);
             expect(res.set).toHaveBeenCalledWith({
                 "Content-Type": "audio/flac",
@@ -867,7 +891,7 @@ describe("AudioStreamingService", () => {
             });
             expect(mockFsCreateReadStream).toHaveBeenCalledWith(
                 "/music/song.flac",
-                { start: 100, end: 199 }
+                { start: 100, end: 199 },
             );
             expect(mockPipeline).toHaveBeenCalledWith(stream, res);
         });
@@ -876,7 +900,10 @@ describe("AudioStreamingService", () => {
             const service = createService();
 
             mockFsStat.mockResolvedValueOnce({ size: 1000 });
-            mockParseRangeHeader.mockReturnValueOnce({ ok: false, status: 416 });
+            mockParseRangeHeader.mockReturnValueOnce({
+                ok: false,
+                status: 416,
+            });
 
             const req: any = {
                 headers: {
@@ -889,7 +916,7 @@ describe("AudioStreamingService", () => {
                 req,
                 res as any,
                 "/music/song.flac",
-                "audio/flac"
+                "audio/flac",
             );
 
             expect(res.status).toHaveBeenCalledWith(416);
@@ -915,7 +942,7 @@ describe("AudioStreamingService", () => {
                 req,
                 res as any,
                 "/music/song.flac",
-                "audio/flac"
+                "audio/flac",
             );
 
             expect(res.status).toHaveBeenNthCalledWith(1, 200);
@@ -923,7 +950,7 @@ describe("AudioStreamingService", () => {
             expect(res.end).toHaveBeenCalledTimes(1);
             expect(mockLogger.error).toHaveBeenCalledWith(
                 "[AudioStreaming] Stream error for /music/song.flac:",
-                expect.any(Error)
+                expect.any(Error),
             );
         });
 
@@ -936,7 +963,7 @@ describe("AudioStreamingService", () => {
             mockPipeline.mockRejectedValueOnce(
                 Object.assign(new Error("aborted"), {
                     code: "ERR_STREAM_PREMATURE_CLOSE",
-                })
+                }),
             );
 
             const req: any = { headers: {} };
@@ -946,7 +973,7 @@ describe("AudioStreamingService", () => {
                 req,
                 res as any,
                 "/music/song.flac",
-                "audio/flac"
+                "audio/flac",
             );
 
             // 200 set up front; the abort must not produce a 500 or an error log.
@@ -965,7 +992,7 @@ describe("AudioStreamingService", () => {
 
             expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
             expect(clearIntervalSpy).toHaveBeenCalledWith(
-                12345 as unknown as NodeJS.Timeout
+                12345 as unknown as NodeJS.Timeout,
             );
         });
     });

@@ -211,7 +211,8 @@ export function resolveConservativeSegmentedStartupRetryDelayMs({
     retryAfterMsHint,
     maxDelayMs = RETRY_AFTER_HINT_MAX_MS,
 }: ResolveConservativeRetryDelayInput): number {
-    const normalizedComputedDelay = parsePositiveIntegerMs(computedDelayMs) ?? 0;
+    const normalizedComputedDelay =
+        parsePositiveIntegerMs(computedDelayMs) ?? 0;
     const normalizedRetryHint = parsePositiveIntegerMs(retryAfterMsHint);
     if (normalizedRetryHint === null) {
         return normalizedComputedDelay;

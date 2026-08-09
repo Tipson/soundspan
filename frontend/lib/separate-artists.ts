@@ -6,7 +6,7 @@
  */
 export function separateArtists<T>(
     items: T[],
-    getArtistKey: (item: T) => string
+    getArtistKey: (item: T) => string,
 ): T[] {
     if (items.length <= 1) return items;
 
@@ -22,7 +22,7 @@ export function separateArtists<T>(
     }
 
     const buckets = Array.from(bucketMap.values()).sort(
-        (a, b) => b.length - a.length
+        (a, b) => b.length - a.length,
     );
 
     const result: T[] = [];

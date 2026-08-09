@@ -52,7 +52,7 @@ const mockResolveSafeOutboundUrl = jest.fn(async (url: string) =>
     url.includes("192.168.") ||
     url.includes("resolves-private")
         ? null
-        : url
+        : url,
 );
 
 jest.mock("../outboundUrlSafety", () => ({
@@ -137,7 +137,7 @@ describe("PodcastCacheService", () => {
         expect(result.failed).toBe(1);
         expect(result.errors).toEqual([
             expect.stringContaining(
-                "Failed to sync cover for Fail: db write failed"
+                "Failed to sync cover for Fail: db write failed",
             ),
         ]);
 
@@ -150,7 +150,7 @@ describe("PodcastCacheService", () => {
                     "/srv/music",
                     "cover-cache",
                     "podcasts",
-                    "podcast_pod-ok.jpg"
+                    "podcast_pod-ok.jpg",
                 ),
             },
         });
@@ -164,7 +164,7 @@ describe("PodcastCacheService", () => {
         await expect(service.syncAllCovers()).rejects.toThrow("mkdir denied");
         expect(logger.error).toHaveBeenCalledWith(
             " Podcast cover sync failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -224,7 +224,7 @@ describe("PodcastCacheService", () => {
         expect(result.failed).toBe(1);
         expect(result.errors).toEqual([
             expect.stringContaining(
-                "Failed to sync cover for episode Episode Fail: episode update failed"
+                "Failed to sync cover for episode Episode Fail: episode update failed",
             ),
         ]);
 
@@ -235,13 +235,15 @@ describe("PodcastCacheService", () => {
     it("syncEpisodeCovers rethrows fatal query failures", async () => {
         const service = new PodcastCacheService();
         prisma.podcastEpisode.findMany.mockRejectedValueOnce(
-            new Error("query failed")
+            new Error("query failed"),
         );
 
-        await expect(service.syncEpisodeCovers()).rejects.toThrow("query failed");
+        await expect(service.syncEpisodeCovers()).rejects.toThrow(
+            "query failed",
+        );
         expect(logger.error).toHaveBeenCalledWith(
             " Episode cover sync failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -252,14 +254,14 @@ describe("PodcastCacheService", () => {
         const localPath = await (service as any).downloadCover(
             "pod-net",
             "https://img.example/down.jpg",
-            "podcast"
+            "podcast",
         );
 
         expect(localPath).toBeNull();
         expect(fsPromises.writeFile).not.toHaveBeenCalled();
         expect(logger.error).toHaveBeenCalledWith(
             "Failed to download cover for podcast pod-net:",
-            "network error"
+            "network error",
         );
     });
 
@@ -269,14 +271,14 @@ describe("PodcastCacheService", () => {
         const localPath = await (service as any).downloadCover(
             "pod-ssrf",
             "http://127.0.0.1:9200/internal",
-            "podcast"
+            "podcast",
         );
 
         expect(localPath).toBeNull();
         expect(fetchMock).not.toHaveBeenCalled();
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining("SSRF-blocked"),
-            expect.stringContaining("127.0.0.1")
+            expect.stringContaining("127.0.0.1"),
         );
     });
 
@@ -286,7 +288,7 @@ describe("PodcastCacheService", () => {
         const localPath = await (service as any).downloadCover(
             "pod-priv",
             "http://192.168.1.1/admin",
-            "podcast"
+            "podcast",
         );
 
         expect(localPath).toBeNull();
@@ -300,13 +302,13 @@ describe("PodcastCacheService", () => {
         const localPath = await (service as any).downloadCover(
             "pod-ext",
             "https://cdn.podcast.example/cover.jpg",
-            "podcast"
+            "podcast",
         );
 
         expect(localPath).not.toBeNull();
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(mockResolveSafeOutboundUrl).toHaveBeenCalledWith(
-            "https://cdn.podcast.example/cover.jpg"
+            "https://cdn.podcast.example/cover.jpg",
         );
     });
 
@@ -318,7 +320,7 @@ describe("PodcastCacheService", () => {
         const localPath = await (service as any).downloadCover(
             "pod-rebind",
             "https://resolves-private.example.com/cover.jpg",
-            "podcast"
+            "podcast",
         );
 
         expect(localPath).toBeNull();
@@ -334,17 +336,14 @@ describe("PodcastCacheService", () => {
                     "/srv/music",
                     "cover-cache",
                     "podcasts",
-                    "podcast_keep.jpg"
+                    "podcast_keep.jpg",
                 ),
             },
             { localCoverPath: null },
         ]);
         prisma.podcastEpisode.findMany.mockResolvedValueOnce([
             {
-                localCoverPath: path.join(
-                    "/tmp",
-                    "episode_keep.jpg"
-                ),
+                localCoverPath: path.join("/tmp", "episode_keep.jpg"),
             },
         ]);
         fsPromises.readdir.mockResolvedValueOnce([
@@ -358,12 +357,7 @@ describe("PodcastCacheService", () => {
         expect(deleted).toBe(1);
         expect(fsPromises.unlink).toHaveBeenCalledTimes(1);
         expect(fsPromises.unlink).toHaveBeenCalledWith(
-            path.join(
-                "/srv/music",
-                "cover-cache",
-                "podcasts",
-                "orphan.jpg"
-            )
+            path.join("/srv/music", "cover-cache", "podcasts", "orphan.jpg"),
         );
     });
 });

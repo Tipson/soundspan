@@ -22,7 +22,9 @@ jest.mock("../deezer", () => ({
 
 jest.mock("../rateLimiter", () => ({
     rateLimiter: {
-        execute: jest.fn(async (_bucket: string, fn: () => Promise<unknown>) => fn()),
+        execute: jest.fn(async (_bucket: string, fn: () => Promise<unknown>) =>
+            fn(),
+        ),
     },
 }));
 
@@ -106,7 +108,7 @@ describe("spotifyService", () => {
         expect(mockAxiosGet).toHaveBeenCalledTimes(2);
         expect(token).toBeNull();
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "Spotify: All token endpoints failed; API browsing unavailable, continuing with fallback providers."
+            "Spotify: All token endpoints failed; API browsing unavailable, continuing with fallback providers.",
         );
     });
 
@@ -119,7 +121,7 @@ describe("spotifyService", () => {
 
         expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Spotify: Token endpoints still unavailable; fallback providers remain active."
+            "Spotify: Token endpoints still unavailable; fallback providers remain active.",
         );
     });
 
@@ -127,7 +129,9 @@ describe("spotifyService", () => {
         const svc = spotifyService as any;
         svc.anonymousToken = "cached-token";
         svc.tokenExpiry = Date.now() + 30 * 1000;
-        mockAxiosGet.mockResolvedValueOnce(makeTokenResponse("refreshed-token"));
+        mockAxiosGet.mockResolvedValueOnce(
+            makeTokenResponse("refreshed-token"),
+        );
 
         const token = await svc.getAnonymousToken();
 
@@ -171,30 +175,34 @@ describe("spotifyService", () => {
     it("parses Spotify URLs and returns null for unsupported formats", () => {
         expect(
             spotifyService.parseUrl(
-                "https://open.spotify.com/playlist/37i9dQZF1DX4dyzvuaRJ0n"
-            )
+                "https://open.spotify.com/playlist/37i9dQZF1DX4dyzvuaRJ0n",
+            ),
         ).toEqual({
             type: "playlist",
             id: "37i9dQZF1DX4dyzvuaRJ0n",
         });
         expect(
-            spotifyService.parseUrl("spotify:album:6JWc4iAiJ9FjyK0B59ABb4")
+            spotifyService.parseUrl("spotify:album:6JWc4iAiJ9FjyK0B59ABb4"),
         ).toEqual({
             type: "album",
             id: "6JWc4iAiJ9FjyK0B59ABb4",
         });
         expect(
-            spotifyService.parseUrl("spotify:track:4uLU6hMCjMI75M1A2tKUQC")
+            spotifyService.parseUrl("spotify:track:4uLU6hMCjMI75M1A2tKUQC"),
         ).toEqual({
             type: "track",
             id: "4uLU6hMCjMI75M1A2tKUQC",
         });
-        expect(spotifyService.parseUrl("https://example.com/not-spotify")).toBeNull();
+        expect(
+            spotifyService.parseUrl("https://example.com/not-spotify"),
+        ).toBeNull();
     });
 
     it("rejects non-playlist URLs passed to getPlaylist", async () => {
         await expect(
-            spotifyService.getPlaylist("https://open.spotify.com/album/6JWc4iAiJ9FjyK0B59ABb4")
+            spotifyService.getPlaylist(
+                "https://open.spotify.com/album/6JWc4iAiJ9FjyK0B59ABb4",
+            ),
         ).rejects.toThrow("Expected playlist URL, got album");
     });
 
@@ -241,11 +249,17 @@ describe("spotifyService", () => {
                                 track: {
                                     id: "track-1",
                                     name: "Track One",
-                                    artists: [{ id: "artist-1", name: "Artist One" }],
+                                    artists: [
+                                        { id: "artist-1", name: "Artist One" },
+                                    ],
                                     album: {
                                         id: "album-empty",
                                         name: "Unknown Album",
-                                        images: [{ url: "https://images.example/a.jpg" }],
+                                        images: [
+                                            {
+                                                url: "https://images.example/a.jpg",
+                                            },
+                                        ],
                                     },
                                     duration_ms: 123000,
                                     track_number: 1,
@@ -260,7 +274,7 @@ describe("spotifyService", () => {
             .mockResolvedValueOnce({ data: playlistHtml });
 
         const playlist = await spotifyService.getPlaylist(
-            "https://open.spotify.com/playlist/playlist-1"
+            "https://open.spotify.com/playlist/playlist-1",
         );
 
         expect(playlist).not.toBeNull();
@@ -281,7 +295,8 @@ describe("spotifyService", () => {
                                 trackList: [
                                     {
                                         title: "Embed Track",
-                                        subtitle: "Embed Artist, Secondary Artist",
+                                        subtitle:
+                                            "Embed Artist, Secondary Artist",
                                         uri: "spotify:track:embed-track",
                                         albumName: "Embed Album",
                                         duration: 99000,
@@ -321,7 +336,9 @@ describe("spotifyService", () => {
                                 name: "Top Mix",
                                 description: "top",
                                 owner: { display_name: "Spotify" },
-                                images: [{ url: "https://images.example/feat.jpg" }],
+                                images: [
+                                    { url: "https://images.example/feat.jpg" },
+                                ],
                                 tracks: { total: 42 },
                             },
                         ],
@@ -356,7 +373,9 @@ describe("spotifyService", () => {
                                 name: "Today's Top Hits",
                                 description: "desc",
                                 owner: { display_name: "Spotify" },
-                                images: [{ url: "https://images.example/s1.jpg" }],
+                                images: [
+                                    { url: "https://images.example/s1.jpg" },
+                                ],
                                 tracks: { total: 50 },
                             },
                             null,
@@ -414,7 +433,9 @@ describe("spotifyService", () => {
                                 name: "Category Playlist",
                                 description: null,
                                 owner: { display_name: "Spotify" },
-                                images: [{ url: "https://images.example/cat.jpg" }],
+                                images: [
+                                    { url: "https://images.example/cat.jpg" },
+                                ],
                                 tracks: { total: 12 },
                             },
                         ],
@@ -428,14 +449,19 @@ describe("spotifyService", () => {
                             {
                                 id: "pop",
                                 name: "Pop",
-                                icons: [{ url: "https://images.example/pop.jpg" }],
+                                icons: [
+                                    { url: "https://images.example/pop.jpg" },
+                                ],
                             },
                         ],
                     },
                 },
             });
 
-        const categoryPlaylists = await spotifyService.getCategoryPlaylists("pop", 10);
+        const categoryPlaylists = await spotifyService.getCategoryPlaylists(
+            "pop",
+            10,
+        );
         const categories = await spotifyService.getCategories(10);
 
         expect(categoryPlaylists).toEqual([
@@ -471,7 +497,9 @@ describe("spotifyService", () => {
                                 name: "Retry Playlist",
                                 description: "retried",
                                 owner: { display_name: "Spotify" },
-                                images: [{ url: "https://images.example/retry.jpg" }],
+                                images: [
+                                    { url: "https://images.example/retry.jpg" },
+                                ],
                                 tracks: { total: 21 },
                             },
                         ],
@@ -511,7 +539,10 @@ describe("spotifyService", () => {
     it("returns [] when playlist search fails with non-401 error", async () => {
         mockAxiosGet
             .mockResolvedValueOnce(makeTokenResponse("token-search"))
-            .mockRejectedValueOnce({ response: { status: 500 }, message: "server down" });
+            .mockRejectedValueOnce({
+                response: { status: 500 },
+                message: "server down",
+            });
 
         const results = await spotifyService.searchPlaylists("chill", 3);
 
@@ -531,7 +562,11 @@ describe("spotifyService", () => {
                                 name: "Filtered Playlist",
                                 description: "test",
                                 owner: { display_name: "Curator" },
-                                images: [{ url: "https://images.example/search-filtered.jpg" }],
+                                images: [
+                                    {
+                                        url: "https://images.example/search-filtered.jpg",
+                                    },
+                                ],
                                 tracks: { total: 11 },
                             },
                         ],
@@ -569,7 +604,9 @@ describe("spotifyService", () => {
     it("gracefully returns empty when Apollo cache payload cannot be parsed", () => {
         const html = `<script>window.__APOLLO_STATE__ = {"Track:spotify:track:track-xyz":{"album":"Album:spotify:album:album-xyz"},"Album:spotify:album:album-xyz":{"name":"Apollo Album"}};</script>`;
 
-        const extracted = (spotifyService as any).extractTracksFromApolloCache(html);
+        const extracted = (spotifyService as any).extractTracksFromApolloCache(
+            html,
+        );
 
         expect(extracted).toEqual([]);
     });
@@ -577,7 +614,9 @@ describe("spotifyService", () => {
     it("extracts tracks from Apollo cache when structure is valid", () => {
         const html = `<script>window.__APOLLO_STATE__ = {"Track:spotify:track:track-123":{"album":"Album:spotify:album:album-123"},"Album:spotify:album:album-123":{"name":"Apollo Album"}}<\/script>`;
 
-        const extracted = (spotifyService as any).extractTracksFromApolloCache(html);
+        const extracted = (spotifyService as any).extractTracksFromApolloCache(
+            html,
+        );
 
         expect(extracted).toEqual([
             {
@@ -591,7 +630,9 @@ describe("spotifyService", () => {
     it("extracts tracks from Apollo cache when album data is nested as object", () => {
         const html = `<script>window.__APOLLO_STATE__ = {"Track:spotify:track:track-object":{"albumOfTrack":{"name":"Apollo Object Album","uri":"spotify:album:album-object"}}}<\/script>`;
 
-        const extracted = (spotifyService as any).extractTracksFromApolloCache(html);
+        const extracted = (spotifyService as any).extractTracksFromApolloCache(
+            html,
+        );
 
         expect(extracted).toEqual([
             {
@@ -638,11 +679,11 @@ describe("spotifyService", () => {
 
         const albums = await svc.scrapePlaylistPageForAlbums("html-playlist");
 
-            expect(albums.get("htmltrack123")).toEqual({
-                album: "Html Album",
-                albumId: "htmlalbum456",
-            });
+        expect(albums.get("htmltrack123")).toEqual({
+            album: "Html Album",
+            albumId: "htmlalbum456",
         });
+    });
 
     it("uses tracks.items from embed payload when trackList is missing", async () => {
         const embedData = JSON.stringify({
@@ -659,7 +700,11 @@ describe("spotifyService", () => {
                             images: {
                                 items: [
                                     {
-                                        sources: [{ url: "https://images.example/playlist-owner.jpg" }],
+                                        sources: [
+                                            {
+                                                url: "https://images.example/playlist-owner.jpg",
+                                            },
+                                        ],
                                     },
                                 ],
                             },
@@ -669,11 +714,20 @@ describe("spotifyService", () => {
                                         track: {
                                             uri: "spotify:track:track-items",
                                             name: "Track Items",
-                                            artists: [{ id: "artist-1", name: "Artist One" }],
+                                            artists: [
+                                                {
+                                                    id: "artist-1",
+                                                    name: "Artist One",
+                                                },
+                                            ],
                                             album: {
                                                 name: "Album Items",
                                                 uri: "spotify:album:album-items",
-                                                images: [{ url: "https://images.example/album-items.jpg" }],
+                                                images: [
+                                                    {
+                                                        url: "https://images.example/album-items.jpg",
+                                                    },
+                                                ],
                                             },
                                             duration: 120000,
                                         },
@@ -689,7 +743,9 @@ describe("spotifyService", () => {
 
         mockAxiosGet.mockResolvedValueOnce({ data: embedHtml });
 
-        const playlist = await (spotifyService as any).fetchPlaylistViaEmbedHtml("embed-tracks-items");
+        const playlist = await (
+            spotifyService as any
+        ).fetchPlaylistViaEmbedHtml("embed-tracks-items");
 
         expect(playlist).toEqual({
             id: "embed-tracks-items",
@@ -750,7 +806,7 @@ describe("spotifyService", () => {
             "https://open.spotify.com/track/track-1",
             expect.objectContaining({
                 timeout: 10000,
-            })
+            }),
         );
         timeoutSpy.mockRestore();
     });
@@ -785,7 +841,11 @@ describe("spotifyService", () => {
         });
 
         const albums = await (spotifyService as any).scrapeTrackPagesForAlbums([
-            { spotifyId: "next-track", title: "Next Track", artist: "Artist Next" },
+            {
+                spotifyId: "next-track",
+                title: "Next Track",
+                artist: "Artist Next",
+            },
         ]);
 
         expect(albums.get("next-track")).toEqual({
@@ -815,9 +875,9 @@ describe("spotifyService", () => {
     it("returns null from embed parsing when __NEXT_DATA__ is missing", async () => {
         mockAxiosGet.mockResolvedValueOnce({ data: "<html>No data</html>" });
 
-        const playlist = await (spotifyService as any).fetchPlaylistViaEmbedHtml(
-            "embed-missing"
-        );
+        const playlist = await (
+            spotifyService as any
+        ).fetchPlaylistViaEmbedHtml("embed-missing");
         expect(playlist).toBeNull();
     });
 
@@ -846,9 +906,9 @@ describe("spotifyService", () => {
             `,
         });
 
-        const playlist = await (spotifyService as any).fetchPlaylistViaEmbedHtml(
-            "embed-row-fallback"
-        );
+        const playlist = await (
+            spotifyService as any
+        ).fetchPlaylistViaEmbedHtml("embed-row-fallback");
 
         expect(playlist).toEqual({
             id: "embed-row-fallback",
@@ -894,7 +954,10 @@ describe("spotifyService", () => {
 
         const search = await spotifyService.searchPlaylists("x", 3);
         const categories = await spotifyService.getCategories(3);
-        const categoryPlaylists = await spotifyService.getCategoryPlaylists("pop", 3);
+        const categoryPlaylists = await spotifyService.getCategoryPlaylists(
+            "pop",
+            3,
+        );
         const featured = await spotifyService.getFeaturedPlaylists(3);
 
         expect(search).toEqual([]);
@@ -908,9 +971,11 @@ describe("spotifyService", () => {
             .mockRejectedValueOnce(new Error("token down"))
             .mockRejectedValueOnce(new Error("token endpoint down"))
             .mockResolvedValueOnce({
-                data: `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
-                    props: { pageProps: {} },
-                })}</script></html>`,
+                data: `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
+                    {
+                        props: { pageProps: {} },
+                    },
+                )}</script></html>`,
             })
             .mockRejectedValueOnce(new Error("token down"))
             .mockRejectedValueOnce(new Error("token endpoint down"))
@@ -918,8 +983,12 @@ describe("spotifyService", () => {
                 data: `<html><script id="__NEXT_DATA__" type="application/json">{not valid json}</script></html>`,
             });
 
-        const missingDataPlaylist = await spotifyService.getPlaylist("playlist-missing-data");
-        const malformedPayloadPlaylist = await spotifyService.getPlaylist("playlist-invalid-json");
+        const missingDataPlaylist = await spotifyService.getPlaylist(
+            "playlist-missing-data",
+        );
+        const malformedPayloadPlaylist = await spotifyService.getPlaylist(
+            "playlist-invalid-json",
+        );
 
         expect(missingDataPlaylist).toEqual({
             id: "playlist-missing-data",
@@ -941,9 +1010,11 @@ describe("spotifyService", () => {
             data: `<html><script id="__NEXT_DATA__" type="application/json">{not valid json}</script></html>`,
         });
 
-        const albums = await svc.scrapePlaylistPageForAlbums("playlist-invalid-next-data");
+        const albums = await svc.scrapePlaylistPageForAlbums(
+            "playlist-invalid-next-data",
+        );
         const apolloTracks = svc.extractTracksFromApolloCache(
-            `<script>window.__APOLLO_STATE__ = {not valid json}</script>`
+            `<script>window.__APOLLO_STATE__ = {not valid json}</script>`,
         );
 
         expect(albums.size).toBe(0);
@@ -956,17 +1027,17 @@ describe("spotifyService", () => {
                 pageProps: {
                     state: {
                         data: {
-                        entity: {
-                            name: "Embed Playlist",
-                            description: "from embed",
-                            trackList: [
-                                {
-                                    uri: "spotify:track:htmltrack123",
-                                    title: "Embed Track",
-                                    subtitle: "Embed Artist",
-                                    albumName: "Unknown Album",
-                                    duration: 99000,
-                                },
+                            entity: {
+                                name: "Embed Playlist",
+                                description: "from embed",
+                                trackList: [
+                                    {
+                                        uri: "spotify:track:htmltrack123",
+                                        title: "Embed Track",
+                                        subtitle: "Embed Artist",
+                                        albumName: "Unknown Album",
+                                        duration: 99000,
+                                    },
                                 ],
                             },
                         },
@@ -989,7 +1060,9 @@ describe("spotifyService", () => {
             .mockResolvedValueOnce({ data: embedHtml })
             .mockResolvedValueOnce({ data: playlistHtml });
 
-        const playlist = await (spotifyService as any).fetchPlaylistViaEmbedHtml("embed-scrape-playlist");
+        const playlist = await (
+            spotifyService as any
+        ).fetchPlaylistViaEmbedHtml("embed-scrape-playlist");
 
         expect(playlist).not.toBeNull();
         expect(playlist!.tracks).toHaveLength(1);
@@ -1022,11 +1095,17 @@ describe("spotifyService", () => {
                                 track: {
                                     id: "track-unknown",
                                     name: "Track One",
-                                    artists: [{ id: "artist-1", name: "Artist One" }],
+                                    artists: [
+                                        { id: "artist-1", name: "Artist One" },
+                                    ],
                                     album: {
                                         id: "album-empty",
                                         name: "Unknown Album",
-                                        images: [{ url: "https://images.example/unknown-album.jpg" }],
+                                        images: [
+                                            {
+                                                url: "https://images.example/unknown-album.jpg",
+                                            },
+                                        ],
                                     },
                                     duration_ms: 120000,
                                     track_number: 1,
@@ -1043,7 +1122,9 @@ describe("spotifyService", () => {
                 data: `<meta property="og:description" content="Artist One · Recovered Album · Track One · 2024">`,
             });
 
-        const playlist = await spotifyService.getPlaylist("https://open.spotify.com/playlist/playlist-unknown");
+        const playlist = await spotifyService.getPlaylist(
+            "https://open.spotify.com/playlist/playlist-unknown",
+        );
 
         expect(playlist).not.toBeNull();
         expect(playlist!.tracks[0].album).toBe("Recovered Album");
@@ -1076,7 +1157,11 @@ describe("spotifyService", () => {
                                 images: {
                                     items: [
                                         {
-                                            sources: [{ url: "https://images.example/owner.jpg" }],
+                                            sources: [
+                                                {
+                                                    url: "https://images.example/owner.jpg",
+                                                },
+                                            ],
                                         },
                                     ],
                                 },
@@ -1102,14 +1187,18 @@ describe("spotifyService", () => {
             .mockRejectedValueOnce(new Error("token endpoint down"))
             .mockResolvedValueOnce({ data: embedHtml })
             .mockResolvedValueOnce({ data: "<html></html>" })
-            .mockResolvedValueOnce({ data: "<html><meta property=\"og:description\" content=\"Deezer Artist · Unknown Album · Deezer Track · 2024\"></html>" });
+            .mockResolvedValueOnce({
+                data: '<html><meta property="og:description" content="Deezer Artist · Unknown Album · Deezer Track · 2024"></html>',
+            });
 
         mockDeezerTrackAlbum.mockResolvedValueOnce({
             albumName: "Deezer Resolved Album",
             albumId: 99,
         });
 
-        const playlist = await spotifyService.getPlaylist("https://open.spotify.com/playlist/playlist-deezer-fallback");
+        const playlist = await spotifyService.getPlaylist(
+            "https://open.spotify.com/playlist/playlist-deezer-fallback",
+        );
 
         expect(playlist).not.toBeNull();
         expect(playlist!.tracks[0].album).toBe("Deezer Resolved Album");
@@ -1123,7 +1212,10 @@ describe("spotifyService", () => {
 
         mockAxiosGet
             .mockResolvedValueOnce(makeTokenResponse("search-token"))
-            .mockRejectedValueOnce({ response: { status: 401 }, message: "expired" })
+            .mockRejectedValueOnce({
+                response: { status: 401 },
+                message: "expired",
+            })
             .mockResolvedValueOnce(makeTokenResponse("search-token-2"))
             .mockRejectedValueOnce(new Error("retry search failed"));
 
@@ -1144,7 +1236,10 @@ describe("spotifyService", () => {
 
         try {
             const featured = await svc.getFeaturedPlaylists(5);
-            const categoryPlaylists = await spotifyService.getCategoryPlaylists("pop", 5);
+            const categoryPlaylists = await spotifyService.getCategoryPlaylists(
+                "pop",
+                5,
+            );
             const categories = await spotifyService.getCategories(5);
 
             expect(featured).toEqual([]);
@@ -1174,11 +1269,17 @@ describe("spotifyService", () => {
                                 track: {
                                     id: "track-deezer",
                                     name: "Track One",
-                                    artists: [{ id: "artist-1", name: "Artist One" }],
+                                    artists: [
+                                        { id: "artist-1", name: "Artist One" },
+                                    ],
                                     album: {
                                         id: "album-empty",
                                         name: "Unknown Album",
-                                        images: [{ url: "https://images.example/deezer-a.jpg" }],
+                                        images: [
+                                            {
+                                                url: "https://images.example/deezer-a.jpg",
+                                            },
+                                        ],
                                     },
                                     duration_ms: 123000,
                                     track_number: 1,
@@ -1193,7 +1294,10 @@ describe("spotifyService", () => {
             .mockResolvedValueOnce({ data: "<html></html>" })
             .mockRejectedValueOnce(new Error("track scrape down"));
 
-        mockDeezerTrackAlbum.mockResolvedValueOnce({ albumName: "Deezer Album", albumId: 42 });
+        mockDeezerTrackAlbum.mockResolvedValueOnce({
+            albumName: "Deezer Album",
+            albumId: 42,
+        });
 
         const playlist = await spotifyService.getPlaylist("playlist-deezer");
 
@@ -1218,7 +1322,10 @@ describe("spotifyService", () => {
                 return Promise.reject(new Error("search down"));
             }
 
-            if (url.includes("/v1/browse/categories/") && url.includes("/playlists")) {
+            if (
+                url.includes("/v1/browse/categories/") &&
+                url.includes("/playlists")
+            ) {
                 return Promise.reject(new Error("category playlists down"));
             }
 
@@ -1231,7 +1338,10 @@ describe("spotifyService", () => {
 
         const featured = await spotifyService.getFeaturedPlaylists(5);
         const search = await spotifyService.searchPlaylists("x", 5);
-        const categoryPlaylists = await spotifyService.getCategoryPlaylists("pop", 5);
+        const categoryPlaylists = await spotifyService.getCategoryPlaylists(
+            "pop",
+            5,
+        );
         const categories = await spotifyService.getCategories(5);
 
         expect(featured).toEqual([]);
@@ -1245,7 +1355,9 @@ describe("spotifyService", () => {
             data: `<html><script id="__NEXT_DATA__" type="application/json">{}</script></html>`,
         });
 
-        const playlist = await (spotifyService as any).fetchPlaylistViaEmbedHtml("embed-without-payload");
+        const playlist = await (
+            spotifyService as any
+        ).fetchPlaylistViaEmbedHtml("embed-without-payload");
 
         expect(playlist).toBeNull();
     });
@@ -1267,14 +1379,16 @@ describe("spotifyService", () => {
 
         mockAxiosGet.mockResolvedValueOnce({ data: html });
 
-        const albums = await svc.scrapePlaylistPageForAlbums("playlist-empty-next-data");
+        const albums = await svc.scrapePlaylistPageForAlbums(
+            "playlist-empty-next-data",
+        );
 
         expect(albums.size).toBe(0);
     });
 
     it("returns [] from Apollo extraction when HTML is not a string", () => {
         const tracks = (spotifyService as any).extractTracksFromApolloCache(
-            null as unknown as string
+            null as unknown as string,
         );
 
         expect(tracks).toEqual([]);
@@ -1308,16 +1422,27 @@ describe("spotifyService", () => {
 
         const scrapeTrackPagesSpy = jest
             .spyOn(svc, "scrapeTrackPagesForAlbums")
-            .mockResolvedValue(new Map([["track-1", { album: "Recovered Album", albumId: "album-1" }]]));
+            .mockResolvedValue(
+                new Map([
+                    [
+                        "track-1",
+                        { album: "Recovered Album", albumId: "album-1" },
+                    ],
+                ]),
+            );
 
         mockAxiosGet.mockResolvedValueOnce({ data: embedHtml });
 
-        const playlist = await svc.fetchPlaylistViaEmbedHtml("playlist-track-fallback");
+        const playlist = await svc.fetchPlaylistViaEmbedHtml(
+            "playlist-track-fallback",
+        );
 
         expect(playlist).not.toBeNull();
         expect(playlist!.tracks[0].album).toBe("Recovered Album");
         expect(playlist!.tracks[0].albumId).toBe("album-1");
-        expect(scrapePlaylistPageSpy).toHaveBeenCalledWith("playlist-track-fallback");
+        expect(scrapePlaylistPageSpy).toHaveBeenCalledWith(
+            "playlist-track-fallback",
+        );
         expect(scrapeTrackPagesSpy).toHaveBeenCalledTimes(1);
 
         scrapePlaylistPageSpy.mockRestore();
@@ -1385,7 +1510,9 @@ describe("spotifyService", () => {
             data: `<html><script id="__NEXT_DATA__" type="application/json">{not valid json}</script></html>`,
         });
 
-        const playlist = await svc.fetchPlaylistViaEmbedHtml("malformed-next-data");
+        const playlist = await svc.fetchPlaylistViaEmbedHtml(
+            "malformed-next-data",
+        );
 
         expect(playlist).toBeNull();
     });

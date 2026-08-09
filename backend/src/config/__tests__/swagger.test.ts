@@ -42,7 +42,7 @@ describe("config/swagger", () => {
                     }),
                 }),
                 apis: ["./src/routes/*.ts"],
-            })
+            }),
         );
         expect(swaggerSpec).toBe(mockedSpec);
     });

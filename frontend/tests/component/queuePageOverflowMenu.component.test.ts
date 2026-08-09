@@ -30,7 +30,14 @@ const state = {
         album?: { title: string; id?: string; coverArt?: string | null };
         streamSource?: string;
     }>,
-    currentTrack: null as { id: string; title: string; album?: { coverArt?: string | null; title: string }; artist?: { name: string }; displayTitle?: string; duration?: number } | null,
+    currentTrack: null as {
+        id: string;
+        title: string;
+        album?: { coverArt?: string | null; title: string };
+        artist?: { name: string };
+        displayTitle?: string;
+        duration?: number;
+    } | null,
     currentIndex: 0,
     isInGroup: false,
     isHost: false,
@@ -132,7 +139,10 @@ mock.module("@/lib/api", {
         api: {
             getCoverArtUrl: (url: string) => url,
             addTrackToPlaylist: async () => undefined,
-            createPlaylist: async () => ({ id: "new-playlist-id", name: "Test" }),
+            createPlaylist: async () => ({
+                id: "new-playlist-id",
+                name: "Test",
+            }),
         },
     },
 });
@@ -147,7 +157,10 @@ mock.module("next/navigation", {
 
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 mock.module("@/components/ui/Card", {
@@ -159,8 +172,13 @@ mock.module("@/components/ui/Card", {
 
 mock.module("@/components/ui/Button", {
     namedExports: {
-        Button: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) =>
-            React.createElement("button", props, children),
+        Button: ({
+            children,
+            ...props
+        }: {
+            children: React.ReactNode;
+            [key: string]: unknown;
+        }) => React.createElement("button", props, children),
     },
 });
 
@@ -172,8 +190,19 @@ mock.module("@/components/ui/EmptyState", {
 
 mock.module("@/components/layout/PageHeader", {
     namedExports: {
-        PageHeader: ({ title, actions }: { title: string; actions?: React.ReactNode }) =>
-            React.createElement("div", { "data-testid": "page-header" }, title, actions),
+        PageHeader: ({
+            title,
+            actions,
+        }: {
+            title: string;
+            actions?: React.ReactNode;
+        }) =>
+            React.createElement(
+                "div",
+                { "data-testid": "page-header" },
+                title,
+                actions,
+            ),
     },
 });
 
@@ -230,7 +259,11 @@ test("Queue page Next Up tracks render TrackOverflowMenu trigger", async () => {
     // Should have overflow menu triggers for Now Playing + each Next Up track (1 + 2)
     const triggerMatches = html.match(/aria-haspopup="menu"/g);
     assert.ok(triggerMatches, "Should render overflow menu triggers");
-    assert.equal(triggerMatches!.length, 3, "Should have trigger for Now Playing + each Next Up track");
+    assert.equal(
+        triggerMatches!.length,
+        3,
+        "Should have trigger for Now Playing + each Next Up track",
+    );
 });
 
 test("Queue page replaces standalone Remove button with overflow menu", async () => {
@@ -240,7 +273,11 @@ test("Queue page replaces standalone Remove button with overflow menu", async ()
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
     // Should NOT have standalone "Remove" titled button (was the X button)
-    assert.doesNotMatch(html, /title="Remove"/, "Should not have standalone Remove button");
+    assert.doesNotMatch(
+        html,
+        /title="Remove"/,
+        "Should not have standalone Remove button",
+    );
 
     // Should still have the overflow menu trigger
     assert.match(html, /Track actions/, "Should have overflow menu");
@@ -269,7 +306,11 @@ test("Queue page renders Save as Playlist button when queue has tracks", async (
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
     // Should have a "Save as Playlist" button
-    assert.match(html, /Save as Playlist/, "Should render Save as Playlist button");
+    assert.match(
+        html,
+        /Save as Playlist/,
+        "Should render Save as Playlist button",
+    );
 });
 
 test("Queue page does not render Save as Playlist when queue is empty", async () => {
@@ -282,5 +323,9 @@ test("Queue page does not render Save as Playlist when queue is empty", async ()
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
     // Should NOT have the button when empty
-    assert.doesNotMatch(html, /Save as Playlist/, "Should not render Save as Playlist when empty");
+    assert.doesNotMatch(
+        html,
+        /Save as Playlist/,
+        "Should not render Save as Playlist when empty",
+    );
 });

@@ -34,7 +34,7 @@ const resolvedTrackSchema = z
         {
             message:
                 "Resolved track source/ID mismatch: local requires trackId, youtube requires trackYtMusicId, tidal requires trackTidalId",
-        }
+        },
     );
 
 const summarySchema = z.object({
@@ -114,68 +114,68 @@ function toDefaultPlaylistName(sourceType: string): string {
  *       202:
  *         description: New generic import job created
  */
-router.post(
-    "/jobs",
-    requireAuth,
-    async (req: Request, res: Response) => {
-        try {
-            const parsed = submitJobSchema.safeParse(req.body);
-            if (!parsed.success) {
-                return res.status(400).json({ error: "Valid playlist URL is required" });
-            }
-
-            const parsedSource = playlistImportService.parseSourceUrl(parsed.data.url);
-            if (!parsedSource) {
-                return res.status(400).json({ error: "Unsupported playlist URL" });
-            }
-
-            const userId = req.user!.id;
-            const normalizedSource = buildNormalizedSource(
-                parsedSource.source,
-                parsedSource.id
-            );
-            const existingJob = await importJobStore.findActiveJobForSource(
-                userId,
-                normalizedSource
-            );
-
-            if (existingJob) {
-                return res.status(200).json({
-                    deduped: true,
-                    job: existingJob,
-                });
-            }
-
-            const job = await importJobStore.createJob({
-                userId,
-                sourceType: parsedSource.source,
-                sourceId: parsedSource.id,
-                sourceUrl: parsed.data.url,
-                playlistName: toDefaultPlaylistName(parsedSource.source),
-                requestedPlaylistName: parsed.data.name,
-                status: "pending",
-                progress: 0,
-                summary: {
-                    total: 0,
-                    local: 0,
-                    youtube: 0,
-                    tidal: 0,
-                    unresolved: 0,
-                },
-            });
-
-            genericImportJobRunner.enqueue(job.id);
-
-            res.status(202).json({
-                deduped: false,
-                job,
-            });
-        } catch (err) {
-            logger.error("[Import] Job submit failed:", err);
-            res.status(500).json({ error: "Failed to submit import job" });
+router.post("/jobs", requireAuth, async (req: Request, res: Response) => {
+    try {
+        const parsed = submitJobSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res
+                .status(400)
+                .json({ error: "Valid playlist URL is required" });
         }
+
+        const parsedSource = playlistImportService.parseSourceUrl(
+            parsed.data.url,
+        );
+        if (!parsedSource) {
+            return res.status(400).json({ error: "Unsupported playlist URL" });
+        }
+
+        const userId = req.user!.id;
+        const normalizedSource = buildNormalizedSource(
+            parsedSource.source,
+            parsedSource.id,
+        );
+        const existingJob = await importJobStore.findActiveJobForSource(
+            userId,
+            normalizedSource,
+        );
+
+        if (existingJob) {
+            return res.status(200).json({
+                deduped: true,
+                job: existingJob,
+            });
+        }
+
+        const job = await importJobStore.createJob({
+            userId,
+            sourceType: parsedSource.source,
+            sourceId: parsedSource.id,
+            sourceUrl: parsed.data.url,
+            playlistName: toDefaultPlaylistName(parsedSource.source),
+            requestedPlaylistName: parsed.data.name,
+            status: "pending",
+            progress: 0,
+            summary: {
+                total: 0,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
+        });
+
+        genericImportJobRunner.enqueue(job.id);
+
+        res.status(202).json({
+            deduped: false,
+            job,
+        });
+    } catch (err) {
+        logger.error("[Import] Job submit failed:", err);
+        res.status(500).json({ error: "Failed to submit import job" });
     }
-);
+});
 
 /**
  * @openapi
@@ -189,19 +189,15 @@ router.post(
  *       200:
  *         description: User-scoped import jobs
  */
-router.get(
-    "/jobs",
-    requireAuth,
-    async (req: Request, res: Response) => {
-        try {
-            const jobs = await importJobStore.listJobsForUser(req.user!.id);
-            res.json({ jobs });
-        } catch (err) {
-            logger.error("[Import] Job list failed:", err);
-            res.status(500).json({ error: "Failed to list import jobs" });
-        }
+router.get("/jobs", requireAuth, async (req: Request, res: Response) => {
+    try {
+        const jobs = await importJobStore.listJobsForUser(req.user!.id);
+        res.json({ jobs });
+    } catch (err) {
+        logger.error("[Import] Job list failed:", err);
+        res.status(500).json({ error: "Failed to list import jobs" });
     }
-);
+});
 
 /**
  * @openapi
@@ -239,7 +235,7 @@ router.get(
             logger.error("[Import] Job status failed:", err);
             res.status(500).json({ error: "Failed to load import job" });
         }
-    }
+    },
 );
 
 /**
@@ -263,21 +259,27 @@ router.post(
         try {
             const parsed = reconnectJobSchema.safeParse(req.body);
             if (!parsed.success) {
-                return res.status(400).json({ error: "Valid playlist URL is required" });
+                return res
+                    .status(400)
+                    .json({ error: "Valid playlist URL is required" });
             }
 
-            const parsedSource = playlistImportService.parseSourceUrl(parsed.data.url);
+            const parsedSource = playlistImportService.parseSourceUrl(
+                parsed.data.url,
+            );
             if (!parsedSource) {
-                return res.status(400).json({ error: "Unsupported playlist URL" });
+                return res
+                    .status(400)
+                    .json({ error: "Unsupported playlist URL" });
             }
 
             const normalizedSource = buildNormalizedSource(
                 parsedSource.source,
-                parsedSource.id
+                parsedSource.id,
             );
             const job = await importJobStore.findActiveJobForSource(
                 req.user!.id,
-                normalizedSource
+                normalizedSource,
             );
 
             if (!job) {
@@ -291,7 +293,7 @@ router.post(
             logger.error("[Import] Job reconnect failed:", err);
             res.status(500).json({ error: "Failed to reconnect import job" });
         }
-    }
+    },
 );
 
 /**
@@ -322,9 +324,9 @@ router.post(
                 return res.status(404).json({ error: "Import job not found" });
             }
             if (job.userId !== req.user!.id) {
-                return res
-                    .status(403)
-                    .json({ error: "Not authorized to cancel this import job" });
+                return res.status(403).json({
+                    error: "Not authorized to cancel this import job",
+                });
             }
             if (TERMINAL_JOB_STATUSES.has(job.status)) {
                 return res.status(409).json({
@@ -341,7 +343,7 @@ router.post(
             logger.error("[Import] Job cancel failed:", err);
             res.status(500).json({ error: "Failed to cancel import job" });
         }
-    }
+    },
 );
 
 const m3uPreviewSchema = z.object({
@@ -403,61 +405,55 @@ router.post(
             const playlistName = parsed.data.name || "M3U import";
             const result = await playlistImportService.previewM3UImport(
                 playlistName,
-                parsed.data.content
+                parsed.data.content,
             );
             res.json(result);
         } catch (err: any) {
             logger.error("[Import] M3U preview failed:", err);
             res.status(500).json({ error: "Failed to preview M3U import" });
         }
-    }
+    },
 );
 
-router.post(
-    "/preview",
-    requireAuth,
-    async (req: Request, res: Response) => {
-        try {
-            const parsed = urlSchema.safeParse(req.body);
-            if (!parsed.success) {
-                return res
-                    .status(400)
-                    .json({ error: "Valid playlist URL is required" });
-            }
-
-            const userId = req.user!.id;
-            const result = await playlistImportService.previewImport(
-                userId,
-                parsed.data.url
-            );
-            res.json(result);
-        } catch (err: any) {
-            const msg = err.message || "";
-            if (
-                msg.includes("Unsupported") ||
-                msg.includes("not found") ||
-                msg.includes("requires authentication")
-            ) {
-                return res
-                    .status(400)
-                    .json({ error: msg });
-            }
-            if (
-                msg.includes("ECONNREFUSED") ||
-                msg.includes("ETIMEDOUT") ||
-                msg.includes("fetch failed") ||
-                msg.includes("status code 5")
-            ) {
-                logger.warn("[Import] External service unavailable:", err);
-                return res
-                    .status(502)
-                    .json({ error: "External service unavailable" });
-            }
-            logger.error("[Import] Preview failed:", err);
-            res.status(500).json({ error: "Failed to preview import" });
+router.post("/preview", requireAuth, async (req: Request, res: Response) => {
+    try {
+        const parsed = urlSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res
+                .status(400)
+                .json({ error: "Valid playlist URL is required" });
         }
+
+        const userId = req.user!.id;
+        const result = await playlistImportService.previewImport(
+            userId,
+            parsed.data.url,
+        );
+        res.json(result);
+    } catch (err: any) {
+        const msg = err.message || "";
+        if (
+            msg.includes("Unsupported") ||
+            msg.includes("not found") ||
+            msg.includes("requires authentication")
+        ) {
+            return res.status(400).json({ error: msg });
+        }
+        if (
+            msg.includes("ECONNREFUSED") ||
+            msg.includes("ETIMEDOUT") ||
+            msg.includes("fetch failed") ||
+            msg.includes("status code 5")
+        ) {
+            logger.warn("[Import] External service unavailable:", err);
+            return res
+                .status(502)
+                .json({ error: "External service unavailable" });
+        }
+        logger.error("[Import] Preview failed:", err);
+        res.status(500).json({ error: "Failed to preview import" });
     }
-);
+});
 
 /**
  * @openapi
@@ -499,35 +495,29 @@ router.post(
  *       401:
  *         description: Not authenticated
  */
-router.post(
-    "/execute",
-    requireAuth,
-    async (req: Request, res: Response) => {
-        try {
-            const parsed = executeSchema.safeParse(req.body);
-            if (!parsed.success) {
-                return res
-                    .status(400)
-                    .json({ error: "Valid previewData is required" });
-            }
-
-            const userId = req.user!.id;
-            const result = await playlistImportService.importPlaylist(
-                userId,
-                parsed.data.previewData,
-                parsed.data.name
-            );
-            res.json(result);
-        } catch (err: any) {
-            if (err.message?.includes("Invalid track reference")) {
-                return res
-                    .status(400)
-                    .json({ error: err.message });
-            }
-            logger.error("[Import] Execute failed:", err);
-            res.status(500).json({ error: "Failed to execute import" });
+router.post("/execute", requireAuth, async (req: Request, res: Response) => {
+    try {
+        const parsed = executeSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res
+                .status(400)
+                .json({ error: "Valid previewData is required" });
         }
+
+        const userId = req.user!.id;
+        const result = await playlistImportService.importPlaylist(
+            userId,
+            parsed.data.previewData,
+            parsed.data.name,
+        );
+        res.json(result);
+    } catch (err: any) {
+        if (err.message?.includes("Invalid track reference")) {
+            return res.status(400).json({ error: err.message });
+        }
+        logger.error("[Import] Execute failed:", err);
+        res.status(500).json({ error: "Failed to execute import" });
     }
-);
+});
 
 export default router;

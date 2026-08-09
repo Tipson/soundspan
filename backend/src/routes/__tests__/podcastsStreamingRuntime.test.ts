@@ -99,7 +99,7 @@ jest.mock("../../services/podcastDownload", () => ({
     downloadInBackground: (
         episodeId: string,
         audioUrl: string,
-        userId: string
+        userId: string,
     ) => downloadInBackground(episodeId, audioUrl, userId),
 }));
 
@@ -109,7 +109,7 @@ jest.mock("../../services/itunes", () => ({
         getSimilarPodcasts: (
             title: string,
             description?: string,
-            author?: string
+            author?: string,
         ) => getSimilarPodcasts(title, description, author),
     },
 }));
@@ -188,13 +188,14 @@ import router from "../podcasts";
 
 function getHandler(
     path: string,
-    method: "get" | "post" | "delete" | "options"
+    method: "get" | "post" | "delete" | "options",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
-    if (!layer) throw new Error(`${method.toUpperCase()} route not found: ${path}`);
+    if (!layer)
+        throw new Error(`${method.toUpperCase()} route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -227,7 +228,10 @@ function createRes() {
             }
             return res;
         }),
-        writeHead: jest.fn(function (code: number, outHeaders?: Record<string, any>) {
+        writeHead: jest.fn(function (
+            code: number,
+            outHeaders?: Record<string, any>,
+        ) {
             res.statusCode = code;
             if (outHeaders) {
                 for (const [k, v] of Object.entries(outHeaders)) {
@@ -275,23 +279,26 @@ function createStream() {
 describe("podcasts streaming/runtime behavior", () => {
     const cacheStatusHandler = getHandler(
         "/:podcastId/episodes/:episodeId/cache-status",
-        "get"
+        "get",
     );
-    const streamHandler = getHandler("/:podcastId/episodes/:episodeId/stream", "get");
+    const streamHandler = getHandler(
+        "/:podcastId/episodes/:episodeId/stream",
+        "get",
+    );
     const progressHandler = getHandler(
         "/:podcastId/episodes/:episodeId/progress",
-        "post"
+        "post",
     );
     const clearProgressHandler = getHandler(
         "/:podcastId/episodes/:episodeId/progress",
-        "delete"
+        "delete",
     );
     const similarHandler = getHandler("/:id/similar", "get");
     const podcastCoverOptionsHandler = getHandler("/:id/cover", "options");
     const coverHandler = getHandler("/:id/cover", "get");
     const episodeCoverOptionsHandler = getHandler(
         "/episodes/:episodeId/cover",
-        "options"
+        "options",
     );
     const episodeCoverHandler = getHandler("/episodes/:episodeId/cover", "get");
 
@@ -326,9 +333,7 @@ describe("podcasts streaming/runtime behavior", () => {
         getSimilarPodcasts.mockResolvedValue([]);
 
         mockParseRangeHeader.mockReturnValue({ ok: true, start: 0, end: 99 });
-        mockLookup.mockResolvedValue([
-            { address: "93.184.216.34", family: 4 },
-        ]);
+        mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
         mockAxiosGet.mockReset();
         mockAxiosHead.mockReset();
         mockAxiosIsCancel.mockReturnValue(false);
@@ -357,7 +362,9 @@ describe("podcasts streaming/runtime behavior", () => {
             path: true,
         });
 
-        getCachedFilePath.mockRejectedValueOnce(new Error("cache lookup failed"));
+        getCachedFilePath.mockRejectedValueOnce(
+            new Error("cache lookup failed"),
+        );
         const errRes = createRes();
         await cacheStatusHandler(req, errRes);
         expect(errRes.statusCode).toBe(500);
@@ -389,7 +396,11 @@ describe("podcasts streaming/runtime behavior", () => {
             fileSize: 1000,
         });
         getCachedFilePath.mockResolvedValueOnce("/cache/ep-1.mp3");
-        mockParseRangeHeader.mockReturnValueOnce({ ok: true, start: 0, end: 99 });
+        mockParseRangeHeader.mockReturnValueOnce({
+            ok: true,
+            start: 0,
+            end: 99,
+        });
 
         const fileStream = createStream();
         mockCreateReadStream.mockReturnValueOnce(fileStream);
@@ -443,12 +454,17 @@ describe("podcasts streaming/runtime behavior", () => {
 
         await streamHandler(req, res);
 
-        expect(mockCreateReadStream).toHaveBeenCalledWith("/cache/ep-clamp.mp3", {
-            start: 1048576,
-            end: 2097151,
-        });
+        expect(mockCreateReadStream).toHaveBeenCalledWith(
+            "/cache/ep-clamp.mp3",
+            {
+                start: 1048576,
+                end: 2097151,
+            },
+        );
         expect(res.statusCode).toBe(206);
-        expect(res.headers["Content-Range"]).toBe("bytes 1048576-2097151/2097152");
+        expect(res.headers["Content-Range"]).toBe(
+            "bytes 1048576-2097151/2097152",
+        );
         expect(fileStream.pipe).toHaveBeenCalledWith(res);
     });
 
@@ -462,7 +478,11 @@ describe("podcasts streaming/runtime behavior", () => {
             fileSize: 1000,
         });
         getCachedFilePath.mockResolvedValueOnce("/cache/ep-cache-err.mp3");
-        mockParseRangeHeader.mockReturnValueOnce({ ok: true, start: 0, end: 99 });
+        mockParseRangeHeader.mockReturnValueOnce({
+            ok: true,
+            start: 0,
+            end: 99,
+        });
         mockFsStat.mockResolvedValueOnce({ size: 1000 });
 
         const fileStream = createStream();
@@ -478,7 +498,7 @@ describe("podcasts streaming/runtime behavior", () => {
         await streamHandler(req, res);
 
         const cacheErrorHandler = fileStream.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1];
         expect(cacheErrorHandler).toBeDefined();
         cacheErrorHandler(new Error("cache read failed"));
@@ -517,7 +537,7 @@ describe("podcasts streaming/runtime behavior", () => {
 
         res.headersSent = true;
         const cacheErrorHandler = fileStream.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1];
         expect(cacheErrorHandler).toBeDefined();
         cacheErrorHandler(new Error("stream broke after headers"));
@@ -554,7 +574,7 @@ describe("podcasts streaming/runtime behavior", () => {
         await streamHandler(req, res);
 
         const cacheErrorHandler = fileStream.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1];
         expect(cacheErrorHandler).toBeDefined();
         cacheErrorHandler(new Error("cache full-file error"));
@@ -572,8 +592,14 @@ describe("podcasts streaming/runtime behavior", () => {
             mimeType: "audio/mpeg",
             fileSize: 1000,
         });
-        getCachedFilePath.mockResolvedValueOnce("/cache/ep-cache-range-end.mp3");
-        mockParseRangeHeader.mockReturnValueOnce({ ok: true, start: 0, end: 99 });
+        getCachedFilePath.mockResolvedValueOnce(
+            "/cache/ep-cache-range-end.mp3",
+        );
+        mockParseRangeHeader.mockReturnValueOnce({
+            ok: true,
+            start: 0,
+            end: 99,
+        });
         mockFsStat.mockResolvedValueOnce({ size: 1000 });
 
         const fileStream = createStream();
@@ -590,7 +616,7 @@ describe("podcasts streaming/runtime behavior", () => {
 
         res.headersSent = true;
         const cacheErrorHandler = fileStream.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1];
         expect(cacheErrorHandler).toBeDefined();
         cacheErrorHandler(new Error("cache range post-header error"));
@@ -688,7 +714,9 @@ describe("podcasts streaming/runtime behavior", () => {
         });
         getCachedFilePath.mockResolvedValueOnce(null);
         isDownloading.mockReturnValueOnce(false);
-        mockAxiosHead.mockResolvedValueOnce({ headers: { "content-length": "12345" } });
+        mockAxiosHead.mockResolvedValueOnce({
+            headers: { "content-length": "12345" },
+        });
 
         const upstream = createStream();
         mockAxiosGet.mockResolvedValueOnce({
@@ -709,7 +737,7 @@ describe("podcasts streaming/runtime behavior", () => {
         expect(downloadInBackground).toHaveBeenCalledWith(
             "ep-2",
             "https://audio/ep-2.mp3",
-            "user-99"
+            "user-99",
         );
         expect(prisma.podcastEpisode.update).toHaveBeenCalledWith({
             where: { id: "ep-2" },
@@ -724,11 +752,11 @@ describe("podcasts streaming/runtime behavior", () => {
         expect(upstream.pipe).toHaveBeenCalledWith(res);
 
         const streamErrorHandler = upstream.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1];
         expect(streamErrorHandler).toBeDefined();
         streamErrorHandler(
-            Object.assign(new Error("rss full stream error"), { code: "EIO" })
+            Object.assign(new Error("rss full stream error"), { code: "EIO" }),
         );
         expect(res.end).toHaveBeenCalled();
 
@@ -798,12 +826,12 @@ describe("podcasts streaming/runtime behavior", () => {
 
         expect(mockAxiosHead).toHaveBeenCalledWith(
             "https://audio/ep-norange-fail.mp3",
-            { maxRedirects: 0, timeout: 30000 }
+            { maxRedirects: 0, timeout: 30000 },
         );
         expect(downloadInBackground).toHaveBeenCalledWith(
             "ep-norange-fail",
             "https://audio/ep-norange-fail.mp3",
-            "user-1"
+            "user-1",
         );
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({
@@ -841,7 +869,7 @@ describe("podcasts streaming/runtime behavior", () => {
 
         expect(mockAxiosHead).toHaveBeenCalledWith(
             "https://audio/ep-head-fail.mp3",
-            { maxRedirects: 0, timeout: 30000 }
+            { maxRedirects: 0, timeout: 30000 },
         );
         expect(mockAxiosGet).toHaveBeenCalledTimes(1);
         expect(res.statusCode).toBe(200);
@@ -885,7 +913,11 @@ describe("podcasts streaming/runtime behavior", () => {
             fileSize: 4000,
         });
         getCachedFilePath.mockResolvedValueOnce(null);
-        mockParseRangeHeader.mockReturnValueOnce({ ok: true, start: 100, end: 199 });
+        mockParseRangeHeader.mockReturnValueOnce({
+            ok: true,
+            start: 100,
+            end: 199,
+        });
 
         const upstream = createStream();
         mockAxiosGet.mockResolvedValueOnce({
@@ -914,10 +946,12 @@ describe("podcasts streaming/runtime behavior", () => {
         expect(upstream.pipe).toHaveBeenCalledWith(res);
 
         const streamErrorHandler = upstream.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1];
         expect(streamErrorHandler).toBeDefined();
-        streamErrorHandler(Object.assign(new Error("rss error"), { code: "EPIPE" }));
+        streamErrorHandler(
+            Object.assign(new Error("rss error"), { code: "EPIPE" }),
+        );
         expect(res.end).toHaveBeenCalled();
 
         for (const closeHandler of res.closeHandlers) {
@@ -936,7 +970,11 @@ describe("podcasts streaming/runtime behavior", () => {
             fileSize: 4000,
         });
         getCachedFilePath.mockResolvedValueOnce(null);
-        mockParseRangeHeader.mockReturnValueOnce({ ok: true, start: 0, end: 99 });
+        mockParseRangeHeader.mockReturnValueOnce({
+            ok: true,
+            start: 0,
+            end: 99,
+        });
 
         const upstream = createStream();
         mockAxiosGet.mockResolvedValueOnce({
@@ -970,18 +1008,20 @@ describe("podcasts streaming/runtime behavior", () => {
             fileSize: 4000,
         });
         getCachedFilePath.mockResolvedValueOnce(null);
-        mockParseRangeHeader.mockReturnValueOnce({ ok: true, start: 50, end: 149 });
+        mockParseRangeHeader.mockReturnValueOnce({
+            ok: true,
+            start: 50,
+            end: 149,
+        });
 
         const rangeError: any = new Error("range unsupported");
         rangeError.response = { status: 416 };
         const fallbackStream = createStream();
-        mockAxiosGet
-            .mockRejectedValueOnce(rangeError)
-            .mockResolvedValueOnce({
-                status: 200,
-                data: fallbackStream,
-                headers: {},
-            });
+        mockAxiosGet.mockRejectedValueOnce(rangeError).mockResolvedValueOnce({
+            status: 200,
+            data: fallbackStream,
+            headers: {},
+        });
 
         const req = {
             params: { podcastId: "pod-1", episodeId: "ep-rss-range-fallback" },
@@ -998,24 +1038,26 @@ describe("podcasts streaming/runtime behavior", () => {
             expect.objectContaining({
                 headers: { Range: "bytes=50-149" },
                 responseType: "stream",
-            })
+            }),
         );
         expect(mockAxiosGet).toHaveBeenNthCalledWith(
             2,
             "https://audio/ep-rss-range-fallback.mp3",
             expect.objectContaining({
                 responseType: "stream",
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.headers["Content-Length"]).toBeUndefined();
         expect(fallbackStream.pipe).toHaveBeenCalledWith(res);
 
         const fallbackErrorHandler = fallbackStream.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1];
         expect(fallbackErrorHandler).toBeDefined();
-        fallbackErrorHandler(Object.assign(new Error("fallback error"), { code: "EIO" }));
+        fallbackErrorHandler(
+            Object.assign(new Error("fallback error"), { code: "EIO" }),
+        );
         expect(res.end).toHaveBeenCalled();
 
         for (const closeHandler of res.closeHandlers) {
@@ -1034,10 +1076,16 @@ describe("podcasts streaming/runtime behavior", () => {
             fileSize: 4000,
         });
         getCachedFilePath.mockResolvedValueOnce(null);
-        mockParseRangeHeader.mockReturnValueOnce({ ok: true, start: 0, end: 99 });
+        mockParseRangeHeader.mockReturnValueOnce({
+            ok: true,
+            start: 0,
+            end: 99,
+        });
         const cancelError = new Error("request canceled");
         mockAxiosGet.mockRejectedValueOnce(cancelError);
-        mockAxiosIsCancel.mockImplementation((error: unknown) => error === cancelError);
+        mockAxiosIsCancel.mockImplementation(
+            (error: unknown) => error === cancelError,
+        );
 
         const req = {
             params: { podcastId: "pod-1", episodeId: "ep-rss-range-cancel" },
@@ -1065,7 +1113,9 @@ describe("podcasts streaming/runtime behavior", () => {
         getCachedFilePath.mockResolvedValueOnce(null);
         const cancelError = new Error("request canceled");
         mockAxiosGet.mockRejectedValueOnce(cancelError);
-        mockAxiosIsCancel.mockImplementation((error: unknown) => error === cancelError);
+        mockAxiosIsCancel.mockImplementation(
+            (error: unknown) => error === cancelError,
+        );
 
         const req = {
             params: { podcastId: "pod-1", episodeId: "ep-rss-full-cancel" },
@@ -1090,7 +1140,9 @@ describe("podcasts streaming/runtime behavior", () => {
             fileSize: 4000,
         });
         getCachedFilePath.mockResolvedValueOnce(null);
-        mockAxiosGet.mockRejectedValueOnce(new Error("rss full request failed"));
+        mockAxiosGet.mockRejectedValueOnce(
+            new Error("rss full request failed"),
+        );
         mockAxiosIsCancel.mockReturnValue(false);
 
         const req = {
@@ -1135,7 +1187,7 @@ describe("podcasts streaming/runtime behavior", () => {
         expect(mockAxiosHead).not.toHaveBeenCalled();
         expect(mockAxiosGet).not.toHaveBeenCalledWith(
             audioUrl,
-            expect.anything()
+            expect.anything(),
         );
     });
 
@@ -1178,7 +1230,7 @@ describe("podcasts streaming/runtime behavior", () => {
         expect(mockAxiosGet).toHaveBeenCalledTimes(1);
         expect(mockAxiosGet).not.toHaveBeenCalledWith(
             privateUrl,
-            expect.anything()
+            expect.anything(),
         );
         expect(interimStream.destroy).toHaveBeenCalled();
     });
@@ -1228,7 +1280,7 @@ describe("podcasts streaming/runtime behavior", () => {
             expect.objectContaining({
                 headers: { Range: "bytes=100-199" },
                 maxRedirects: 0,
-            })
+            }),
         );
         expect(interimStream.destroy).toHaveBeenCalled();
         expect(res.statusCode).toBe(206);
@@ -1255,7 +1307,7 @@ describe("podcasts streaming/runtime behavior", () => {
         });
 
         prisma.podcastProgress.upsert.mockRejectedValueOnce(
-            new Error("progress write failed")
+            new Error("progress write failed"),
         );
         const progressErrRes = createRes();
         await progressHandler(progressReq, progressErrRes);
@@ -1274,7 +1326,7 @@ describe("podcasts streaming/runtime behavior", () => {
         });
 
         prisma.podcastProgress.deleteMany.mockRejectedValueOnce(
-            new Error("delete failed")
+            new Error("delete failed"),
         );
         const clearErrRes = createRes();
         await clearProgressHandler(clearReq, clearErrRes);
@@ -1352,7 +1404,9 @@ describe("podcasts streaming/runtime behavior", () => {
         expect(notFoundRes.statusCode).toBe(404);
         expect(notFoundRes.body).toEqual({ error: "Podcast not found" });
 
-        prisma.podcast.findUnique.mockRejectedValueOnce(new Error("similar lookup failed"));
+        prisma.podcast.findUnique.mockRejectedValueOnce(
+            new Error("similar lookup failed"),
+        );
         const errorRes = createRes();
         await similarHandler(req, errorRes);
         expect(errorRes.statusCode).toBe(500);
@@ -1371,16 +1425,16 @@ describe("podcasts streaming/runtime behavior", () => {
 
         expect(podcastRes.statusCode).toBe(204);
         expect(
-            podcastRes.headers["Access-Control-Allow-Origin"]
+            podcastRes.headers["Access-Control-Allow-Origin"],
         ).toBeUndefined();
         expect(
-            podcastRes.headers["Access-Control-Allow-Credentials"]
+            podcastRes.headers["Access-Control-Allow-Credentials"],
         ).toBeUndefined();
         expect(podcastRes.headers["Access-Control-Allow-Methods"]).toBe(
-            "GET, OPTIONS"
+            "GET, OPTIONS",
         );
         expect(podcastRes.headers["Access-Control-Allow-Headers"]).toBe(
-            "Content-Type"
+            "Content-Type",
         );
         expect(podcastRes.headers["Access-Control-Max-Age"]).toBe("86400");
 
@@ -1392,16 +1446,16 @@ describe("podcasts streaming/runtime behavior", () => {
         await episodeCoverOptionsHandler(episodeReq, episodeRes);
         expect(episodeRes.statusCode).toBe(204);
         expect(
-            episodeRes.headers["Access-Control-Allow-Origin"]
+            episodeRes.headers["Access-Control-Allow-Origin"],
         ).toBeUndefined();
         expect(
-            episodeRes.headers["Access-Control-Allow-Credentials"]
+            episodeRes.headers["Access-Control-Allow-Credentials"],
         ).toBeUndefined();
         expect(episodeRes.headers["Access-Control-Allow-Methods"]).toBe(
-            "GET, OPTIONS"
+            "GET, OPTIONS",
         );
         expect(episodeRes.headers["Access-Control-Allow-Headers"]).toBe(
-            "Content-Type"
+            "Content-Type",
         );
         expect(episodeRes.headers["Access-Control-Max-Age"]).toBe("86400");
     });
@@ -1498,7 +1552,9 @@ describe("podcasts streaming/runtime behavior", () => {
     });
 
     it("returns 500 for podcast and episode cover handler failures", async () => {
-        prisma.podcast.findUnique.mockRejectedValueOnce(new Error("podcast cover read failed"));
+        prisma.podcast.findUnique.mockRejectedValueOnce(
+            new Error("podcast cover read failed"),
+        );
         const podcastReq = {
             params: { id: "pod-err" },
             headers: {},
@@ -1512,7 +1568,7 @@ describe("podcasts streaming/runtime behavior", () => {
         });
 
         prisma.podcastEpisode.findUnique.mockRejectedValueOnce(
-            new Error("episode cover read failed")
+            new Error("episode cover read failed"),
         );
         const episodeReq = {
             params: { episodeId: "ep-err" },

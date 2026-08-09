@@ -23,7 +23,7 @@ test("mapYtMusicChartsToFeaturedPlaylists maps chart tracks to home cards", () =
                 },
             ],
         },
-        10
+        10,
     );
 
     assert.equal(cards.length, 2);
@@ -55,16 +55,14 @@ test("mapYtMusicChartsToFeaturedPlaylists deduplicates by videoId and enforces l
                 { videoId: "dup-1", title: "Song A (duplicate)", artist: "A2" },
                 { videoId: "dup-3", title: "Song C", artist: "C" },
             ],
-            videos: [
-                { videoId: "dup-4", title: "Song D", artist: "D" },
-            ],
+            videos: [{ videoId: "dup-4", title: "Song D", artist: "D" }],
         },
-        3
+        3,
     );
 
     assert.deepEqual(
         cards.map((card) => card.id),
-        ["dup-1", "dup-2", "dup-3"]
+        ["dup-1", "dup-2", "dup-3"],
     );
 });
 
@@ -77,7 +75,7 @@ test("mapYtMusicChartsToFeaturedPlaylists ignores invalid entries", () => {
                 { videoId: "valid", title: "Valid Song", artist: "Artist" },
             ],
         },
-        10
+        10,
     );
 
     assert.equal(cards.length, 1);

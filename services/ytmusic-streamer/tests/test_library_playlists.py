@@ -62,9 +62,11 @@ class TestLibraryPlaylists:
     @pytest.mark.anyio
     async def test_returns_playlists_for_authenticated_user(self, client):
         """Should return formatted playlist data for an authenticated user."""
-        mock_run = MagicMock(side_effect=lambda uid, operation, func: func(MagicMock(
-            get_library_playlists=MagicMock(return_value=_SAMPLE_PLAYLISTS)
-        )))
+        mock_run = MagicMock(
+            side_effect=lambda uid, operation, func: func(
+                MagicMock(get_library_playlists=MagicMock(return_value=_SAMPLE_PLAYLISTS))
+            )
+        )
 
         with patch("app._run_ytmusic_with_auth_retry", mock_run):
             resp = await client.get("/library/playlists", params={"user_id": "user-1"})
@@ -120,9 +122,11 @@ class TestLibraryPlaylists:
     @pytest.mark.anyio
     async def test_mixes_only_filter(self, client):
         """When mixes_only=true, should filter to auto-generated playlists only."""
-        mock_run = MagicMock(side_effect=lambda uid, operation, func: func(MagicMock(
-            get_library_playlists=MagicMock(return_value=_SAMPLE_PLAYLISTS)
-        )))
+        mock_run = MagicMock(
+            side_effect=lambda uid, operation, func: func(
+                MagicMock(get_library_playlists=MagicMock(return_value=_SAMPLE_PLAYLISTS))
+            )
+        )
 
         with patch("app._run_ytmusic_with_auth_retry", mock_run):
             resp = await client.get(

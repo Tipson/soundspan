@@ -20,7 +20,7 @@ export const VARIOUS_ARTISTS_MBID = "89ad4ac3-39f7-470e-963a-56509c546377";
  */
 export function canonicalizeVariousArtists(name: string): string {
     // Strip angle brackets and trim
-    const cleaned = name.trim().replace(/^<|>$/g, '');
+    const cleaned = name.trim().replace(/^<|>$/g, "");
 
     // Case-insensitive regex patterns for Various Artists variations
     // Pattern 1: VA, V.A., V/A, V.A (with optional dots/slashes)
@@ -38,8 +38,11 @@ export function canonicalizeVariousArtists(name: string): string {
 /**
  * Check if a platform-specific artist ID is Various Artists
  */
-export function isVariousArtistsById(platform: 'deezer' | 'spotify', id: string | number): boolean {
-    if (platform === 'deezer' && String(id) === '5080') {
+export function isVariousArtistsById(
+    platform: "deezer" | "spotify",
+    id: string | number,
+): boolean {
+    if (platform === "deezer" && String(id) === "5080") {
         return true;
     }
     // Add other platform IDs as needed
@@ -51,7 +54,7 @@ export function isVariousArtistsById(platform: 'deezer' | 'spotify', id: string 
  * e.g., "Ólafur" → "Olafur", "Björk" → "Bjork"
  */
 function stripDiacritics(str: string): string {
-    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 /**
@@ -70,11 +73,11 @@ export function hasDiacritics(str: string): boolean {
 export function getPreferredArtistName(name1: string, name2: string): string {
     const has1 = hasDiacritics(name1);
     const has2 = hasDiacritics(name2);
-    
+
     // If one has accents and the other doesn't, prefer the accented one
     if (has2 && !has1) return name2;
     if (has1 && !has2) return name1;
-    
+
     // If both or neither have accents, prefer the longer/more complete one
     return name1.length >= name2.length ? name1 : name2;
 }
@@ -92,13 +95,13 @@ export function getPreferredArtistName(name1: string, name2: string): string {
 export function normalizeArtistName(name: string): string {
     if (name == null) return "";
     let normalized = stripDiacritics(name.trim().toLowerCase());
-    
+
     // Normalize "&" to "and" (handles "Of Mice & Men" vs "Of Mice And Men")
-    normalized = normalized.replace(/\s*&\s*/g, ' and ');
-    
+    normalized = normalized.replace(/\s*&\s*/g, " and ");
+
     // Normalize multiple spaces to single space
-    normalized = normalized.replace(/\s+/g, ' ');
-    
+    normalized = normalized.replace(/\s+/g, " ");
+
     return normalized.trim();
 }
 
@@ -124,27 +127,29 @@ export function stripAlbumEdition(title: string): string {
         return title?.trim() || "";
     }
 
-    return title
-        // Remove parenthetical edition/version markers
-        .replace(
-            /\s*\([^)]*(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|soundtrack|motion picture|super deluxe|explicit|clean|mono|stereo|remix|live|acoustic|unplugged|sessions?|recording|import|japan|uk|us)\s*[^)]*\)\s*/gi,
-            ""
-        )
-        // Remove bracketed edition markers
-        .replace(
-            /\s*\[[^\]]*(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|soundtrack|motion picture|super deluxe|explicit|clean|mono|stereo|remix|live|acoustic|unplugged|sessions?|recording|import|japan|uk|us)\s*[^\]]*\]\s*/gi,
-            ""
-        )
-        // Remove trailing dash content with edition keywords
-        .replace(
-            /\s*[-–—:]\s*(?:\d{4}\s+)?(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|mono|stereo|remix|live|acoustic).*$/gi,
-            ""
-        )
-        // Remove trailing year in parentheses (often indicates remaster year)
-        .replace(/\s*\(\d{4}\)\s*$/, "")
-        // Clean up any double spaces or trailing whitespace
-        .replace(/\s+/g, " ")
-        .trim();
+    return (
+        title
+            // Remove parenthetical edition/version markers
+            .replace(
+                /\s*\([^)]*(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|soundtrack|motion picture|super deluxe|explicit|clean|mono|stereo|remix|live|acoustic|unplugged|sessions?|recording|import|japan|uk|us)\s*[^)]*\)\s*/gi,
+                "",
+            )
+            // Remove bracketed edition markers
+            .replace(
+                /\s*\[[^\]]*(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|soundtrack|motion picture|super deluxe|explicit|clean|mono|stereo|remix|live|acoustic|unplugged|sessions?|recording|import|japan|uk|us)\s*[^\]]*\]\s*/gi,
+                "",
+            )
+            // Remove trailing dash content with edition keywords
+            .replace(
+                /\s*[-–—:]\s*(?:\d{4}\s+)?(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|mono|stereo|remix|live|acoustic).*$/gi,
+                "",
+            )
+            // Remove trailing year in parentheses (often indicates remaster year)
+            .replace(/\s*\(\d{4}\)\s*$/, "")
+            // Clean up any double spaces or trailing whitespace
+            .replace(/\s+/g, " ")
+            .trim()
+    );
 }
 
 /**
@@ -158,7 +163,7 @@ export function stripAlbumEdition(title: string): string {
 export function areArtistNamesSimilar(
     name1: string,
     name2: string,
-    threshold: number = 95
+    threshold: number = 95,
 ): boolean {
     if (name1 == null || name2 == null) return false;
     // First normalize both names
@@ -185,7 +190,7 @@ export function areArtistNamesSimilar(
 export function findBestArtistMatch(
     targetName: string,
     candidates: string[],
-    threshold: number = 95
+    threshold: number = 95,
 ): string | null {
     if (targetName == null || !candidates?.length) return null;
     const normalizedTarget = normalizeArtistName(targetName);
@@ -223,8 +228,8 @@ export function findBestArtistMatch(
  */
 export function extractPrimaryArtist(artistName: string): string {
     // Empty string check
-    if (!artistName || artistName.trim() === '') {
-        return 'Unknown Artist';
+    if (!artistName || artistName.trim() === "") {
+        return "Unknown Artist";
     }
 
     // Trim whitespace
@@ -260,8 +265,7 @@ export function extractPrimaryArtist(artistName: string): string {
         if (parts.length > 1) {
             const firstPart = parts[0].trim();
             const secondPart = parts[1].trim();
-            const lastWord =
-                firstPart.split(/\s+/).pop()?.toLowerCase() || "";
+            const lastWord = firstPart.split(/\s+/).pop()?.toLowerCase() || "";
 
             // Don't split if the first part ends with common incomplete words
             // These suggest it's a band name, not a collaboration
@@ -312,7 +316,7 @@ export function extractPrimaryArtist(artistName: string): string {
  * Returns null if no clear artist pattern is found
  */
 export function parseArtistFromPath(folderName: string): string | null {
-    if (!folderName || folderName.trim() === '') {
+    if (!folderName || folderName.trim() === "") {
         return null;
     }
 
@@ -337,9 +341,12 @@ export function parseArtistFromPath(folderName: string): string | null {
     if (sceneMatch && sceneMatch[1]) {
         const artistPart = sceneMatch[1].trim();
         // Convert dots to spaces (Artist.Name -> Artist Name)
-        const artist = artistPart.replace(/\./g, ' ').trim();
+        const artist = artistPart.replace(/\./g, " ").trim();
         // Validate: should be at least 2 chars and not all caps metadata
-        if (artist.length >= 2 && !/^(FLAC|MP3|WAV|24BIT|WEB|CD)$/i.test(artist)) {
+        if (
+            artist.length >= 2 &&
+            !/^(FLAC|MP3|WAV|24BIT|WEB|CD)$/i.test(artist)
+        ) {
             return artist;
         }
     }

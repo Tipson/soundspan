@@ -77,7 +77,10 @@ function formatNumber(value: number | null, digits = 4): string {
     return String(round(value, digits));
 }
 
-function summarizeField(rows: EnhancedTrackRow[], key: FieldKey): NumericSummary {
+function summarizeField(
+    rows: EnhancedTrackRow[],
+    key: FieldKey,
+): NumericSummary {
     const values: number[] = [];
     let nullCount = 0;
     let outOfRangeCount = 0;
@@ -112,7 +115,9 @@ function summarizeField(rows: EnhancedTrackRow[], key: FieldKey): NumericSummary
     };
 }
 
-function summarizeDanceabilityDelta(rows: EnhancedTrackRow[]): DanceabilityDeltaSummary {
+function summarizeDanceabilityDelta(
+    rows: EnhancedTrackRow[],
+): DanceabilityDeltaSummary {
     const absDeltas: number[] = [];
     const signedDeltas: number[] = [];
     let overlapCount = 0;
@@ -178,7 +183,9 @@ function buildReport(params: {
     lines.push("# Analyzer Enhanced-Mode Baseline Report");
     lines.push("");
     lines.push(`- Generated at: ${generatedAt}`);
-    lines.push("- Runner: `backend/scripts/measure-analyzer-enhanced-baseline.ts`");
+    lines.push(
+        "- Runner: `backend/scripts/measure-analyzer-enhanced-baseline.ts`",
+    );
     lines.push("");
     lines.push("## Scope");
     lines.push("");
@@ -239,10 +246,22 @@ function buildReport(params: {
     );
     lines.push(`- ML-only rows: ${danceabilityDelta.mlOnlyCount}`);
     lines.push(`- Base-only rows: ${danceabilityDelta.baseOnlyCount}`);
-    lines.push(`- Median abs delta (` + "`|danceabilityMl - danceability|`" + `): ${formatNumber(danceabilityDelta.medianAbsDelta)}`);
-    lines.push(`- P95 abs delta: ${formatNumber(danceabilityDelta.p95AbsDelta)}`);
-    lines.push(`- Max abs delta: ${formatNumber(danceabilityDelta.maxAbsDelta)}`);
-    lines.push(`- Mean signed delta (` + "`danceabilityMl - danceability`" + `): ${formatNumber(danceabilityDelta.meanSignedDelta)}`);
+    lines.push(
+        `- Median abs delta (` +
+            "`|danceabilityMl - danceability|`" +
+            `): ${formatNumber(danceabilityDelta.medianAbsDelta)}`,
+    );
+    lines.push(
+        `- P95 abs delta: ${formatNumber(danceabilityDelta.p95AbsDelta)}`,
+    );
+    lines.push(
+        `- Max abs delta: ${formatNumber(danceabilityDelta.maxAbsDelta)}`,
+    );
+    lines.push(
+        `- Mean signed delta (` +
+            "`danceabilityMl - danceability`" +
+            `): ${formatNumber(danceabilityDelta.meanSignedDelta)}`,
+    );
 
     lines.push("");
     lines.push("## Baseline Notes");
@@ -276,7 +295,10 @@ async function runMeasurement(): Promise<void> {
         _count: { _all: true },
     });
     const completedModeCounts = new Map<string, number>(
-        completedModeGroups.map((row) => [row.analysisMode ?? "null", row._count._all]),
+        completedModeGroups.map((row) => [
+            row.analysisMode ?? "null",
+            row._count._all,
+        ]),
     );
 
     const enhancedRows = await prisma.track.findMany({

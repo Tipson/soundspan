@@ -115,14 +115,14 @@ describe("metadataOverrides", () => {
             getMergedGenres({
                 genres: ["rock", "metal"],
                 userGenres: ["metal", "ambient"],
-            })
+            }),
         ).toEqual(["metal", "ambient", "rock"]);
     });
 
     it("supports JSON genre payloads and effective genre helpers", () => {
         const artist = {
-            genres: "[\"rock\",\"indie\"]",
-            userGenres: "[\"indie\",\"shoegaze\"]",
+            genres: '["rock","indie"]',
+            userGenres: '["indie","shoegaze"]',
         } as any;
         const album = {
             genres: ["soul"],
@@ -138,4 +138,3 @@ describe("metadataOverrides", () => {
         expect(getAlbumEffectiveGenres(album)).toEqual(["soul"]);
     });
 });
-

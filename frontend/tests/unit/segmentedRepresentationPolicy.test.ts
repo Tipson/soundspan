@@ -9,9 +9,9 @@ import {
 test("resolveSegmentAssetNameFromUri extracts the final segment", () => {
     assert.equal(
         resolveSegmentAssetNameFromUri(
-            "/api/streaming/v1/sessions/session-1/chunk-2-00017.m4s?st=token"
+            "/api/streaming/v1/sessions/session-1/chunk-2-00017.m4s?st=token",
         ),
-        "chunk-2-00017.m4s"
+        "chunk-2-00017.m4s",
     );
     assert.equal(
         resolveSegmentAssetNameFromUri("chunk-2-00017.m4s?st=token"),
@@ -22,11 +22,11 @@ test("resolveSegmentAssetNameFromUri extracts the final segment", () => {
 test("resolveSegmentRepresentationIdFromName parses chunk representation IDs", () => {
     assert.equal(
         resolveSegmentRepresentationIdFromName("chunk-0-00001.m4s"),
-        "0"
+        "0",
     );
     assert.equal(
         resolveSegmentRepresentationIdFromName("chunk-aac-high-00001.webm"),
-        "aac-high"
+        "aac-high",
     );
 });
 
@@ -34,16 +34,16 @@ test("resolveSegmentRepresentationIdFromName parses init representation IDs", ()
     assert.equal(resolveSegmentRepresentationIdFromName("init-1.m4s"), "1");
     assert.equal(
         resolveSegmentRepresentationIdFromName("init-aac-main.webm"),
-        "aac-main"
+        "aac-main",
     );
 });
 
 test("resolveSegmentRepresentationIdFromUri returns null for non-segment assets", () => {
     assert.equal(
         resolveSegmentRepresentationIdFromUri(
-            "/api/streaming/v1/sessions/session-1/manifest.mpd?st=token"
+            "/api/streaming/v1/sessions/session-1/manifest.mpd?st=token",
         ),
-        null
+        null,
     );
     assert.equal(resolveSegmentRepresentationIdFromUri(""), null);
 });
@@ -61,7 +61,7 @@ test("resolveSegmentRepresentationIdFromName returns null for malformed names", 
 test("resolveSegmentAssetNameFromUri handles encoded segment names", () => {
     assert.equal(
         resolveSegmentAssetNameFromUri(
-            "/api/streaming/v1/sessions/s1/segments/chunk-0-00001.m4s?st=tok"
+            "/api/streaming/v1/sessions/s1/segments/chunk-0-00001.m4s?st=tok",
         ),
         "chunk-0-00001.m4s",
     );
@@ -70,13 +70,13 @@ test("resolveSegmentAssetNameFromUri handles encoded segment names", () => {
 test("resolveSegmentRepresentationIdFromUri chains name extraction and ID parse", () => {
     assert.equal(
         resolveSegmentRepresentationIdFromUri(
-            "/api/streaming/v1/sessions/s1/segments/chunk-2-00017.m4s?st=tok"
+            "/api/streaming/v1/sessions/s1/segments/chunk-2-00017.m4s?st=tok",
         ),
         "2",
     );
     assert.equal(
         resolveSegmentRepresentationIdFromUri(
-            "/api/streaming/v1/sessions/s1/segments/init-aac-high.m4s?st=tok"
+            "/api/streaming/v1/sessions/s1/segments/init-aac-high.m4s?st=tok",
         ),
         "aac-high",
     );
@@ -84,7 +84,9 @@ test("resolveSegmentRepresentationIdFromUri chains name extraction and ID parse"
 
 test("resolveSegmentAssetNameFromUri trims input and rejects blank terminal paths", () => {
     assert.equal(
-        resolveSegmentAssetNameFromUri("   /api/stream/chunk-9-00001.m4s?st=x#frag   "),
+        resolveSegmentAssetNameFromUri(
+            "   /api/stream/chunk-9-00001.m4s?st=x#frag   ",
+        ),
         "chunk-9-00001.m4s",
     );
     assert.equal(resolveSegmentAssetNameFromUri("   "), null);

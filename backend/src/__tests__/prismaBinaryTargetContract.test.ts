@@ -16,7 +16,7 @@ describe("prisma engine-less client contract", () => {
     });
 
     it("keeps the datasource URL out of the schema (Prisma 7 config file owns it)", () => {
-        expect(schema).not.toContain("env(\"DATABASE_URL\")");
+        expect(schema).not.toContain('env("DATABASE_URL")');
 
         const configPath = path.resolve(__dirname, "../../prisma.config.ts");
         const config = fs.readFileSync(configPath, "utf8");
@@ -34,9 +34,13 @@ describe("shuffle migration rollout contract", () => {
 
     it("backfills the volatile random default without rewriting Track on ADD COLUMN", () => {
         expect(migration).toContain('ADD COLUMN "random" DOUBLE PRECISION;');
-        expect(migration).toContain('ALTER COLUMN "random" SET DEFAULT random()');
+        expect(migration).toContain(
+            'ALTER COLUMN "random" SET DEFAULT random()',
+        );
         expect(migration).toContain('UPDATE "Track" SET "random" = random()');
-        expect(migration).not.toMatch(/ADD COLUMN[^;]+NOT NULL[^;]+DEFAULT random\(\)/s);
+        expect(migration).not.toMatch(
+            /ADD COLUMN[^;]+NOT NULL[^;]+DEFAULT random\(\)/s,
+        );
     });
 
     it("builds the sampling index without blocking Track writes", () => {

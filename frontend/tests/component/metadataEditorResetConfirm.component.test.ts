@@ -4,8 +4,9 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const resetArtistMetadata = mock.fn(async () => ({
     message: "ok",
@@ -68,7 +69,7 @@ async function click(button: HTMLButtonElement): Promise<void> {
 
 function findButton(text: string): HTMLButtonElement {
     const button = Array.from(document.querySelectorAll("button")).find(
-        (candidate) => candidate.textContent?.includes(text)
+        (candidate) => candidate.textContent?.includes(text),
     );
     assert.ok(button instanceof HTMLButtonElement, `Missing ${text} button`);
     return button;
@@ -76,7 +77,7 @@ function findButton(text: string): HTMLButtonElement {
 
 function findLastExactButton(text: string): HTMLButtonElement {
     const buttons = Array.from(document.querySelectorAll("button")).filter(
-        (candidate) => candidate.textContent === text
+        (candidate) => candidate.textContent === text,
     );
     const button = buttons.at(-1);
     assert.ok(button instanceof HTMLButtonElement, `Missing ${text} button`);
@@ -101,7 +102,7 @@ async function mountEditor() {
                     _hasUserOverrides: true,
                 },
                 onSave,
-            })
+            }),
         );
     });
 
@@ -129,11 +130,11 @@ test("confirms before resetting artist metadata", async (t) => {
     assert.equal(resetArtistMetadata.mock.callCount(), 0);
     assert.match(
         document.body.textContent ?? "",
-        /Reset .*metadata|cannot be undone/i
+        /Reset .*metadata|cannot be undone/i,
     );
 
     const confirmButton = Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent === "Reset"
+        (button) => button.textContent === "Reset",
     );
     assert.ok(confirmButton instanceof HTMLButtonElement);
     await click(confirmButton);

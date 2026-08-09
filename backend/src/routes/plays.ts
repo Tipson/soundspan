@@ -4,9 +4,7 @@ import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { z } from "zod";
 import { trackMappingService } from "../services/trackMappingService";
-import {
-    resolveRemoteTrackMetadataForRequest,
-} from "../services/remoteTrackMetadataResolver";
+import { resolveRemoteTrackMetadataForRequest } from "../services/remoteTrackMetadataResolver";
 import {
     type UnifiedTrackResponse,
     normalizeLocalTrack,
@@ -45,7 +43,12 @@ const playSchema = z
 
         const isRemote = Boolean(data.tidalTrackId || data.youtubeVideoId);
         if (isRemote) {
-            if (!data.title || !data.artist || !data.album || data.duration === undefined) {
+            if (
+                !data.title ||
+                !data.artist ||
+                !data.album ||
+                data.duration === undefined
+            ) {
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     path: ["title"],
@@ -59,7 +62,9 @@ const playSchema = z
 const playHistoryRangeSchema = z.enum(["7d", "30d", "365d", "all"]);
 type PlayHistoryRange = z.infer<typeof playHistoryRangeSchema>;
 
-const getHistoryRangeStart = (range: Exclude<PlayHistoryRange, "all">): Date => {
+const getHistoryRangeStart = (
+    range: Exclude<PlayHistoryRange, "all">,
+): Date => {
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
     const lookbackDays = range === "7d" ? 7 : range === "30d" ? 30 : 365;
@@ -103,29 +108,31 @@ router.get("/summary", async (req, res) => {
         const thirtyDaysAgo = getHistoryRangeStart("30d");
         const yearAgo = getHistoryRangeStart("365d");
 
-        const [allTime, last7Days, last30Days, last365Days] = await Promise.all([
-            prisma.play.count({
-                where: { userId },
-            }),
-            prisma.play.count({
-                where: {
-                    userId,
-                    playedAt: { gte: sevenDaysAgo, lte: now },
-                },
-            }),
-            prisma.play.count({
-                where: {
-                    userId,
-                    playedAt: { gte: thirtyDaysAgo, lte: now },
-                },
-            }),
-            prisma.play.count({
-                where: {
-                    userId,
-                    playedAt: { gte: yearAgo, lte: now },
-                },
-            }),
-        ]);
+        const [allTime, last7Days, last30Days, last365Days] = await Promise.all(
+            [
+                prisma.play.count({
+                    where: { userId },
+                }),
+                prisma.play.count({
+                    where: {
+                        userId,
+                        playedAt: { gte: sevenDaysAgo, lte: now },
+                    },
+                }),
+                prisma.play.count({
+                    where: {
+                        userId,
+                        playedAt: { gte: thirtyDaysAgo, lte: now },
+                    },
+                }),
+                prisma.play.count({
+                    where: {
+                        userId,
+                        playedAt: { gte: yearAgo, lte: now },
+                    },
+                }),
+            ],
+        );
 
         res.json({
             allTime,
@@ -179,7 +186,7 @@ router.delete("/history", async (req, res) => {
     try {
         const userId = req.user!.id;
         const parsed = playHistoryRangeSchema.safeParse(
-            (req.query.range as string) || "30d"
+            (req.query.range as string) || "30d",
         );
 
         if (!parsed.success) {
@@ -271,8 +278,8 @@ router.post("/", async (req, res) => {
         }
 
         if (payload.tidalTrackId) {
-            const resolvedMetadata =
-                await resolveRemoteTrackMetadataForRequest({
+            const resolvedMetadata = await resolveRemoteTrackMetadataForRequest(
+                {
                     provider: "tidal",
                     userId,
                     tidalId: payload.tidalTrackId,
@@ -282,7 +289,8 @@ router.post("/", async (req, res) => {
                         album: payload.album,
                         duration: payload.duration,
                     },
-                });
+                },
+            );
             const ensured = await trackMappingService.ensureRemoteTrack({
                 provider: "tidal",
                 tidalId: payload.tidalTrackId,
@@ -400,7 +408,9 @@ router.get("/", async (req, res) => {
             plays
                 .map((play) => {
                     if (play.track) {
-                        const normalized = normalizeLocalTrack(play.track as any);
+                        const normalized = normalizeLocalTrack(
+                            play.track as any,
+                        );
                         return {
                             id: play.id,
                             playedAt: play.playedAt,
@@ -418,7 +428,9 @@ router.get("/", async (req, res) => {
                         };
                     }
                     if (play.trackYtMusic) {
-                        const normalized = normalizeYtMusicTrack(play.trackYtMusic);
+                        const normalized = normalizeYtMusicTrack(
+                            play.trackYtMusic,
+                        );
                         return {
                             id: play.id,
                             playedAt: play.playedAt,
@@ -428,7 +440,10 @@ router.get("/", async (req, res) => {
                     }
                     return null;
                 })
-                .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+                .filter(
+                    (entry): entry is NonNullable<typeof entry> =>
+                        entry !== null,
+                ),
         );
     } catch (error) {
         logger.error("Get plays error:", error);

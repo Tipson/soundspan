@@ -12,8 +12,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 after(() => {
     try {
@@ -61,8 +62,8 @@ async function mountCamera(reducedMotion = false) {
             await React.act(async () => {
                 await new Promise<void>((resolve) =>
                     requestAnimationFrame(() =>
-                        requestAnimationFrame(() => resolve())
-                    )
+                        requestAnimationFrame(() => resolve()),
+                    ),
                 );
             });
         },
@@ -118,7 +119,7 @@ test("accumulateZoom zooms about the cursor, preserving the world point under it
     const afterVp = h.latest().viewport!;
     assert.ok(
         Math.abs(afterVp.scale - before.scale * 2) < 1e-6,
-        `scale doubled (got ${afterVp.scale})`
+        `scale doubled (got ${afterVp.scale})`,
     );
     const worldAfter = {
         x: (cursor.x - afterVp.tx) / afterVp.scale,

@@ -13,7 +13,10 @@ interface IntegrationsSectionProps {
 /**
  * Renders the IntegrationsSection component.
  */
-export function IntegrationsSection({ settings, onUpdate }: IntegrationsSectionProps) {
+export function IntegrationsSection({
+    settings,
+    onUpdate,
+}: IntegrationsSectionProps) {
     return (
         <SettingsSection
             id="integrations"

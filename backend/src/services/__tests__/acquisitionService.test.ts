@@ -120,7 +120,10 @@ describe("acquisitionService", () => {
 
         prisma.downloadJob.findUnique.mockResolvedValue({ metadata: {} });
         prisma.downloadJob.update.mockResolvedValue({});
-        prisma.downloadJob.create.mockResolvedValue({ id: "101", metadata: {} });
+        prisma.downloadJob.create.mockResolvedValue({
+            id: "101",
+            metadata: {},
+        });
     });
 
     it("computes behavior matrix for no sources, single-source, and dual-source cases", async () => {
@@ -201,7 +204,9 @@ describe("acquisitionService", () => {
     });
 
     it("updates queue concurrency when settings change", async () => {
-        getSystemSettings.mockResolvedValueOnce({ soulseekConcurrentDownloads: 7 });
+        getSystemSettings.mockResolvedValueOnce({
+            soulseekConcurrentDownloads: 7,
+        });
 
         await svc.updateQueueConcurrency();
 
@@ -213,7 +218,7 @@ describe("acquisitionService", () => {
         soulseekService.isAvailable.mockResolvedValueOnce(false);
         const unavailableResults = await svc.acquireTracks(
             [{ artistName: "A", trackTitle: "T" }],
-            { userId: "user-1" }
+            { userId: "user-1" },
         );
         expect(unavailableResults).toEqual([
             {
@@ -226,7 +231,7 @@ describe("acquisitionService", () => {
         getSystemSettings.mockResolvedValueOnce({ musicPath: "" });
         const missingPathResults = await svc.acquireTracks(
             [{ artistName: "A", trackTitle: "T" }],
-            { userId: "user-1" }
+            { userId: "user-1" },
         );
         expect(missingPathResults).toEqual([
             {
@@ -249,7 +254,7 @@ describe("acquisitionService", () => {
                 { artistName: "Artist A", trackTitle: "Track A" },
                 { artistName: "Artist B", trackTitle: "Track B" },
             ],
-            { userId: "user-1" }
+            { userId: "user-1" },
         );
         expect(successResults).toEqual([
             {
@@ -274,11 +279,11 @@ describe("acquisitionService", () => {
             soulseekConcurrentDownloads: 4,
         });
         soulseekService.searchAndDownloadBatch.mockRejectedValueOnce(
-            new Error("batch failed")
+            new Error("batch failed"),
         );
         const errorResults = await svc.acquireTracks(
             [{ artistName: "Artist A", trackTitle: "Track A" }],
-            { userId: "user-1" }
+            { userId: "user-1" },
         );
         expect(errorResults).toEqual([
             {
@@ -296,8 +301,8 @@ describe("acquisitionService", () => {
                     albumTitle: "Album",
                     mbid: "rg-1",
                 },
-                { existingJobId: "existing-1", userId: "user-1" }
-            )
+                { existingJobId: "existing-1", userId: "user-1" },
+            ),
         ).resolves.toEqual({ id: "existing-1" });
         expect(prisma.downloadJob.create).not.toHaveBeenCalled();
 
@@ -308,8 +313,8 @@ describe("acquisitionService", () => {
                     albumTitle: "Album",
                     mbid: "rg-1",
                 },
-                { userId: "NaN" }
-            )
+                { userId: "NaN" },
+            ),
         ).rejects.toThrow("Invalid userId");
 
         prisma.downloadJob.create.mockResolvedValueOnce({ id: "202" });
@@ -324,8 +329,8 @@ describe("acquisitionService", () => {
                     userId: "user-2",
                     discoveryBatchId: "batch-1",
                     spotifyImportJobId: "import-1",
-                }
-            )
+                },
+            ),
         ).resolves.toEqual({ id: "202" });
 
         expect(prisma.downloadJob.create).toHaveBeenCalledWith({
@@ -412,8 +417,8 @@ describe("acquisitionService", () => {
         await expect(
             svc.acquireAlbum(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-1" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({
             success: false,
             error: "No download sources available (neither Soulseek nor Lidarr configured)",
@@ -422,22 +427,22 @@ describe("acquisitionService", () => {
         await expect(
             svc.acquireAlbum(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-1" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({ success: true, source: "soulseek" });
 
         await expect(
             svc.acquireAlbum(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-1" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({ success: true, source: "lidarr" });
 
         await expect(
             svc.acquireAlbum(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-1" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({ success: true, source: "soulseek" });
     });
 
@@ -446,16 +451,19 @@ describe("acquisitionService", () => {
         await expect(
             svc.acquireAlbumViaSoulseek(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-1" },
-                { userId: "user-1" }
-            )
-        ).resolves.toEqual({ success: false, error: "Music path not configured" });
+                { userId: "user-1" },
+            ),
+        ).resolves.toEqual({
+            success: false,
+            error: "Music path not configured",
+        });
 
         getSystemSettings.mockResolvedValueOnce({ musicPath: "/music" });
         await expect(
             svc.acquireAlbumViaSoulseek(
                 { artistName: "Artist", albumTitle: "Album" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({
             success: false,
             error: "Album MBID required for Soulseek download",
@@ -481,7 +489,7 @@ describe("acquisitionService", () => {
                 mbid: "rg-3",
                 requestedTracks: [{ title: "Only Track" }, { title: "Two" }],
             },
-            { userId: "user-1" }
+            { userId: "user-1" },
         );
 
         expect(result).toEqual({
@@ -498,7 +506,7 @@ describe("acquisitionService", () => {
                 { artist: "Artist", title: "Two", album: "Album" },
             ],
             "/music",
-            3
+            3,
         );
     });
 
@@ -507,7 +515,10 @@ describe("acquisitionService", () => {
             musicPath: "/music",
             soulseekConcurrentDownloads: 4,
         });
-        prisma.downloadJob.create.mockResolvedValueOnce({ id: "401", metadata: {} });
+        prisma.downloadJob.create.mockResolvedValueOnce({
+            id: "401",
+            metadata: {},
+        });
         musicBrainzService.getAlbumTracks.mockResolvedValueOnce([]);
         lastFmService.getAlbumInfo.mockResolvedValueOnce({
             tracks: {
@@ -522,8 +533,8 @@ describe("acquisitionService", () => {
         await expect(
             svc.acquireAlbumViaSoulseek(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-4" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({
             success: false,
             tracksTotal: 1,
@@ -535,7 +546,10 @@ describe("acquisitionService", () => {
             musicPath: "/music",
             soulseekConcurrentDownloads: 4,
         });
-        prisma.downloadJob.create.mockResolvedValueOnce({ id: "402", metadata: {} });
+        prisma.downloadJob.create.mockResolvedValueOnce({
+            id: "402",
+            metadata: {},
+        });
         musicBrainzService.getAlbumTracks.mockResolvedValueOnce([
             { title: "Track 1" },
             { title: "Track 2" },
@@ -549,7 +563,7 @@ describe("acquisitionService", () => {
 
         const partialResult = await svc.acquireAlbumViaSoulseek(
             { artistName: "Artist", albumTitle: "Album", mbid: "rg-5" },
-            { userId: "user-1" }
+            { userId: "user-1" },
         );
         expect(partialResult).toEqual({
             success: false,
@@ -564,15 +578,20 @@ describe("acquisitionService", () => {
             musicPath: "/music",
             soulseekConcurrentDownloads: 4,
         });
-        prisma.downloadJob.create.mockResolvedValueOnce({ id: "403", metadata: {} });
+        prisma.downloadJob.create.mockResolvedValueOnce({
+            id: "403",
+            metadata: {},
+        });
         musicBrainzService.getAlbumTracks.mockResolvedValueOnce([]);
-        lastFmService.getAlbumInfo.mockResolvedValueOnce({ tracks: { track: [] } });
+        lastFmService.getAlbumInfo.mockResolvedValueOnce({
+            tracks: { track: [] },
+        });
 
         await expect(
             svc.acquireAlbumViaSoulseek(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-6" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({
             success: false,
             error: "Could not get track list from MusicBrainz or Last.fm",
@@ -584,25 +603,31 @@ describe("acquisitionService", () => {
             musicPath: "/music",
             soulseekConcurrentDownloads: 4,
         });
-        prisma.downloadJob.create.mockResolvedValueOnce({ id: "501", metadata: {} });
+        prisma.downloadJob.create.mockResolvedValueOnce({
+            id: "501",
+            metadata: {},
+        });
         prisma.downloadJob.update
             .mockRejectedValueOnce(new Error("status write failed"))
             .mockResolvedValue({});
 
         const result = await svc.acquireAlbumViaSoulseek(
             { artistName: "Artist", albumTitle: "Album", mbid: "rg-7" },
-            { userId: "user-1" }
+            { userId: "user-1" },
         );
 
-        expect(result).toEqual({ success: false, error: "status write failed" });
+        expect(result).toEqual({
+            success: false,
+            error: "status write failed",
+        });
     });
 
     it("acquireAlbumViaLidarr handles missing mbid, success, structured failure, and exception", async () => {
         await expect(
             svc.acquireAlbumViaLidarr(
                 { artistName: "Artist", albumTitle: "Album" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({
             success: false,
             error: "Album MBID required for Lidarr download",
@@ -620,8 +645,8 @@ describe("acquisitionService", () => {
         await expect(
             svc.acquireAlbumViaLidarr(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-8" },
-                { userId: "user-1", discoveryBatchId: "batch-1" }
-            )
+                { userId: "user-1", discoveryBatchId: "batch-1" },
+            ),
         ).resolves.toEqual({
             success: true,
             source: "lidarr",
@@ -643,8 +668,8 @@ describe("acquisitionService", () => {
         await expect(
             svc.acquireAlbumViaLidarr(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-9" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({
             success: false,
             error: "indexer unavailable",
@@ -652,12 +677,14 @@ describe("acquisitionService", () => {
             isRecoverable: true,
         });
 
-        prisma.downloadJob.create.mockRejectedValueOnce(new Error("db explode"));
+        prisma.downloadJob.create.mockRejectedValueOnce(
+            new Error("db explode"),
+        );
         await expect(
             svc.acquireAlbumViaLidarr(
                 { artistName: "Artist", albumTitle: "Album", mbid: "rg-10" },
-                { userId: "user-1" }
-            )
+                { userId: "user-1" },
+            ),
         ).resolves.toEqual({
             success: false,
             error: "db explode",

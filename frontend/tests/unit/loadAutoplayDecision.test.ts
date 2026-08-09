@@ -73,7 +73,10 @@ test("advance play intent freshness is bounded by the TTL", () => {
     assert.equal(isAdvancePlayIntentFresh(null, 10_000), false);
     assert.equal(isAdvancePlayIntentFresh(10_000, 10_001), true);
     assert.equal(
-        isAdvancePlayIntentFresh(10_000, 10_000 + ADVANCE_PLAY_INTENT_TTL_MS - 1),
+        isAdvancePlayIntentFresh(
+            10_000,
+            10_000 + ADVANCE_PLAY_INTENT_TTL_MS - 1,
+        ),
         true,
     );
     assert.equal(

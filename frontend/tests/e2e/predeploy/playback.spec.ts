@@ -10,7 +10,11 @@ test.describe("Playback", () => {
         await page.goto("/");
 
         // Should show "Not Playing" or similar player status
-        await expect(page.locator("text=/Not Playing|Now Playing|Select something/i").first()).toBeVisible({ timeout: 5000 });
+        await expect(
+            page
+                .locator("text=/Not Playing|Now Playing|Select something/i")
+                .first(),
+        ).toBeVisible({ timeout: 5000 });
     });
 
     test("album page accessible and shows tracks", async ({ page }) => {
@@ -46,7 +50,9 @@ test.describe("Playback", () => {
         await expect(openOverlayButton).toBeEnabled({ timeout: 20000 });
 
         // Move away from queue index 0 so the centering assertion can detect regressions.
-        const nextTrackButton = page.getByRole("button", { name: "Next track" });
+        const nextTrackButton = page.getByRole("button", {
+            name: "Next track",
+        });
         for (let i = 0; i < 5; i += 1) {
             if (!(await nextTrackButton.isEnabled())) break;
             await nextTrackButton.click();
@@ -81,7 +87,7 @@ test.describe("Playback", () => {
         const queueSize = await page.locator("[data-queue-index]").count();
         test.skip(
             queueSize <= 8,
-            `Need at least 9 queue rows to validate centering, found ${queueSize}`
+            `Need at least 9 queue rows to validate centering, found ${queueSize}`,
         );
 
         const getQueueAlignment = async () =>
@@ -97,7 +103,10 @@ test.describe("Playback", () => {
 
                 return {
                     centerDelta: Math.abs(rowCenter - containerMid),
-                    centerTolerance: Math.max(56, container.clientHeight * 0.24),
+                    centerTolerance: Math.max(
+                        56,
+                        container.clientHeight * 0.24,
+                    ),
                     rowTop,
                     minTopOffset: Math.max(20, rowRect.height * 0.6),
                 };
@@ -110,7 +119,7 @@ test.describe("Playback", () => {
                     if (!alignment) return Number.POSITIVE_INFINITY;
                     return alignment.centerDelta - alignment.centerTolerance;
                 },
-                { timeout: 8000 }
+                { timeout: 8000 },
             )
             .toBeLessThanOrEqual(0);
 
@@ -121,7 +130,7 @@ test.describe("Playback", () => {
                     if (!alignment) return Number.NEGATIVE_INFINITY;
                     return alignment.rowTop - alignment.minTopOffset;
                 },
-                { timeout: 8000 }
+                { timeout: 8000 },
             )
             .toBeGreaterThanOrEqual(0);
     });

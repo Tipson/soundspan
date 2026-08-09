@@ -287,67 +287,73 @@ router.post(
  * GET /soulseek/search/:searchId
  * Get results for an ongoing search
  */
-router.get<{ searchId: string }>("/search/:searchId", requireAuth, async (req, res) => {
-    try {
-        const { searchId } = req.params;
-        const session = searchSessions.get(searchId);
+router.get<{ searchId: string }>(
+    "/search/:searchId",
+    requireAuth,
+    async (req, res) => {
+        try {
+            const { searchId } = req.params;
+            const session = searchSessions.get(searchId);
 
-        if (!session) {
-            return res.status(404).json({
-                error: "Search not found or expired",
-                results: [],
-                count: 0,
+            if (!session) {
+                return res.status(404).json({
+                    error: "Search not found or expired",
+                    results: [],
+                    count: 0,
+                });
+            }
+
+            // Format results for frontend
+            const formattedResults = session.results.map((r) => {
+                const filename = r.file.split(/[/\\]/).pop() || r.file;
+                const format = filename.toLowerCase().endsWith(".flac")
+                    ? "flac"
+                    : "mp3";
+
+                // Try to parse artist and album from path
+                const pathParts = r.file.split(/[/\\]/);
+                const parsedArtist =
+                    pathParts.length > 2
+                        ? pathParts[pathParts.length - 3]
+                        : undefined;
+                const parsedAlbum =
+                    pathParts.length > 1
+                        ? pathParts[pathParts.length - 2]
+                        : undefined;
+
+                // Extract title from filename: strip extension, track number prefix, and leading dash/space
+                const nameWithoutExt = filename.replace(/\.[^.]+$/, "");
+                const parsedTitle =
+                    nameWithoutExt
+                        .replace(/^\d+[\s.\-_]*/, "") // Remove leading track number
+                        .replace(/^\s*-\s*/, "") // Remove leading dash
+                        .trim() || undefined;
+
+                return {
+                    username: r.user,
+                    path: r.file,
+                    filename,
+                    size: r.size,
+                    bitrate: r.bitrate || 0,
+                    format,
+                    parsedArtist,
+                    parsedAlbum,
+                    parsedTitle,
+                };
+            });
+
+            res.json({
+                results: formattedResults,
+                count: formattedResults.length,
+            });
+        } catch (error: any) {
+            logger.error("Get search results error:", error.message);
+            res.status(500).json({
+                error: "Failed to get results",
             });
         }
-
-        // Format results for frontend
-        const formattedResults = session.results.map((r) => {
-            const filename = r.file.split(/[/\\]/).pop() || r.file;
-            const format =
-                filename.toLowerCase().endsWith(".flac") ? "flac" : "mp3";
-
-            // Try to parse artist and album from path
-            const pathParts = r.file.split(/[/\\]/);
-            const parsedArtist =
-                pathParts.length > 2 ?
-                    pathParts[pathParts.length - 3]
-                :   undefined;
-            const parsedAlbum =
-                pathParts.length > 1 ?
-                    pathParts[pathParts.length - 2]
-                :   undefined;
-
-            // Extract title from filename: strip extension, track number prefix, and leading dash/space
-            const nameWithoutExt = filename.replace(/\.[^.]+$/, "");
-            const parsedTitle = nameWithoutExt
-                .replace(/^\d+[\s.\-_]*/, "") // Remove leading track number
-                .replace(/^\s*-\s*/, "") // Remove leading dash
-                .trim() || undefined;
-
-            return {
-                username: r.user,
-                path: r.file,
-                filename,
-                size: r.size,
-                bitrate: r.bitrate || 0,
-                format,
-                parsedArtist,
-                parsedAlbum,
-                parsedTitle,
-            };
-        });
-
-        res.json({
-            results: formattedResults,
-            count: formattedResults.length,
-        });
-    } catch (error: any) {
-        logger.error("Get search results error:", error.message);
-        res.status(500).json({
-            error: "Failed to get results",
-        });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -412,7 +418,9 @@ router.post(
 
                 if (!resolvedTitle) resolvedTitle = name || "Unknown";
                 if (!resolvedArtist) resolvedArtist = "Unknown";
-                logger.warn(`[Soulseek] Derived artist/title from filename: "${resolvedArtist}" - "${resolvedTitle}"`);
+                logger.warn(
+                    `[Soulseek] Derived artist/title from filename: "${resolvedArtist}" - "${resolvedTitle}"`,
+                );
             }
 
             const settings = await getSystemSettings();
@@ -424,7 +432,9 @@ router.post(
                 });
             }
 
-            logger.debug(`[Soulseek] Downloading: "${resolvedArtist} - ${resolvedTitle}"`);
+            logger.debug(
+                `[Soulseek] Downloading: "${resolvedArtist} - ${resolvedTitle}"`,
+            );
 
             const result = await soulseekService.searchAndDownload(
                 resolvedArtist,

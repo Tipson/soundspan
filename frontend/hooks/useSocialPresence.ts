@@ -71,7 +71,7 @@ function useSocialPresencePushInvalidation(
     enabled: boolean,
     queryKey:
         | typeof SOCIAL_ONLINE_QUERY_KEY
-        | typeof SOCIAL_CONNECTED_QUERY_KEY
+        | typeof SOCIAL_CONNECTED_QUERY_KEY,
 ) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
@@ -123,7 +123,7 @@ export function useSocialPresence(options: SocialPresenceOptions = {}) {
                     activeIntervalMs: SOCIAL_POLL_ACTIVE_MS,
                     idleIntervalMs: SOCIAL_POLL_IDLE_MS,
                 }),
-                isDocumentVisible
+                isDocumentVisible,
             );
         },
     });
@@ -157,7 +157,7 @@ export function useAdminConnectedUsers(enabled: boolean) {
                     activeIntervalMs: SOCIAL_POLL_ACTIVE_MS,
                     idleIntervalMs: SOCIAL_POLL_IDLE_MS,
                 }),
-                isDocumentVisible
+                isDocumentVisible,
             );
         },
     });

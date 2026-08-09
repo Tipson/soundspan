@@ -1,4 +1,9 @@
-export type ActivityTab = "notifications" | "active" | "history" | "imports" | "social";
+export type ActivityTab =
+    | "notifications"
+    | "active"
+    | "history"
+    | "imports"
+    | "social";
 
 const ALL_ACTIVITY_TAB_IDS: ActivityTab[] = [
     "notifications",
@@ -51,7 +56,7 @@ export function getActivityPanelBadgeState({
  */
 export function getActivityTabBadge(
     tab: ActivityTab,
-    badgeState: ActivityPanelBadgeState
+    badgeState: ActivityPanelBadgeState,
 ): number | null {
     if (tab === "notifications") {
         return badgeState.notificationBadge;
@@ -73,7 +78,7 @@ export function getActivityTabBadge(
  */
 export function isActivityTabVisible(
     tab: ActivityTab,
-    isAdmin: boolean
+    isAdmin: boolean,
 ): boolean {
     if (isAdmin) {
         return true;
@@ -86,7 +91,9 @@ export function isActivityTabVisible(
  * Executes getVisibleActivityTabIds.
  */
 export function getVisibleActivityTabIds(isAdmin: boolean): ActivityTab[] {
-    return ALL_ACTIVITY_TAB_IDS.filter((tab) => isActivityTabVisible(tab, isAdmin));
+    return ALL_ACTIVITY_TAB_IDS.filter((tab) =>
+        isActivityTabVisible(tab, isAdmin),
+    );
 }
 
 /**
@@ -95,7 +102,7 @@ export function getVisibleActivityTabIds(isAdmin: boolean): ActivityTab[] {
 export function resolveActivityTab(
     requestedTab: ActivityTab,
     visibleTabs: readonly ActivityTab[],
-    fallbackTab: ActivityTab = "notifications"
+    fallbackTab: ActivityTab = "notifications",
 ): ActivityTab {
     if (visibleTabs.includes(requestedTab)) {
         return requestedTab;

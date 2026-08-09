@@ -70,10 +70,14 @@ test("journeyTracks prepends the from-track when it isn't the first waypoint", (
     const wps = [waypoint("a"), waypoint("b"), waypoint("c")];
     const queue = journeyTracks(fromTrack, wps);
     assert.equal(queue.length, 4);
-    assert.equal(queue[0], fromTrack, "origin is first and passed through as-is");
+    assert.equal(
+        queue[0],
+        fromTrack,
+        "origin is first and passed through as-is",
+    );
     assert.deepEqual(
         queue.map((t) => t.id),
-        ["from", "a", "b", "c"]
+        ["from", "a", "b", "c"],
     );
 });
 
@@ -82,7 +86,7 @@ test("journeyTracks does not duplicate the from-track if it is already first", (
     const queue = journeyTracks(fromTrack, wps);
     assert.deepEqual(
         queue.map((t) => t.id),
-        ["from", "b"]
+        ["from", "b"],
     );
 });
 
@@ -91,7 +95,7 @@ test("journeyTracks with no from-track returns just the mapped waypoints", () =>
     const queue = journeyTracks(null, wps);
     assert.deepEqual(
         queue.map((t) => t.id),
-        ["a", "b"]
+        ["a", "b"],
     );
     // Mapped items are real Track objects.
     assert.equal(queue[0].duration, 0);
@@ -111,6 +115,6 @@ test("annotateOnMap flags presence and preserves 1-based sequence", () => {
             { id: "a", onMap: true, seq: 1 },
             { id: "b", onMap: false, seq: 2 },
             { id: "c", onMap: true, seq: 3 },
-        ]
+        ],
     );
 });

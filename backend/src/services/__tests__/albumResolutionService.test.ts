@@ -34,12 +34,20 @@ describe("albumResolutionService", () => {
 
     describe("resolveAlbumForRemoteTrack", () => {
         it("returns null for empty title", async () => {
-            const result = await resolveAlbumForRemoteTrack("", "artist-1", "tidal");
+            const result = await resolveAlbumForRemoteTrack(
+                "",
+                "artist-1",
+                "tidal",
+            );
             expect(result).toBeNull();
         });
 
         it("returns null for 'Single'", async () => {
-            const result = await resolveAlbumForRemoteTrack("Single", "artist-1", "tidal");
+            const result = await resolveAlbumForRemoteTrack(
+                "Single",
+                "artist-1",
+                "tidal",
+            );
             expect(result).toBeNull();
         });
 
@@ -47,13 +55,17 @@ describe("albumResolutionService", () => {
             const result = await resolveAlbumForRemoteTrack(
                 "Unknown Album",
                 "artist-1",
-                "youtube"
+                "youtube",
             );
             expect(result).toBeNull();
         });
 
         it("returns null for 'N/A'", async () => {
-            const result = await resolveAlbumForRemoteTrack("N/A", "artist-1", "tidal");
+            const result = await resolveAlbumForRemoteTrack(
+                "N/A",
+                "artist-1",
+                "tidal",
+            );
             expect(result).toBeNull();
         });
 
@@ -66,7 +78,7 @@ describe("albumResolutionService", () => {
             const result = await resolveAlbumForRemoteTrack(
                 "ok computer",
                 "artist-1",
-                "tidal"
+                "tidal",
             );
             expect(result).toEqual({
                 id: "album-1",
@@ -88,7 +100,7 @@ describe("albumResolutionService", () => {
             const result = await resolveAlbumForRemoteTrack(
                 "Abbey Road (2019 Remaster)",
                 "artist-1",
-                "tidal"
+                "tidal",
             );
             expect(result).toEqual({
                 id: "album-2",
@@ -109,7 +121,7 @@ describe("albumResolutionService", () => {
             const result = await resolveAlbumForRemoteTrack(
                 "Brand New Album",
                 "artist-1",
-                "youtube"
+                "youtube",
             );
             expect(result).toEqual({
                 id: "new-album-id",
@@ -126,7 +138,7 @@ describe("albumResolutionService", () => {
                         primaryType: "Album",
                     }),
                     skipDuplicates: true,
-                })
+                }),
             );
         });
 
@@ -142,7 +154,7 @@ describe("albumResolutionService", () => {
             const result = await resolveAlbumForRemoteTrack(
                 "Brand New Album",
                 "artist-1",
-                "tidal"
+                "tidal",
             );
             expect(result).toEqual({
                 id: "existing-album-id",
@@ -160,7 +172,7 @@ describe("albumResolutionService", () => {
             mockPrisma.album.createMany.mockRejectedValueOnce(databaseError);
 
             await expect(
-                resolveAlbumForRemoteTrack("Broken Album", "artist-1", "tidal")
+                resolveAlbumForRemoteTrack("Broken Album", "artist-1", "tidal"),
             ).rejects.toThrow("database unavailable");
             expect(mockPrisma.album.findUnique).not.toHaveBeenCalled();
         });
@@ -172,8 +184,14 @@ describe("albumResolutionService", () => {
             mockPrisma.album.findUnique.mockResolvedValueOnce(null);
 
             await expect(
-                resolveAlbumForRemoteTrack("Missing Album", "artist-1", "youtube")
-            ).rejects.toThrow("Failed to resolve remote album row after createMany");
+                resolveAlbumForRemoteTrack(
+                    "Missing Album",
+                    "artist-1",
+                    "youtube",
+                ),
+            ).rejects.toThrow(
+                "Failed to resolve remote album row after createMany",
+            );
             expect(mockPrisma.album.findUnique).toHaveBeenCalledTimes(1);
         });
     });

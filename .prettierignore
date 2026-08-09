@@ -1,0 +1,17 @@
+# Package-owned source trees
+backend/
+frontend/
+packages/
+
+# Dependency lockfiles, documentation, and deployment configuration
+package-lock.json
+**/*.md
+**/*.yml
+**/*.yaml
+charts/
+
+# Python sidecars are formatted with Ruff
+services/
+
+# Binary/static assets
+**/assets/

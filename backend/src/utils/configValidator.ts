@@ -26,31 +26,37 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
 
     // Docker safety: If configured path doesn't exist but /music does, use /music
     // This handles users passing host .env files to Docker with host paths
-    const isDocker = fs.existsSync('/.dockerenv');
-    if (isDocker && !fs.existsSync(musicPath) && fs.existsSync('/music')) {
-        logger.warn(`MUSIC_PATH=${musicPath} not found in container, using /music (Docker mount point)`);
-        musicPath = '/music';
+    const isDocker = fs.existsSync("/.dockerenv");
+    if (isDocker && !fs.existsSync(musicPath) && fs.existsSync("/music")) {
+        logger.warn(
+            `MUSIC_PATH=${musicPath} not found in container, using /music (Docker mount point)`,
+        );
+        musicPath = "/music";
     }
 
     // Log if database has a different path than what we're using (helps debug migrations)
     if (settings?.musicPath && settings.musicPath !== musicPath) {
-        logger.debug(`Database has musicPath=${settings.musicPath}, using ${musicPath} from env/default`);
+        logger.debug(
+            `Database has musicPath=${settings.musicPath}, using ${musicPath} from env/default`,
+        );
     }
 
     // VALIDATE MUSIC PATH EXISTS
     if (!fs.existsSync(musicPath)) {
-        const isDocker = fs.existsSync('/.dockerenv') || process.env.NODE_ENV === 'production';
+        const isDocker =
+            fs.existsSync("/.dockerenv") ||
+            process.env.NODE_ENV === "production";
         const guidance = isDocker
             ? `Docker users: Ensure your volume mount is correct in docker-compose.yml:
    volumes:
      - /path/to/your/music:/music
    The container expects music at /music, not your host path.`
             : `Check that MUSIC_PATH in your .env file points to an existing directory.`;
-        
+
         throw new AppError(
             ErrorCode.MUSIC_PATH_NOT_ACCESSIBLE,
             ErrorCategory.FATAL,
-            `Music path does not exist: ${musicPath}\n\n${guidance}`
+            `Music path does not exist: ${musicPath}\n\n${guidance}`,
         );
     }
 
@@ -61,7 +67,7 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         throw new AppError(
             ErrorCode.MUSIC_PATH_NOT_ACCESSIBLE,
             ErrorCategory.FATAL,
-            `Music path not readable: ${musicPath}. Check file permissions.`
+            `Music path not readable: ${musicPath}. Check file permissions.`,
         );
     }
 
@@ -76,14 +82,14 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         try {
             fs.mkdirSync(transcodeCachePath, { recursive: true });
             logger.debug(
-                `Created transcode cache directory: ${transcodeCachePath}`
+                `Created transcode cache directory: ${transcodeCachePath}`,
             );
         } catch (err: any) {
             throw new AppError(
                 ErrorCode.TRANSCODE_CACHE_NOT_WRITABLE,
                 ErrorCategory.FATAL,
                 `Cannot create transcode cache directory: ${transcodeCachePath}`,
-                { originalError: err.message }
+                { originalError: err.message },
             );
         }
     }
@@ -95,7 +101,7 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         throw new AppError(
             ErrorCode.TRANSCODE_CACHE_NOT_WRITABLE,
             ErrorCategory.FATAL,
-            `Transcode cache not writable: ${transcodeCachePath}. Check file permissions.`
+            `Transcode cache not writable: ${transcodeCachePath}. Check file permissions.`,
         );
     }
 
@@ -108,7 +114,7 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         throw new AppError(
             ErrorCode.INVALID_CONFIG,
             ErrorCategory.FATAL,
-            `Invalid transcode cache size: must be a positive integer. Got: ${transcodeCacheMaxGb}`
+            `Invalid transcode cache size: must be a positive integer. Got: ${transcodeCacheMaxGb}`,
         );
     }
 
@@ -131,7 +137,7 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         logger.debug(`   FFmpeg path: ${ffmpegPath.path}`);
     } catch (err: any) {
         logger.warn(
-            "  Bundled FFmpeg not available. Transcoding will not be available."
+            "  Bundled FFmpeg not available. Transcoding will not be available.",
         );
         logger.warn(`   Error: ${err.message}`);
         logger.warn("   Original quality streaming will still work.");

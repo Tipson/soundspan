@@ -25,7 +25,7 @@ export class CoverArtExtractor {
      */
     async extractCoverArt(
         audioFilePath: string,
-        albumId: string
+        albumId: string,
     ): Promise<string | null> {
         try {
             // Check if already cached
@@ -49,14 +49,14 @@ export class CoverArtExtractor {
             await fs.promises.writeFile(cachePath, picture.data);
 
             logger.debug(
-                `[COVER-ART] Extracted cover art from ${path.basename(audioFilePath)}: ${cacheFileName}`
+                `[COVER-ART] Extracted cover art from ${path.basename(audioFilePath)}: ${cacheFileName}`,
             );
 
             return cacheFileName;
         } catch (err) {
             logger.error(
                 `[COVER-ART] Failed to extract from ${audioFilePath}:`,
-                err
+                err,
             );
             return null;
         }

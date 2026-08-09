@@ -30,7 +30,7 @@ interface AuthContextType {
     login: (
         username: string,
         password: string,
-        token?: string
+        token?: string,
     ) => Promise<void>;
     logout: () => void;
 }
@@ -94,12 +94,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
 
                 // If not on a public path, check if we need onboarding
-                const isPublic = publicPaths.includes(pathname) || publicPrefixes.some((prefix) => pathname.startsWith(prefix));
+                const isPublic =
+                    publicPaths.includes(pathname) ||
+                    publicPrefixes.some((prefix) =>
+                        pathname.startsWith(prefix),
+                    );
                 if (!isPublic) {
                     // Check if any users exist in the system
                     try {
                         const status = await api.get<{ hasAccount: boolean }>(
-                            "/onboarding/status"
+                            "/onboarding/status",
                         );
 
                         if (!status.hasAccount) {
@@ -122,34 +126,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
 
-    const login = useCallback(async (
-        username: string,
-        password: string,
-        token?: string
-    ) => {
-        try {
-            const userData = await api.login(username, password, token);
+    const login = useCallback(
+        async (username: string, password: string, token?: string) => {
+            try {
+                const userData = await api.login(username, password, token);
 
-            // Check if 2FA is required
-            if (userData.requires2FA) {
-                // Don't set user or redirect, just throw an error to trigger 2FA UI
-                throw new Error("2FA token required");
+                // Check if 2FA is required
+                if (userData.requires2FA) {
+                    // Don't set user or redirect, just throw an error to trigger 2FA UI
+                    throw new Error("2FA token required");
+                }
+
+                setUser(userData);
+                setIsAuthenticated(true);
+
+                // Redirect based on onboarding status
+                if (userData.onboardingComplete === false) {
+                    router.push("/onboarding");
+                } else {
+                    router.push("/");
+                }
+            } catch (error: unknown) {
+                sharedFrontendLogger.error(
+                    "[AUTH] Login failed:",
+                    error instanceof Error ? error.message : error,
+                );
+                throw error;
             }
-
-            setUser(userData);
-            setIsAuthenticated(true);
-
-            // Redirect based on onboarding status
-            if (userData.onboardingComplete === false) {
-                router.push("/onboarding");
-            } else {
-                router.push("/");
-            }
-        } catch (error: unknown) {
-            sharedFrontendLogger.error("[AUTH] Login failed:", error instanceof Error ? error.message : error);
-            throw error;
-        }
-    }, [router]);
+        },
+        [router],
+    );
 
     const logout = useCallback(async () => {
         await api.logout();
@@ -166,7 +172,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const handleSessionExpired = () => {
             const current = window.location.pathname;
-            const isPublicRoute = publicPaths.includes(current) || publicPrefixes.some((prefix) => current.startsWith(prefix));
+            const isPublicRoute =
+                publicPaths.includes(current) ||
+                publicPrefixes.some((prefix) => current.startsWith(prefix));
             if (isPublicRoute) return;
 
             setIsAuthenticated(false);
@@ -176,17 +184,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             router.push("/login");
         };
         window.addEventListener("auth:session-expired", handleSessionExpired);
-        return () => window.removeEventListener("auth:session-expired", handleSessionExpired);
+        return () =>
+            window.removeEventListener(
+                "auth:session-expired",
+                handleSessionExpired,
+            );
     }, [router]);
 
     // Memoize context value to prevent unnecessary re-renders
-    const contextValue = useMemo(() => ({
-        isAuthenticated,
-        isLoading,
-        user,
-        login,
-        logout,
-    }), [isAuthenticated, isLoading, user, login, logout]);
+    const contextValue = useMemo(
+        () => ({
+            isAuthenticated,
+            isLoading,
+            user,
+            login,
+            logout,
+        }),
+        [isAuthenticated, isLoading, user, login, logout],
+    );
 
     return (
         <AuthContext.Provider value={contextValue}>

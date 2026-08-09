@@ -55,7 +55,8 @@ describe("discoveryLogger", () => {
         jest.doMock("../../utils/logger", () => ({ logger }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = require("../discoveryLogger") as typeof import("../discoveryLogger");
+        const mod =
+            require("../discoveryLogger") as typeof import("../discoveryLogger");
 
         return {
             mod,
@@ -89,7 +90,7 @@ describe("discoveryLogger", () => {
             "data",
             "logs",
             "discovery",
-            "discovery-2026-01-15T10-11-12-345Z-jobmanual.log"
+            "discovery-2026-01-15T10-11-12-345Z-jobmanual.log",
         );
 
         const logPath = mod.discoveryLogger.start("user-1");
@@ -98,7 +99,7 @@ describe("discoveryLogger", () => {
         expect(mod.discoveryLogger.getCurrentLogPath()).toBe(expectedPath);
         expect(mkdirSync).toHaveBeenCalledWith(
             path.join(process.cwd(), "data", "logs", "discovery"),
-            { recursive: true }
+            { recursive: true },
         );
         expect(createWriteStream).toHaveBeenCalledWith(expectedPath, {
             flags: "a",
@@ -107,7 +108,9 @@ describe("discoveryLogger", () => {
 
         mod.discoveryLogger.write("nested message", 2);
 
-        expect(streamWrite).toHaveBeenLastCalledWith("[10:11:12]     nested message\n");
+        expect(streamWrite).toHaveBeenLastCalledWith(
+            "[10:11:12]     nested message\n",
+        );
         expect(logger.debug).toHaveBeenCalledWith("nested message");
     });
 
@@ -120,7 +123,7 @@ describe("discoveryLogger", () => {
         const logPath = mod.discoveryLogger.start("user-2", 77);
 
         expect(logPath).toBe(
-            "/app/logs/discovery/discovery-2026-01-15T10-11-12-345Z-job77.log"
+            "/app/logs/discovery/discovery-2026-01-15T10-11-12-345Z-job77.log",
         );
         expect(mkdirSync).not.toHaveBeenCalled();
         expect(createWriteStream).toHaveBeenCalledWith(logPath, { flags: "a" });
@@ -153,7 +156,8 @@ describe("discoveryLogger", () => {
     });
 
     it("ends logs, includes optional summary, and safely handles missing streams", () => {
-        const { mod, existsSync, streamEnd, logger } = loadDiscoveryLoggerModule();
+        const { mod, existsSync, streamEnd, logger } =
+            loadDiscoveryLoggerModule();
         existsSync.mockReturnValue(true);
 
         mod.discoveryLogger.start("user-4", 5);
@@ -194,7 +198,8 @@ describe("discoveryLogger", () => {
     });
 
     it("returns the lexically newest discovery log and its content", () => {
-        const { mod, existsSync, readdirSync, readFileSync } = loadDiscoveryLoggerModule();
+        const { mod, existsSync, readdirSync, readFileSync } =
+            loadDiscoveryLoggerModule();
 
         existsSync.mockReturnValue(true);
         readdirSync.mockReturnValue([
@@ -210,7 +215,7 @@ describe("discoveryLogger", () => {
             "data",
             "logs",
             "discovery",
-            "discovery-2026-01-01T00-00-00-000Z-job2.log"
+            "discovery-2026-01-01T00-00-00-000Z-job2.log",
         );
 
         expect(result).toEqual({
@@ -221,7 +226,8 @@ describe("discoveryLogger", () => {
     });
 
     it("lists all logs sorted by mtime descending and excludes non-discovery files", () => {
-        const { mod, existsSync, readdirSync, statSync } = loadDiscoveryLoggerModule();
+        const { mod, existsSync, readdirSync, statSync } =
+            loadDiscoveryLoggerModule();
 
         existsSync.mockReturnValue(true);
         readdirSync.mockReturnValue([
@@ -273,7 +279,7 @@ describe("discoveryLogger", () => {
         existsSync.mockReturnValue(true);
         readFileSync.mockReturnValue("requested log content");
         expect(mod.discoveryLogger.getLogContent("present.log")).toBe(
-            "requested log content"
+            "requested log content",
         );
     });
 
@@ -315,8 +321,8 @@ describe("discoveryLogger", () => {
                 "data",
                 "logs",
                 "discovery",
-                "discovery-old.log"
-            )
+                "discovery-old.log",
+            ),
         );
     });
 });

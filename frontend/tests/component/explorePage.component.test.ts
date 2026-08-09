@@ -31,7 +31,12 @@ mock.module("@/features/explore/hooks/useExploreData", {
     namedExports: {
         useExploreData: () => ({
             likedSummary: { total: 42, coverUrl: null },
-            discoverWeekly: { weekStart: "2026-02-24", weekEnd: "2026-03-02", totalCount: 25, coverUrl: null },
+            discoverWeekly: {
+                weekStart: "2026-02-24",
+                weekEnd: "2026-03-02",
+                totalCount: 25,
+                coverUrl: null,
+            },
             mixes: state.mixes,
             recommended: state.recommended,
             homeShelves: state.homeShelves,
@@ -66,9 +71,14 @@ mock.module("@/features/explore/hooks/useUserSettingsExplorePrefs", {
 
 mock.module("@/hooks/useQueries", {
     namedExports: {
-        mapYtMusicChartsToFeaturedPlaylists: (charts: Record<string, unknown[]>) => {
+        mapYtMusicChartsToFeaturedPlaylists: (
+            charts: Record<string, unknown[]>,
+        ) => {
             const entries = Object.values(charts ?? {}).flat();
-            return entries.map((e: Record<string, string>) => ({ id: e.videoId, title: e.title }));
+            return entries.map((e: Record<string, string>) => ({
+                id: e.videoId,
+                title: e.title,
+            }));
         },
     },
 });
@@ -122,7 +132,11 @@ mock.module("@/features/explore/components/ProviderTabSection", {
 });
 
 mock.module("@/features/explore/hooks/useTidalExploreEnabled", {
-    namedExports: { useTidalExploreEnabled: () => ({ showTidalExplore: state.showTidalExplore }) },
+    namedExports: {
+        useTidalExploreEnabled: () => ({
+            showTidalExplore: state.showTidalExplore,
+        }),
+    },
 });
 
 mock.module("@/features/explore/components/MoodPills", {
@@ -214,9 +228,18 @@ test("explore page renders sections in correct order", async () => {
     const recommendedIdx = html.indexOf("Recommended For You");
 
     assert.ok(madeForYouIdx < quickStartIdx, "Made For You before Quick Start");
-    assert.ok(quickStartIdx < providerTabIdx, "Quick Start before Provider Tabs");
-    assert.ok(providerTabIdx < popularIdx, "Provider Tabs before Popular Artists");
-    assert.ok(popularIdx < recommendedIdx, "Popular Artists before Recommended");
+    assert.ok(
+        quickStartIdx < providerTabIdx,
+        "Quick Start before Provider Tabs",
+    );
+    assert.ok(
+        providerTabIdx < popularIdx,
+        "Provider Tabs before Popular Artists",
+    );
+    assert.ok(
+        popularIdx < recommendedIdx,
+        "Popular Artists before Recommended",
+    );
 });
 
 test("explore page does not render legacy tab navigation", async () => {

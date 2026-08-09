@@ -64,7 +64,7 @@ describe("rateLimiter", () => {
         const { rateLimiter } = await loadRateLimiterModule();
 
         await expect(
-            rateLimiter.execute("unknown" as any, async () => "ok")
+            rateLimiter.execute("unknown" as any, async () => "ok"),
         ).rejects.toThrow("Unknown service: unknown");
     });
 
@@ -79,7 +79,7 @@ describe("rateLimiter", () => {
         expect(requestFn).toHaveBeenCalledTimes(1);
         expect(lastfmQueue.add).toHaveBeenCalledWith(
             expect.any(Function),
-            expect.objectContaining({ priority: 0 })
+            expect.objectContaining({ priority: 0 }),
         );
     });
 
@@ -92,7 +92,10 @@ describe("rateLimiter", () => {
 
         const requestFn = jest
             .fn()
-            .mockRejectedValueOnce({ response: { status: 429 }, message: "429" })
+            .mockRejectedValueOnce({
+                response: { status: 429 },
+                message: "429",
+            })
             .mockResolvedValue("ok-after-retry");
 
         const result = await rateLimiter.execute("lastfm", requestFn);
@@ -111,7 +114,7 @@ describe("rateLimiter", () => {
         const requestFn = jest.fn().mockRejectedValue(error);
 
         await expect(
-            rateLimiter.execute("lastfm", requestFn, { skipRetry: true })
+            rateLimiter.execute("lastfm", requestFn, { skipRetry: true }),
         ).rejects.toEqual(error);
         expect(requestFn).toHaveBeenCalledTimes(1);
         expect(sleepSpy).not.toHaveBeenCalled();
@@ -165,7 +168,7 @@ describe("rateLimiter", () => {
         rateLimiter.pauseAll(5000);
         const result = await rateLimiter.execute(
             "fanart",
-            async () => "during-pause"
+            async () => "during-pause",
         );
 
         expect(result).toBe("during-pause");
@@ -227,16 +230,22 @@ describe("rateLimiter", () => {
         const { rateLimiter } = await loadRateLimiterModule();
 
         expect(
-            (rateLimiter as any).isTransientError({ code: "ECONNRESET" })
+            (rateLimiter as any).isTransientError({ code: "ECONNRESET" }),
         ).toBe(true);
         expect(
-            (rateLimiter as any).isTransientError({ response: { status: 503 } })
+            (rateLimiter as any).isTransientError({
+                response: { status: 503 },
+            }),
         ).toBe(true);
         expect(
-            (rateLimiter as any).isTransientError({ message: "Socket hang up" })
+            (rateLimiter as any).isTransientError({
+                message: "Socket hang up",
+            }),
         ).toBe(true);
         expect(
-            (rateLimiter as any).isTransientError({ message: "validation failed" })
+            (rateLimiter as any).isTransientError({
+                message: "validation failed",
+            }),
         ).toBe(false);
     });
 });

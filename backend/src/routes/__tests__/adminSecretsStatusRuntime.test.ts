@@ -38,15 +38,16 @@ import router from "../admin";
 import { prisma } from "../../utils/db";
 
 const mockUserFindMany = prisma.user.findMany as unknown as jest.Mock;
-const mockUserSettingsFindMany =
-    prisma.userSettings.findMany as unknown as jest.Mock;
-const mockSystemSettingsFindMany =
-    prisma.systemSettings.findMany as unknown as jest.Mock;
+const mockUserSettingsFindMany = prisma.userSettings
+    .findMany as unknown as jest.Mock;
+const mockSystemSettingsFindMany = prisma.systemSettings
+    .findMany as unknown as jest.Mock;
 const mockApiKeyFindMany = prisma.apiKey.findMany as unknown as jest.Mock;
 
 function getHandler(path: string, method: "get" | "delete") {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.[method]
+        (entry: any) =>
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);

@@ -27,7 +27,7 @@ const WEIGHTS = {
     clap: 0.55,
     features: {
         energy: 0.12,
-        valence: 0.10,
+        valence: 0.1,
         bpm: 0.08,
         danceability: 0.06,
         acousticness: 0.04,
@@ -56,7 +56,7 @@ function getArtistCapForLimit(limit: number): number {
 
 function applyArtistDiversityCap(
     tracks: SimilarTrack[],
-    limit: number
+    limit: number,
 ): SimilarTrack[] {
     if (!Array.isArray(tracks) || tracks.length === 0 || limit <= 0) {
         return [];
@@ -69,9 +69,9 @@ function applyArtistDiversityCap(
 
     for (const track of tracks) {
         const artistKey =
-            typeof track.artistId === "string" && track.artistId.length > 0 ?
-                track.artistId
-            :   `unknown:${track.id}`;
+            typeof track.artistId === "string" && track.artistId.length > 0
+                ? track.artistId
+                : `unknown:${track.id}`;
         const count = artistCounts.get(artistKey) ?? 0;
 
         if (count < maxPerArtist) {
@@ -105,22 +105,28 @@ function applyArtistDiversityCap(
  */
 export async function findSimilarTracks(
     trackId: string,
-    limit: number = 20
+    limit: number = 20,
 ): Promise<SimilarTrack[]> {
     const features = await featureDetection.getFeatures();
 
     if (features.vibeEmbeddings && features.musicCNN) {
-        logger.debug(`[HYBRID-SIMILARITY] Using hybrid mode for track ${trackId}`);
+        logger.debug(
+            `[HYBRID-SIMILARITY] Using hybrid mode for track ${trackId}`,
+        );
         return findSimilarHybrid(trackId, limit);
     }
 
     if (features.vibeEmbeddings && !features.musicCNN) {
-        logger.debug(`[HYBRID-SIMILARITY] Using CLAP-only mode for track ${trackId}`);
+        logger.debug(
+            `[HYBRID-SIMILARITY] Using CLAP-only mode for track ${trackId}`,
+        );
         return findSimilarClapOnly(trackId, limit);
     }
 
     if (features.musicCNN && !features.vibeEmbeddings) {
-        logger.debug(`[HYBRID-SIMILARITY] Using features-only mode for track ${trackId}`);
+        logger.debug(
+            `[HYBRID-SIMILARITY] Using features-only mode for track ${trackId}`,
+        );
         return findSimilarFeaturesOnly(trackId, limit);
     }
 
@@ -130,7 +136,7 @@ export async function findSimilarTracks(
 
 async function findSimilarHybrid(
     trackId: string,
-    limit: number
+    limit: number,
 ): Promise<SimilarTrack[]> {
     // Fetch 5x candidates from CLAP to ensure good coverage after re-ranking
     const candidateLimit = Math.max(limit * CANDIDATE_MULTIPLIER, limit);
@@ -192,7 +198,7 @@ async function findSimilarHybrid(
 
 async function findSimilarClapOnly(
     trackId: string,
-    limit: number
+    limit: number,
 ): Promise<SimilarTrack[]> {
     const candidateLimit = Math.max(limit * CANDIDATE_MULTIPLIER, limit);
     const results = await runAnnQuery<SimilarTrack[]>(Prisma.sql`
@@ -228,7 +234,7 @@ async function findSimilarClapOnly(
 
 async function findSimilarFeaturesOnly(
     trackId: string,
-    limit: number
+    limit: number,
 ): Promise<SimilarTrack[]> {
     const candidateLimit = Math.max(limit * CANDIDATE_MULTIPLIER, limit);
     const results = await prisma.$queryRaw<SimilarTrack[]>`

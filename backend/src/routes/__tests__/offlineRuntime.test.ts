@@ -41,17 +41,20 @@ jest.mock("../../utils/db", () => ({
 import router from "../offline";
 import { prisma as prismaClient } from "../../utils/db";
 
-const mockUserSettingsFindUnique = prismaClient.userSettings.findUnique as jest.Mock;
+const mockUserSettingsFindUnique = prismaClient.userSettings
+    .findUnique as jest.Mock;
 const mockAlbumFindUnique = prismaClient.album.findUnique as jest.Mock;
-const mockCachedTrackAggregate = prismaClient.cachedTrack.aggregate as jest.Mock;
+const mockCachedTrackAggregate = prismaClient.cachedTrack
+    .aggregate as jest.Mock;
 const mockCachedTrackUpsert = prismaClient.cachedTrack.upsert as jest.Mock;
 const mockCachedTrackFindMany = prismaClient.cachedTrack.findMany as jest.Mock;
-const mockCachedTrackDeleteMany = prismaClient.cachedTrack.deleteMany as jest.Mock;
+const mockCachedTrackDeleteMany = prismaClient.cachedTrack
+    .deleteMany as jest.Mock;
 
 function getHandler(method: "get" | "post" | "delete", path: string) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -205,7 +208,7 @@ describe("offline routes runtime", () => {
                         streamUrl: "/library/tracks/t1/stream?quality=high",
                     }),
                 ]),
-            })
+            }),
         );
     });
 
@@ -308,7 +311,9 @@ describe("offline routes runtime", () => {
         const errorRes = createRes();
         await postAlbumDownload(errorReq, errorRes);
         expect(errorRes.statusCode).toBe(500);
-        expect(errorRes.body).toEqual({ error: "Failed to create download job" });
+        expect(errorRes.body).toEqual({
+            error: "Failed to create download job",
+        });
     });
 
     it("validates required fields for track completion", async () => {
@@ -367,7 +372,7 @@ describe("offline routes runtime", () => {
         });
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
-            expect.objectContaining({ id: "cached-1", trackId: "t1" })
+            expect.objectContaining({ id: "cached-1", trackId: "t1" }),
         );
 
         mockCachedTrackUpsert.mockRejectedValueOnce(new Error("write failed"));
@@ -419,7 +424,7 @@ describe("offline routes runtime", () => {
                         cachedQuality: "high",
                     }),
                 ]),
-            })
+            }),
         );
     });
 
@@ -471,7 +476,9 @@ describe("offline routes runtime", () => {
     });
 
     it("returns 500 when album cache deletion fails", async () => {
-        mockCachedTrackDeleteMany.mockRejectedValueOnce(new Error("delete failed"));
+        mockCachedTrackDeleteMany.mockRejectedValueOnce(
+            new Error("delete failed"),
+        );
         const req = {
             session: {},
             user: { id: "u1", username: "u1", role: "user" },
@@ -510,7 +517,9 @@ describe("offline routes runtime", () => {
     });
 
     it("returns 500 when stats query fails", async () => {
-        mockCachedTrackAggregate.mockRejectedValueOnce(new Error("aggregate failed"));
+        mockCachedTrackAggregate.mockRejectedValueOnce(
+            new Error("aggregate failed"),
+        );
         const req = {
             session: {},
             user: { id: "u1", username: "u1", role: "user" },

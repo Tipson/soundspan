@@ -22,7 +22,10 @@ function isAbortError(err: unknown): boolean {
 
 describe("isAbortError", () => {
     test("detects AbortError by name", () => {
-        const err = new DOMException("The play() request was interrupted", "AbortError");
+        const err = new DOMException(
+            "The play() request was interrupted",
+            "AbortError",
+        );
         assert.ok(isAbortError(err));
     });
 
@@ -32,7 +35,9 @@ describe("isAbortError", () => {
     });
 
     test("detects abort by message pattern", () => {
-        const err = new Error("The play() request was interrupted by a call to pause()");
+        const err = new Error(
+            "The play() request was interrupted by a call to pause()",
+        );
         assert.ok(isAbortError(err));
     });
 

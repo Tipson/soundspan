@@ -12,9 +12,10 @@ class DiscoveryLogger {
 
     constructor() {
         // Store logs in /app/logs/discovery (matches Dockerfile directory)
-        this.logDir = process.env.NODE_ENV === "production"
-            ? "/app/logs/discovery"
-            : path.join(process.cwd(), "data", "logs", "discovery");
+        this.logDir =
+            process.env.NODE_ENV === "production"
+                ? "/app/logs/discovery"
+                : path.join(process.cwd(), "data", "logs", "discovery");
     }
 
     /**
@@ -32,7 +33,9 @@ class DiscoveryLogger {
         this.currentLogFile = path.join(this.logDir, filename);
 
         // Open write stream
-        this.currentStream = fs.createWriteStream(this.currentLogFile, { flags: "a" });
+        this.currentStream = fs.createWriteStream(this.currentLogFile, {
+            flags: "a",
+        });
 
         // Write header
         this.write("═".repeat(60));
@@ -53,12 +56,12 @@ class DiscoveryLogger {
         const prefix = "  ".repeat(indent);
         const timestamp = new Date().toISOString().split("T")[1].split(".")[0];
         const line = `[${timestamp}] ${prefix}${message}`;
-        
+
         // Write to file
         if (this.currentStream) {
             this.currentStream.write(line + "\n");
         }
-        
+
         // Also write to console for real-time visibility
         logger.debug(message);
     }
@@ -153,8 +156,9 @@ class DiscoveryLogger {
             return null;
         }
 
-        const files = fs.readdirSync(this.logDir)
-            .filter(f => f.startsWith("discovery-") && f.endsWith(".log"))
+        const files = fs
+            .readdirSync(this.logDir)
+            .filter((f) => f.startsWith("discovery-") && f.endsWith(".log"))
             .sort()
             .reverse();
 
@@ -164,7 +168,7 @@ class DiscoveryLogger {
 
         const latestPath = path.join(this.logDir, files[0]);
         const content = fs.readFileSync(latestPath, "utf-8");
-        
+
         return { path: latestPath, content };
     }
 
@@ -176,15 +180,16 @@ class DiscoveryLogger {
             return [];
         }
 
-        return fs.readdirSync(this.logDir)
-            .filter(f => f.startsWith("discovery-") && f.endsWith(".log"))
-            .map(filename => {
+        return fs
+            .readdirSync(this.logDir)
+            .filter((f) => f.startsWith("discovery-") && f.endsWith(".log"))
+            .map((filename) => {
                 const filePath = path.join(this.logDir, filename);
                 const stats = fs.statSync(filePath);
                 return {
                     filename,
                     date: stats.mtime,
-                    size: stats.size
+                    size: stats.size,
                 };
             })
             .sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -219,9 +224,3 @@ class DiscoveryLogger {
 }
 
 export const discoveryLogger = new DiscoveryLogger();
-
-
-
-
-
-

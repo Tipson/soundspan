@@ -28,7 +28,11 @@ const YOUTUBE_TRACK: LikedPlaylistTrack = {
     streamSource: "youtube",
     youtubeVideoId: "dQw4w9WgXcQ",
     artist: { id: "yt:artist:abc", name: "YT Artist" },
-    album: { id: "yt:album:xyz", title: "Single", coverArt: "https://lh3.googleusercontent.com/thumb" },
+    album: {
+        id: "yt:album:xyz",
+        title: "Single",
+        coverArt: "https://lh3.googleusercontent.com/thumb",
+    },
 };
 
 const TIDAL_TRACK: LikedPlaylistTrack = {
@@ -41,7 +45,11 @@ const TIDAL_TRACK: LikedPlaylistTrack = {
     streamSource: "tidal",
     tidalTrackId: "123456789",
     artist: { id: "tidal:artist:abc", name: "Tidal Artist" },
-    album: { id: "tidal:album:xyz", title: "Tidal Album", coverArt: "https://resources.tidal.com/thumb" },
+    album: {
+        id: "tidal:album:xyz",
+        title: "Tidal Album",
+        coverArt: "https://resources.tidal.com/thumb",
+    },
 };
 
 // ── toAudioTrack — local tracks ───────────────────────────────

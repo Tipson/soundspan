@@ -9,15 +9,16 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Any api method resolves to null so mount-time playback-state hydration is a
 // no-op and cannot change the render counts under test.
-const apiStub = new Proxy(
-    {},
-    { get: () => async () => null },
-) as Record<string, unknown>;
+const apiStub = new Proxy({}, { get: () => async () => null }) as Record<
+    string,
+    unknown
+>;
 mock.module("@/lib/api", { namedExports: { api: apiStub } });
 
 after(() => {
@@ -33,7 +34,8 @@ type EngineTickFn = (time: number, invocationTrackId?: string | null) => void;
 test("playback status consumers do not re-render on clock ticks after the context split", async () => {
     localStorage.clear();
     const { createRoot } = await import("react-dom/client");
-    const { AudioStateProvider } = await import("../../lib/audio-state-context");
+    const { AudioStateProvider } =
+        await import("../../lib/audio-state-context");
     const {
         AudioPlaybackProvider,
         usePlaybackStatus,
@@ -109,7 +111,8 @@ test("playback status consumers do not re-render on clock ticks after the contex
     }
 
     const tickStatusRenders = statusRendersRef.current - mountStatusRenders;
-    const tickProgressRenders = progressRendersRef.current - mountProgressRenders;
+    const tickProgressRenders =
+        progressRendersRef.current - mountProgressRenders;
     const tickCompositeRenders =
         compositeRendersRef.current - mountCompositeRenders;
 

@@ -1,7 +1,11 @@
 import fs from "fs";
 import path from "path";
 
-function extractSection(source: string, startMarker: string, endMarker: string): string {
+function extractSection(
+    source: string,
+    startMarker: string,
+    endMarker: string,
+): string {
     const start = source.indexOf(startMarker);
     if (start === -1) {
         throw new Error(`Missing start marker: ${startMarker}`);
@@ -16,7 +20,7 @@ function extractSection(source: string, startMarker: string, endMarker: string):
 describe("audio analyzer process-pool recovery contract", () => {
     const analyzerPath = path.resolve(
         __dirname,
-        "../../../services/audio-analyzer/analyzer.py"
+        "../../../services/audio-analyzer/analyzer.py",
     );
 
     it("re-queues tracks instead of failing them when worker processes crash", () => {
@@ -24,7 +28,7 @@ describe("audio analyzer process-pool recovery contract", () => {
         const processSection = extractSection(
             source,
             "def _consume_batch_results",
-            "def _handle_batch_timeout"
+            "def _handle_batch_timeout",
         );
 
         expect(processSection).toContain("self._is_pool_crash_error(e)");
@@ -37,7 +41,7 @@ describe("audio analyzer process-pool recovery contract", () => {
         const requeueSection = extractSection(
             source,
             "def _requeue_tracks_for_retry",
-            "def _cleanup_stale_processing"
+            "def _cleanup_stale_processing",
         );
 
         expect(requeueSection).toContain(`"analysisStatus" = 'pending'`);
@@ -50,7 +54,7 @@ describe("audio analyzer process-pool recovery contract", () => {
         const loaderSection = extractSection(
             source,
             "def _load_ml_models",
-            "def load_audio"
+            "def load_audio",
         );
 
         expect(loaderSection).not.toContain("import tensorflow as tf");

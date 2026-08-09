@@ -7,7 +7,10 @@
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { api } from "@/lib/api";
 import { TidalBadge } from "@/components/ui/TidalBadge";
-import type { TidalBrowseShelf, TidalBrowseShelfItem } from "@/hooks/useQueries";
+import type {
+    TidalBrowseShelf,
+    TidalBrowseShelfItem,
+} from "@/hooks/useQueries";
 import { BrowseCard } from "./BrowseCard";
 
 interface TidalFeaturedShelvesSectionProps {
@@ -45,7 +48,10 @@ export function TidalFeaturedShelvesSection({
     const HIDDEN_SHELVES = ["shortcuts"];
 
     const allShelves = [...homeShelves, ...exploreShelves].filter(
-        (s) => s.contents && s.contents.length > 0 && !HIDDEN_SHELVES.includes((s.title ?? "").trim().toLowerCase())
+        (s) =>
+            s.contents &&
+            s.contents.length > 0 &&
+            !HIDDEN_SHELVES.includes((s.title ?? "").trim().toLowerCase()),
     );
 
     if (allShelves.length === 0) return null;
@@ -63,7 +69,13 @@ export function TidalFeaturedShelvesSection({
                             <BrowseCard
                                 key={getItemKey(item, i)}
                                 href={getItemHref(item)}
-                                imageUrl={item.thumbnailUrl ? api.getTidalBrowseImageUrl(item.thumbnailUrl) : null}
+                                imageUrl={
+                                    item.thumbnailUrl
+                                        ? api.getTidalBrowseImageUrl(
+                                              item.thumbnailUrl,
+                                          )
+                                        : null
+                                }
                                 title={item.title ?? ""}
                                 subtitle={item.subtitle}
                             />

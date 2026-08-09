@@ -92,7 +92,7 @@ function toImportSummaryJson(summary: ImportJobSummary): Prisma.InputJsonValue {
 }
 
 function toNullableJsonUpdateValue(
-    value: Prisma.InputJsonValue | null
+    value: Prisma.InputJsonValue | null,
 ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
     return value === null ? Prisma.JsonNull : value;
 }
@@ -120,7 +120,9 @@ type ImportJobPersistenceRecord = {
     updatedAt: Date;
 };
 
-function toStoredImportJob(record: ImportJobPersistenceRecord): StoredImportJob {
+function toStoredImportJob(
+    record: ImportJobPersistenceRecord,
+): StoredImportJob {
     return {
         ...record,
         status: record.status as ImportJobLifecycleStatus,
@@ -141,21 +143,23 @@ class ImportJobStore {
                 sourceUrl: input.sourceUrl,
                 normalizedSource: buildNormalizedSource(
                     input.sourceType,
-                    input.sourceId
+                    input.sourceId,
                 ),
                 playlistName: input.playlistName,
                 requestedPlaylistName: input.requestedPlaylistName ?? null,
                 status: input.status ?? "pending",
                 progress: input.progress ?? 0,
                 summary: toImportSummaryJson(input.summary),
-                ...(input.resolvedTracks !== undefined ?
-                    { resolvedTracks: input.resolvedTracks }
-                :   {}),
+                ...(input.resolvedTracks !== undefined
+                    ? { resolvedTracks: input.resolvedTracks }
+                    : {}),
                 createdPlaylistId: null,
                 error: null,
             },
         });
-        return toStoredImportJob(created as unknown as ImportJobPersistenceRecord);
+        return toStoredImportJob(
+            created as unknown as ImportJobPersistenceRecord,
+        );
     }
 
     /**
@@ -163,32 +167,34 @@ class ImportJobStore {
      */
     async updateJob(
         jobId: string,
-        input: UpdateImportJobInput
+        input: UpdateImportJobInput,
     ): Promise<StoredImportJob> {
         const updated = await prisma.importJob.update({
             where: { id: jobId },
             data: {
                 ...(input.status !== undefined ? { status: input.status } : {}),
-                ...(input.progress !== undefined ?
-                    { progress: input.progress }
-                :   {}),
-                ...(input.summary ?
-                    { summary: toImportSummaryJson(input.summary) }
-                :   {}),
-                ...(input.resolvedTracks !== undefined ?
-                    {
-                        resolvedTracks: toNullableJsonUpdateValue(
-                            input.resolvedTracks
-                        ),
-                    }
-                :   {}),
-                ...(input.createdPlaylistId !== undefined ?
-                    { createdPlaylistId: input.createdPlaylistId }
-                :   {}),
+                ...(input.progress !== undefined
+                    ? { progress: input.progress }
+                    : {}),
+                ...(input.summary
+                    ? { summary: toImportSummaryJson(input.summary) }
+                    : {}),
+                ...(input.resolvedTracks !== undefined
+                    ? {
+                          resolvedTracks: toNullableJsonUpdateValue(
+                              input.resolvedTracks,
+                          ),
+                      }
+                    : {}),
+                ...(input.createdPlaylistId !== undefined
+                    ? { createdPlaylistId: input.createdPlaylistId }
+                    : {}),
                 ...(input.error !== undefined ? { error: input.error } : {}),
             },
         });
-        return toStoredImportJob(updated as unknown as ImportJobPersistenceRecord);
+        return toStoredImportJob(
+            updated as unknown as ImportJobPersistenceRecord,
+        );
     }
 
     /**
@@ -198,9 +204,9 @@ class ImportJobStore {
         const job = await prisma.importJob.findUnique({
             where: { id: jobId },
         });
-        return job ?
-                toStoredImportJob(job as unknown as ImportJobPersistenceRecord)
-            :   null;
+        return job
+            ? toStoredImportJob(job as unknown as ImportJobPersistenceRecord)
+            : null;
     }
 
     /**
@@ -208,7 +214,7 @@ class ImportJobStore {
      */
     async listJobsForUser(
         userId: string,
-        limit = 25
+        limit = 25,
     ): Promise<StoredImportJob[]> {
         const jobs = await prisma.importJob.findMany({
             where: { userId },
@@ -216,7 +222,7 @@ class ImportJobStore {
             take: limit,
         });
         return jobs.map((job) =>
-            toStoredImportJob(job as unknown as ImportJobPersistenceRecord)
+            toStoredImportJob(job as unknown as ImportJobPersistenceRecord),
         );
     }
 
@@ -225,7 +231,7 @@ class ImportJobStore {
      */
     async findActiveJobForSource(
         userId: string,
-        normalizedSource: string
+        normalizedSource: string,
     ): Promise<StoredImportJob | null> {
         const job = await prisma.importJob.findFirst({
             where: {
@@ -235,9 +241,9 @@ class ImportJobStore {
             },
             orderBy: { updatedAt: "desc" },
         });
-        return job ?
-                toStoredImportJob(job as unknown as ImportJobPersistenceRecord)
-            :   null;
+        return job
+            ? toStoredImportJob(job as unknown as ImportJobPersistenceRecord)
+            : null;
     }
 }
 

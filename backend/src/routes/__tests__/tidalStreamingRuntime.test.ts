@@ -47,7 +47,7 @@ const mockEncrypt = jest.fn((value: string) => `enc:${value}`);
 const mockDecrypt = jest.fn((value: string) =>
     typeof value === "string" && value.startsWith("enc:")
         ? value.slice(4)
-        : value
+        : value,
 );
 jest.mock("../../utils/encryption", () => ({
     encrypt: mockEncrypt,
@@ -58,19 +58,20 @@ import router from "../tidalStreaming";
 
 function getRouteLayer(
     path: string,
-    method: "get" | "post" | "put" | "delete"
+    method: "get" | "post" | "put" | "delete",
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
-    if (!layer) throw new Error(`${method.toUpperCase()} route not found: ${path}`);
+    if (!layer)
+        throw new Error(`${method.toUpperCase()} route not found: ${path}`);
     return layer;
 }
 
 function getLastHandler(
     path: string,
-    method: "get" | "post" | "put" | "delete"
+    method: "get" | "post" | "put" | "delete",
 ) {
     const layer = getRouteLayer(path, method);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -117,7 +118,9 @@ describe("tidal streaming route runtime", () => {
 
         tidalStreamingService.isEnabled.mockResolvedValue(true);
         tidalStreamingService.isAvailable.mockResolvedValue(true);
-        tidalStreamingService.getUserPreferredQuality.mockResolvedValue("LOSSLESS");
+        tidalStreamingService.getUserPreferredQuality.mockResolvedValue(
+            "LOSSLESS",
+        );
         tidalStreamingService.getAuthStatus.mockResolvedValue({
             authenticated: true,
             credentialsConfigured: true,
@@ -159,7 +162,7 @@ describe("tidal streaming route runtime", () => {
 
         prisma.userSettings.findUnique.mockResolvedValue({
             userId: "u1",
-            tidalOAuthJson: "enc:{\"access_token\":\"abc\"}",
+            tidalOAuthJson: 'enc:{"access_token":"abc"}',
             tidalStreamingQuality: "LOSSLESS",
         });
         prisma.userSettings.upsert.mockResolvedValue({});
@@ -185,11 +188,11 @@ describe("tidal streaming route runtime", () => {
         // Fifth call site (F31): the sidecar session probe goes through the
         // authenticated service client, not a bare axios.get.
         expect(
-            tidalStreamingService.checkSidecarAuthStatus
+            tidalStreamingService.checkSidecarAuthStatus,
         ).toHaveBeenCalledWith("u1");
 
         tidalStreamingService.getAuthStatus.mockRejectedValueOnce(
-            new Error("status failed")
+            new Error("status failed"),
         );
         const errRes = createRes();
         await statusHandler(req, errRes);
@@ -197,10 +200,12 @@ describe("tidal streaming route runtime", () => {
     });
 
     it("restores user oauth during status checks when sidecar session is missing", async () => {
-        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(false);
+        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(
+            false,
+        );
         prisma.userSettings.findUnique.mockResolvedValueOnce({
             userId: "u1",
-            tidalOAuthJson: "enc:{\"access_token\":\"abc\"}",
+            tidalOAuthJson: 'enc:{"access_token":"abc"}',
             tidalStreamingQuality: "LOSSLESS",
         });
 
@@ -217,7 +222,7 @@ describe("tidal streaming route runtime", () => {
         });
         expect(tidalStreamingService.restoreOAuth).toHaveBeenCalledWith(
             "u1",
-            "{\"access_token\":\"abc\"}"
+            '{"access_token":"abc"}',
         );
     });
 
@@ -294,7 +299,7 @@ describe("tidal streaming route runtime", () => {
 
         const saveReq = {
             user: { id: "u1" },
-            body: { oauthJson: "{\"access_token\":\"x\"}" },
+            body: { oauthJson: '{"access_token":"x"}' },
         } as any;
         const saveRes = createRes();
         await saveTokenHandler(saveReq, saveRes);
@@ -319,7 +324,9 @@ describe("tidal streaming route runtime", () => {
         await searchHandler(invalidSearchReq, invalidSearchRes);
         expect(invalidSearchRes.statusCode).toBe(400);
 
-        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(false);
+        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(
+            false,
+        );
         prisma.userSettings.findUnique.mockResolvedValueOnce(null);
         const noAuthReq = {
             user: { id: "u1" },
@@ -329,7 +336,9 @@ describe("tidal streaming route runtime", () => {
         await searchHandler(noAuthReq, noAuthRes);
         expect(noAuthRes.statusCode).toBe(401);
 
-        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(true);
+        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(
+            true,
+        );
         const okSearchReq = {
             user: { id: "u1" },
             body: { query: "hello" },
@@ -381,7 +390,9 @@ describe("tidal streaming route runtime", () => {
         await streamInfoHandler(invalidInfoReq, invalidInfoRes);
         expect(invalidInfoRes.statusCode).toBe(400);
 
-        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(false);
+        tidalStreamingService.checkSidecarAuthStatus.mockResolvedValueOnce(
+            false,
+        );
         prisma.userSettings.findUnique.mockResolvedValueOnce(null);
         const noAuthInfoReq = {
             user: { id: "u1" },
@@ -404,7 +415,7 @@ describe("tidal streaming route runtime", () => {
         expect(tidalStreamingService.getStreamInfo).toHaveBeenLastCalledWith(
             "u1",
             42,
-            "LOSSLESS"
+            "LOSSLESS",
         );
 
         const defaultQualityReq = {
@@ -418,10 +429,12 @@ describe("tidal streaming route runtime", () => {
         expect(tidalStreamingService.getStreamInfo).toHaveBeenLastCalledWith(
             "u1",
             43,
-            "LOSSLESS"
+            "LOSSLESS",
         );
 
-        tidalStreamingService.getUserPreferredQuality.mockResolvedValueOnce("HIGH");
+        tidalStreamingService.getUserPreferredQuality.mockResolvedValueOnce(
+            "HIGH",
+        );
         const dbFallbackReq = {
             user: { id: "u1" },
             params: { trackId: "44" },
@@ -433,7 +446,7 @@ describe("tidal streaming route runtime", () => {
         expect(tidalStreamingService.getStreamInfo).toHaveBeenLastCalledWith(
             "u1",
             44,
-            "HIGH"
+            "HIGH",
         );
     });
 
@@ -468,13 +481,10 @@ describe("tidal streaming route runtime", () => {
         await streamHandler(req, res);
 
         expect(res.status).toHaveBeenCalledWith(206);
-        expect(res.setHeader).toHaveBeenCalledWith(
-            "Content-Type",
-            "audio/aac"
-        );
+        expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "audio/aac");
         expect(res.setHeader).toHaveBeenCalledWith(
             "Content-Range",
-            "bytes 0-100/200"
+            "bytes 0-100/200",
         );
         expect(pipeMock).toHaveBeenCalledWith(res);
     });
@@ -494,21 +504,23 @@ describe("tidal streaming route runtime", () => {
         });
 
         tidalStreamingService.initiateDeviceAuth.mockRejectedValueOnce(
-            new Error("device auth failed")
+            new Error("device auth failed"),
         );
         const errorRes = createRes();
         await deviceCodeHandler(req, errorRes);
         expect(errorRes.statusCode).toBe(500);
-        expect(errorRes.body).toEqual({ error: "Failed to initiate TIDAL auth" });
+        expect(errorRes.body).toEqual({
+            error: "Failed to initiate TIDAL auth",
+        });
     });
 
     it("restores DB-stored credentials when sidecar auth status lookup fails", async () => {
         tidalStreamingService.checkSidecarAuthStatus.mockRejectedValueOnce(
-            new Error("sidecar down")
+            new Error("sidecar down"),
         );
         prisma.userSettings.findUnique.mockResolvedValueOnce({
             userId: "u1",
-            tidalOAuthJson: "enc:{\"access_token\":\"abc\"}",
+            tidalOAuthJson: 'enc:{"access_token":"abc"}',
             tidalStreamingQuality: "LOSSLESS",
         });
 
@@ -520,7 +532,7 @@ describe("tidal streaming route runtime", () => {
         expect(res.body).toEqual({ tracks: [] });
         expect(tidalStreamingService.restoreOAuth).toHaveBeenCalledWith(
             "u1",
-            "{\"access_token\":\"abc\"}"
+            '{"access_token":"abc"}',
         );
     });
 
@@ -528,15 +540,18 @@ describe("tidal streaming route runtime", () => {
         const reqBase = { user: { id: "u1" } } as any;
 
         tidalStreamingService.findMatchForTrack.mockRejectedValueOnce(
-            new Error("match failed")
+            new Error("match failed"),
         );
         const matchRes = createRes();
-        await matchHandler({ ...reqBase, body: { artist: "A", title: "T" } }, matchRes);
+        await matchHandler(
+            { ...reqBase, body: { artist: "A", title: "T" } },
+            matchRes,
+        );
         expect(matchRes.statusCode).toBe(500);
         expect(matchRes.body).toEqual({ error: "TIDAL match failed" });
 
         tidalStreamingService.findMatchesForAlbum.mockRejectedValueOnce(
-            new Error("batch failed")
+            new Error("batch failed"),
         );
         const batchRes = createRes();
         await matchBatchHandler(
@@ -544,13 +559,13 @@ describe("tidal streaming route runtime", () => {
                 ...reqBase,
                 body: { tracks: [{ artist: "A", title: "T" }] },
             },
-            batchRes
+            batchRes,
         );
         expect(batchRes.statusCode).toBe(500);
         expect(batchRes.body).toEqual({ error: "TIDAL batch match failed" });
 
         tidalStreamingService.getStreamInfo.mockRejectedValueOnce(
-            new Error("stream info failed")
+            new Error("stream info failed"),
         );
         const streamInfoReq = {
             ...reqBase,
@@ -560,10 +575,12 @@ describe("tidal streaming route runtime", () => {
         const streamInfoRes = createRes();
         await streamInfoHandler(streamInfoReq, streamInfoRes);
         expect(streamInfoRes.statusCode).toBe(500);
-        expect(streamInfoRes.body).toEqual({ error: "Failed to get stream info" });
+        expect(streamInfoRes.body).toEqual({
+            error: "Failed to get stream info",
+        });
 
         tidalStreamingService.getStreamProxy.mockRejectedValueOnce(
-            new Error("stream proxy failed")
+            new Error("stream proxy failed"),
         );
         const streamReq = {
             ...reqBase,
@@ -579,21 +596,21 @@ describe("tidal streaming route runtime", () => {
 
     it("maps save and clear token failures", async () => {
         tidalStreamingService.restoreOAuth.mockRejectedValueOnce(
-            new Error("restore failed")
+            new Error("restore failed"),
         );
         const saveRes = createRes();
         await saveTokenHandler(
             {
                 user: { id: "u1" },
-                body: { oauthJson: "{\"access_token\":\"x\"}" },
+                body: { oauthJson: '{"access_token":"x"}' },
             },
-            saveRes
+            saveRes,
         );
         expect(saveRes.statusCode).toBe(500);
         expect(saveRes.body).toEqual({ error: "Failed to save TIDAL token" });
 
         tidalStreamingService.clearAuth.mockRejectedValueOnce(
-            new Error("clear failed")
+            new Error("clear failed"),
         );
         const clearRes = createRes();
         await clearAuthHandler({ user: { id: "u1" } } as any, clearRes);

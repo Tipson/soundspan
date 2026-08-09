@@ -32,35 +32,45 @@ export function PreviewEpisodes({
                 previewData.previewEpisodes.length > 0 ? (
                     <>
                         <div className="space-y-1">
-                            {previewData.previewEpisodes.map((episode, index) => (
-                                <div
-                                    key={`${episode.publishedAt}-${episode.title}`}
-                                    className="flex items-center gap-4 px-3 py-3 rounded-md opacity-60 cursor-not-allowed"
-                                >
-                                    {/* Number */}
-                                    <div className="w-8 flex items-center justify-center shrink-0">
-                                        <span className="text-sm text-white/40">
-                                            {index + 1}
-                                        </span>
-                                    </div>
+                            {previewData.previewEpisodes.map(
+                                (episode, index) => (
+                                    <div
+                                        key={`${episode.publishedAt}-${episode.title}`}
+                                        className="flex items-center gap-4 px-3 py-3 rounded-md opacity-60 cursor-not-allowed"
+                                    >
+                                        {/* Number */}
+                                        <div className="w-8 flex items-center justify-center shrink-0">
+                                            <span className="text-sm text-white/40">
+                                                {index + 1}
+                                            </span>
+                                        </div>
 
-                                    {/* Episode Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-medium truncate text-sm text-white">
-                                            {episode.title}
-                                        </h3>
-                                        <div className="flex items-center gap-2 text-xs text-white/50">
-                                            <span>{formatDate(episode.publishedAt)}</span>
-                                            {episode.duration > 0 && (
-                                                <>
-                                                    <span>•</span>
-                                                    <span>{formatDuration(episode.duration)}</span>
-                                                </>
-                                            )}
+                                        {/* Episode Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-medium truncate text-sm text-white">
+                                                {episode.title}
+                                            </h3>
+                                            <div className="flex items-center gap-2 text-xs text-white/50">
+                                                <span>
+                                                    {formatDate(
+                                                        episode.publishedAt,
+                                                    )}
+                                                </span>
+                                                {episode.duration > 0 && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span>
+                                                            {formatDuration(
+                                                                episode.duration,
+                                                            )}
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                ),
+                            )}
                         </div>
 
                         {/* Blur/Fade Overlay with Subscribe CTA */}
@@ -78,7 +88,9 @@ export function PreviewEpisodes({
                                 ) : (
                                     <>
                                         <Plus className="w-5 h-5" />
-                                        <span>Subscribe to Unlock All Episodes</span>
+                                        <span>
+                                            Subscribe to Unlock All Episodes
+                                        </span>
                                     </>
                                 )}
                             </button>
@@ -118,7 +130,9 @@ export function PreviewEpisodes({
                         <div
                             className="prose prose-invert prose-sm max-w-none text-white/70 [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline"
                             dangerouslySetInnerHTML={{
-                                __html: DOMPurify.sanitize(previewData.description || ""),
+                                __html: DOMPurify.sanitize(
+                                    previewData.description || "",
+                                ),
                             }}
                         />
                     </div>

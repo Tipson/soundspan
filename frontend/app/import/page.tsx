@@ -65,7 +65,9 @@ export function isSupportedPlaylistUrl(url: string): boolean {
     const path = parsed.pathname;
 
     if (hostname === "open.spotify.com") {
-        return /^\/(?:intl-[a-z]{2}(?:-[a-z]{2})?\/)?playlist\/[a-zA-Z0-9]+\/?$/i.test(path);
+        return /^\/(?:intl-[a-z]{2}(?:-[a-z]{2})?\/)?playlist\/[a-zA-Z0-9]+\/?$/i.test(
+            path,
+        );
     }
 
     if (hostname === "deezer.com" || hostname.endsWith(".deezer.com")) {
@@ -203,11 +205,10 @@ function ImportPageContent() {
     const [importMode, setImportMode] = useState<ImportMode>("url");
     const [url, setUrl] = useState("");
     const [playlistName, setPlaylistName] = useState("");
-    const [preview, setPreview] = useState<PlaylistImportPreviewResponse | null>(
-        null
-    );
+    const [preview, setPreview] =
+        useState<PlaylistImportPreviewResponse | null>(null);
     const [result, setResult] = useState<PlaylistImportExecuteResponse | null>(
-        null
+        null,
     );
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [isExecuting, setIsExecuting] = useState(false);
@@ -226,7 +227,7 @@ function ImportPageContent() {
 
             if (!isSupportedPlaylistUrl(trimmedUrl)) {
                 toast.error(
-                    "Supported URLs: Spotify, Deezer, YouTube Music, and TIDAL playlists"
+                    "Supported URLs: Spotify, Deezer, YouTube Music, and TIDAL playlists",
                 );
                 return;
             }
@@ -240,13 +241,13 @@ function ImportPageContent() {
                 setStep("preview");
             } catch (error) {
                 toast.error(
-                    getErrorMessage(error, "Failed to preview playlist")
+                    getErrorMessage(error, "Failed to preview playlist"),
                 );
             } finally {
                 setIsPreviewLoading(false);
             }
         },
-        [toast]
+        [toast],
     );
 
     const handleM3uFileSelect = useCallback(
@@ -269,7 +270,7 @@ function ImportPageContent() {
             };
             reader.readAsText(file);
         },
-        [toast]
+        [toast],
     );
 
     const fetchM3uPreview = useCallback(async () => {
@@ -282,7 +283,7 @@ function ImportPageContent() {
         try {
             const response = await api.previewM3UImport(
                 m3uContent,
-                m3uPlaylistName || undefined
+                m3uPlaylistName || undefined,
             );
             setPreview(response);
             setPlaylistName(response.playlistName);
@@ -330,11 +331,18 @@ function ImportPageContent() {
         if (!url) return;
 
         try {
-            const result = await api.submitImportJob(url, playlistName || undefined);
+            const result = await api.submitImportJob(
+                url,
+                playlistName || undefined,
+            );
             if (result.deduped) {
-                toast.info("An import for this playlist is already in progress");
+                toast.info(
+                    "An import for this playlist is already in progress",
+                );
             } else {
-                toast.success("Import job submitted — check the Imports tab in Activity");
+                toast.success(
+                    "Import job submitted — check the Imports tab in Activity",
+                );
             }
             resetFlow();
         } catch (error) {
@@ -389,8 +397,8 @@ function ImportPageContent() {
                             Import Playlist
                         </h1>
                         <p className="text-sm text-gray-400">
-                            Import playlists from streaming services or local M3U
-                            files
+                            Import playlists from streaming services or local
+                            M3U files
                         </p>
                     </div>
                 </div>
@@ -443,11 +451,21 @@ function ImportPageContent() {
                                     />
                                     <p className="text-xs text-gray-400 mt-2">
                                         Paste a{" "}
-                                        <span className="text-[#1DB954]">Spotify</span>,{" "}
-                                        <span className="text-[#AD47FF]">Deezer</span>,{" "}
-                                        <span className="text-red-400">YouTube Music</span>,{" "}
-                                        or{" "}
-                                        <span className="text-[#00BFFF]">TIDAL</span>{" "}
+                                        <span className="text-[#1DB954]">
+                                            Spotify
+                                        </span>
+                                        ,{" "}
+                                        <span className="text-[#AD47FF]">
+                                            Deezer
+                                        </span>
+                                        ,{" "}
+                                        <span className="text-red-400">
+                                            YouTube Music
+                                        </span>
+                                        , or{" "}
+                                        <span className="text-[#00BFFF]">
+                                            TIDAL
+                                        </span>{" "}
                                         playlist URL
                                     </p>
                                 </div>
@@ -475,15 +493,20 @@ function ImportPageContent() {
                                         M3U / M3U8 Playlist File
                                     </label>
                                     <div
-                                        onClick={() => fileInputRef.current?.click()}
+                                        onClick={() =>
+                                            fileInputRef.current?.click()
+                                        }
                                         className="w-full bg-white/5 border border-dashed border-white/20 rounded-lg px-4 py-8 text-center cursor-pointer hover:border-white/40 hover:bg-white/[0.07] transition-colors"
                                     >
                                         <FileUp className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                                         {m3uFileName ? (
-                                            <p className="text-sm text-white">{m3uFileName}</p>
+                                            <p className="text-sm text-white">
+                                                {m3uFileName}
+                                            </p>
                                         ) : (
                                             <p className="text-sm text-gray-400">
-                                                Click to select an M3U or M3U8 file
+                                                Click to select an M3U or M3U8
+                                                file
                                             </p>
                                         )}
                                     </div>
@@ -495,7 +518,8 @@ function ImportPageContent() {
                                         onChange={handleM3uFileSelect}
                                     />
                                     <p className="text-xs text-gray-400 mt-2">
-                                        Tracks are matched against your local library using file paths and metadata
+                                        Tracks are matched against your local
+                                        library using file paths and metadata
                                     </p>
                                 </div>
                                 {m3uContent && (
@@ -507,7 +531,9 @@ function ImportPageContent() {
                                             type="text"
                                             value={m3uPlaylistName}
                                             onChange={(event) =>
-                                                setM3uPlaylistName(event.target.value)
+                                                setM3uPlaylistName(
+                                                    event.target.value,
+                                                )
                                             }
                                             placeholder="Enter playlist name"
                                             className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-colors"
@@ -705,7 +731,9 @@ function ImportPageContent() {
                             </button>
                             <button
                                 onClick={() =>
-                                    router.push(`/playlist/${result.playlistId}`)
+                                    router.push(
+                                        `/playlist/${result.playlistId}`,
+                                    )
                                 }
                                 className="px-5 py-2.5 rounded-full text-sm font-medium bg-[#1DB954] text-black hover:brightness-110 transition-all"
                             >

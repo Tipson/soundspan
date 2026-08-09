@@ -44,11 +44,7 @@ describe("async utils", () => {
 
             const results = await processBatched([1, 2, 3, 4, 5], 2, processor);
 
-            expect(calls).toEqual([
-                [1, 2],
-                [3, 4],
-                [5],
-            ]);
+            expect(calls).toEqual([[1, 2], [3, 4], [5]]);
             expect(results).toEqual([10, 20, 30, 40, 50]);
             expect(processor).toHaveBeenCalledTimes(3);
         });

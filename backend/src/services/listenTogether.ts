@@ -90,7 +90,10 @@ async function generateJoinCode(): Promise<string> {
     for (let attempt = 0; attempt < JOIN_CODE_MAX_ATTEMPTS; attempt++) {
         let candidate = "";
         for (let i = 0; i < JOIN_CODE_LENGTH; i++) {
-            candidate += JOIN_CODE_ALPHABET[crypto.randomInt(0, JOIN_CODE_ALPHABET.length)];
+            candidate +=
+                JOIN_CODE_ALPHABET[
+                    crypto.randomInt(0, JOIN_CODE_ALPHABET.length)
+                ];
         }
         const existing = await prisma.syncGroup.findUnique({
             where: { joinCode: candidate },
@@ -103,7 +106,7 @@ async function generateJoinCode(): Promise<string> {
 
 async function resolvePresentationName(
     userId: string,
-    fallbackUsername: string
+    fallbackUsername: string,
 ): Promise<string> {
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -120,13 +123,17 @@ async function resolvePresentationName(
  * Validates and materializes mixed-source queue input into canonical queue items.
  */
 export async function validateQueueTracks(
-    inputs: QueueTrackInput[]
+    inputs: QueueTrackInput[],
 ): Promise<SyncQueueItem[]> {
     if (!inputs.length) return [];
 
     const localInputs: Array<{ input: QueueTrackInput; trackId: string }> = [];
-    const tidalInputs: Array<{ input: QueueTrackInput; tidalTrackId: number }> = [];
-    const youtubeInputs: Array<{ input: QueueTrackInput; youtubeVideoId: string }> = [];
+    const tidalInputs: Array<{ input: QueueTrackInput; tidalTrackId: number }> =
+        [];
+    const youtubeInputs: Array<{
+        input: QueueTrackInput;
+        youtubeVideoId: string;
+    }> = [];
 
     for (const input of inputs) {
         const localTrackId =
@@ -144,9 +151,11 @@ export async function validateQueueTracks(
             input.youtubeVideoId.trim().length > 0
                 ? input.youtubeVideoId.trim()
                 : null;
-        const presentCount = [localTrackId, tidalTrackId, youtubeVideoId].filter(
-            Boolean
-        ).length;
+        const presentCount = [
+            localTrackId,
+            tidalTrackId,
+            youtubeVideoId,
+        ].filter(Boolean).length;
         if (presentCount !== 1) continue;
 
         if (localTrackId) {
@@ -165,7 +174,9 @@ export async function validateQueueTracks(
     const queue: SyncQueueItem[] = [];
 
     if (localInputs.length > 0) {
-        const uniqueLocalIds = Array.from(new Set(localInputs.map((entry) => entry.trackId)));
+        const uniqueLocalIds = Array.from(
+            new Set(localInputs.map((entry) => entry.trackId)),
+        );
         const localTracks = await prisma.track.findMany({
             where: { id: { in: uniqueLocalIds }, filePath: { not: "" } },
             select: {
@@ -183,7 +194,9 @@ export async function validateQueueTracks(
                 },
             },
         });
-        const localTrackMap = new Map(localTracks.map((track) => [track.id, track]));
+        const localTrackMap = new Map(
+            localTracks.map((track) => [track.id, track]),
+        );
 
         for (const entry of localInputs) {
             const track = localTrackMap.get(entry.trackId);
@@ -192,7 +205,10 @@ export async function validateQueueTracks(
                 id: track.id,
                 title: track.title,
                 duration: track.duration,
-                artist: { id: track.album.artist.id, name: track.album.artist.name },
+                artist: {
+                    id: track.album.artist.id,
+                    name: track.album.artist.name,
+                },
                 album: {
                     id: track.album.id,
                     title: track.album.title,
@@ -211,7 +227,8 @@ export async function validateQueueTracks(
         const artist = (entry.input.artist ?? "").trim();
         const album = (entry.input.album ?? "").trim();
         const duration =
-            typeof entry.input.duration === "number" && Number.isFinite(entry.input.duration)
+            typeof entry.input.duration === "number" &&
+            Number.isFinite(entry.input.duration)
                 ? Math.max(1, Math.trunc(entry.input.duration))
                 : 180;
         const ensured = await trackMappingService.ensureRemoteTrack({
@@ -261,7 +278,8 @@ export async function validateQueueTracks(
         const artist = (entry.input.artist ?? "").trim();
         const album = (entry.input.album ?? "").trim();
         const duration =
-            typeof entry.input.duration === "number" && Number.isFinite(entry.input.duration)
+            typeof entry.input.duration === "number" &&
+            Number.isFinite(entry.input.duration)
                 ? Math.max(1, Math.trunc(entry.input.duration))
                 : 180;
         const ensured = await trackMappingService.ensureRemoteTrack({
@@ -311,14 +329,20 @@ export async function validateQueueTracks(
 
 /** Backward-compatible local-only wrapper used by older paths/tests. */
 export async function validateLocalTracks(
-    trackIds: string[]
+    trackIds: string[],
 ): Promise<SyncQueueItem[]> {
-    const queue = await validateQueueTracks(trackIds.map((trackId) => ({ trackId })));
+    const queue = await validateQueueTracks(
+        trackIds.map((trackId) => ({ trackId })),
+    );
     return queue.filter((item) => (item.originSource ?? "local") === "local");
 }
 
-function queueToJson(queue: SyncQueueItem[]): Prisma.InputJsonValue | typeof Prisma.DbNull {
-    return queue.length === 0 ? Prisma.DbNull : (queue as unknown as Prisma.InputJsonValue);
+function queueToJson(
+    queue: SyncQueueItem[],
+): Prisma.InputJsonValue | typeof Prisma.DbNull {
+    return queue.length === 0
+        ? Prisma.DbNull
+        : (queue as unknown as Prisma.InputJsonValue);
 }
 
 // ---------------------------------------------------------------------------
@@ -337,7 +361,10 @@ export async function createGroup(
     // Auto-leave any existing group
     await maybeLeaveExisting(userId);
 
-    const hostPresentationName = await resolvePresentationName(userId, username);
+    const hostPresentationName = await resolvePresentationName(
+        userId,
+        username,
+    );
     const joinCode = await generateJoinCode();
     const allQueueInputs =
         Array.isArray(options.queueTracks) && options.queueTracks.length > 0
@@ -350,20 +377,24 @@ export async function createGroup(
         ? initialQueue.findIndex(
               (track) =>
                   track.id === requestedTrackId ||
-                  track.localTrackId === requestedTrackId
+                  track.localTrackId === requestedTrackId,
           )
         : -1;
     const hasRequestedTrack = requestedTrackIndex >= 0;
     const initialCurrentIndex = hasRequestedTrack ? requestedTrackIndex : 0;
     const initialTrack = initialQueue[initialCurrentIndex] ?? null;
     const requestedTimeMs =
-        typeof options.currentTimeMs === "number" && Number.isFinite(options.currentTimeMs)
+        typeof options.currentTimeMs === "number" &&
+        Number.isFinite(options.currentTimeMs)
             ? options.currentTimeMs
             : 0;
     const maxTrackMs = initialTrack ? initialTrack.duration * 1000 : 0;
-    const initialCurrentTimeMs = Math.max(0, Math.min(requestedTimeMs, maxTrackMs));
+    const initialCurrentTimeMs = Math.max(
+        0,
+        Math.min(requestedTimeMs, maxTrackMs),
+    );
     const initialIsPlaying = Boolean(
-        options.isPlaying && initialQueue.length > 0 && hasRequestedTrack
+        options.isPlaying && initialQueue.length > 0 && hasRequestedTrack,
     );
     const initialTrackId = initialTrack?.localTrackId ?? null;
 
@@ -441,7 +472,10 @@ export async function joinGroup(
 
     // Auto-leave previous group (if different)
     await maybeLeaveExisting(userId, dbGroup.id);
-    const memberPresentationName = await resolvePresentationName(userId, username);
+    const memberPresentationName = await resolvePresentationName(
+        userId,
+        username,
+    );
 
     const now = new Date();
 
@@ -459,7 +493,7 @@ export async function joinGroup(
     const snapshot = groupManager.addMember(
         dbGroup.id,
         userId,
-        memberPresentationName
+        memberPresentationName,
     );
     await listenTogetherStateStore.setSnapshot(dbGroup.id, snapshot);
     return snapshot;
@@ -477,8 +511,12 @@ export async function joinGroupById(
     const membership = await prisma.syncGroupMember.findFirst({
         where: { syncGroupId: groupId, userId, leftAt: null },
     });
-    if (!membership) throw new GroupError("NOT_MEMBER", "Not a member of this group");
-    const memberPresentationName = await resolvePresentationName(userId, username);
+    if (!membership)
+        throw new GroupError("NOT_MEMBER", "Not a member of this group");
+    const memberPresentationName = await resolvePresentationName(
+        userId,
+        username,
+    );
 
     // Ensure in memory
     await ensureGroupInMemory(groupId);
@@ -499,7 +537,10 @@ export async function joinGroupById(
 /**
  * Leave a group. Handles host transfer and auto-disband.
  */
-export async function leaveGroup(userId: string, groupId: string): Promise<LeaveResult> {
+export async function leaveGroup(
+    userId: string,
+    groupId: string,
+): Promise<LeaveResult> {
     // Remove from in-memory first
     const result = groupManager.has(groupId)
         ? groupManager.removeMember(groupId, userId)
@@ -528,7 +569,11 @@ export async function leaveGroup(userId: string, groupId: string): Promise<Leave
                 data: { isHost: false },
             }),
             prisma.syncGroupMember.updateMany({
-                where: { syncGroupId: groupId, userId: result.newHostUserId, leftAt: null },
+                where: {
+                    syncGroupId: groupId,
+                    userId: result.newHostUserId,
+                    leftAt: null,
+                },
                 data: { isHost: true },
             }),
         ]);
@@ -559,7 +604,10 @@ export async function endGroup(userId: string, groupId: string): Promise<void> {
             throw new GroupError("NOT_FOUND", "Group not found");
         }
         if (group.hostUserId !== userId) {
-            throw new GroupError("NOT_ALLOWED", "Only the host can end the group");
+            throw new GroupError(
+                "NOT_ALLOWED",
+                "Only the host can end the group",
+            );
         }
     }
 
@@ -582,11 +630,15 @@ export async function getActiveGroupCount(): Promise<number> {
 /**
  * Discover public groups.
  */
-export async function discoverGroups(userId: string): Promise<DiscoverableGroup[]> {
+export async function discoverGroups(
+    userId: string,
+): Promise<DiscoverableGroup[]> {
     const groups = await prisma.syncGroup.findMany({
         where: { isActive: true, visibility: "public" },
         include: {
-            hostUser: { select: { id: true, username: true, displayName: true } },
+            hostUser: {
+                select: { id: true, username: true, displayName: true },
+            },
             track: {
                 select: {
                     id: true,
@@ -624,13 +676,22 @@ export async function discoverGroups(userId: string): Promise<DiscoverableGroup[
             isPlaying: memGroup ? memGroup.playback.isPlaying : g.isPlaying,
             currentTrack: (() => {
                 if (memGroup) {
-                    const track = memGroup.playback.queue[memGroup.playback.currentIndex];
+                    const track =
+                        memGroup.playback.queue[memGroup.playback.currentIndex];
                     return track
-                        ? { id: track.id, title: track.title, artistName: track.artist.name }
+                        ? {
+                              id: track.id,
+                              title: track.title,
+                              artistName: track.artist.name,
+                          }
                         : null;
                 }
                 return g.track
-                    ? { id: g.track.id, title: g.track.title, artistName: g.track.album.artist.name }
+                    ? {
+                          id: g.track.id,
+                          title: g.track.title,
+                          artistName: g.track.album.artist.name,
+                      }
                     : null;
             })(),
         };
@@ -640,7 +701,9 @@ export async function discoverGroups(userId: string): Promise<DiscoverableGroup[
 /**
  * Get the user's current active group (if any).
  */
-export async function getMyGroup(userId: string): Promise<GroupSnapshot | null> {
+export async function getMyGroup(
+    userId: string,
+): Promise<GroupSnapshot | null> {
     const membership = await prisma.syncGroupMember.findFirst({
         where: { userId, leftAt: null, syncGroup: { isActive: true } },
         select: { syncGroupId: true },
@@ -704,7 +767,10 @@ async function persistDirtyGroups(): Promise<void> {
 
             groupManager.markClean(group.id);
         } catch (err) {
-            logger.error(`[ListenTogether] Failed to persist group ${group.id}:`, err);
+            logger.error(
+                `[ListenTogether] Failed to persist group ${group.id}:`,
+                err,
+            );
         }
     }
 }
@@ -735,7 +801,10 @@ export async function persistAllGroups(): Promise<void> {
                 },
             });
         } catch (err) {
-            logger.error(`[ListenTogether] Final persist failed for ${id}:`, err);
+            logger.error(
+                `[ListenTogether] Final persist failed for ${id}:`,
+                err,
+            );
         }
     }
 }
@@ -744,7 +813,10 @@ export async function persistAllGroups(): Promise<void> {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-async function maybeLeaveExisting(userId: string, targetGroupId?: string): Promise<void> {
+async function maybeLeaveExisting(
+    userId: string,
+    targetGroupId?: string,
+): Promise<void> {
     const existing = await prisma.syncGroupMember.findFirst({
         where: { userId, leftAt: null, syncGroup: { isActive: true } },
         select: { syncGroupId: true },
@@ -772,7 +844,9 @@ async function ensureGroupInMemory(groupId: string): Promise<void> {
             members: {
                 where: { leftAt: null },
                 include: {
-                    user: { select: { id: true, username: true, displayName: true } },
+                    user: {
+                        select: { id: true, username: true, displayName: true },
+                    },
                 },
             },
         },
@@ -818,8 +892,10 @@ function parseQueueFromDb(raw: Prisma.JsonValue | null): SyncQueueItem[] {
             typeof q.id === "string" &&
             typeof q.title === "string" &&
             typeof q.duration === "number" &&
-            artist && typeof artist.name === "string" &&
-            album && typeof album.title === "string"
+            artist &&
+            typeof artist.name === "string" &&
+            album &&
+            typeof album.title === "string"
         ) {
             const provider = normalizeCanonicalMediaProviderIdentity({
                 mediaSource: q.mediaSource,
@@ -855,15 +931,22 @@ function parseQueueFromDb(raw: Prisma.JsonValue | null): SyncQueueItem[] {
                             ? album.id
                             : `album:${q.id}`,
                     title: album.title,
-                    coverArt: typeof album.coverArt === "string" ? album.coverArt : null,
+                    coverArt:
+                        typeof album.coverArt === "string"
+                            ? album.coverArt
+                            : null,
                 },
                 mediaSource: provider.source,
                 provider,
                 ...toLegacyStreamFields(provider),
                 localTrackId:
-                    typeof q.localTrackId === "string" ? q.localTrackId : undefined,
+                    typeof q.localTrackId === "string"
+                        ? q.localTrackId
+                        : undefined,
                 trackTidalId:
-                    typeof q.trackTidalId === "string" ? q.trackTidalId : undefined,
+                    typeof q.trackTidalId === "string"
+                        ? q.trackTidalId
+                        : undefined,
                 trackYtMusicId:
                     typeof q.trackYtMusicId === "string"
                         ? q.trackYtMusicId

@@ -51,7 +51,7 @@ export function MusicBrainzLookup({
     const [hasSearched, setHasSearched] = useState(false);
     const [artistResults, setArtistResults] = useState<MusicBrainzArtist[]>([]);
     const [albumResults, setAlbumResults] = useState<MusicBrainzReleaseGroup[]>(
-        []
+        [],
     );
     const [manualMbid, setManualMbid] = useState(currentValue || "");
     const [showManualInput, setShowManualInput] = useState(false);
@@ -75,7 +75,9 @@ export function MusicBrainzLookup({
 
         try {
             if (type === "artist") {
-                const response = await api.searchMusicBrainzArtists(searchQuery.trim());
+                const response = await api.searchMusicBrainzArtists(
+                    searchQuery.trim(),
+                );
                 setArtistResults(response.artists);
                 setAlbumResults([]);
                 return;
@@ -83,7 +85,7 @@ export function MusicBrainzLookup({
 
             const response = await api.searchMusicBrainzReleaseGroups(
                 searchQuery.trim(),
-                artistName
+                artistName,
             );
             setAlbumResults(response.albums);
             setArtistResults([]);
@@ -92,7 +94,7 @@ export function MusicBrainzLookup({
             toast.error(
                 error instanceof Error
                     ? error.message
-                    : "MusicBrainz search failed"
+                    : "MusicBrainz search failed",
             );
         } finally {
             setIsSearching(false);
@@ -201,7 +203,9 @@ export function MusicBrainzLookup({
                                 artistResults.map((artist) => (
                                     <button
                                         key={artist.mbid}
-                                        onClick={() => handleSelectArtist(artist)}
+                                        onClick={() =>
+                                            handleSelectArtist(artist)
+                                        }
                                         className="w-full border-b border-white/5 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-white/5"
                                     >
                                         <div className="flex items-start justify-between gap-2">
@@ -249,7 +253,10 @@ export function MusicBrainzLookup({
                                             <div className="flex flex-shrink-0 items-center gap-2">
                                                 {album.firstReleaseDate && (
                                                     <span className="text-xs text-gray-400">
-                                                        {album.firstReleaseDate.substring(0, 4)}
+                                                        {album.firstReleaseDate.substring(
+                                                            0,
+                                                            4,
+                                                        )}
                                                     </span>
                                                 )}
                                                 <span className="rounded bg-white/5 px-1.5 py-0.5 text-xs text-gray-400">
@@ -262,7 +269,8 @@ export function MusicBrainzLookup({
                             )
                         ) : (
                             <div className="p-4 text-center text-sm text-gray-400">
-                                No results found. Try a different search or paste the MBID directly.
+                                No results found. Try a different search or
+                                paste the MBID directly.
                             </div>
                         )}
                     </div>
@@ -275,7 +283,9 @@ export function MusicBrainzLookup({
                     onClick={() => setShowManualInput(!showManualInput)}
                     className="text-xs text-gray-400 transition-colors hover:text-white"
                 >
-                    {showManualInput ? "Hide manual entry" : "Or paste MBID directly"}
+                    {showManualInput
+                        ? "Hide manual entry"
+                        : "Or paste MBID directly"}
                 </button>
 
                 {showManualInput && (

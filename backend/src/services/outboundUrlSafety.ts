@@ -86,11 +86,11 @@ export function normalizeSafeOutboundUrl(rawUrl: string): string | null {
  */
 export function normalizeSafeOutboundRedirectTarget(
     redirectTarget: string,
-    currentUrl: string
+    currentUrl: string,
 ): string | null {
     try {
         return normalizeSafeOutboundUrl(
-            new URL(redirectTarget, currentUrl).toString()
+            new URL(redirectTarget, currentUrl).toString(),
         );
     } catch {
         return null;
@@ -110,7 +110,7 @@ export function normalizeSafeOutboundRedirectTarget(
  * into the request agent would close that and is a larger follow-up.
  */
 async function hasOnlyPublicResolvedAddresses(
-    hostname: string
+    hostname: string,
 ): Promise<boolean> {
     const host = stripIpv6Brackets(hostname);
     try {
@@ -121,7 +121,7 @@ async function hasOnlyPublicResolvedAddresses(
         return addresses.every(
             ({ address }) =>
                 !isBlockedIpv4Hostname(address) &&
-                !isBlockedIpv6Hostname(address)
+                !isBlockedIpv6Hostname(address),
         );
     } catch {
         return false;
@@ -135,16 +135,14 @@ async function hasOnlyPublicResolvedAddresses(
  * apply at the point an outbound request is actually made.
  */
 export async function resolveSafeOutboundUrl(
-    rawUrl: string
+    rawUrl: string,
 ): Promise<string | null> {
     const normalized = normalizeSafeOutboundUrl(rawUrl);
     if (!normalized) {
         return null;
     }
     const { hostname } = new URL(normalized);
-    return (await hasOnlyPublicResolvedAddresses(hostname))
-        ? normalized
-        : null;
+    return (await hasOnlyPublicResolvedAddresses(hostname)) ? normalized : null;
 }
 
 /**
@@ -153,7 +151,7 @@ export async function resolveSafeOutboundUrl(
  */
 export async function resolveSafeOutboundRedirectTarget(
     redirectTarget: string,
-    currentUrl: string
+    currentUrl: string,
 ): Promise<string | null> {
     let absolute: string;
     try {

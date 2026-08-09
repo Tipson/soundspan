@@ -16,7 +16,7 @@ const LYRICS_ROUTE_TIMEOUT_MS = 20000;
 class LyricsRouteTimeoutError extends Error {
     constructor(trackId: string) {
         super(
-            `Lyrics lookup timed out for ${trackId} after ${LYRICS_ROUTE_TIMEOUT_MS}ms`
+            `Lyrics lookup timed out for ${trackId} after ${LYRICS_ROUTE_TIMEOUT_MS}ms`,
         );
         this.name = "LyricsRouteTimeoutError";
     }
@@ -26,7 +26,7 @@ router.use(requireAuth);
 
 async function getLyricsWithRouteTimeout(
     trackId: string,
-    context: LyricsLookupContext
+    context: LyricsLookupContext,
 ) {
     return new Promise<{
         syncedLyrics: string | null;
@@ -39,7 +39,7 @@ async function getLyricsWithRouteTimeout(
             if (settled) return;
             settled = true;
             logger.warn(
-                `[Lyrics] GET /lyrics/${trackId} timed out after ${LYRICS_ROUTE_TIMEOUT_MS}ms`
+                `[Lyrics] GET /lyrics/${trackId} timed out after ${LYRICS_ROUTE_TIMEOUT_MS}ms`,
             );
             reject(new LyricsRouteTimeoutError(trackId));
         }, LYRICS_ROUTE_TIMEOUT_MS);
@@ -162,7 +162,7 @@ router.get("/:trackId", async (req, res) => {
             duration,
         });
         logger.debug(
-            `[Lyrics] GET /lyrics/${trackId} source=${result.source} synced=${result.synced} (${Date.now() - startedAt}ms)`
+            `[Lyrics] GET /lyrics/${trackId} source=${result.source} synced=${result.synced} (${Date.now() - startedAt}ms)`,
         );
         res.json(result);
     } catch (error) {
@@ -171,7 +171,10 @@ router.get("/:trackId", async (req, res) => {
                 error: "Lyrics lookup timed out",
             });
         }
-        logger.error(`Get lyrics error for track ${req.params.trackId}:`, error);
+        logger.error(
+            `Get lyrics error for track ${req.params.trackId}:`,
+            error,
+        );
         res.status(503).json({ error: "Failed to load lyrics" });
     }
 });
@@ -199,15 +202,22 @@ router.get("/:trackId", async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.delete<{ trackId: string }>("/:trackId", lyricsMutationLimiter, async (req, res) => {
-    try {
-        const { trackId } = req.params;
-        await clearLyricsCache(trackId);
-        res.json({ message: "Lyrics cache cleared" });
-    } catch (error) {
-        logger.error(`Clear lyrics cache error for track ${req.params.trackId}:`, error);
-        res.status(500).json({ error: "Failed to clear lyrics cache" });
-    }
-});
+router.delete<{ trackId: string }>(
+    "/:trackId",
+    lyricsMutationLimiter,
+    async (req, res) => {
+        try {
+            const { trackId } = req.params;
+            await clearLyricsCache(trackId);
+            res.json({ message: "Lyrics cache cleared" });
+        } catch (error) {
+            logger.error(
+                `Clear lyrics cache error for track ${req.params.trackId}:`,
+                error,
+            );
+            res.status(500).json({ error: "Failed to clear lyrics cache" });
+        }
+    },
+);
 
 export default router;

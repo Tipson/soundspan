@@ -17,9 +17,7 @@ def _client(headers: dict[str, str] | None = None) -> AsyncClient:
     from app import app
 
     transport = ASGITransport(app=app)
-    return AsyncClient(
-        transport=transport, base_url="http://test", headers=headers or {}
-    )
+    return AsyncClient(transport=transport, base_url="http://test", headers=headers or {})
 
 
 @pytest.mark.anyio
@@ -97,9 +95,7 @@ async def test_traversal_user_id_rejected_on_clear(monkeypatch):
     """/auth/clear (which unlinks files) also rejects traversal ids."""
     monkeypatch.setenv("INTERNAL_API_SECRET", SECRET)
     async with _client({"x-internal-secret": SECRET}) as client:
-        resp = await client.post(
-            "/auth/clear", params={"user_id": "../../etc/passwd"}
-        )
+        resp = await client.post("/auth/clear", params={"user_id": "../../etc/passwd"})
     assert resp.status_code == 400
 
 

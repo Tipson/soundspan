@@ -58,7 +58,7 @@ import { createMockJsonResponse } from "./helpers/mockJsonResponse";
 function getHandler(path: string, method: "get" | "post") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {

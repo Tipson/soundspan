@@ -10,7 +10,7 @@ export function clampNonNegativePlaybackTime(timeSec: number): number {
  */
 export function resolvePlaybackTimeUpperBound(
     mediaDurationSec: number,
-    engineDurationSec = 0
+    engineDurationSec = 0,
 ): number {
     return mediaDurationSec > 0 && engineDurationSec > 0
         ? Math.min(mediaDurationSec, engineDurationSec)
@@ -22,7 +22,7 @@ export function resolvePlaybackTimeUpperBound(
  */
 export function clampPlaybackTimeToUpperBound(
     timeSec: number,
-    upperBoundSec: number
+    upperBoundSec: number,
 ): number {
     return upperBoundSec > 0
         ? Math.min(clampNonNegativePlaybackTime(timeSec), upperBoundSec)

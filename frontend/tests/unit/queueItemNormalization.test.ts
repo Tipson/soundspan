@@ -43,7 +43,7 @@ test("normalizeQueueItems defaults legacy persisted tracks to itemType track", (
     // Track fields must be preserved untouched.
     assert.equal(
         (normalized[1] as { youtubeVideoId?: string }).youtubeVideoId,
-        "yt-1"
+        "yt-1",
     );
 });
 
@@ -121,7 +121,7 @@ test("normalizeQueueItems preserves mixed ordering", () => {
 
     assert.deepEqual(
         normalized.map((item) => item.itemType),
-        ["track", "episode", "track"]
+        ["track", "episode", "track"],
     );
 });
 

@@ -13,10 +13,17 @@ interface SettingsLayoutProps {
 /**
  * Renders the SettingsLayout component.
  */
-export function SettingsLayout({ children, sidebarItems, isAdmin, title = "Settings" }: SettingsLayoutProps) {
-    const [activeSection, setActiveSection] = useState(sidebarItems[0]?.id || "");
+export function SettingsLayout({
+    children,
+    sidebarItems,
+    isAdmin,
+    title = "Settings",
+}: SettingsLayoutProps) {
+    const [activeSection, setActiveSection] = useState(
+        sidebarItems[0]?.id || "",
+    );
     const mainContentRef = useRef<HTMLDivElement>(null);
-    
+
     // Handle sidebar click - scroll to section
     const handleSectionClick = useCallback((id: string) => {
         const element = document.getElementById(id);
@@ -25,37 +32,44 @@ export function SettingsLayout({ children, sidebarItems, isAdmin, title = "Setti
             setActiveSection(id);
         }
     }, []);
-    
+
     // Track active section based on scroll position
     useEffect(() => {
-        const visibleItems = sidebarItems.filter(item => !item.adminOnly || isAdmin);
-        
+        const visibleItems = sidebarItems.filter(
+            (item) => !item.adminOnly || isAdmin,
+        );
+
         // Find the scrollable parent (the main element in AuthenticatedLayout)
-        const findScrollableParent = (el: HTMLElement | null): HTMLElement | null => {
+        const findScrollableParent = (
+            el: HTMLElement | null,
+        ): HTMLElement | null => {
             while (el) {
                 const style = window.getComputedStyle(el);
-                if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                if (
+                    style.overflowY === "auto" ||
+                    style.overflowY === "scroll"
+                ) {
                     return el;
                 }
                 el = el.parentElement;
             }
             return null;
         };
-        
-        const scrollContainer = mainContentRef.current 
-            ? findScrollableParent(mainContentRef.current) 
+
+        const scrollContainer = mainContentRef.current
+            ? findScrollableParent(mainContentRef.current)
             : null;
-        
+
         if (!scrollContainer) return;
-        
+
         // Use scroll event for smooth tracking
         const handleScroll = () => {
             const containerRect = scrollContainer.getBoundingClientRect();
             const offset = 150; // Offset from top
-            
+
             // Find the section that's currently in view
             let currentSection = visibleItems[0]?.id || "";
-            
+
             for (const item of visibleItems) {
                 const element = document.getElementById(item.id);
                 if (element) {
@@ -66,15 +80,15 @@ export function SettingsLayout({ children, sidebarItems, isAdmin, title = "Setti
                     }
                 }
             }
-            
-            setActiveSection(prev => {
+
+            setActiveSection((prev) => {
                 if (prev !== currentSection) {
                     return currentSection;
                 }
                 return prev;
             });
         };
-        
+
         // Throttle scroll events
         let ticking = false;
         const scrollHandler = () => {
@@ -86,29 +100,33 @@ export function SettingsLayout({ children, sidebarItems, isAdmin, title = "Setti
                 ticking = true;
             }
         };
-        
-        scrollContainer.addEventListener("scroll", scrollHandler, { passive: true });
-        
+
+        scrollContainer.addEventListener("scroll", scrollHandler, {
+            passive: true,
+        });
+
         // Initial check
         handleScroll();
-        
-        return () => scrollContainer.removeEventListener("scroll", scrollHandler);
+
+        return () =>
+            scrollContainer.removeEventListener("scroll", scrollHandler);
     }, [sidebarItems, isAdmin]);
-    
+
     return (
         <div className="min-h-screen bg-surface relative">
             {/* Subtle grey gradient for systems page feel */}
-            <div 
+            <div
                 className="absolute inset-0 pointer-events-none"
                 style={{
-                    backgroundImage: 'linear-gradient(to bottom, #1a1a1a 0%, #121212 15%, #0a0a0a 30%)'
+                    backgroundImage:
+                        "linear-gradient(to bottom, #1a1a1a 0%, #121212 15%, #0a0a0a 30%)",
                 }}
             />
-            
+
             <div className="relative max-w-5xl mx-auto px-4 md:px-8 py-8">
                 {/* Header */}
                 <h1 className="text-2xl font-bold text-white mb-8">{title}</h1>
-                
+
                 {/* Layout */}
                 <div className="flex gap-12">
                     {/* Sidebar */}
@@ -118,7 +136,7 @@ export function SettingsLayout({ children, sidebarItems, isAdmin, title = "Setti
                         onSectionClick={handleSectionClick}
                         isAdmin={isAdmin}
                     />
-                    
+
                     {/* Main Content */}
                     <main ref={mainContentRef} className="flex-1 min-w-0">
                         {children}
@@ -128,4 +146,3 @@ export function SettingsLayout({ children, sidebarItems, isAdmin, title = "Setti
         </div>
     );
 }
-

@@ -1,10 +1,20 @@
-import { useSearchQuery, useDiscoverSearchQuery, useDiscoverSimilarArtistsQuery } from "@/hooks/useQueries";
+import {
+    useSearchQuery,
+    useDiscoverSearchQuery,
+    useDiscoverSimilarArtistsQuery,
+} from "@/hooks/useQueries";
 import type { SearchResult, DiscoverResult, AliasInfo } from "../types";
 import { useMemo } from "react";
 
 interface UseSearchDataProps {
     query: string;
-    libraryType?: "all" | "artists" | "albums" | "tracks" | "audiobooks" | "podcasts";
+    libraryType?:
+        | "all"
+        | "artists"
+        | "albums"
+        | "tracks"
+        | "audiobooks"
+        | "podcasts";
     discoverType?: "music" | "podcasts" | "all";
     libraryLimit?: number;
     discoverLimit?: number;
@@ -35,13 +45,13 @@ export function useSearchData({
     const {
         data: libraryResults,
         isLoading: isLibrarySearching,
-        isFetching: isLibraryFetching
+        isFetching: isLibraryFetching,
     } = useSearchQuery(query, libraryType, libraryLimit);
 
     const {
         data: discoverData,
         isLoading: isDiscoverSearching,
-        isFetching: isDiscoverFetching
+        isFetching: isDiscoverFetching,
     } = useDiscoverSearchQuery(query, discoverType, discoverLimit);
 
     const discoverResults = useMemo(() => {
@@ -62,7 +72,7 @@ export function useSearchData({
     const { data: similarData } = useDiscoverSimilarArtistsQuery(
         topArtist?.name || "",
         topArtist?.mbid || "",
-        similarArtistsLimit
+        similarArtistsLimit,
     );
 
     const similarArtists = useMemo(() => {

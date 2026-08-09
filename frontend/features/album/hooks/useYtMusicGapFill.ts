@@ -80,17 +80,17 @@ const _matchCache = new Map<string, Record<string, YtMusicMatch>>();
  */
 export function useYtMusicGapFill(
     album: Album | null | undefined,
-    source: AlbumSource | null
+    source: AlbumSource | null,
 ) {
     const [matches, setMatches] = useState<Record<string, YtMusicMatch>>({});
     const [loading, setLoading] = useState(false);
     const matchedAlbumIdRef = useRef<string | null>(null);
     const [ytMusicAvailable, setYtMusicAvailable] = useState(
         // Optimistically use cached value to avoid flash
-        _ytStatusCache?.available ?? false
+        _ytStatusCache?.available ?? false,
     );
     const [isStatusResolved, setIsStatusResolved] = useState(
-        _ytStatusCache !== null
+        _ytStatusCache !== null,
     );
     const albumTracks = album?.tracks;
 
@@ -121,9 +121,7 @@ export function useYtMusicGapFill(
         // For library albums, only tracks without a local file need matching
         // (also skip any already enriched by TIDAL — TIDAL takes priority)
         return albumTracks.filter(
-            (t) =>
-                t.streamSource !== "tidal" &&
-                !t.filePath
+            (t) => t.streamSource !== "tidal" && !t.filePath,
         );
     }, [albumTracks, source, ytMusicAvailable]);
 
@@ -180,7 +178,7 @@ export function useYtMusicGapFill(
 
             // Step 2: Find tracks still unmatched after persisted lookup
             const unmatchedTracks = unownedTracks.filter(
-                (t) => !newMatches[t.id]
+                (t) => !newMatches[t.id],
             );
 
             // Step 3: Call match-batch only for tracks without persisted mappings
@@ -197,7 +195,8 @@ export function useYtMusicGapFill(
                 }));
 
                 try {
-                    const { matches: batchMatches } = await api.matchYtMusicBatch(trackPayload);
+                    const { matches: batchMatches } =
+                        await api.matchYtMusicBatch(trackPayload);
 
                     if (cancelled) return;
 
@@ -207,7 +206,10 @@ export function useYtMusicGapFill(
                         }
                     });
                 } catch (err) {
-                    sharedFrontendLogger.error("[YTMusic Gap-Fill] Batch match failed:", err);
+                    sharedFrontendLogger.error(
+                        "[YTMusic Gap-Fill] Batch match failed:",
+                        err,
+                    );
                 }
             }
 

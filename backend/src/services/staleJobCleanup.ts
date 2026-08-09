@@ -15,7 +15,11 @@ export interface CleanupResult {
     downloadJobs: { cleaned: number; ids: string[] };
     spotifyImportJobs: { cleaned: number; ids: string[] };
     bullQueues: { cleaned: number; queues: string[] };
-    audioAnalysis: { reset: number; permanentlyFailed: number; recovered: number };
+    audioAnalysis: {
+        reset: number;
+        permanentlyFailed: number;
+        recovered: number;
+    };
     totalCleaned: number;
 }
 
@@ -45,7 +49,9 @@ class StaleJobCleanupService {
             audioAnalysis.reset +
             audioAnalysis.permanentlyFailed;
 
-        logger.debug(`[STALE-CLEANUP] Complete. Total cleaned: ${totalCleaned}`);
+        logger.debug(
+            `[STALE-CLEANUP] Complete. Total cleaned: ${totalCleaned}`,
+        );
 
         return {
             discoveryBatches,
@@ -77,7 +83,7 @@ class StaleJobCleanupService {
         logger.debug(
             `[STALE-CLEANUP] Cleaning ${
                 ids.length
-            } discovery batches: ${ids.join(", ")}`
+            } discovery batches: ${ids.join(", ")}`,
         );
 
         // Update batches to failed
@@ -160,7 +166,7 @@ class StaleJobCleanupService {
 
         const ids = staleJobs.map((j) => j.id);
         logger.debug(
-            `[STALE-CLEANUP] Cleaning ${ids.length} Spotify import jobs`
+            `[STALE-CLEANUP] Cleaning ${ids.length} Spotify import jobs`,
         );
 
         await prisma.spotifyImportJob.updateMany({
@@ -184,7 +190,7 @@ class StaleJobCleanupService {
                 // Clean completed jobs older than retention period
                 const completedCleaned = await queue.clean(
                     retentionMs,
-                    "completed"
+                    "completed",
                 );
                 const failedCleaned = await queue.clean(retentionMs, "failed");
 
@@ -192,7 +198,7 @@ class StaleJobCleanupService {
                     completedCleaned.length + failedCleaned.length;
                 if (queueCleaned > 0) {
                     logger.debug(
-                        `[STALE-CLEANUP] Cleaned ${queueCleaned} jobs from ${queue.name}`
+                        `[STALE-CLEANUP] Cleaned ${queueCleaned} jobs from ${queue.name}`,
                     );
                     totalCleaned += queueCleaned;
                     cleanedQueues.push(queue.name);
@@ -200,7 +206,7 @@ class StaleJobCleanupService {
             } catch (error) {
                 logger.error(
                     `[STALE-CLEANUP] Error cleaning queue ${queue.name}:`,
-                    error
+                    error,
                 );
             }
         }

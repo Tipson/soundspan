@@ -9,7 +9,7 @@ export type RangeParseResult =
  */
 export function parseRangeHeader(
     rangeHeader: string,
-    fileSize: number
+    fileSize: number,
 ): RangeParseResult {
     const parts = rangeHeader.replace(/bytes=/, "").split("-");
     const startPart = parts[0];

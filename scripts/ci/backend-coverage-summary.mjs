@@ -8,50 +8,58 @@ const jestResultsPath = path.resolve("backend/coverage/jest-results.json");
 const outputMarkdownPath = path.resolve("backend/coverage/coverage-summary.md");
 
 function toNumber(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function pct(value) {
-  return `${toNumber(value).toFixed(2)}%`;
+    return `${toNumber(value).toFixed(2)}%`;
 }
 
 function readJson(filePath) {
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
+    if (!fs.existsSync(filePath)) {
+        return null;
+    }
 
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 const coverage = readJson(summaryPath);
-const enforceGate = String(process.env.ENFORCE_COVERAGE_GATE || "false").toLowerCase() === "true";
+const enforceGate =
+    String(process.env.ENFORCE_COVERAGE_GATE || "false").toLowerCase() ===
+    "true";
 if (!coverage || !coverage.total) {
-  const message = "Coverage summary was not found. Ensure Jest coverage generation succeeded.";
-  fs.mkdirSync(path.dirname(outputMarkdownPath), { recursive: true });
-  fs.writeFileSync(outputMarkdownPath, `## Backend Coverage Summary\n\n${message}\n`);
-  if (enforceGate) {
-    console.error(message);
-    process.exit(2);
-  }
-  console.log(message);
-  process.exit(0);
+    const message =
+        "Coverage summary was not found. Ensure Jest coverage generation succeeded.";
+    fs.mkdirSync(path.dirname(outputMarkdownPath), { recursive: true });
+    fs.writeFileSync(
+        outputMarkdownPath,
+        `## Backend Coverage Summary\n\n${message}\n`,
+    );
+    if (enforceGate) {
+        console.error(message);
+        process.exit(2);
+    }
+    console.log(message);
+    process.exit(0);
 }
 
 const jestResults = readJson(jestResultsPath);
 const total = coverage.total;
 const perFile = Object.entries(coverage)
-  .filter(([key]) => key !== "total")
-  .map(([file, stats]) => ({
-    file: path.relative(process.cwd(), file),
-    statements: toNumber(stats.statements?.pct),
-    branches: toNumber(stats.branches?.pct),
-    functions: toNumber(stats.functions?.pct),
-    lines: toNumber(stats.lines?.pct),
-  }));
+    .filter(([key]) => key !== "total")
+    .map(([file, stats]) => ({
+        file: path.relative(process.cwd(), file),
+        statements: toNumber(stats.statements?.pct),
+        branches: toNumber(stats.branches?.pct),
+        functions: toNumber(stats.functions?.pct),
+        lines: toNumber(stats.lines?.pct),
+    }));
 
 const byLowLine = [...perFile].sort((a, b) => a.lines - b.lines);
-const zeroCoverageFiles = byLowLine.filter((file) => file.lines === 0).map((file) => file.file);
+const zeroCoverageFiles = byLowLine
+    .filter((file) => file.lines === 0)
+    .map((file) => file.file);
 const lowestCoverageFiles = byLowLine.slice(0, 20);
 
 const lineMin = toNumber(process.env.COVERAGE_LINE_MIN, 0);
@@ -61,16 +69,24 @@ const statementMin = toNumber(process.env.COVERAGE_STATEMENT_MIN, 0);
 
 const gateFailures = [];
 if (toNumber(total.lines?.pct) < lineMin) {
-  gateFailures.push(`lines ${pct(total.lines?.pct)} < ${lineMin.toFixed(2)}%`);
+    gateFailures.push(
+        `lines ${pct(total.lines?.pct)} < ${lineMin.toFixed(2)}%`,
+    );
 }
 if (toNumber(total.branches?.pct) < branchMin) {
-  gateFailures.push(`branches ${pct(total.branches?.pct)} < ${branchMin.toFixed(2)}%`);
+    gateFailures.push(
+        `branches ${pct(total.branches?.pct)} < ${branchMin.toFixed(2)}%`,
+    );
 }
 if (toNumber(total.functions?.pct) < functionMin) {
-  gateFailures.push(`functions ${pct(total.functions?.pct)} < ${functionMin.toFixed(2)}%`);
+    gateFailures.push(
+        `functions ${pct(total.functions?.pct)} < ${functionMin.toFixed(2)}%`,
+    );
 }
 if (toNumber(total.statements?.pct) < statementMin) {
-  gateFailures.push(`statements ${pct(total.statements?.pct)} < ${statementMin.toFixed(2)}%`);
+    gateFailures.push(
+        `statements ${pct(total.statements?.pct)} < ${statementMin.toFixed(2)}%`,
+    );
 }
 
 const suiteCount = jestResults?.numTotalTestSuites ?? "n/a";
@@ -100,48 +116,48 @@ lines.push(`| Files at 0% Line Coverage | ${zeroCoverageFiles.length} |`);
 lines.push("");
 
 if (lowestCoverageFiles.length > 0) {
-  lines.push("### Lowest-Coverage Files (Line %)");
-  lines.push("");
-  lines.push("| File | Line % |");
-  lines.push("| --- | ---: |");
-  for (const file of lowestCoverageFiles) {
-    lines.push(`| \`${file.file}\` | ${pct(file.lines)} |`);
-  }
-  lines.push("");
+    lines.push("### Lowest-Coverage Files (Line %)");
+    lines.push("");
+    lines.push("| File | Line % |");
+    lines.push("| --- | ---: |");
+    for (const file of lowestCoverageFiles) {
+        lines.push(`| \`${file.file}\` | ${pct(file.lines)} |`);
+    }
+    lines.push("");
 }
 
 if (zeroCoverageFiles.length > 0) {
-  lines.push("<details>");
-  lines.push("<summary>Files with 0% line coverage</summary>");
-  lines.push("");
-  for (const file of zeroCoverageFiles) {
-    lines.push(`- \`${file}\``);
-  }
-  lines.push("");
-  lines.push("</details>");
-  lines.push("");
+    lines.push("<details>");
+    lines.push("<summary>Files with 0% line coverage</summary>");
+    lines.push("");
+    for (const file of zeroCoverageFiles) {
+        lines.push(`- \`${file}\``);
+    }
+    lines.push("");
+    lines.push("</details>");
+    lines.push("");
 }
 
 if (enforceGate) {
-  lines.push("### Coverage Gate");
-  lines.push("");
-  lines.push(
-    `Thresholds: lines >= ${lineMin.toFixed(2)}%, branches >= ${branchMin.toFixed(2)}%, functions >= ${functionMin.toFixed(2)}%, statements >= ${statementMin.toFixed(2)}%`,
-  );
-  if (gateFailures.length > 0) {
+    lines.push("### Coverage Gate");
     lines.push("");
-    lines.push("Gate result: failed");
-    for (const failure of gateFailures) {
-      lines.push(`- ${failure}`);
+    lines.push(
+        `Thresholds: lines >= ${lineMin.toFixed(2)}%, branches >= ${branchMin.toFixed(2)}%, functions >= ${functionMin.toFixed(2)}%, statements >= ${statementMin.toFixed(2)}%`,
+    );
+    if (gateFailures.length > 0) {
+        lines.push("");
+        lines.push("Gate result: failed");
+        for (const failure of gateFailures) {
+            lines.push(`- ${failure}`);
+        }
+    } else {
+        lines.push("");
+        lines.push("Gate result: passed");
     }
-  } else {
     lines.push("");
-    lines.push("Gate result: passed");
-  }
-  lines.push("");
 } else {
-  lines.push("> Coverage gate is currently disabled (visibility mode).");
-  lines.push("");
+    lines.push("> Coverage gate is currently disabled (visibility mode).");
+    lines.push("");
 }
 
 fs.mkdirSync(path.dirname(outputMarkdownPath), { recursive: true });
@@ -149,9 +165,9 @@ fs.writeFileSync(outputMarkdownPath, `${lines.join("\n")}\n`, "utf8");
 console.log(`Wrote ${outputMarkdownPath}`);
 
 if (enforceGate && gateFailures.length > 0) {
-  console.error("Coverage gate failed:");
-  for (const failure of gateFailures) {
-    console.error(`- ${failure}`);
-  }
-  process.exit(2);
+    console.error("Coverage gate failed:");
+    for (const failure of gateFailures) {
+        console.error(`- ${failure}`);
+    }
+    process.exit(2);
 }

@@ -95,7 +95,11 @@ mock.module("@/lib/audio-controls-context", {
 
 mock.module("@/lib/audio-playback-context", {
     namedExports: {
-        useAudioPlayback: () => ({ isPlaying: false, currentTime: 0, duration: 0 }),
+        useAudioPlayback: () => ({
+            isPlaying: false,
+            currentTime: 0,
+            duration: 0,
+        }),
     },
 });
 
@@ -150,10 +154,12 @@ test("renders its shell without throwing when the map API rejects", async () => 
 
 test("map tab renders full-bleed and clears the mobile player", async () => {
     const { VibeMapTab } = await import("../../components/vibe/VibeMapTab");
-    const html = renderToStaticMarkup(React.createElement(VibeMapTab, {
-        currentTrackPresent: true,
-        onExplore: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+        React.createElement(VibeMapTab, {
+            currentTrackPresent: true,
+            onExplore: () => undefined,
+        }),
+    );
 
     assert.match(html, /absolute inset-0 overflow-hidden/);
     assert.match(html, /aria-label="Map view \(current\)"/);

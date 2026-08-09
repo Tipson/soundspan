@@ -353,8 +353,7 @@ export interface SegmentedStreamingSnapshotInput {
     bufferedUntilSec?: number;
 }
 
-export interface SegmentedStreamingHandoffResponse
-    extends SegmentedStreamingSessionResponse {
+export interface SegmentedStreamingHandoffResponse extends SegmentedStreamingSessionResponse {
     previousSessionId: string;
     resumeAtSec: number;
     shouldPlay: boolean;
@@ -370,17 +369,45 @@ class ApiClient extends WithListenGroups(
         WithYouTube(
             WithYtMusic(
                 WithVibe(
-                    WithAudiobooks(WithPodcasts(WithSoulseek(WithEnrichment(WithMetadata(
-                        WithNotifications(WithDiscover(WithImports(WithDownloads(WithAuth(
-                            WithConnectors(WithSettings(WithPlays(WithRecommendations(WithMedia(
-                                WithPlaylists(WithLibrary(ApiClientCore))
-                            )))))
-                        )))))
-                    )))))
-                )
-            )
-        )
-    )
+                    WithAudiobooks(
+                        WithPodcasts(
+                            WithSoulseek(
+                                WithEnrichment(
+                                    WithMetadata(
+                                        WithNotifications(
+                                            WithDiscover(
+                                                WithImports(
+                                                    WithDownloads(
+                                                        WithAuth(
+                                                            WithConnectors(
+                                                                WithSettings(
+                                                                    WithPlays(
+                                                                        WithRecommendations(
+                                                                            WithMedia(
+                                                                                WithPlaylists(
+                                                                                    WithLibrary(
+                                                                                        ApiClientCore,
+                                                                                    ),
+                                                                                ),
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),
 ) {}
 
 // Create a singleton instance without passing baseUrl - it will be determined dynamically

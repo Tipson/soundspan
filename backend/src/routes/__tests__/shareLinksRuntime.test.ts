@@ -144,7 +144,9 @@ type MockResponse = {
     headers: Record<string, string>;
     status: jest.MockedFunction<(code: number) => MockResponse>;
     json: jest.MockedFunction<(payload: unknown) => MockResponse>;
-    setHeader: jest.MockedFunction<(key: string, value: string) => MockResponse>;
+    setHeader: jest.MockedFunction<
+        (key: string, value: string) => MockResponse
+    >;
     send: jest.MockedFunction<(data: unknown) => MockResponse>;
     destroy: jest.MockedFunction<(error?: Error) => MockResponse>;
 };
@@ -152,14 +154,16 @@ type MockResponse = {
 function getHandler(path: string, method: "get" | "post" | "delete") {
     const stack = (router as unknown as { stack: RouterLayer[] }).stack;
     const layer = stack.find(
-        (entry) => entry.route?.path === path && entry.route?.methods?.[method]
+        (entry) => entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
     }
     const route = layer.route;
     if (!route) {
-        throw new Error(`Route missing handler: ${method.toUpperCase()} ${path}`);
+        throw new Error(
+            `Route missing handler: ${method.toUpperCase()} ${path}`,
+        );
     }
     return route.stack[route.stack.length - 1].handle;
 }
@@ -210,11 +214,27 @@ describe("shareLinks routes runtime", () => {
             toString: jest.fn(() => "a".repeat(64)),
         });
 
-        mockPlaylistFindUnique.mockResolvedValue({ id: "playlist-1", userId: "u1" });
+        mockPlaylistFindUnique.mockResolvedValue({
+            id: "playlist-1",
+            userId: "u1",
+        });
         mockAlbumFindUnique.mockResolvedValue({ id: "album-1" });
-        mockTrackFindUnique.mockResolvedValue({ id: "track-1", title: "Track One", filePath: "artist/album/track.flac", fileModified: new Date() });
-        mockTrackFindFirst.mockResolvedValue({ id: "track-1", title: "Track One", filePath: "artist/album/track.flac", fileModified: new Date() });
-        mockPlaylistItemFindFirst.mockResolvedValue({ id: "item-1", trackId: "track-1" });
+        mockTrackFindUnique.mockResolvedValue({
+            id: "track-1",
+            title: "Track One",
+            filePath: "artist/album/track.flac",
+            fileModified: new Date(),
+        });
+        mockTrackFindFirst.mockResolvedValue({
+            id: "track-1",
+            title: "Track One",
+            filePath: "artist/album/track.flac",
+            fileModified: new Date(),
+        });
+        mockPlaylistItemFindFirst.mockResolvedValue({
+            id: "item-1",
+            trackId: "track-1",
+        });
 
         mockShareLinkCreate.mockResolvedValue({
             id: "share-1",
@@ -264,7 +284,11 @@ describe("shareLinks routes runtime", () => {
     it("POST creates a share link with generated token", async () => {
         const req = createReq({
             user: { id: "u1", role: "user" },
-            body: { resourceType: "playlist", resourceId: "playlist-1", maxPlays: 10 },
+            body: {
+                resourceType: "playlist",
+                resourceId: "playlist-1",
+                maxPlays: 10,
+            },
         });
         const res = createRes();
 
@@ -286,7 +310,7 @@ describe("shareLinks routes runtime", () => {
                 id: "share-1",
                 token: "a".repeat(64),
                 accessPath: `/api/share-links/access/${"a".repeat(64)}`,
-            })
+            }),
         );
     });
 
@@ -310,7 +334,10 @@ describe("shareLinks routes runtime", () => {
     });
 
     it("DELETE revokes an owned share link", async () => {
-        const req = createReq({ user: { id: "u1" }, params: { id: "share-1" } });
+        const req = createReq({
+            user: { id: "u1" },
+            params: { id: "share-1" },
+        });
         const res = createRes();
 
         await deleteShareLink(req, res);
@@ -419,7 +446,11 @@ describe("shareLinks routes runtime", () => {
         mockTrackFindUnique.mockResolvedValueOnce({
             id: "track-1",
             title: "Track One",
-            album: { id: "album-1", title: "Album One", artist: { id: "artist-1", name: "Artist" } },
+            album: {
+                id: "album-1",
+                title: "Album One",
+                artist: { id: "artist-1", name: "Artist" },
+            },
         });
 
         const req = createReq({ params: { token: "t2" } });
@@ -433,7 +464,7 @@ describe("shareLinks routes runtime", () => {
                     playCount: { increment: 1 },
                     lastStreamedAt: expect.any(Date),
                 }),
-            })
+            }),
         );
         expect(mockShareLinkUpdate).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(200);
@@ -456,7 +487,11 @@ describe("shareLinks routes runtime", () => {
         mockTrackFindUnique.mockResolvedValueOnce({
             id: "track-1",
             title: "Track One",
-            album: { id: "album-1", title: "Album One", artist: { id: "artist-1", name: "Artist" } },
+            album: {
+                id: "album-1",
+                title: "Album One",
+                artist: { id: "artist-1", name: "Artist" },
+            },
         });
 
         const req = createReq({ params: { token: "t3" } });
@@ -475,15 +510,27 @@ describe("shareLinks routes runtime", () => {
     describe("GET /access/:token/stream/:trackId", () => {
         it("streams track for valid share link (track type)", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "track",
-                resourceId: "track-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "track",
+                resourceId: "track-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
             mockTrackFindUnique.mockResolvedValueOnce({
-                id: "track-1", title: "Track", filePath: "a/b/track.flac", fileModified: new Date(),
+                id: "track-1",
+                title: "Track",
+                filePath: "a/b/track.flac",
+                fileModified: new Date(),
             });
 
-            const req = createReq({ params: { token: "valid-token", trackId: "track-1" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "track-1" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
@@ -493,12 +540,21 @@ describe("shareLinks routes runtime", () => {
 
         it("streams track belonging to shared album", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
 
-            const req = createReq({ params: { token: "valid-token", trackId: "track-1" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "track-1" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
@@ -511,12 +567,21 @@ describe("shareLinks routes runtime", () => {
 
         it("streams track belonging to shared playlist", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "playlist",
-                resourceId: "playlist-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "playlist",
+                resourceId: "playlist-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
 
-            const req = createReq({ params: { token: "valid-token", trackId: "track-1" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "track-1" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
@@ -528,13 +593,22 @@ describe("shareLinks routes runtime", () => {
 
         it("returns 404 for track not in shared album", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
             mockTrackFindFirst.mockResolvedValueOnce(null);
 
-            const req = createReq({ params: { token: "valid-token", trackId: "wrong-track" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "wrong-track" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
@@ -544,13 +618,21 @@ describe("shareLinks routes runtime", () => {
 
         it("returns 404 for expired share link", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "expired-token", resourceType: "track",
-                resourceId: "track-1", revoked: false,
+                id: "share-1",
+                token: "expired-token",
+                resourceType: "track",
+                resourceId: "track-1",
+                revoked: false,
                 expiresAt: new Date("2020-01-01T00:00:00.000Z"),
-                maxPlays: null, playCount: 0,
+                maxPlays: null,
+                playCount: 0,
             });
 
-            const req = createReq({ params: { token: "expired-token", trackId: "track-1" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "expired-token", trackId: "track-1" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
@@ -560,50 +642,92 @@ describe("shareLinks routes runtime", () => {
 
         it("returns 404 for track without filePath", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "track",
-                resourceId: "track-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "track",
+                resourceId: "track-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
             mockTrackFindUnique.mockResolvedValueOnce({
-                id: "track-1", title: "Track", filePath: null, fileModified: null,
+                id: "track-1",
+                title: "Track",
+                filePath: null,
+                fileModified: null,
             });
 
-            const req = createReq({ params: { token: "valid-token", trackId: "track-1" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "track-1" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
             expect(res.statusCode).toBe(404);
-            expect(res.body).toEqual({ error: "Track not available for streaming" });
+            expect(res.body).toEqual({
+                error: "Track not available for streaming",
+            });
         });
 
         it("sets Content-Disposition for download=true", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "track",
-                resourceId: "track-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "track",
+                resourceId: "track-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
             mockTrackFindUnique.mockResolvedValueOnce({
-                id: "track-1", title: "Track", filePath: "a/b/track.flac", fileModified: new Date(),
+                id: "track-1",
+                title: "Track",
+                filePath: "a/b/track.flac",
+                fileModified: new Date(),
             });
 
-            const req = createReq({ params: { token: "valid-token", trackId: "track-1" }, query: { download: "true" }, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "track-1" },
+                query: { download: "true" },
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
-            expect(res.setHeader).toHaveBeenCalledWith("Content-Disposition", expect.stringContaining("attachment"));
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Content-Disposition",
+                expect.stringContaining("attachment"),
+            );
         });
 
         it("only updates lastStreamedAt for a new stream session", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "track",
-                resourceId: "track-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0, lastStreamedAt: null,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "track",
+                resourceId: "track-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
+                lastStreamedAt: null,
             });
             mockTrackFindUnique.mockResolvedValueOnce({
-                id: "track-1", title: "Track", filePath: "a/b/track.flac", fileModified: new Date(),
+                id: "track-1",
+                title: "Track",
+                filePath: "a/b/track.flac",
+                fileModified: new Date(),
             });
 
-            const req = createReq({ params: { token: "valid-token", trackId: "track-1" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "track-1" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
@@ -616,15 +740,28 @@ describe("shareLinks routes runtime", () => {
 
         it("only updates lastStreamedAt for an existing stream session", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "track",
-                resourceId: "track-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0, lastStreamedAt: new Date(Date.now() - 5 * 60 * 1000),
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "track",
+                resourceId: "track-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
+                lastStreamedAt: new Date(Date.now() - 5 * 60 * 1000),
             });
             mockTrackFindUnique.mockResolvedValueOnce({
-                id: "track-1", title: "Track", filePath: "a/b/track.flac", fileModified: new Date(),
+                id: "track-1",
+                title: "Track",
+                filePath: "a/b/track.flac",
+                fileModified: new Date(),
             });
 
-            const req = createReq({ params: { token: "valid-token", trackId: "track-1" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token", trackId: "track-1" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedStream(req, res);
 
@@ -640,7 +777,9 @@ describe("shareLinks routes runtime", () => {
         it("returns 404 for invalid token", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce(null);
 
-            const req = { params: { token: "invalid-token" } } as unknown as Request;
+            const req = {
+                params: { token: "invalid-token" },
+            } as unknown as Request;
             const res = createRes();
 
             await getSharedZip(req, res);
@@ -651,19 +790,36 @@ describe("shareLinks routes runtime", () => {
 
         it("streams a zip for a valid album share", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-zip", token: "zip-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-zip",
+                token: "zip-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
             mockAlbumFindUnique.mockResolvedValueOnce({
                 artist: { name: "Artist One" },
                 tracks: [
-                    { id: "track-1", title: "Track One", filePath: "artist/album/01.flac", fileModified: new Date() },
-                    { id: "track-2", title: "Track Two", filePath: "artist/album/02.flac", fileModified: new Date() },
+                    {
+                        id: "track-1",
+                        title: "Track One",
+                        filePath: "artist/album/01.flac",
+                        fileModified: new Date(),
+                    },
+                    {
+                        id: "track-2",
+                        title: "Track Two",
+                        filePath: "artist/album/02.flac",
+                        fileModified: new Date(),
+                    },
                 ],
             });
 
-            const req = { params: { token: "zip-token" } } as unknown as Request;
+            const req = {
+                params: { token: "zip-token" },
+            } as unknown as Request;
             const res = createRes();
 
             await getSharedZip(req, res);
@@ -678,19 +834,36 @@ describe("shareLinks routes runtime", () => {
 
         it("returns 404 when no streamable tracks exist", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-zip", token: "zip-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-zip",
+                token: "zip-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
             mockAlbumFindUnique.mockResolvedValueOnce({
                 artist: { name: "Artist One" },
                 tracks: [
-                    { id: "track-1", title: "Track One", filePath: null, fileModified: null },
-                    { id: "track-2", title: "Track Two", filePath: null, fileModified: null },
+                    {
+                        id: "track-1",
+                        title: "Track One",
+                        filePath: null,
+                        fileModified: null,
+                    },
+                    {
+                        id: "track-2",
+                        title: "Track Two",
+                        filePath: null,
+                        fileModified: null,
+                    },
                 ],
             });
 
-            const req = { params: { token: "zip-token" } } as unknown as Request;
+            const req = {
+                params: { token: "zip-token" },
+            } as unknown as Request;
             const res = createRes();
 
             await getSharedZip(req, res);
@@ -702,19 +875,36 @@ describe("shareLinks routes runtime", () => {
 
         it("does not mutate play counts during zip download", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-zip", token: "zip-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-zip",
+                token: "zip-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
             mockAlbumFindUnique.mockResolvedValueOnce({
                 artist: { name: "Artist One" },
                 tracks: [
-                    { id: "track-1", title: "Track One", filePath: "artist/album/01.flac", fileModified: new Date() },
-                    { id: "track-2", title: "Track Two", filePath: "artist/album/02.flac", fileModified: new Date() },
+                    {
+                        id: "track-1",
+                        title: "Track One",
+                        filePath: "artist/album/01.flac",
+                        fileModified: new Date(),
+                    },
+                    {
+                        id: "track-2",
+                        title: "Track Two",
+                        filePath: "artist/album/02.flac",
+                        fileModified: new Date(),
+                    },
                 ],
             });
 
-            const req = { params: { token: "zip-token" } } as unknown as Request;
+            const req = {
+                params: { token: "zip-token" },
+            } as unknown as Request;
             const res = createRes();
 
             await getSharedZip(req, res);
@@ -727,24 +917,43 @@ describe("shareLinks routes runtime", () => {
     describe("GET /access/:token/cover", () => {
         it("proxies cover image for valid share link", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
 
-            const req = createReq({ params: { token: "valid-token" }, query: { url: "https://example.com/cover.jpg" }, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token" },
+                query: { url: "https://example.com/cover.jpg" },
+                headers: {},
+            });
             const res = createRes();
             await getSharedCover(req, res);
 
-            expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/jpeg");
-            expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "public, max-age=3600");
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Content-Type",
+                "image/jpeg",
+            );
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Cache-Control",
+                "public, max-age=3600",
+            );
             expect(res.send).toHaveBeenCalled();
         });
 
         it("returns 404 for invalid share token", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce(null);
 
-            const req = createReq({ params: { token: "invalid" }, query: { url: "https://example.com/cover.jpg" }, headers: {} });
+            const req = createReq({
+                params: { token: "invalid" },
+                query: { url: "https://example.com/cover.jpg" },
+                headers: {},
+            });
             const res = createRes();
             await getSharedCover(req, res);
 
@@ -753,12 +962,21 @@ describe("shareLinks routes runtime", () => {
 
         it("returns 400 when url param is missing", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
 
-            const req = createReq({ params: { token: "valid-token" }, query: {}, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token" },
+                query: {},
+                headers: {},
+            });
             const res = createRes();
             await getSharedCover(req, res);
 
@@ -767,13 +985,26 @@ describe("shareLinks routes runtime", () => {
 
         it("returns 404 when image fetch fails", async () => {
             mockShareLinkFindUnique.mockResolvedValueOnce({
-                id: "share-1", token: "valid-token", resourceType: "album",
-                resourceId: "album-1", revoked: false, expiresAt: null,
-                maxPlays: null, playCount: 0,
+                id: "share-1",
+                token: "valid-token",
+                resourceType: "album",
+                resourceId: "album-1",
+                revoked: false,
+                expiresAt: null,
+                maxPlays: null,
+                playCount: 0,
             });
-            mockFetchExternalImage.mockResolvedValueOnce({ ok: false, url: "https://example.com/cover.jpg", status: "not_found" });
+            mockFetchExternalImage.mockResolvedValueOnce({
+                ok: false,
+                url: "https://example.com/cover.jpg",
+                status: "not_found",
+            });
 
-            const req = createReq({ params: { token: "valid-token" }, query: { url: "https://example.com/cover.jpg" }, headers: {} });
+            const req = createReq({
+                params: { token: "valid-token" },
+                query: { url: "https://example.com/cover.jpg" },
+                headers: {},
+            });
             const res = createRes();
             await getSharedCover(req, res);
 

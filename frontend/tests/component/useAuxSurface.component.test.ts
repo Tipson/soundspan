@@ -10,8 +10,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 after(() => {
     try {
@@ -28,9 +29,8 @@ type AuxApi = ReturnType<
 >;
 
 async function mountAux() {
-    const { useAuxSurface } = await import(
-        "../../components/vibe/useAuxSurface"
-    );
+    const { useAuxSurface } =
+        await import("../../components/vibe/useAuxSurface");
     const { createRoot } = await import("react-dom/client");
 
     const latestRef: { current: AuxApi | null } = { current: null };
@@ -57,7 +57,8 @@ async function mountAux() {
 
     return {
         latest: () => {
-            if (!latestRef.current) throw new Error("useAuxSurface did not run");
+            if (!latestRef.current)
+                throw new Error("useAuxSurface did not run");
             return latestRef.current;
         },
         render,

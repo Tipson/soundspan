@@ -7,7 +7,10 @@ interface GradientSpinnerProps {
     className?: string;
 }
 
-const GradientSpinner = memo(function GradientSpinner({ size = "md", className = "" }: GradientSpinnerProps) {
+const GradientSpinner = memo(function GradientSpinner({
+    size = "md",
+    className = "",
+}: GradientSpinnerProps) {
     const sizeMap = {
         sm: { size: 16, strokeWidth: 2, radius: 6 },
         md: { size: 32, strokeWidth: 3, radius: 13 },
@@ -28,12 +31,33 @@ const GradientSpinner = memo(function GradientSpinner({ size = "md", className =
             viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
         >
             <defs>
-                <linearGradient id={`spinnerGrad-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style={{ stopColor: '#facc15', stopOpacity: 1 }} />
-                    <stop offset="25%" style={{ stopColor: '#f59e0b', stopOpacity: 1 }} />
-                    <stop offset="50%" style={{ stopColor: '#c026d3', stopOpacity: 1 }} />
-                    <stop offset="75%" style={{ stopColor: '#2323FF', stopOpacity: 1 }} />
-                    <stop offset="100%" style={{ stopColor: '#facc15', stopOpacity: 1 }} />
+                <linearGradient
+                    id={`spinnerGrad-${size}`}
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                >
+                    <stop
+                        offset="0%"
+                        style={{ stopColor: "#facc15", stopOpacity: 1 }}
+                    />
+                    <stop
+                        offset="25%"
+                        style={{ stopColor: "#f59e0b", stopOpacity: 1 }}
+                    />
+                    <stop
+                        offset="50%"
+                        style={{ stopColor: "#c026d3", stopOpacity: 1 }}
+                    />
+                    <stop
+                        offset="75%"
+                        style={{ stopColor: "#2323FF", stopOpacity: 1 }}
+                    />
+                    <stop
+                        offset="100%"
+                        style={{ stopColor: "#facc15", stopOpacity: 1 }}
+                    />
                 </linearGradient>
             </defs>
             <circle

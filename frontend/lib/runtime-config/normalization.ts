@@ -17,14 +17,14 @@ export type SegmentedVhsProfile = "balanced" | "legacy";
 export type RuntimeConfigEnvironment = Record<string, string | undefined>;
 
 const normalizeConfigString = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): string | null => {
     const normalized = value?.trim().toLowerCase();
     return normalized || null;
 };
 
 const normalizeBooleanConfig = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): boolean | null => {
     const normalized = normalizeConfigString(value);
     if (!normalized) {
@@ -40,7 +40,7 @@ const normalizeBooleanConfig = (
 };
 
 export const normalizeStreamingEngineMode = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): StreamingEngineMode | null => {
     const normalized = normalizeConfigString(value);
     if (!normalized) {
@@ -53,7 +53,7 @@ export const normalizeStreamingEngineMode = (
 };
 
 export const normalizeSegmentedVhsProfile = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): SegmentedVhsProfile | null => {
     const normalized = normalizeConfigString(value);
     if (!normalized) {
@@ -66,7 +66,7 @@ export const normalizeSegmentedVhsProfile = (
 };
 
 export const normalizeSegmentedStartupFallbackTimeoutMs = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): number | null => {
     const normalized = normalizeConfigString(value);
     if (!normalized) {
@@ -80,24 +80,24 @@ export const normalizeSegmentedStartupFallbackTimeoutMs = (
 
     return Math.min(
         SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MAX_MS,
-        Math.max(SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MIN_MS, parsed)
+        Math.max(SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MIN_MS, parsed),
     );
 };
 
 export const normalizeListenTogetherSegmentedPlaybackEnabled = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): boolean | null => {
     return normalizeBooleanConfig(value);
 };
 
 export const normalizeSegmentedSessionPrewarmEnabled = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): boolean | null => {
     return normalizeBooleanConfig(value);
 };
 
 const normalizePositiveNumber = (
-    value: string | null | undefined
+    value: string | null | undefined,
 ): number | null => {
     if (value == null) {
         return null;
@@ -112,7 +112,7 @@ const normalizePositiveNumber = (
 };
 
 export const normalizeSegmentedEffectiveFragmentDurationSec = (
-    env: RuntimeConfigEnvironment
+    env: RuntimeConfigEnvironment,
 ): number => {
     const segmentDurationSec =
         normalizePositiveNumber(env.SEGMENTED_LOCAL_SEG_DURATION_SEC) ??
@@ -123,25 +123,25 @@ export const normalizeSegmentedEffectiveFragmentDurationSec = (
 
     return Number.parseFloat(
         (segmentDurationSec * fragmentDurationRatio).toFixed(
-            DASH_FRAGMENT_DURATION_PRECISION_DIGITS
-        )
+            DASH_FRAGMENT_DURATION_PRECISION_DIGITS,
+        ),
     );
 };
 
 export const buildRuntimeConfigPayload = (
-    env: RuntimeConfigEnvironment
+    env: RuntimeConfigEnvironment,
 ): string => {
     const mode = normalizeStreamingEngineMode(env.STREAMING_ENGINE_MODE);
     const modeJson = mode ? JSON.stringify(mode) : "null";
     const segmentedVhsProfile = normalizeSegmentedVhsProfile(
-        env.SEGMENTED_VHS_PROFILE
+        env.SEGMENTED_VHS_PROFILE,
     );
     const segmentedVhsProfileJson = segmentedVhsProfile
         ? JSON.stringify(segmentedVhsProfile)
         : "null";
     const segmentedStartupFallbackTimeoutMs =
         normalizeSegmentedStartupFallbackTimeoutMs(
-            env.SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MS
+            env.SEGMENTED_STARTUP_FALLBACK_TIMEOUT_MS,
         );
     const segmentedStartupFallbackTimeoutJson =
         segmentedStartupFallbackTimeoutMs !== null
@@ -149,7 +149,7 @@ export const buildRuntimeConfigPayload = (
             : "null";
     const listenTogetherSegmentedPlaybackEnabled =
         normalizeListenTogetherSegmentedPlaybackEnabled(
-            env.LISTEN_TOGETHER_SEGMENTED_PLAYBACK_ENABLED
+            env.LISTEN_TOGETHER_SEGMENTED_PLAYBACK_ENABLED,
         );
     const listenTogetherSegmentedPlaybackEnabledJson =
         listenTogetherSegmentedPlaybackEnabled !== null
@@ -157,7 +157,7 @@ export const buildRuntimeConfigPayload = (
             : "null";
     const segmentedSessionPrewarmEnabled =
         normalizeSegmentedSessionPrewarmEnabled(
-            env.SEGMENTED_SESSION_PREWARM_ENABLED
+            env.SEGMENTED_SESSION_PREWARM_ENABLED,
         );
     const segmentedSessionPrewarmEnabledJson =
         segmentedSessionPrewarmEnabled !== null
@@ -166,7 +166,7 @@ export const buildRuntimeConfigPayload = (
     const segmentedEffectiveFragmentDurationSec =
         normalizeSegmentedEffectiveFragmentDurationSec(env);
     const segmentedEffectiveFragmentDurationSecJson = String(
-        segmentedEffectiveFragmentDurationSec
+        segmentedEffectiveFragmentDurationSec,
     );
 
     return `window.__SOUNDSPAN_RUNTIME_CONFIG__ = Object.assign(

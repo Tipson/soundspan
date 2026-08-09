@@ -12,10 +12,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Mock factory helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_mock_track(
     *,
@@ -60,8 +60,7 @@ def _make_mock_playlist(
     playlist.num_tracks = num_tracks
     playlist.image = MagicMock(
         return_value=(
-            f"https://resources.tidal.com/images/"
-            f"{image_id.replace('-', '/')}/320x320.jpg"
+            f"https://resources.tidal.com/images/{image_id.replace('-', '/')}/320x320.jpg"
         )
     )
     playlist.tracks = MagicMock(return_value=tracks or [])
@@ -82,8 +81,7 @@ def _make_mock_mix(
     mix.sub_title = sub_title
     mix.image = MagicMock(
         return_value=(
-            f"https://resources.tidal.com/images/"
-            f"{image_id.replace('-', '/')}/320x320.jpg"
+            f"https://resources.tidal.com/images/{image_id.replace('-', '/')}/320x320.jpg"
         )
     )
     mix.items = MagicMock(return_value=[_make_mock_track()])
@@ -129,6 +127,7 @@ def _make_mock_genre(
 # 1. _tidal_image_url serialization
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestTidalImageUrl:
     """Verify UUID-to-URL conversion for TIDAL image resources."""
 
@@ -136,36 +135,27 @@ class TestTidalImageUrl:
         """Dashes in the image UUID should be replaced with slashes."""
         from app import _tidal_image_url
 
-        result = _tidal_image_url(
-            "ab67616d-0000-b273-1234567890ab", w=480, h=480
-        )
+        result = _tidal_image_url("ab67616d-0000-b273-1234567890ab", w=480, h=480)
         assert result == (
-            "https://resources.tidal.com/images/"
-            "ab67616d/0000/b273/1234567890ab/480x480.jpg"
+            "https://resources.tidal.com/images/ab67616d/0000/b273/1234567890ab/480x480.jpg"
         )
 
     def test_different_dimensions(self):
         """Different width/height should be reflected in the URL."""
         from app import _tidal_image_url
 
-        result = _tidal_image_url(
-            "ab67616d-0000-b273-1234567890ab", w=1280, h=1280
-        )
+        result = _tidal_image_url("ab67616d-0000-b273-1234567890ab", w=1280, h=1280)
         assert result == (
-            "https://resources.tidal.com/images/"
-            "ab67616d/0000/b273/1234567890ab/1280x1280.jpg"
+            "https://resources.tidal.com/images/ab67616d/0000/b273/1234567890ab/1280x1280.jpg"
         )
 
     def test_rectangular_dimensions(self):
         """Non-square dimensions should be supported."""
         from app import _tidal_image_url
 
-        result = _tidal_image_url(
-            "ab67616d-0000-b273-1234567890ab", w=640, h=480
-        )
+        result = _tidal_image_url("ab67616d-0000-b273-1234567890ab", w=640, h=480)
         assert result == (
-            "https://resources.tidal.com/images/"
-            "ab67616d/0000/b273/1234567890ab/640x480.jpg"
+            "https://resources.tidal.com/images/ab67616d/0000/b273/1234567890ab/640x480.jpg"
         )
 
     def test_none_image_id_returns_none(self):
@@ -186,6 +176,7 @@ class TestTidalImageUrl:
 # ═══════════════════════════════════════════════════════════════════════
 # 2. _serialize_page
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestSerializePage:
     """Verify that a tidalapi Page is serialized to shelf format."""
@@ -249,6 +240,7 @@ class TestSerializePage:
 # 3. _serialize_mix
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestSerializeMix:
     """Verify mix serialization."""
 
@@ -284,6 +276,7 @@ class TestSerializeMix:
 # 4. _serialize_playlist_preview
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestSerializePlaylistPreview:
     """Verify playlist preview serialization (list views)."""
 
@@ -317,6 +310,7 @@ class TestSerializePlaylistPreview:
 # ═══════════════════════════════════════════════════════════════════════
 # 5. _serialize_playlist_detail
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestSerializePlaylistDetail:
     """Verify detailed playlist serialization (with tracks)."""
@@ -386,6 +380,7 @@ class TestSerializePlaylistDetail:
 # 6. _serialize_genre
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestSerializeGenre:
     """Verify genre serialization."""
 
@@ -404,6 +399,7 @@ class TestSerializeGenre:
 # ═══════════════════════════════════════════════════════════════════════
 # 7. _build_browse_session
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestBuildBrowseSession:
     """Verify that _build_browse_session constructs a tidalapi.Session."""
@@ -480,6 +476,7 @@ class TestBuildBrowseSession:
 # 8. Browse endpoint HTTP tests
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestBrowseHomeEndpoint:
     """Tests for GET /user/browse/home."""
 
@@ -505,9 +502,7 @@ class TestBrowseHomeEndpoint:
         mock_session.home.return_value = mock_page
 
         with patch("app._build_browse_session", return_value=mock_session):
-            resp = await client.get(
-                "/user/browse/home", params={"user_id": "test"}
-            )
+            resp = await client.get("/user/browse/home", params={"user_id": "test"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -531,9 +526,7 @@ class TestBrowseExploreEndpoint:
         mock_session.explore.return_value = mock_page
 
         with patch("app._build_browse_session", return_value=mock_session):
-            resp = await client.get(
-                "/user/browse/explore", params={"user_id": "test"}
-            )
+            resp = await client.get("/user/browse/explore", params={"user_id": "test"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -564,9 +557,7 @@ class TestBrowseGenresEndpoint:
         mock_session.genres.return_value = mock_page
 
         with patch("app._build_browse_session", return_value=mock_session):
-            resp = await client.get(
-                "/user/browse/genres", params={"user_id": "test"}
-            )
+            resp = await client.get("/user/browse/genres", params={"user_id": "test"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -598,9 +589,7 @@ class TestBrowseMoodsEndpoint:
         mock_session.moods.return_value = mock_page
 
         with patch("app._build_browse_session", return_value=mock_session):
-            resp = await client.get(
-                "/user/browse/moods", params={"user_id": "test"}
-            )
+            resp = await client.get("/user/browse/moods", params={"user_id": "test"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -631,9 +620,7 @@ class TestBrowseMixesEndpoint:
         mock_session.mixes.return_value = mock_page
 
         with patch("app._build_browse_session", return_value=mock_session):
-            resp = await client.get(
-                "/user/browse/mixes", params={"user_id": "test"}
-            )
+            resp = await client.get("/user/browse/mixes", params={"user_id": "test"})
 
         assert resp.status_code == 200
         data = resp.json()

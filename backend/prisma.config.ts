@@ -8,8 +8,9 @@ import { defineConfig, env } from "prisma/config";
 // runs during Docker builds with no database available, so only wire the
 // datasource when DATABASE_URL is present; commands that actually need a
 // database (migrate/studio) fail fast with a missing-datasource error instead.
-const datasource =
-    process.env.DATABASE_URL ? { url: env("DATABASE_URL") } : undefined;
+const datasource = process.env.DATABASE_URL
+    ? { url: env("DATABASE_URL") }
+    : undefined;
 
 export default defineConfig({
     schema: "prisma/schema.prisma",

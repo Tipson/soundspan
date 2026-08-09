@@ -8,7 +8,10 @@ import { useAudioControls } from "@/lib/audio-controls-context";
 import { Track } from "@/lib/audio-state-context";
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { RadioStationCard, RadioStationCardStation } from "@/components/ui/RadioStationCard";
+import {
+    RadioStationCard,
+    RadioStationCardStation,
+} from "@/components/ui/RadioStationCard";
 import {
     GenreCount,
     selectFeaturedRadioGenres,
@@ -120,7 +123,6 @@ const getGenreColor = (genre: string): string => {
     return GENRE_COLORS[lower] || GENRE_COLORS.default;
 };
 
-
 /**
  * Fetches library genre and decade data, then builds three station lists:
  * quickStart (static stations), genres, and decades.
@@ -140,12 +142,15 @@ export function useLibraryRadioData(skip = false) {
                 ]);
 
                 const validGenres = selectFeaturedRadioGenres(
-                    genresRes.genres || []
+                    genresRes.genres || [],
                 );
                 setGenres(validGenres);
                 setDecades((decadesRes.decades || []).slice(0, 4));
             } catch (error) {
-                sharedFrontendLogger.error("Failed to fetch radio data:", error);
+                sharedFrontendLogger.error(
+                    "Failed to fetch radio data:",
+                    error,
+                );
             } finally {
                 setIsLoading(false);
             }
@@ -164,7 +169,7 @@ export function useLibraryRadioData(skip = false) {
                 filter: { type: "genre" as const, value: g.genre },
                 minTracks: 15,
             })),
-        [genres]
+        [genres],
     );
 
     const decadeStations: RadioStation[] = useMemo(
@@ -177,7 +182,7 @@ export function useLibraryRadioData(skip = false) {
                 filter: { type: "decade" as const, value: d.decade.toString() },
                 minTracks: 15,
             })),
-        [decades]
+        [decades],
     );
 
     return {
@@ -186,7 +191,7 @@ export function useLibraryRadioData(skip = false) {
         decadeStations,
         allStations: useMemo(
             () => [...STATIC_STATIONS, ...genreStations, ...decadeStations],
-            [genreStations, decadeStations]
+            [genreStations, decadeStations],
         ),
         isLoading,
     };
@@ -203,14 +208,19 @@ interface LibraryRadioStationsProps {
  * Renders the LibraryRadioStations component as a responsive grid of
  * full-size square radio station cards with mosaic cover art.
  */
-export function LibraryRadioStations({ stations: stationsProp, externalLoading }: LibraryRadioStationsProps = {}) {
+export function LibraryRadioStations({
+    stations: stationsProp,
+    externalLoading,
+}: LibraryRadioStationsProps = {}) {
     const { playTracks } = useAudioControls();
     const [loadingStation, setLoadingStation] = useState<string | null>(null);
 
     // When no stations prop, fetch internally (backward compat for home page)
     const internalData = useLibraryRadioData(!!stationsProp);
     const allStations = stationsProp ?? internalData.allStations;
-    const isLoading = stationsProp ? (externalLoading ?? false) : internalData.isLoading;
+    const isLoading = stationsProp
+        ? (externalLoading ?? false)
+        : internalData.isLoading;
 
     const startRadio = async (station: RadioStation) => {
         setLoadingStation(station.id);
@@ -224,7 +234,7 @@ export function LibraryRadioStations({ stations: stationsProp, externalLoading }
             params.set("limit", "100");
 
             const response = await api.get<{ tracks: Track[] }>(
-                `/library/radio?${params.toString()}`
+                `/library/radio?${params.toString()}`,
             );
 
             if (!response.tracks || response.tracks.length === 0) {

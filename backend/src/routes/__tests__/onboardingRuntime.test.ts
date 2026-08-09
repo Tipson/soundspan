@@ -73,15 +73,13 @@ jest.mock("jsonwebtoken", () => ({
 
 import router from "../onboarding";
 
-function getHandler(
-    path: string,
-    method: "get" | "post" | "put" | "delete"
-) {
+function getHandler(path: string, method: "get" | "post" | "put" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
-    if (!layer) throw new Error(`${method.toUpperCase()} route not found: ${path}`);
+    if (!layer)
+        throw new Error(`${method.toUpperCase()} route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -113,7 +111,8 @@ describe("onboarding route runtime", () => {
     beforeEach(() => {
         jest.clearAllMocks();
 
-        process.env.SETTINGS_ENCRYPTION_KEY = "default-encryption-key-change-me";
+        process.env.SETTINGS_ENCRYPTION_KEY =
+            "default-encryption-key-change-me";
 
         prisma.user.count.mockResolvedValue(1);
         prisma.user.findUnique.mockResolvedValue(null);
@@ -168,7 +167,7 @@ describe("onboarding route runtime", () => {
         expect(prisma.user.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({ role: "admin" }),
-            })
+            }),
         );
 
         // Second registration attempt (count=1) — rejected (registration closed)
@@ -190,7 +189,10 @@ describe("onboarding route runtime", () => {
         const lidarrDisabledRes = createRes();
         await saveLidarr(lidarrDisabledReq, lidarrDisabledRes);
         expect(lidarrDisabledRes.statusCode).toBe(200);
-        expect(lidarrDisabledRes.body).toEqual({ success: true, tested: false });
+        expect(lidarrDisabledRes.body).toEqual({
+            success: true,
+            tested: false,
+        });
 
         const lidarrEnabledReq = {
             user: { id: "u1" },
@@ -218,10 +220,16 @@ describe("onboarding route runtime", () => {
 
         const lidarrCatchReq = {
             user: { id: "u1" },
-            body: { enabled: true, url: "http://lidarr.local", apiKey: "lidarr-key" },
+            body: {
+                enabled: true,
+                url: "http://lidarr.local",
+                apiKey: "lidarr-key",
+            },
         } as any;
         const lidarrCatchRes = createRes();
-        prisma.systemSettings.upsert.mockRejectedValueOnce(new Error("db down"));
+        prisma.systemSettings.upsert.mockRejectedValueOnce(
+            new Error("db down"),
+        );
         await saveLidarr(lidarrCatchReq, lidarrCatchRes);
         expect(lidarrCatchRes.statusCode).toBe(500);
         expect(lidarrCatchRes.body).toEqual({
@@ -255,7 +263,11 @@ describe("onboarding route runtime", () => {
 
         const absZodReq = {
             user: { id: "u1" },
-            body: { enabled: "yes", url: "http://abs.local", apiKey: "abs-key" },
+            body: {
+                enabled: "yes",
+                url: "http://abs.local",
+                apiKey: "abs-key",
+            },
         } as any;
         const absZodRes = createRes();
         await saveAudiobookshelf(absZodReq, absZodRes);
@@ -271,10 +283,14 @@ describe("onboarding route runtime", () => {
             },
         } as any;
         const absCatchRes = createRes();
-        prisma.systemSettings.upsert.mockRejectedValueOnce(new Error("db down"));
+        prisma.systemSettings.upsert.mockRejectedValueOnce(
+            new Error("db down"),
+        );
         await saveAudiobookshelf(absCatchReq, absCatchRes);
         expect(absCatchRes.statusCode).toBe(500);
-        expect(absCatchRes.body).toEqual({ error: "Failed to save configuration" });
+        expect(absCatchRes.body).toEqual({
+            error: "Failed to save configuration",
+        });
     });
 
     it("saves soulseek settings with credential validation", async () => {
@@ -318,7 +334,9 @@ describe("onboarding route runtime", () => {
             body: { enabled: true, username: "soul", password: "secret" },
         } as any;
         const soulseekCatchRes = createRes();
-        prisma.systemSettings.upsert.mockRejectedValueOnce(new Error("db down"));
+        prisma.systemSettings.upsert.mockRejectedValueOnce(
+            new Error("db down"),
+        );
         await saveSoulseek(soulseekCatchReq, soulseekCatchRes);
         expect(soulseekCatchRes.statusCode).toBe(500);
         expect(soulseekCatchRes.body).toEqual({
@@ -332,7 +350,10 @@ describe("onboarding route runtime", () => {
         await saveEnrichment(invalidReq, invalidRes);
         expect(invalidRes.statusCode).toBe(400);
 
-        const enrichReq = { user: { id: "u1" }, body: { enabled: true } } as any;
+        const enrichReq = {
+            user: { id: "u1" },
+            body: { enabled: true },
+        } as any;
         const enrichRes = createRes();
         await saveEnrichment(enrichReq, enrichRes);
         expect(enrichRes.statusCode).toBe(200);
@@ -387,7 +408,9 @@ describe("onboarding route runtime", () => {
 
         prisma.user.count.mockResolvedValueOnce(1);
         mockVerifyAccessToken.mockReturnValueOnce({ userId: "u1" });
-        prisma.user.findUnique.mockResolvedValueOnce({ onboardingComplete: false });
+        prisma.user.findUnique.mockResolvedValueOnce({
+            onboardingComplete: false,
+        });
         const tokenReq = {
             headers: { authorization: "Bearer token-1" },
         } as any;
@@ -401,7 +424,9 @@ describe("onboarding route runtime", () => {
 
         prisma.user.count.mockResolvedValueOnce(1);
         mockVerifyAccessToken.mockReturnValueOnce({ userId: "u1" });
-        prisma.user.findUnique.mockResolvedValueOnce({ onboardingComplete: true });
+        prisma.user.findUnique.mockResolvedValueOnce({
+            onboardingComplete: true,
+        });
         const onboardingCompleteReq = {
             headers: { authorization: "Bearer token-2" },
         } as any;

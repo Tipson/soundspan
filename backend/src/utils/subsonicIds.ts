@@ -66,7 +66,9 @@ export function parseSubsonicId(
     }
 
     if (!expectedType) {
-        throw new SubsonicIdError("Unprefixed ID requires expected entity type");
+        throw new SubsonicIdError(
+            "Unprefixed ID requires expected entity type",
+        );
     }
 
     return { type: expectedType, id: trimmed };

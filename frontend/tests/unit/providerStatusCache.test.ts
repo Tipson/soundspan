@@ -15,30 +15,30 @@ test("provider status cache keeps successful availability longer than failures",
     assert.equal(
         isProviderStatusCacheFresh(
             positive,
-            now + PROVIDER_STATUS_POSITIVE_TTL_MS - 1
+            now + PROVIDER_STATUS_POSITIVE_TTL_MS - 1,
         ),
-        true
+        true,
     );
     assert.equal(
         isProviderStatusCacheFresh(
             positive,
-            now + PROVIDER_STATUS_POSITIVE_TTL_MS
+            now + PROVIDER_STATUS_POSITIVE_TTL_MS,
         ),
-        false
+        false,
     );
 
     assert.equal(
         isProviderStatusCacheFresh(
             negative,
-            now + PROVIDER_STATUS_NEGATIVE_TTL_MS - 1
+            now + PROVIDER_STATUS_NEGATIVE_TTL_MS - 1,
         ),
-        true
+        true,
     );
     assert.equal(
         isProviderStatusCacheFresh(
             negative,
-            now + PROVIDER_STATUS_NEGATIVE_TTL_MS
+            now + PROVIDER_STATUS_NEGATIVE_TTL_MS,
         ),
-        false
+        false,
     );
 });

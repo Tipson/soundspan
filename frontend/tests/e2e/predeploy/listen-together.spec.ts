@@ -10,7 +10,7 @@ test.describe("Listen Together", () => {
         await page.goto("/listen-together");
 
         await expect(
-            page.getByRole("heading", { name: /listen together/i })
+            page.getByRole("heading", { name: /listen together/i }),
         ).toBeVisible();
         await expect(page.getByText("Create a Group")).toBeVisible({
             timeout: 10000,
@@ -21,7 +21,7 @@ test.describe("Listen Together", () => {
         page,
     }) => {
         const response = await page.request.get(
-            "/socket.io/listen-together/?EIO=4&transport=polling&t=predeploy"
+            "/socket.io/listen-together/?EIO=4&transport=polling&t=predeploy",
         );
         const bodyPrefix = (await response.text()).trim().slice(0, 120);
         const contentType =

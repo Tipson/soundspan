@@ -1,8 +1,4 @@
-import {
-    parseSubsonicId,
-    SubsonicIdError,
-    toSubsonicId,
-} from "../subsonicIds";
+import { parseSubsonicId, SubsonicIdError, toSubsonicId } from "../subsonicIds";
 
 describe("subsonicIds", () => {
     it("formats IDs with deterministic prefixes", () => {
@@ -38,7 +34,9 @@ describe("subsonicIds", () => {
     });
 
     it("rejects mismatched prefixed IDs", () => {
-        expect(() => parseSubsonicId("al-123", "artist")).toThrow(SubsonicIdError);
+        expect(() => parseSubsonicId("al-123", "artist")).toThrow(
+            SubsonicIdError,
+        );
     });
 
     it("requires expected type for unprefixed IDs", () => {

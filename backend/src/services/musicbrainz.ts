@@ -25,7 +25,7 @@ class MusicBrainzService {
         cacheKey: string,
         requestFn: () => Promise<T>,
         ttlSeconds = 2592000, // 30 days
-        fallbackValue?: T
+        fallbackValue?: T,
     ): Promise<T> {
         try {
             const cached = await redisClient.get(cacheKey);
@@ -42,7 +42,7 @@ class MusicBrainzService {
             data = await rateLimiter.execute("musicbrainz", requestFn);
         } catch (error: any) {
             logger.warn(
-                `[MusicBrainz] Request failed for key "${cacheKey}": ${error.message}`
+                `[MusicBrainz] Request failed for key "${cacheKey}": ${error.message}`,
             );
 
             // Preserve 404 behavior for callers that use it as control flow
@@ -54,7 +54,11 @@ class MusicBrainzService {
             if (fallbackValue !== undefined) {
                 try {
                     // Short cache for fallback prevents immediate repeated failures.
-                    await redisClient.setEx(cacheKey, 120, JSON.stringify(fallbackValue));
+                    await redisClient.setEx(
+                        cacheKey,
+                        120,
+                        JSON.stringify(fallbackValue),
+                    );
                 } catch (err) {
                     logger.warn("Redis set fallback error:", err);
                 }
@@ -80,16 +84,21 @@ class MusicBrainzService {
     async searchArtist(query: string, limit = 10) {
         const cacheKey = `mb:search:artist:${query}:${limit}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.client.get("/artist", {
-                params: {
-                    query,
-                    limit,
-                    fmt: "json",
-                },
-            });
-            return response.data.artists || [];
-        }, 2592000, []);
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                const response = await this.client.get("/artist", {
+                    params: {
+                        query,
+                        limit,
+                        fmt: "json",
+                    },
+                });
+                return response.data.artists || [];
+            },
+            2592000,
+            [],
+        );
     }
 
     async searchReleaseGroups(query: string, artistName?: string, limit = 10) {
@@ -97,98 +106,137 @@ class MusicBrainzService {
         const normalizedArtist = artistName?.trim() || "";
         const cacheKey = `mb:search:release-group:${normalizedQuery}:${normalizedArtist}:${limit}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            let searchQuery = `releasegroup:"${this.escapeLucene(normalizedQuery)}"`;
-            if (normalizedArtist) {
-                searchQuery += ` AND artist:"${this.escapeLucene(normalizedArtist)}"`;
-            }
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                let searchQuery = `releasegroup:"${this.escapeLucene(normalizedQuery)}"`;
+                if (normalizedArtist) {
+                    searchQuery += ` AND artist:"${this.escapeLucene(normalizedArtist)}"`;
+                }
 
-            const response = await this.client.get("/release-group", {
-                params: {
-                    query: searchQuery,
-                    limit,
-                    fmt: "json",
-                },
-            });
+                const response = await this.client.get("/release-group", {
+                    params: {
+                        query: searchQuery,
+                        limit,
+                        fmt: "json",
+                    },
+                });
 
-            return response.data["release-groups"] || [];
-        }, 2592000, []);
+                return response.data["release-groups"] || [];
+            },
+            2592000,
+            [],
+        );
     }
 
     async getArtist(mbid: string, includes: string[] = ["url-rels", "tags"]) {
         const cacheKey = `mb:artist:${mbid}:${includes.join(",")}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.client.get(`/artist/${mbid}`, {
-                params: {
-                    inc: includes.join("+"),
-                    fmt: "json",
-                },
-            });
-            return response.data;
-        }, 2592000, null);
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                const response = await this.client.get(`/artist/${mbid}`, {
+                    params: {
+                        inc: includes.join("+"),
+                        fmt: "json",
+                    },
+                });
+                return response.data;
+            },
+            2592000,
+            null,
+        );
     }
 
     async getReleaseGroups(
         artistMbid: string,
         types: string[] = ["album", "ep"],
-        limit = 100
+        limit = 100,
     ) {
         const cacheKey = `mb:rg:${artistMbid}:${types.join(",")}:${limit}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.client.get("/release-group", {
-                params: {
-                    artist: artistMbid,
-                    type: types.join("|"),
-                    limit,
-                    fmt: "json",
-                },
-            });
-            return response.data["release-groups"] || [];
-        }, 2592000, []);
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                const response = await this.client.get("/release-group", {
+                    params: {
+                        artist: artistMbid,
+                        type: types.join("|"),
+                        limit,
+                        fmt: "json",
+                    },
+                });
+                return response.data["release-groups"] || [];
+            },
+            2592000,
+            [],
+        );
     }
 
     async getReleaseGroup(rgMbid: string) {
         const cacheKey = `mb:rg:${rgMbid}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.client.get(`/release-group/${rgMbid}`, {
-                params: {
-                    inc: "artist-credits+releases",
-                    fmt: "json",
-                },
-            });
-            return response.data;
-        }, 2592000, null);
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                const response = await this.client.get(
+                    `/release-group/${rgMbid}`,
+                    {
+                        params: {
+                            inc: "artist-credits+releases",
+                            fmt: "json",
+                        },
+                    },
+                );
+                return response.data;
+            },
+            2592000,
+            null,
+        );
     }
 
     async getReleaseGroupDetails(rgMbid: string) {
         const cacheKey = `mb:rg:details:${rgMbid}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.client.get(`/release-group/${rgMbid}`, {
-                params: {
-                    inc: "artist-credits+releases+labels",
-                    fmt: "json",
-                },
-            });
-            return response.data;
-        }, 2592000, null);
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                const response = await this.client.get(
+                    `/release-group/${rgMbid}`,
+                    {
+                        params: {
+                            inc: "artist-credits+releases+labels",
+                            fmt: "json",
+                        },
+                    },
+                );
+                return response.data;
+            },
+            2592000,
+            null,
+        );
     }
 
     async getRelease(releaseMbid: string) {
         const cacheKey = `mb:release:${releaseMbid}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.client.get(`/release/${releaseMbid}`, {
-                params: {
-                    inc: "recordings+artist-credits+labels",
-                    fmt: "json",
-                },
-            });
-            return response.data;
-        }, 2592000, null);
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                const response = await this.client.get(
+                    `/release/${releaseMbid}`,
+                    {
+                        params: {
+                            inc: "recordings+artist-credits+labels",
+                            fmt: "json",
+                        },
+                    },
+                );
+                return response.data;
+            },
+            2592000,
+            null,
+        );
     }
 
     extractPrimaryArtist(artistCredits: any[]): string {
@@ -223,7 +271,7 @@ class MusicBrainzService {
                 // Remove "- YEAR Remaster", "- Remastered YEAR", "- Deluxe Edition", etc.
                 .replace(
                     /\s*-\s*(\d{4}\s+)?(deluxe|remastered|remaster|edition|version|expanded|bonus|explicit|clean|single|radio edit|remix|acoustic|live|mono|stereo)(\s+\d{4})?\s*(edition|version|mix)?\s*/gi,
-                    " "
+                    " ",
                 )
                 // Also catch standalone year suffixes like "- 2011"
                 .replace(/\s*-\s*\d{4}\s*$/gi, " ")
@@ -250,7 +298,7 @@ class MusicBrainzService {
      */
     async searchAlbum(
         albumTitle: string,
-        artistName: string
+        artistName: string,
     ): Promise<{ id: string; title: string } | null> {
         const cacheKey = `mb:search:album:${artistName}:${albumTitle}`;
 
@@ -323,7 +371,7 @@ class MusicBrainzService {
                     .join(" "); // First 3 words
                 const simpleArtist = normalizedArtist.split(" ")[0]; // First word of artist
                 const query3 = `${this.escapeLucene(
-                    simpleTitle
+                    simpleTitle,
                 )} AND artist:${this.escapeLucene(simpleArtist)}`;
 
                 const response3 = await this.client.get("/release-group", {
@@ -368,7 +416,7 @@ class MusicBrainzService {
      */
     async searchRecording(
         trackTitle: string,
-        artistName: string
+        artistName: string,
     ): Promise<{
         albumName: string;
         albumMbid: string;
@@ -401,10 +449,10 @@ class MusicBrainzService {
                 const allRecordings = response.data.recordings || [];
 
                 logger.debug(
-                    `[MusicBrainz] Query: "${trackTitle}" by "${artistName}"`
+                    `[MusicBrainz] Query: "${trackTitle}" by "${artistName}"`,
                 );
                 logger.debug(
-                    `[MusicBrainz] Found ${allRecordings.length} total recordings`
+                    `[MusicBrainz] Found ${allRecordings.length} total recordings`,
                 );
 
                 // Log first 5 recordings for debugging
@@ -418,7 +466,7 @@ class MusicBrainzService {
                     logger.debug(
                         `   ${i + 1}. [${disambig}] → ${
                             albumNames || "(no albums)"
-                        }`
+                        }`,
                     );
                 });
 
@@ -436,7 +484,7 @@ class MusicBrainzService {
                 });
 
                 logger.debug(
-                    `[MusicBrainz] After filtering live/demo: ${recordings.length} studio recordings`
+                    `[MusicBrainz] After filtering live/demo: ${recordings.length} studio recordings`,
                 );
 
                 if (recordings.length === 0) {
@@ -445,7 +493,7 @@ class MusicBrainzService {
                     const normalizedArtist =
                         this.normalizeForSearch(artistName);
                     const fuzzyQuery = `${this.escapeLucene(
-                        normalizedTitle
+                        normalizedTitle,
                     )} AND artist:${this.escapeLucene(normalizedArtist)}`;
 
                     const fuzzyResponse = await this.client.get("/recording", {
@@ -469,7 +517,9 @@ class MusicBrainzService {
                             recArtist
                                 .toLowerCase()
                                 .includes(
-                                    normalizedArtist.toLowerCase().split(" ")[0]
+                                    normalizedArtist
+                                        .toLowerCase()
+                                        .split(" ")[0],
                                 )
                         ) {
                             const result = this.extractAlbumFromRecording(rec);
@@ -483,7 +533,7 @@ class MusicBrainzService {
 
                     if (strippedTitle !== normalizedTitle) {
                         logger.debug(
-                            `[MusicBrainz] Trying punctuation-stripped search: "${strippedTitle}" by ${strippedArtist}`
+                            `[MusicBrainz] Trying punctuation-stripped search: "${strippedTitle}" by ${strippedArtist}`,
                         );
 
                         const strippedQuery = `${strippedTitle} AND artist:${strippedArtist}`;
@@ -496,13 +546,13 @@ class MusicBrainzService {
                                     fmt: "json",
                                     inc: "releases+release-groups+artists",
                                 },
-                            }
+                            },
                         );
 
                         const strippedRecordings =
                             strippedResponse.data.recordings || [];
                         logger.debug(
-                            `[MusicBrainz] Punctuation-stripped search found ${strippedRecordings.length} recordings`
+                            `[MusicBrainz] Punctuation-stripped search found ${strippedRecordings.length} recordings`,
                         );
 
                         for (const rec of strippedRecordings) {
@@ -516,14 +566,14 @@ class MusicBrainzService {
                                     .includes(
                                         strippedArtist
                                             .toLowerCase()
-                                            .split(" ")[0]
+                                            .split(" ")[0],
                                     )
                             ) {
                                 const result =
                                     this.extractAlbumFromRecording(rec);
                                 if (result) {
                                     logger.debug(
-                                        `[MusicBrainz] Found via punctuation-stripped search: ${result.albumName}`
+                                        `[MusicBrainz] Found via punctuation-stripped search: ${result.albumName}`,
                                     );
                                     return result;
                                 }
@@ -539,30 +589,30 @@ class MusicBrainzService {
                     const disambig =
                         rec.disambiguation || "(no disambiguation)";
                     logger.debug(
-                        `[MusicBrainz] Trying recording: "${rec.title}" [${disambig}]`
+                        `[MusicBrainz] Trying recording: "${rec.title}" [${disambig}]`,
                     );
                     const result = this.extractAlbumFromRecording(rec, false);
                     if (result) {
                         logger.debug(
-                            `[MusicBrainz] Found album: "${result.albumName}" (MBID: ${result.albumMbid})`
+                            `[MusicBrainz] Found album: "${result.albumName}" (MBID: ${result.albumMbid})`,
                         );
                         return result; // Found a good album
                     } else {
                         logger.debug(
-                            `[MusicBrainz] No valid album found for this recording`
+                            `[MusicBrainz] No valid album found for this recording`,
                         );
                     }
                 }
 
                 // Fallback: Try again accepting Singles/EPs as last resort
                 logger.debug(
-                    `[MusicBrainz] No official albums found, trying to find Singles/EPs...`
+                    `[MusicBrainz] No official albums found, trying to find Singles/EPs...`,
                 );
                 for (const rec of recordings) {
                     const result = this.extractAlbumFromRecording(rec, true);
                     if (result) {
                         logger.debug(
-                            `[MusicBrainz] Found Single/EP: "${result.albumName}" (MBID: ${result.albumMbid})`
+                            `[MusicBrainz] Found Single/EP: "${result.albumName}" (MBID: ${result.albumMbid})`,
                         );
                         return result;
                     }
@@ -570,13 +620,13 @@ class MusicBrainzService {
 
                 // No good albums found in any recording
                 logger.debug(
-                    `[MusicBrainz] No official albums or singles found for "${trackTitle}" by ${artistName} (checked ${recordings.length} recordings)`
+                    `[MusicBrainz] No official albums or singles found for "${trackTitle}" by ${artistName} (checked ${recordings.length} recordings)`,
                 );
                 return null;
             } catch (error: any) {
                 logger.error(
                     "MusicBrainz recording search error:",
-                    error.message
+                    error.message,
                 );
                 return null;
             }
@@ -590,7 +640,7 @@ class MusicBrainzService {
      */
     private extractAlbumFromRecording(
         recording: any,
-        allowSingles: boolean = false
+        allowSingles: boolean = false,
     ): {
         albumName: string;
         albumMbid: string;
@@ -672,8 +722,8 @@ class MusicBrainzService {
                 `[MusicBrainz] Skipping recording - no ${modeText} found in ${
                     releases.length
                 } releases (threshold: ${threshold}). Top scores: ${topScores.join(
-                    ", "
-                )}`
+                    ", ",
+                )}`,
             );
             return null;
         }
@@ -686,7 +736,7 @@ class MusicBrainzService {
         }
 
         logger.debug(
-            `[MusicBrainz] Selected "${releaseGroup.title}" (score: ${bestResult.score}) from ${releases.length} releases`
+            `[MusicBrainz] Selected "${releaseGroup.title}" (score: ${bestResult.score}) from ${releases.length} releases`,
         );
 
         return {
@@ -704,13 +754,13 @@ class MusicBrainzService {
      */
     async clearRecordingCache(
         trackTitle: string,
-        artistName: string
+        artistName: string,
     ): Promise<boolean> {
         const cacheKey = `mb:search:recording:${artistName}:${trackTitle}`;
         try {
             await redisClient.del(cacheKey);
             logger.debug(
-                `[MusicBrainz] Cleared cache for: "${trackTitle}" by ${artistName}`
+                `[MusicBrainz] Cleared cache for: "${trackTitle}" by ${artistName}`,
             );
             return true;
         } catch (err) {
@@ -738,7 +788,7 @@ class MusicBrainzService {
             }
 
             logger.debug(
-                `[MusicBrainz] Cleared ${cleared} stale null cache entries`
+                `[MusicBrainz] Cleared ${cleared} stale null cache entries`,
             );
             return cleared;
         } catch (err) {
@@ -752,7 +802,7 @@ class MusicBrainzService {
      * Uses the first official release from the release group
      */
     async getAlbumTracks(
-        rgMbid: string
+        rgMbid: string,
     ): Promise<Array<{ title: string; position?: number; duration?: number }>> {
         const cacheKey = `mb:albumtracks:${rgMbid}`;
 
@@ -766,13 +816,13 @@ class MusicBrainzService {
                             inc: "releases",
                             fmt: "json",
                         },
-                    }
+                    },
                 );
 
                 const releases = rgResponse.data?.releases || [];
                 if (releases.length === 0) {
                     logger.debug(
-                        `[MusicBrainz] No releases found for release group ${rgMbid}`
+                        `[MusicBrainz] No releases found for release group ${rgMbid}`,
                     );
                     return [];
                 }
@@ -790,7 +840,7 @@ class MusicBrainzService {
                             inc: "recordings",
                             fmt: "json",
                         },
-                    }
+                    },
                 );
 
                 const media = releaseResponse.data?.media || [];
@@ -811,12 +861,12 @@ class MusicBrainzService {
                 }
 
                 logger.debug(
-                    `[MusicBrainz] Found ${tracks.length} tracks for release group ${rgMbid}`
+                    `[MusicBrainz] Found ${tracks.length} tracks for release group ${rgMbid}`,
                 );
                 return tracks;
             } catch (error: any) {
                 logger.error(
-                    `MusicBrainz getAlbumTracks error: ${error.message}`
+                    `MusicBrainz getAlbumTracks error: ${error.message}`,
                 );
                 return [];
             }

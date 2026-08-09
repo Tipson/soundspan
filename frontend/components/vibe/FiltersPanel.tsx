@@ -15,7 +15,12 @@
  */
 
 import { SlidersHorizontal, X } from "lucide-react";
-import { FILTERABLE_MOODS, VIBE_ACCENTS, getMoodColor, moodLabel } from "./types";
+import {
+    FILTERABLE_MOODS,
+    VIBE_ACCENTS,
+    getMoodColor,
+    moodLabel,
+} from "./types";
 import type { UseMapFilters } from "./useMapFilters";
 
 type FiltersSlice = Pick<
@@ -163,18 +168,31 @@ function CollapsedFilters({
     expand: () => void;
 }) {
     return (
-        <div className="pointer-events-none absolute left-3 z-30" style={{ bottom }}>
-            <button type="button" onClick={expand} aria-expanded={false}
+        <div
+            className="pointer-events-none absolute left-3 z-30"
+            style={{ bottom }}
+        >
+            <button
+                type="button"
+                onClick={expand}
+                aria-expanded={false}
                 title="Show filters"
-                className="pointer-events-auto inline-flex items-center gap-2 h-10 px-3 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg text-sm text-gray-200 hover:bg-black/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60">
+                className="pointer-events-auto inline-flex items-center gap-2 h-10 px-3 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg text-sm text-gray-200 hover:bg-black/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
+            >
                 <SlidersHorizontal className="w-4 h-4" />
-                <span className="tabular-nums">Filters · {visibleCount}/{total}</span>
+                <span className="tabular-nums">
+                    Filters · {visibleCount}/{total}
+                </span>
             </button>
         </div>
     );
 }
 
-function FiltersHeader({ visible, total, collapse }: {
+function FiltersHeader({
+    visible,
+    total,
+    collapse,
+}: {
     visible: number;
     total: number;
     collapse: () => void;
@@ -183,34 +201,62 @@ function FiltersHeader({ visible, total, collapse }: {
         <div className="flex items-center gap-2 mb-2">
             <SlidersHorizontal className="w-4 h-4 text-indigo-300" />
             <span className="text-sm font-semibold text-white">Filters</span>
-            <span className="text-xs text-gray-400 tabular-nums">{visible}/{total} visible</span>
-            <button type="button" onClick={collapse} aria-expanded={true}
-                aria-label="Collapse filters" title="Collapse filters"
-                className="ml-auto -mr-1 inline-flex items-center justify-center w-10 h-10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60">
+            <span className="text-xs text-gray-400 tabular-nums">
+                {visible}/{total} visible
+            </span>
+            <button
+                type="button"
+                onClick={collapse}
+                aria-expanded={true}
+                aria-label="Collapse filters"
+                title="Collapse filters"
+                className="ml-auto -mr-1 inline-flex items-center justify-center w-10 h-10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
+            >
                 <X className="w-4 h-4" />
             </button>
         </div>
     );
 }
 
-function MoodFilters({ filters, moods }: { filters: FiltersSlice; moods: readonly string[] }) {
+function MoodFilters({
+    filters,
+    moods,
+}: {
+    filters: FiltersSlice;
+    moods: readonly string[];
+}) {
     return (
         <>
             <div className="flex flex-wrap gap-1.5">
                 {moods.map((mood) => {
                     const active = filters.activeMoods.has(mood);
                     return (
-                        <button key={mood} type="button" aria-pressed={active}
-                            onClick={(event) => event.shiftKey ? filters.soloMood(mood) : filters.toggleMood(mood)}
+                        <button
+                            key={mood}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={(event) =>
+                                event.shiftKey
+                                    ? filters.soloMood(mood)
+                                    : filters.toggleMood(mood)
+                            }
                             title={`${moodLabel(mood)} — click to toggle, shift-click to solo`}
-                            className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${active ? "bg-white/10 border-white/15 text-gray-200 opacity-100" : "border-white/10 text-gray-300 opacity-35"}`}>
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getMoodColor(mood) }} />
+                            className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${active ? "bg-white/10 border-white/15 text-gray-200 opacity-100" : "border-white/10 text-gray-300 opacity-35"}`}
+                        >
+                            <span
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: getMoodColor(mood) }}
+                            />
                             {moodLabel(mood)}
                         </button>
                     );
                 })}
-                <button type="button" onClick={filters.selectAllMoods} title="Show all moods"
-                    className="inline-flex items-center h-9 px-3 rounded-full border border-white/10 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60">
+                <button
+                    type="button"
+                    onClick={filters.selectAllMoods}
+                    title="Show all moods"
+                    className="inline-flex items-center h-9 px-3 rounded-full border border-white/10 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
+                >
                     All
                 </button>
             </div>
@@ -222,10 +268,20 @@ function MoodFilters({ filters, moods }: { filters: FiltersSlice; moods: readonl
 function FilterRanges({ filters }: { filters: FiltersSlice }) {
     return (
         <>
-            <DualRange label="Energy" lowLabel="calm" highLabel="intense"
-                value={filters.energyRange} onChange={filters.setEnergyRange} />
-            <DualRange label="Mood" lowLabel="sad" highLabel="happy"
-                value={filters.valenceRange} onChange={filters.setValenceRange} />
+            <DualRange
+                label="Energy"
+                lowLabel="calm"
+                highLabel="intense"
+                value={filters.energyRange}
+                onChange={filters.setEnergyRange}
+            />
+            <DualRange
+                label="Mood"
+                lowLabel="sad"
+                highLabel="happy"
+                value={filters.valenceRange}
+                onChange={filters.setValenceRange}
+            />
         </>
     );
 }
@@ -247,8 +303,12 @@ export function FiltersPanel({
 
     if (!expanded) {
         return (
-            <CollapsedFilters visibleCount={visibleCount} total={total}
-                bottom={bottomOffset} expand={() => onExpandedChange(true)} />
+            <CollapsedFilters
+                visibleCount={visibleCount}
+                total={total}
+                bottom={bottomOffset}
+                expand={() => onExpandedChange(true)}
+            />
         );
     }
 
@@ -269,8 +329,11 @@ export function FiltersPanel({
                     compact ? "rounded-t-xl" : "rounded-xl"
                 } ${reducedMotion ? "" : "vibe-anim-in"}`}
             >
-                <FiltersHeader visible={visibleCount} total={total}
-                    collapse={() => onExpandedChange(false)} />
+                <FiltersHeader
+                    visible={visibleCount}
+                    total={total}
+                    collapse={() => onExpandedChange(false)}
+                />
                 <MoodFilters filters={filters} moods={moods} />
                 <FilterRanges filters={filters} />
 

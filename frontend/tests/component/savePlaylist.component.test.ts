@@ -63,9 +63,8 @@ test("saveTracksAsPlaylist creates the playlist then adds tracks sequentially, i
         calls.push(`add:${playlistId}:${(ref as { trackId: string }).trackId}`);
         return {};
     };
-    const { saveTracksAsPlaylist } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { saveTracksAsPlaylist } =
+        await import("../../components/vibe/savePlaylist");
 
     const result = await saveTracksAsPlaylist("My Journey", ["t1", "t2", "t3"]);
 
@@ -86,11 +85,16 @@ test("saveTracksAsPlaylist dedupes track ids, preserving first occurrence order"
         added.push((ref as { trackId: string }).trackId);
         return {};
     };
-    const { saveTracksAsPlaylist } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { saveTracksAsPlaylist } =
+        await import("../../components/vibe/savePlaylist");
 
-    const result = await saveTracksAsPlaylist("Dupes", ["a", "b", "a", "c", "b"]);
+    const result = await saveTracksAsPlaylist("Dupes", [
+        "a",
+        "b",
+        "a",
+        "c",
+        "b",
+    ]);
 
     assert.deepEqual(added, ["a", "b", "c"]);
     assert.equal(result.added, 3);
@@ -106,9 +110,8 @@ test("a partial save returns the failed ids and logs each failure", async () => 
         }
         return {};
     };
-    const { saveTracksAsPlaylist } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { saveTracksAsPlaylist } =
+        await import("../../components/vibe/savePlaylist");
 
     const result = await saveTracksAsPlaylist("Partial", [
         "good1",
@@ -129,14 +132,14 @@ test("a partial save returns the failed ids and logs each failure", async () => 
     // per failed add plus one partial-save summary.
     assert.equal(warnCalls.length, 3);
     const perTrack = warnCalls.filter(
-        (c) => c.message === "Failed to add track to playlist"
+        (c) => c.message === "Failed to add track to playlist",
     );
     assert.deepEqual(
         perTrack.map((c) => (c.context as { trackId: string }).trackId),
-        ["bad-1", "bad-2"]
+        ["bad-1", "bad-2"],
     );
     const summary = warnCalls.find(
-        (c) => c.message === "Playlist saved partially"
+        (c) => c.message === "Playlist saved partially",
     );
     assert.ok(summary);
     assert.deepEqual(summary.context, {
@@ -152,9 +155,8 @@ test("a fully-failed save still resolves, reporting every id as failed", async (
     state.addImpl = async () => {
         throw new Error("db down");
     };
-    const { saveTracksAsPlaylist } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { saveTracksAsPlaylist } =
+        await import("../../components/vibe/savePlaylist");
 
     const result = await saveTracksAsPlaylist("Doomed", ["a", "b"]);
 
@@ -174,9 +176,8 @@ test("saveTracksAsPlaylist with an empty track list still creates the playlist w
     state.addImpl = async () => {
         throw new Error("should not be called");
     };
-    const { saveTracksAsPlaylist } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { saveTracksAsPlaylist } =
+        await import("../../components/vibe/savePlaylist");
 
     const result = await saveTracksAsPlaylist("Empty", []);
 
@@ -185,23 +186,21 @@ test("saveTracksAsPlaylist with an empty track list still creates the playlist w
 });
 
 test("describeSaveResult: a full save reads as success", async () => {
-    const { describeSaveResult } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { describeSaveResult } =
+        await import("../../components/vibe/savePlaylist");
     assert.deepEqual(
         describeSaveResult("Mix", { id: "p", added: 5, failedTrackIds: [] }),
-        { tone: "success", message: "Saved 5 tracks to Mix" }
+        { tone: "success", message: "Saved 5 tracks to Mix" },
     );
     assert.deepEqual(
         describeSaveResult("Mix", { id: "p", added: 1, failedTrackIds: [] }),
-        { tone: "success", message: "Saved 1 track to Mix" }
+        { tone: "success", message: "Saved 1 track to Mix" },
     );
 });
 
 test("describeSaveResult: a partial save is a warning naming the miss count", async () => {
-    const { describeSaveResult } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { describeSaveResult } =
+        await import("../../components/vibe/savePlaylist");
     assert.deepEqual(
         describeSaveResult("Mix", {
             id: "p",
@@ -210,9 +209,8 @@ test("describeSaveResult: a partial save is a warning naming the miss count", as
         }),
         {
             tone: "warning",
-            message:
-                "Saved 3 of 4 tracks to Mix — 1 track couldn't be added",
-        }
+            message: "Saved 3 of 4 tracks to Mix — 1 track couldn't be added",
+        },
     );
     assert.equal(
         describeSaveResult("Mix", {
@@ -220,23 +218,21 @@ test("describeSaveResult: a partial save is a warning naming the miss count", as
             added: 0,
             failedTrackIds: ["x", "y"],
         }).tone,
-        "warning"
+        "warning",
     );
 });
 
 test("formatPlaylistDate renders 'MMM D' (e.g. Jul 15)", async () => {
-    const { formatPlaylistDate } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { formatPlaylistDate } =
+        await import("../../components/vibe/savePlaylist");
     // Local-time construction avoids UTC-offset day-boundary flakiness.
     const d = new Date(2026, 6, 15, 12, 0, 0); // July 15 2026, noon local
     assert.equal(formatPlaylistDate(d), "Jul 15");
 });
 
 test("formatPlaylistDate does not zero-pad the day", async () => {
-    const { formatPlaylistDate } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { formatPlaylistDate } =
+        await import("../../components/vibe/savePlaylist");
     const d = new Date(2026, 0, 5, 12, 0, 0); // January 5
     assert.equal(formatPlaylistDate(d), "Jan 5");
 });

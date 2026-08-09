@@ -69,7 +69,10 @@ jest.mock("../../services/umapProjection", () => ({
 
 jest.mock("../../utils/embedding", () => ({
     parseEmbedding: jest.fn((text: string) => {
-        const values = text.replace(/[\[\]]/g, "").split(",").map(Number);
+        const values = text
+            .replace(/[\[\]]/g, "")
+            .split(",")
+            .map(Number);
         return values;
     }),
 }));
@@ -97,7 +100,7 @@ const mockRedisSetEx = redisClient.setEx as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -169,13 +172,13 @@ describe("vibe calibration runtime", () => {
                 select: { trackId: true },
                 orderBy: { trackId: "asc" },
                 take: expect.any(Number),
-            })
+            }),
         );
 
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "vibe:calibration:v1:50",
             86400,
-            expect.any(String)
+            expect.any(String),
         );
         const cachedPayload = JSON.parse(mockRedisSetEx.mock.calls[0][2]);
         expect(cachedPayload.quantiles).toHaveLength(101);
@@ -217,7 +220,7 @@ describe("vibe calibration runtime", () => {
                 sampleSize: 12,
                 updatedAt: "2026-08-07T00:00:00.000Z",
                 quantiles: [null],
-            })
+            }),
         );
         mockEmbeddingFindMany.mockResolvedValueOnce(idRows(12));
         mockQueryRaw.mockResolvedValueOnce(embeddingRows(12));
@@ -316,7 +319,9 @@ describe("vibe calibration runtime", () => {
         await calibrationHandler({ user: { id: "user-1" } } as any, res);
 
         expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to compute vibe calibration" });
+        expect(res.body).toEqual({
+            error: "Failed to compute vibe calibration",
+        });
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 });

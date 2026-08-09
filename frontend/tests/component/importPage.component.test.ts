@@ -45,9 +45,8 @@ beforeEach(() => {
 });
 
 test("preview list renders provider resolution badges per track", async () => {
-    const { PreviewTrackResolutionList } = await import(
-        "../../app/import/page"
-    );
+    const { PreviewTrackResolutionList } =
+        await import("../../app/import/page");
 
     const html = renderToStaticMarkup(
         React.createElement(PreviewTrackResolutionList, {
@@ -81,7 +80,7 @@ test("preview list renders provider resolution badges per track", async () => {
                     confidence: 0,
                 },
             ],
-        })
+        }),
     );
 
     assert.match(html, /LOCAL/);

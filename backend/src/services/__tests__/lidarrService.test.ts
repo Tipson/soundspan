@@ -54,7 +54,8 @@ const mockAxiosGet = axios.get as jest.Mock;
 const mockAxiosPost = axios.post as jest.Mock;
 const mockAxiosDelete = axios.delete as jest.Mock;
 const mockGetSystemSettings = getSystemSettings as jest.Mock;
-const mockMusicBrainzSearchArtist = musicBrainzService.searchArtist as jest.Mock;
+const mockMusicBrainzSearchArtist =
+    musicBrainzService.searchArtist as jest.Mock;
 const mockStripAlbumEdition = stripAlbumEdition as jest.Mock;
 
 function createClientMock() {
@@ -90,7 +91,7 @@ describe("lidarr service behavior", () => {
             "album missing",
             AcquisitionErrorType.ALBUM_NOT_FOUND,
             false,
-            original
+            original,
         );
 
         expect(err.name).toBe("AcquisitionError");
@@ -157,7 +158,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         mockGetSystemSettings.mockRejectedValueOnce(
-            new Error("settings db unavailable")
+            new Error("settings db unavailable"),
         );
 
         await expect(lidarrService.isEnabled()).resolves.toBe(false);
@@ -173,7 +174,7 @@ describe("lidarr service behavior", () => {
 
         const results = await lidarrService.searchArtist(
             "Fallback Artist",
-            "artist-mbid"
+            "artist-mbid",
         );
 
         expect(client.get).toHaveBeenCalledWith("/api/v1/artist/lookup", {
@@ -183,7 +184,7 @@ describe("lidarr service behavior", () => {
             expect.objectContaining({
                 foreignArtistId: "artist-mbid",
                 artistName: "Fallback Artist",
-            })
+            }),
         );
     });
 
@@ -202,7 +203,7 @@ describe("lidarr service behavior", () => {
 
         const results = await lidarrService.searchArtist(
             "Direct MBID Artist",
-            "artist-direct-mbid"
+            "artist-direct-mbid",
         );
 
         expect(results).toEqual([
@@ -228,12 +229,16 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
         client.get.mockRejectedValueOnce(new Error("lookup failed"));
         mockMusicBrainzSearchArtist.mockResolvedValueOnce([
-            { id: "artist-mbid-fallback", name: "Fallback Artist", type: "Group" },
+            {
+                id: "artist-mbid-fallback",
+                name: "Fallback Artist",
+                type: "Group",
+            },
         ]);
 
         const results = await lidarrService.searchArtist(
             "Fallback Artist",
-            "artist-mbid-fallback"
+            "artist-mbid-fallback",
         );
 
         expect(results).toEqual([
@@ -252,7 +257,10 @@ describe("lidarr service behavior", () => {
         mockMusicBrainzSearchArtist.mockRejectedValueOnce(new Error("mb fail"));
 
         await expect(
-            lidarrService.searchArtist("Fallback Artist", "artist-mbid-fallback")
+            lidarrService.searchArtist(
+                "Fallback Artist",
+                "artist-mbid-fallback",
+            ),
         ).resolves.toEqual([]);
     });
 
@@ -263,7 +271,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(lidarrService.searchArtist("Artist")).rejects.toThrow(
-            "Lidarr not enabled"
+            "Lidarr not enabled",
         );
     });
 
@@ -281,7 +289,7 @@ describe("lidarr service behavior", () => {
         });
 
         await expect(
-            lidarrService.searchAlbum("Artist", "Album")
+            lidarrService.searchAlbum("Artist", "Album"),
         ).resolves.toEqual([
             expect.objectContaining({
                 id: 901,
@@ -305,7 +313,7 @@ describe("lidarr service behavior", () => {
         });
 
         await expect(
-            lidarrService.searchAlbum("Artist", "Album")
+            lidarrService.searchAlbum("Artist", "Album"),
         ).resolves.toEqual([]);
     });
 
@@ -322,7 +330,7 @@ describe("lidarr service behavior", () => {
             });
 
         await expect(
-            (lidarrService as any).waitForCommand(12, 5000, 0)
+            (lidarrService as any).waitForCommand(12, 5000, 0),
         ).resolves.toEqual({
             status: "completed",
             message: "finished successfully",
@@ -336,7 +344,7 @@ describe("lidarr service behavior", () => {
             },
         });
         await expect(
-            (lidarrService as any).waitForCommand(13, 5000, 0)
+            (lidarrService as any).waitForCommand(13, 5000, 0),
         ).resolves.toEqual({
             status: "failed",
             message: "import failed",
@@ -354,21 +362,21 @@ describe("lidarr service behavior", () => {
             .mockResolvedValueOnce({
                 data: [{ id: 81, title: "Album 81" }],
             });
-        await expect(lidarrService.getArtistAlbums("artist-mbid-1")).resolves.toEqual(
-            [{ id: 81, title: "Album 81" }]
-        );
+        await expect(
+            lidarrService.getArtistAlbums("artist-mbid-1"),
+        ).resolves.toEqual([{ id: 81, title: "Album 81" }]);
 
         client.get.mockResolvedValueOnce({
             data: [{ id: 77, foreignArtistId: "other-mbid" }],
         });
-        await expect(lidarrService.getArtistAlbums("missing-mbid")).resolves.toEqual(
-            []
-        );
+        await expect(
+            lidarrService.getArtistAlbums("missing-mbid"),
+        ).resolves.toEqual([]);
 
         client.get.mockRejectedValueOnce(new Error("network"));
-        await expect(lidarrService.getArtistAlbums("artist-mbid-1")).resolves.toEqual(
-            []
-        );
+        await expect(
+            lidarrService.getArtistAlbums("artist-mbid-1"),
+        ).resolves.toEqual([]);
     });
 
     it("resolves root folders with fallback and safe defaults", async () => {
@@ -385,13 +393,13 @@ describe("lidarr service behavior", () => {
             .mockRejectedValueOnce(new Error("rootfolder down"));
 
         await expect(
-            (lidarrService as any).ensureRootFolderExists("/missing")
+            (lidarrService as any).ensureRootFolderExists("/missing"),
         ).resolves.toBe("/library");
         await expect(
-            (lidarrService as any).ensureRootFolderExists("/missing")
+            (lidarrService as any).ensureRootFolderExists("/missing"),
         ).resolves.toBe("/missing");
         await expect(
-            (lidarrService as any).ensureRootFolderExists("/missing")
+            (lidarrService as any).ensureRootFolderExists("/missing"),
         ).resolves.toBe("/missing");
     });
 
@@ -403,7 +411,7 @@ describe("lidarr service behavior", () => {
         });
 
         await expect(
-            (lidarrService as any).ensureRootFolderExists("/music")
+            (lidarrService as any).ensureRootFolderExists("/music"),
         ).resolves.toBe("/music");
         expect(client.get).toHaveBeenCalledWith("/api/v1/rootfolder");
     });
@@ -455,12 +463,12 @@ describe("lidarr service behavior", () => {
                 "/missing",
                 true,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 foreignArtistId: "artist-mbid-better",
-            })
+            }),
         );
 
         expect(client.post).toHaveBeenCalledWith(
@@ -469,7 +477,7 @@ describe("lidarr service behavior", () => {
                 foreignArtistId: "artist-mbid-better",
                 rootFolderPath: "/library",
                 monitorNewItems: "none",
-            })
+            }),
         );
         searchSpy.mockRestore();
     });
@@ -521,12 +529,12 @@ describe("lidarr service behavior", () => {
                 "/music",
                 false,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 foreignArtistId: "artist-mbid-group",
-            })
+            }),
         );
 
         searchSpy.mockRestore();
@@ -572,12 +580,12 @@ describe("lidarr service behavior", () => {
                 "/music",
                 false,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 foreignArtistId: "artist-only",
-            })
+            }),
         );
 
         searchSpy.mockRestore();
@@ -590,7 +598,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(
-            lidarrService.addArtist("artist-disabled", "Disabled Artist")
+            lidarrService.addArtist("artist-disabled", "Disabled Artist"),
         ).rejects.toThrow("Lidarr not enabled");
     });
 
@@ -642,13 +650,13 @@ describe("lidarr service behavior", () => {
                 "/music",
                 false,
                 false,
-                true
-            )
+                true,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 77,
                 foreignArtistId: "artist-discovery-add",
-            })
+            }),
         );
 
         expect(discoverySpy).toHaveBeenCalled();
@@ -657,14 +665,14 @@ describe("lidarr service behavior", () => {
             expect.objectContaining({
                 tags: [77],
                 monitorNewItems: "none",
-            })
+            }),
         );
         expect(client.post).toHaveBeenCalledWith(
             "/api/v1/command",
             expect.objectContaining({
                 name: "RefreshArtist",
                 artistId: 77,
-            })
+            }),
         );
 
         searchSpy.mockRestore();
@@ -700,8 +708,8 @@ describe("lidarr service behavior", () => {
                 "/music",
                 true,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toBeNull();
 
         expect(client.post).not.toHaveBeenCalled();
@@ -767,13 +775,13 @@ describe("lidarr service behavior", () => {
                 "/music",
                 true,
                 true,
-                true
-            )
+                true,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 12,
                 monitored: true,
-            })
+            }),
         );
 
         expect(addTagsSpy).toHaveBeenCalledWith(12, [99]);
@@ -782,14 +790,14 @@ describe("lidarr service behavior", () => {
             expect.objectContaining({
                 monitored: true,
                 monitorNewItems: "all",
-            })
+            }),
         );
         expect(client.put).toHaveBeenCalledWith(
             "/api/v1/album/301",
             expect.objectContaining({
                 id: 301,
                 monitored: true,
-            })
+            }),
         );
         expect(client.post).toHaveBeenCalledWith("/api/v1/command", {
             name: "AlbumSearch",
@@ -849,13 +857,13 @@ describe("lidarr service behavior", () => {
                 "/music",
                 true,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 22,
                 foreignArtistId: "artist-mbid-race",
-            })
+            }),
         );
 
         searchSpy.mockRestore();
@@ -874,7 +882,7 @@ describe("lidarr service behavior", () => {
             });
 
         await expect(
-            lidarrService.addArtist("artist-missing", "Missing Artist")
+            lidarrService.addArtist("artist-missing", "Missing Artist"),
         ).resolves.toBeNull();
     });
 
@@ -918,13 +926,13 @@ describe("lidarr service behavior", () => {
                 "/music",
                 true,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 88,
                 foreignArtistId: "artist-existing",
-            })
+            }),
         );
 
         expect(client.put).not.toHaveBeenCalled();
@@ -978,13 +986,13 @@ describe("lidarr service behavior", () => {
                 "/music",
                 true,
                 false,
-                true
-            )
+                true,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 89,
                 foreignArtistId: "artist-discovery",
-            })
+            }),
         );
 
         expect(tagSpy).toHaveBeenCalled();
@@ -1025,8 +1033,8 @@ describe("lidarr service behavior", () => {
                 "/music",
                 true,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toBeNull();
 
         searchSpy.mockRestore();
@@ -1082,18 +1090,25 @@ describe("lidarr service behavior", () => {
         });
 
         await expect(
-            lidarrService.addArtist("", "Alpha Artist", "/music", true, false, false)
+            lidarrService.addArtist(
+                "",
+                "Alpha Artist",
+                "/music",
+                true,
+                false,
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 foreignArtistId: "alpha-artist",
-            })
+            }),
         );
 
         expect(client.post).toHaveBeenCalledWith(
             "/api/v1/artist",
             expect.objectContaining({
                 foreignArtistId: "alpha-artist",
-            })
+            }),
         );
         searchSpy.mockRestore();
     });
@@ -1151,16 +1166,20 @@ describe("lidarr service behavior", () => {
         const client = createClientMock();
         primeServiceWithClient(client);
 
-        client.get
-            .mockResolvedValueOnce({ data: [] })
-            .mockResolvedValueOnce({
-                data: [{ id: 101, label: "soundspan-discovery" }],
-            });
+        client.get.mockResolvedValueOnce({ data: [] }).mockResolvedValueOnce({
+            data: [{ id: 101, label: "soundspan-discovery" }],
+        });
         client.post.mockRejectedValueOnce(new Error("tag create conflict"));
 
-        await expect(lidarrService.getOrCreateDiscoveryTag()).resolves.toBeNull();
-        await expect(lidarrService.getOrCreateDiscoveryTag()).resolves.toBe(101);
-        await expect(lidarrService.getOrCreateDiscoveryTag()).resolves.toBe(101);
+        await expect(
+            lidarrService.getOrCreateDiscoveryTag(),
+        ).resolves.toBeNull();
+        await expect(lidarrService.getOrCreateDiscoveryTag()).resolves.toBe(
+            101,
+        );
+        await expect(lidarrService.getOrCreateDiscoveryTag()).resolves.toBe(
+            101,
+        );
 
         expect(client.get).toHaveBeenCalledTimes(2);
         expect(client.post).toHaveBeenCalledTimes(1);
@@ -1182,10 +1201,12 @@ describe("lidarr service behavior", () => {
             });
         client.put.mockResolvedValue({});
 
-        await expect(lidarrService.addTagsToArtist(11, [2, 3])).resolves.toBe(true);
-        await expect(lidarrService.removeTagsFromArtist(11, [1, 3])).resolves.toBe(
-            true
+        await expect(lidarrService.addTagsToArtist(11, [2, 3])).resolves.toBe(
+            true,
         );
+        await expect(
+            lidarrService.removeTagsFromArtist(11, [1, 3]),
+        ).resolves.toBe(true);
 
         expect(client.put).toHaveBeenCalledWith("/api/v1/artist/11", {
             id: 11,
@@ -1204,12 +1225,17 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
 
         client.get.mockResolvedValueOnce({
-            data: { id: 21, artistName: "Artist B", monitored: true, tags: [4, 7] },
+            data: {
+                id: 21,
+                artistName: "Artist B",
+                monitored: true,
+                tags: [4, 7],
+            },
         });
         client.put.mockRejectedValueOnce(new Error("tag update failed"));
 
         await expect(lidarrService.addTagsToArtist(21, [7, 9])).resolves.toBe(
-            false
+            false,
         );
         expect(client.put).toHaveBeenCalledWith("/api/v1/artist/21", {
             id: 21,
@@ -1228,9 +1254,9 @@ describe("lidarr service behavior", () => {
         });
         client.put.mockRejectedValueOnce(new Error("remove failed"));
 
-        await expect(lidarrService.removeTagsFromArtist(22, [5, 99])).resolves.toBe(
-            false
-        );
+        await expect(
+            lidarrService.removeTagsFromArtist(22, [5, 99]),
+        ).resolves.toBe(false);
         expect(client.put).toHaveBeenCalledWith("/api/v1/artist/22", {
             id: 22,
             artistName: "Artist C",
@@ -1259,9 +1285,9 @@ describe("lidarr service behavior", () => {
             });
         client.put.mockResolvedValue({});
 
-        await expect(lidarrService.removeDiscoveryTagByMbid("artist-1")).resolves.toBe(
-            true
-        );
+        await expect(
+            lidarrService.removeDiscoveryTagByMbid("artist-1"),
+        ).resolves.toBe(true);
         expect(client.put).toHaveBeenCalledWith("/api/v1/artist/12", {
             id: 12,
             artistName: "Artist",
@@ -1307,7 +1333,9 @@ describe("lidarr service behavior", () => {
             })
             .mockResolvedValueOnce({
                 data: {
-                    records: [{ id: 44, downloadId: "dl-1", title: "Queued Album" }],
+                    records: [
+                        { id: 44, downloadId: "dl-1", title: "Queued Album" },
+                    ],
                 },
             });
         client.post.mockResolvedValue({});
@@ -1317,8 +1345,12 @@ describe("lidarr service behavior", () => {
         expect(releases[0].guid).toBe("r3");
         expect(releases[1].guid).toBe("r2");
 
-        await expect(lidarrService.grabRelease(releases[0] as any)).resolves.toBe(true);
-        await expect(lidarrService.blocklistAndRemove("dl-1")).resolves.toBe(true);
+        await expect(
+            lidarrService.grabRelease(releases[0] as any),
+        ).resolves.toBe(true);
+        await expect(lidarrService.blocklistAndRemove("dl-1")).resolves.toBe(
+            true,
+        );
         expect(client.delete).toHaveBeenCalledWith("/api/v1/queue/44", {
             params: {
                 removeFromClient: true,
@@ -1406,8 +1438,8 @@ describe("lidarr service behavior", () => {
                 "Artist",
                 "Album",
                 "/music",
-                "artist-mbid"
-            )
+                "artist-mbid",
+            ),
         ).rejects.toMatchObject({
             type: AcquisitionErrorType.NO_RELEASES_AVAILABLE,
             isRecoverable: true,
@@ -1506,7 +1538,7 @@ describe("lidarr service behavior", () => {
                 message: "Retry completed with 0 reports",
             })
             .mockRejectedValueOnce(
-                new Error("Command 9103 timed out after 30000ms")
+                new Error("Command 9103 timed out after 30000ms"),
             );
 
         await expect(
@@ -1515,8 +1547,8 @@ describe("lidarr service behavior", () => {
                 "Artist",
                 "Album Studio Session",
                 "/music",
-                "artist-mbid"
-            )
+                "artist-mbid",
+            ),
         ).resolves.toEqual(baseAlbum);
 
         expect(client.put).toHaveBeenCalledWith("/api/v1/album/502", {
@@ -1534,7 +1566,11 @@ describe("lidarr service behavior", () => {
         client.get.mockResolvedValueOnce({ data: [] });
 
         await expect(
-            lidarrService.addAlbum("album-mbid", "Unknown Artist", "Unknown Album")
+            lidarrService.addAlbum(
+                "album-mbid",
+                "Unknown Artist",
+                "Unknown Album",
+            ),
         ).resolves.toBeNull();
     });
 
@@ -1555,8 +1591,8 @@ describe("lidarr service behavior", () => {
                 "Unknown Artist",
                 "Unknown Album",
                 "/music",
-                "artist-missing"
-            )
+                "artist-missing",
+            ),
         ).resolves.toBeNull();
 
         expect(addArtistSpy).toHaveBeenCalledWith(
@@ -1565,7 +1601,7 @@ describe("lidarr service behavior", () => {
             "/music",
             false,
             false,
-            false
+            false,
         );
         addArtistSpy.mockRestore();
     });
@@ -1604,8 +1640,8 @@ describe("lidarr service behavior", () => {
                 "Artist",
                 "Album",
                 "/music",
-                "artist-mbid"
-            )
+                "artist-mbid",
+            ),
         ).resolves.toBeNull();
     });
 
@@ -1688,14 +1724,14 @@ describe("lidarr service behavior", () => {
                 "Dormant Artist",
                 "Dormant Album",
                 "/music",
-                "artist-existing-unmonitored"
-            )
+                "artist-existing-unmonitored",
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 901,
                 foreignAlbumId: "album-mbid",
                 monitored: true,
-            })
+            }),
         );
 
         expect(client.put).toHaveBeenCalledWith(
@@ -1705,7 +1741,7 @@ describe("lidarr service behavior", () => {
                 artistName: "Dormant Artist",
                 foreignArtistId: "artist-existing-unmonitored",
                 monitored: true,
-            })
+            }),
         );
         expect(waitSpy).toHaveBeenCalledWith(7001, 30000);
         waitSpy.mockRestore();
@@ -1742,8 +1778,8 @@ describe("lidarr service behavior", () => {
                 "Artist",
                 "Uncataloged Album",
                 "/music",
-                "artist-refresh-fail"
-            )
+                "artist-refresh-fail",
+            ),
         ).resolves.toBeNull();
 
         expect(client.post).toHaveBeenCalledWith("/api/v1/command", {
@@ -1823,13 +1859,13 @@ describe("lidarr service behavior", () => {
                 "Disc Album",
                 "/music",
                 "artist-disc",
-                true
-            )
+                true,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 901,
                 foreignAlbumId: "album-mbid",
-            })
+            }),
         );
 
         expect(discoverySpy).toHaveBeenCalled();
@@ -1848,7 +1884,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(
-            lidarrService.addAlbum("album-mbid", "Artist", "Album")
+            lidarrService.addAlbum("album-mbid", "Artist", "Album"),
         ).rejects.toThrow("Lidarr not enabled");
     });
 
@@ -1941,15 +1977,17 @@ describe("lidarr service behavior", () => {
                     "Artist",
                     "Album Deluxe (Remaster)",
                     "/music",
-                    "artist-no-indexers"
-                )
-            ).rejects.toThrow("No releases available - indexers found no matching downloads");
+                    "artist-no-indexers",
+                ),
+            ).rejects.toThrow(
+                "No releases available - indexers found no matching downloads",
+            );
 
             expect(waitSpy).toHaveBeenCalled();
             expect(waitSpy.mock.calls[0]?.[1]).toBe(30000);
             expect(client.put).toHaveBeenCalledWith(
                 "/api/v1/album/901",
-                expect.objectContaining({ anyReleaseOk: true })
+                expect.objectContaining({ anyReleaseOk: true }),
             );
         } finally {
             setTimeoutSpy.mockRestore();
@@ -2027,9 +2065,12 @@ describe("lidarr service behavior", () => {
                     "Timeout Artist",
                     "Timeout Album",
                     "/music",
-                    "artist-timeout"
-                )
-            ).resolves.toMatchObject({ id: 902, foreignAlbumId: "album-timeout" });
+                    "artist-timeout",
+                ),
+            ).resolves.toMatchObject({
+                id: 902,
+                foreignAlbumId: "album-timeout",
+            });
 
             expect(waitSpy).toHaveBeenCalledWith(9301, 30000);
         } finally {
@@ -2042,9 +2083,9 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
         client.get.mockResolvedValueOnce({ data: { records: [] } });
 
-        await expect(lidarrService.blocklistAndRemove("missing-download")).resolves.toBe(
-            true
-        );
+        await expect(
+            lidarrService.blocklistAndRemove("missing-download"),
+        ).resolves.toBe(true);
         expect(client.delete).not.toHaveBeenCalled();
     });
 
@@ -2111,14 +2152,14 @@ describe("lidarr service behavior", () => {
                 "Monitored Artist",
                 "Unstable Album",
                 "/music",
-                "artist-mbid"
-            )
+                "artist-mbid",
+            ),
         ).resolves.toEqual(
-            expect.objectContaining({ id: 401, foreignAlbumId: "album-mbid" })
+            expect.objectContaining({ id: 401, foreignAlbumId: "album-mbid" }),
         );
         expect(waitSpy).toHaveBeenCalledWith(7101, 30000);
         expect(logger.error).toHaveBeenCalledWith(
-            " CRITICAL: Album monitoring failed to persist!"
+            " CRITICAL: Album monitoring failed to persist!",
         );
 
         waitSpy.mockRestore();
@@ -2214,17 +2255,17 @@ describe("lidarr service behavior", () => {
                 "Index Artist",
                 "Indexed Album",
                 "/music",
-                "artist-index"
-            )
+                "artist-index",
+            ),
         ).rejects.toThrow(
-            "No releases available - indexers found no matching downloads"
+            "No releases available - indexers found no matching downloads",
         );
         expect((lidarrService as any)._indexerCountLogged).toBe(true);
         expect(client.get).toHaveBeenCalledWith("/api/v1/indexer");
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining(
-                "No enabled indexers - Lidarr cannot search for releases"
-            )
+                "No enabled indexers - Lidarr cannot search for releases",
+            ),
         );
 
         waitSpy.mockRestore();
@@ -2320,8 +2361,8 @@ describe("lidarr service behavior", () => {
                 "Base Album Artist",
                 "Alpha Deluxe (Remix)",
                 "/music",
-                "artist-base"
-            )
+                "artist-base",
+            ),
         ).resolves.toEqual(expect.objectContaining({ id: 702 }));
         expect(client.put).toHaveBeenCalledWith(
             "/api/v1/album/702",
@@ -2329,7 +2370,7 @@ describe("lidarr service behavior", () => {
                 id: 702,
                 monitored: true,
                 anyReleaseOk: true,
-            })
+            }),
         );
 
         waitSpy.mockRestore();
@@ -2425,12 +2466,12 @@ describe("lidarr service behavior", () => {
                 "Base Album Artist",
                 "Alpha Deluxe (Remix)",
                 "/music",
-                "artist-base-fail"
-            )
+                "artist-base-fail",
+            ),
         ).rejects.toThrow("No releases available for");
 
         expect(logger.warn).toHaveBeenCalledWith(
-            `   Base album "Alpha Deluxe 2" also has no releases`
+            `   Base album "Alpha Deluxe 2" also has no releases`,
         );
 
         waitSpy.mockRestore();
@@ -2498,12 +2539,12 @@ describe("lidarr service behavior", () => {
                 "Error Artist",
                 "Error Album",
                 "/music",
-                "artist-fail"
-            )
+                "artist-fail",
+            ),
         ).resolves.toBeNull();
         expect(logger.error).toHaveBeenCalledWith(
             "Lidarr add album error:",
-            "command transport failed"
+            "command transport failed",
         );
 
         waitSpy.mockRestore();
@@ -2516,7 +2557,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(
-            lidarrService.blocklistAndRemove("missing-download")
+            lidarrService.blocklistAndRemove("missing-download"),
         ).rejects.toThrow("Lidarr not enabled");
     });
 
@@ -2527,7 +2568,14 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(
-            lidarrService.grabRelease({ guid: "g", protocol: "torrent", approved: false, rejected: false, indexerId: 1, title: "t", })
+            lidarrService.grabRelease({
+                guid: "g",
+                protocol: "torrent",
+                approved: false,
+                rejected: false,
+                indexerId: 1,
+                title: "t",
+            }),
         ).rejects.toThrow("Lidarr not enabled");
     });
 
@@ -2538,7 +2586,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(lidarrService.getAlbumReleases(5)).rejects.toThrow(
-            "Lidarr not enabled"
+            "Lidarr not enabled",
         );
     });
 
@@ -2554,7 +2602,9 @@ describe("lidarr service behavior", () => {
         });
         client.delete.mockRejectedValueOnce(new Error("delete failed"));
 
-        await expect(lidarrService.blocklistAndRemove("dl-fail")).resolves.toBe(false);
+        await expect(lidarrService.blocklistAndRemove("dl-fail")).resolves.toBe(
+            false,
+        );
         expect(client.delete).toHaveBeenCalledWith("/api/v1/queue/123", {
             params: {
                 removeFromClient: true,
@@ -2579,7 +2629,7 @@ describe("lidarr service behavior", () => {
                 protocol: "torrent",
                 approved: true,
                 rejected: false,
-            } as any)
+            } as any),
         ).resolves.toBe(false);
     });
 
@@ -2608,7 +2658,12 @@ describe("lidarr service behavior", () => {
                         monitored: true,
                         grabbed: true,
                         statistics: { percentOfTracks: 100 },
-                        images: [{ coverType: "cover", remoteUrl: "https://cover.jpg" }],
+                        images: [
+                            {
+                                coverType: "cover",
+                                remoteUrl: "https://cover.jpg",
+                            },
+                        ],
                     },
                 ],
             })
@@ -2629,13 +2684,13 @@ describe("lidarr service behavior", () => {
                 ],
             });
 
-        await expect(lidarrService.findQueueItemByDownloadId("dl-2")).resolves.toEqual(
-            { downloadId: "dl-2", id: 2, title: "Album 2" }
-        );
+        await expect(
+            lidarrService.findQueueItemByDownloadId("dl-2"),
+        ).resolves.toEqual({ downloadId: "dl-2", id: 2, title: "Album 2" });
 
         const calendar = await lidarrService.getCalendar(
             new Date("2026-02-01"),
-            new Date("2026-02-28")
+            new Date("2026-02-28"),
         );
         expect(calendar).toEqual([
             expect.objectContaining({
@@ -2659,7 +2714,7 @@ describe("lidarr service behavior", () => {
 
         const calendar = await lidarrService.getCalendar(
             new Date("2026-02-01"),
-            new Date("2026-02-28")
+            new Date("2026-02-28"),
         );
         expect(calendar).toEqual([]);
     });
@@ -2717,23 +2772,29 @@ describe("lidarr service behavior", () => {
         expect(
             (lidarrService as any).isAlbumAvailableInSnapshot(
                 snapshot,
-                "album-mbid-31"
-            )
+                "album-mbid-31",
+            ),
         ).toBe(true);
         expect(
             (lidarrService as any).isAlbumAvailableInSnapshot(
                 snapshot,
                 undefined,
                 "My Artist",
-                "My Album"
-            )
+                "My Album",
+            ),
         ).toBe(true);
 
         expect(
-            (lidarrService as any).isDownloadActiveInSnapshot(snapshot, "queue-1")
+            (lidarrService as any).isDownloadActiveInSnapshot(
+                snapshot,
+                "queue-1",
+            ),
         ).toEqual({ active: true, progress: 80 });
         expect(
-            (lidarrService as any).isDownloadActiveInSnapshot(snapshot, "queue-2")
+            (lidarrService as any).isDownloadActiveInSnapshot(
+                snapshot,
+                "queue-2",
+            ),
         ).toEqual({ active: false, progress: 30 });
     });
 
@@ -2770,7 +2831,11 @@ describe("lidarr service behavior", () => {
         client.get
             .mockResolvedValueOnce({
                 data: [
-                    { id: 51, foreignArtistId: "artist-mbid-1", artistName: "Artist 1" },
+                    {
+                        id: 51,
+                        foreignArtistId: "artist-mbid-1",
+                        artistName: "Artist 1",
+                    },
                 ],
             })
             .mockResolvedValueOnce({
@@ -2784,7 +2849,12 @@ describe("lidarr service behavior", () => {
                 data: [{ id: 801 }, { id: 802 }],
             })
             .mockResolvedValueOnce({
-                data: [{ foreignAlbumId: "album-1", statistics: { percentOfTracks: 100 } }],
+                data: [
+                    {
+                        foreignAlbumId: "album-1",
+                        statistics: { percentOfTracks: 100 },
+                    },
+                ],
             })
             .mockResolvedValueOnce({
                 data: [
@@ -2792,7 +2862,9 @@ describe("lidarr service behavior", () => {
                 ],
             })
             .mockResolvedValueOnce({
-                data: [{ title: "Album 1", statistics: { percentOfTracks: 100 } }],
+                data: [
+                    { title: "Album 1", statistics: { percentOfTracks: 100 } },
+                ],
             })
             .mockResolvedValueOnce({
                 data: [{ foreignArtistId: "artist-mbid-1" }],
@@ -2800,19 +2872,21 @@ describe("lidarr service behavior", () => {
         client.delete.mockResolvedValue({});
         client.put.mockResolvedValue({});
 
-        await expect(lidarrService.deleteArtist("artist-mbid-1")).resolves.toEqual(
-            expect.objectContaining({ success: true })
-        );
-        await expect(lidarrService.deleteAlbum(81)).resolves.toEqual(
-            expect.objectContaining({ success: true })
-        );
-        await expect(lidarrService.isAlbumAvailable("album-1")).resolves.toBe(true);
         await expect(
-            lidarrService.isAlbumAvailableByTitle("Artist 1", "Album 1")
-        ).resolves.toBe(true);
-        await expect(lidarrService.isArtistInLidarr("artist-mbid-1")).resolves.toBe(
-            true
+            lidarrService.deleteArtist("artist-mbid-1"),
+        ).resolves.toEqual(expect.objectContaining({ success: true }));
+        await expect(lidarrService.deleteAlbum(81)).resolves.toEqual(
+            expect.objectContaining({ success: true }),
         );
+        await expect(lidarrService.isAlbumAvailable("album-1")).resolves.toBe(
+            true,
+        );
+        await expect(
+            lidarrService.isAlbumAvailableByTitle("Artist 1", "Album 1"),
+        ).resolves.toBe(true);
+        await expect(
+            lidarrService.isArtistInLidarr("artist-mbid-1"),
+        ).resolves.toBe(true);
     });
 
     it("searchAlbum falls back to stripped title when direct lookup returns no album", async () => {
@@ -2820,14 +2894,14 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
         mockStripAlbumEdition.mockReturnValueOnce("Album");
 
-        client.get
-            .mockResolvedValueOnce({ data: [] })
-            .mockResolvedValueOnce({
-                data: [{ id: 901, title: "Album", foreignAlbumId: "album-mbid-901" }],
-            });
+        client.get.mockResolvedValueOnce({ data: [] }).mockResolvedValueOnce({
+            data: [
+                { id: 901, title: "Album", foreignAlbumId: "album-mbid-901" },
+            ],
+        });
 
         await expect(
-            lidarrService.searchAlbum("Artist", "Album (Deluxe)")
+            lidarrService.searchAlbum("Artist", "Album (Deluxe)"),
         ).resolves.toEqual([
             expect.objectContaining({
                 id: 901,
@@ -2836,13 +2910,9 @@ describe("lidarr service behavior", () => {
         ]);
 
         expect(client.get).toHaveBeenCalledTimes(2);
-        expect(client.get).toHaveBeenNthCalledWith(
-            2,
-            "/api/v1/album/lookup",
-            {
-                params: { term: "Artist Album" },
-            }
-        );
+        expect(client.get).toHaveBeenNthCalledWith(2, "/api/v1/album/lookup", {
+            params: { term: "Artist Album" },
+        });
     });
 
     it("searchAlbum with MBID uses only primary lookup and does not try stripped title", async () => {
@@ -2852,7 +2922,7 @@ describe("lidarr service behavior", () => {
         client.get.mockResolvedValueOnce({ data: [] });
 
         await expect(
-            lidarrService.searchAlbum("Artist", "Album", "album-mbid")
+            lidarrService.searchAlbum("Artist", "Album", "album-mbid"),
         ).resolves.toEqual([]);
 
         expect(client.get).toHaveBeenCalledTimes(1);
@@ -2867,7 +2937,7 @@ describe("lidarr service behavior", () => {
         client.get.mockRejectedValueOnce(new Error("lookup down"));
 
         await expect(
-            lidarrService.searchAlbum("Artist", "Album", "album-mbid")
+            lidarrService.searchAlbum("Artist", "Album", "album-mbid"),
         ).resolves.toEqual([]);
     });
 
@@ -2878,7 +2948,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(
-            lidarrService.searchAlbum("Artist", "Album")
+            lidarrService.searchAlbum("Artist", "Album"),
         ).rejects.toThrow("Lidarr not enabled");
     });
 
@@ -2887,7 +2957,9 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
         client.get.mockRejectedValueOnce(new Error("lookup down"));
 
-        await expect(lidarrService.searchArtist("No Backup")).resolves.toEqual([]);
+        await expect(lidarrService.searchArtist("No Backup")).resolves.toEqual(
+            [],
+        );
     });
 
     it("waitForCommand rejects when command never reaches terminal state", async () => {
@@ -2901,7 +2973,7 @@ describe("lidarr service behavior", () => {
         });
 
         await expect(
-            (lidarrService as any).waitForCommand(99, 10, 0)
+            (lidarrService as any).waitForCommand(99, 10, 0),
         ).rejects.toThrow("Command 99 timed out after 10ms");
     });
 
@@ -2916,7 +2988,9 @@ describe("lidarr service behavior", () => {
         });
 
         client.post.mockRejectedValueOnce(new Error("rescan failed"));
-        await expect(lidarrService.rescanLibrary()).rejects.toThrow("rescan failed");
+        await expect(lidarrService.rescanLibrary()).rejects.toThrow(
+            "rescan failed",
+        );
     });
 
     it("getArtists returns empty when Lidarr is disabled", async () => {
@@ -2941,7 +3015,7 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
 
         await expect(
-            lidarrService.deleteArtist("temp-artist")
+            lidarrService.deleteArtist("temp-artist"),
         ).resolves.toEqual({
             success: false,
             message: "Invalid or temporary MBID",
@@ -2957,7 +3031,7 @@ describe("lidarr service behavior", () => {
         client.get.mockResolvedValueOnce({ data: [] });
 
         await expect(
-            lidarrService.deleteArtist("missing-mbid")
+            lidarrService.deleteArtist("missing-mbid"),
         ).resolves.toEqual({
             success: true,
             message: "Artist not in Lidarr (already removed or never added)",
@@ -2969,7 +3043,9 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
 
         client.get
-            .mockResolvedValueOnce({ data: { id: 81, artistId: 33, title: "Album 81" } })
+            .mockResolvedValueOnce({
+                data: { id: 81, artistId: 33, title: "Album 81" },
+            })
             .mockResolvedValueOnce({ data: [{ id: 201 }, { id: 202 }] });
         client.delete.mockResolvedValue({});
         client.put.mockResolvedValue({ data: {} });
@@ -2978,7 +3054,7 @@ describe("lidarr service behavior", () => {
             expect.objectContaining({
                 success: true,
                 message: "Deleted files and unmonitored Album 81",
-            })
+            }),
         );
 
         expect(client.delete).toHaveBeenCalledWith("/api/v1/trackFile/201");
@@ -3017,7 +3093,9 @@ describe("lidarr service behavior", () => {
         });
         client.delete.mockRejectedValueOnce(new Error("delete failed"));
 
-        await expect(lidarrService.deleteArtist("artist-delete-fail")).resolves.toEqual({
+        await expect(
+            lidarrService.deleteArtist("artist-delete-fail"),
+        ).resolves.toEqual({
             success: false,
             message: "delete failed",
         });
@@ -3029,7 +3107,9 @@ describe("lidarr service behavior", () => {
         svc.enabled = false;
         svc.client = null;
 
-        await expect(lidarrService.deleteArtist("artist-disabled")).resolves.toEqual({
+        await expect(
+            lidarrService.deleteArtist("artist-disabled"),
+        ).resolves.toEqual({
             success: false,
             message: "Lidarr not enabled or configured",
         });
@@ -3038,19 +3118,21 @@ describe("lidarr service behavior", () => {
             message: "Lidarr not enabled or configured",
         });
         expect(await lidarrService.isAlbumAvailable("album-mbid")).toBe(false);
-        expect(await lidarrService.isAlbumAvailableByTitle("Artist", "Album")).toBe(
-            false
+        expect(
+            await lidarrService.isAlbumAvailableByTitle("Artist", "Album"),
+        ).toBe(false);
+        expect(await lidarrService.isArtistInLidarr("artist-disabled")).toBe(
+            false,
         );
-        expect(await lidarrService.isArtistInLidarr("artist-disabled")).toBe(false);
         expect(await lidarrService.getTags()).toEqual([]);
         expect(await lidarrService.createTag("new-tag")).toBeNull();
         expect(await lidarrService.getOrCreateDiscoveryTag()).toBeNull();
         expect(await lidarrService.addTagsToArtist(1, [3])).toBe(false);
         expect(await lidarrService.removeTagsFromArtist(1, [3])).toBe(false);
         expect(await lidarrService.getArtistsByTag(3)).toEqual([]);
-        expect(await lidarrService.removeDiscoveryTagByMbid("artist-disabled")).toBe(
-            false
-        );
+        expect(
+            await lidarrService.removeDiscoveryTagByMbid("artist-disabled"),
+        ).toBe(false);
         await expect(lidarrService.deleteArtistById(7)).resolves.toEqual({
             success: false,
             message: "Lidarr not enabled",
@@ -3065,22 +3147,45 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
 
         client.get.mockResolvedValueOnce({
-            data: [{ foreignAlbumId: "album-mbid", statistics: { percentOfTracks: 80 } }],
+            data: [
+                {
+                    foreignAlbumId: "album-mbid",
+                    statistics: { percentOfTracks: 80 },
+                },
+            ],
         });
-        await expect(lidarrService.isAlbumAvailable("album-mbid")).resolves.toBe(true);
+        await expect(
+            lidarrService.isAlbumAvailable("album-mbid"),
+        ).resolves.toBe(true);
 
         client.get.mockResolvedValueOnce({
-            data: [{ foreignAlbumId: "other", statistics: { percentOfTracks: 100 } }],
+            data: [
+                {
+                    foreignAlbumId: "other",
+                    statistics: { percentOfTracks: 100 },
+                },
+            ],
         });
-        await expect(lidarrService.isAlbumAvailable("album-mbid")).resolves.toBe(false);
+        await expect(
+            lidarrService.isAlbumAvailable("album-mbid"),
+        ).resolves.toBe(false);
 
         client.get.mockResolvedValueOnce({
-            data: [{ foreignAlbumId: "album-mbid", statistics: { percentOfTracks: 0 } }],
+            data: [
+                {
+                    foreignAlbumId: "album-mbid",
+                    statistics: { percentOfTracks: 0 },
+                },
+            ],
         });
-        await expect(lidarrService.isAlbumAvailable("album-mbid")).resolves.toBe(false);
+        await expect(
+            lidarrService.isAlbumAvailable("album-mbid"),
+        ).resolves.toBe(false);
 
         client.get.mockRejectedValueOnce({ response: { status: 404 } });
-        await expect(lidarrService.isAlbumAvailable("album-mbid")).resolves.toBe(false);
+        await expect(
+            lidarrService.isAlbumAvailable("album-mbid"),
+        ).resolves.toBe(false);
     });
 
     it("isAlbumAvailableByTitle returns false when no matches or matching entries have no files", async () => {
@@ -3088,7 +3193,9 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
 
         client.get.mockResolvedValueOnce({ data: [] });
-        await expect(lidarrService.isAlbumAvailableByTitle("A", "B")).resolves.toBe(false);
+        await expect(
+            lidarrService.isAlbumAvailableByTitle("A", "B"),
+        ).resolves.toBe(false);
 
         client.get
             .mockResolvedValueOnce({
@@ -3098,7 +3205,7 @@ describe("lidarr service behavior", () => {
                 data: [{ title: "B", statistics: { percentOfTracks: 0 } }],
             });
         await expect(
-            lidarrService.isAlbumAvailableByTitle("Target", "B")
+            lidarrService.isAlbumAvailableByTitle("Target", "B"),
         ).resolves.toBe(false);
     });
 
@@ -3127,7 +3234,10 @@ describe("lidarr service behavior", () => {
             });
 
         await expect(
-            lidarrService.isAlbumAvailableByTitle("Target Artist", "Wanted Album")
+            lidarrService.isAlbumAvailableByTitle(
+                "Target Artist",
+                "Wanted Album",
+            ),
         ).resolves.toBe(true);
     });
 
@@ -3140,10 +3250,13 @@ describe("lidarr service behavior", () => {
             .mockRejectedValueOnce(new Error("title lookup failed"));
 
         await expect(
-            lidarrService.isAlbumAvailable("album-lookup-failed")
+            lidarrService.isAlbumAvailable("album-lookup-failed"),
         ).resolves.toBe(false);
         await expect(
-            lidarrService.isAlbumAvailableByTitle("Unavailable Artist", "Unavailable Album")
+            lidarrService.isAlbumAvailableByTitle(
+                "Unavailable Artist",
+                "Unavailable Album",
+            ),
         ).resolves.toBe(false);
 
         const snapshot = {
@@ -3191,37 +3304,42 @@ describe("lidarr service behavior", () => {
                 snapshot,
                 undefined,
                 "Artist",
-                "Album Deluxe"
-            )
+                "Album Deluxe",
+            ),
         ).toBe(true);
         expect(
             (lidarrService as any).isAlbumAvailableInSnapshot(
                 snapshot,
                 undefined,
                 "Artist",
-                "Album"
-            )
+                "Album",
+            ),
         ).toBe(true);
         expect(
             (lidarrService as any).isAlbumAvailableInSnapshot(
                 snapshot,
                 undefined,
                 "Nope",
-                "Missing"
-            )
+                "Missing",
+            ),
         ).toBe(false);
         expect(
-            (lidarrService as any).isDownloadActiveInSnapshot(snapshot, "dl-missing")
+            (lidarrService as any).isDownloadActiveInSnapshot(
+                snapshot,
+                "dl-missing",
+            ),
         ).toEqual({ active: false });
     });
 
     it("isArtistInLidarr returns false when artist is absent", async () => {
         const client = createClientMock();
         primeServiceWithClient(client);
-        client.get.mockResolvedValueOnce({ data: [{ foreignArtistId: "other" }] });
+        client.get.mockResolvedValueOnce({
+            data: [{ foreignArtistId: "other" }],
+        });
 
         await expect(
-            lidarrService.isArtistInLidarr("absent-mbid")
+            lidarrService.isArtistInLidarr("absent-mbid"),
         ).resolves.toBe(false);
     });
 
@@ -3232,7 +3350,9 @@ describe("lidarr service behavior", () => {
             data: [{ id: 11, foreignArtistId: "present-mbid" }],
         });
 
-        await expect(lidarrService.isArtistInLidarr("present-mbid")).resolves.toBe(true);
+        await expect(
+            lidarrService.isArtistInLidarr("present-mbid"),
+        ).resolves.toBe(true);
     });
 
     it("getArtistsByTag filters artists using Lidarr tag ids", async () => {
@@ -3240,8 +3360,18 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
         client.get.mockResolvedValueOnce({
             data: [
-                { id: 1, foreignArtistId: "a", tags: [9, 8], artistName: "With Tag" },
-                { id: 2, foreignArtistId: "b", tags: [1], artistName: "No Tag" },
+                {
+                    id: 1,
+                    foreignArtistId: "a",
+                    tags: [9, 8],
+                    artistName: "With Tag",
+                },
+                {
+                    id: 2,
+                    foreignArtistId: "b",
+                    tags: [1],
+                    artistName: "No Tag",
+                },
             ],
         });
 
@@ -3296,7 +3426,7 @@ describe("lidarr service behavior", () => {
         client.get.mockResolvedValueOnce({ data: [] });
 
         await expect(
-            lidarrService.removeDiscoveryTagByMbid("missing-mbid")
+            lidarrService.removeDiscoveryTagByMbid("missing-mbid"),
         ).resolves.toBe(true);
     });
 
@@ -3310,7 +3440,7 @@ describe("lidarr service behavior", () => {
         client.put.mockResolvedValue({});
 
         await expect(
-            lidarrService.removeDiscoveryTagByMbid("mb")
+            lidarrService.removeDiscoveryTagByMbid("mb"),
         ).resolves.toBe(true);
         expect(client.put).not.toHaveBeenCalled();
     });
@@ -3344,7 +3474,7 @@ describe("lidarr service behavior", () => {
         });
 
         await expect(
-            lidarrService.deleteArtistById(99, false)
+            lidarrService.deleteArtistById(99, false),
         ).resolves.toEqual({
             success: false,
             message: "server down",
@@ -3412,7 +3542,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(svc.ensureRootFolderExists("/fallback")).resolves.toBe(
-            "/fallback"
+            "/fallback",
         );
     });
 
@@ -3420,9 +3550,9 @@ describe("lidarr service behavior", () => {
         const svc = lidarrService as any;
         svc.client = null;
 
-        await expect(lidarrService.getArtistAlbums("artist-mbid")).resolves.toEqual(
-            []
-        );
+        await expect(
+            lidarrService.getArtistAlbums("artist-mbid"),
+        ).resolves.toEqual([]);
     });
 
     it("addArtist updates existing artist but skips missing album search when disabled", async () => {
@@ -3474,13 +3604,13 @@ describe("lidarr service behavior", () => {
                 "/music",
                 false,
                 true,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 12,
                 foreignArtistId: "artist-existing",
-            })
+            }),
         );
 
         expect(client.post).not.toHaveBeenCalled();
@@ -3489,7 +3619,7 @@ describe("lidarr service behavior", () => {
             expect.objectContaining({
                 monitored: true,
                 monitorNewItems: "all",
-            })
+            }),
         );
         searchSpy.mockRestore();
     });
@@ -3531,8 +3661,8 @@ describe("lidarr service behavior", () => {
                 "/music",
                 true,
                 true,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(existingArtist);
 
         expect(client.put).toHaveBeenCalledTimes(1);
@@ -3581,13 +3711,13 @@ describe("lidarr service behavior", () => {
                 "/music",
                 false,
                 false,
-                false
-            )
+                false,
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 77,
                 foreignArtistId: "artist-refresh-fail",
-            })
+            }),
         );
 
         expect(client.post).toHaveBeenCalledWith("/api/v1/command", {
@@ -3602,9 +3732,9 @@ describe("lidarr service behavior", () => {
         primeServiceWithClient(client);
         client.get.mockResolvedValueOnce({ data: [] });
 
-        await expect(lidarrService.searchAlbum("Artist", "Album")).resolves.toEqual(
-            []
-        );
+        await expect(
+            lidarrService.searchAlbum("Artist", "Album"),
+        ).resolves.toEqual([]);
 
         expect(client.get).toHaveBeenCalledTimes(1);
         expect(client.get).toHaveBeenCalledWith("/api/v1/album/lookup", {
@@ -3643,8 +3773,8 @@ describe("lidarr service behavior", () => {
                 "Artist",
                 "Album",
                 "/music",
-                "artist-mbid-refresh"
-            )
+                "artist-mbid-refresh",
+            ),
         ).resolves.toBeNull();
 
         expect(client.post).toHaveBeenCalledWith("/api/v1/command", {
@@ -3726,14 +3856,14 @@ describe("lidarr service behavior", () => {
                 "Added Artist",
                 "Album Added",
                 "/music",
-                "artist-added"
-            )
+                "artist-added",
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 301,
                 foreignAlbumId: "album-added-mbid",
                 monitored: true,
-            })
+            }),
         );
 
         expect(addArtistSpy).toHaveBeenCalledWith(
@@ -3742,7 +3872,7 @@ describe("lidarr service behavior", () => {
             "/music",
             false,
             false,
-            false
+            false,
         );
         expect(client.put).toHaveBeenCalledWith(
             "/api/v1/artist/88",
@@ -3752,7 +3882,7 @@ describe("lidarr service behavior", () => {
                 foreignArtistId: "artist-added",
                 monitored: true,
                 tags: [],
-            })
+            }),
         );
         expect(client.put).toHaveBeenCalledWith(
             "/api/v1/album/301",
@@ -3760,7 +3890,7 @@ describe("lidarr service behavior", () => {
                 id: 301,
                 title: "Album Added",
                 monitored: true,
-            })
+            }),
         );
 
         addArtistSpy.mockRestore();
@@ -3773,7 +3903,7 @@ describe("lidarr service behavior", () => {
 
         const calendar = await lidarrService.getCalendar(
             new Date("2026-02-01"),
-            new Date("2026-02-28")
+            new Date("2026-02-28"),
         );
         expect(calendar).toEqual([]);
     });
@@ -3804,9 +3934,12 @@ describe("lidarr service behavior", () => {
 
         const result = await cleanStuckDownloads(
             "http://lidarr:8686",
-            "api-key"
+            "api-key",
         );
-        expect(result).toEqual({ removed: 1, items: ["Terminal Import Failed"] });
+        expect(result).toEqual({
+            removed: 1,
+            items: ["Terminal Import Failed"],
+        });
         expect(mockAxiosDelete).toHaveBeenCalledTimes(1);
     });
 
@@ -3878,12 +4011,12 @@ describe("lidarr service behavior", () => {
                 "Timeout Artist",
                 "No Data Album",
                 "/music",
-                "artist-timeout"
-            )
+                "artist-timeout",
+            ),
         ).resolves.toBeNull();
 
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Timeout reached after 60s")
+            expect.stringContaining("Timeout reached after 60s"),
         );
 
         addArtistSpy.mockRestore();
@@ -3944,17 +4077,19 @@ describe("lidarr service behavior", () => {
                 "Exact Match Band",
                 "Exact Match Album",
                 "/music",
-                "artist-exact"
-            )
+                "artist-exact",
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 901,
                 foreignAlbumId: "album-exact",
-            })
+            }),
         );
 
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining('Matched exact normalized: "Exact Match Album (Deluxe Edition)"')
+            expect.stringContaining(
+                'Matched exact normalized: "Exact Match Album (Deluxe Edition)"',
+            ),
         );
 
         waitSpy.mockRestore();
@@ -4014,17 +4149,19 @@ describe("lidarr service behavior", () => {
                 "Partial Band",
                 "Partial Match Album",
                 "/music",
-                "artist-partial"
-            )
+                "artist-partial",
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 id: 902,
                 foreignAlbumId: "album-partial",
-            })
+            }),
         );
 
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining('Matched partial (contained): "Partial Match Album Remastered"')
+            expect.stringContaining(
+                'Matched partial (contained): "Partial Match Album Remastered"',
+            ),
         );
 
         waitSpy.mockRestore();
@@ -4038,11 +4175,13 @@ describe("lidarr service behavior", () => {
             .mockRejectedValueOnce(new Error("tag lookup failed"));
         (lidarrService as any).discoveryTagId = null;
 
-        await expect(lidarrService.getOrCreateDiscoveryTag()).resolves.toBeNull();
+        await expect(
+            lidarrService.getOrCreateDiscoveryTag(),
+        ).resolves.toBeNull();
         expect(getTagsSpy).toHaveBeenCalledTimes(1);
         expect(logger.error).toHaveBeenCalledWith(
             "[LIDARR] Failed to get/create discovery tag:",
-            "tag lookup failed"
+            "tag lookup failed",
         );
 
         getTagsSpy.mockRestore();
@@ -4057,7 +4196,7 @@ describe("lidarr service behavior", () => {
             .mockResolvedValue(null);
 
         await expect(
-            lidarrService.removeDiscoveryTagByMbid("artist-without-tag-id")
+            lidarrService.removeDiscoveryTagByMbid("artist-without-tag-id"),
         ).resolves.toBe(false);
         expect(discoverySpy).toHaveBeenCalled();
 
@@ -4079,14 +4218,17 @@ describe("lidarr service behavior", () => {
                 ],
             },
         });
-        client.delete.mockRejectedValueOnce({ response: { status: 500 }, message: "delete failed" });
+        client.delete.mockRejectedValueOnce({
+            response: { status: 500 },
+            message: "delete failed",
+        });
 
         await expect(
-            lidarrService.blocklistAndRemove("remove-fail")
+            lidarrService.blocklistAndRemove("remove-fail"),
         ).resolves.toBe(false);
         expect(logger.error).toHaveBeenCalledWith(
             "[LIDARR] Failed to blocklist:",
-            "delete failed"
+            "delete failed",
         );
     });
 
@@ -4096,7 +4238,9 @@ describe("lidarr service behavior", () => {
         svc.enabled = false;
         svc.client = null;
 
-        await expect(lidarrService.rescanLibrary()).rejects.toThrow("Lidarr not enabled");
+        await expect(lidarrService.rescanLibrary()).rejects.toThrow(
+            "Lidarr not enabled",
+        );
     });
 
     it("checks album availability with generic Lidarr failures", async () => {
@@ -4105,10 +4249,12 @@ describe("lidarr service behavior", () => {
 
         client.get.mockRejectedValueOnce(new Error("album query failed"));
 
-        await expect(lidarrService.isAlbumAvailable("album-failure")).resolves.toBe(false);
+        await expect(
+            lidarrService.isAlbumAvailable("album-failure"),
+        ).resolves.toBe(false);
         expect(logger.error).toHaveBeenCalledWith(
             "Lidarr album check error:",
-            "album query failed"
+            "album query failed",
         );
     });
 
@@ -4119,7 +4265,7 @@ describe("lidarr service behavior", () => {
         client.get.mockRejectedValueOnce(new Error("artist fetch failed"));
 
         await expect(
-            lidarrService.isArtistInLidarr("artist-failure")
+            lidarrService.isArtistInLidarr("artist-failure"),
         ).resolves.toBe(false);
     });
 
@@ -4137,9 +4283,7 @@ describe("lidarr service behavior", () => {
             })
             .mockRejectedValueOnce(new Error("release lookup failed"));
 
-        await expect(
-            lidarrService.getAlbumReleases(12)
-        ).resolves.toEqual([
+        await expect(lidarrService.getAlbumReleases(12)).resolves.toEqual([
             expect.objectContaining({ id: 2 }),
             expect.objectContaining({ id: 3 }),
             expect.objectContaining({ id: 1 }),
@@ -4149,7 +4293,7 @@ describe("lidarr service behavior", () => {
         expect(emptyReleases).toEqual([]);
         expect(logger.error).toHaveBeenCalledWith(
             "[LIDARR] Failed to fetch releases:",
-            "release lookup failed"
+            "release lookup failed",
         );
     });
 
@@ -4160,7 +4304,7 @@ describe("lidarr service behavior", () => {
         svc.client = null;
 
         await expect(
-            (lidarrService as any).findQueueItemByDownloadId("dl-disabled")
+            (lidarrService as any).findQueueItemByDownloadId("dl-disabled"),
         ).resolves.toBeNull();
     });
 
@@ -4171,11 +4315,11 @@ describe("lidarr service behavior", () => {
         client.get.mockRejectedValueOnce(new Error("queue down"));
 
         await expect(
-            (lidarrService as any).findQueueItemByDownloadId("dl-down")
+            (lidarrService as any).findQueueItemByDownloadId("dl-down"),
         ).resolves.toBeNull();
         expect(logger.error).toHaveBeenCalledWith(
             "[LIDARR] Failed to find queue item:",
-            "queue down"
+            "queue down",
         );
     });
 
@@ -4183,12 +4327,14 @@ describe("lidarr service behavior", () => {
         const client = createClientMock();
         primeServiceWithClient(client);
 
-        client.get.mockRejectedValueOnce(new Error("monitored artists unavailable"));
+        client.get.mockRejectedValueOnce(
+            new Error("monitored artists unavailable"),
+        );
 
         await expect(lidarrService.getMonitoredArtists()).resolves.toEqual([]);
         expect(logger.error).toHaveBeenCalledWith(
             "[LIDARR] Failed to fetch monitored artists:",
-            "monitored artists unavailable"
+            "monitored artists unavailable",
         );
     });
 
@@ -4215,7 +4361,7 @@ describe("lidarr service behavior", () => {
         expect(snapshot.albumsByTitle.size).toBe(0);
         expect(logger.error).toHaveBeenCalledWith(
             "[LIDARR] Failed to create reconciliation snapshot:",
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -4317,15 +4463,14 @@ describe("lidarr service behavior", () => {
                 "Base Album Artist",
                 "Fallback Album (Remix)",
                 "/music",
-                "artist-base-fallback"
-            )
+                "artist-base-fallback",
+            ),
         ).rejects.toBeInstanceOf(AcquisitionError);
         expect(baseTitleSpy).toHaveBeenCalledWith("Fallback Album (Remix)");
 
         baseTitleSpy.mockRestore();
         waitSpy.mockRestore();
     });
-
 });
 
 describe("lidarr exported queue/history helpers", () => {
@@ -4346,7 +4491,12 @@ describe("lidarr exported queue/history helpers", () => {
                         id: 1,
                         title: "Album One",
                         statusMessages: [
-                            { title: "msg", messages: ["No files found are eligible for import"] },
+                            {
+                                title: "msg",
+                                messages: [
+                                    "No files found are eligible for import",
+                                ],
+                            },
                         ],
                         trackedDownloadStatus: "ok",
                         trackedDownloadState: "downloading",
@@ -4370,7 +4520,10 @@ describe("lidarr exported queue/history helpers", () => {
         });
         mockAxiosDelete.mockResolvedValue({});
 
-        const result = await cleanStuckDownloads("http://lidarr:8686", "api-key");
+        const result = await cleanStuckDownloads(
+            "http://lidarr:8686",
+            "api-key",
+        );
         expect(result.removed).toBe(3);
         expect(result.items).toEqual(["Album One", "Album Two", "Album Three"]);
         expect(mockAxiosDelete).toHaveBeenCalledTimes(3);
@@ -4390,7 +4543,7 @@ describe("lidarr exported queue/history helpers", () => {
         const records = await getRecentCompletedDownloads(
             "http://lidarr:8686",
             "api-key",
-            5
+            5,
         );
         expect(records).toHaveLength(1);
         expect(records[0].id).toBe(1);
@@ -4400,19 +4553,23 @@ describe("lidarr exported queue/history helpers", () => {
         mockAxiosGet.mockResolvedValueOnce({
             data: { totalRecords: 17 },
         });
-        await expect(getQueueCount("http://lidarr:8686", "api-key")).resolves.toBe(
-            17
-        );
+        await expect(
+            getQueueCount("http://lidarr:8686", "api-key"),
+        ).resolves.toBe(17);
 
         mockAxiosGet.mockRejectedValueOnce(new Error("queue down"));
-        await expect(getQueueCount("http://lidarr:8686", "api-key")).resolves.toBe(0);
+        await expect(
+            getQueueCount("http://lidarr:8686", "api-key"),
+        ).resolves.toBe(0);
     });
 
     it("returns queue and active download status from settings", async () => {
         mockAxiosGet
             .mockResolvedValueOnce({
                 data: {
-                    records: [{ id: 11, downloadId: "dl-11", status: "downloading" }],
+                    records: [
+                        { id: 11, downloadId: "dl-11", status: "downloading" },
+                    ],
                 },
             })
             .mockResolvedValueOnce({
@@ -4438,7 +4595,9 @@ describe("lidarr exported queue/history helpers", () => {
         const active = await isDownloadActive("dl-11");
         const missing = await isDownloadActive("dl-missing");
 
-        expect(queue).toEqual([{ id: 11, downloadId: "dl-11", status: "downloading" }]);
+        expect(queue).toEqual([
+            { id: 11, downloadId: "dl-11", status: "downloading" },
+        ]);
         expect(active).toEqual({
             active: true,
             status: "downloading",
@@ -4491,7 +4650,7 @@ describe("lidarr exported queue/history helpers", () => {
         });
 
         await expect(
-            cleanStuckDownloads("http://lidarr:8686", "api-key")
+            cleanStuckDownloads("http://lidarr:8686", "api-key"),
         ).resolves.toEqual({ removed: 0, items: [] });
         expect(mockAxiosDelete).toHaveBeenCalledTimes(1);
     });
@@ -4506,7 +4665,9 @@ describe("lidarr exported queue/history helpers", () => {
                         statusMessages: [
                             {
                                 title: "msg",
-                                messages: ["No files found are eligible for import"],
+                                messages: [
+                                    "No files found are eligible for import",
+                                ],
                             },
                         ],
                         trackedDownloadStatus: "warning",
@@ -4521,7 +4682,7 @@ describe("lidarr exported queue/history helpers", () => {
         });
 
         await expect(
-            cleanStuckDownloads("http://lidarr:8686", "api-key")
+            cleanStuckDownloads("http://lidarr:8686", "api-key"),
         ).resolves.toEqual({ removed: 0, items: [] });
         expect(mockAxiosDelete).toHaveBeenCalledTimes(1);
     });
@@ -4530,7 +4691,7 @@ describe("lidarr exported queue/history helpers", () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("queue unavailable"));
 
         await expect(
-            cleanStuckDownloads("http://lidarr:8686", "api-key")
+            cleanStuckDownloads("http://lidarr:8686", "api-key"),
         ).rejects.toThrow("queue unavailable");
     });
 
@@ -4557,7 +4718,9 @@ describe("lidarr exported queue/history helpers", () => {
                     {
                         id: 77,
                         title: "Healthy item",
-                        statusMessages: [{ title: "ok", messages: ["all good"] }],
+                        statusMessages: [
+                            { title: "ok", messages: ["all good"] },
+                        ],
                         trackedDownloadStatus: "ok",
                         trackedDownloadState: "downloading",
                     },
@@ -4565,7 +4728,10 @@ describe("lidarr exported queue/history helpers", () => {
             },
         });
 
-        const result = await cleanStuckDownloads("http://lidarr:8686", "api-key");
+        const result = await cleanStuckDownloads(
+            "http://lidarr:8686",
+            "api-key",
+        );
         expect(result).toEqual({ removed: 0, items: [] });
         expect(mockAxiosDelete).not.toHaveBeenCalled();
     });
@@ -4577,14 +4743,16 @@ describe("lidarr exported queue/history helpers", () => {
 
     it("returns inactive status when active-check fetch fails", async () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("queue down"));
-        await expect(isDownloadActive("dl-11")).resolves.toEqual({ active: false });
+        await expect(isDownloadActive("dl-11")).resolves.toEqual({
+            active: false,
+        });
     });
 
     it("propagates recent-completed-download failures from Lidarr history", async () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("history down"));
 
         await expect(
-            getRecentCompletedDownloads("http://lidarr:8686", "api-key", 5)
+            getRecentCompletedDownloads("http://lidarr:8686", "api-key", 5),
         ).rejects.toThrow("history down");
     });
 });

@@ -90,7 +90,8 @@ function CoverMosaic({
                     className={cn(
                         "object-cover",
                         greyed && "opacity-50 grayscale",
-                        hoverScale && "group-hover:scale-105 transition-transform duration-300",
+                        hoverScale &&
+                            "group-hover:scale-105 transition-transform duration-300",
                     )}
                     sizes={imageSizes}
                     unoptimized
@@ -116,14 +117,18 @@ function CoverMosaic({
             )}
         >
             {filledUrls.map((url, i) => (
-                <div key={`${url}-${i}`} className="relative bg-surface-elevated">
+                <div
+                    key={`${url}-${i}`}
+                    className="relative bg-surface-elevated"
+                >
                     <Image
                         src={url}
                         alt=""
                         fill
                         className={cn(
                             "object-cover",
-                            hoverScale && "group-hover:scale-105 transition-transform duration-300",
+                            hoverScale &&
+                                "group-hover:scale-105 transition-transform duration-300",
                         )}
                         sizes={imageSizes}
                         unoptimized

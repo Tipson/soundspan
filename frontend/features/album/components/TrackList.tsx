@@ -8,7 +8,11 @@ import { formatTime } from "@/utils/formatTime";
 import { formatNumber } from "@/utils/formatNumber";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TidalBadge } from "@/components/ui/TidalBadge";
-import { TrackList as SharedTrackList, PreviewBadge, LoadingBadge } from "@/components/track";
+import {
+    TrackList as SharedTrackList,
+    PreviewBadge,
+    LoadingBadge,
+} from "@/components/track";
 import type { TrackRowItem, TrackRowSlots, RowState } from "@/components/track";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
@@ -62,15 +66,24 @@ export const TrackList = memo(function TrackList({
     const handlePlay = useCallback(
         (track: Track, index: number) => {
             const isYouTubeTrack = track.streamSource === "youtube";
-            const isTidalTrack = track.streamSource === "tidal" && !!track.tidalTrackId;
-            const hasLocalFile = typeof track.filePath === "string" && track.filePath.trim().length > 0;
-            const isAwaitingProviderMatch = isProviderMatching && !hasLocalFile && !isTidalTrack && !isYouTubeTrack;
+            const isTidalTrack =
+                track.streamSource === "tidal" && !!track.tidalTrackId;
+            const hasLocalFile =
+                typeof track.filePath === "string" &&
+                track.filePath.trim().length > 0;
+            const isAwaitingProviderMatch =
+                isProviderMatching &&
+                !hasLocalFile &&
+                !isTidalTrack &&
+                !isYouTubeTrack;
             const isPlayable = isOwned || isTidalTrack || isYouTubeTrack;
             const isPreviewOnly = !isPlayable && !isAwaitingProviderMatch;
 
             if (isAwaitingProviderMatch) return;
             if (isPreviewOnly) {
-                onPreview(track, { stopPropagation: () => {} } as React.MouseEvent);
+                onPreview(track, {
+                    stopPropagation: () => {},
+                } as React.MouseEvent);
                 return;
             }
             onPlayTrack(track, index);
@@ -81,12 +94,20 @@ export const TrackList = memo(function TrackList({
     const rowSlots = useCallback(
         (track: Track, index: number, state: RowState): TrackRowSlots => {
             const isYouTubeTrack = track.streamSource === "youtube";
-            const isTidalTrack = track.streamSource === "tidal" && !!track.tidalTrackId;
-            const hasLocalFile = typeof track.filePath === "string" && track.filePath.trim().length > 0;
-            const isAwaitingProviderMatch = isProviderMatching && !hasLocalFile && !isTidalTrack && !isYouTubeTrack;
+            const isTidalTrack =
+                track.streamSource === "tidal" && !!track.tidalTrackId;
+            const hasLocalFile =
+                typeof track.filePath === "string" &&
+                track.filePath.trim().length > 0;
+            const isAwaitingProviderMatch =
+                isProviderMatching &&
+                !hasLocalFile &&
+                !isTidalTrack &&
+                !isYouTubeTrack;
             const isPlayable = isOwned || isTidalTrack || isYouTubeTrack;
             const isPreviewOnly = !isPlayable && !isAwaitingProviderMatch;
-            const isPreviewPlaying = previewTrack === track.id && previewPlaying;
+            const isPreviewPlaying =
+                previewTrack === track.id && previewPlaying;
 
             return {
                 leadingColumn: (
@@ -94,12 +115,20 @@ export const TrackList = memo(function TrackList({
                         <span
                             className={cn(
                                 "group-hover:hidden text-sm",
-                                state.isPlaying ? "text-ai-hover font-bold" : "text-gray-400",
+                                state.isPlaying
+                                    ? "text-ai-hover font-bold"
+                                    : "text-gray-400",
                             )}
                         >
-                            {track.trackNumber || track.trackNo || track.displayTrackNo || index + 1}
+                            {track.trackNumber ||
+                                track.trackNo ||
+                                track.displayTrackNo ||
+                                index + 1}
                         </span>
-                        <Play className="hidden group-hover:inline-block w-4 h-4 text-white" fill="currentColor" />
+                        <Play
+                            className="hidden group-hover:inline-block w-4 h-4 text-white"
+                            fill="currentColor"
+                        />
                     </div>
                 ),
                 titleBadges: (
@@ -110,26 +139,44 @@ export const TrackList = memo(function TrackList({
                         {isPreviewOnly && <PreviewBadge />}
                     </>
                 ),
-                artistContent: track.artist?.name && track.artist.name !== album.artist?.name ? (
-                    <div className="text-xs md:text-sm text-gray-400 truncate">
-                        {track.artist.name}
-                    </div>
-                ) : null,
+                artistContent:
+                    track.artist?.name &&
+                    track.artist.name !== album.artist?.name ? (
+                        <div className="text-xs md:text-sm text-gray-400 truncate">
+                            {track.artist.name}
+                        </div>
+                    ) : null,
                 trailingActions: (
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        {isPlayable && track.playCount !== undefined && track.playCount > 0 && (
-                            <div className="hidden lg:flex items-center gap-1.5 text-xs text-gray-400 bg-surface-hover px-2 py-1 rounded-full">
-                                <Play className="w-3 h-3" />
-                                <span>{formatNumber(track.playCount)}</span>
-                            </div>
-                        )}
+                    <div
+                        className="flex items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {isPlayable &&
+                            track.playCount !== undefined &&
+                            track.playCount > 0 && (
+                                <div className="hidden lg:flex items-center gap-1.5 text-xs text-gray-400 bg-surface-hover px-2 py-1 rounded-full">
+                                    <Play className="w-3 h-3" />
+                                    <span>{formatNumber(track.playCount)}</span>
+                                </div>
+                            )}
                         {isPreviewOnly && (
                             <button
-                                onClick={(e) => { e.stopPropagation(); onPreview(track, e); }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPreview(track, e);
+                                }}
                                 className="p-2 rounded-full bg-surface-hover hover:bg-[#2a2a2a] transition-colors text-white"
-                                aria-label={isPreviewPlaying ? "Pause preview" : "Play preview"}
+                                aria-label={
+                                    isPreviewPlaying
+                                        ? "Pause preview"
+                                        : "Play preview"
+                                }
                             >
-                                {isPreviewPlaying ? <Pause className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                                {isPreviewPlaying ? (
+                                    <Pause className="w-4 h-4" />
+                                ) : (
+                                    <Volume2 className="w-4 h-4" />
+                                )}
                             </button>
                         )}
                         <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
@@ -147,10 +194,26 @@ export const TrackList = memo(function TrackList({
                                 track={{
                                     id: track.id,
                                     title: track.displayTitle ?? track.title,
-                                    artist: { name: track.artist?.name ?? album.artist?.name ?? "", id: track.artist?.id ?? album.artist?.id },
-                                    album: { title: album.title, coverArt: album.coverArt, id: album.id },
+                                    artist: {
+                                        name:
+                                            track.artist?.name ??
+                                            album.artist?.name ??
+                                            "",
+                                        id:
+                                            track.artist?.id ??
+                                            album.artist?.id,
+                                    },
+                                    album: {
+                                        title: album.title,
+                                        coverArt: album.coverArt,
+                                        id: album.id,
+                                    },
                                     duration: track.duration ?? 0,
-                                    streamSource: track.streamSource === "tidal" || track.streamSource === "youtube" ? track.streamSource : undefined,
+                                    streamSource:
+                                        track.streamSource === "tidal" ||
+                                        track.streamSource === "youtube"
+                                            ? track.streamSource
+                                            : undefined,
                                 }}
                                 showGoToAlbum={false}
                             />
@@ -163,14 +226,23 @@ export const TrackList = memo(function TrackList({
                 ),
             };
         },
-        [album, isOwned, isProviderMatching, previewTrack, previewPlaying, onPreview],
+        [
+            album,
+            isOwned,
+            isProviderMatching,
+            previewTrack,
+            previewPlaying,
+            onPreview,
+        ],
     );
 
     const separator = useCallback(
         (track: Track, index: number, prevTrack: Track | null) => {
             if (!isMultiDisc) return null;
             const currentDisc = track.discNumber ?? track.discNo ?? 1;
-            const prevDisc = prevTrack ? (prevTrack.discNumber ?? prevTrack.discNo ?? 1) : 0;
+            const prevDisc = prevTrack
+                ? (prevTrack.discNumber ?? prevTrack.discNo ?? 1)
+                : 0;
             if (index === 0 || currentDisc !== prevDisc) {
                 return (
                     <div className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-[#0d0d0d] border-b border-surface-active">

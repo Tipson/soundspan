@@ -50,7 +50,7 @@ test("all-on init: every mood active means the mood filter passes everything", (
 test("empty activeMoods hides everything (legit zero-visible state, NOT 'all pass')", () => {
     const mask = computeVisibilityMask(
         tracks,
-        filters({ activeMoods: new Set() })
+        filters({ activeMoods: new Set() }),
     );
     assert.deepEqual(Array.from(mask), [0, 0, 0, 0, 0]);
     assert.equal(countVisible(mask), 0);
@@ -66,7 +66,7 @@ test("per-chip toggle: removing one mood from the full set hides only that mood,
 
     const mask = computeVisibilityMask(
         tracks,
-        filters({ activeMoods: afterToggleOff })
+        filters({ activeMoods: afterToggleOff }),
     );
     // moodSad tracks (1, 4) drop out; everything else still passes.
     assert.deepEqual(Array.from(mask), [1, 0, 1, 1, 0]);
@@ -87,7 +87,7 @@ test("solo (shift-click): isolates exactly one mood, discarding the rest", () =>
 test("multiple active moods union", () => {
     const mask = computeVisibilityMask(
         tracks,
-        filters({ activeMoods: new Set(["moodHappy", "moodParty"]) })
+        filters({ activeMoods: new Set(["moodHappy", "moodParty"]) }),
     );
     assert.deepEqual(Array.from(mask), [1, 0, 1, 1, 0]);
 });
@@ -95,7 +95,7 @@ test("multiple active moods union", () => {
 test("energy range excludes out-of-range non-null features", () => {
     const mask = computeVisibilityMask(
         tracks,
-        filters({ energyRange: [0.4, 0.6] })
+        filters({ energyRange: [0.4, 0.6] }),
     );
     // track0 energy .9 out, track1 .2 out, track2 null passes, track3 .5 in, track4 .95 out
     assert.deepEqual(Array.from(mask), [0, 0, 1, 1, 0]);
@@ -104,7 +104,7 @@ test("energy range excludes out-of-range non-null features", () => {
 test("valence range with null valence still passing", () => {
     const mask = computeVisibilityMask(
         tracks,
-        filters({ valenceRange: [0.6, 1] })
+        filters({ valenceRange: [0.6, 1] }),
     );
     // track0 .8 in, track1 .1 out, track2 null passes, track3 .5 out, track4 null passes
     assert.deepEqual(Array.from(mask), [1, 0, 1, 0, 1]);
@@ -114,7 +114,7 @@ test("null energy and valence always pass range filters", () => {
     // Narrow both ranges to an empty-ish window; only the all-null track survives ranges.
     const mask = computeVisibilityMask(
         [{ dominantMood: "moodHappy", energy: null, valence: null }],
-        filters({ energyRange: [0.99, 1], valenceRange: [0.99, 1] })
+        filters({ energyRange: [0.99, 1], valenceRange: [0.99, 1] }),
     );
     assert.deepEqual(Array.from(mask), [1]);
 });
@@ -125,7 +125,7 @@ test("mood + range filters compose (AND)", () => {
         filters({
             activeMoods: new Set(["moodSad"]),
             energyRange: [0.9, 1],
-        })
+        }),
     );
     // Only sad tracks with energy in [.9,1] (or null energy): track1 sad .2 out, track4 sad .95 in
     assert.deepEqual(Array.from(mask), [0, 0, 0, 0, 1]);
@@ -174,7 +174,7 @@ test("a neutral-mood track is visible by default (default whitelist includes neu
     const defaultActive = new Set(FILTERABLE_MOODS);
     const mask = computeVisibilityMask(
         tracksWithNeutral,
-        filters({ activeMoods: defaultActive })
+        filters({ activeMoods: defaultActive }),
     );
     assert.equal(mask[5], 1);
 });
@@ -185,7 +185,7 @@ test("the neutral chip is hideable via toggle and re-showable by toggling again"
     assert.equal(afterHide.has(NEUTRAL_MOOD), false);
     const maskHidden = computeVisibilityMask(
         tracksWithNeutral,
-        filters({ activeMoods: afterHide })
+        filters({ activeMoods: afterHide }),
     );
     assert.equal(maskHidden[5], 0);
     // every other mood is untouched
@@ -195,7 +195,7 @@ test("the neutral chip is hideable via toggle and re-showable by toggling again"
     assert.equal(afterReshow.has(NEUTRAL_MOOD), true);
     const maskReshown = computeVisibilityMask(
         tracksWithNeutral,
-        filters({ activeMoods: afterReshow })
+        filters({ activeMoods: afterReshow }),
     );
     assert.equal(maskReshown[5], 1);
 });
@@ -207,7 +207,7 @@ test("neutral is included after a reset/selectAll-style restore (new Set(FILTERA
     assert.ok(restored.has(NEUTRAL_MOOD));
     const mask = computeVisibilityMask(
         tracksWithNeutral,
-        filters({ activeMoods: restored })
+        filters({ activeMoods: restored }),
     );
     assert.equal(mask[5], 1);
 });

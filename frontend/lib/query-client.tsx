@@ -46,7 +46,8 @@ function makeQueryClient() {
                     }
                     return failureCount < 1;
                 },
-                retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+                retryDelay: (attemptIndex) =>
+                    Math.min(1000 * 2 ** attemptIndex, 30000),
 
                 // Error handling
                 throwOnError: false, // Don't throw errors, let components handle them

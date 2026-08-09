@@ -16,14 +16,14 @@ import {
 // ---------------------------------------------------------------------------
 describe("hasReliableEnhanced", () => {
     it("returns true for enhanced mode with reliable version prefix", () => {
-        expect(
-            hasReliableEnhanced("enhanced", "2.1b6-enhanced-v3.0.0")
-        ).toBe(true);
+        expect(hasReliableEnhanced("enhanced", "2.1b6-enhanced-v3.0.0")).toBe(
+            true,
+        );
     });
 
     it("returns false for standard mode", () => {
         expect(hasReliableEnhanced("standard", "2.1b6-enhanced-v3.0.0")).toBe(
-            false
+            false,
         );
     });
 
@@ -122,20 +122,20 @@ describe("detectOOD", () => {
             detectOOD({
                 moodHappy: 0.85,
                 moodSad: 0.75,
-                moodRelaxed: 0.80,
+                moodRelaxed: 0.8,
                 moodAggressive: 0.78,
-            })
+            }),
         ).toBe(true);
     });
 
     it("detects all-neutral moods as OOD", () => {
         expect(
             detectOOD({
-                moodHappy: 0.50,
+                moodHappy: 0.5,
                 moodSad: 0.48,
                 moodRelaxed: 0.51,
                 moodAggressive: 0.49,
-            })
+            }),
         ).toBe(true);
     });
 
@@ -146,7 +146,7 @@ describe("detectOOD", () => {
                 moodSad: 0.1,
                 moodRelaxed: 0.3,
                 moodAggressive: 0.2,
-            })
+            }),
         ).toBe(false);
     });
 
@@ -247,10 +247,7 @@ describe("cosineSimilarity", () => {
     it("is symmetric", () => {
         const a = [1, 3, 5, 7];
         const b = [2, 4, 6, 8];
-        expect(cosineSimilarity(a, b)).toBeCloseTo(
-            cosineSimilarity(b, a),
-            10
-        );
+        expect(cosineSimilarity(a, b)).toBeCloseTo(cosineSimilarity(b, a), 10);
     });
 
     it("gives high similarity for proportional vectors", () => {
@@ -270,7 +267,7 @@ describe("computeTagBonus", () => {
 
     it("returns 0 when no overlap", () => {
         expect(
-            computeTagBonus(["rock"], ["indie"], ["jazz"], ["classical"])
+            computeTagBonus(["rock"], ["indie"], ["jazz"], ["classical"]),
         ).toBe(0);
     });
 
@@ -279,7 +276,7 @@ describe("computeTagBonus", () => {
             ["Rock", "indie"],
             ["alternative"],
             ["rock"],
-            ["pop"]
+            ["pop"],
         );
         expect(bonus).toBe(0.01); // 1 overlap * 0.01
     });
@@ -300,7 +297,7 @@ describe("computeAggregateFeatureVector", () => {
 
     it("returns null for tracks with no audio data", () => {
         expect(
-            computeAggregateFeatureVector([{ id: "1" }, { id: "2" }])
+            computeAggregateFeatureVector([{ id: "1" }, { id: "2" }]),
         ).toBeNull();
     });
 
@@ -353,7 +350,7 @@ describe("scoreTracksAgainstSeed", () => {
             [],
             [],
             new Map(),
-            identityBias
+            identityBias,
         );
         expect(result).toEqual([]);
     });
@@ -395,7 +392,7 @@ describe("scoreTracksAgainstSeed", () => {
             [],
             [similar, dissimilar],
             new Map(),
-            identityBias
+            identityBias,
         );
 
         // Similar track should score above threshold and rank first
@@ -452,12 +449,12 @@ describe("scoreTracksAgainstSeed", () => {
             [],
             [opposite],
             new Map(),
-            identityBias
+            identityBias,
         );
 
         // The opposite track should be filtered out or have low score
         if (result.length > 0) {
-            expect(result[0].score).toBeGreaterThan(0.40);
+            expect(result[0].score).toBeGreaterThan(0.4);
         }
     });
 
@@ -494,13 +491,11 @@ describe("scoreTracksAgainstSeed", () => {
             [],
             candidates,
             new Map(),
-            identityBias
+            identityBias,
         );
 
         for (let i = 1; i < result.length; i++) {
-            expect(result[i - 1].score).toBeGreaterThanOrEqual(
-                result[i].score
-            );
+            expect(result[i - 1].score).toBeGreaterThanOrEqual(result[i].score);
         }
     });
 
@@ -528,7 +523,7 @@ describe("scoreTracksAgainstSeed", () => {
             ["rock"],
             [withTags],
             new Map(),
-            identityBias
+            identityBias,
         );
 
         const resultWithout = scoreTracksAgainstSeed(
@@ -537,13 +532,11 @@ describe("scoreTracksAgainstSeed", () => {
             ["rock"],
             [withoutTags],
             new Map(),
-            identityBias
+            identityBias,
         );
 
         if (resultWith.length > 0 && resultWithout.length > 0) {
-            expect(resultWith[0].score).toBeGreaterThan(
-                resultWithout[0].score
-            );
+            expect(resultWith[0].score).toBeGreaterThan(resultWithout[0].score);
         }
     });
 });

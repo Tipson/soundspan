@@ -122,7 +122,7 @@ class HowlerEngine {
         autoplay: boolean = false,
         format?: string,
         isRetry: boolean = false,
-        requestOptions?: HowlerRequestOptions
+        requestOptions?: HowlerRequestOptions,
     ): void {
         // Don't reload if same source and already loaded
         if (this.state.currentSrc === src && this.howl) {
@@ -190,7 +190,7 @@ class HowlerEngine {
             src.includes("/api/podcasts/") || src.includes("/api/audiobooks/");
         const xhrOptions = this.buildXhrOptions(
             isAndroidWebView,
-            requestOptions
+            requestOptions,
         );
 
         // Build Howl config
@@ -249,7 +249,7 @@ class HowlerEngine {
                     "[HowlerEngine] Load error:",
                     error,
                     "Attempt:",
-                    this.retryCount + 1
+                    this.retryCount + 1,
                 );
                 this.isLoading = false;
 
@@ -278,7 +278,7 @@ class HowlerEngine {
                             autoplayToRetry,
                             formatToRetry,
                             true,
-                            requestOptionsToRetry
+                            requestOptionsToRetry,
                         );
                     }, 500 * this.retryCount); // Exponential backoff
                     return;
@@ -440,7 +440,9 @@ class HowlerEngine {
         if (!this.state.currentSrc) return;
 
         const src = this.state.currentSrc;
-        const format = this.howl ? (this.howl as unknown as { _format?: string[] })._format : undefined;
+        const format = this.howl
+            ? (this.howl as unknown as { _format?: string[] })._format
+            : undefined;
 
         this.cleanup();
         this.load(src, false, format?.[0], false, this.lastRequestOptions);
@@ -455,7 +457,7 @@ class HowlerEngine {
     preload(
         src: string,
         format?: string,
-        requestOptions?: HowlerRequestOptions
+        requestOptions?: HowlerRequestOptions,
     ): void {
         // Don't preload if same as current source
         if (this.state.currentSrc === src) {
@@ -485,7 +487,7 @@ class HowlerEngine {
             src.includes("/api/podcasts/") || src.includes("/api/audiobooks/");
         const xhrOptions = this.buildXhrOptions(
             isAndroidWebView,
-            requestOptions
+            requestOptions,
         );
 
         // Build Howl config (same logic as load())
@@ -509,7 +511,10 @@ class HowlerEngine {
                 this.isPreloading = false;
             },
             onloaderror: (id, error) => {
-                sharedFrontendLogger.error("[HowlerEngine] Preload error:", error);
+                sharedFrontendLogger.error(
+                    "[HowlerEngine] Preload error:",
+                    error,
+                );
                 this.cancelPreload();
             },
         });
@@ -616,7 +621,11 @@ class HowlerEngine {
 
         try {
             // Access the underlying HTML5 audio element
-            const sounds = (this.howl as unknown as { _sounds?: Array<{ _node?: HTMLAudioElement }> })._sounds;
+            const sounds = (
+                this.howl as unknown as {
+                    _sounds?: Array<{ _node?: HTMLAudioElement }>;
+                }
+            )._sounds;
             if (sounds && sounds.length > 0 && sounds[0]._node) {
                 return sounds[0]._node.currentTime || 0;
             }
@@ -663,7 +672,11 @@ class HowlerEngine {
     hasTrackEnded(): boolean {
         if (!this.howl) return false;
         try {
-            const sounds = (this.howl as unknown as { _sounds?: Array<{ _node?: HTMLAudioElement }> })._sounds;
+            const sounds = (
+                this.howl as unknown as {
+                    _sounds?: Array<{ _node?: HTMLAudioElement }>;
+                }
+            )._sounds;
             const node = sounds?.[0]?._node;
             if (node && node instanceof HTMLMediaElement) {
                 return node.ended;
@@ -699,7 +712,7 @@ class HowlerEngine {
             } catch (err) {
                 sharedFrontendLogger.error(
                     `[HowlerEngine] Event listener error (${event}):`,
-                    err
+                    err,
                 );
             }
         });
@@ -718,7 +731,8 @@ class HowlerEngine {
                     // During a seek operation, ignore timeupdate events that report stale positions
                     // This prevents the UI flicker where old position briefly shows during seek
                     if (this.isSeeking && this.seekTargetTime !== null) {
-                        const isNearTarget = Math.abs(seek - this.seekTargetTime) < 2;
+                        const isNearTarget =
+                            Math.abs(seek - this.seekTargetTime) < 2;
                         if (!isNearTarget) {
                             // Stale position - don't emit, use target instead
                             return;
@@ -731,7 +745,7 @@ class HowlerEngine {
                             this.seekTimeoutId = null;
                         }
                     }
-                    
+
                     this.state.currentTime = seek;
                     this.emit("timeupdate", { time: seek });
                 }
@@ -811,7 +825,9 @@ class HowlerEngine {
         // Remove any previous native ended listener (e.g. from a prior load)
         this.removeNativeEndedListener();
 
-        const sounds = (howl as unknown as { _sounds?: Array<{ _node?: HTMLAudioElement }> })._sounds;
+        const sounds = (
+            howl as unknown as { _sounds?: Array<{ _node?: HTMLAudioElement }> }
+        )._sounds;
         const node = sounds?.[0]?._node;
         if (!node || !(node instanceof HTMLMediaElement)) return;
 
@@ -914,7 +930,10 @@ class HowlerEngine {
         if (ctx.state === "running") return;
 
         void ctx.resume().catch((err) => {
-            sharedFrontendLogger.warn("[HowlerEngine] Failed to resume audio context:", err);
+            sharedFrontendLogger.warn(
+                "[HowlerEngine] Failed to resume audio context:",
+                err,
+            );
         });
     }
 
@@ -941,14 +960,14 @@ class HowlerEngine {
         } catch (err) {
             sharedFrontendLogger.warn(
                 "[HowlerEngine] Failed to set navigator.audioSession.type=playback:",
-                err
+                err,
             );
         }
     }
 
     private buildXhrOptions(
         isAndroidWebView: boolean,
-        requestOptions?: HowlerRequestOptions
+        requestOptions?: HowlerRequestOptions,
     ): ExtendedHowlOptions["xhr"] | undefined {
         const timeoutOverride =
             typeof requestOptions?.timeoutMs === "number" &&
@@ -956,7 +975,8 @@ class HowlerEngine {
             requestOptions.timeoutMs > 0
                 ? requestOptions.timeoutMs
                 : undefined;
-        const timeout = timeoutOverride ?? (isAndroidWebView ? 30000 : undefined);
+        const timeout =
+            timeoutOverride ?? (isAndroidWebView ? 30000 : undefined);
         const hasHeaders =
             Boolean(requestOptions?.requestHeaders) &&
             Object.keys(requestOptions?.requestHeaders ?? {}).length > 0;

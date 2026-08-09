@@ -11,9 +11,20 @@ import {
     Trash2,
 } from "lucide-react";
 
-const STATUS_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-    MISSING_FROM_DISK: { label: "Missing", icon: FileWarning, color: "text-amber-400" },
-    UNREADABLE_METADATA: { label: "Unreadable", icon: AlertTriangle, color: "text-red-400" },
+const STATUS_LABELS: Record<
+    string,
+    { label: string; icon: React.ElementType; color: string }
+> = {
+    MISSING_FROM_DISK: {
+        label: "Missing",
+        icon: FileWarning,
+        color: "text-amber-400",
+    },
+    UNREADABLE_METADATA: {
+        label: "Unreadable",
+        icon: AlertTriangle,
+        color: "text-red-400",
+    },
 };
 
 /**
@@ -69,14 +80,14 @@ export function LibraryHealthSection() {
                         disabled={isLoading}
                         className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors disabled:opacity-50"
                     >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+                        <RefreshCw
+                            className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`}
+                        />
                         Refresh
                     </button>
                 </div>
 
-                {error && (
-                    <p className="text-sm text-red-400 py-2">{error}</p>
-                )}
+                {error && <p className="text-sm text-red-400 py-2">{error}</p>}
 
                 {isLoading && records.length === 0 && (
                     <div className="flex items-center justify-center py-8">
@@ -95,7 +106,9 @@ export function LibraryHealthSection() {
                 {records.length > 0 && (
                     <div className="rounded-lg border border-white/5 overflow-hidden divide-y divide-white/5">
                         {records.map((record) => {
-                            const statusConfig = STATUS_LABELS[record.status] ?? STATUS_LABELS.MISSING_FROM_DISK;
+                            const statusConfig =
+                                STATUS_LABELS[record.status] ??
+                                STATUS_LABELS.MISSING_FROM_DISK;
                             const Icon = statusConfig.icon;
 
                             return (
@@ -106,14 +119,21 @@ export function LibraryHealthSection() {
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                <Icon className={`w-4 h-4 shrink-0 ${statusConfig.color}`} />
+                                                <Icon
+                                                    className={`w-4 h-4 shrink-0 ${statusConfig.color}`}
+                                                />
                                                 <p className="text-sm text-white truncate">
-                                                    {record.track?.title || "Unknown Track"}
+                                                    {record.track?.title ||
+                                                        "Unknown Track"}
                                                 </p>
                                             </div>
                                             {record.track?.album && (
                                                 <p className="text-xs text-gray-400 mt-0.5 ml-6 truncate">
-                                                    {record.track.album.artist?.name} &middot;{" "}
+                                                    {
+                                                        record.track.album
+                                                            .artist?.name
+                                                    }{" "}
+                                                    &middot;{" "}
                                                     {record.track.album.title}
                                                 </p>
                                             )}
@@ -127,7 +147,9 @@ export function LibraryHealthSection() {
                                             )}
                                         </div>
                                         <button
-                                            onClick={() => void handleDismiss(record.id)}
+                                            onClick={() =>
+                                                void handleDismiss(record.id)
+                                            }
                                             className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-white/5 rounded transition-colors shrink-0"
                                             title="Dismiss"
                                         >

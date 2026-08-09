@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { DeviceAuthLinkPanel, SettingsRow, SettingsSelect, SettingsToggle, IntegrationCard } from "../ui";
+import {
+    DeviceAuthLinkPanel,
+    SettingsRow,
+    SettingsSelect,
+    SettingsToggle,
+    IntegrationCard,
+} from "../ui";
 import { UserSettings } from "../../types";
 import { CheckCircle, XCircle, AlertTriangle, Music2 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -16,7 +22,10 @@ const QUALITY_OPTIONS = [
     { value: "LOW", label: "Low (AAC 96 kbps)" },
     { value: "HIGH", label: "High (AAC 320 kbps)" },
     { value: "LOSSLESS", label: "Lossless (FLAC 16-bit / 44.1 kHz)" },
-    { value: "HI_RES_LOSSLESS", label: "Max / Hi-Res (FLAC up to 24-bit / 192 kHz)" },
+    {
+        value: "HI_RES_LOSSLESS",
+        label: "Max / Hi-Res (FLAC up to 24-bit / 192 kHz)",
+    },
 ];
 
 /**
@@ -35,7 +44,9 @@ export function TidalStreamingCard({
     const [success, setSuccess] = useState<string | null>(null);
 
     const [copied, setCopied] = useState(false);
-    const authResultRef = useRef<Awaited<ReturnType<typeof api.pollTidalAuth>> | null>(null);
+    const authResultRef = useRef<Awaited<
+        ReturnType<typeof api.pollTidalAuth>
+    > | null>(null);
 
     // Check TIDAL streaming status on mount
     useEffect(() => {
@@ -57,8 +68,10 @@ export function TidalStreamingCard({
 
     const initiateAuth = useCallback(async () => {
         const deviceAuth = await api.initiateTidalAuth();
-        let authLink = deviceAuth.verification_uri_complete || deviceAuth.verification_uri;
-        if (authLink && !authLink.startsWith("http")) authLink = `https://${authLink}`;
+        let authLink =
+            deviceAuth.verification_uri_complete || deviceAuth.verification_uri;
+        if (authLink && !authLink.startsWith("http"))
+            authLink = `https://${authLink}`;
         return {
             deviceCode: deviceAuth.device_code,
             verificationUri: authLink,
@@ -72,25 +85,32 @@ export function TidalStreamingCard({
         const result = await api.pollTidalAuth(deviceCode);
         if (result.status === "pending") return { status: "pending" } as const;
         if (result.status === "error") {
-            return { status: "error", message: result.error || "Authentication failed" } as const;
+            return {
+                status: "error",
+                message: result.error || "Authentication failed",
+            } as const;
         }
         authResultRef.current = result;
         return { status: "success" } as const;
     }, []);
 
-    const handleSessionStarted = useCallback(async (session: {
-        userCode?: string;
-        verificationUri: string;
-    }) => {
-        try {
-            await navigator.clipboard.writeText(session.userCode || "");
-            setCopied(true);
-            setTimeout(() => setCopied(false), 3000);
-        } catch {
-            // Clipboard may not be available
-        }
-        window.open(session.verificationUri, "_blank", "noopener,noreferrer");
-    }, []);
+    const handleSessionStarted = useCallback(
+        async (session: { userCode?: string; verificationUri: string }) => {
+            try {
+                await navigator.clipboard.writeText(session.userCode || "");
+                setCopied(true);
+                setTimeout(() => setCopied(false), 3000);
+            } catch {
+                // Clipboard may not be available
+            }
+            window.open(
+                session.verificationUri,
+                "_blank",
+                "noopener,noreferrer",
+            );
+        },
+        [],
+    );
 
     const handleAuthSuccess = useCallback(() => {
         const result = authResultRef.current;
@@ -136,8 +156,10 @@ export function TidalStreamingCard({
             cancelAuthentication();
             setSuccess(null);
             setError(null);
-        } catch (err: any) {
-            setError(err.message || "Failed to disconnect");
+        } catch (err: unknown) {
+            setError(
+                err instanceof Error ? err.message : "Failed to disconnect",
+            );
         }
     }, [cancelAuthentication]);
 
@@ -166,7 +188,8 @@ export function TidalStreamingCard({
         : !tidalAvailable
           ? "TIDAL service is not running"
           : undefined;
-    const isExpanded = isAuthenticated || authState === "polling" || authState === "loading";
+    const isExpanded =
+        isAuthenticated || authState === "polling" || authState === "loading";
 
     const statusText = statusLoading
         ? "Checking..."
@@ -184,8 +207,9 @@ export function TidalStreamingCard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Not affiliated with or endorsed by TIDAL. Requires an active TIDAL subscription.
-                You are responsible for complying with TIDAL&apos;s Terms of Service.
+                Not affiliated with or endorsed by TIDAL. Requires an active
+                TIDAL subscription. You are responsible for complying with
+                TIDAL&apos;s Terms of Service.
             </p>
         </div>
     );
@@ -219,7 +243,14 @@ export function TidalStreamingCard({
                             onCancel={handleCancelLink}
                             introText="A TIDAL authorization page should have opened. If it didn't, click the link below."
                             pasteInstruction="Enter this code on the TIDAL page"
-                            signInInstruction={<>Sign in with your TIDAL account and click <strong className="text-white">Allow</strong></>}
+                            signInInstruction={
+                                <>
+                                    Sign in with your TIDAL account and click{" "}
+                                    <strong className="text-white">
+                                        Allow
+                                    </strong>
+                                </>
+                            }
                             openLinkLabel="Open TIDAL Authorization Page"
                         />
                     )}

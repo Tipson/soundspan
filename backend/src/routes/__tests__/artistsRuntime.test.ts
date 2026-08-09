@@ -115,7 +115,7 @@ const originalFetch = (global as any).fetch;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
 
     if (!layer) {
@@ -208,7 +208,7 @@ describe("artists routes runtime", () => {
         expect(mockYtSearch).toHaveBeenCalledWith(
             "__public__",
             "AC/DC Back In Black",
-            "songs"
+            "songs",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ videoId: "dQw4w9WgXcQ" });
@@ -274,7 +274,7 @@ describe("artists routes runtime", () => {
         await getDiscover(req, res);
 
         expect(mockRedisGet).toHaveBeenCalledWith(
-            "discovery:artist:cached-artist:disc:0:top:0:sim:0"
+            "discovery:artist:cached-artist:disc:0:top:0:sim:0",
         );
         expect(mockGetArtistInfo).not.toHaveBeenCalled();
         expect(mockSearchArtist).not.toHaveBeenCalled();
@@ -302,7 +302,10 @@ describe("artists routes runtime", () => {
 
         expect(mockSearchArtist).toHaveBeenCalledWith("Recovery Artist", 1);
         expect(mockGetArtist).not.toHaveBeenCalled();
-        expect(mockGetArtistInfo).toHaveBeenCalledWith("Recovery Artist", "fallback-mbid");
+        expect(mockGetArtistInfo).toHaveBeenCalledWith(
+            "Recovery Artist",
+            "fallback-mbid",
+        );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
             expect.objectContaining({
@@ -311,12 +314,12 @@ describe("artists routes runtime", () => {
                 topTracks: [],
                 similarArtists: [],
                 albums: [],
-            })
+            }),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "discovery:artist:Recovery%20Artist:disc:0:top:0:sim:0",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -345,7 +348,9 @@ describe("artists routes runtime", () => {
     it("returns empty top tracks when /discover top tracks lookup fails", async () => {
         const mbid = "22222222-2222-2222-2222-222222222222";
         mockGetArtist.mockResolvedValueOnce({ name: "Top Tracks Fail" });
-        mockGetArtistTopTracks.mockRejectedValueOnce(new Error("top-tracks timeout"));
+        mockGetArtistTopTracks.mockRejectedValueOnce(
+            new Error("top-tracks timeout"),
+        );
 
         const req = {
             params: { nameOrMbid: mbid },
@@ -360,7 +365,11 @@ describe("artists routes runtime", () => {
         await getDiscover(req, res);
 
         expect(mockGetArtist).toHaveBeenCalledWith(mbid);
-        expect(mockGetArtistTopTracks).toHaveBeenCalledWith(mbid, "Top Tracks Fail", 10);
+        expect(mockGetArtistTopTracks).toHaveBeenCalledWith(
+            mbid,
+            "Top Tracks Fail",
+            10,
+        );
         expect(res.statusCode).toBe(200);
         expect(res.body.topTracks).toEqual([]);
     });
@@ -372,7 +381,8 @@ describe("artists routes runtime", () => {
 
         mockGetArtistInfo.mockResolvedValueOnce({
             bio: {
-                summary: "There are multiple artists with the name Resolved Artist.",
+                summary:
+                    "There are multiple artists with the name Resolved Artist.",
             },
             image: [
                 {
@@ -417,7 +427,7 @@ describe("artists routes runtime", () => {
         });
 
         mockGetBestImage.mockReturnValueOnce(
-            "https://last.fm/images/resolved-artist.jpg"
+            "https://last.fm/images/resolved-artist.jpg",
         );
 
         mockGetArtistTopTracks.mockResolvedValueOnce([
@@ -464,9 +474,13 @@ describe("artists routes runtime", () => {
             },
         ]);
 
-        fetchMock.mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true });
+        fetchMock
+            .mockResolvedValueOnce({ ok: false })
+            .mockResolvedValueOnce({ ok: true });
 
-        mockGetAlbumCover.mockResolvedValueOnce("https://deezer/covers/older.jpg");
+        mockGetAlbumCover.mockResolvedValueOnce(
+            "https://deezer/covers/older.jpg",
+        );
 
         const req = {
             params: { nameOrMbid: encodeURIComponent("The Artist") },
@@ -484,7 +498,7 @@ describe("artists routes runtime", () => {
         expect(mockGetArtistTopTracks).toHaveBeenCalledWith(
             "artist-mbid-1",
             "Resolved Artist",
-            10
+            10,
         );
         expect(mockGetReleaseGroups).toHaveBeenCalledWith("artist-mbid-1");
 
@@ -500,7 +514,7 @@ describe("artists routes runtime", () => {
                 genres: ["alt-rock", "indie"],
                 listeners: 1234,
                 playcount: 5678,
-            })
+            }),
         );
 
         expect(res.body.topTracks).toEqual([
@@ -519,17 +533,17 @@ describe("artists routes runtime", () => {
                 rgMbid: "rg-newer",
                 year: 2012,
                 owned: false,
-            })
+            }),
         );
 
         const olderAlbum = res.body.albums.find(
-            (album: any) => album.rgMbid === "rg-older"
+            (album: any) => album.rgMbid === "rg-older",
         );
         expect(olderAlbum).toEqual(
             expect.objectContaining({
                 coverUrl: "https://deezer/covers/older.jpg",
                 year: 2000,
-            })
+            }),
         );
 
         expect(res.body.similarArtists).toEqual([
@@ -547,7 +561,7 @@ describe("artists routes runtime", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "discovery:artist:The%20Artist:disc:1:top:1:sim:1",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
 
         const cachedJson = mockRedisSetEx.mock.calls[0][2] as string;
@@ -555,7 +569,7 @@ describe("artists routes runtime", () => {
             expect.objectContaining({
                 name: "Resolved Artist",
                 bio: null,
-            })
+            }),
         );
     });
 
@@ -583,7 +597,7 @@ describe("artists routes runtime", () => {
         await getDiscover(req, res);
 
         expect(mockRedisGet).toHaveBeenCalledWith(
-            `discovery:artist:${mbid}:disc:0:top:0:sim:0`
+            `discovery:artist:${mbid}:disc:0:top:0:sim:0`,
         );
         expect(mockSearchArtist).not.toHaveBeenCalled();
         expect(mockGetArtist).toHaveBeenCalledWith(mbid);
@@ -598,13 +612,13 @@ describe("artists routes runtime", () => {
                 albums: [],
                 topTracks: [],
                 similarArtists: [],
-            })
+            }),
         );
 
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             `discovery:artist:${mbid}:disc:0:top:0:sim:0`,
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -657,7 +671,9 @@ describe("artists routes runtime", () => {
         });
 
         fetchMock.mockResolvedValueOnce({ ok: false });
-        mockGetAlbumCover.mockResolvedValueOnce("https://deezer/covers/rg-123.jpg");
+        mockGetAlbumCover.mockResolvedValueOnce(
+            "https://deezer/covers/rg-123.jpg",
+        );
 
         const req = {
             params: { mbid: "rg-123" },
@@ -684,7 +700,7 @@ describe("artists routes runtime", () => {
                 coverArt: "https://deezer/covers/rg-123.jpg",
                 bio: "Album wiki summary",
                 tags: ["electronic"],
-            })
+            }),
         );
 
         expect(res.body.tracks).toEqual([
@@ -705,7 +721,7 @@ describe("artists routes runtime", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "discovery:album:rg-123:tracks:1",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -775,19 +791,21 @@ describe("artists routes runtime", () => {
                 type: "EP",
                 coverUrl:
                     "https://coverartarchive.org/release/release-mbid-9/front-500",
-            })
+            }),
         );
         expect(res.body.tracks).toEqual([]);
 
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "discovery:album:release-mbid-9:tracks:0",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
     it("returns 500 for /album errors", async () => {
-        mockGetReleaseGroup.mockRejectedValueOnce(new Error("musicbrainz timeout"));
+        mockGetReleaseGroup.mockRejectedValueOnce(
+            new Error("musicbrainz timeout"),
+        );
 
         const req = {
             params: { mbid: "bad-mbid" },
@@ -827,10 +845,14 @@ describe("artists routes runtime", () => {
             title: "Release Group with Missing Release Tracks",
             "primary-type": "Album",
             "first-release-date": "2010-01-01",
-            "artist-credit": [{ name: "Fail Artist", artist: { id: "artist-fail" } }],
+            "artist-credit": [
+                { name: "Fail Artist", artist: { id: "artist-fail" } },
+            ],
             releases: [{ id: "release-bad-tracks" }],
         });
-        mockGetRelease.mockRejectedValueOnce(new Error("release tracks failed"));
+        mockGetRelease.mockRejectedValueOnce(
+            new Error("release tracks failed"),
+        );
         fetchMock.mockResolvedValueOnce({ ok: true });
 
         const req = {
@@ -846,7 +868,7 @@ describe("artists routes runtime", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body.tracks).toEqual([]);
         expect(res.body.coverUrl).toBe(
-            "https://coverartarchive.org/release-group/rg-album-fail/front-500"
+            "https://coverartarchive.org/release-group/rg-album-fail/front-500",
         );
     });
 
@@ -856,7 +878,9 @@ describe("artists routes runtime", () => {
             title: "Cover Fallback Album",
             "primary-type": "Album",
             "first-release-date": "2015-05-05",
-            "artist-credit": [{ name: "Fallback Artist", artist: { id: "artist-fallback" } }],
+            "artist-credit": [
+                { name: "Fallback Artist", artist: { id: "artist-fallback" } },
+            ],
         });
         fetchMock.mockRejectedValueOnce(new Error("cover head check failed"));
         mockGetAlbumCover.mockResolvedValueOnce(null);
@@ -871,16 +895,16 @@ describe("artists routes runtime", () => {
 
         expect(mockGetAlbumCover).toHaveBeenCalledWith(
             "Fallback Artist",
-            "Cover Fallback Album"
+            "Cover Fallback Album",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body.coverUrl).toBe(
-            "https://coverartarchive.org/release-group/rg-cover-fallback/front-500"
+            "https://coverartarchive.org/release-group/rg-cover-fallback/front-500",
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "discovery:album:rg-cover-fallback:tracks:0",
             24 * 60 * 60,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -891,7 +915,9 @@ describe("artists routes runtime", () => {
             title: "Cached Album",
             "primary-type": "EP",
             "first-release-date": "2020-02-02",
-            "artist-credit": [{ name: "Cache Artist", artist: { id: "artist-cache" } }],
+            "artist-credit": [
+                { name: "Cache Artist", artist: { id: "artist-cache" } },
+            ],
         });
         fetchMock.mockResolvedValueOnce({ ok: true });
 
@@ -908,7 +934,7 @@ describe("artists routes runtime", () => {
             expect.objectContaining({
                 id: "rg-cache-fail",
                 title: "Cached Album",
-            })
+            }),
         );
     });
 });

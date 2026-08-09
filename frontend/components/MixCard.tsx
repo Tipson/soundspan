@@ -19,7 +19,10 @@ interface MixCardProps {
 const MixCard = memo(
     function MixCard({ mix, index }: MixCardProps) {
         const proxiedUrls = useMemo(
-            () => mix.coverUrls.slice(0, 4).map((url) => api.getCoverArtUrl(url, 300)),
+            () =>
+                mix.coverUrls
+                    .slice(0, 4)
+                    .map((url) => api.getCoverArtUrl(url, 300)),
             [mix.coverUrls],
         );
 
@@ -59,10 +62,10 @@ const MixCard = memo(
             prevProps.mix.trackCount === nextProps.mix.trackCount &&
             prevProps.mix.coverUrls.length === nextProps.mix.coverUrls.length &&
             prevProps.mix.coverUrls.every(
-                (url, i) => url === nextProps.mix.coverUrls[i]
+                (url, i) => url === nextProps.mix.coverUrls[i],
             )
         );
-    }
+    },
 );
 
 export { MixCard };

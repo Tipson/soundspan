@@ -3,7 +3,7 @@ jest.mock("../../middleware/auth", () => ({
 }));
 
 const mockLyricsMutationLimiter = jest.fn(
-    (_req: any, _res: any, next: () => void) => next()
+    (_req: any, _res: any, next: () => void) => next(),
 );
 jest.mock("../../middleware/rateLimiter", () => ({
     lyricsMutationLimiter: mockLyricsMutationLimiter,
@@ -36,11 +36,11 @@ const mockLoggerError = logger.error as jest.Mock;
 function getHandler(
     path: string,
     method: "get" | "delete",
-    stackIndex?: number
+    stackIndex?: number,
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -162,7 +162,7 @@ describe("lyrics routes runtime", () => {
         expect(res.statusCode).toBe(504);
         expect(res.body).toEqual({ error: "Lyrics lookup timed out" });
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "[Lyrics] GET /lyrics/track-slow timed out after 20000ms"
+            "[Lyrics] GET /lyrics/track-slow timed out after 20000ms",
         );
     });
 
@@ -182,7 +182,7 @@ describe("lyrics routes runtime", () => {
         expect(res.body).toEqual({ error: "Failed to load lyrics" });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Get lyrics error for track track-error:",
-            error
+            error,
         );
     });
 
@@ -195,7 +195,7 @@ describe("lyrics routes runtime", () => {
         expect(mockLyricsMutationLimiter).toHaveBeenCalledWith(
             limiterReq,
             limiterRes,
-            next
+            next,
         );
         expect(next).toHaveBeenCalledTimes(1);
 
@@ -209,7 +209,9 @@ describe("lyrics routes runtime", () => {
     });
 
     it("returns 500 when clear lyrics cache fails", async () => {
-        mockClearLyricsCache.mockRejectedValueOnce(new Error("db write failed"));
+        mockClearLyricsCache.mockRejectedValueOnce(
+            new Error("db write failed"),
+        );
         const req = { params: { trackId: "track-1" } } as any;
         const res = createRes();
 
@@ -219,7 +221,7 @@ describe("lyrics routes runtime", () => {
         expect(res.body).toEqual({ error: "Failed to clear lyrics cache" });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Clear lyrics cache error for track track-1:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

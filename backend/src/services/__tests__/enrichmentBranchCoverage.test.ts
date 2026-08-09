@@ -36,7 +36,8 @@ jest.mock("../imageProvider", () => ({ imageProviderService }));
 const mockDownloadAndStoreImage = jest.fn();
 const mockIsNativePath = jest.fn();
 jest.mock("../imageStorage", () => ({
-    downloadAndStoreImage: (...args: unknown[]) => mockDownloadAndStoreImage(...args),
+    downloadAndStoreImage: (...args: unknown[]) =>
+        mockDownloadAndStoreImage(...args),
     isNativePath: (...args: unknown[]) => mockIsNativePath(...args),
 }));
 
@@ -90,7 +91,10 @@ describe("enrichment branch coverage", () => {
         const service = new EnrichmentService();
 
         await expect(service.getSettings("u0")).resolves.toEqual(
-            expect.objectContaining({ enabled: false, sources: expect.any(Object) })
+            expect.objectContaining({
+                enabled: false,
+                sources: expect.any(Object),
+            }),
         );
 
         prisma.user.findUnique.mockResolvedValueOnce({
@@ -113,7 +117,7 @@ describe("enrichment branch coverage", () => {
                     maxRequestsPerMinute: 30,
                     respectApiLimits: false,
                 },
-            })
+            }),
         );
     });
 
@@ -125,15 +129,20 @@ describe("enrichment branch coverage", () => {
             name: "Artist One",
             mbid: "mbid-stable",
         });
-        lastFmService.getArtistInfo.mockRejectedValueOnce(new Error("lastfm timeout"));
+        lastFmService.getArtistInfo.mockRejectedValueOnce(
+            new Error("lastfm timeout"),
+        );
         imageProviderService.getArtistImage.mockRejectedValueOnce(
-            new Error("image provider timeout")
+            new Error("image provider timeout"),
         );
 
         const result = await service.enrichArtist("artist-1", enabledConfig);
         expect(result).toEqual({ confidence: 0 });
         expect(musicBrainzService.searchArtist).not.toHaveBeenCalled();
-        expect(lastFmService.getArtistInfo).toHaveBeenCalledWith("Artist One", "mbid-stable");
+        expect(lastFmService.getArtistInfo).toHaveBeenCalledWith(
+            "Artist One",
+            "mbid-stable",
+        );
     });
 
     it("enrichArtist uses undefined/empty fallback for temp mbids and maps minimal lastfm data", async () => {
@@ -152,9 +161,22 @@ describe("enrichment branch coverage", () => {
         lastFmService.getSimilarArtists.mockResolvedValueOnce([]);
 
         const result = await service.enrichArtist("artist-2", enabledConfig);
-        expect(result).toEqual({ bio: undefined, tags: [], genres: [], similarArtists: [], confidence: 0.3 });
-        expect(lastFmService.getArtistInfo).toHaveBeenCalledWith("Artist Temp", undefined);
-        expect(lastFmService.getSimilarArtists).toHaveBeenCalledWith("", "Artist Temp", 10);
+        expect(result).toEqual({
+            bio: undefined,
+            tags: [],
+            genres: [],
+            similarArtists: [],
+            confidence: 0.3,
+        });
+        expect(lastFmService.getArtistInfo).toHaveBeenCalledWith(
+            "Artist Temp",
+            undefined,
+        );
+        expect(lastFmService.getSimilarArtists).toHaveBeenCalledWith(
+            "",
+            "Artist Temp",
+            10,
+        );
     });
 
     it("enrichAlbum handles title normalization match, label lookup failure, and cover failure", async () => {
@@ -176,9 +198,16 @@ describe("enrichment branch coverage", () => {
         musicBrainzService.getReleaseGroup.mockResolvedValueOnce({
             releases: [{ id: "release-1" }],
         });
-        musicBrainzService.getRelease.mockRejectedValueOnce(new Error("release fetch failed"));
-        lastFmService.getAlbumInfo.mockResolvedValueOnce({ tags: undefined, tracks: undefined });
-        imageProviderService.getAlbumCover.mockRejectedValueOnce(new Error("cover timeout"));
+        musicBrainzService.getRelease.mockRejectedValueOnce(
+            new Error("release fetch failed"),
+        );
+        lastFmService.getAlbumInfo.mockResolvedValueOnce({
+            tags: undefined,
+            tracks: undefined,
+        });
+        imageProviderService.getAlbumCover.mockRejectedValueOnce(
+            new Error("cover timeout"),
+        );
 
         const result = await service.enrichAlbum("album-1", enabledConfig);
         expect(result).toEqual({

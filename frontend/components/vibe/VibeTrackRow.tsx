@@ -40,8 +40,17 @@ export interface VibeTrackRowProps {
 }
 
 function TrackRowContent({
-    title, artistName, onMap, percent, label, accentClass, seq,
-}: Pick<VibeTrackRowProps, "title" | "artistName" | "onMap" | "accentClass" | "seq"> & {
+    title,
+    artistName,
+    onMap,
+    percent,
+    label,
+    accentClass,
+    seq,
+}: Pick<
+    VibeTrackRowProps,
+    "title" | "artistName" | "onMap" | "accentClass" | "seq"
+> & {
     percent: number;
     label: string;
 }) {
@@ -53,16 +62,24 @@ function TrackRowContent({
                 </span>
             )}
             <span className="flex-1 min-w-0">
-                <span className="block truncate text-[13px] text-white">{title}</span>
-                <span className="block truncate text-xs text-gray-400">{artistName}</span>
+                <span className="block truncate text-[13px] text-white">
+                    {title}
+                </span>
+                <span className="block truncate text-xs text-gray-400">
+                    {artistName}
+                </span>
             </span>
             {!onMap && (
                 <span className="shrink-0 text-xs uppercase tracking-wide text-amber-400/80 border border-amber-400/30 rounded px-1 py-0.5">
                     not on map
                 </span>
             )}
-            <span className={`shrink-0 text-xs tabular-nums ${accentClass}`}
-                title={label || undefined}>{percent}%</span>
+            <span
+                className={`shrink-0 text-xs tabular-nums ${accentClass}`}
+                title={label || undefined}
+            >
+                {percent}%
+            </span>
         </>
     );
 }
@@ -81,8 +98,17 @@ export function VibeTrackRow({
 }: VibeTrackRowProps) {
     const { percent, label } = calibratedMatch(distance, quantiles);
 
-    const inner = <TrackRowContent title={title} artistName={artistName}
-        onMap={onMap} percent={percent} label={label} accentClass={accentClass} seq={seq} />;
+    const inner = (
+        <TrackRowContent
+            title={title}
+            artistName={artistName}
+            onMap={onMap}
+            percent={percent}
+            label={label}
+            accentClass={accentClass}
+            seq={seq}
+        />
+    );
 
     if (onClick) {
         return (
@@ -98,7 +124,9 @@ export function VibeTrackRow({
     }
 
     return (
-        <div className={`flex items-center gap-2 px-1 py-1.5 ${className ?? ""}`}>
+        <div
+            className={`flex items-center gap-2 px-1 py-1.5 ${className ?? ""}`}
+        >
             {inner}
         </div>
     );

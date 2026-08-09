@@ -33,7 +33,6 @@ mock.module("@/utils/cn", {
     },
 });
 
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
 type CoverMosaicMod = typeof import("../../components/ui/CoverMosaic");
 
 const loadComponent = async () => {
@@ -47,7 +46,10 @@ describe("CoverMosaic", () => {
         const html = renderToStaticMarkup(
             React.createElement(CoverMosaic, { coverUrls: [] }),
         );
-        assert.ok(html.includes('data-icon="music"'), "Should render Music icon");
+        assert.ok(
+            html.includes('data-icon="music"'),
+            "Should render Music icon",
+        );
         assert.ok(!html.includes("<img"), "Should not render any images");
     });
 
@@ -59,8 +61,14 @@ describe("CoverMosaic", () => {
                 emptyState: React.createElement("span", null, "custom-empty"),
             }),
         );
-        assert.ok(html.includes("custom-empty"), "Should render custom empty state");
-        assert.ok(!html.includes('data-icon="music"'), "Should not render default Music icon");
+        assert.ok(
+            html.includes("custom-empty"),
+            "Should render custom empty state",
+        );
+        assert.ok(
+            !html.includes('data-icon="music"'),
+            "Should not render default Music icon",
+        );
     });
 
     test("renders loading skeleton when isLoading and 0 URLs", async () => {
@@ -71,8 +79,14 @@ describe("CoverMosaic", () => {
                 isLoading: true,
             }),
         );
-        assert.ok(html.includes("animate-pulse"), "Should show pulse animation");
-        assert.ok(!html.includes('data-icon="music"'), "Should not render Music icon when loading");
+        assert.ok(
+            html.includes("animate-pulse"),
+            "Should show pulse animation",
+        );
+        assert.ok(
+            !html.includes('data-icon="music"'),
+            "Should not render Music icon when loading",
+        );
     });
 
     test("renders single full-bleed image for 1 URL in 2x2", async () => {
@@ -84,9 +98,15 @@ describe("CoverMosaic", () => {
             }),
         );
         assert.ok(html.includes('src="url-1"'), "Should render the image");
-        assert.ok(html.includes('data-sizes="200px"'), "Should pass sizes prop");
+        assert.ok(
+            html.includes('data-sizes="200px"'),
+            "Should pass sizes prop",
+        );
         // Should NOT be in a grid
-        assert.ok(!html.includes("grid-cols-2"), "Single image should not be in a grid");
+        assert.ok(
+            !html.includes("grid-cols-2"),
+            "Single image should not be in a grid",
+        );
     });
 
     test("renders 2x2 grid for multiple URLs", async () => {
@@ -125,26 +145,25 @@ describe("CoverMosaic", () => {
         assert.equal(imgCount, 2, "Should render 2 images");
         // empty cells should have music icon
         const iconCount = (html.match(/data-icon="music"/g) || []).length;
-        assert.equal(iconCount, 2, "Should render 2 music icons in empty cells");
+        assert.equal(
+            iconCount,
+            2,
+            "Should render 2 music icons in empty cells",
+        );
     });
 
     test("empty cells have no icon when showEmptyCellIcon is false", async () => {
         const CoverMosaic = await loadComponent();
-        const html = renderToStaticMarkup(
-            React.createElement(CoverMosaic, {
-                coverUrls: ["url-1"],
-                layout: "2x2",
-            }),
-        );
-        // 1 URL in 2x2 = full-bleed, no empty cells
-        // Let's test with 2 URLs instead
         const html2 = renderToStaticMarkup(
             React.createElement(CoverMosaic, {
                 coverUrls: ["url-1", "url-2"],
                 showEmptyCellIcon: false,
             }),
         );
-        assert.ok(!html2.includes('data-icon="music"'), "Should not show music icons in empty cells");
+        assert.ok(
+            !html2.includes('data-icon="music"'),
+            "Should not show music icons in empty cells",
+        );
     });
 
     test("applies greyed class", async () => {

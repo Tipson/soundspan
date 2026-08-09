@@ -84,7 +84,7 @@ jest.mock("../../utils/db", () => ({
 
 jest.mock("../../utils/normalize", () => ({
     normalizeToArray: jest.fn((val: unknown) =>
-        Array.isArray(val) ? val : val != null ? [val] : []
+        Array.isArray(val) ? val : val != null ? [val] : [],
     ),
 }));
 
@@ -99,12 +99,12 @@ const mockRedisGet = redisClient.get as jest.Mock;
 const mockRedisSet = redisClient.set as jest.Mock;
 const mockLoggerError = logger.error as jest.Mock;
 const mockLoggerWarn = logger.warn as jest.Mock;
-const mockFindUniqueUserSettings = mockPrisma.userSettings.findUnique as jest.Mock;
+const mockFindUniqueUserSettings = mockPrisma.userSettings
+    .findUnique as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) throw new Error(`GET route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -136,7 +136,7 @@ function createRes() {
 function createMockStreamResponse(
     status = 200,
     headers: Record<string, string> = {},
-    errorAfter?: Error
+    errorAfter?: Error,
 ) {
     const data = new PassThrough();
     if (errorAfter) {
@@ -194,7 +194,7 @@ describe("artists preview (YT Music) routes", () => {
             expect(mockSearch).toHaveBeenCalledWith(
                 "__public__",
                 "AC/DC Back In Black",
-                "songs"
+                "songs",
             );
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual({ videoId: "dQw4w9WgXcQ" });
@@ -212,7 +212,7 @@ describe("artists preview (YT Music) routes", () => {
             expect(mockRedisSet).toHaveBeenCalledWith(
                 "yt-preview:artist:track",
                 "abc123",
-                { expiration: { type: "EX", value: 24 * 60 * 60 } }
+                { expiration: { type: "EX", value: 24 * 60 * 60 } },
             );
         });
 
@@ -225,7 +225,7 @@ describe("artists preview (YT Music) routes", () => {
             expect(mockRedisSet).toHaveBeenCalledWith(
                 "yt-preview:nobody:nothing",
                 "null",
-                { expiration: { type: "EX", value: 24 * 60 * 60 } }
+                { expiration: { type: "EX", value: 24 * 60 * 60 } },
             );
             expect(res.statusCode).toBe(404);
             expect(res.body).toEqual({ error: "Preview not found" });
@@ -298,7 +298,7 @@ describe("artists preview (YT Music) routes", () => {
             expect(mockRedisSet).toHaveBeenCalledWith(
                 "yt-preview:loud artist:big track",
                 "null",
-                expect.any(Object)
+                expect.any(Object),
             );
         });
     });
@@ -308,7 +308,7 @@ describe("artists preview (YT Music) routes", () => {
     describe("GET /preview-stream/:videoId", () => {
         const buildReq = (
             videoId: string,
-            opts?: { userId?: string; range?: string }
+            opts?: { userId?: string; range?: string },
         ) =>
             ({
                 params: { videoId },
@@ -344,7 +344,7 @@ describe("artists preview (YT Music) routes", () => {
 
             await getPreviewStream(
                 buildReq("vid-pub", { userId: "user-no-oauth" }),
-                res
+                res,
             );
 
             expect(mockFindUniqueUserSettings).toHaveBeenCalledWith({
@@ -355,7 +355,7 @@ describe("artists preview (YT Music) routes", () => {
                 "__public__",
                 "vid-pub",
                 "high",
-                undefined
+                undefined,
             );
             expect(res.statusCode).toBe(200);
         });
@@ -371,14 +371,14 @@ describe("artists preview (YT Music) routes", () => {
             const res = createRes();
             await getPreviewStream(
                 buildReq("vid-auth", { userId: "user-with-oauth" }),
-                res
+                res,
             );
 
             expect(mockGetStreamProxy).toHaveBeenCalledWith(
                 "user-with-oauth",
                 "vid-auth",
                 "high",
-                undefined
+                undefined,
             );
         });
 
@@ -394,7 +394,7 @@ describe("artists preview (YT Music) routes", () => {
                 "__public__",
                 "vid-anon",
                 "high",
-                undefined
+                undefined,
             );
         });
 
@@ -413,14 +413,14 @@ describe("artists preview (YT Music) routes", () => {
                     userId: "u1",
                     range: "bytes=0-1024",
                 }),
-                res
+                res,
             );
 
             expect(mockGetStreamProxy).toHaveBeenCalledWith(
                 "__public__",
                 "vid-range",
                 "high",
-                "bytes=0-1024"
+                "bytes=0-1024",
             );
             expect(res.statusCode).toBe(206);
             expect(res._headers["content-range"]).toBe("bytes 0-1024/5000");
@@ -436,10 +436,7 @@ describe("artists preview (YT Music) routes", () => {
             mockStream.data.pipe = jest.fn();
 
             const res = createRes();
-            await getPreviewStream(
-                buildReq("vid-mp4", { userId: "u1" }),
-                res
-            );
+            await getPreviewStream(buildReq("vid-mp4", { userId: "u1" }), res);
 
             expect(res._headers["content-type"]).toBe("audio/mp4");
             expect(res._headers["content-length"]).toBe("12345");
@@ -462,7 +459,7 @@ describe("artists preview (YT Music) routes", () => {
             const res = createRes();
             await getPreviewStream(
                 buildReq("vid-fallback", { userId: "user-expired" }),
-                res
+                res,
             );
 
             // First call with user's OAuth
@@ -471,7 +468,7 @@ describe("artists preview (YT Music) routes", () => {
                 "user-expired",
                 "vid-fallback",
                 "high",
-                undefined
+                undefined,
             );
             // Fallback with public
             expect(mockGetStreamProxy).toHaveBeenNthCalledWith(
@@ -479,7 +476,7 @@ describe("artists preview (YT Music) routes", () => {
                 "__public__",
                 "vid-fallback",
                 "high",
-                undefined
+                undefined,
             );
             expect(res.statusCode).toBe(200);
         });
@@ -487,14 +484,11 @@ describe("artists preview (YT Music) routes", () => {
         it("returns 500 when stream proxy fails (non-401)", async () => {
             mockFindUniqueUserSettings.mockResolvedValueOnce(null);
             mockGetStreamProxy.mockRejectedValueOnce(
-                new Error("sidecar timeout")
+                new Error("sidecar timeout"),
             );
 
             const res = createRes();
-            await getPreviewStream(
-                buildReq("vid-err", { userId: "u1" }),
-                res
-            );
+            await getPreviewStream(buildReq("vid-err", { userId: "u1" }), res);
 
             expect(res.statusCode).toBe(500);
             expect(res.body).toEqual({
@@ -508,7 +502,7 @@ describe("artists preview (YT Music) routes", () => {
             const mockStream = createMockStreamResponse(
                 200,
                 {},
-                new Error("upstream disconnected")
+                new Error("upstream disconnected"),
             );
             mockGetStreamProxy.mockResolvedValueOnce(mockStream);
             mockStream.data.pipe = jest.fn();
@@ -516,14 +510,14 @@ describe("artists preview (YT Music) routes", () => {
             const res = createRes();
             await getPreviewStream(
                 buildReq("vid-stream-err", { userId: "u1" }),
-                res
+                res,
             );
 
             // The error handler is attached — give event loop a tick
             await new Promise((r) => setImmediate(r));
 
             expect(mockLoggerWarn).toHaveBeenCalledWith(
-                expect.stringContaining("Preview stream error")
+                expect.stringContaining("Preview stream error"),
             );
         });
     });

@@ -8,7 +8,7 @@ const DEFAULT_DEPENDENCY_CHECK_TIMEOUT_MS = 2_000;
 const parsedDependencyCheckIntervalMs = Number.parseInt(
     process.env.READINESS_DEPENDENCY_CHECK_INTERVAL_MS ||
         `${DEFAULT_DEPENDENCY_CHECK_INTERVAL_MS}`,
-    10
+    10,
 );
 const READINESS_DEPENDENCY_CHECK_INTERVAL_MS =
     Number.isFinite(parsedDependencyCheckIntervalMs) &&
@@ -19,7 +19,7 @@ const READINESS_DEPENDENCY_CHECK_INTERVAL_MS =
 const parsedDependencyCheckTimeoutMs = Number.parseInt(
     process.env.READINESS_DEPENDENCY_CHECK_TIMEOUT_MS ||
         `${DEFAULT_DEPENDENCY_CHECK_TIMEOUT_MS}`,
-    10
+    10,
 );
 const READINESS_DEPENDENCY_CHECK_TIMEOUT_MS =
     Number.isFinite(parsedDependencyCheckTimeoutMs) &&
@@ -64,7 +64,10 @@ function initialSnapshot(): DependencyReadinessSnapshot {
     };
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+): Promise<T> {
     return await new Promise<T>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
             reject(new Error(`timed out after ${timeoutMs}ms`));
@@ -190,12 +193,10 @@ export class DependencyReadinessTracker {
 
             if (previousHealthy && !overallHealthy) {
                 logger.warn(
-                    `[Readiness/${this.label}] Dependencies unhealthy (postgres=${postgres.ok}, redis=${redis.ok})`
+                    `[Readiness/${this.label}] Dependencies unhealthy (postgres=${postgres.ok}, redis=${redis.ok})`,
                 );
             } else if (!previousHealthy && overallHealthy) {
-                logger.info(
-                    `[Readiness/${this.label}] Dependencies recovered`
-                );
+                logger.info(`[Readiness/${this.label}] Dependencies recovered`);
             }
 
             return this.getSnapshot();
@@ -211,7 +212,7 @@ export class DependencyReadinessTracker {
  * Executes createDependencyReadinessTracker.
  */
 export function createDependencyReadinessTracker(
-    label: string
+    label: string,
 ): DependencyReadinessTracker {
     return new DependencyReadinessTracker(label);
 }

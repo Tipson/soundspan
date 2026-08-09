@@ -22,7 +22,8 @@ import { createFeatureDisabledHandler } from "../../utils/featureGate";
 import { enrichmentFailureService } from "../../services/enrichmentFailureService";
 
 const mockRecordFailure = enrichmentFailureService.recordFailure as jest.Mock;
-const mockResolveByEntity = enrichmentFailureService.resolveByEntity as jest.Mock;
+const mockResolveByEntity =
+    enrichmentFailureService.resolveByEntity as jest.Mock;
 
 /**
  * Mirrors the index.ts wiring when AUDIO_ANALYSIS_ENABLED=false: the internal
@@ -36,7 +37,7 @@ function buildDisabledAnalysisApp() {
     app.use(
         "/api/analysis",
         analysisInternalRouter,
-        createFeatureDisabledHandler()
+        createFeatureDisabledHandler(),
     );
     return app;
 }
@@ -101,7 +102,7 @@ describe("analysisInternal router gating (AUDIO_ANALYSIS_ENABLED=false wiring)",
             .send({ trackId: "t1", trackName: "Track" });
         expect(failure.status).toBe(200);
         expect(mockRecordFailure).toHaveBeenCalledWith(
-            expect.objectContaining({ entityType: "vibe", entityId: "t1" })
+            expect.objectContaining({ entityType: "vibe", entityId: "t1" }),
         );
 
         const success = await request(app)

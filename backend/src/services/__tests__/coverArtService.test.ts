@@ -26,7 +26,7 @@ jest.mock("../rateLimiter", () => ({
     rateLimiter: {
         execute: jest.fn(
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
-                requestFn()
+                requestFn(),
         ),
     },
 }));
@@ -51,7 +51,8 @@ const mockRedisDel = redisClient.del as jest.Mock;
 const mockRateLimiterExecute = rateLimiter.execute as jest.Mock;
 const mockGetAlbumCover = imageProviderService.getAlbumCover as jest.Mock;
 const mockGetReleaseGroup = musicBrainzService.getReleaseGroup as jest.Mock;
-const mockExtractPrimaryArtist = musicBrainzService.extractPrimaryArtist as jest.Mock;
+const mockExtractPrimaryArtist =
+    musicBrainzService.extractPrimaryArtist as jest.Mock;
 
 describe("coverArtService", () => {
     beforeEach(() => {
@@ -60,7 +61,7 @@ describe("coverArtService", () => {
         mockRedisDel.mockResolvedValue(1);
         mockRateLimiterExecute.mockImplementation(
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
-                requestFn()
+                requestFn(),
         );
         mockGetReleaseGroup.mockResolvedValue(null);
         mockExtractPrimaryArtist.mockReturnValue("Unknown Artist");
@@ -107,12 +108,18 @@ describe("coverArtService", () => {
 
         resolveCoverArtRequest({
             data: {
-                images: [{ front: true, image: "https://images.example/front.jpg" }],
+                images: [
+                    { front: true, image: "https://images.example/front.jpg" },
+                ],
             },
         });
 
-        await expect(firstRequest).resolves.toBe("https://images.example/front.jpg");
-        await expect(secondRequest).resolves.toBe("https://images.example/front.jpg");
+        await expect(firstRequest).resolves.toBe(
+            "https://images.example/front.jpg",
+        );
+        await expect(secondRequest).resolves.toBe(
+            "https://images.example/front.jpg",
+        );
     });
 
     it("falls back to provider chain when Cover Art Archive is not found", async () => {
@@ -139,12 +146,12 @@ describe("coverArtService", () => {
             "Fallback Artist",
             "Fallback Album",
             "mbid-fallback",
-            { timeout: 5000 }
+            { timeout: 5000 },
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "caa:mbid-fallback",
             365 * 24 * 60 * 60,
-            "https://deezer.example/fallback.jpg"
+            "https://deezer.example/fallback.jpg",
         );
     });
 
@@ -162,7 +169,7 @@ describe("coverArtService", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "caa:mbid-not-found",
             30 * 24 * 60 * 60,
-            "NOT_FOUND"
+            "NOT_FOUND",
         );
     });
 
@@ -174,13 +181,15 @@ describe("coverArtService", () => {
             throw new Error(`Unexpected URL: ${url}`);
         });
 
-        const result = await coverArtService.getCoverArt("mbid-transient-error");
+        const result = await coverArtService.getCoverArt(
+            "mbid-transient-error",
+        );
 
         expect(result).toBeNull();
         expect(mockRedisSetEx).not.toHaveBeenCalledWith(
             "caa:mbid-transient-error",
             30 * 24 * 60 * 60,
-            "NOT_FOUND"
+            "NOT_FOUND",
         );
     });
 
@@ -190,10 +199,10 @@ describe("coverArtService", () => {
             .mockResolvedValueOnce("https://cached.example/cover.jpg");
 
         await expect(
-            coverArtService.clearNotFoundCache(" mbid-clear-me ")
+            coverArtService.clearNotFoundCache(" mbid-clear-me "),
         ).resolves.toBeUndefined();
         await expect(
-            coverArtService.clearNotFoundCache("mbid-keep-value")
+            coverArtService.clearNotFoundCache("mbid-keep-value"),
         ).resolves.toBeUndefined();
 
         expect(mockRedisGet).toHaveBeenNthCalledWith(1, "caa:mbid-clear-me");
@@ -206,7 +215,7 @@ describe("coverArtService", () => {
         mockRedisGet.mockRejectedValueOnce(new Error("redis unavailable"));
 
         await expect(
-            coverArtService.clearNotFoundCache("mbid-cache-error")
+            coverArtService.clearNotFoundCache("mbid-cache-error"),
         ).resolves.toBeUndefined();
 
         expect(mockRedisDel).not.toHaveBeenCalled();

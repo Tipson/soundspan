@@ -22,7 +22,8 @@ describe("moodBucketWorker", () => {
         };
 
         const resolvedClaimResult =
-            options && Object.prototype.hasOwnProperty.call(options, "claimResult")
+            options &&
+            Object.prototype.hasOwnProperty.call(options, "claimResult")
                 ? options.claimResult
                 : "OK";
 
@@ -45,7 +46,9 @@ describe("moodBucketWorker", () => {
         };
 
         const clients = [claimClient, replacementClaimClient];
-        const createIORedisClient = jest.fn(() => clients.shift() || claimClient);
+        const createIORedisClient = jest.fn(
+            () => clients.shift() || claimClient,
+        );
 
         const prisma = {
             $queryRaw: jest.fn(async () => options?.tracks ?? []),
@@ -130,7 +133,7 @@ describe("moodBucketWorker", () => {
 
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining("failed due to Redis connection closure"),
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(createIORedisClient).toHaveBeenCalledTimes(2);
         expect(replacementClaimClient.set).toHaveBeenCalled();
@@ -147,8 +150,10 @@ describe("moodBucketWorker", () => {
 
         expect(prisma.$queryRaw).not.toHaveBeenCalled();
         expect(logger.error).toHaveBeenCalledWith(
-            expect.stringContaining("Failed to claim startup mood-bucket cycle"),
-            expect.any(Error)
+            expect.stringContaining(
+                "Failed to claim startup mood-bucket cycle",
+            ),
+            expect.any(Error),
         );
     });
 
@@ -164,9 +169,9 @@ describe("moodBucketWorker", () => {
         expect(prisma.$queryRaw).toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "Failed to release cycle claim for startup mood-bucket cycle"
+                "Failed to release cycle claim for startup mood-bucket cycle",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -186,10 +191,10 @@ describe("moodBucketWorker", () => {
 
         expect(moodBucketService.assignTrackToMoods).toHaveBeenCalledTimes(2);
         expect(logger.error).toHaveBeenCalledWith(
-            expect.stringContaining("✗ Track 1: assign failed")
+            expect.stringContaining("✗ Track 1: assign failed"),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Assigned 1/2 tracks")
+            expect.stringContaining("Assigned 1/2 tracks"),
         );
     });
 
@@ -202,7 +207,7 @@ describe("moodBucketWorker", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[Mood Bucket] Worker error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

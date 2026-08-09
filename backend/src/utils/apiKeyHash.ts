@@ -38,7 +38,7 @@ function getPepper(): string {
         process.env.SESSION_SECRET;
     if (!pepper) {
         throw new Error(
-            "API_KEY_PEPPER, SETTINGS_ENCRYPTION_KEY, ENCRYPTION_KEY, or SESSION_SECRET must be set to hash API keys at rest"
+            "API_KEY_PEPPER, SETTINGS_ENCRYPTION_KEY, ENCRYPTION_KEY, or SESSION_SECRET must be set to hash API keys at rest",
         );
     }
     return pepper;
@@ -97,7 +97,7 @@ export function isHashedApiKey(stored: string | null | undefined): boolean {
  */
 export async function findApiKeyRecord<R>(
     rawKey: string,
-    lookup: (storedKey: string) => Promise<R | null>
+    lookup: (storedKey: string) => Promise<R | null>,
 ): Promise<R | null> {
     const byHash = await lookup(hashApiKey(rawKey));
     if (byHash) return byHash;

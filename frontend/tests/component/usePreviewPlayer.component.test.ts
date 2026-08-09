@@ -4,8 +4,9 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 type EngineListener = () => void;
 
@@ -150,9 +151,8 @@ async function mountHook<T>(useHook: () => T) {
 }
 
 async function mountPreviewPlayer() {
-    const { usePreviewPlayer } = await import(
-        "../../features/discover/hooks/usePreviewPlayer"
-    );
+    const { usePreviewPlayer } =
+        await import("../../features/discover/hooks/usePreviewPlayer");
     return mountHook<PreviewPlayerApi>(usePreviewPlayer);
 }
 
@@ -236,11 +236,13 @@ test("track preview end resumes the main player that it paused", async () => {
     engineState.playing = true;
     const harness = await mountTrackPreview();
     await harness.act(() =>
-        harness.latest().handlePreview(
-            { id: "track-a", title: "Track A" },
-            "Artist",
-            clickEvent,
-        )
+        harness
+            .latest()
+            .handlePreview(
+                { id: "track-a", title: "Track A" },
+                "Artist",
+                clickEvent,
+            ),
     );
     assert.equal(engineState.playCalls, 0);
 
@@ -253,11 +255,13 @@ test("track-preview unmount resumes the main player that it paused", async () =>
     engineState.playing = true;
     const harness = await mountTrackPreview();
     await harness.act(() =>
-        harness.latest().handlePreview(
-            { id: "track-a", title: "Track A" },
-            "Artist",
-            clickEvent,
-        )
+        harness
+            .latest()
+            .handlePreview(
+                { id: "track-a", title: "Track A" },
+                "Artist",
+                clickEvent,
+            ),
     );
     assert.equal(engineState.playCalls, 0);
 

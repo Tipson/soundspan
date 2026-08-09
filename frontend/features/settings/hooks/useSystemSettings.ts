@@ -29,7 +29,8 @@ const defaultSystemSettings: SystemSettings = {
     tidalUserId: "",
     tidalCountryCode: "US",
     tidalQuality: "HIGH",
-    tidalFileTemplate: "{album.artist}/{album.title}/{item.number:02d}. {item.title}",
+    tidalFileTemplate:
+        "{album.artist}/{album.title}/{item.number:02d}. {item.title}",
     musicPath: "/music",
     downloadPath: "/downloads",
     transcodeCacheMaxGb: 10,
@@ -59,63 +60,72 @@ export function useSystemSettings() {
     // This prevents stale frontend defaults from being saved over real values
     // if the API call fails.
     const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(
-        null
+        null,
     );
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [changedServices, setChangedServices] = useState<string[]>([]);
-    const [originalSettings, setOriginalSettings] = useState<SystemSettings | null>(
-        null
-    );
+    const [originalSettings, setOriginalSettings] =
+        useState<SystemSettings | null>(null);
     const [loadError, setLoadError] = useState(false);
     const lastLoadAttemptAtRef = useRef(0);
 
     const isAdmin = user?.role === "admin";
 
-    const loadSystemSettings = useCallback(async (options?: { background?: boolean }) => {
-        const isBackground = options?.background === true;
-        try {
-            lastLoadAttemptAtRef.current = Date.now();
-            if (!isBackground) {
-                setIsLoading(true);
-            }
-            const [sysData, userData] = await Promise.all([
-                api.getSystemSettings(),
-                api.getSettings(),
-            ]);
-
-            // Sanitize null values to empty strings for controlled inputs
-            const sanitizeSettings = (settings: Record<string, unknown>): SystemSettings => {
-                const sanitized: Record<string, unknown> = {};
-                for (const key in settings) {
-                    const value = settings[key];
-                    // Convert null to empty string for string fields
-                    if (value === null && typeof defaultSystemSettings[key as keyof SystemSettings] === 'string') {
-                        sanitized[key] = '';
-                    } else {
-                        sanitized[key] = value;
-                    }
+    const loadSystemSettings = useCallback(
+        async (options?: { background?: boolean }) => {
+            const isBackground = options?.background === true;
+            try {
+                lastLoadAttemptAtRef.current = Date.now();
+                if (!isBackground) {
+                    setIsLoading(true);
                 }
-                return sanitized as unknown as SystemSettings;
-            };
+                const [sysData, userData] = await Promise.all([
+                    api.getSystemSettings(),
+                    api.getSettings(),
+                ]);
 
-            const combinedSettings = {
-                ...sanitizeSettings(sysData),
-                maxCacheSizeMb: userData.maxCacheSizeMb,
-            };
+                // Sanitize null values to empty strings for controlled inputs
+                const sanitizeSettings = (
+                    settings: Record<string, unknown>,
+                ): SystemSettings => {
+                    const sanitized: Record<string, unknown> = {};
+                    for (const key in settings) {
+                        const value = settings[key];
+                        // Convert null to empty string for string fields
+                        if (
+                            value === null &&
+                            typeof defaultSystemSettings[
+                                key as keyof SystemSettings
+                            ] === "string"
+                        ) {
+                            sanitized[key] = "";
+                        } else {
+                            sanitized[key] = value;
+                        }
+                    }
+                    return sanitized as unknown as SystemSettings;
+                };
 
-            setSystemSettings(combinedSettings);
-            setOriginalSettings(combinedSettings);
-            setLoadError(false);
-        } catch (error) {
-            logger.error("Failed to load system settings", { error });
-            setLoadError(true);
-        } finally {
-            if (!isBackground) {
-                setIsLoading(false);
+                const combinedSettings = {
+                    ...sanitizeSettings(sysData),
+                    maxCacheSizeMb: userData.maxCacheSizeMb,
+                };
+
+                setSystemSettings(combinedSettings);
+                setOriginalSettings(combinedSettings);
+                setLoadError(false);
+            } catch (error) {
+                logger.error("Failed to load system settings", { error });
+                setLoadError(true);
+            } finally {
+                if (!isBackground) {
+                    setIsLoading(false);
+                }
             }
-        }
-    }, []);
+        },
+        [],
+    );
 
     useEffect(() => {
         if (isAuthenticated && isAdmin) {
@@ -137,7 +147,7 @@ export function useSystemSettings() {
             if (
                 shouldRetryFailedSettingsLoad(
                     loadError,
-                    lastLoadAttemptAtRef.current
+                    lastLoadAttemptAtRef.current,
                 )
             ) {
                 void loadSystemSettings({ background: true });
@@ -155,11 +165,16 @@ export function useSystemSettings() {
         };
     }, [isAuthenticated, isAdmin, loadError, loadSystemSettings]);
 
-    const saveSystemSettings = async (settingsToSave: SystemSettings, _showToast = false) => {
+    const saveSystemSettings = async (
+        settingsToSave: SystemSettings,
+        _showToast = false,
+    ) => {
         // Guard: never save if settings were never loaded from the DB.
         // This prevents frontend defaults from overwriting real values.
         if (!originalSettings) {
-            throw new Error("Cannot save — settings have not been loaded from the server yet.");
+            throw new Error(
+                "Cannot save — settings have not been loaded from the server yet.",
+            );
         }
 
         try {
@@ -184,8 +199,10 @@ export function useSystemSettings() {
                 changed.push("Lidarr");
             }
             if (
-                originalSettings.soulseekUsername !== settingsToSave.soulseekUsername ||
-                originalSettings.soulseekPassword !== settingsToSave.soulseekPassword
+                originalSettings.soulseekUsername !==
+                    settingsToSave.soulseekUsername ||
+                originalSettings.soulseekPassword !==
+                    settingsToSave.soulseekPassword
             ) {
                 changed.push("Soulseek");
             }
@@ -199,9 +216,7 @@ export function useSystemSettings() {
             ) {
                 changed.push("Audiobookshelf");
             }
-            if (
-                originalSettings.tidalEnabled !== settingsToSave.tidalEnabled
-            ) {
+            if (originalSettings.tidalEnabled !== settingsToSave.tidalEnabled) {
                 changed.push("TIDAL");
             }
 
@@ -218,7 +233,7 @@ export function useSystemSettings() {
     };
 
     const updateSystemSettings = (updates: Partial<SystemSettings>) => {
-        setSystemSettings((prev) => prev ? { ...prev, ...updates } : null);
+        setSystemSettings((prev) => (prev ? { ...prev, ...updates } : null));
     };
 
     /**
@@ -226,9 +241,14 @@ export function useSystemSettings() {
      * Returns { success: true, version?: string } or { success: false, error: string }
      * Caller handles displaying the result inline
      */
-    const testService = async (service: string): Promise<{ success: boolean; version?: string; error?: string }> => {
+    const testService = async (
+        service: string,
+    ): Promise<{ success: boolean; version?: string; error?: string }> => {
         if (!systemSettings) {
-            return { success: false, error: "Settings have not been loaded yet." };
+            return {
+                success: false,
+                error: "Settings have not been loaded yet.",
+            };
         }
         try {
             let result;
@@ -236,13 +256,13 @@ export function useSystemSettings() {
                 case "lidarr":
                     result = await api.testLidarr(
                         systemSettings.lidarrUrl,
-                        systemSettings.lidarrApiKey
+                        systemSettings.lidarrApiKey,
                     );
                     break;
                 case "openai":
                     result = await api.testOpenai(
                         systemSettings.openaiApiKey,
-                        systemSettings.openaiModel
+                        systemSettings.openaiModel,
                     );
                     break;
                 case "fanart":
@@ -254,19 +274,19 @@ export function useSystemSettings() {
                 case "audiobookshelf":
                     result = await api.testAudiobookshelf(
                         systemSettings.audiobookshelfUrl,
-                        systemSettings.audiobookshelfApiKey
+                        systemSettings.audiobookshelfApiKey,
                     );
                     break;
                 case "soulseek":
                     result = await api.testSoulseek(
                         systemSettings.soulseekUsername,
-                        systemSettings.soulseekPassword
+                        systemSettings.soulseekPassword,
                     );
                     break;
                 case "spotify":
                     result = await api.testSpotify(
                         systemSettings.spotifyClientId,
-                        systemSettings.spotifyClientSecret
+                        systemSettings.spotifyClientSecret,
                     );
                     break;
                 case "tidal":
@@ -279,7 +299,13 @@ export function useSystemSettings() {
             return { success: true, version: result?.version };
         } catch (error: unknown) {
             logger.error("Failed to test service", { service, error });
-            return { success: false, error: error instanceof Error ? error.message : `Failed to connect` };
+            return {
+                success: false,
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : `Failed to connect`,
+            };
         }
     };
 

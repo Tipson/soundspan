@@ -35,7 +35,11 @@ interface MobileSidebarProps {
 /**
  * Renders the MobileSidebar component.
  */
-export function MobileSidebar({ isOpen, onClose, hasActiveSessions }: MobileSidebarProps) {
+export function MobileSidebar({
+    isOpen,
+    onClose,
+    hasActiveSessions,
+}: MobileSidebarProps) {
     const pathname = usePathname();
     const { user, logout } = useAuth();
     const { toast } = useToast();
@@ -150,14 +154,16 @@ export function MobileSidebar({ isOpen, onClose, hasActiveSessions }: MobileSide
                                     key={link.href}
                                     href={link.href}
                                     aria-current={
-                                        pathname === link.href ? "page" : undefined
+                                        pathname === link.href
+                                            ? "page"
+                                            : undefined
                                     }
                                     aria-label={link.name}
                                     className={cn(
                                         "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors",
-                                        pathname === link.href ?
-                                            "bg-white/10 text-white"
-                                        :   "text-gray-400 hover:text-white hover:bg-white/5",
+                                        pathname === link.href
+                                            ? "bg-white/10 text-white"
+                                            : "text-gray-400 hover:text-white hover:bg-white/5",
                                     )}
                                 >
                                     <Icon className="w-5 h-5" />
@@ -182,9 +188,9 @@ export function MobileSidebar({ isOpen, onClose, hasActiveSessions }: MobileSide
                             disabled={isSyncing}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-colors text-left",
-                                isSyncing ? "text-green-400" : (
-                                    "text-gray-400 hover:text-white hover:bg-white/5"
-                                ),
+                                isSyncing
+                                    ? "text-green-400"
+                                    : "text-gray-400 hover:text-white hover:bg-white/5",
                             )}
                         >
                             <RefreshCw
@@ -205,9 +211,9 @@ export function MobileSidebar({ isOpen, onClose, hasActiveSessions }: MobileSide
                             }
                             className={cn(
                                 "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors",
-                                pathname === "/settings" ?
-                                    "bg-white/10 text-white"
-                                :   "text-gray-400 hover:text-white hover:bg-white/5",
+                                pathname === "/settings"
+                                    ? "bg-white/10 text-white"
+                                    : "text-gray-400 hover:text-white hover:bg-white/5",
                             )}
                         >
                             <Settings className="w-5 h-5" />
@@ -224,9 +230,9 @@ export function MobileSidebar({ isOpen, onClose, hasActiveSessions }: MobileSide
                                 }
                                 className={cn(
                                     "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors",
-                                    pathname === "/admin" ?
-                                        "bg-white/10 text-white"
-                                    :   "text-gray-400 hover:text-white hover:bg-white/5",
+                                    pathname === "/admin"
+                                        ? "bg-white/10 text-white"
+                                        : "text-gray-400 hover:text-white hover:bg-white/5",
                                 )}
                             >
                                 <Shield className="w-5 h-5" />

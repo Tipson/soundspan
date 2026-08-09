@@ -54,7 +54,7 @@ const mockRedisSetEx = redis.setEx as jest.Mock;
 function getHandler(path: string, method: "get") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -176,11 +176,11 @@ describe("homepage routes runtime", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "homepage:genres:2",
             86400,
-            expect.any(String)
+            expect.any(String),
         );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
             "[HOMEPAGE] Redis cache write error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -246,7 +246,7 @@ describe("homepage routes runtime", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "homepage:top-podcasts:1",
             86400,
-            expect.any(String)
+            expect.any(String),
         );
     });
 
@@ -261,7 +261,7 @@ describe("homepage routes runtime", () => {
         expect(res.body).toEqual({ error: "Failed to fetch top podcasts" });
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Get top podcasts error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

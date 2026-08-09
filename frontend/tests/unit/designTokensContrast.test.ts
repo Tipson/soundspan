@@ -14,20 +14,27 @@ import {
     SETTINGS_FOCUS_RING_TOKEN,
 } from "../../features/settings/components/ui/settingsFieldStyles";
 
-const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+const globalsCss = readFileSync(
+    new URL("../../app/globals.css", import.meta.url),
+    "utf8",
+);
 const themeBlock = globalsCss.match(/@theme\s*\{([^}]*)\}/)?.[1];
 
 assert.ok(themeBlock, "globals.css must contain an @theme block");
 
 const themeColors = Object.fromEntries(
     [...themeBlock.matchAll(/--color-([\w-]+):\s*(#[0-9a-fA-F]{6});/g)].map(
-        ([, name, hex]) => [name, hex.toLowerCase()]
-    )
+        ([, name, hex]) => [name, hex.toLowerCase()],
+    ),
 );
 
 test("globals.css @theme stays synchronized with DESIGN_TOKENS", () => {
     for (const [name, hex] of Object.entries(DESIGN_TOKENS)) {
-        assert.equal(themeColors[name], hex, `--color-${name} must equal ${hex}`);
+        assert.equal(
+            themeColors[name],
+            hex,
+            `--color-${name} must equal ${hex}`,
+        );
     }
 });
 
@@ -39,7 +46,9 @@ test("text and brand tokens meet the normal-text contrast floor", () => {
         DESIGN_TOKENS["brand-hover"],
         "#9ca3af",
     ]) {
-        assert.ok(contrastRatio(foreground, DESIGN_TOKENS.surface) >= AA_NORMAL);
+        assert.ok(
+            contrastRatio(foreground, DESIGN_TOKENS.surface) >= AA_NORMAL,
+        );
     }
 });
 
@@ -51,14 +60,14 @@ test("gray-500 and gray-600 document contrast failures on surface", () => {
 test("settings focus ring token meets non-text contrast", () => {
     assert.equal(
         SETTINGS_FIELD_FOCUS_RING,
-        "focus:outline-none focus:ring-2 focus:ring-brand-hover"
+        "focus:outline-none focus:ring-2 focus:ring-brand-hover",
     );
     assert.ok(SETTINGS_FOCUS_RING_TOKEN in DESIGN_TOKENS);
     assert.ok(
         contrastRatio(
             DESIGN_TOKENS[SETTINGS_FOCUS_RING_TOKEN],
-            DESIGN_TOKENS["line-muted"]
-        ) >= NON_TEXT
+            DESIGN_TOKENS["line-muted"],
+        ) >= NON_TEXT,
     );
 });
 

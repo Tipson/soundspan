@@ -40,9 +40,7 @@ export function LibrarySafetySection({
                 <SettingsToggle
                     id="show-version"
                     checked={settings.showVersion}
-                    onChange={(checked) =>
-                        onUpdate({ showVersion: checked })
-                    }
+                    onChange={(checked) => onUpdate({ showVersion: checked })}
                 />
             </SettingsRow>
         </SettingsSection>

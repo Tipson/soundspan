@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/auth", () => ({
-    requireAuthOrToken: (_req: Request, _res: Response, next: () => void) => next(),
+    requireAuthOrToken: (_req: Request, _res: Response, next: () => void) =>
+        next(),
     // releases.ts mounts router.use(requireAuth) at module scope; without this
     // key the incomplete mock hands Router.use() undefined and the suite dies
     // at load. Passthrough is correct here — this suite pins the
@@ -117,8 +118,7 @@ function getRouteHandler(
 ) {
     const layer = router.stack.find(
         (entry: any) =>
-            entry.route?.path === path &&
-            entry.route?.methods?.[method],
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -254,7 +254,7 @@ describe("downloads/release compatibility regressions", () => {
                 artistName: "Artist Three",
                 artistMbid: "artist-3",
                 albumMbid: "rg-missing",
-                releaseDate: new Date(now - (2 * oneDay)).toISOString(),
+                releaseDate: new Date(now - 2 * oneDay).toISOString(),
                 coverUrl: null,
                 hasFile: false,
             },
@@ -386,14 +386,27 @@ describe("downloads/release compatibility regressions", () => {
         const invalidDaysRes = createRes();
 
         await upcomingHandler({ query: {} } as any, missingDaysRes);
-        await upcomingHandler({ query: { days: "invalid" } } as any, invalidDaysRes);
+        await upcomingHandler(
+            { query: { days: "invalid" } } as any,
+            invalidDaysRes,
+        );
 
         expect(mockGetCalendar).toHaveBeenCalledTimes(2);
         const dayMs = 24 * 60 * 60 * 1000;
-        const [startOne, endOne] = mockGetCalendar.mock.calls[0] as [Date, Date];
-        const [startTwo, endTwo] = mockGetCalendar.mock.calls[1] as [Date, Date];
-        expect(Math.round((endOne.getTime() - startOne.getTime()) / dayMs)).toBe(90);
-        expect(Math.round((endTwo.getTime() - startTwo.getTime()) / dayMs)).toBe(90);
+        const [startOne, endOne] = mockGetCalendar.mock.calls[0] as [
+            Date,
+            Date,
+        ];
+        const [startTwo, endTwo] = mockGetCalendar.mock.calls[1] as [
+            Date,
+            Date,
+        ];
+        expect(
+            Math.round((endOne.getTime() - startOne.getTime()) / dayMs),
+        ).toBe(90);
+        expect(
+            Math.round((endTwo.getTime() - startTwo.getTime()) / dayMs),
+        ).toBe(90);
         expect(missingDaysRes.statusCode).toBe(200);
         expect(invalidDaysRes.statusCode).toBe(200);
         expect(missingDaysRes.body).toMatchObject({
@@ -481,8 +494,13 @@ describe("downloads/release compatibility regressions", () => {
 
         expect(mockAlbumFindMany).toHaveBeenCalledTimes(1);
         const dayMs = 24 * 60 * 60 * 1000;
-        const [startDate, endDate] = mockGetCalendar.mock.calls[0] as [Date, Date];
-        expect(Math.round((endDate.getTime() - startDate.getTime()) / dayMs)).toBe(30);
+        const [startDate, endDate] = mockGetCalendar.mock.calls[0] as [
+            Date,
+            Date,
+        ];
+        expect(
+            Math.round((endDate.getTime() - startDate.getTime()) / dayMs),
+        ).toBe(30);
         expect(res.statusCode).toBe(200);
         expect(res.body.count).toBe(2);
         expect(res.body.inLibraryCount).toBe(2);

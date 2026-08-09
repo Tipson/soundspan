@@ -13,7 +13,9 @@ describe("podcast refresh prisma retry compatibility", () => {
     });
 
     it("uses createMany with skipDuplicates to reduce per-episode prisma churn", () => {
-        const refreshStart = source.indexOf("export async function refreshPodcastFeed");
+        const refreshStart = source.indexOf(
+            "export async function refreshPodcastFeed",
+        );
         expect(refreshStart).toBeGreaterThan(-1);
 
         const refreshSection = source.slice(refreshStart);

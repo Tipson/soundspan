@@ -32,7 +32,9 @@ function episode(id: string): QueueItem {
 
 /** posOf stub: ids in `onMap` resolve to distinct points, others are off-map. */
 function posOfFor(onMap: readonly string[]) {
-    const index = new Map(onMap.map((id, i) => [id, { x: i * 0.1, y: i * 0.05 }]));
+    const index = new Map(
+        onMap.map((id, i) => [id, { x: i * 0.1, y: i * 0.05 }]),
+    );
     return (id: string) => index.get(id) ?? null;
 }
 
@@ -47,7 +49,7 @@ test("starts at the current track's dot and walks upcoming on-map tracks in orde
     const pts = upcomingOnMapPoints(
         [track("a"), track("b"), track("c")],
         0,
-        posOf
+        posOf,
     );
     assert.deepEqual(pts, [posOf("a"), posOf("b"), posOf("c")]);
 });
@@ -57,7 +59,7 @@ test("skips podcast episodes and off-map tracks without breaking the line", () =
     const pts = upcomingOnMapPoints(
         [track("a"), episode("e1"), track("offmap"), track("c")],
         0,
-        posOf
+        posOf,
     );
     assert.deepEqual(pts, [posOf("a"), posOf("c")]);
 });
@@ -66,12 +68,12 @@ test("returns [] when fewer than two points resolve (a plan needs a line)", () =
     // Only the current track is on the map.
     assert.deepEqual(
         upcomingOnMapPoints([track("a"), track("x")], 0, posOfFor(["a"])),
-        []
+        [],
     );
     // Only one upcoming track is on the map and nothing is current.
     assert.deepEqual(
         upcomingOnMapPoints([track("x"), track("b")], -1, posOfFor(["b"])),
-        []
+        [],
     );
 });
 
@@ -80,7 +82,7 @@ test("an off-map current track still yields a plan from the upcoming hops", () =
     const pts = upcomingOnMapPoints(
         [track("offmap"), track("b"), track("c")],
         0,
-        posOf
+        posOf,
     );
     assert.deepEqual(pts, [posOf("b"), posOf("c")]);
 });

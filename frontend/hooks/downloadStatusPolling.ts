@@ -3,7 +3,7 @@
  */
 export function resolveDownloadPollDelayMs(
     activeCount: number,
-    totalCount: number
+    totalCount: number,
 ): number {
     if (activeCount > 0) {
         return 5_000;
@@ -17,7 +17,7 @@ export function resolveDownloadPollDelayMs(
  */
 export function resolveDownloadErrorBackoffMs(
     baseIntervalMs: number,
-    errorCount: number
+    errorCount: number,
 ): number {
     return Math.min(baseIntervalMs * 2 ** errorCount, 120_000);
 }

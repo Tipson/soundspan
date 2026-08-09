@@ -154,11 +154,11 @@ const mockTransaction = prisma.$transaction as jest.Mock;
 function getRouteHandler(
     path: string,
     method: "get" | "post" | "delete" | "patch",
-    stackIndex = 0
+    stackIndex = 0,
 ) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -197,7 +197,7 @@ describe("downloads routes runtime", () => {
     const clearAllHandler = getRouteHandler("/clear-all", "delete");
     const clearLidarrQueueHandler = getRouteHandler(
         "/clear-lidarr-queue",
-        "post"
+        "post",
     );
     const failedListHandler = getRouteHandler("/failed", "get");
     const failedDismissHandler = getRouteHandler("/failed/:id", "delete");
@@ -245,7 +245,10 @@ describe("downloads routes runtime", () => {
         mockDownloadFindFirst.mockResolvedValue(null);
         mockDownloadUpdate.mockResolvedValue({});
         mockDownloadDeleteMany.mockResolvedValue({ count: 0 });
-        mockDownloadCreate.mockResolvedValue({ id: "job-1", status: "pending" });
+        mockDownloadCreate.mockResolvedValue({
+            id: "job-1",
+            status: "pending",
+        });
 
         mockUnavailableFindMany.mockResolvedValue([]);
         mockUnavailableFindFirst.mockResolvedValue(null);
@@ -269,7 +272,7 @@ describe("downloads routes runtime", () => {
                         status: "pending",
                     }),
                 },
-            })
+            }),
         );
     });
 
@@ -387,7 +390,7 @@ describe("downloads routes runtime", () => {
                 downloadJob: {
                     create: jest.fn(),
                 },
-            })
+            }),
         );
 
         const req = {
@@ -410,7 +413,7 @@ describe("downloads routes runtime", () => {
                 id: "existing-job",
                 duplicate: true,
                 message: "Download already in progress",
-            })
+            }),
         );
     });
 
@@ -428,7 +431,7 @@ describe("downloads routes runtime", () => {
                 downloadJob: {
                     create: jest.fn().mockResolvedValue(createdJob),
                 },
-            })
+            }),
         );
 
         mockDownloadFindUnique.mockResolvedValueOnce({
@@ -457,14 +460,14 @@ describe("downloads routes runtime", () => {
                 id: "job-created",
                 status: "pending",
                 message: "Download job created. Processing in background.",
-            })
+            }),
         );
         expect(mockStartDownload).toHaveBeenCalledWith(
             "job-created",
             "Correct Artist",
             "Album",
             "rg-1",
-            "user-1"
+            "user-1",
         );
     });
 
@@ -503,7 +506,7 @@ describe("downloads routes runtime", () => {
                         statusText: "tidal unavailable — skipped",
                     }),
                 }),
-            })
+            }),
         );
     });
 
@@ -535,7 +538,7 @@ describe("downloads routes runtime", () => {
             "Artist",
             "Album",
             "rg-fb",
-            "user-1"
+            "user-1",
         );
     });
 
@@ -576,7 +579,7 @@ describe("downloads routes runtime", () => {
                         statusText: "tidal and fallback lidarr unavailable",
                     }),
                 }),
-            })
+            }),
         );
     });
 
@@ -606,7 +609,7 @@ describe("downloads routes runtime", () => {
         expect(mockDownloadUpdate).not.toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({ status: "failed" }),
-            })
+            }),
         );
     });
 
@@ -658,7 +661,7 @@ describe("downloads routes runtime", () => {
         expect(mockLidarrAddArtist).toHaveBeenCalledWith(
             "artist-mbid-1",
             "Artist Canonical",
-            "/music/discovery"
+            "/music/discovery",
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(
@@ -668,7 +671,7 @@ describe("downloads routes runtime", () => {
                 rootFolderPath: "/music/discovery",
                 albumCount: 0,
                 jobs: [],
-            })
+            }),
         );
     });
 
@@ -736,7 +739,7 @@ describe("downloads routes runtime", () => {
 
     it("returns 500 when clearing Lidarr queue fails", async () => {
         mockClearLidarrQueue.mockRejectedValueOnce(
-            new Error("lidarr queue timeout")
+            new Error("lidarr queue timeout"),
         );
 
         const req = {} as any;
@@ -858,12 +861,9 @@ describe("downloads routes runtime", () => {
         expect(mockDownloadFindFirst).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({
-                    OR: [
-                        { lidarrAlbumId: 42 },
-                        { targetMbid: "rg-42" },
-                    ],
+                    OR: [{ lidarrAlbumId: 42 }, { targetMbid: "rg-42" }],
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
@@ -1200,9 +1200,10 @@ describe("downloads routes runtime", () => {
                         .mockResolvedValueOnce([])
                         .mockResolvedValueOnce([]),
                     downloadJob: {
-                        create: jest
-                            .fn()
-                            .mockResolvedValue({ id: "job-new", status: "pending" }),
+                        create: jest.fn().mockResolvedValue({
+                            id: "job-new",
+                            status: "pending",
+                        }),
                     },
                 }),
             );
@@ -1287,7 +1288,9 @@ describe("downloads routes runtime", () => {
     });
 
     it("returns 500 when listing failed albums throws", async () => {
-        mockUnavailableFindMany.mockRejectedValueOnce(new Error("db unavailable"));
+        mockUnavailableFindMany.mockRejectedValueOnce(
+            new Error("db unavailable"),
+        );
 
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
@@ -1322,9 +1325,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-missing", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-missing",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1354,9 +1358,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-parse", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-parse",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1393,9 +1398,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-parse-split", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-parse-split",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1432,9 +1438,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-simple-fail", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-simple-fail",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1478,9 +1485,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-throw", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-throw",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1571,9 +1579,10 @@ describe("downloads routes runtime", () => {
                     .mockResolvedValueOnce([])
                     .mockResolvedValueOnce([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-batch-1", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-batch-1",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1614,9 +1623,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-fallback-1", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-fallback-1",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1676,9 +1686,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-fallback-3", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-fallback-3",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1728,9 +1739,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-fallback-2", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-fallback-2",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1788,9 +1800,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-tidal", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1861,9 +1874,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-tidal-fallback", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal-fallback",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1929,9 +1943,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-tidal-fail", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal-fail",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -2000,9 +2015,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({ id: "job-tidal-zero", status: "pending" }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal-zero",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -2099,7 +2115,9 @@ describe("downloads routes runtime", () => {
     });
 
     it("returns 500 with error details when delete throws", async () => {
-        mockDownloadDeleteMany.mockRejectedValueOnce(new Error("delete exploded"));
+        mockDownloadDeleteMany.mockRejectedValueOnce(
+            new Error("delete exploded"),
+        );
 
         const req = {
             params: { id: "job-1" },

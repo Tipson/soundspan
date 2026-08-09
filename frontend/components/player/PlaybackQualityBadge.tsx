@@ -23,7 +23,7 @@ const PLAYBACK_QUALITY_BADGE_SIZE_CLASS: Record<
 };
 
 export const getPlaybackQualityBadgeToneClassName = (
-    variant: PlaybackQualityBadgeValue["variant"]
+    variant: PlaybackQualityBadgeValue["variant"],
 ): string => {
     return PLAYBACK_QUALITY_BADGE_TONE_CLASS[variant];
 };
@@ -49,7 +49,7 @@ export function PlaybackQualityBadge({
             className={cn(
                 PLAYBACK_QUALITY_BADGE_SIZE_CLASS[size],
                 getPlaybackQualityBadgeToneClassName(badge.variant),
-                className
+                className,
             )}
             title={showTitle ? badge.label : undefined}
         >

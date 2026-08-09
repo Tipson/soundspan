@@ -44,7 +44,7 @@ describe("apiKeyHash", () => {
             const raw = "raw-key-abc";
             const hashed = hashApiKey(raw);
             const lookup = jest.fn(async (key: string) =>
-                key === hashed ? { id: "hashed-row" } : null
+                key === hashed ? { id: "hashed-row" } : null,
             );
 
             const record = await findApiKeyRecord(raw, lookup);
@@ -59,7 +59,7 @@ describe("apiKeyHash", () => {
             const raw = "raw-key-def";
             const hashed = hashApiKey(raw);
             const lookup = jest.fn(async (key: string) =>
-                key === raw ? { id: "legacy-row" } : null
+                key === raw ? { id: "legacy-row" } : null,
             );
 
             const record = await findApiKeyRecord(raw, lookup);
@@ -81,7 +81,7 @@ describe("apiKeyHash", () => {
             // or at-rest hashing would be pointless.
             const stored = hashApiKey("real-raw-key"); // hmac:<h>
             const lookup = jest.fn(async (key: string) =>
-                key === stored ? { id: "victim-row" } : null
+                key === stored ? { id: "victim-row" } : null,
             );
 
             const record = await findApiKeyRecord(stored, lookup);
@@ -161,7 +161,9 @@ describe("apiKeyHash", () => {
     describe("planApiKeyHashing (backfill decision)", () => {
         it("skips rows already hashed (idempotent re-runs)", () => {
             const hashed = hashApiKey("some-raw-key");
-            expect(planApiKeyHashing(hashed)).toEqual({ action: "skip-hashed" });
+            expect(planApiKeyHashing(hashed)).toEqual({
+                action: "skip-hashed",
+            });
         });
 
         it("hashes a legacy plaintext key into its at-rest form", () => {

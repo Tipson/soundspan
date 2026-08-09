@@ -1,5 +1,9 @@
+import importlib.util
 import os
+import sys
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -8,7 +12,6 @@ from services.common.analyzer_env import (
     get_blocking_socket_timeout,
     get_int_env,
 )
-
 
 THREAD_ENV_KEYS = [
     "OMP_NUM_THREADS",
@@ -22,6 +25,58 @@ TF_ENV_KEYS = [
     "TF_NUM_INTEROP_THREADS",
 ]
 ANALYZER_PATH = Path(__file__).resolve().parents[1] / "analyzer.py"
+
+
+class FakeRedisClient:
+    """Minimal Redis client used while constructing the worker."""
+
+    def pubsub(self) -> "FakeRedisClient":
+        return self
+
+    def subscribe(self, _channel: str) -> None:
+        pass
+
+
+def _load_analyzer_with_recording_redis(
+    monkeypatch: pytest.MonkeyPatch,
+    timeout_calls: list[tuple[str, int, int]],
+    redis_calls: list[tuple[tuple[Any, ...], dict[str, Any]]],
+) -> ModuleType:
+    """Load the analyzer with isolated Redis and database dependencies."""
+
+    def resolve_timeout(name: str, default: int, *, blocking_timeout: int) -> int:
+        timeout_calls.append((name, default, blocking_timeout))
+        return 37
+
+    def from_url(*args: Any, **kwargs: Any) -> FakeRedisClient:
+        redis_calls.append((args, kwargs))
+        return FakeRedisClient()
+
+    redis_stub = ModuleType("redis")
+    redis_stub.from_url = from_url  # type: ignore[attr-defined]
+    psycopg2_stub = ModuleType("psycopg2")
+    extras_stub = ModuleType("psycopg2.extras")
+    extras_stub.Json = object  # type: ignore[attr-defined]
+    extras_stub.RealDictCursor = object  # type: ignore[attr-defined]
+    psycopg2_stub.extras = extras_stub  # type: ignore[attr-defined]
+
+    monkeypatch.setenv("BRPOP_TIMEOUT", "12")
+    monkeypatch.setattr(
+        "services.common.analyzer_env.get_blocking_socket_timeout",
+        resolve_timeout,
+    )
+    monkeypatch.setitem(sys.modules, "redis", redis_stub)
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_stub)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_stub)
+    monkeypatch.setitem(sys.modules, "essentia", None)
+
+    spec = importlib.util.spec_from_file_location("audio_analyzer_env_test_module", ANALYZER_PATH)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_get_int_env_uses_default_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,11 +107,18 @@ def test_audio_blocking_socket_timeout_exceeds_brpop_timeout(
     assert timeout > 30
 
 
-def test_audio_worker_applies_bounded_socket_timeout_to_queue_client() -> None:
-    source = ANALYZER_PATH.read_text(encoding="utf-8")
+def test_audio_worker_applies_bounded_socket_timeout_to_queue_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    timeout_calls: list[tuple[str, int, int]] = []
+    redis_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    module = _load_analyzer_with_recording_redis(monkeypatch, timeout_calls, redis_calls)
 
-    assert "'AUDIO_REDIS_SOCKET_TIMEOUT'" in source
-    assert "socket_timeout=REDIS_SOCKET_TIMEOUT" in source
+    worker = module.AnalysisWorker()
+
+    assert timeout_calls == [("AUDIO_REDIS_SOCKET_TIMEOUT", 17, 12)]
+    assert redis_calls == [((module.REDIS_URL,), {"socket_timeout": 37})]
+    assert isinstance(worker.redis, FakeRedisClient)
 
 
 def test_configure_thread_env_sets_tf_and_blas_vars(

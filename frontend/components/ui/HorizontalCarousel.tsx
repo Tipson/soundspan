@@ -84,7 +84,7 @@ export function HorizontalCarousel({
                         "opacity-0 group-hover/carousel:opacity-100 transition-opacity",
                         "hover:bg-black hover:scale-105 transition-all",
                         "border border-white/10 shadow-lg",
-                        "-translate-x-1/2"
+                        "-translate-x-1/2",
                     )}
                     aria-label="Scroll left"
                 >
@@ -100,7 +100,7 @@ export function HorizontalCarousel({
                     "snap-x snap-mandatory",
                     gapClass,
                     // Padding for edge items
-                    "px-1"
+                    "px-1",
                 )}
             >
                 {children}
@@ -117,14 +117,13 @@ export function HorizontalCarousel({
                         "opacity-0 group-hover/carousel:opacity-100 transition-opacity",
                         "hover:bg-black hover:scale-105 transition-all",
                         "border border-white/10 shadow-lg",
-                        "translate-x-1/2"
+                        "translate-x-1/2",
                     )}
                     aria-label="Scroll right"
                 >
                     <ChevronRight className="w-5 h-5 text-white" />
                 </button>
             )}
-
         </div>
     );
 }
@@ -145,7 +144,7 @@ export function CarouselItem({ children, className }: CarouselItemProps) {
                 "flex-shrink-0 snap-start",
                 // Responsive widths - smaller items that fit more on screen
                 "w-[140px] sm:w-[160px] md:w-[170px] lg:w-[180px]",
-                className
+                className,
             )}
         >
             {children}

@@ -1,8 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const baseURL =
-    process.env.SOUNDSPAN_UI_BASE_URL ||
-    "http://127.0.0.1:3030";
+const baseURL = process.env.SOUNDSPAN_UI_BASE_URL || "http://127.0.0.1:3030";
 
 export default defineConfig({
     testDir: "./tests/e2e",
@@ -16,8 +14,7 @@ export default defineConfig({
         video: "retain-on-failure",
     },
     reporter: [["list"], ["html", { open: "never" }]],
-    webServer:
-        process.env.SOUNDSPAN_E2E_START_WEB
+    webServer: process.env.SOUNDSPAN_E2E_START_WEB
         ? {
               command: "npm run dev",
               url: baseURL,

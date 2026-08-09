@@ -27,7 +27,8 @@ describe("vibeAnalysisCleanupService", () => {
     it("returns zero when no stale tracks exist", async () => {
         mockTrackFindMany.mockResolvedValueOnce([]);
 
-        const result = await vibeAnalysisCleanupService.cleanupStaleProcessing();
+        const result =
+            await vibeAnalysisCleanupService.cleanupStaleProcessing();
 
         expect(mockTrackFindMany).toHaveBeenCalledWith({
             where: {
@@ -67,7 +68,8 @@ describe("vibeAnalysisCleanupService", () => {
         ]);
         mockTrackUpdate.mockResolvedValue({});
 
-        const result = await vibeAnalysisCleanupService.cleanupStaleProcessing();
+        const result =
+            await vibeAnalysisCleanupService.cleanupStaleProcessing();
 
         expect(mockTrackUpdate).toHaveBeenCalledTimes(2);
         expect(mockTrackUpdate).toHaveBeenNthCalledWith(1, {
@@ -85,13 +87,13 @@ describe("vibeAnalysisCleanupService", () => {
             },
         });
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[VibeAnalysisCleanup] Found 2 stale vibe tracks (processing > 30 min)"
+            "[VibeAnalysisCleanup] Found 2 stale vibe tracks (processing > 30 min)",
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[VibeAnalysisCleanup] Reset for retry: Artist One - Track One"
+            "[VibeAnalysisCleanup] Reset for retry: Artist One - Track One",
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[VibeAnalysisCleanup] Reset for retry: Artist Two - Track Two"
+            "[VibeAnalysisCleanup] Reset for retry: Artist Two - Track Two",
         );
         expect(result).toEqual({ reset: 2 });
     });
@@ -107,7 +109,7 @@ describe("vibeAnalysisCleanupService", () => {
         mockTrackUpdate.mockRejectedValueOnce(new Error("write failed"));
 
         await expect(
-            vibeAnalysisCleanupService.cleanupStaleProcessing()
+            vibeAnalysisCleanupService.cleanupStaleProcessing(),
         ).rejects.toThrow("write failed");
         expect(mockTrackUpdate).toHaveBeenCalledTimes(1);
     });

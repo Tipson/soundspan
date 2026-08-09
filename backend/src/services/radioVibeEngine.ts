@@ -21,7 +21,7 @@ const MAX_SEED_SAMPLE = 100;
  */
 export const hasReliableEnhanced = (
     analysisMode: string | null | undefined,
-    analysisVersion: string | null | undefined
+    analysisVersion: string | null | undefined,
 ): boolean =>
     analysisMode === "enhanced" &&
     typeof analysisVersion === "string" &&
@@ -63,14 +63,12 @@ export const calculateEnhancedArousal = (track: any): number => {
     const bpm = track.bpm ?? 120;
     const moodArousal = aggressive * 0.3 + party * 0.2;
     const energyArousal = energy * 0.25;
-    const tempoArousal =
-        Math.max(0, Math.min(1, (bpm - 60) / 120)) * 0.15;
-    const calmReduction =
-        (1 - relaxed) * 0.05 + (1 - acoustic) * 0.05;
+    const tempoArousal = Math.max(0, Math.min(1, (bpm - 60) / 120)) * 0.15;
+    const calmReduction = (1 - relaxed) * 0.05 + (1 - acoustic) * 0.05;
 
     return Math.max(
         0,
-        Math.min(1, moodArousal + energyArousal + tempoArousal + calmReduction)
+        Math.min(1, moodArousal + energyArousal + tempoArousal + calmReduction),
     );
 };
 
@@ -134,13 +132,13 @@ export const octaveAwareBPMDistance = (bpm1: number, bpm2: number): number => {
 export const buildFeatureVector = (track: any): number[] => {
     const trackHasReliable = hasReliableEnhanced(
         track.analysisMode,
-        track.analysisVersion
+        track.analysisVersion,
     );
     const isOOD = trackHasReliable && detectOOD(track);
 
     const getMoodValue = (
         value: number | null,
-        defaultValue: number
+        defaultValue: number,
     ): number => {
         if (!value) return defaultValue;
         if (!isOOD) return value;
@@ -160,9 +158,16 @@ export const buildFeatureVector = (track: any): number[] => {
         getMoodValue(trackHasReliable ? track.moodSad : null, 0.5) * 1.3,
         getMoodValue(trackHasReliable ? track.moodRelaxed : null, 0.5) * 1.3,
         getMoodValue(trackHasReliable ? track.moodAggressive : null, 0.5) * 1.3,
-        getMoodValue(trackHasReliable ? (track as any).moodParty : null, 0.5) * 1.3,
-        getMoodValue(trackHasReliable ? (track as any).moodAcoustic : null, 0.5) * 1.3,
-        getMoodValue(trackHasReliable ? (track as any).moodElectronic : null, 0.5) * 1.3,
+        getMoodValue(trackHasReliable ? (track as any).moodParty : null, 0.5) *
+            1.3,
+        getMoodValue(
+            trackHasReliable ? (track as any).moodAcoustic : null,
+            0.5,
+        ) * 1.3,
+        getMoodValue(
+            trackHasReliable ? (track as any).moodElectronic : null,
+            0.5,
+        ) * 1.3,
         // Audio features (5 features) — standard weight
         track.energy ?? 0.5,
         enhancedArousal,
@@ -207,13 +212,13 @@ export const computeTagBonus = (
     sourceTags: string[],
     sourceGenres: string[],
     trackTags: string[],
-    trackGenres: string[]
+    trackGenres: string[],
 ): number => {
     const sourceSet = new Set(
-        [...sourceTags, ...sourceGenres].map((t) => t.toLowerCase())
+        [...sourceTags, ...sourceGenres].map((t) => t.toLowerCase()),
     );
     const trackSet = new Set(
-        [...trackTags, ...trackGenres].map((t) => t.toLowerCase())
+        [...trackTags, ...trackGenres].map((t) => t.toLowerCase()),
     );
     if (sourceSet.size === 0 || trackSet.size === 0) return 0;
     const overlap = [...sourceSet].filter((tag) => trackSet.has(tag)).length;
@@ -228,14 +233,14 @@ export const computeTagBonus = (
  * @returns Centroid feature vector, or null if no seeds have analysis data.
  */
 export const computeAggregateFeatureVector = (
-    seedTracks: any[]
+    seedTracks: any[],
 ): number[] | null => {
     if (!seedTracks || seedTracks.length === 0) return null;
 
     // Filter to tracks that have at least some audio data
     // Use explicit null checks since 0 is a valid value for these fields
     const analyzable = seedTracks.filter(
-        (t) => t.bpm != null || t.energy != null || t.valence != null
+        (t) => t.bpm != null || t.energy != null || t.valence != null,
     );
     if (analyzable.length === 0) return null;
 
@@ -244,7 +249,11 @@ export const computeAggregateFeatureVector = (
     if (sampled.length > MAX_SEED_SAMPLE) {
         // Fisher-Yates partial shuffle for random sample
         const copy = [...sampled];
-        for (let i = copy.length - 1; i > copy.length - MAX_SEED_SAMPLE - 1 && i > 0; i--) {
+        for (
+            let i = copy.length - 1;
+            i > copy.length - MAX_SEED_SAMPLE - 1 && i > 0;
+            i--
+        ) {
             const j = Math.floor(Math.random() * (i + 1));
             [copy[i], copy[j]] = [copy[j], copy[i]];
         }
@@ -295,10 +304,10 @@ export const scoreTracksAgainstSeed = (
     seedGenres: string[],
     candidates: any[],
     preferenceScores: Map<string, number>,
-    applyPreferenceBias: (score: number, preference: number) => number
+    applyPreferenceBias: (score: number, preference: number) => number,
 ): ScoredTrack[] => {
     // Use lower threshold when we have enhanced data in the centroid
-    const minThreshold = 0.40;
+    const minThreshold = 0.4;
 
     const scored: ScoredTrack[] = [];
     for (const t of candidates) {
@@ -309,7 +318,7 @@ export const scoreTracksAgainstSeed = (
             seedTags,
             seedGenres,
             t.lastfmTags || [],
-            t.essentiaGenres || []
+            t.essentiaGenres || [],
         );
 
         const finalScore = Math.max(
@@ -318,9 +327,9 @@ export const scoreTracksAgainstSeed = (
                 1,
                 applyPreferenceBias(
                     score * 0.95 + tagBonus,
-                    preferenceScores.get(t.id) ?? 0
-                )
-            )
+                    preferenceScores.get(t.id) ?? 0,
+                ),
+            ),
         );
 
         if (finalScore > minThreshold) {

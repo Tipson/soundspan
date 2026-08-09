@@ -82,7 +82,7 @@ class RSSParserService {
 
     private getHeaderValue(
         headers: Record<string, unknown>,
-        name: string
+        name: string,
     ): string | undefined {
         const value = headers[name];
         return typeof value === "string" && value.trim().length > 0
@@ -95,7 +95,7 @@ class RSSParserService {
      */
     async parseFeed(
         feedUrl: string,
-        options: RSSFeedRequestOptions = {}
+        options: RSSFeedRequestOptions = {},
     ): Promise<ParsedPodcastFeed> {
         try {
             const safeFeedUrl = await resolveSafeOutboundUrl(feedUrl);
@@ -132,22 +132,20 @@ class RSSParserService {
                 }
                 const location = this.getHeaderValue(
                     response.headers,
-                    "location"
+                    "location",
                 );
                 if (!location) {
                     throw new Error("Redirect without a Location header");
                 }
                 const nextUrl = await resolveSafeOutboundRedirectTarget(
                     location,
-                    currentUrl
+                    currentUrl,
                 );
                 if (!nextUrl) {
-                    throw new Error(
-                        "Invalid or private feed redirect target"
-                    );
+                    throw new Error("Invalid or private feed redirect target");
                 }
                 logger.debug(
-                    ` [RSS PARSER] Following feed redirect (${response.status}) -> ${nextUrl}`
+                    ` [RSS PARSER] Following feed redirect (${response.status}) -> ${nextUrl}`,
                 );
                 currentUrl = nextUrl;
             }
@@ -156,14 +154,14 @@ class RSSParserService {
                 etag: this.getHeaderValue(response.headers, "etag"),
                 lastModified: this.getHeaderValue(
                     response.headers,
-                    "last-modified"
+                    "last-modified",
                 ),
             };
 
             if (response.status === 304) {
                 throw new RSSFeedNotModifiedError(
                     feedMetadata.etag,
-                    feedMetadata.lastModified
+                    feedMetadata.lastModified,
                 );
             }
 
@@ -193,7 +191,7 @@ class RSSParserService {
                         const audioEnclosure = this.findAudioEnclosure(item);
                         if (!audioEnclosure) {
                             logger.warn(
-                                ` Skipping episode "${item.title}" - no audio found`
+                                ` Skipping episode "${item.title}" - no audio found`,
                             );
                             return null;
                         }
@@ -207,7 +205,7 @@ class RSSParserService {
                                 undefined,
                             audioUrl: audioEnclosure.url,
                             duration: this.parseDuration(
-                                (item as any).itunesDuration
+                                (item as any).itunesDuration,
                             ),
                             publishedAt: item.pubDate
                                 ? new Date(item.pubDate)
@@ -232,7 +230,7 @@ class RSSParserService {
                     } catch (error: any) {
                         logger.error(
                             `    Error parsing episode "${item.title}":`,
-                            error.message
+                            error.message,
                         );
                         return null;
                     }
@@ -254,10 +252,7 @@ class RSSParserService {
                       ? error.message
                       : String(error);
 
-            logger.error(
-                `\n [RSS PARSER] Failed to parse feed:`,
-                errorMessage
-            );
+            logger.error(`\n [RSS PARSER] Failed to parse feed:`, errorMessage);
             throw new Error(`Failed to parse podcast feed: ${errorMessage}`);
         }
     }
@@ -296,7 +291,7 @@ class RSSParserService {
      * Find audio enclosure in episode
      */
     private findAudioEnclosure(
-        item: any
+        item: any,
     ): { url: string; type?: string; length?: string } | null {
         // Check enclosure field
         if (item.enclosure) {

@@ -54,9 +54,11 @@ jest.mock("../services/deezer", () => ({
 
 jest.mock("../services/musicbrainz", () => ({
     musicBrainzService: {
-        searchArtist: jest.fn().mockResolvedValue([
-            { id: "11111111-2222-4333-8444-555555555555" },
-        ]),
+        searchArtist: jest
+            .fn()
+            .mockResolvedValue([
+                { id: "11111111-2222-4333-8444-555555555555" },
+            ]),
     },
 }));
 
@@ -111,7 +113,8 @@ describe("artist enrichment MBID conflict handling", () => {
         const attemptedMbidWrite = mockPrisma.artist.update.mock.calls.some(
             (call) =>
                 call?.[0]?.where?.id === "artist-1" &&
-                call?.[0]?.data?.mbid === "11111111-2222-4333-8444-555555555555"
+                call?.[0]?.data?.mbid ===
+                    "11111111-2222-4333-8444-555555555555",
         );
         expect(attemptedMbidWrite).toBe(false);
     });

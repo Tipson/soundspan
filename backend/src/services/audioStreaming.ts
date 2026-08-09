@@ -47,7 +47,7 @@ export class AudioStreamingService {
     constructor(
         musicPath: string,
         transcodeCachePath: string,
-        transcodeCacheMaxGb: number
+        transcodeCacheMaxGb: number,
     ) {
         this.musicPath = musicPath;
         this.transcodeCachePath = transcodeCachePath;
@@ -59,11 +59,14 @@ export class AudioStreamingService {
         }
 
         // Start cache eviction timer (every 6 hours)
-        this.evictionInterval = setInterval(() => {
-            this.evictCache(this.transcodeCacheMaxGb).catch((err) => {
-                logger.error("Cache eviction failed:", err);
-            });
-        }, 6 * 60 * 60 * 1000);
+        this.evictionInterval = setInterval(
+            () => {
+                this.evictCache(this.transcodeCacheMaxGb).catch((err) => {
+                    logger.error("Cache eviction failed:", err);
+                });
+            },
+            6 * 60 * 60 * 1000,
+        );
     }
 
     /**
@@ -73,14 +76,18 @@ export class AudioStreamingService {
         trackId: string,
         quality: Quality,
         sourceModified: Date,
-        sourceAbsolutePath: string
+        sourceAbsolutePath: string,
     ): Promise<StreamFileInfo> {
-        logger.debug(`[AudioStreaming] Request: trackId=${trackId}, quality=${quality}, source=${path.basename(sourceAbsolutePath)}`);
-        
+        logger.debug(
+            `[AudioStreaming] Request: trackId=${trackId}, quality=${quality}, source=${path.basename(sourceAbsolutePath)}`,
+        );
+
         // If original quality requested, return source file
         if (quality === "original") {
             const mimeType = this.getMimeType(sourceAbsolutePath);
-            logger.debug(`[AudioStreaming] Serving original: mimeType=${mimeType}`);
+            logger.debug(
+                `[AudioStreaming] Serving original: mimeType=${mimeType}`,
+            );
             return {
                 filePath: sourceAbsolutePath,
                 mimeType,
@@ -91,12 +98,12 @@ export class AudioStreamingService {
         const cachedPath = await this.getCachedTranscode(
             trackId,
             quality,
-            sourceModified
+            sourceModified,
         );
 
         if (cachedPath) {
             logger.debug(
-                `[STREAM] Using cached transcode: ${quality} (${cachedPath})`
+                `[STREAM] Using cached transcode: ${quality} (${cachedPath})`,
             );
             return {
                 filePath: cachedPath,
@@ -115,7 +122,7 @@ export class AudioStreamingService {
 
                 if (sourceBitrate && sourceBitrate <= targetBitrate) {
                     logger.debug(
-                        `[STREAM] Source bitrate (${sourceBitrate}kbps) <= target (${targetBitrate}kbps), serving original`
+                        `[STREAM] Source bitrate (${sourceBitrate}kbps) <= target (${targetBitrate}kbps), serving original`,
                     );
                     return {
                         filePath: sourceAbsolutePath,
@@ -125,7 +132,7 @@ export class AudioStreamingService {
             } catch (err) {
                 logger.warn(
                     `[STREAM] Failed to read source metadata, will transcode anyway:`,
-                    err
+                    err,
                 );
             }
         }
@@ -135,21 +142,21 @@ export class AudioStreamingService {
         if (currentSize > this.transcodeCacheMaxGb * 0.9) {
             logger.debug(
                 `[STREAM] Cache near full (${currentSize.toFixed(
-                    2
-                )}GB), evicting to 80%...`
+                    2,
+                )}GB), evicting to 80%...`,
             );
             await this.evictCache(this.transcodeCacheMaxGb * 0.8);
         }
 
         // Transcode to cache
         logger.debug(
-            `[STREAM] Transcoding to ${quality} quality: ${sourceAbsolutePath}`
+            `[STREAM] Transcoding to ${quality} quality: ${sourceAbsolutePath}`,
         );
         const transcodedPath = await this.transcodeToCache(
             trackId,
             quality,
             sourceAbsolutePath,
-            sourceModified
+            sourceModified,
         );
 
         return {
@@ -164,7 +171,7 @@ export class AudioStreamingService {
     private async getCachedTranscode(
         trackId: string,
         quality: Quality,
-        sourceModified: Date
+        sourceModified: Date,
     ): Promise<string | null> {
         const cached = await prisma.transcodedFile.findFirst({
             where: {
@@ -178,14 +185,14 @@ export class AudioStreamingService {
         // Invalidate if source file was modified after transcode was created
         if (cached.sourceModified < sourceModified) {
             logger.debug(
-                `[STREAM] Cache stale for track ${trackId}, removing...`
+                `[STREAM] Cache stale for track ${trackId}, removing...`,
             );
             await prisma.transcodedFile.delete({ where: { id: cached.id } });
 
             // Delete file from disk
             const cachePath = path.join(
                 this.transcodeCachePath,
-                cached.cachePath
+                cached.cachePath,
             );
             await fs.promises.unlink(cachePath).catch(() => {});
 
@@ -217,13 +224,13 @@ export class AudioStreamingService {
         trackId: string,
         quality: Quality,
         sourcePath: string,
-        sourceModified: Date
+        sourceModified: Date,
     ): Promise<string> {
         const dedupeKey = `${trackId}-${quality}`;
         const inflight = this.inflightTranscodes.get(dedupeKey);
         if (inflight) {
             logger.debug(
-                `[STREAM] Joining in-flight transcode for ${dedupeKey}`
+                `[STREAM] Joining in-flight transcode for ${dedupeKey}`,
             );
             return inflight;
         }
@@ -232,7 +239,7 @@ export class AudioStreamingService {
             trackId,
             quality,
             sourcePath,
-            sourceModified
+            sourceModified,
         ).finally(() => {
             this.inflightTranscodes.delete(dedupeKey);
         });
@@ -248,14 +255,14 @@ export class AudioStreamingService {
         trackId: string,
         quality: Quality,
         sourcePath: string,
-        sourceModified: Date
+        sourceModified: Date,
     ): Promise<string> {
         const settings = QUALITY_SETTINGS[quality];
         if (!settings.bitrate || !settings.format) {
             throw new AppError(
                 ErrorCode.INVALID_CONFIG,
                 ErrorCategory.FATAL,
-                `Invalid quality setting: ${quality}`
+                `Invalid quality setting: ${quality}`,
             );
         }
 
@@ -285,8 +292,8 @@ export class AudioStreamingService {
                                     ErrorCode.FFMPEG_NOT_FOUND,
                                     ErrorCategory.FATAL,
                                     "FFmpeg not installed. Please install FFmpeg to enable transcoding.",
-                                    { trackId, quality }
-                                )
+                                    { trackId, quality },
+                                ),
                             );
                         } else {
                             reject(
@@ -294,8 +301,8 @@ export class AudioStreamingService {
                                     ErrorCode.TRANSCODE_FAILED,
                                     ErrorCategory.RECOVERABLE,
                                     `Transcoding failed: ${err.message}`,
-                                    { trackId, quality, source: sourcePath }
-                                )
+                                    { trackId, quality, source: sourcePath },
+                                ),
                             );
                         }
                     })
@@ -329,7 +336,7 @@ export class AudioStreamingService {
                                     stats.size /
                                     1024 /
                                     1024
-                                ).toFixed(2)}MB)`
+                                ).toFixed(2)}MB)`,
                             );
                             resolve(cachePath);
                         } catch (err: any) {
@@ -338,8 +345,8 @@ export class AudioStreamingService {
                                     ErrorCode.DB_QUERY_ERROR,
                                     ErrorCategory.RECOVERABLE,
                                     `Failed to save transcode record: ${err.message}`,
-                                    { trackId, quality }
-                                )
+                                    { trackId, quality },
+                                ),
                             );
                         }
                     })
@@ -350,8 +357,8 @@ export class AudioStreamingService {
                         ErrorCode.FFMPEG_NOT_FOUND,
                         ErrorCategory.FATAL,
                         "FFmpeg not available. Please install FFmpeg to enable transcoding.",
-                        { trackId, quality }
-                    )
+                        { trackId, quality },
+                    ),
                 );
             }
         });
@@ -408,8 +415,8 @@ export class AudioStreamingService {
 
         logger.debug(
             `[CACHE] Evicted ${evicted} files, new size: ${currentSize.toFixed(
-                2
-            )}GB`
+                2,
+            )}GB`,
         );
     }
 
@@ -442,7 +449,7 @@ export class AudioStreamingService {
         req: Request,
         res: Response,
         filePath: string,
-        mimeType: string
+        mimeType: string,
     ): Promise<void> {
         try {
             // Get file stats for size
@@ -519,7 +526,7 @@ export class AudioStreamingService {
                 if (code !== "ERR_STREAM_PREMATURE_CLOSE") {
                     logger.error(
                         `[AudioStreaming] Stream error for ${filePath}:`,
-                        err
+                        err,
                     );
                     if (!res.headersSent) {
                         res.status(500).end();

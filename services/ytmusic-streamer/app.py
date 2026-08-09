@@ -17,18 +17,20 @@ user-private operations and per-user cache segmentation for public search.
 import asyncio
 import json
 import os
+import random
 import re
 import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, Optional, Literal, cast
+from typing import Any, Literal, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
-from ytmusicapi import YTMusic, OAuthCredentials
+from ytmusicapi import OAuthCredentials, YTMusic
 
 SERVICES_ROOT = Path(__file__).resolve().parents[1]
 if str(SERVICES_ROOT) not in sys.path:
@@ -53,10 +55,12 @@ from yt_download import (
     bulk_album_metadata,
     classify_youtube_url,
     derive_proxy_audio_container,
-    extract_video_id as _extract_video_id,
     find_active_download_job,
     find_existing_download,
     resolve_download_filepath,
+)
+from yt_download import (
+    extract_video_id as _extract_video_id,
 )
 
 
@@ -83,20 +87,20 @@ def _stamp_audio_tags(filepath: str, tags: dict) -> None:
     tmp_path = f"{root}.tagtmp{ext}"
     cmd = build_tag_rewrite_command(filepath, tags, tmp_path)
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 -- argv comes from a code-owned ffmpeg command builder
             cmd, capture_output=True, text=True, timeout=120
         )
         if result.returncode != 0:
             log.warning(
-                f"ffmpeg tag stamp failed for {filepath}: "
-                f"{(result.stderr or '').strip()[:300]}"
+                f"ffmpeg tag stamp failed for {filepath}: {(result.stderr or '').strip()[:300]}"
             )
             _safe_remove(tmp_path)
             return
         os.replace(tmp_path, filepath)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.warning(f"Failed to stamp audio tags on {filepath}: {e}")
         _safe_remove(tmp_path)
+
 
 # ════════════════════════════════════════════════════════════════════
 # WORKAROUND REGISTRY — ytmusicapi issue #813  (OAuth + WEB_REMIX broken)
@@ -241,8 +245,6 @@ _USER_AGENT = (
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _ALLOWED_STREAM_QUALITIES = {"LOW", "MEDIUM", "HIGH", "LOSSLESS"}
 
-import random
-
 # ── Stream URL cache (in-memory, URLs expire after ~6h) ────────────
 # Keys are "{user_id}:{video_id}" to isolate per-user sessions
 _stream_cache: dict[str, dict] = {}
@@ -256,6 +258,7 @@ def _bound_cache(cache: dict, max_size: int) -> None:
     """Evict oldest entries until an insertion-ordered cache is bounded."""
     while len(cache) > max_size:
         cache.pop(next(iter(cache)))
+
 
 # ── YTMusic instances ────────────────────────────────────────────────
 # Per-user authenticated clients are used for user-private operations
@@ -272,19 +275,23 @@ _public_ytmusic_instances: dict[Literal["tv", "native"], YTMusic] = {}
 # Models
 # ════════════════════════════════════════════════════════════════════
 
+
 class OAuthTokenPayload(BaseModel):
     """OAuth tokens stored by the backend."""
+
     oauth_json: str  # Full JSON string from ytmusicapi OAuth
 
 
 class DeviceCodeRequest(BaseModel):
     """Request to initiate device code flow."""
+
     client_id: str
     client_secret: str
 
 
 class DeviceCodePollRequest(BaseModel):
     """Request to poll for device code completion."""
+
     client_id: str
     client_secret: str
     device_code: str
@@ -292,26 +299,30 @@ class DeviceCodePollRequest(BaseModel):
 
 class SearchRequest(BaseModel):
     """Payload for single-query YouTube Music search requests."""
+
     query: str
-    filter: Optional[Literal["songs", "albums", "artists", "videos"]] = None
+    filter: Literal["songs", "albums", "artists", "videos"] | None = None
     limit: int = 20
 
 
 class BatchSearchQuery(BaseModel):
     """A single query within a batch search request."""
+
     query: str
-    filter: Optional[Literal["songs", "albums", "artists", "videos"]] = None
+    filter: Literal["songs", "albums", "artists", "videos"] | None = None
     limit: int = 5  # Lower default for batch — we only need top results
 
 
 class BatchSearchRequest(BaseModel):
     """Batch of search queries to execute concurrently."""
+
     queries: list[BatchSearchQuery]
 
 
 # ════════════════════════════════════════════════════════════════════
 # Helpers
 # ════════════════════════════════════════════════════════════════════
+
 
 def _validate_video_id(video_id: str) -> str:
     """Reject video ids that are not exactly 11 URL-safe characters."""
@@ -343,8 +354,14 @@ def _sanitized_http_error(
     detail: str,
 ) -> HTTPException:
     """Log full exception detail; return a generic client-facing HTTPException."""
-    log.error("%s failed: %s", operation, exc, exc_info=True)
+    log.error(
+        "%s failed: %s",
+        operation,
+        exc,
+        exc_info=True,  # noqa: LOG014 -- callers invoke this helper from active exception handlers
+    )
     return HTTPException(status_code=status_code, detail=detail)
+
 
 def _oauth_file(user_id: str) -> Path:
     """Return the OAuth JSON path for a given user."""
@@ -428,7 +445,7 @@ def _parse_duration_text_value(value: Any) -> int:
     return 0
 
 
-def _normalize_native_search_item(item: dict) -> Optional[dict]:
+def _normalize_native_search_item(item: dict) -> dict | None:
     """
     Normalize search results into the connector shim shape used by the backend.
     This accepts both native `yt.search()` items and TV-parser candidates.
@@ -466,7 +483,7 @@ def _normalize_native_search_item(item: dict) -> Optional[dict]:
         primary_artist = "Unknown"
 
     album = item.get("album")
-    album_name: Optional[str] = None
+    album_name: str | None = None
     if isinstance(album, dict):
         name = str(album.get("name") or "").strip()
         album_name = name or None
@@ -505,7 +522,7 @@ def _normalize_native_search_item(item: dict) -> Optional[dict]:
 def _native_search(
     yt: YTMusic,
     query: str,
-    filter: Optional[str] = None,
+    filter: Literal["songs", "albums", "artists", "videos"] | None = None,
     limit: int = 20,
 ) -> list[dict]:
     """Execute yt.search() and normalize results to sidecar response shape."""
@@ -532,7 +549,7 @@ def _get_ytmusic(user_id: str) -> YTMusic:
     if oauth_path.exists():
         try:
             # Read the oauth JSON to check if it has custom client credentials
-            oauth_data = json.loads(oauth_path.read_text())
+            json.loads(oauth_path.read_text())
 
             # Build OAuthCredentials if client_id/client_secret are stored alongside
             oauth_creds = None
@@ -545,7 +562,9 @@ def _get_ytmusic(user_id: str) -> YTMusic:
                 )
 
             if oauth_creds:
-                yt = YTMusic(str(oauth_path), oauth_credentials=oauth_creds, language=YTMUSIC_LANGUAGE)
+                yt = YTMusic(
+                    str(oauth_path), oauth_credentials=oauth_creds, language=YTMUSIC_LANGUAGE
+                )
             else:
                 yt = YTMusic(str(oauth_path), language=YTMUSIC_LANGUAGE)
 
@@ -727,7 +746,12 @@ def _stream_extraction_http_error(
         "age" in error_str.lower() and "confirm" in error_str.lower()
     )
     if age_restricted:
-        log.error("%s failed: %s", error_label, error, exc_info=True)
+        log.error(
+            "%s failed: %s",
+            error_label,
+            error,
+            exc_info=True,  # noqa: LOG014 -- called while handling the extraction exception
+        )
         return HTTPException(
             status_code=451,
             detail={
@@ -736,12 +760,10 @@ def _stream_extraction_http_error(
                 "video_id": video_id,
             },
         )
-    return _sanitized_http_error(
-        error_label, error, 502, "Failed to extract stream"
-    )
+    return _sanitized_http_error(error_label, error, 502, "Failed to extract stream")
 
 
-def _best_audio_stream_url(info: dict) -> Optional[str]:
+def _best_audio_stream_url(info: dict) -> str | None:
     """Return the direct URL or the highest-bitrate audio-only format URL."""
     stream_url = info.get("url")
     if stream_url:
@@ -749,8 +771,7 @@ def _best_audio_stream_url(info: dict) -> Optional[str]:
     audio_formats = [
         item
         for item in info.get("formats", [])
-        if item.get("acodec") != "none"
-        and item.get("vcodec") in ("none", None)
+        if item.get("acodec") != "none" and item.get("vcodec") in ("none", None)
     ]
     audio_formats.sort(key=lambda item: item.get("abr", 0) or 0, reverse=True)
     return audio_formats[0].get("url") if audio_formats else None
@@ -804,16 +825,12 @@ def _extract_stream_info(
             )
             return result
     except Exception as error:
-        raise _stream_extraction_http_error(
-            video_id, error_label, error
-        ) from error
+        raise _stream_extraction_http_error(video_id, error_label, error) from error
 
 
 def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> dict:
     """Extract a cached audio stream URL for a regular YouTube video."""
-    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(
-        quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"]
-    )
+    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"])
     ydl_opts = {
         "format": fmt,
         "quiet": True,
@@ -836,9 +853,7 @@ def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> dict:
     )
 
 
-def _get_stream_url_sync(
-    user_id: str, video_id: str, quality: str = "HIGH"
-) -> dict:
+def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> dict:
     """Extract a cached audio stream URL for a YouTube Music video."""
     format_map = {
         "LOW": "ba[abr<=64]/worstaudio/ba",
@@ -878,16 +893,12 @@ async def _extract_stream_info_bounded(func, *args) -> dict:
     hang forever: yt-dlp's socket_timeout bounds its network reads.
     """
     try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(func, *args), timeout=EXTRACT_TIMEOUT
-        )
+        return await asyncio.wait_for(asyncio.to_thread(func, *args), timeout=EXTRACT_TIMEOUT)
     except TimeoutError as error:
-        raise HTTPException(
-            status_code=504, detail="Stream extraction timed out"
-        ) from error
+        raise HTTPException(status_code=504, detail="Stream extraction timed out") from error
 
 
-def _tv_search(yt: YTMusic, query: str, filter: Optional[str] = None, limit: int = 20) -> list[dict]:
+def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 20) -> list[dict]:
     """
     WORKAROUND(#813) — Custom search parser for the TVHTML5 client.
 
@@ -994,18 +1005,22 @@ def _tv_search(yt: YTMusic, query: str, filter: Optional[str] = None, limit: int
                     byline = _extract_text(r.get("shortBylineText") or r.get("longBylineText"))
                     duration_text = _extract_text(r.get("lengthText"))
                     thumbs = r.get("thumbnail", {}).get("thumbnails", [])
-                    items.append({
-                        "type": "song",
-                        "videoId": vid,
-                        "title": title_text,
-                        "artist": byline.split("\u00b7")[0].strip() if byline else "Unknown",
-                        "artists": [byline.split("\u00b7")[0].strip()] if byline else [],
-                        "album": byline.split("\u00b7")[1].strip() if "\u00b7" in byline else None,
-                        "duration": duration_text,
-                        "duration_seconds": _parse_duration_text(duration_text),
-                        "thumbnails": thumbs,
-                        "isExplicit": False,
-                    })
+                    items.append(
+                        {
+                            "type": "song",
+                            "videoId": vid,
+                            "title": title_text,
+                            "artist": byline.split("\u00b7")[0].strip() if byline else "Unknown",
+                            "artists": [byline.split("\u00b7")[0].strip()] if byline else [],
+                            "album": byline.split("\u00b7")[1].strip()
+                            if "\u00b7" in byline
+                            else None,
+                            "duration": duration_text,
+                            "duration_seconds": _parse_duration_text(duration_text),
+                            "thumbnails": thumbs,
+                            "isExplicit": False,
+                        }
+                    )
                 return
 
             # ── tileRenderer (TVHTML5 v7+) ──
@@ -1020,12 +1035,11 @@ def _tv_search(yt: YTMusic, query: str, filter: Optional[str] = None, limit: int
                 if vid:
                     metadata = r.get("metadata", {}).get("tileMetadataRenderer", {})
                     title_text = (
-                        _extract_text(r.get("header", {}).get("tileHeaderRenderer", {}).get("title"))
-                        or _extract_text(metadata.get("title"))
-                        or _extract_text(
-                            r.get("overlayMetadata", {})
-                            .get("primaryText")
+                        _extract_text(
+                            r.get("header", {}).get("tileHeaderRenderer", {}).get("title")
                         )
+                        or _extract_text(metadata.get("title"))
+                        or _extract_text(r.get("overlayMetadata", {}).get("primaryText"))
                     )
 
                     # metadata lines contain artist / album / duration
@@ -1038,9 +1052,7 @@ def _tv_search(yt: YTMusic, query: str, filter: Optional[str] = None, limit: int
                         line_renderer = line.get("lineRenderer", {})
                         line_values: list[str] = []
                         for item_entry in line_renderer.get("items", []):
-                            text_obj = (
-                                item_entry.get("lineItemRenderer", {}).get("text")
-                            )
+                            text_obj = item_entry.get("lineItemRenderer", {}).get("text")
                             lt = _extract_text(text_obj)
                             if lt:
                                 line_values.append(lt)
@@ -1085,46 +1097,59 @@ def _tv_search(yt: YTMusic, query: str, filter: Optional[str] = None, limit: int
                     if not artist_name:
                         artist_name = "Unknown"
 
-                    items.append({
-                        "type": "song",
-                        "videoId": vid,
-                        "title": title_text,
-                        "artist": artist_name,
-                        "artists": [artist_name] if artist_name != "Unknown" else [],
-                        "album": album_name,
-                        "duration": duration_text,
-                        "duration_seconds": duration_seconds,
-                        "thumbnails": (
-                            r.get("contentImage", {})
-                            .get("musicThumbnailRenderer", {})
-                            .get("thumbnail", {})
-                            .get("thumbnails", [])
-                        ),
-                        "isExplicit": False,
-                    })
+                    items.append(
+                        {
+                            "type": "song",
+                            "videoId": vid,
+                            "title": title_text,
+                            "artist": artist_name,
+                            "artists": [artist_name] if artist_name != "Unknown" else [],
+                            "album": album_name,
+                            "duration": duration_text,
+                            "duration_seconds": duration_seconds,
+                            "thumbnails": (
+                                r.get("contentImage", {})
+                                .get("musicThumbnailRenderer", {})
+                                .get("thumbnail", {})
+                                .get("thumbnails", [])
+                            ),
+                            "isExplicit": False,
+                        }
+                    )
                 return
 
             # ── musicCardShelfRenderer (top result) ──
             if "musicCardShelfRenderer" in node:
                 r = node["musicCardShelfRenderer"]
-                nav_ep = (r.get("title", {}).get("runs", [{}])[0].get("navigationEndpoint", {})
-                          .get("watchEndpoint", {}))
+                nav_ep = (
+                    r.get("title", {})
+                    .get("runs", [{}])[0]
+                    .get("navigationEndpoint", {})
+                    .get("watchEndpoint", {})
+                )
                 vid = nav_ep.get("videoId", "")
                 if vid:
                     title_text = _extract_text(r.get("title"))
                     subtitle = _extract_text(r.get("subtitle"))
-                    items.append({
-                        "type": "song",
-                        "videoId": vid,
-                        "title": title_text,
-                        "artist": subtitle.split("\u00b7")[0].strip() if subtitle else "Unknown",
-                        "artists": [subtitle.split("\u00b7")[0].strip()] if subtitle else [],
-                        "album": None,
-                        "duration": "",
-                        "duration_seconds": 0,
-                        "thumbnails": r.get("thumbnail", {}).get("musicThumbnailRenderer", {}).get("thumbnail", {}).get("thumbnails", []),
-                        "isExplicit": False,
-                    })
+                    items.append(
+                        {
+                            "type": "song",
+                            "videoId": vid,
+                            "title": title_text,
+                            "artist": subtitle.split("\u00b7")[0].strip()
+                            if subtitle
+                            else "Unknown",
+                            "artists": [subtitle.split("\u00b7")[0].strip()] if subtitle else [],
+                            "album": None,
+                            "duration": "",
+                            "duration_seconds": 0,
+                            "thumbnails": r.get("thumbnail", {})
+                            .get("musicThumbnailRenderer", {})
+                            .get("thumbnail", {})
+                            .get("thumbnails", []),
+                            "isExplicit": False,
+                        }
+                    )
                 # Also walk children for more results
                 for child in r.get("contents", []):
                     _walk_renderers(child, depth + 1)
@@ -1169,7 +1194,7 @@ def _clean_stream_cache():
 def _search_cache_key(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: str | None,
     limit: int,
     strategy: Literal["tv", "native"],
 ) -> str:
@@ -1180,10 +1205,10 @@ def _search_cache_key(
 def _get_cached_search(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: str | None,
     limit: int,
     strategy: Literal["tv", "native"],
-) -> Optional[list]:
+) -> list | None:
     """Return cached search results if still valid, else None."""
     key = _search_cache_key(user_id, query, filter_, limit, strategy)
     entry = _search_cache.get(key)
@@ -1198,7 +1223,7 @@ def _get_cached_search(
 def _set_cached_search(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: str | None,
     limit: int,
     strategy: Literal["tv", "native"],
     results: list,
@@ -1216,7 +1241,7 @@ def _set_cached_search(
 def _search_once(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: Literal["songs", "albums", "artists", "videos"] | None,
     limit: int,
     strategy: Literal["tv", "native"],
     use_unauth_client: bool = False,
@@ -1246,29 +1271,21 @@ def _search_once(
             _invalidate_public_ytmusic(strategy)
             retry_client = _get_public_ytmusic(strategy)
             if strategy == "native":
-                items = _native_search(
-                    retry_client, query, filter=filter_, limit=limit
-                )
+                items = _native_search(retry_client, query, filter=filter_, limit=limit)
             else:
-                items = _tv_search(
-                    retry_client, query, filter=filter_, limit=limit
-                )
+                items = _tv_search(retry_client, query, filter=filter_, limit=limit)
     else:
         if strategy == "native":
             items = _run_ytmusic_with_auth_retry(
                 user_id,
                 operation=f"search-native query={query!r}",
-                func=lambda yt: _native_search(
-                    yt, query, filter=filter_, limit=limit
-                ),
+                func=lambda yt: _native_search(yt, query, filter=filter_, limit=limit),
             )
         else:
             items = _run_ytmusic_with_auth_retry(
                 user_id,
                 operation=f"search-tv query={query!r}",
-                func=lambda yt: _tv_search(
-                    yt, query, filter=filter_, limit=limit
-                ),
+                func=lambda yt: _tv_search(yt, query, filter=filter_, limit=limit),
             )
 
     _set_cached_search(user_id, query, filter_, limit, strategy, items)
@@ -1278,7 +1295,7 @@ def _search_once(
 def _search_with_mode_fallback(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: Literal["songs", "albums", "artists", "videos"] | None,
     limit: int,
     use_unauth_client: bool = False,
 ) -> tuple[list[dict], Literal["tv", "native"]]:
@@ -1316,9 +1333,7 @@ def _search_with_mode_fallback(
         )
     except Exception as native_err:
         # Preserve explicit native behavior unless auto fallback is enabled.
-        if SEARCH_MODE != "auto" or (
-            not use_unauth_client and _is_oauth_auth_error(native_err)
-        ):
+        if SEARCH_MODE != "auto" or (not use_unauth_client and _is_oauth_auth_error(native_err)):
             raise
 
         log.warning(
@@ -1359,6 +1374,7 @@ def _clean_search_cache():
 # Routes
 # ════════════════════════════════════════════════════════════════════
 
+
 @app.get("/health")
 async def health():
     # Count how many users have OAuth files
@@ -1374,6 +1390,7 @@ async def health():
 
 # ── OAuth Authentication (per-user) ────────────────────────────────
 
+
 @app.get("/auth/status")
 async def auth_status(user_id: str = Query(...)):
     """Check if a specific user has valid OAuth credentials."""
@@ -1386,11 +1403,10 @@ async def auth_status(user_id: str = Query(...)):
         _get_ytmusic(user_id)
         return {"authenticated": True}
     except Exception as e:
-        log.error(
+        log.exception(
             "Stored credentials failed to load for user %s: %s",
             user_id,
             e,
-            exc_info=True,
         )
         return {
             "authenticated": False,
@@ -1424,10 +1440,15 @@ async def auth_restore(req: Request, user_id: str = Query(...)):
     client_secret = body.get("client_secret")
     if client_id and client_secret:
         creds_path = _client_creds_file(user_id)
-        _write_private_file(creds_path, json.dumps({
-            "client_id": client_id,
-            "client_secret": client_secret,
-        }))
+        _write_private_file(
+            creds_path,
+            json.dumps(
+                {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                }
+            ),
+        )
 
     _invalidate_ytmusic(user_id)
     _clear_user_search_fallback(user_id)
@@ -1451,6 +1472,7 @@ async def auth_clear(user_id: str = Query(...)):
 
 
 # ── OAuth Device Code Flow ──────────────────────────────────────────
+
 
 @app.post("/auth/device-code")
 async def auth_device_code(req: DeviceCodeRequest):
@@ -1501,17 +1523,18 @@ async def auth_device_code_poll(req: DeviceCodePollRequest, user_id: str = Query
             client_id=req.client_id,
             client_secret=req.client_secret,
         )
-        token = oauth_creds.token_from_code(req.device_code)
+        token = cast(dict[str, Any], oauth_creds.token_from_code(req.device_code))
 
         # Check if we got an error (authorization_pending, slow_down, etc.)
         if "error" in token:
             error = token["error"]
             if error in ("authorization_pending", "slow_down"):
                 return {"status": "pending", "error": error}
-            else:
-                friendly = ERROR_MESSAGES.get(error, f"Authorization failed ({error}). Please try again.")
-                log.error(f"Device code poll error: {error}")
-                return {"status": "error", "error": friendly}
+            friendly = ERROR_MESSAGES.get(
+                error, f"Authorization failed ({error}). Please try again."
+            )
+            log.error(f"Device code poll error: {error}")
+            return {"status": "error", "error": friendly}
 
         # Success — we have a token. Save it for this user.
         DATA_PATH.mkdir(parents=True, exist_ok=True)
@@ -1520,10 +1543,15 @@ async def auth_device_code_poll(req: DeviceCodePollRequest, user_id: str = Query
 
         # Save client credentials alongside so _get_ytmusic can use them
         creds_path = _client_creds_file(user_id)
-        _write_private_file(creds_path, json.dumps({
-            "client_id": req.client_id,
-            "client_secret": req.client_secret,
-        }))
+        _write_private_file(
+            creds_path,
+            json.dumps(
+                {
+                    "client_id": req.client_id,
+                    "client_secret": req.client_secret,
+                }
+            ),
+        )
 
         _invalidate_ytmusic(user_id)
         _clear_user_search_fallback(user_id)
@@ -1554,6 +1582,7 @@ async def auth_device_code_poll(req: DeviceCodePollRequest, user_id: str = Query
 
 
 # ── Search ──────────────────────────────────────────────────────────
+
 
 @app.post("/search")
 async def search(req: SearchRequest, user_id: str = Query(...)):
@@ -1606,6 +1635,7 @@ async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)):
     Rate-pacing: requests are throttled via _batch_semaphore and
     inter-request delays instead of firing all N simultaneously.
     """
+
     async def _run_one(q: BatchSearchQuery) -> dict:
         """Execute and sanitize one query in the batch."""
         # Check primary cache first — avoids consuming a semaphore slot.
@@ -1616,7 +1646,9 @@ async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)):
 
         async with _batch_semaphore:
             # Random delay between requests within the batch
-            delay = random.uniform(BATCH_DELAY_MIN, BATCH_DELAY_MAX)
+            delay = random.uniform(  # noqa: S311 -- request pacing jitter is not security-sensitive
+                BATCH_DELAY_MIN, BATCH_DELAY_MAX
+            )
             await asyncio.sleep(delay)
             try:
                 items, _used_strategy = await asyncio.to_thread(
@@ -1634,8 +1666,10 @@ async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)):
                 log.warning(f"Batch search failed for query={q.query!r}: {e}")
                 return {"results": [], "total": 0, "error": "search failed"}
 
-    log.debug(f"Batch search: {len(req.queries)} queries for user {user_id} "
-              f"(concurrency={BATCH_CONCURRENCY})")
+    log.debug(
+        f"Batch search: {len(req.queries)} queries for user {user_id} "
+        f"(concurrency={BATCH_CONCURRENCY})"
+    )
     results = await asyncio.gather(*[_run_one(q) for q in req.queries])
     return {"results": list(results)}
 
@@ -1660,9 +1694,7 @@ async def search_debug(req: SearchRequest, user_id: str = Query(...)):
         raw = yt._send_request("search", body)
         return {"raw": raw}
     except Exception as e:
-        raise _sanitized_http_error(
-            "Debug search", e, 500, "Debug search failed"
-        ) from e
+        raise _sanitized_http_error("Debug search", e, 500, "Debug search failed") from e
 
 
 def _format_album_response(browse_id: str, album: dict) -> dict:
@@ -1670,17 +1702,19 @@ def _format_album_response(browse_id: str, album: dict) -> dict:
     tracks = []
     for t in album.get("tracks", []):
         artists = t.get("artists", [])
-        tracks.append({
-            "videoId": t.get("videoId"),
-            "title": t.get("title"),
-            "artist": artists[0].get("name") if artists else "Unknown",
-            "artists": [a.get("name") for a in artists],
-            "trackNumber": t.get("trackNumber"),
-            "duration": t.get("duration"),
-            "duration_seconds": t.get("duration_seconds"),
-            "isExplicit": t.get("isExplicit", False),
-            "likeStatus": t.get("likeStatus"),
-        })
+        tracks.append(
+            {
+                "videoId": t.get("videoId"),
+                "title": t.get("title"),
+                "artist": artists[0].get("name") if artists else "Unknown",
+                "artists": [a.get("name") for a in artists],
+                "trackNumber": t.get("trackNumber"),
+                "duration": t.get("duration"),
+                "duration_seconds": t.get("duration_seconds"),
+                "isExplicit": t.get("isExplicit", False),
+                "likeStatus": t.get("likeStatus"),
+            }
+        )
 
     thumbnails = album.get("thumbnails", [])
     return {
@@ -1720,9 +1754,7 @@ async def get_album(browse_id: str, user_id: str = Query(...)):
     except HTTPException:
         raise
     except Exception as e:
-        raise _sanitized_http_error(
-            f"Get album {browse_id}", e, 500, "Failed to load album"
-        ) from e
+        raise _sanitized_http_error(f"Get album {browse_id}", e, 500, "Failed to load album") from e
 
 
 @app.get("/artist/{channel_id}")
@@ -1746,23 +1778,27 @@ async def get_artist(channel_id: str, user_id: str = Query(...)):
         songs = []
         for s in (artist.get("songs", {}).get("results", []))[:10]:
             artists = s.get("artists", [])
-            songs.append({
-                "videoId": s.get("videoId"),
-                "title": s.get("title"),
-                "artist": artists[0].get("name") if artists else "Unknown",
-                "album": s.get("album", {}).get("name") if s.get("album") else None,
-                "duration": s.get("duration"),
-            })
+            songs.append(
+                {
+                    "videoId": s.get("videoId"),
+                    "title": s.get("title"),
+                    "artist": artists[0].get("name") if artists else "Unknown",
+                    "album": s.get("album", {}).get("name") if s.get("album") else None,
+                    "duration": s.get("duration"),
+                }
+            )
 
         albums = []
         for a in (artist.get("albums", {}).get("results", []))[:20]:
-            albums.append({
-                "browseId": a.get("browseId"),
-                "title": a.get("title"),
-                "year": a.get("year"),
-                "type": a.get("type", "Album"),
-                "thumbnails": a.get("thumbnails", []),
-            })
+            albums.append(
+                {
+                    "browseId": a.get("browseId"),
+                    "title": a.get("title"),
+                    "year": a.get("year"),
+                    "type": a.get("type", "Album"),
+                    "thumbnails": a.get("thumbnails", []),
+                }
+            )
 
         thumbnails = artist.get("thumbnails", [])
         return {
@@ -1814,12 +1850,11 @@ async def get_song(video_id: str, user_id: str = Query(...)):
     except HTTPException:
         raise
     except Exception as e:
-        raise _sanitized_http_error(
-            f"Get song {video_id}", e, 500, "Failed to load song"
-        ) from e
+        raise _sanitized_http_error(f"Get song {video_id}", e, 500, "Failed to load song") from e
 
 
 # ── Streaming ───────────────────────────────────────────────────────
+
 
 @app.get("/stream/{video_id}")
 async def get_stream_info(video_id: str, user_id: str = Query(...), quality: str = "HIGH"):
@@ -1833,9 +1868,7 @@ async def get_stream_info(video_id: str, user_id: str = Query(...), quality: str
     if user_id != "__public__":
         _get_ytmusic(user_id)
 
-    result = await _extract_stream_info_bounded(
-        _get_stream_url_sync, user_id, video_id, quality
-    )
+    result = await _extract_stream_info_bounded(_get_stream_url_sync, user_id, video_id, quality)
     return {
         "videoId": video_id,
         "url": result["url"],
@@ -1852,7 +1885,7 @@ async def proxy_stream(
     video_id: str,
     user_id: str = Query(...),
     quality: str = "HIGH",
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]  # FastAPI injects Request despite the sentinel default
 ):
     """
     Proxy the audio stream from YouTube. The backend pipes this to the
@@ -1899,12 +1932,11 @@ async def proxy_stream(
         return await build_range_proxy_response(
             stream_url, headers, content_type, _USER_AGENT, log, video_id
         )
-    return build_full_proxy_response(
-        stream_url, headers, content_type, _USER_AGENT, log, video_id
-    )
+    return build_full_proxy_response(stream_url, headers, content_type, _USER_AGENT, log, video_id)
 
 
 # ── Library ─────────────────────────────────────────────────────────
+
 
 @app.get("/library/songs")
 async def library_songs(user_id: str = Query(...), limit: int = 100, order: str = "recently_added"):
@@ -1914,22 +1946,27 @@ async def library_songs(user_id: str = Query(...), limit: int = 100, order: str 
             _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_library_songs(limit={limit}, order={order})",
-            func=lambda yt: yt.get_library_songs(limit=limit, order=order),
+            func=lambda yt: yt.get_library_songs(
+                limit=limit,
+                order=cast(Literal["a_to_z", "z_to_a", "recently_added"], order),
+            ),
         )
         items = []
         for s in songs:
             artists = s.get("artists", [])
             album = s.get("album", {}) or {}
-            items.append({
-                "videoId": s.get("videoId"),
-                "title": s.get("title"),
-                "artist": artists[0].get("name") if artists else "Unknown",
-                "artists": [a.get("name") for a in artists],
-                "album": album.get("name") if album else None,
-                "duration": s.get("duration"),
-                "duration_seconds": s.get("duration_seconds"),
-                "thumbnails": s.get("thumbnails", []),
-            })
+            items.append(
+                {
+                    "videoId": s.get("videoId"),
+                    "title": s.get("title"),
+                    "artist": artists[0].get("name") if artists else "Unknown",
+                    "artists": [a.get("name") for a in artists],
+                    "album": album.get("name") if album else None,
+                    "duration": s.get("duration"),
+                    "duration_seconds": s.get("duration_seconds"),
+                    "thumbnails": s.get("thumbnails", []),
+                }
+            )
         return {"songs": items, "total": len(items)}
     except HTTPException:
         raise
@@ -1943,27 +1980,34 @@ async def library_songs(user_id: str = Query(...), limit: int = 100, order: str 
 
 
 @app.get("/library/albums")
-async def library_albums(user_id: str = Query(...), limit: int = 100, order: str = "recently_added"):
+async def library_albums(
+    user_id: str = Query(...), limit: int = 100, order: str = "recently_added"
+):
     """Get user's saved albums from YouTube Music."""
     try:
         albums = await asyncio.to_thread(
             _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_library_albums(limit={limit}, order={order})",
-            func=lambda yt: yt.get_library_albums(limit=limit, order=order),
+            func=lambda yt: yt.get_library_albums(
+                limit=limit,
+                order=cast(Literal["a_to_z", "z_to_a", "recently_added"], order),
+            ),
         )
         items = []
         for a in albums:
             artists = a.get("artists", [])
-            items.append({
-                "browseId": a.get("browseId"),
-                "title": a.get("title"),
-                "artist": artists[0].get("name") if artists else "Unknown",
-                "artists": [a_name.get("name") for a_name in artists],
-                "year": a.get("year"),
-                "thumbnails": a.get("thumbnails", []),
-                "type": a.get("type", "Album"),
-            })
+            items.append(
+                {
+                    "browseId": a.get("browseId"),
+                    "title": a.get("title"),
+                    "artist": artists[0].get("name") if artists else "Unknown",
+                    "artists": [a_name.get("name") for a_name in artists],
+                    "year": a.get("year"),
+                    "thumbnails": a.get("thumbnails", []),
+                    "type": a.get("type", "Album"),
+                }
+            )
         return {"albums": items, "total": len(items)}
     except HTTPException:
         raise
@@ -2020,13 +2064,15 @@ async def library_playlists(
                     continue
                 if not any(pid.startswith(prefix) for prefix in _AUTO_PLAYLIST_PREFIXES):
                     continue
-            items.append({
-                "playlistId": pid,
-                "title": p.get("title", ""),
-                "description": p.get("description", ""),
-                "thumbnails": p.get("thumbnails", []),
-                "count": p.get("count"),
-            })
+            items.append(
+                {
+                    "playlistId": pid,
+                    "title": p.get("title", ""),
+                    "description": p.get("description", ""),
+                    "thumbnails": p.get("thumbnails", []),
+                    "count": p.get("count"),
+                }
+            )
         return {"playlists": items, "total": len(items)}
     except HTTPException:
         raise
@@ -2079,6 +2125,7 @@ async def yt_video_info(url: str = Query(...)):
     }
 
     try:
+
         def _extract():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(
@@ -2171,15 +2218,14 @@ async def yt_playlist_info(url: str = Query(...)):
     }
 
     try:
+
         def _extract():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(enumerate_url, download=False)
 
         info = await asyncio.to_thread(_extract)
         if not info:
-            raise HTTPException(
-                status_code=404, detail="Playlist or channel not found"
-            )
+            raise HTTPException(status_code=404, detail="Playlist or channel not found")
 
         summary = build_playlist_entries(info, YT_PLAYLIST_MAX_ENTRIES)
         if summary["count"] == 0:
@@ -2211,7 +2257,7 @@ async def yt_playlist_info(url: str = Query(...)):
 async def yt_proxy_stream(
     video_id: str,
     quality: str = "HIGH",
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]  # FastAPI injects Request despite the sentinel default
 ):
     """
     Proxy audio stream from a regular YouTube video.
@@ -2220,9 +2266,7 @@ async def yt_proxy_stream(
     """
     video_id = _validate_video_id(video_id)
     quality = _validate_stream_quality(quality)
-    stream_info = await _extract_stream_info_bounded(
-        _get_yt_stream_url_sync, video_id, quality
-    )
+    stream_info = await _extract_stream_info_bounded(_get_yt_stream_url_sync, video_id, quality)
     stream_url = stream_info["url"]
 
     acodec = stream_info.get("acodec", "")
@@ -2247,9 +2291,7 @@ async def yt_proxy_stream(
         return await build_range_proxy_response(
             stream_url, headers, content_type, _USER_AGENT, log, video_id
         )
-    return build_full_proxy_response(
-        stream_url, headers, content_type, _USER_AGENT, log, video_id
-    )
+    return build_full_proxy_response(stream_url, headers, content_type, _USER_AGENT, log, video_id)
 
 
 class YtDownloadRequest(BaseModel):
@@ -2261,10 +2303,10 @@ class YtDownloadRequest(BaseModel):
     quality: str = "HIGH"
     # Optional grouping label (e.g. the playlist/channel title) so the
     # downloads view can group a bulk run's jobs by where they came from.
-    source: Optional[str] = None
+    source: str | None = None
     # Bulk source type ("channel" | "playlist"). Only channels are collapsed to
     # a single artist on import; playlists keep each track's native metadata.
-    source_kind: Optional[str] = None
+    source_kind: str | None = None
 
 
 # ── Download job store (in-memory) ──────────────────────────────────
@@ -2298,8 +2340,7 @@ def _prune_yt_download_jobs():
     stale = [
         job_id
         for job_id, job in _yt_download_jobs.items()
-        if job.get("status") in TERMINAL_DOWNLOAD_STATUSES
-        and job.get("created_at", 0) <= cutoff
+        if job.get("status") in TERMINAL_DOWNLOAD_STATUSES and job.get("created_at", 0) <= cutoff
     ]
     for job_id in stale:
         del _yt_download_jobs[job_id]
@@ -2310,12 +2351,12 @@ def _prune_yt_download_jobs():
 def _new_yt_download_job(
     video_id: str,
     status: str = "queued",
-    source: Optional[str] = None,
-    source_kind: Optional[str] = None,
+    source: str | None = None,
+    source_kind: str | None = None,
 ) -> dict:
     """Create and register a download job record."""
     _prune_yt_download_jobs()
-    job = {
+    job: dict[str, Any] = {
         "job_id": uuid.uuid4().hex,
         "video_id": video_id,
         "status": status,
@@ -2356,16 +2397,10 @@ def _update_yt_download_progress(job: dict, update: dict, download_cancelled):
     status = update.get("status")
     if status == "downloading":
         job["status"] = "downloading"
-        total = (
-            update.get("total_bytes")
-            or update.get("total_bytes_estimate")
-            or 0
-        )
+        total = update.get("total_bytes") or update.get("total_bytes_estimate") or 0
         downloaded = update.get("downloaded_bytes") or 0
         if total > 0:
-            job["progress_pct"] = round(
-                min(99.0, downloaded * 100.0 / total), 1
-            )
+            job["progress_pct"] = round(min(99.0, downloaded * 100.0 / total), 1)
     elif status == "finished":
         job["status"] = "processing"
         job["progress_pct"] = max(float(job.get("progress_pct") or 0), 99.0)
@@ -2390,9 +2425,7 @@ def _build_yt_download_opts(
         {"key": "EmbedThumbnail"},
     ]
 
-    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(
-        quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"]
-    )
+    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"])
 
     def _progress_hook(update: dict):
         _update_yt_download_progress(job, update, download_cancelled)
@@ -2419,9 +2452,7 @@ def _build_yt_download_opts(
     }
 
 
-def _complete_yt_download(
-    job: dict, info: dict, audio_format: str, output_dir: str
-) -> None:
+def _complete_yt_download(job: dict, info: dict, audio_format: str, output_dir: str) -> None:
     """Resolve output metadata and mark a successful download completed."""
     video_id = job["video_id"]
     filepath = resolve_download_filepath(info, audio_format)
@@ -2536,12 +2567,8 @@ async def yt_download(req: YtDownloadRequest):
         job["already_existed"] = True
         return {"job_id": job["job_id"], "status": job["status"]}
 
-    job = _new_yt_download_job(
-        video_id, source=req.source, source_kind=req.source_kind
-    )
-    task = asyncio.create_task(
-        _run_yt_download_job(job, audio_format, req.quality, output_dir)
-    )
+    job = _new_yt_download_job(video_id, source=req.source, source_kind=req.source_kind)
+    task = asyncio.create_task(_run_yt_download_job(job, audio_format, req.quality, output_dir))
     _yt_download_tasks.add(task)
     task.add_done_callback(_yt_download_tasks.discard)
     log.info(
@@ -2596,13 +2623,12 @@ async def yt_download_cancel(job_id: str):
         # Not yet picked up by a worker — settle it terminally now; the
         # worker's pre-download check also bails if it starts in the meantime.
         job["status"] = "cancelled"
-    log.info(
-        f"YT download cancel requested for {job['video_id']} (job={job_id})"
-    )
+    log.info(f"YT download cancel requested for {job['video_id']} (job={job_id})")
     return _yt_download_job_payload(job)
 
 
 # ── Cleanup ─────────────────────────────────────────────────────────
+
 
 @app.on_event("startup")
 async def startup():
@@ -2642,18 +2668,21 @@ async def startup():
 
 # ── Browse (unauthenticated) ────────────────────────────────────────
 
-def _get_browse_ytmusic(user_id: Optional[str] = None) -> YTMusic:
+
+def _get_browse_ytmusic(user_id: str | None = None) -> YTMusic:
     """Get a YTMusic instance for browse — authenticated if user has OAuth, else public."""
     if user_id and _oauth_file(user_id).exists():
         try:
             return _get_ytmusic(user_id)
         except Exception:
-            log.warning("Failed to get authenticated YTMusic for user=%s, falling back to public", user_id)
+            log.warning(
+                "Failed to get authenticated YTMusic for user=%s, falling back to public", user_id
+            )
     return _get_public_ytmusic("native")
 
 
 @app.get("/charts")
-async def get_charts(country: str = "US", user_id: Optional[str] = Query(None)):
+async def get_charts(country: str = "US", user_id: str | None = Query(None)):
     """Get YT Music charts (top songs, trending, etc.).
 
     Always uses a public (unauthenticated) YTMusic instance because
@@ -2685,13 +2714,11 @@ async def get_charts(country: str = "US", user_id: Optional[str] = Query(None)):
                 result[section_key] = items
         return result
     except Exception as e:
-        raise _sanitized_http_error(
-            "Charts fetch", e, 500, "Failed to load charts"
-        ) from e
+        raise _sanitized_http_error("Charts fetch", e, 500, "Failed to load charts") from e
 
 
 @app.get("/moods-and-genres")
-async def get_moods_and_genres(user_id: Optional[str] = Query(None)):
+async def get_moods_and_genres(user_id: str | None = Query(None)):
     """Get YT Music mood/genre categories.
 
     Always uses a public (unauthenticated) YTMusic instance because
@@ -2707,10 +2734,12 @@ async def get_moods_and_genres(user_id: Optional[str] = Query(None)):
         for cat_title, cat_items in categories.items():
             entries = []
             for item in cat_items:
-                entries.append({
-                    "title": item.get("title", ""),
-                    "params": item.get("params", ""),
-                })
+                entries.append(
+                    {
+                        "title": item.get("title", ""),
+                        "params": item.get("params", ""),
+                    }
+                )
             result.append({"title": cat_title, "items": entries})
         return result
     except Exception as e:
@@ -2723,7 +2752,7 @@ async def get_moods_and_genres(user_id: Optional[str] = Query(None)):
 
 
 @app.get("/home")
-async def get_home(limit: int = Query(6, ge=1, le=20), user_id: Optional[str] = Query(None)):
+async def get_home(limit: int = Query(6, ge=1, le=20), user_id: str | None = Query(None)):
     """Get YT Music home page shelves (featured/curated content).
 
     Always uses a public (unauthenticated) YTMusic instance because
@@ -2731,16 +2760,17 @@ async def get_home(limit: int = Query(6, ge=1, le=20), user_id: Optional[str] = 
     with HTTP 400.
     """
     try:
-        home = await asyncio.to_thread(
-            lambda: _get_public_ytmusic("native").get_home(limit=limit)
-        )
+        home = await asyncio.to_thread(lambda: _get_public_ytmusic("native").get_home(limit=limit))
 
         shelves = []
         for shelf in home:
             if not isinstance(shelf, dict):
                 continue
             title = shelf.get("title", "")
-            if YTMUSIC_HOME_FILTERED_SHELVES and title.strip().lower() in YTMUSIC_HOME_FILTERED_SHELVES:
+            if (
+                YTMUSIC_HOME_FILTERED_SHELVES
+                and title.strip().lower() in YTMUSIC_HOME_FILTERED_SHELVES
+            ):
                 log.debug("Filtered shelf from /home response: %r", title)
                 continue
             contents = []
@@ -2779,18 +2809,14 @@ async def get_home(limit: int = Query(6, ge=1, le=20), user_id: Optional[str] = 
 
         return shelves
     except Exception as e:
-        raise _sanitized_http_error(
-            "Home fetch", e, 500, "Failed to load home"
-        ) from e
+        raise _sanitized_http_error("Home fetch", e, 500, "Failed to load home") from e
 
 
 @app.get("/browse-album/{browse_id}")
 async def get_browse_album(browse_id: str):
     """Get album details from YouTube Music (unauthenticated, public browse)."""
     try:
-        album = await asyncio.to_thread(
-            lambda: _get_public_ytmusic("native").get_album(browse_id)
-        )
+        album = await asyncio.to_thread(lambda: _get_public_ytmusic("native").get_album(browse_id))
         return _format_album_response(browse_id, album)
     except HTTPException:
         raise
@@ -2807,7 +2833,9 @@ async def get_browse_album(browse_id: str):
 
 
 @app.get("/mood-playlists")
-async def get_mood_playlists(params: str = Query(..., min_length=1, max_length=512), user_id: Optional[str] = Query(None)):
+async def get_mood_playlists(
+    params: str = Query(..., min_length=1, max_length=512), user_id: str | None = Query(None)
+):
     """Get playlists for a specific mood/genre category.
 
     Uses a custom browse implementation instead of ytmusicapi's
@@ -2833,9 +2861,11 @@ async def get_mood_playlists(params: str = Query(..., min_length=1, max_length=5
             # {"name": str, "id": str|None} dicts; flatten to a string.
             raw_author = item.get("author", "")
             if isinstance(raw_author, list):
-                raw_author = ", ".join(
-                    a.get("name", "") for a in raw_author if isinstance(a, dict)
-                ) if raw_author else ""
+                raw_author = (
+                    ", ".join(a.get("name", "") for a in raw_author if isinstance(a, dict))
+                    if raw_author
+                    else ""
+                )
             elif not isinstance(raw_author, str):
                 raw_author = str(raw_author)
             entry = {
@@ -2862,14 +2892,14 @@ async def get_mood_playlists(params: str = Query(..., min_length=1, max_length=5
 async def get_playlist(
     playlist_id: str,
     limit: int = 100,
-    user_id: Optional[str] = Query(None),
+    user_id: str | None = Query(None),
 ):
     """Get a YT Music playlist with track details.
 
     When ``user_id`` is provided, prefers authenticated browse context and
     falls back to public browse if authenticated fetch fails.
     """
-    auth_error: Optional[Exception] = None
+    auth_error: Exception | None = None
     try:
         if user_id and user_id != "__public__":
             try:
@@ -2886,13 +2916,9 @@ async def get_playlist(
                     user_id,
                     auth_err,
                 )
-                playlist = _get_public_ytmusic("native").get_playlist(
-                    playlist_id, limit=limit
-                )
+                playlist = _get_public_ytmusic("native").get_playlist(playlist_id, limit=limit)
         else:
-            playlist = _get_public_ytmusic("native").get_playlist(
-                playlist_id, limit=limit
-            )
+            playlist = _get_public_ytmusic("native").get_playlist(playlist_id, limit=limit)
 
         tracks = []
         for t in playlist.get("tracks", []):
@@ -2903,21 +2929,25 @@ async def get_playlist(
             artist_name = (
                 first_artist.get("name", "Unknown")
                 if isinstance(first_artist, dict)
-                else str(first_artist) if first_artist else "Unknown"
+                else str(first_artist)
+                if first_artist
+                else "Unknown"
             )
-            tracks.append({
-                "videoId": t.get("videoId"),
-                "title": t.get("title"),
-                "artist": artist_name,
-                "artists": [
-                    a.get("name") if isinstance(a, dict) else str(a)
-                    for a in artists
-                    if (a.get("name") if isinstance(a, dict) else a)
-                ],
-                "album": album.get("name", "") if isinstance(album, dict) else str(album),
-                "duration": _parse_duration(t.get("duration", "")),
-                "thumbnailUrl": _best_thumbnail(t.get("thumbnails", [])),
-            })
+            tracks.append(
+                {
+                    "videoId": t.get("videoId"),
+                    "title": t.get("title"),
+                    "artist": artist_name,
+                    "artists": [
+                        a.get("name") if isinstance(a, dict) else str(a)
+                        for a in artists
+                        if (a.get("name") if isinstance(a, dict) else a)
+                    ],
+                    "album": album.get("name", "") if isinstance(album, dict) else str(album),
+                    "duration": _parse_duration(t.get("duration", "")),
+                    "thumbnailUrl": _best_thumbnail(t.get("thumbnails", [])),
+                }
+            )
 
         return {
             "id": playlist_id,
@@ -2950,11 +2980,11 @@ def _fetch_mood_playlists(yt: YTMusic, params: str) -> list[dict]:
     silently skipped instead of taking down the whole request.
     """
     from ytmusicapi.navigation import (
-        nav,
-        SINGLE_COLUMN_TAB,
-        SECTION_LIST,
         CAROUSEL_CONTENTS,
         GRID_ITEMS,
+        SECTION_LIST,
+        SINGLE_COLUMN_TAB,
+        nav,
     )
     from ytmusicapi.parsers._utils import MTRIR
     from ytmusicapi.parsers.browsing import parse_playlist
@@ -2981,14 +3011,14 @@ def _fetch_mood_playlists(yt: YTMusic, params: str) -> list[dict]:
                 continue
             try:
                 playlists.append(parse_playlist(result[MTRIR]))
-            except Exception:
+            except Exception:  # noqa: S112 -- malformed third-party playlist items are intentionally skipped
                 # Skip items that lack required fields (e.g. music videos
                 # without a browse navigation endpoint)
                 continue
     return playlists
 
 
-def _best_thumbnail(thumbnails: list) -> Optional[str]:
+def _best_thumbnail(thumbnails: list) -> str | None:
     """Pick the best available thumbnail URL."""
     if not thumbnails:
         return None
@@ -3024,4 +3054,5 @@ async def shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8586)
+
+    uvicorn.run(app, host="0.0.0.0", port=8586)  # noqa: S104 -- container service must accept pod traffic

@@ -40,7 +40,7 @@ function ensureCoversDir(subdir: string): string {
 export async function downloadAndStoreImage(
     url: string,
     id: string,
-    type: "artist" | "album"
+    type: "artist" | "album",
 ): Promise<string | null> {
     if (!url) return null;
 
@@ -50,7 +50,9 @@ export async function downloadAndStoreImage(
     const filePath = path.join(dirPath, filename);
 
     try {
-        logger.debug(`[ImageStorage] Downloading ${type} image: ${url.substring(0, 60)}...`);
+        logger.debug(
+            `[ImageStorage] Downloading ${type} image: ${url.substring(0, 60)}...`,
+        );
 
         const response = await fetch(url, {
             headers: {
@@ -60,7 +62,9 @@ export async function downloadAndStoreImage(
         });
 
         if (!response.ok) {
-            logger.debug(`[ImageStorage] Failed to download: ${response.status}`);
+            logger.debug(
+                `[ImageStorage] Failed to download: ${response.status}`,
+            );
             return null;
         }
 
@@ -72,7 +76,9 @@ export async function downloadAndStoreImage(
 
         const buffer = await response.arrayBuffer();
         if (buffer.byteLength < 1000) {
-            logger.debug(`[ImageStorage] Image too small (${buffer.byteLength} bytes), likely placeholder`);
+            logger.debug(
+                `[ImageStorage] Image too small (${buffer.byteLength} bytes), likely placeholder`,
+            );
             return null;
         }
 

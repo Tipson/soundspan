@@ -74,7 +74,7 @@ describe("listen together socket runtime behavior", () => {
             (callback: (event: Record<string, unknown>) => void) => {
                 socialPresenceCallback = callback;
                 return unsubscribeSocialPresenceUpdates;
-            }
+            },
         );
 
         const listenTogetherClusterSync: any = {
@@ -128,7 +128,7 @@ describe("listen together socket runtime behavior", () => {
         class MockGroupError extends Error {
             constructor(
                 public code: string,
-                message: string
+                message: string,
             ) {
                 super(message);
             }
@@ -190,7 +190,7 @@ describe("listen together socket runtime behavior", () => {
             () => ({
                 createAdapter: jest.fn(() => "redis-adapter"),
             }),
-            { virtual: true }
+            { virtual: true },
         );
 
         return {
@@ -221,7 +221,9 @@ describe("listen together socket runtime behavior", () => {
         };
     }
 
-    function bootstrapConnectedSocket(mocks: ReturnType<typeof setupListenTogetherSocketMocks>) {
+    function bootstrapConnectedSocket(
+        mocks: ReturnType<typeof setupListenTogetherSocketMocks>,
+    ) {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const socketService = require("../listenTogetherSocket");
         socketService.setupListenTogetherSocket({
@@ -229,7 +231,7 @@ describe("listen together socket runtime behavior", () => {
         } as any);
 
         const connectionCall = mocks.namespace.on.mock.calls.find(
-            (call: unknown[]) => call[0] === "connection"
+            (call: unknown[]) => call[0] === "connection",
         );
         const connectionHandler = connectionCall[1];
 
@@ -275,7 +277,7 @@ describe("listen together socket runtime behavior", () => {
         expect(mocks.namespace.use).toHaveBeenCalledTimes(1);
         expect(mocks.namespace.on).toHaveBeenCalledWith(
             "connection",
-            expect.any(Function)
+            expect.any(Function),
         );
 
         socketService.shutdownListenTogetherSocket();
@@ -346,7 +348,7 @@ describe("listen together socket runtime behavior", () => {
         } as any);
 
         const connectionCall = mocks.namespace.on.mock.calls.find(
-            (call: unknown[]) => call[0] === "connection"
+            (call: unknown[]) => call[0] === "connection",
         );
         expect(connectionCall).toBeTruthy();
         const connectionHandler = connectionCall[1];
@@ -381,12 +383,12 @@ describe("listen together socket runtime behavior", () => {
         expect(mocks.joinGroupById).toHaveBeenCalledWith(
             "user-1",
             "User One",
-            "group-1"
+            "group-1",
         );
         expect(mocks.groupManager.addSocket).toHaveBeenCalledWith(
             "group-1",
             "user-1",
-            "sock-1"
+            "sock-1",
         );
         expect(joinAck).toHaveBeenCalledWith({ ok: true });
 
@@ -394,12 +396,15 @@ describe("listen together socket runtime behavior", () => {
         await eventHandlers["playback"]({ action: "pause" }, playbackAck);
         expect(mocks.groupManager.pause).toHaveBeenCalledWith(
             "group-1",
-            "user-1"
+            "user-1",
         );
         expect(playbackAck).toHaveBeenCalledWith({ ok: true });
 
         const queueInvalidAck = jest.fn();
-        await eventHandlers["queue"]({ action: "add", trackIds: [] }, queueInvalidAck);
+        await eventHandlers["queue"](
+            { action: "add", trackIds: [] },
+            queueInvalidAck,
+        );
         expect(queueInvalidAck).toHaveBeenCalledWith({
             error: "trackIds required",
         });
@@ -408,7 +413,7 @@ describe("listen together socket runtime behavior", () => {
         const queueNoTracksAck = jest.fn();
         await eventHandlers["queue"](
             { action: "add", trackIds: ["bad-track"] },
-            queueNoTracksAck
+            queueNoTracksAck,
         );
         expect(queueNoTracksAck).toHaveBeenCalledWith({
             error: "No valid tracks found",
@@ -418,12 +423,12 @@ describe("listen together socket runtime behavior", () => {
         const queueAddAck = jest.fn();
         await eventHandlers["queue"](
             { action: "add", trackIds: ["track-1"] },
-            queueAddAck
+            queueAddAck,
         );
         expect(mocks.groupManager.modifyQueue).toHaveBeenCalledWith(
             "group-1",
             "user-1",
-            { action: "add", items: [{ id: "track-1" }] }
+            { action: "add", items: [{ id: "track-1" }] },
         );
         expect(queueAddAck).toHaveBeenCalledWith({
             ok: true,
@@ -451,7 +456,7 @@ describe("listen together socket runtime behavior", () => {
         const queueTruncateAck = jest.fn();
         await eventHandlers["queue"](
             { action: "add", trackIds: ["track-a", "track-b"] },
-            queueTruncateAck
+            queueTruncateAck,
         );
         expect(mocks.validateQueueTracks).toHaveBeenLastCalledWith([
             { trackId: "track-a" },
@@ -467,7 +472,7 @@ describe("listen together socket runtime behavior", () => {
         await eventHandlers["ready"](readyAck);
         expect(mocks.groupManager.reportReady).toHaveBeenCalledWith(
             "group-1",
-            "user-1"
+            "user-1",
         );
         expect(readyAck).toHaveBeenCalledWith({ ok: true });
 
@@ -476,7 +481,7 @@ describe("listen together socket runtime behavior", () => {
         expect(pingAck).toHaveBeenCalledWith(
             expect.objectContaining({
                 serverTime: expect.any(Number),
-            })
+            }),
         );
 
         const leaveAck = jest.fn();
@@ -523,12 +528,15 @@ describe("listen together socket runtime behavior", () => {
             .mockResolvedValueOnce(refreshedSnapshot as any);
 
         const initialJoinAck = jest.fn();
-        await eventHandlers["join-group"]({ groupId: "group-1" }, initialJoinAck);
+        await eventHandlers["join-group"](
+            { groupId: "group-1" },
+            initialJoinAck,
+        );
         expect(initialJoinAck).toHaveBeenCalledWith({ ok: true });
         expect(socket.emit).toHaveBeenNthCalledWith(
             1,
             "group:state",
-            initialSnapshot
+            initialSnapshot,
         );
 
         mocks.groupManager.socketCount.mockReturnValueOnce(0);
@@ -538,19 +546,22 @@ describe("listen together socket runtime behavior", () => {
 
         await jest.advanceTimersByTimeAsync(20);
         const reconnectJoinAck = jest.fn();
-        await eventHandlers["join-group"]({ groupId: "group-1" }, reconnectJoinAck);
+        await eventHandlers["join-group"](
+            { groupId: "group-1" },
+            reconnectJoinAck,
+        );
         expect(reconnectJoinAck).toHaveBeenCalledWith({ ok: true });
         expect(mocks.joinGroupById).toHaveBeenNthCalledWith(
             2,
             "user-1",
             "User One",
-            "group-1"
+            "group-1",
         );
         expect(mocks.leaveGroup).not.toHaveBeenCalled();
         expect(socket.emit).toHaveBeenNthCalledWith(
             2,
             "group:state",
-            refreshedSnapshot
+            refreshedSnapshot,
         );
         expect(socket.join).toHaveBeenNthCalledWith(2, "group-1");
 
@@ -571,7 +582,7 @@ describe("listen together socket runtime behavior", () => {
             // eslint-disable-next-line @typescript-eslint/no-var-requires
             require("../listenTogetherSocket");
         }).toThrow(
-            "JWT_SECRET or SESSION_SECRET environment variable is required for authentication"
+            "JWT_SECRET or SESSION_SECRET environment variable is required for authentication",
         );
     });
 
@@ -596,7 +607,7 @@ describe("listen together socket runtime behavior", () => {
         const missingTokenNext = jest.fn();
         await authMiddleware(makeSocket(), missingTokenNext);
         expect(missingTokenNext.mock.calls[0][0].message).toBe(
-            "Authentication required"
+            "Authentication required",
         );
 
         mocks.prismaUserFindUnique.mockResolvedValueOnce(null);
@@ -661,7 +672,7 @@ describe("listen together socket runtime behavior", () => {
         const mocks = setupListenTogetherSocketMocks();
         mocks.listenTogetherClusterSync.isEnabled.mockReturnValue(true);
         mocks.listenTogetherClusterSync.start.mockRejectedValueOnce(
-            new Error("sync startup failed")
+            new Error("sync startup failed"),
         );
         mocks.listenTogetherStateStore.isEnabled.mockReturnValue(false);
 
@@ -674,20 +685,20 @@ describe("listen together socket runtime behavior", () => {
         await Promise.resolve();
 
         expect(mocks.logger.info).toHaveBeenCalledWith(
-            "[ListenTogether/WS] Redis adapter disabled via LISTEN_TOGETHER_REDIS_ADAPTER_ENABLED=false"
+            "[ListenTogether/WS] Redis adapter disabled via LISTEN_TOGETHER_REDIS_ADAPTER_ENABLED=false",
         );
         expect(mocks.logger.info).toHaveBeenCalledWith(
-            "[ListenTogether/MutationLock] Disabled via LISTEN_TOGETHER_MUTATION_LOCK_ENABLED=false"
+            "[ListenTogether/MutationLock] Disabled via LISTEN_TOGETHER_MUTATION_LOCK_ENABLED=false",
         );
         expect(mocks.logger.info).toHaveBeenCalledWith(
-            "[ListenTogether/StateStore] Disabled via LISTEN_TOGETHER_STATE_STORE_ENABLED=false"
+            "[ListenTogether/StateStore] Disabled via LISTEN_TOGETHER_STATE_STORE_ENABLED=false",
         );
         expect(mocks.logger.info).toHaveBeenCalledWith(
-            "[ListenTogether/WS] Transport policy: websocket + polling fallback"
+            "[ListenTogether/WS] Transport policy: websocket + polling fallback",
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "[ListenTogether/StateSync] Failed to start cluster sync; proceeding with pod-local state",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -713,7 +724,7 @@ describe("listen together socket runtime behavior", () => {
 
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "[ListenTogether/WS] Failed to initialize Redis adapter; continuing in single-pod fanout mode",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -741,7 +752,7 @@ describe("listen together socket runtime behavior", () => {
         await eventHandlers["join-group"]({ groupId: "group-1" }, reconnectAck);
         expect(reconnectAck).toHaveBeenCalledWith({ ok: true });
         expect(mocks.logger.warn).not.toHaveBeenCalledWith(
-            expect.stringContaining("exceeded target of")
+            expect.stringContaining("exceeded target of"),
         );
 
         socket.data.groupId = "group-1";
@@ -752,7 +763,7 @@ describe("listen together socket runtime behavior", () => {
             expect.objectContaining({
                 transient: true,
                 retryAfterMs: 300,
-            })
+            }),
         );
 
         socketService.shutdownListenTogetherSocket();
@@ -790,17 +801,22 @@ describe("listen together socket runtime behavior", () => {
             serverTime: Date.now(),
             stateVersion: 1,
         });
-        callbacks.onMemberJoined("group-1", { userId: "u1", username: "User 1" });
+        callbacks.onMemberJoined("group-1", {
+            userId: "u1",
+            username: "User 1",
+        });
         callbacks.onMemberLeft("group-1", { userId: "u2", username: "User 2" });
         callbacks.onGroupEnded("group-1", "ended");
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(mocks.namespace.to).toHaveBeenCalledWith("group-1");
         expect(mocks.listenTogetherStateStore.setSnapshot).toHaveBeenCalled();
-        expect(mocks.listenTogetherClusterSync.publishSnapshot).toHaveBeenCalled();
-        expect(mocks.listenTogetherStateStore.deleteSnapshot).toHaveBeenCalledWith(
-            "group-1"
-        );
+        expect(
+            mocks.listenTogetherClusterSync.publishSnapshot,
+        ).toHaveBeenCalled();
+        expect(
+            mocks.listenTogetherStateStore.deleteSnapshot,
+        ).toHaveBeenCalledWith("group-1");
     });
 
     it("broadcasts social presence updates and unsubscribes on shutdown", () => {
@@ -820,7 +836,7 @@ describe("listen together socket runtime behavior", () => {
         mocks.emitSocialPresence(presenceEvent);
         expect(mocks.namespace.emit).toHaveBeenCalledWith(
             "social:presence-updated",
-            presenceEvent
+            presenceEvent,
         );
 
         socketService.shutdownListenTogetherSocket();
@@ -849,7 +865,9 @@ describe("listen together socket runtime behavior", () => {
             stateVersion: 1,
         });
         await new Promise((resolve) => setImmediate(resolve));
-        expect(mocks.listenTogetherStateStore.setSnapshot).not.toHaveBeenCalled();
+        expect(
+            mocks.listenTogetherStateStore.setSnapshot,
+        ).not.toHaveBeenCalled();
 
         const snapshot = {
             id: "group-1",
@@ -880,10 +898,12 @@ describe("listen together socket runtime behavior", () => {
         await new Promise((resolve) => setImmediate(resolve));
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(mocks.listenTogetherStateStore.setSnapshot).toHaveBeenCalledTimes(2);
-        expect(mocks.listenTogetherClusterSync.publishSnapshot).toHaveBeenCalledTimes(
-            1
-        );
+        expect(
+            mocks.listenTogetherStateStore.setSnapshot,
+        ).toHaveBeenCalledTimes(2);
+        expect(
+            mocks.listenTogetherClusterSync.publishSnapshot,
+        ).toHaveBeenCalledTimes(1);
 
         socketService.shutdownListenTogetherSocket();
     });
@@ -915,7 +935,7 @@ describe("listen together socket runtime behavior", () => {
             async () => {
                 setSnapshotStarted = true;
                 await setSnapshotGate;
-            }
+            },
         );
         mocks.groupManager.pause.mockImplementationOnce(() => {
             callbacks.onPlaybackDelta("group-1", { isPlaying: false });
@@ -924,7 +944,7 @@ describe("listen together socket runtime behavior", () => {
         const playbackAck = jest.fn();
         const playbackPromise = eventHandlers["playback"](
             { action: "pause" },
-            playbackAck
+            playbackAck,
         );
         await new Promise((resolve) => setImmediate(resolve));
 
@@ -951,7 +971,10 @@ describe("listen together socket runtime behavior", () => {
             bootstrapConnectedSocket(mocks);
 
         const noGroupPlaybackAck = jest.fn();
-        await eventHandlers["playback"]({ action: "pause" }, noGroupPlaybackAck);
+        await eventHandlers["playback"](
+            { action: "pause" },
+            noGroupPlaybackAck,
+        );
         expect(noGroupPlaybackAck).toHaveBeenCalledWith({
             error: "Not in a group",
         });
@@ -965,7 +988,10 @@ describe("listen together socket runtime behavior", () => {
         });
 
         const setTrackMissingAck = jest.fn();
-        await eventHandlers["playback"]({ action: "set-track" }, setTrackMissingAck);
+        await eventHandlers["playback"](
+            { action: "set-track" },
+            setTrackMissingAck,
+        );
         expect(setTrackMissingAck).toHaveBeenCalledWith({
             error: "index required for set-track",
         });
@@ -980,7 +1006,7 @@ describe("listen together socket runtime behavior", () => {
         const conflictSeekAck = jest.fn();
         await eventHandlers["playback"](
             { action: "seek", positionMs: 1000 },
-            conflictSeekAck
+            conflictSeekAck,
         );
         expect(conflictSeekAck).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -989,12 +1015,15 @@ describe("listen together socket runtime behavior", () => {
                 transient: true,
                 retryable: true,
                 retryAfterMs: expect.any(Number),
-            })
+            }),
         );
 
         mocks.mutationLockClient.set.mockResolvedValueOnce("NOPE");
         const conflictPlaybackAck = jest.fn();
-        await eventHandlers["playback"]({ action: "play" }, conflictPlaybackAck);
+        await eventHandlers["playback"](
+            { action: "play" },
+            conflictPlaybackAck,
+        );
         expect(conflictPlaybackAck).toHaveBeenCalledWith(
             expect.objectContaining({
                 error: "Another group update is in progress. Please retry.",
@@ -1002,7 +1031,7 @@ describe("listen together socket runtime behavior", () => {
                 transient: true,
                 retryable: true,
                 retryAfterMs: expect.any(Number),
-            })
+            }),
         );
 
         mocks.mutationLockClient.set.mockResolvedValueOnce("NOPE");
@@ -1015,7 +1044,7 @@ describe("listen together socket runtime behavior", () => {
                 transient: true,
                 retryable: true,
                 retryAfterMs: expect.any(Number),
-            })
+            }),
         );
 
         const noGroupQueueAck = jest.fn();
@@ -1029,7 +1058,7 @@ describe("listen together socket runtime behavior", () => {
         const removeMissingIndexAck = jest.fn();
         await eventHandlers["queue"](
             { action: "remove" },
-            removeMissingIndexAck
+            removeMissingIndexAck,
         );
         expect(removeMissingIndexAck).toHaveBeenCalledWith({
             error: "index required",
@@ -1038,7 +1067,7 @@ describe("listen together socket runtime behavior", () => {
         const reorderMissingAck = jest.fn();
         await eventHandlers["queue"](
             { action: "reorder", fromIndex: 1 },
-            reorderMissingAck
+            reorderMissingAck,
         );
         expect(reorderMissingAck).toHaveBeenCalledWith({
             error: "fromIndex and toIndex required",
@@ -1071,7 +1100,7 @@ describe("listen together socket runtime behavior", () => {
                 transient: true,
                 retryable: true,
                 retryAfterMs: expect.any(Number),
-            })
+            }),
         );
 
         mocks.groupManager.reportReady.mockImplementationOnce(() => {
@@ -1138,7 +1167,7 @@ describe("listen together socket runtime behavior", () => {
         const setTrackAck = jest.fn();
         await eventHandlers["playback"](
             { action: "set-track", index: 1 },
-            setTrackAck
+            setTrackAck,
         );
         expect(setTrackAck).toHaveBeenCalledWith({
             code: "CONFLICT",
@@ -1191,7 +1220,7 @@ describe("listen together socket runtime behavior", () => {
         await jest.advanceTimersByTimeAsync(60_000);
         expect(mocks.logger.warn).toHaveBeenCalledWith(
             "[ListenTogether/WS] Failed stale-member cleanup for User One (group-1):",
-            expect.any(Error)
+            expect.any(Error),
         );
 
         socketService.shutdownListenTogetherSocket();
@@ -1238,23 +1267,26 @@ describe("listen together socket runtime behavior", () => {
         expect(socket.emit).toHaveBeenNthCalledWith(
             1,
             "group:state",
-            initialSnapshot
+            initialSnapshot,
         );
         expect(mocks.leaveGroup).not.toHaveBeenCalled();
 
         const secondJoinAck = jest.fn();
-        await eventHandlers["join-group"]({ groupId: "group-1" }, secondJoinAck);
+        await eventHandlers["join-group"](
+            { groupId: "group-1" },
+            secondJoinAck,
+        );
         expect(secondJoinAck).toHaveBeenCalledWith({ ok: true });
         expect(mocks.joinGroupById).toHaveBeenNthCalledWith(
             2,
             "user-1",
             "User One",
-            "group-1"
+            "group-1",
         );
         expect(socket.emit).toHaveBeenNthCalledWith(
             2,
             "group:state",
-            refreshedSnapshot
+            refreshedSnapshot,
         );
         expect(mocks.leaveGroup).not.toHaveBeenCalled();
 
@@ -1267,7 +1299,8 @@ describe("listen together socket runtime behavior", () => {
             JWT_SECRET: "test-secret",
         };
         const mocks = setupListenTogetherSocketMocks();
-        const { socketService, eventHandlers } = bootstrapConnectedSocket(mocks);
+        const { socketService, eventHandlers } =
+            bootstrapConnectedSocket(mocks);
 
         mocks.configMock.allowedOrigins = ["https://example.test"];
         const originCallback = mocks.getServerOptions().cors.origin;
@@ -1285,43 +1318,52 @@ describe("listen together socket runtime behavior", () => {
             playback: { queue: [], currentIndex: 0, isPlaying: false },
         });
         mocks.mutationLockClient.eval.mockRejectedValueOnce(
-            new Error("release failed")
+            new Error("release failed"),
         );
         const nextAck = jest.fn();
         await eventHandlers["playback"]({ action: "next" }, nextAck);
         expect(nextAck).toHaveBeenCalledWith({ ok: true });
         expect(mocks.groupManager.applyExternalSnapshot).toHaveBeenCalled();
-        expect(mocks.groupManager.next).toHaveBeenCalledWith("group-1", "user-1");
+        expect(mocks.groupManager.next).toHaveBeenCalledWith(
+            "group-1",
+            "user-1",
+        );
         expect(mocks.logger.warn).toHaveBeenCalledWith(
             "[ListenTogether/MutationLock] Failed to release lock for playback:next (group-1)",
-            expect.any(Error)
+            expect.any(Error),
         );
 
         const previousAck = jest.fn();
         await eventHandlers["playback"]({ action: "previous" }, previousAck);
         expect(previousAck).toHaveBeenCalledWith({ ok: true });
-        expect(mocks.groupManager.previous).toHaveBeenCalledWith("group-1", "user-1");
+        expect(mocks.groupManager.previous).toHaveBeenCalledWith(
+            "group-1",
+            "user-1",
+        );
 
         const setTrackAck = jest.fn();
         await eventHandlers["playback"](
             { action: "set-track", index: 2 },
-            setTrackAck
+            setTrackAck,
         );
         expect(setTrackAck).toHaveBeenCalledWith({ ok: true });
         expect(mocks.groupManager.setTrack).toHaveBeenCalledWith(
             "group-1",
             "user-1",
-            2
+            2,
         );
 
         const queueRemoveAck = jest.fn();
-        await eventHandlers["queue"]({ action: "remove", index: 0 }, queueRemoveAck);
+        await eventHandlers["queue"](
+            { action: "remove", index: 0 },
+            queueRemoveAck,
+        );
         expect(queueRemoveAck).toHaveBeenCalledWith({ ok: true });
 
         const queueReorderAck = jest.fn();
         await eventHandlers["queue"](
             { action: "reorder", fromIndex: 0, toIndex: 1 },
-            queueReorderAck
+            queueReorderAck,
         );
         expect(queueReorderAck).toHaveBeenCalledWith({ ok: true });
 
@@ -1337,7 +1379,10 @@ describe("listen together socket runtime behavior", () => {
             playback: { status: "paused", index: 0, positionMs: 0 },
         });
         const handoffJoinAck = jest.fn();
-        await eventHandlers["join-group"]({ groupId: "group-2" }, handoffJoinAck);
+        await eventHandlers["join-group"](
+            { groupId: "group-2" },
+            handoffJoinAck,
+        );
         expect(mocks.leaveGroup).toHaveBeenCalledWith("user-1", "group-1");
         expect(handoffJoinAck).toHaveBeenCalledWith({ ok: true });
 
@@ -1355,11 +1400,16 @@ describe("listen together socket runtime behavior", () => {
 
         mocks.joinGroupById.mockRejectedValueOnce(new Error("join failed"));
         const failedJoinAck = jest.fn();
-        await eventHandlers["join-group"]({ groupId: "group-1" }, failedJoinAck);
-        expect(failedJoinAck).toHaveBeenCalledWith({ error: "Failed to join group" });
+        await eventHandlers["join-group"](
+            { groupId: "group-1" },
+            failedJoinAck,
+        );
+        expect(failedJoinAck).toHaveBeenCalledWith({
+            error: "Failed to join group",
+        });
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "[ListenTogether/WS] join-group error:",
-            expect.any(Error)
+            expect.any(Error),
         );
 
         socket.data.groupId = "group-1";
@@ -1369,11 +1419,13 @@ describe("listen together socket runtime behavior", () => {
         expect(leaveAck).toHaveBeenCalledWith({ ok: true });
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "[ListenTogether/WS] Error leaving group:",
-            expect.any(Error)
+            expect.any(Error),
         );
 
         socket.data.groupId = "group-1";
-        mocks.mutationLockClient.set.mockRejectedValueOnce(new Error("redis down"));
+        mocks.mutationLockClient.set.mockRejectedValueOnce(
+            new Error("redis down"),
+        );
         const lockFailureAck = jest.fn();
         await eventHandlers["playback"]({ action: "play" }, lockFailureAck);
         expect(lockFailureAck).toHaveBeenCalledWith(
@@ -1383,11 +1435,11 @@ describe("listen together socket runtime behavior", () => {
                 transient: true,
                 retryable: true,
                 retryAfterMs: expect.any(Number),
-            })
+            }),
         );
         expect(mocks.logger.error).toHaveBeenCalledWith(
             "[ListenTogether/MutationLock] Failed to acquire lock for playback:play (group-1)",
-            expect.any(Error)
+            expect.any(Error),
         );
 
         socketService.shutdownListenTogetherSocket();
@@ -1453,8 +1505,8 @@ describe("listen together socket runtime behavior", () => {
 
         expect(mocks.logger.info).toHaveBeenCalledWith(
             expect.stringContaining(
-                "[ListenTogether/Observability] reason=conflict"
-            )
+                "[ListenTogether/Observability] reason=conflict",
+            ),
         );
 
         socketService.shutdownListenTogetherSocket();
@@ -1474,18 +1526,21 @@ describe("listen together socket runtime behavior", () => {
         const playAck = jest.fn();
         await eventHandlers["playback"]({ action: "play" }, playAck);
         expect(playAck).toHaveBeenCalledWith({ ok: true });
-        expect(mocks.groupManager.play).toHaveBeenCalledWith("group-1", "user-1");
+        expect(mocks.groupManager.play).toHaveBeenCalledWith(
+            "group-1",
+            "user-1",
+        );
 
         const seekAck = jest.fn();
         await eventHandlers["playback"](
             { action: "seek", positionMs: 1200 },
-            seekAck
+            seekAck,
         );
         expect(seekAck).toHaveBeenCalledWith({ ok: true });
         expect(mocks.groupManager.seek).toHaveBeenCalledWith(
             "group-1",
             "user-1",
-            1200
+            1200,
         );
 
         expect(mocks.mutationLockClient.set).not.toHaveBeenCalled();
@@ -1508,14 +1563,15 @@ describe("listen together socket runtime behavior", () => {
         } as any);
 
         expect(mocks.logger.warn).toHaveBeenCalledWith(
-            "[ListenTogether/WS] Cross-pod fanout is enabled, but authoritative session snapshots are disabled (LISTEN_TOGETHER_STATE_STORE_ENABLED=false); GroupManager state remains pod-local in-memory between mutations."
+            "[ListenTogether/WS] Cross-pod fanout is enabled, but authoritative session snapshots are disabled (LISTEN_TOGETHER_STATE_STORE_ENABLED=false); GroupManager state remains pod-local in-memory between mutations.",
         );
 
-        const clusterHandler = mocks.listenTogetherClusterSync.start.mock.calls[0][0];
+        const clusterHandler =
+            mocks.listenTogetherClusterSync.start.mock.calls[0][0];
         const snapshot = { id: "group-1", playback: {}, members: [] };
         clusterHandler(snapshot);
         expect(mocks.groupManager.applyExternalSnapshot).toHaveBeenCalledWith(
-            snapshot
+            snapshot,
         );
     });
 
@@ -1542,21 +1598,23 @@ describe("listen together socket runtime behavior", () => {
         await new Promise((resolve) => setImmediate(resolve));
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(mocks.listenTogetherStateStore.setSnapshot).toHaveBeenCalledTimes(2);
-        expect(mocks.listenTogetherClusterSync.publishSnapshot).toHaveBeenCalledTimes(
-            1,
-        );
+        expect(
+            mocks.listenTogetherStateStore.setSnapshot,
+        ).toHaveBeenCalledTimes(2);
+        expect(
+            mocks.listenTogetherClusterSync.publishSnapshot,
+        ).toHaveBeenCalledTimes(1);
 
         mocks.groupManager.snapshotById.mockReturnValue(undefined);
         callbacks.onGroupEnded("group-1", "ended");
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(mocks.listenTogetherStateStore.deleteSnapshot).toHaveBeenCalledWith(
-            "group-1",
-        );
-        expect(mocks.listenTogetherClusterSync.publishSnapshot).toHaveBeenCalledTimes(
-            1,
-        );
+        expect(
+            mocks.listenTogetherStateStore.deleteSnapshot,
+        ).toHaveBeenCalledWith("group-1");
+        expect(
+            mocks.listenTogetherClusterSync.publishSnapshot,
+        ).toHaveBeenCalledTimes(1);
 
         socketService.shutdownListenTogetherSocket();
     });
@@ -1573,7 +1631,10 @@ describe("listen together socket runtime behavior", () => {
             bootstrapConnectedSocket(mocks);
 
         const initialJoinAck = jest.fn();
-        await eventHandlers["join-group"]({ groupId: "group-1" }, initialJoinAck);
+        await eventHandlers["join-group"](
+            { groupId: "group-1" },
+            initialJoinAck,
+        );
         expect(initialJoinAck).toHaveBeenCalledWith({ ok: true });
 
         mocks.groupManager.socketCount.mockReturnValueOnce(0);
@@ -1587,7 +1648,9 @@ describe("listen together socket runtime behavior", () => {
         );
 
         socket.data.groupId = "group-1";
-        mocks.groupManager.socketCount.mockReturnValueOnce(0).mockReturnValueOnce(1);
+        mocks.groupManager.socketCount
+            .mockReturnValueOnce(0)
+            .mockReturnValueOnce(1);
         await eventHandlers["disconnect"]("network");
         await jest.advanceTimersByTimeAsync(60_000);
         expect(mocks.leaveGroup).not.toHaveBeenCalled();

@@ -36,6 +36,7 @@ VIDEO_ID = "dQw4w9WgXcQ"
 
 # ── bulk_album_metadata (collapse a CHANNEL to one artist) ──────────
 
+
 def test_bulk_album_metadata_channel_sets_artist_albumartist_and_album():
     assert bulk_album_metadata("Book Club Radio", "channel") == {
         "artist": "Book Club Radio",
@@ -70,6 +71,7 @@ def test_bulk_album_metadata_none_for_blank_or_nonstring(source):
 
 # ── build_tag_rewrite_command (ffmpeg tag rewrite, parser-safe) ─────
 
+
 def test_build_tag_rewrite_command_stream_copies_and_keeps_metadata():
     cmd = build_tag_rewrite_command(
         "/music/yt/track.opus",
@@ -98,6 +100,7 @@ def test_build_tag_rewrite_command_emits_one_metadata_pair_per_tag_in_order():
 
 
 # ── extract_video_id ────────────────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     "url",
@@ -135,6 +138,7 @@ def test_extract_video_id_rejects_invalid(url):
 
 # ── YT_PLAYER_CLIENTS (regular-YouTube extractor clients) ───────────
 
+
 def test_yt_player_clients_excludes_broken_bare_android():
     # The bare "android" InnerTube client is PO-token-gated and returns no
     # usable audio formats, so it must not be used for regular-YouTube
@@ -147,6 +151,7 @@ def test_yt_player_clients_excludes_broken_bare_android():
 
 
 # ── find_existing_download (idempotency check) ──────────────────────
+
 
 def test_find_existing_download_matches_bracketed_id(tmp_path):
     target = tmp_path / f"Some DJ Set [{VIDEO_ID}].mp3"
@@ -185,6 +190,7 @@ def test_find_existing_download_missing_dir_returns_none(tmp_path):
 
 # ── resolve_download_filepath ───────────────────────────────────────
 
+
 def test_resolve_filepath_from_requested_downloads(tmp_path):
     final = tmp_path / f"Title [{VIDEO_ID}].mp3"
     final.write_bytes(b"audio")
@@ -213,11 +219,7 @@ def test_resolve_filepath_falls_back_to_legacy_keys(tmp_path):
 
 
 def test_resolve_filepath_returns_none_when_nothing_exists(tmp_path):
-    info = {
-        "requested_downloads": [
-            {"filepath": str(tmp_path / "missing.webm")}
-        ]
-    }
+    info = {"requested_downloads": [{"filepath": str(tmp_path / "missing.webm")}]}
 
     assert resolve_download_filepath(info, "mp3") is None
 
@@ -232,6 +234,7 @@ def test_resolve_filepath_handles_bad_info():
 # The container hint must be derived from the SAME format selection and
 # acodec mapping the /yt/ stream proxy uses, otherwise the player gets a
 # decode hint that does not match the bytes served.
+
 
 def test_proxy_selectors_cover_all_qualities():
     assert set(PROXY_AUDIO_FORMAT_SELECTORS) == {
@@ -280,6 +283,7 @@ def test_derive_proxy_audio_container_defaults_to_mp4():
 # container file already matches the on-disk idempotency check even
 # though the postprocessor is about to replace it.
 
+
 def _job(job_id, video_id, status):
     return {"job_id": job_id, "video_id": video_id, "status": status}
 
@@ -294,7 +298,7 @@ def test_find_active_download_job_matches_each_active_status(status):
 
 
 def test_active_statuses_cover_the_full_non_terminal_lifecycle():
-    assert ACTIVE_DOWNLOAD_STATUSES == {"queued", "downloading", "processing"}
+    assert {"queued", "downloading", "processing"} == ACTIVE_DOWNLOAD_STATUSES
 
 
 @pytest.mark.parametrize("status", ["completed", "failed"])
@@ -335,21 +339,15 @@ PLAYLIST_ID = "PL-TQY69MwxBRttHQST4uYTaFs4RQPLuOH"
 
 
 def test_classify_pure_playlist_url():
-    result = classify_youtube_url(
-        f"https://www.youtube.com/playlist?list={PLAYLIST_ID}"
-    )
+    result = classify_youtube_url(f"https://www.youtube.com/playlist?list={PLAYLIST_ID}")
     assert result["kind"] == "playlist"
     assert result["playlist_id"] == PLAYLIST_ID
-    assert result["enumerate_url"] == (
-        f"https://www.youtube.com/playlist?list={PLAYLIST_ID}"
-    )
+    assert result["enumerate_url"] == (f"https://www.youtube.com/playlist?list={PLAYLIST_ID}")
 
 
 def test_classify_watch_with_playlist_prefers_playlist():
     # A real (non-RD) list wins over the focused video.
-    result = classify_youtube_url(
-        f"https://www.youtube.com/watch?v={VIDEO_ID}&list={PLAYLIST_ID}"
-    )
+    result = classify_youtube_url(f"https://www.youtube.com/watch?v={VIDEO_ID}&list={PLAYLIST_ID}")
     assert result["kind"] == "playlist"
     assert result["playlist_id"] == PLAYLIST_ID
 
@@ -382,25 +380,17 @@ def test_classify_single_video(url):
 def test_classify_channel_handle():
     result = classify_youtube_url("https://www.youtube.com/@BookClubRadio")
     assert result["kind"] == "channel"
-    assert result["enumerate_url"] == (
-        "https://www.youtube.com/@BookClubRadio/videos"
-    )
+    assert result["enumerate_url"] == ("https://www.youtube.com/@BookClubRadio/videos")
 
 
 def test_classify_channel_handle_with_tab_normalizes_to_videos():
-    result = classify_youtube_url(
-        "https://www.youtube.com/@BookClubRadio/streams"
-    )
+    result = classify_youtube_url("https://www.youtube.com/@BookClubRadio/streams")
     assert result["kind"] == "channel"
-    assert result["enumerate_url"] == (
-        "https://www.youtube.com/@BookClubRadio/videos"
-    )
+    assert result["enumerate_url"] == ("https://www.youtube.com/@BookClubRadio/videos")
 
 
 def test_classify_channel_id():
-    result = classify_youtube_url(
-        "https://www.youtube.com/channel/UCabcdEFGHijklMNOpqrSTUvw"
-    )
+    result = classify_youtube_url("https://www.youtube.com/channel/UCabcdEFGHijklMNOpqrSTUvw")
     assert result["kind"] == "channel"
     assert result["enumerate_url"] == (
         "https://www.youtube.com/channel/UCabcdEFGHijklMNOpqrSTUvw/videos"
@@ -444,14 +434,14 @@ def test_classify_unknown(url):
 # list of {videoId,title,uploader,duration}, skipping unavailable entries
 # and reporting truncation.
 
+
 def _flat_info(n, *, playlist_count=None, title="My Playlist", channel="Chan"):
     return {
         "title": title,
         "channel": channel,
         "playlist_count": playlist_count,
         "entries": [
-            {"id": f"vid{i:08d}", "title": f"Track {i}", "channel": channel,
-             "duration": 100 + i}
+            {"id": f"vid{i:08d}", "title": f"Track {i}", "channel": channel, "duration": 100 + i}
             for i in range(n)
         ],
     }

@@ -154,15 +154,14 @@ test("shows all tabs for admin users on desktop", async () => {
     state.downloads = [{ id: "d1" }];
     state.socialUsers = [{ id: "u1" }];
 
-    const { ActivityPanel } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
 
     const html = renderToStaticMarkup(
         React.createElement(ActivityPanel, {
             isOpen: true,
             onToggle: () => undefined,
-        })
+        }),
     );
 
     assert.match(html, />Notifications</);
@@ -171,12 +170,16 @@ test("shows all tabs for admin users on desktop", async () => {
     assert.match(html, />Social</);
     assert.match(html, /notifications-tab/);
     assert.equal(
-        state.notificationHookOptions.some((options) => options?.enabled === true),
-        true
+        state.notificationHookOptions.some(
+            (options) => options?.enabled === true,
+        ),
+        true,
     );
     assert.equal(
-        state.socialPresenceHookOptions.some((options) => options?.enabled === true),
-        true
+        state.socialPresenceHookOptions.some(
+            (options) => options?.enabled === true,
+        ),
+        true,
     );
 });
 
@@ -184,16 +187,15 @@ test("hides admin-only tabs for non-admin users and falls back from hidden activ
     state.userRole = "user";
     state.socialUsers = [{ id: "u1" }];
 
-    const { ActivityPanel } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
 
     const html = renderToStaticMarkup(
         React.createElement(ActivityPanel, {
             isOpen: true,
             onToggle: () => undefined,
             activeTab: "active",
-        })
+        }),
     );
 
     assert.match(html, />Notifications</);
@@ -213,16 +215,15 @@ test("renders mobile overlay with social content and capped badges", async () =>
         id: `u-${index}`,
     }));
 
-    const { ActivityPanel } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
 
     const html = renderToStaticMarkup(
         React.createElement(ActivityPanel, {
             isOpen: true,
             onToggle: () => undefined,
             activeTab: "social",
-        })
+        }),
     );
 
     assert.match(html, /title="Close"/);
@@ -231,9 +232,8 @@ test("renders mobile overlay with social content and capped badges", async () =>
 });
 
 test("renders controlled active, history, and social content", async () => {
-    const { ActivityPanel } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
 
     const tabCases: Array<[string, "active" | "history" | "social"]> = [
         ["active-tab", "active"],
@@ -247,7 +247,7 @@ test("renders controlled active, history, and social content", async () => {
                 isOpen: true,
                 onToggle: () => undefined,
                 activeTab,
-            })
+            }),
         );
 
         assert.match(html, new RegExp(expectedMarkup));
@@ -257,49 +257,50 @@ test("renders controlled active, history, and social content", async () => {
 test("returns null for closed mobile panel", async () => {
     state.isMobile = true;
 
-    const { ActivityPanel } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
 
     const html = renderToStaticMarkup(
         React.createElement(ActivityPanel, {
             isOpen: false,
             onToggle: () => undefined,
-        })
+        }),
     );
 
     assert.equal(html, "");
 });
 
 test("renders collapsed desktop strip without the panel badge when idle", async () => {
-    const { ActivityPanel } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
 
     const html = renderToStaticMarkup(
         React.createElement(ActivityPanel, {
             isOpen: false,
             onToggle: () => undefined,
-        })
+        }),
     );
 
     assert.match(html, /Open activity panel/);
     assert.match(html, /translateX\(332px\)/);
     assert.doesNotMatch(html, /w-2\.5 h-2\.5/);
     assert.equal(
-        state.notificationHookOptions.some((options) => options?.enabled === false),
-        true
+        state.notificationHookOptions.some(
+            (options) => options?.enabled === false,
+        ),
+        true,
     );
     assert.equal(
-        state.socialPresenceHookOptions.some((options) => options?.enabled === false),
-        true
+        state.socialPresenceHookOptions.some(
+            (options) => options?.enabled === false,
+        ),
+        true,
     );
 });
 
 test("activity panel toggle hides on mobile and renders on desktop", async () => {
-    const { ActivityPanelToggle } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanelToggle } =
+        await import("../../components/layout/ActivityPanel");
 
     state.isMobile = true;
     let html = renderToStaticMarkup(React.createElement(ActivityPanelToggle));
@@ -313,27 +314,27 @@ test("activity panel toggle hides on mobile and renders on desktop", async () =>
 });
 
 test("activity panel toggle omits badge when idle", async () => {
-    const { ActivityPanelToggle } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanelToggle } =
+        await import("../../components/layout/ActivityPanel");
 
     const html = renderToStaticMarkup(React.createElement(ActivityPanelToggle));
     assert.doesNotMatch(html, /w-1 h-1 rounded-full/);
 });
 
 test("activity panel toggle can disable polling when panel is open", async () => {
-    const { ActivityPanelToggle } = await import(
-        "../../components/layout/ActivityPanel"
-    );
+    const { ActivityPanelToggle } =
+        await import("../../components/layout/ActivityPanel");
 
     renderToStaticMarkup(
         React.createElement(ActivityPanelToggle, {
             pollingEnabled: false,
-        })
+        }),
     );
 
     assert.equal(
-        state.notificationHookOptions.some((options) => options?.enabled === false),
-        true
+        state.notificationHookOptions.some(
+            (options) => options?.enabled === false,
+        ),
+        true,
     );
 });

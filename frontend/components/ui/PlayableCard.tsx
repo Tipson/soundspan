@@ -75,7 +75,7 @@ const PlayableCard = memo(function PlayableCard({
                     )}
                     style={{ contain: "content" }}
                 >
-                    {memoizedCoverArt ?
+                    {memoizedCoverArt ? (
                         <CachedImage
                             src={memoizedCoverArt}
                             alt={title}
@@ -84,10 +84,11 @@ const PlayableCard = memo(function PlayableCard({
                             loading="lazy"
                             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
                         />
-                    :   placeholderIcon || (
+                    ) : (
+                        placeholderIcon || (
                             <div className="w-12 h-12 bg-[#3e3e3e] rounded-full" />
                         )
-                    }
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-b from-black/0 to-black/30 opacity-0 group-hover:opacity-100 pointer-events-none" />
                 </div>
 
@@ -109,12 +110,13 @@ const PlayableCard = memo(function PlayableCard({
                                 : "opacity-0 pointer-events-none sm:pointer-events-auto group-hover:opacity-100",
                         )}
                     >
-                        {showPlaySpinner ?
+                        {showPlaySpinner ? (
                             <Loader2 className="w-4 h-4 animate-spin text-black" />
-                        : isPlaying ?
+                        ) : isPlaying ? (
                             <Pause className="w-4 h-4 fill-current text-black" />
-                        :   <Play className="w-4 h-4 fill-current ml-0.5 text-black" />
-                        }
+                        ) : (
+                            <Play className="w-4 h-4 fill-current ml-0.5 text-black" />
+                        )}
                     </button>
                 )}
             </div>
@@ -145,14 +147,14 @@ const PlayableCard = memo(function PlayableCard({
                                 disabled={isDownloading}
                                 className={cn(
                                     "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors",
-                                    isDownloading ?
-                                        "bg-gray-500/20 border border-gray-500/30 text-gray-400 cursor-not-allowed"
-                                    :   "bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 hover:border-yellow-500/50 text-yellow-400 hover:text-yellow-300",
+                                    isDownloading
+                                        ? "bg-gray-500/20 border border-gray-500/30 text-gray-400 cursor-not-allowed"
+                                        : "bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 hover:border-yellow-500/50 text-yellow-400 hover:text-yellow-300",
                                 )}
                                 title={
-                                    isDownloading ? "Downloading..." : (
-                                        "Download Album"
-                                    )
+                                    isDownloading
+                                        ? "Downloading..."
+                                        : "Download Album"
                                 }
                             >
                                 <Download
@@ -179,9 +181,9 @@ const PlayableCard = memo(function PlayableCard({
                                     disabled={isDownloading}
                                     className={cn(
                                         "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors",
-                                        isDownloading ?
-                                            "bg-gray-500/20 border border-gray-500/30 text-gray-400 cursor-not-allowed"
-                                        :   "bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 hover:border-yellow-500/50 text-yellow-400 hover:text-yellow-300",
+                                        isDownloading
+                                            ? "bg-gray-500/20 border border-gray-500/30 text-gray-400 cursor-not-allowed"
+                                            : "bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 hover:border-yellow-500/50 text-yellow-400 hover:text-yellow-300",
                                     )}
                                     title="Search and select release"
                                 >
@@ -210,17 +212,22 @@ const PlayableCard = memo(function PlayableCard({
 
     // TV navigation attributes
     const tvNavProps =
-        tvCardIndex !== undefined ?
-            {
-                "data-tv-card": true,
-                "data-tv-card-index": tvCardIndex,
-                tabIndex: 0,
-            }
-        :   {};
+        tvCardIndex !== undefined
+            ? {
+                  "data-tv-card": true,
+                  "data-tv-card-index": tvCardIndex,
+                  tabIndex: 0,
+              }
+            : {};
 
     if (href) {
         return (
-            <Link href={href} onClick={handleLinkClick} prefetch={false} {...tvNavProps}>
+            <Link
+                href={href}
+                onClick={handleLinkClick}
+                prefetch={false}
+                {...tvNavProps}
+            >
                 <Card variant={variant} className={cardClassName} {...props}>
                     {cardContent}
                 </Card>

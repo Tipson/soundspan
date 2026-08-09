@@ -15,11 +15,7 @@ import {
     createMigratingStorageKey,
     removeMigratingStorageItem,
 } from "@/lib/storage-migration";
-import {
-    Book,
-    ListTree,
-    Shuffle,
-} from "lucide-react";
+import { Book, ListTree, Shuffle } from "lucide-react";
 import { shuffleArray } from "@/utils/shuffle";
 import { BRAND_NAME } from "@/lib/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -56,7 +52,7 @@ const CURRENT_AUDIOBOOK_KEY = createMigratingStorageKey("current_audiobook");
 const PLAYBACK_TYPE_KEY = createMigratingStorageKey("playback_type");
 
 const isAudiobookshelfConfigStatus = (
-    value: unknown
+    value: unknown,
 ): value is AudiobookshelfConfigStatus => {
     return Boolean(value) && typeof value === "object" && "configured" in value;
 };
@@ -89,7 +85,7 @@ export default function AudiobooksPage() {
             audiobooksData.configured !== false);
     const audiobooks: Audiobook[] = useMemo(
         () => (Array.isArray(audiobooksData) ? audiobooksData : []),
-        [audiobooksData]
+        [audiobooksData],
     );
 
     // Clear player state if Audiobookshelf is disabled
@@ -110,12 +106,17 @@ export default function AudiobooksPage() {
             (book) =>
                 book.progress &&
                 book.progress.progress > 0 &&
-                !book.progress.isFinished
+                !book.progress.isFinished,
         );
-        
+
         // If currently playing an audiobook that's not in the list, prepend it
-        if (currentAudiobook && !inProgress.find(b => b.id === currentAudiobook.id)) {
-            const currentBook = audiobooks.find(b => b.id === currentAudiobook.id);
+        if (
+            currentAudiobook &&
+            !inProgress.find((b) => b.id === currentAudiobook.id)
+        ) {
+            const currentBook = audiobooks.find(
+                (b) => b.id === currentAudiobook.id,
+            );
             if (currentBook) {
                 return [currentBook, ...inProgress];
             }
@@ -125,7 +126,7 @@ export default function AudiobooksPage() {
 
     // Get all unique genres
     const allGenres = Array.from(
-        new Set(audiobooks.flatMap((book) => book.genres || []))
+        new Set(audiobooks.flatMap((book) => book.genres || [])),
     ).sort();
 
     const getFilteredAndSortedBooks = () => {
@@ -137,7 +138,7 @@ export default function AudiobooksPage() {
                 break;
             case "finished":
                 filtered = audiobooks.filter(
-                    (book) => book.progress?.isFinished
+                    (book) => book.progress?.isFinished,
                 );
                 break;
         }
@@ -145,7 +146,7 @@ export default function AudiobooksPage() {
         // Filter by genre
         if (selectedGenre) {
             filtered = filtered.filter((book) =>
-                book.genres?.includes(selectedGenre)
+                book.genres?.includes(selectedGenre),
             );
         }
 
@@ -194,14 +195,14 @@ export default function AudiobooksPage() {
     };
 
     const filteredBooks = getFilteredAndSortedBooks();
-    
+
     // Pagination
     const totalPages = Math.ceil(filteredBooks.length / itemsPerPage);
     const paginatedBooks = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
         return filteredBooks.slice(start, start + itemsPerPage);
     }, [filteredBooks, currentPage, itemsPerPage]);
-    
+
     // Reset to page 1 when filters change.
     useEffect(() => {
         setCurrentPage(1);
@@ -347,7 +348,7 @@ export default function AudiobooksPage() {
                         <Button
                             onClick={() =>
                                 router.push(
-                                    "/settings?tab=system#audiobookshelf"
+                                    "/settings?tab=system#audiobookshelf",
                                 )
                             }
                             className="flex-1 py-6 text-lg font-semibold"
@@ -359,7 +360,7 @@ export default function AudiobooksPage() {
                             onClick={() =>
                                 window.open(
                                     "https://hub.docker.com/r/advplyr/audiobookshelf",
-                                    "_blank"
+                                    "_blank",
                                 )
                             }
                             className="flex-1 py-6 text-lg font-semibold"
@@ -443,7 +444,9 @@ export default function AudiobooksPage() {
                             className="flex items-center gap-2 px-4 py-2 bg-brand-hover hover:bg-brand text-black font-medium rounded-full transition-all hover:scale-105"
                         >
                             <Shuffle className="w-4 h-4" />
-                            <span className="hidden sm:inline">Random Book</span>
+                            <span className="hidden sm:inline">
+                                Random Book
+                            </span>
                         </button>
 
                         {/* Results Count - Desktop only */}
@@ -568,7 +571,10 @@ export default function AudiobooksPage() {
                                             data-tv-section="series"
                                         >
                                             {series.map(
-                                                ([seriesName, books], index) => {
+                                                (
+                                                    [seriesName, books],
+                                                    index,
+                                                ) => {
                                                     const firstBook = books[0];
                                                     const bookCount = `${books.length} ${books.length === 1 ? "book" : "books"}`;
                                                     return (
@@ -576,14 +582,22 @@ export default function AudiobooksPage() {
                                                             key={seriesName}
                                                             id={seriesName}
                                                             title={seriesName}
-                                                            author={firstBook.author}
-                                                            coverUrl={firstBook.coverUrl}
-                                                            seriesBadge={bookCount}
+                                                            author={
+                                                                firstBook.author
+                                                            }
+                                                            coverUrl={
+                                                                firstBook.coverUrl
+                                                            }
+                                                            seriesBadge={
+                                                                bookCount
+                                                            }
                                                             index={index}
-                                                            getCoverUrl={getCoverUrl}
+                                                            getCoverUrl={
+                                                                getCoverUrl
+                                                            }
                                                         />
                                                     );
-                                                }
+                                                },
                                             )}
                                         </div>
                                     </section>
@@ -642,8 +656,8 @@ export default function AudiobooksPage() {
                                 filter === "listening"
                                     ? "No audiobooks in progress"
                                     : filter === "finished"
-                                    ? "No finished audiobooks"
-                                    : "No audiobooks found"
+                                      ? "No finished audiobooks"
+                                      : "No audiobooks found"
                             }
                             description={
                                 filter === "all"
@@ -664,7 +678,9 @@ export default function AudiobooksPage() {
                                 First
                             </button>
                             <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                onClick={() =>
+                                    setCurrentPage((p) => Math.max(1, p - 1))
+                                }
                                 disabled={currentPage === 1}
                                 className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -674,7 +690,11 @@ export default function AudiobooksPage() {
                                 Page {currentPage} of {totalPages}
                             </span>
                             <button
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                onClick={() =>
+                                    setCurrentPage((p) =>
+                                        Math.min(totalPages, p + 1),
+                                    )
+                                }
                                 disabled={currentPage === totalPages}
                                 className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >

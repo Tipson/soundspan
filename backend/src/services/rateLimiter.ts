@@ -102,7 +102,7 @@ class GlobalRateLimiter {
                     intervalCap: config.intervalCap,
                     interval: config.interval,
                     carryoverConcurrencyCount: true,
-                })
+                }),
             );
 
             this.circuitBreakers.set(service as ServiceName, {
@@ -125,7 +125,7 @@ class GlobalRateLimiter {
         options?: {
             priority?: number;
             skipRetry?: boolean;
-        }
+        },
     ): Promise<T> {
         const queue = this.queues.get(service);
         const config = SERVICE_CONFIGS[service];
@@ -149,7 +149,7 @@ class GlobalRateLimiter {
                 // Circuit is open, wait or throw
                 const waitTime = circuit.resetAfterMs - elapsed;
                 logger.debug(
-                    `Circuit breaker open for ${service} - waiting ${waitTime}ms`
+                    `Circuit breaker open for ${service} - waiting ${waitTime}ms`,
                 );
                 await this.sleep(waitTime);
             }
@@ -169,7 +169,7 @@ class GlobalRateLimiter {
                     async () => {
                         return await requestFn();
                     },
-                    { priority: options?.priority ?? 0 }
+                    { priority: options?.priority ?? 0 },
                 );
 
                 // Success - reset failure count
@@ -190,7 +190,7 @@ class GlobalRateLimiter {
                     const delay = this.calculateBackoff(
                         attempt,
                         config.baseDelay,
-                        error
+                        error,
                     );
 
                     if (isRateLimit) {
@@ -199,7 +199,7 @@ class GlobalRateLimiter {
                         logger.warn(
                             `Rate limited by ${service} (attempt ${attempt + 1}/${
                                 maxRetries + 1
-                            }) - backing off ${delay}ms`
+                            }) - backing off ${delay}ms`,
                         );
 
                         // If too many failures, open circuit
@@ -208,17 +208,17 @@ class GlobalRateLimiter {
                             circuit.openedAt = Date.now();
                             circuit.resetAfterMs = Math.min(
                                 60000,
-                                circuit.resetAfterMs * 2
+                                circuit.resetAfterMs * 2,
                             );
                             logger.warn(
-                                `Circuit breaker opened for ${service} - will reset in ${circuit.resetAfterMs}ms`
+                                `Circuit breaker opened for ${service} - will reset in ${circuit.resetAfterMs}ms`,
                             );
                         }
                     } else {
                         logger.warn(
                             `Transient ${service} error (attempt ${attempt + 1}/${
                                 maxRetries + 1
-                            }) - retrying in ${delay}ms: ${error.message}`
+                            }) - retrying in ${delay}ms: ${error.message}`,
                         );
                     }
 
@@ -242,7 +242,7 @@ class GlobalRateLimiter {
     private calculateBackoff(
         attempt: number,
         baseDelay: number,
-        error?: any
+        error?: any,
     ): number {
         // Check for Retry-After header
         const retryAfter = error?.response?.headers?.["retry-after"];
@@ -331,7 +331,7 @@ class GlobalRateLimiter {
      */
     async drain(): Promise<void> {
         const promises = Array.from(this.queues.values()).map((queue) =>
-            queue.onIdle()
+            queue.onIdle(),
         );
         await Promise.all(promises);
     }
@@ -353,9 +353,11 @@ class GlobalRateLimiter {
     updateConcurrencyMultiplier(multiplier: number) {
         const clampedMultiplier = Math.max(1, Math.min(5, multiplier));
         this.concurrencyMultiplier = clampedMultiplier;
-        
-        logger.debug(`[Rate Limiter] Updating concurrency multiplier to ${clampedMultiplier}`);
-        
+
+        logger.debug(
+            `[Rate Limiter] Updating concurrency multiplier to ${clampedMultiplier}`,
+        );
+
         // Update all service queues with new concurrency
         for (const [service, config] of Object.entries(SERVICE_CONFIGS)) {
             const queue = this.queues.get(service as ServiceName);
@@ -363,10 +365,12 @@ class GlobalRateLimiter {
                 // Scale concurrency by multiplier, but never exceed intervalCap (rate limit)
                 const newConcurrency = Math.min(
                     config.concurrency * clampedMultiplier,
-                    config.intervalCap
+                    config.intervalCap,
                 );
                 queue.concurrency = newConcurrency;
-                logger.debug(`  → ${service}: ${config.concurrency} → ${newConcurrency}`);
+                logger.debug(
+                    `  → ${service}: ${config.concurrency} → ${newConcurrency}`,
+                );
             }
         }
     }

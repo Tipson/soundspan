@@ -88,7 +88,10 @@ describe("audioAnalysisCleanupService", () => {
                 analysisStatus: "processing",
                 OR: [
                     { analysisStartedAt: { lt: expect.any(Date) } },
-                    { analysisStartedAt: null, updatedAt: { lt: expect.any(Date) } },
+                    {
+                        analysisStartedAt: null,
+                        updatedAt: { lt: expect.any(Date) },
+                    },
                 ],
             },
             include: {
@@ -99,7 +102,11 @@ describe("audioAnalysisCleanupService", () => {
                 },
             },
         });
-        expect(result).toEqual({ reset: 0, permanentlyFailed: 0, recovered: 0 });
+        expect(result).toEqual({
+            reset: 0,
+            permanentlyFailed: 0,
+            recovered: 0,
+        });
     });
 
     it("resets stale tracks for retry when under max retry threshold", async () => {
@@ -119,7 +126,11 @@ describe("audioAnalysisCleanupService", () => {
                 analysisError: "Reset after stale processing (attempt 1/3)",
             },
         });
-        expect(result).toEqual({ reset: 1, permanentlyFailed: 0, recovered: 0 });
+        expect(result).toEqual({
+            reset: 1,
+            permanentlyFailed: 0,
+            recovered: 0,
+        });
     });
 
     it("marks tracks permanently failed at max retries and records enrichment failure", async () => {
@@ -155,14 +166,20 @@ describe("audioAnalysisCleanupService", () => {
                 retryCount: 3,
             },
         });
-        expect(result).toEqual({ reset: 0, permanentlyFailed: 1, recovered: 0 });
+        expect(result).toEqual({
+            reset: 0,
+            permanentlyFailed: 1,
+            recovered: 0,
+        });
     });
 
     it("recovers stale tracks that already have embeddings and clears failure counter", async () => {
         const { service, prisma } = loadAudioCleanupService();
         prisma.track.findMany
             .mockResolvedValueOnce([staleTrack()])
-            .mockResolvedValueOnce([staleTrack({ id: "track-2", title: "Recovered" })]);
+            .mockResolvedValueOnce([
+                staleTrack({ id: "track-2", title: "Recovered" }),
+            ]);
         prisma.$queryRaw
             .mockResolvedValueOnce([{ count: BigInt(0) }])
             .mockResolvedValueOnce([{ count: BigInt(1) }]);
@@ -173,8 +190,16 @@ describe("audioAnalysisCleanupService", () => {
         const secondRun = await service.cleanupStaleProcessing();
         const stats = await service.getStats();
 
-        expect(firstRun).toEqual({ reset: 1, permanentlyFailed: 0, recovered: 0 });
-        expect(secondRun).toEqual({ reset: 0, permanentlyFailed: 0, recovered: 1 });
+        expect(firstRun).toEqual({
+            reset: 1,
+            permanentlyFailed: 0,
+            recovered: 0,
+        });
+        expect(secondRun).toEqual({
+            reset: 0,
+            permanentlyFailed: 0,
+            recovered: 1,
+        });
         expect(prisma.track.update).toHaveBeenLastCalledWith({
             where: { id: "track-2" },
             data: {
@@ -187,7 +212,9 @@ describe("audioAnalysisCleanupService", () => {
     });
 
     it("opens circuit breaker after repeated cleanup failures and transitions through half-open recovery", async () => {
-        jest.useFakeTimers().setSystemTime(new Date("2026-02-17T00:00:00.000Z"));
+        jest.useFakeTimers().setSystemTime(
+            new Date("2026-02-17T00:00:00.000Z"),
+        );
         const { service, prisma } = loadAudioCleanupService();
 
         prisma.track.findMany.mockResolvedValue([staleTrack()]);

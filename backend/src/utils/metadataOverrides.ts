@@ -68,14 +68,14 @@ export function getMergedGenres(entity: {
     const canonical = Array.isArray(entity.genres)
         ? entity.genres
         : typeof entity.genres === "string"
-        ? JSON.parse(entity.genres)
-        : [];
+          ? JSON.parse(entity.genres)
+          : [];
 
     const userAdded = Array.isArray(entity.userGenres)
         ? entity.userGenres
         : typeof entity.userGenres === "string"
-        ? JSON.parse(entity.userGenres)
-        : [];
+          ? JSON.parse(entity.userGenres)
+          : [];
 
     // Merge and deduplicate (user genres first for priority)
     const merged = [...new Set([...userAdded, ...canonical])];

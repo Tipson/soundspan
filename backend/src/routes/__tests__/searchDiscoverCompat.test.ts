@@ -61,7 +61,7 @@ const mockSearchTracks = lastFmService.searchTracks as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -131,7 +131,7 @@ describe("search discover compatibility", () => {
                         name: "Boards of Canada",
                     }),
                 ],
-            })
+            }),
         );
         expect(mockArtistFindMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -151,7 +151,7 @@ describe("search discover compatibility", () => {
                         },
                     ]),
                 },
-            })
+            }),
         );
     });
 

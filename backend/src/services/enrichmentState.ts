@@ -16,7 +16,13 @@ const ENRICHMENT_STATE_REDIS_RETRY_ATTEMPTS = 3;
 const ENRICHMENT_PUBLISHER_REDIS_RETRY_ATTEMPTS = 3;
 
 export type EnrichmentStatus = "idle" | "running" | "paused" | "stopping";
-export type EnrichmentPhase = "artists" | "tracks" | "audio" | "vibe" | "podcasts" | null;
+export type EnrichmentPhase =
+    | "artists"
+    | "tracks"
+    | "audio"
+    | "vibe"
+    | "podcasts"
+    | null;
 
 export interface EnrichmentState {
     status: EnrichmentStatus;
@@ -98,7 +104,7 @@ class EnrichmentStateService {
 
     private async withStateRetry<T>(
         operationName: string,
-        operation: () => Promise<T>
+        operation: () => Promise<T>,
     ): Promise<T> {
         for (let attempt = 1; ; attempt += 1) {
             try {
@@ -113,11 +119,11 @@ class EnrichmentStateService {
 
                 logger.warn(
                     `[Enrichment State] ${operationName} failed due to Redis connection closure (attempt ${attempt}/${ENRICHMENT_STATE_REDIS_RETRY_ATTEMPTS}); recreating client and retrying`,
-                    error
+                    error,
                 );
                 this.recreateStateClient();
                 await new Promise((resolve) =>
-                    setTimeout(resolve, 250 * attempt)
+                    setTimeout(resolve, 250 * attempt),
                 );
             }
         }
@@ -125,7 +131,7 @@ class EnrichmentStateService {
 
     private async withPublisherRetry<T>(
         operationName: string,
-        operation: () => Promise<T>
+        operation: () => Promise<T>,
     ): Promise<T> {
         for (let attempt = 1; ; attempt += 1) {
             try {
@@ -140,11 +146,11 @@ class EnrichmentStateService {
 
                 logger.warn(
                     `[Enrichment State] ${operationName} failed due to Redis connection closure (attempt ${attempt}/${ENRICHMENT_PUBLISHER_REDIS_RETRY_ATTEMPTS}); recreating publisher and retrying`,
-                    error
+                    error,
                 );
                 this.recreatePublisherClient();
                 await new Promise((resolve) =>
-                    setTimeout(resolve, 250 * attempt)
+                    setTimeout(resolve, 250 * attempt),
                 );
             }
         }
@@ -155,7 +161,7 @@ class EnrichmentStateService {
      */
     async getState(): Promise<EnrichmentState | null> {
         const data = await this.withStateRetry("getState", () =>
-            this.redis.get(ENRICHMENT_STATE_KEY)
+            this.redis.get(ENRICHMENT_STATE_KEY),
         );
         if (!data) {
             return null;
@@ -192,7 +198,7 @@ class EnrichmentStateService {
     async setState(state: EnrichmentState): Promise<void> {
         state.lastActivity = new Date().toISOString();
         await this.withStateRetry("setState", () =>
-            this.redis.set(ENRICHMENT_STATE_KEY, JSON.stringify(state))
+            this.redis.set(ENRICHMENT_STATE_KEY, JSON.stringify(state)),
         );
     }
 
@@ -201,7 +207,7 @@ class EnrichmentStateService {
      * Auto-initializes state if it doesn't exist
      */
     async updateState(
-        updates: Partial<EnrichmentState>
+        updates: Partial<EnrichmentState>,
     ): Promise<EnrichmentState> {
         let current = await this.getState();
 
@@ -236,10 +242,10 @@ class EnrichmentStateService {
 
         // Notify workers via pub/sub
         await this.withPublisherRetry("pause publish", () =>
-            this.publisher.publish(ENRICHMENT_CONTROL_CHANNEL, "pause")
+            this.publisher.publish(ENRICHMENT_CONTROL_CHANNEL, "pause"),
         );
         await this.withPublisherRetry("pause audio publish", () =>
-            this.publisher.publish(AUDIO_CONTROL_CHANNEL, "pause")
+            this.publisher.publish(AUDIO_CONTROL_CHANNEL, "pause"),
         );
 
         logger.debug("[Enrichment State] Paused");
@@ -263,7 +269,7 @@ class EnrichmentStateService {
 
         if (state.status !== "paused") {
             throw new Error(
-                `Cannot resume enrichment in ${state.status} state`
+                `Cannot resume enrichment in ${state.status} state`,
             );
         }
 
@@ -274,10 +280,10 @@ class EnrichmentStateService {
 
         // Notify workers via pub/sub
         await this.withPublisherRetry("resume publish", () =>
-            this.publisher.publish(ENRICHMENT_CONTROL_CHANNEL, "resume")
+            this.publisher.publish(ENRICHMENT_CONTROL_CHANNEL, "resume"),
         );
         await this.withPublisherRetry("resume audio publish", () =>
-            this.publisher.publish(AUDIO_CONTROL_CHANNEL, "resume")
+            this.publisher.publish(AUDIO_CONTROL_CHANNEL, "resume"),
         );
 
         logger.debug("[Enrichment State] Resumed");
@@ -306,13 +312,15 @@ class EnrichmentStateService {
 
         // Notify workers via pub/sub
         await this.withPublisherRetry("stop publish", () =>
-            this.publisher.publish(ENRICHMENT_CONTROL_CHANNEL, "stop")
+            this.publisher.publish(ENRICHMENT_CONTROL_CHANNEL, "stop"),
         );
         await this.withPublisherRetry("stop audio publish", () =>
-            this.publisher.publish(AUDIO_CONTROL_CHANNEL, "stop")
+            this.publisher.publish(AUDIO_CONTROL_CHANNEL, "stop"),
         );
 
-        logger.debug("[Enrichment State] Stopping (worker will transition to idle when current item completes)...");
+        logger.debug(
+            "[Enrichment State] Stopping (worker will transition to idle when current item completes)...",
+        );
 
         return updated;
     }
@@ -322,7 +330,7 @@ class EnrichmentStateService {
      */
     async clear(): Promise<void> {
         await this.withStateRetry("clear", () =>
-            this.redis.del(ENRICHMENT_STATE_KEY)
+            this.redis.del(ENRICHMENT_STATE_KEY),
         );
         logger.debug("[Enrichment State] Cleared");
     }
@@ -364,10 +372,7 @@ class EnrichmentStateService {
      * Cleanup connections
      */
     async disconnect(): Promise<void> {
-        await Promise.allSettled([
-            this.redis.quit(),
-            this.publisher.quit(),
-        ]);
+        await Promise.allSettled([this.redis.quit(), this.publisher.quit()]);
     }
 }
 

@@ -21,6 +21,6 @@ test("resolveInitialAudioVolume parses persisted values deterministically", () =
     assert.equal(resolveInitialAudioVolume("-0.2"), 0);
     assert.equal(
         resolveInitialAudioVolume("not-a-number"),
-        DEFAULT_AUDIO_VOLUME
+        DEFAULT_AUDIO_VOLUME,
     );
 });

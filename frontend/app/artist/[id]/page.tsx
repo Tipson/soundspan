@@ -34,7 +34,13 @@ import { Discography } from "@/features/artist/components/Discography";
 import { AvailableAlbums } from "@/features/artist/components/AvailableAlbums";
 import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
 
-function ListSectionSkeleton({ title, rows = 5 }: { title: string; rows?: number }) {
+function ListSectionSkeleton({
+    title,
+    rows = 5,
+}: {
+    title: string;
+    rows?: number;
+}) {
     return (
         <section>
             <h2 className="text-xl font-bold mb-4">{title}</h2>
@@ -98,7 +104,13 @@ export default function ArtistPage() {
     } = useArtistData();
 
     // Action hooks
-    const { playAll, shufflePlay, addAllToQueue, likeAllTracks, addAllToPlaylist } = useArtistActions();
+    const {
+        playAll,
+        shufflePlay,
+        addAllToQueue,
+        likeAllTracks,
+        addAllToPlaylist,
+    } = useArtistActions();
     const { downloadArtist, downloadAlbum } = useDownloadActions();
 
     // Playlist selector state
@@ -118,14 +130,13 @@ export default function ArtistPage() {
         isMatching: isTidalMatching,
         isStatusResolved: isTidalStatusResolved,
     } = useTidalTopTracks(artistWithTopTracks);
-    const tidalArtist =
-        artistWithTopTracks ?
-            {
-                ...artistWithTopTracks,
-                topTracks:
-                    tidalEnrichedTopTracks || artistWithTopTracks.topTracks,
-            }
-        :   null;
+    const tidalArtist = artistWithTopTracks
+        ? {
+              ...artistWithTopTracks,
+              topTracks:
+                  tidalEnrichedTopTracks || artistWithTopTracks.topTracks,
+          }
+        : null;
     const {
         enrichedTopTracks,
         isMatching: isYtMatching,
@@ -143,18 +154,20 @@ export default function ArtistPage() {
 
     // Get image URLs for display and color extraction
     const rawImageUrl =
-        artist && source === "library" ?
-            artist.coverArt
-        :   artist?.image || null;
+        artist && source === "library"
+            ? artist.coverArt
+            : artist?.image || null;
 
     // Use a high-res image for the hero section
-    const heroImage =
-        rawImageUrl ? api.getCoverArtUrl(rawImageUrl, 1200) : null;
+    const heroImage = rawImageUrl
+        ? api.getCoverArtUrl(rawImageUrl, 1200)
+        : null;
 
     // Use a low-res image for color extraction and background blur to save CPU
     // Include token for CORS access needed by canvas color extraction
-    const lowResImage =
-        rawImageUrl ? api.getCoverArtUrl(rawImageUrl, 300, true) : null;
+    const lowResImage = rawImageUrl
+        ? api.getCoverArtUrl(rawImageUrl, 300, true)
+        : null;
 
     const { colors } = useImageColor(lowResImage || rawImageUrl);
 
@@ -166,15 +179,17 @@ export default function ArtistPage() {
         try {
             const albumData = await api.getAlbum(albumId);
             if (albumData.tracks && albumData.tracks.length > 0) {
-                const tracksWithAlbum = albumData.tracks.map((track: Record<string, unknown>) => ({
-                    ...track,
-                    album: {
-                        id: albumData.id,
-                        title: albumData.title,
-                        coverArt: albumData.coverArt,
-                    },
-                    artist: albumData.artist,
-                }));
+                const tracksWithAlbum = albumData.tracks.map(
+                    (track: Record<string, unknown>) => ({
+                        ...track,
+                        album: {
+                            id: albumData.id,
+                            title: albumData.title,
+                            coverArt: albumData.coverArt,
+                        },
+                        artist: albumData.artist,
+                    }),
+                );
                 playTracks(tracksWithAlbum, 0);
                 toast.success(`Playing ${albumTitle}`);
             }
@@ -214,7 +229,10 @@ export default function ArtistPage() {
 
     function handleAddAllPopularToQueue(visibleTracks: Track[]) {
         const playable = visibleTracks.filter(
-            (t) => t.filePath || (t.streamSource === "tidal" && t.tidalTrackId) || (t.streamSource === "youtube" && t.youtubeVideoId)
+            (t) =>
+                t.filePath ||
+                (t.streamSource === "tidal" && t.tidalTrackId) ||
+                (t.streamSource === "youtube" && t.youtubeVideoId),
         );
         if (!playable.length) return;
         const formattedTracks = playable.map(formatTrackForPlayback);
@@ -278,11 +296,11 @@ export default function ArtistPage() {
                 // Backend already returns properly formatted tracks - just pass them through
                 playTracks(response.tracks, 0);
                 toast.success(
-                    `Playing ${artist.name} Radio (${response.tracks.length} tracks)`
+                    `Playing ${artist.name} Radio (${response.tracks.length} tracks)`,
                 );
             } else {
                 toast.error(
-                    "Not enough similar music in your library for artist radio"
+                    "Not enough similar music in your library for artist radio",
                 );
             }
         } catch {
@@ -295,7 +313,7 @@ export default function ArtistPage() {
         radioConfirmedRef.current = true;
         playTracks(radioConfirm.tracks as Parameters<typeof playTracks>[0], 0);
         toast.success(
-            `Playing ${artist?.name ?? "Artist"} Radio (${radioConfirm.count} tracks)`
+            `Playing ${artist?.name ?? "Artist"} Radio (${radioConfirm.count} tracks)`,
         );
     };
 
@@ -357,7 +375,11 @@ export default function ArtistPage() {
                     onShuffle={() => shufflePlay(artist, albums)}
                     onDownloadAll={() => downloadArtist(artist)}
                     onStartRadio={handleStartRadio}
-                    onAddToPlaylist={source === "library" ? () => setShowPlaylistSelector(true) : undefined}
+                    onAddToPlaylist={
+                        source === "library"
+                            ? () => setShowPlaylistSelector(true)
+                            : undefined
+                    }
                     onLikeAll={source === "library" ? handleLikeAll : undefined}
                     isLikingAll={isLikingAll}
                     isPendingDownload={isPendingByMbid(artist.mbid || "")}
@@ -378,10 +400,9 @@ export default function ArtistPage() {
                 <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
-                        background:
-                            colors ?
-                                `linear-gradient(to bottom, ${colors.vibrant}15 0%, ${colors.vibrant}08 15%, ${colors.darkVibrant}05 30%, transparent 50%)`
-                            :   "transparent",
+                        background: colors
+                            ? `linear-gradient(to bottom, ${colors.vibrant}15 0%, ${colors.vibrant}08 15%, ${colors.darkVibrant}05 30%, transparent 50%)`
+                            : "transparent",
                     }}
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,rgba(16,16,16,0.4)_100%)] pointer-events-none" />
@@ -438,7 +459,8 @@ export default function ArtistPage() {
                     )}
 
                     {/* Similar Artists */}
-                    {artist.similarArtists && artist.similarArtists.length > 0 ? (
+                    {artist.similarArtists &&
+                    artist.similarArtists.length > 0 ? (
                         <SimilarArtists
                             similarArtists={artist.similarArtists}
                             onNavigate={(artistId) =>
@@ -457,7 +479,9 @@ export default function ArtistPage() {
                 <ReleaseSelectionModal
                     isOpen={Boolean(searchAlbum)}
                     onClose={() => setSearchAlbum(null)}
-                    albumMbid={searchAlbum.rgMbid || searchAlbum.mbid || searchAlbum.id}
+                    albumMbid={
+                        searchAlbum.rgMbid || searchAlbum.mbid || searchAlbum.id
+                    }
                     artistName={artist.name}
                     albumTitle={searchAlbum.title}
                 />

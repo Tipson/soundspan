@@ -12,10 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import Link from "next/link";
-import {
-    useNotifications,
-    type Notification,
-} from "@/hooks/useNotifications";
+import { useNotifications, type Notification } from "@/hooks/useNotifications";
 import { createFrontendLogger } from "@/lib/logger";
 import { formatRelativeTime } from "@/utils/formatTime";
 
@@ -100,7 +97,9 @@ export function NotificationsTab({
     };
 
     const getLink = (notification: Notification): string | null => {
-        const metadata = notification.metadata as Record<string, unknown> | undefined;
+        const metadata = notification.metadata as
+            | Record<string, unknown>
+            | undefined;
         if (typeof metadata?.playlistId === "string") {
             return `/playlist/${metadata.playlistId}`;
         }
@@ -161,7 +160,7 @@ export function NotificationsTab({
                             key={notification.id}
                             className={cn(
                                 "px-3 py-3 border-b border-white/5 hover:bg-white/5 transition-colors group",
-                                !notification.read && "bg-white/[0.02]"
+                                !notification.read && "bg-white/[0.02]",
                             )}
                         >
                             <div className="flex items-start gap-3">
@@ -175,7 +174,7 @@ export function NotificationsTab({
                                                 "text-sm font-medium truncate",
                                                 notification.read
                                                     ? "text-white/70"
-                                                    : "text-white"
+                                                    : "text-white",
                                             )}
                                         >
                                             {notification.title}
@@ -191,7 +190,9 @@ export function NotificationsTab({
                                     )}
                                     <div className="flex items-center gap-2 mt-1.5">
                                         <span className="text-[10px] text-white/30">
-                                            {formatRelativeTime(notification.createdAt)}
+                                            {formatRelativeTime(
+                                                notification.createdAt,
+                                            )}
                                         </span>
                                         {link && (
                                             <Link
@@ -209,7 +210,7 @@ export function NotificationsTab({
                                         <button
                                             onClick={() =>
                                                 handleMarkAsRead(
-                                                    notification.id
+                                                    notification.id,
                                                 )
                                             }
                                             className="p-1 hover:bg-white/10 rounded transition-colors"

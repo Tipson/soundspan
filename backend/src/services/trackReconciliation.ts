@@ -77,7 +77,7 @@ class TrackReconciliationService {
 
     private async getUnlinkedMappingsBatch(
         batchSize: number,
-        cursor?: ReconciliationCursor
+        cursor?: ReconciliationCursor,
     ) {
         return prisma.trackMapping.findMany({
             where: {
@@ -113,7 +113,7 @@ class TrackReconciliationService {
                 duration: number;
             } | null;
         }>,
-        localCandidates: LocalTrackCandidate[]
+        localCandidates: LocalTrackCandidate[],
     ): Promise<{ linked: number; skipped: number }> {
         let linked = 0;
         let skipped = 0;
@@ -121,7 +121,9 @@ class TrackReconciliationService {
         for (const mapping of mappings) {
             const metadata = this.extractMetadata(mapping);
             if (!metadata) {
-                log.debug(`Mapping ${mapping.id}: no extractable metadata, skipping`);
+                log.debug(
+                    `Mapping ${mapping.id}: no extractable metadata, skipping`,
+                );
                 skipped++;
                 continue;
             }
@@ -139,7 +141,7 @@ class TrackReconciliationService {
                 });
                 if (conflicting) {
                     log.info(
-                        `Mapping ${mapping.id}: conflict with existing mapping ${conflicting.id} for trackId=${match.trackId}, marking stale`
+                        `Mapping ${mapping.id}: conflict with existing mapping ${conflicting.id} for trackId=${match.trackId}, marking stale`,
                     );
                     await prisma.trackMapping.update({
                         where: { id: mapping.id },
@@ -158,7 +160,7 @@ class TrackReconciliationService {
                 }
             } else {
                 log.debug(
-                    `Mapping ${mapping.id}: no match above threshold (best=${match?.matchConfidence ?? 0}%)`
+                    `Mapping ${mapping.id}: no match above threshold (best=${match?.matchConfidence ?? 0}%)`,
                 );
                 skipped++;
             }
@@ -197,21 +199,24 @@ class TrackReconciliationService {
                     continue;
                 }
 
-                const oauthJson = tryDecryptOAuthJson(userWithTidal.tidalOAuthJson);
+                const oauthJson = tryDecryptOAuthJson(
+                    userWithTidal.tidalOAuthJson,
+                );
                 const restored = await tidalStreamingService.restoreOAuth(
                     userWithTidal.userId,
-                    oauthJson
+                    oauthJson,
                 );
                 if (restored) {
                     return userWithTidal.userId;
                 }
 
                 log.warn(
-                    `[YT->TIDAL] TIDAL credentials exist for ${userWithTidal.userId}, but session restore failed`
+                    `[YT->TIDAL] TIDAL credentials exist for ${userWithTidal.userId}, but session restore failed`,
                 );
             }
 
-            cursorUserId = usersWithTidal[usersWithTidal.length - 1]?.userId ?? null;
+            cursorUserId =
+                usersWithTidal[usersWithTidal.length - 1]?.userId ?? null;
         }
 
         return null;
@@ -223,7 +228,7 @@ class TrackReconciliationService {
      */
     async reconcile(
         batchSize: number = DEFAULT_BATCH_SIZE,
-        maxRows?: number
+        maxRows?: number,
     ): Promise<ReconciliationResult> {
         const effectiveBatchSize = Math.max(1, Math.trunc(batchSize));
         const requestedMaxRows =
@@ -241,7 +246,7 @@ class TrackReconciliationService {
 
         const firstBatch = await this.getUnlinkedMappingsBatch(
             Math.min(effectiveBatchSize, effectiveMaxRows),
-            cursor
+            cursor,
         );
 
         if (firstBatch.length === 0) {
@@ -251,11 +256,11 @@ class TrackReconciliationService {
 
         if (requestedMaxRows && requestedMaxRows > 0) {
             log.info(
-                `Reconciling up to ${effectiveMaxRows} unlinked TrackMapping rows in batches of ${effectiveBatchSize}...`
+                `Reconciling up to ${effectiveMaxRows} unlinked TrackMapping rows in batches of ${effectiveBatchSize}...`,
             );
         } else {
             log.info(
-                `Reconciling unlinked TrackMapping rows in batches of ${effectiveBatchSize} until exhausted...`
+                `Reconciling unlinked TrackMapping rows in batches of ${effectiveBatchSize} until exhausted...`,
             );
         }
 
@@ -267,7 +272,7 @@ class TrackReconciliationService {
             return this.exhaustUnlinkedMappingsWithoutMatches(
                 firstBatch,
                 effectiveBatchSize,
-                effectiveMaxRows
+                effectiveMaxRows,
             );
         }
 
@@ -276,7 +281,7 @@ class TrackReconciliationService {
         while (currentBatch.length > 0 && processed < effectiveMaxRows) {
             const batchResult = await this.linkMappingsBatch(
                 currentBatch,
-                localCandidates
+                localCandidates,
             );
             processed += currentBatch.length;
             linked += batchResult.linked;
@@ -298,12 +303,12 @@ class TrackReconciliationService {
             currentBatchSize = Math.min(effectiveBatchSize, remaining);
             currentBatch = await this.getUnlinkedMappingsBatch(
                 currentBatchSize,
-                cursor
+                cursor,
             );
         }
 
         log.info(
-            `Reconciliation complete: ${linked} linked, ${skipped} skipped out of ${processed}`
+            `Reconciliation complete: ${linked} linked, ${skipped} skipped out of ${processed}`,
         );
 
         return {
@@ -319,7 +324,7 @@ class TrackReconciliationService {
             createdAt: Date;
         }>,
         batchSize: number,
-        maxRows: number
+        maxRows: number,
     ): Promise<ReconciliationResult> {
         let processed = firstBatch.length;
         let skipped = firstBatch.length;
@@ -334,10 +339,13 @@ class TrackReconciliationService {
             const lastMapping = currentBatch[currentBatch.length - 1];
             const remaining = maxRows - processed;
             currentBatchSize = Math.min(batchSize, remaining);
-            currentBatch = await this.getUnlinkedMappingsBatch(currentBatchSize, {
-                createdAt: lastMapping.createdAt,
-                id: lastMapping.id,
-            });
+            currentBatch = await this.getUnlinkedMappingsBatch(
+                currentBatchSize,
+                {
+                    createdAt: lastMapping.createdAt,
+                    id: lastMapping.id,
+                },
+            );
             processed += currentBatch.length;
             skipped += currentBatch.length;
         }
@@ -350,7 +358,7 @@ class TrackReconciliationService {
      * This allows future playlist/listen resolution to prefer TIDAL where possible.
      */
     async reconcileYoutubeToTidal(
-        batchSize: number = DEFAULT_BATCH_SIZE
+        batchSize: number = DEFAULT_BATCH_SIZE,
     ): Promise<ProviderUpgradeResult> {
         const ytOnlyMappings = await prisma.trackMapping.findMany({
             where: {
@@ -384,7 +392,7 @@ class TrackReconciliationService {
         const tidalUserId = await this.getRestoredTidalUserId();
         if (!tidalUserId) {
             log.debug(
-                `[YT->TIDAL] No restorable TIDAL user available, skipping ${ytOnlyMappings.length} mappings`
+                `[YT->TIDAL] No restorable TIDAL user available, skipping ${ytOnlyMappings.length} mappings`,
             );
             return {
                 processed: ytOnlyMappings.length,
@@ -403,7 +411,7 @@ class TrackReconciliationService {
         ) {
             const batch = ytOnlyMappings.slice(
                 startIndex,
-                startIndex + TIDAL_UPGRADE_MATCH_BATCH_SIZE
+                startIndex + TIDAL_UPGRADE_MATCH_BATCH_SIZE,
             );
             const matchInputs = batch.map((mapping) => {
                 const yt = mapping.trackYtMusic;
@@ -418,7 +426,7 @@ class TrackReconciliationService {
 
             const matches = await tidalStreamingService.findMatchesForAlbum(
                 tidalUserId,
-                matchInputs
+                matchInputs,
             );
 
             for (let index = 0; index < batch.length; index += 1) {
@@ -436,14 +444,16 @@ class TrackReconciliationService {
                 }
 
                 try {
-                    const tidalRow = await trackMappingService.upsertTrackTidal({
-                        tidalId: match.id,
-                        title: match.title,
-                        artist: match.artist,
-                        album: yt.album || "",
-                        duration: match.duration,
-                        isrc: match.isrc,
-                    });
+                    const tidalRow = await trackMappingService.upsertTrackTidal(
+                        {
+                            tidalId: match.id,
+                            title: match.title,
+                            artist: match.artist,
+                            album: yt.album || "",
+                            duration: match.duration,
+                            isrc: match.isrc,
+                        },
+                    );
 
                     const conflicting = await prisma.trackMapping.findFirst({
                         where: {
@@ -466,7 +476,7 @@ class TrackReconciliationService {
                             trackTidalId: tidalRow.id,
                             confidence: Math.max(
                                 mapping.confidence,
-                                TIDAL_UPGRADE_CONFIDENCE
+                                TIDAL_UPGRADE_CONFIDENCE,
                             ),
                         },
                     });
@@ -475,7 +485,7 @@ class TrackReconciliationService {
                 } catch (error) {
                     log.warn(
                         `[YT->TIDAL] Failed to upgrade mapping ${mapping.id}`,
-                        error
+                        error,
                     );
                     skipped += 1;
                 }
@@ -493,7 +503,9 @@ class TrackReconciliationService {
      * Find orphaned provider rows (TrackTidal/TrackYtMusic with no active TrackMapping)
      * and create remote-only mappings for them.
      */
-    async reconcileOrphans(batchSize: number = DEFAULT_BATCH_SIZE): Promise<{ created: number }> {
+    async reconcileOrphans(
+        batchSize: number = DEFAULT_BATCH_SIZE,
+    ): Promise<{ created: number }> {
         const orphanedTidal = await prisma.trackTidal.findMany({
             where: { mappings: { none: { stale: false } } },
             select: { id: true },
@@ -516,7 +528,10 @@ class TrackReconciliationService {
                 });
                 created++;
             } catch (err) {
-                log.warn(`Failed to create mapping for orphaned TrackTidal id=${row.id}`, err);
+                log.warn(
+                    `Failed to create mapping for orphaned TrackTidal id=${row.id}`,
+                    err,
+                );
             }
         }
 
@@ -529,12 +544,17 @@ class TrackReconciliationService {
                 });
                 created++;
             } catch (err) {
-                log.warn(`Failed to create mapping for orphaned TrackYtMusic id=${row.id}`, err);
+                log.warn(
+                    `Failed to create mapping for orphaned TrackYtMusic id=${row.id}`,
+                    err,
+                );
             }
         }
 
         if (created > 0) {
-            log.info(`Orphan reconciliation: created ${created} mappings (${orphanedTidal.length} Tidal, ${orphanedYt.length} YT Music orphans found)`);
+            log.info(
+                `Orphan reconciliation: created ${created} mappings (${orphanedTidal.length} Tidal, ${orphanedYt.length} YT Music orphans found)`,
+            );
         }
 
         return { created };
@@ -544,23 +564,21 @@ class TrackReconciliationService {
      * Extract match metadata from a mapping's linked provider rows.
      * Prefers Tidal (has ISRC) over YT Music.
      */
-    private extractMetadata(
-        mapping: {
-            trackTidal: {
-                title: string;
-                artist: string;
-                album: string;
-                duration: number;
-                isrc: string | null;
-            } | null;
-            trackYtMusic: {
-                title: string;
-                artist: string;
-                album: string;
-                duration: number;
-            } | null;
-        }
-    ): TrackMatchInput | null {
+    private extractMetadata(mapping: {
+        trackTidal: {
+            title: string;
+            artist: string;
+            album: string;
+            duration: number;
+            isrc: string | null;
+        } | null;
+        trackYtMusic: {
+            title: string;
+            artist: string;
+            album: string;
+            duration: number;
+        } | null;
+    }): TrackMatchInput | null {
         if (mapping.trackTidal) {
             return {
                 artist: mapping.trackTidal.artist,

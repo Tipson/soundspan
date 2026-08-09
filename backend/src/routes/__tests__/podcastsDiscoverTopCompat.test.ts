@@ -61,7 +61,7 @@ import router from "../podcasts";
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) throw new Error(`GET route not found: ${path}`);
     return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -126,7 +126,7 @@ describe("podcasts discover/top compatibility", () => {
                     entity: "podcast",
                     limit: 10,
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual([
@@ -216,7 +216,7 @@ describe("podcasts discover/top compatibility", () => {
                 params: expect.objectContaining({
                     limit: 50,
                 }),
-            })
+            }),
         );
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual([]);

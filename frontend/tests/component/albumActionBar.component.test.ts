@@ -89,12 +89,11 @@ const baseProps = {
 };
 
 test("AlbumActionBar renders share button near other album actions", async () => {
-    const { AlbumActionBar } = await import(
-        "../../features/album/components/AlbumActionBar"
-    );
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
 
     const html = renderToStaticMarkup(
-        React.createElement(AlbumActionBar, baseProps)
+        React.createElement(AlbumActionBar, baseProps),
     );
 
     assert.match(html, /title="Share album"/);
@@ -103,9 +102,8 @@ test("AlbumActionBar renders share button near other album actions", async () =>
 });
 
 test("AlbumActionBar still renders share button for non-library albums", async () => {
-    const { AlbumActionBar } = await import(
-        "../../features/album/components/AlbumActionBar"
-    );
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
 
     const html = renderToStaticMarkup(
         React.createElement(AlbumActionBar, {
@@ -115,7 +113,7 @@ test("AlbumActionBar still renders share button for non-library albums", async (
                 owned: false,
             },
             source: "discovery" as const,
-        })
+        }),
     );
 
     assert.match(html, /title="Share album"/);

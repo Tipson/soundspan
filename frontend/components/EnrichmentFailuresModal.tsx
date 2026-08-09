@@ -3,13 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { enrichmentApi } from "@/lib/enrichmentApi";
-import {
-    X,
-    RefreshCw,
-    SkipForward,
-    Trash2,
-    AlertCircle,
-} from "lucide-react";
+import { X, RefreshCw, SkipForward, Trash2, AlertCircle } from "lucide-react";
 
 interface EnrichmentFailuresModalProps {
     isOpen: boolean;
@@ -27,7 +21,7 @@ export function EnrichmentFailuresModal({
         "all" | "artist" | "track" | "audio" | "vibe"
     >("all");
     const [selectedFailures, setSelectedFailures] = useState<Set<string>>(
-        new Set()
+        new Set(),
     );
     const [currentPage, setCurrentPage] = useState(1);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -35,10 +29,7 @@ export function EnrichmentFailuresModal({
     const queryClient = useQueryClient();
 
     // Fetch failures
-    const {
-        data: failures,
-        isLoading,
-    } = useQuery({
+    const { data: failures, isLoading } = useQuery({
         queryKey: ["enrichment-failures", selectedType, currentPage],
         queryFn: async () => {
             const params: Record<string, string | number | boolean> = {
@@ -138,7 +129,7 @@ export function EnrichmentFailuresModal({
             setSelectedFailures(new Set());
         } else {
             setSelectedFailures(
-                new Set(failures?.failures.map((f) => f.id) || [])
+                new Set(failures?.failures.map((f) => f.id) || []),
             );
         }
     };
@@ -182,7 +173,9 @@ export function EnrichmentFailuresModal({
                                 className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg
                                     hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                {clearAllMutation.isPending ? "Clearing..." : "Clear All"}
+                                {clearAllMutation.isPending
+                                    ? "Clearing..."
+                                    : "Clear All"}
                             </button>
                         )}
                         <button
@@ -196,31 +189,33 @@ export function EnrichmentFailuresModal({
 
                 {/* Filter Tabs */}
                 <div className="flex gap-3 px-6 py-4 border-b border-white/10 overflow-x-auto">
-                    {(
-                        [
-                            { key: "all" as const, label: "All", count: counts?.total || 0 },
-                            {
-                                key: "artist" as const,
-                                label: "Artists",
-                                count: counts?.artist || 0,
-                            },
-                            {
-                                key: "track" as const,
-                                label: "Tracks",
-                                count: counts?.track || 0,
-                            },
-                            {
-                                key: "audio" as const,
-                                label: "Audio Analysis",
-                                count: counts?.audio || 0,
-                            },
-                            {
-                                key: "vibe" as const,
-                                label: "Vibe Embeddings",
-                                count: counts?.vibe || 0,
-                            },
-                        ]
-                    ).map((tab) => (
+                    {[
+                        {
+                            key: "all" as const,
+                            label: "All",
+                            count: counts?.total || 0,
+                        },
+                        {
+                            key: "artist" as const,
+                            label: "Artists",
+                            count: counts?.artist || 0,
+                        },
+                        {
+                            key: "track" as const,
+                            label: "Tracks",
+                            count: counts?.track || 0,
+                        },
+                        {
+                            key: "audio" as const,
+                            label: "Audio Analysis",
+                            count: counts?.audio || 0,
+                        },
+                        {
+                            key: "vibe" as const,
+                            label: "Vibe Embeddings",
+                            count: counts?.vibe || 0,
+                        },
+                    ].map((tab) => (
                         <button
                             key={tab.key}
                             onClick={() => {
@@ -312,7 +307,7 @@ export function EnrichmentFailuresModal({
                                     <input
                                         type="checkbox"
                                         checked={selectedFailures.has(
-                                            failure.id
+                                            failure.id,
                                         )}
                                         onChange={() =>
                                             toggleFailureSelection(failure.id)
@@ -342,7 +337,7 @@ export function EnrichmentFailuresModal({
                                             <span>
                                                 Last:{" "}
                                                 {new Date(
-                                                    failure.lastFailedAt
+                                                    failure.lastFailedAt,
                                                 ).toLocaleString()}
                                             </span>
                                             {failure.errorCode && (
@@ -390,7 +385,7 @@ export function EnrichmentFailuresModal({
                         <button
                             onClick={() =>
                                 setCurrentPage((p) =>
-                                    Math.min(totalPages, p + 1)
+                                    Math.min(totalPages, p + 1),
                                 )
                             }
                             disabled={currentPage === totalPages}
@@ -411,10 +406,18 @@ export function EnrichmentFailuresModal({
                             Clear All Failures?
                         </h3>
                         <p className="text-sm text-white/70 mb-4">
-                            This will permanently delete {selectedType === "all" ? "all" : selectedType}{" "}
-                            {selectedType === "all" ? totalFailures : counts?.[selectedType] || 0} failure
-                            {(selectedType === "all" ? totalFailures : counts?.[selectedType] || 0) !== 1 ? "s" : ""}.
-                            This action cannot be undone.
+                            This will permanently delete{" "}
+                            {selectedType === "all" ? "all" : selectedType}{" "}
+                            {selectedType === "all"
+                                ? totalFailures
+                                : counts?.[selectedType] || 0}{" "}
+                            failure
+                            {(selectedType === "all"
+                                ? totalFailures
+                                : counts?.[selectedType] || 0) !== 1
+                                ? "s"
+                                : ""}
+                            . This action cannot be undone.
                         </p>
                         <div className="flex justify-end gap-2">
                             <button
@@ -427,7 +430,9 @@ export function EnrichmentFailuresModal({
                             <button
                                 onClick={() => {
                                     clearAllMutation.mutate(
-                                        selectedType === "all" ? undefined : selectedType
+                                        selectedType === "all"
+                                            ? undefined
+                                            : selectedType,
                                     );
                                     setShowClearConfirm(false);
                                 }}

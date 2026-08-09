@@ -44,7 +44,8 @@ describe("selectMosaicCovers", () => {
         assert.equal(result.length, 4);
         const artists = new Set(
             result.map((r) => {
-                const orig = [c("t1", "cover-1", "artist-a", "album-1"),
+                const orig = [
+                    c("t1", "cover-1", "artist-a", "album-1"),
                     c("t2", "cover-2", "artist-b", "album-2"),
                     c("t3", "cover-3", "artist-c", "album-3"),
                     c("t4", "cover-4", "artist-d", "album-4"),
@@ -89,10 +90,7 @@ describe("selectMosaicCovers", () => {
 
     test("recycleFallback fills remaining slots by cycling", () => {
         const result = selectMosaicCovers(
-            [
-                c("t1", "cover-1", "artist-a"),
-                c("t2", "cover-2", "artist-b"),
-            ],
+            [c("t1", "cover-1", "artist-a"), c("t2", "cover-2", "artist-b")],
             { count: 6, recycleFallback: true },
         );
         assert.equal(result.length, 6);

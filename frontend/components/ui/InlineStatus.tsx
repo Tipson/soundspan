@@ -56,7 +56,7 @@ export function InlineStatus({
                 status === "success" && "text-emerald-400",
                 status === "error" && "text-red-400",
                 status === "loading" && "text-white/60",
-                className
+                className,
             )}
             aria-live="polite"
         >
@@ -64,7 +64,9 @@ export function InlineStatus({
                 <>
                     {status === "success" && <Check className="w-4 h-4" />}
                     {status === "error" && <X className="w-4 h-4" />}
-                    {status === "loading" && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {status === "loading" && (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    )}
                 </>
             )}
             {message && <span>{message}</span>}
@@ -129,7 +131,8 @@ export function ConnectionTestButton({
     className,
     disabled,
 }: ConnectionTestButtonProps) {
-    const { status, setSuccess, setError, setLoading, props } = useInlineStatus();
+    const { status, setSuccess, setError, setLoading, props } =
+        useInlineStatus();
 
     const handleTest = async () => {
         setLoading("Testing...");
@@ -156,7 +159,7 @@ export function ConnectionTestButton({
                     "px-3 py-1.5 text-sm rounded-md transition-colors",
                     "bg-white/10 hover:bg-white/15 text-white/70 hover:text-white",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
-                    className
+                    className,
                 )}
             >
                 {status === "loading" ? "Testing..." : label}
@@ -185,7 +188,8 @@ export function SaveButton({
     className,
     disabled,
 }: SaveButtonProps) {
-    const { status, setSuccess, setError, setLoading, props } = useInlineStatus();
+    const { status, setSuccess, setError, setLoading, props } =
+        useInlineStatus();
 
     const handleSave = async () => {
         setLoading();
@@ -206,7 +210,7 @@ export function SaveButton({
                     "px-4 py-2 rounded-lg font-medium transition-colors",
                     "bg-amber-500 hover:bg-amber-400 text-black",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
-                    className
+                    className,
                 )}
             >
                 {status === "loading" ? "Saving..." : label}

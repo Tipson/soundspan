@@ -41,15 +41,12 @@ import {
 } from "../../services/youtubeDownload";
 
 const mockGetVideoInfo = youtubeDownloadService.getVideoInfo as jest.Mock;
-const mockGetPlaylistInfo =
-    youtubeDownloadService.getPlaylistInfo as jest.Mock;
+const mockGetPlaylistInfo = youtubeDownloadService.getPlaylistInfo as jest.Mock;
 const mockStartDownload = youtubeDownloadService.startDownload as jest.Mock;
 const mockGetDownloadJobStatus =
     youtubeDownloadService.getDownloadJobStatus as jest.Mock;
-const mockListDownloads =
-    youtubeDownloadService.listDownloads as jest.Mock;
-const mockCancelDownload =
-    youtubeDownloadService.cancelDownload as jest.Mock;
+const mockListDownloads = youtubeDownloadService.listDownloads as jest.Mock;
+const mockCancelDownload = youtubeDownloadService.cancelDownload as jest.Mock;
 const mockWatchJob = watchYouTubeDownloadJobUntilTerminal as jest.Mock;
 
 /** Flush fire-and-forget promise chains started by the handlers. */
@@ -92,7 +89,7 @@ function createFakeBullJob() {
 function findRouteLayer(path: string, method: "get" | "post" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);
@@ -102,7 +99,7 @@ function findRouteLayer(path: string, method: "get" | "post" | "delete") {
 
 function getRouteMiddlewares(path: string, method: "get" | "post" | "delete") {
     return findRouteLayer(path, method).route.stack.map(
-        (entry: any) => entry.handle
+        (entry: any) => entry.handle,
     );
 }
 
@@ -158,7 +155,7 @@ describe("youtube routes runtime", () => {
 
         it("returns 400 when the sidecar rejects the url", async () => {
             mockGetVideoInfo.mockRejectedValue(
-                sidecarError(400, "Could not extract video ID")
+                sidecarError(400, "Could not extract video ID"),
             );
             const req = { query: { url: "https://example.com/nope" } } as any;
             const res = createRes();
@@ -245,8 +242,18 @@ describe("youtube routes runtime", () => {
                 truncated: false,
                 count: 2,
                 entries: [
-                    { videoId: "aaaaaaaaaaa", title: "One", uploader: "DJ", duration: 100 },
-                    { videoId: "bbbbbbbbbbb", title: "Two", uploader: "DJ", duration: 200 },
+                    {
+                        videoId: "aaaaaaaaaaa",
+                        title: "One",
+                        uploader: "DJ",
+                        duration: 100,
+                    },
+                    {
+                        videoId: "bbbbbbbbbbb",
+                        title: "Two",
+                        uploader: "DJ",
+                        duration: 200,
+                    },
                 ],
             });
             const req = {
@@ -259,7 +266,7 @@ describe("youtube routes runtime", () => {
             await playlistInfoHandler(req, res);
 
             expect(mockGetPlaylistInfo).toHaveBeenCalledWith(
-                "https://www.youtube.com/playlist?list=PL-abc123"
+                "https://www.youtube.com/playlist?list=PL-abc123",
             );
             expect(res.statusCode).toBe(200);
             expect(res.body).toMatchObject({
@@ -273,8 +280,8 @@ describe("youtube routes runtime", () => {
             mockGetPlaylistInfo.mockRejectedValue(
                 sidecarError(
                     422,
-                    "This is an auto-generated YouTube mix/radio, which can't be downloaded as a set."
-                )
+                    "This is an auto-generated YouTube mix/radio, which can't be downloaded as a set.",
+                ),
             );
             const req = {
                 query: {
@@ -315,7 +322,11 @@ describe("youtube routes runtime", () => {
             });
             mockWatchJob.mockReturnValue(new Promise(() => undefined));
             const req = {
-                body: { videoId: "dQw4w9WgXcQ", format: "mp3", quality: "HIGH" },
+                body: {
+                    videoId: "dQw4w9WgXcQ",
+                    format: "mp3",
+                    quality: "HIGH",
+                },
                 user: { id: "user-1" },
             } as any;
             const res = createRes();
@@ -328,7 +339,7 @@ describe("youtube routes runtime", () => {
                 "mp3",
                 "HIGH",
                 undefined,
-                undefined
+                undefined,
             );
             expect(res.statusCode).toBe(202);
             expect(res.body).toMatchObject({ jobId: "job-accept" });
@@ -336,7 +347,7 @@ describe("youtube routes runtime", () => {
             // still running so nothing is enqueued yet.
             expect(mockWatchJob).toHaveBeenCalledWith(
                 "job-accept",
-                expect.any(Function)
+                expect.any(Function),
             );
             expect(scanQueue.add).not.toHaveBeenCalled();
         });
@@ -364,7 +375,7 @@ describe("youtube routes runtime", () => {
                     userId: "user-1",
                     source: "youtube-download",
                 },
-                COALESCED_SCAN_JOB_OPTIONS
+                COALESCED_SCAN_JOB_OPTIONS,
             );
 
             // A later completed status poll must not enqueue a second scan.
@@ -377,8 +388,11 @@ describe("youtube routes runtime", () => {
             });
             const pollRes = createRes();
             await statusHandler(
-                { params: { jobId: "job-watched" }, user: { id: "user-1" } } as any,
-                pollRes
+                {
+                    params: { jobId: "job-watched" },
+                    user: { id: "user-1" },
+                } as any,
+                pollRes,
             );
             expect(pollRes.statusCode).toBe(200);
             expect(scanQueue.add).toHaveBeenCalledTimes(1);
@@ -409,7 +423,7 @@ describe("youtube routes runtime", () => {
                     userId: "user-1",
                     source: "youtube-download",
                 },
-                COALESCED_SCAN_JOB_OPTIONS
+                COALESCED_SCAN_JOB_OPTIONS,
             );
             expect(mockWatchJob).not.toHaveBeenCalled();
         });
@@ -462,7 +476,7 @@ describe("youtube routes runtime", () => {
 
                 expect(res.statusCode).toBe(400);
                 expect(mockStartDownload).not.toHaveBeenCalled();
-            }
+            },
         );
 
         it("returns 502 when the sidecar is unreachable", async () => {
@@ -497,7 +511,7 @@ describe("youtube routes runtime", () => {
             await statusHandler(req, res);
 
             expect(mockGetDownloadJobStatus).toHaveBeenCalledWith(
-                "job-progress"
+                "job-progress",
             );
             expect(res.statusCode).toBe(200);
             expect(res.body).toMatchObject({
@@ -552,7 +566,7 @@ describe("youtube routes runtime", () => {
                     userId: "user-1",
                     source: "youtube-download",
                 },
-                COALESCED_SCAN_JOB_OPTIONS
+                COALESCED_SCAN_JOB_OPTIONS,
             );
         });
 
@@ -606,7 +620,7 @@ describe("youtube routes runtime", () => {
                 "opus",
                 "HIGH",
                 "Book Club Radio",
-                "channel"
+                "channel",
             );
         });
     });
@@ -683,14 +697,9 @@ describe("youtube routes runtime", () => {
             ["GET /download/:jobId", "/download/:jobId", "get"],
             ["GET /downloads", "/downloads", "get"],
             ["DELETE /downloads/:jobId", "/downloads/:jobId", "delete"],
-        ] as const)(
-            "requires admin for %s",
-            (_label, path, method) => {
-                expect(getRouteMiddlewares(path, method)).toContain(
-                    requireAdmin
-                );
-            }
-        );
+        ] as const)("requires admin for %s", (_label, path, method) => {
+            expect(getRouteMiddlewares(path, method)).toContain(requireAdmin);
+        });
 
         it.each([
             ["GET /info", "/info", "get"],
@@ -700,9 +709,9 @@ describe("youtube routes runtime", () => {
             "keeps %s available to all authenticated users",
             (_label, path, method) => {
                 expect(getRouteMiddlewares(path, method)).not.toContain(
-                    requireAdmin
+                    requireAdmin,
                 );
-            }
+            },
         );
     });
 
@@ -722,7 +731,7 @@ describe("youtube routes runtime", () => {
                 const res = createRes();
                 await statusHandler(
                     { params: { jobId }, user: { id: "user-1" } } as any,
-                    res
+                    res,
                 );
                 expect(res.statusCode).toBe(200);
             }
@@ -733,7 +742,7 @@ describe("youtube routes runtime", () => {
             expect(scanQueue.add).toHaveBeenCalledWith(
                 "scan",
                 { userId: "user-1", source: "youtube-download" },
-                COALESCED_SCAN_JOB_OPTIONS
+                COALESCED_SCAN_JOB_OPTIONS,
             );
 
             // Scan finishes with no completions observed while it ran — no
@@ -758,8 +767,11 @@ describe("youtube routes runtime", () => {
             }));
 
             await statusHandler(
-                { params: { jobId: "job-co-r1" }, user: { id: "user-1" } } as any,
-                createRes()
+                {
+                    params: { jobId: "job-co-r1" },
+                    user: { id: "user-1" },
+                } as any,
+                createRes(),
             );
             expect(scanQueue.add).toHaveBeenCalledTimes(1);
 
@@ -767,12 +779,18 @@ describe("youtube routes runtime", () => {
             // happened, so later completions need a follow-up scan.
             firstScan.setActive();
             await statusHandler(
-                { params: { jobId: "job-co-r2" }, user: { id: "user-1" } } as any,
-                createRes()
+                {
+                    params: { jobId: "job-co-r2" },
+                    user: { id: "user-1" },
+                } as any,
+                createRes(),
             );
             await statusHandler(
-                { params: { jobId: "job-co-r3" }, user: { id: "user-1" } } as any,
-                createRes()
+                {
+                    params: { jobId: "job-co-r3" },
+                    user: { id: "user-1" },
+                } as any,
+                createRes(),
             );
             // Still only the running scan — the follow-up is deferred until
             // it finishes, and the two completions collapse into one.

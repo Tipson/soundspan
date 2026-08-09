@@ -17,6 +17,14 @@ async function batchProcess<T>(
     }
 }
 
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+    let resolve!: () => void;
+    const promise = new Promise<void>((resolvePromise) => {
+        resolve = resolvePromise;
+    });
+    return { promise, resolve };
+}
+
 test("batchProcess processes all items", async () => {
     const processed: number[] = [];
     const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -25,23 +33,33 @@ test("batchProcess processes all items", async () => {
         processed.push(item);
     });
 
-    assert.deepStrictEqual(processed.sort((a, b) => a - b), items);
+    assert.deepStrictEqual(
+        processed.sort((a, b) => a - b),
+        items,
+    );
 });
 
 test("batchProcess respects batch size concurrency", async () => {
     let concurrent = 0;
     let maxConcurrent = 0;
     const items = Array.from({ length: 20 }, (_, i) => i);
+    const releaseWorkers = createDeferred();
+    const firstBatchStarted = createDeferred();
 
-    await batchProcess(items, 5, async () => {
+    const processing = batchProcess(items, 5, async () => {
         concurrent++;
         maxConcurrent = Math.max(maxConcurrent, concurrent);
-        // Simulate async work
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        if (concurrent === 5) {
+            firstBatchStarted.resolve();
+        }
+        await releaseWorkers.promise;
         concurrent--;
     });
 
+    await firstBatchStarted.promise;
     assert.equal(maxConcurrent, 5, "max concurrency should equal batch size");
+    releaseWorkers.resolve();
+    await processing;
 });
 
 test("batchProcess handles empty array", async () => {
@@ -57,19 +75,37 @@ test("batchProcess handles items fewer than batch size", async () => {
     await batchProcess([1, 2, 3], 10, async (item) => {
         processed.push(item);
     });
-    assert.deepStrictEqual(processed.sort((a, b) => a - b), [1, 2, 3]);
+    assert.deepStrictEqual(
+        processed.sort((a, b) => a - b),
+        [1, 2, 3],
+    );
 });
 
 test("batchProcess waits for each batch to complete before starting next", async () => {
     const startOrder: number[] = [];
     const endOrder: number[] = [];
     const items = Array.from({ length: 6 }, (_, i) => i);
+    const batchGates = [createDeferred(), createDeferred(), createDeferred()];
+    const batchStarts = [createDeferred(), createDeferred(), createDeferred()];
 
-    await batchProcess(items, 2, async (item) => {
+    const processing = batchProcess(items, 2, async (item) => {
+        const batchIndex = Math.floor(item / 2);
         startOrder.push(item);
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        batchStarts[batchIndex].resolve();
+        await batchGates[batchIndex].promise;
         endOrder.push(item);
     });
+
+    await batchStarts[0].promise;
+    assert.deepStrictEqual(startOrder, [0, 1]);
+    batchGates[0].resolve();
+    await batchStarts[1].promise;
+    assert.deepStrictEqual(startOrder, [0, 1, 2, 3]);
+    batchGates[1].resolve();
+    await batchStarts[2].promise;
+    assert.deepStrictEqual(startOrder, [0, 1, 2, 3, 4, 5]);
+    batchGates[2].resolve();
+    await processing;
 
     // Items 0,1 should both start before either of items 2,3 start
     // (since batch size is 2, items 0+1 run concurrently, then 2+3, then 4+5)
@@ -78,9 +114,18 @@ test("batchProcess waits for each batch to complete before starting next", async
     const indexOf1End = endOrder.indexOf(1);
 
     // Items 2 must not start before items 0 AND 1 finish
-    assert.ok(indexOf2Start >= 2, "item 2 should start after batch 1 completes");
-    assert.ok(indexOf0End < endOrder.indexOf(2), "item 0 should finish before item 2");
-    assert.ok(indexOf1End < endOrder.indexOf(2), "item 1 should finish before item 2");
+    assert.ok(
+        indexOf2Start >= 2,
+        "item 2 should start after batch 1 completes",
+    );
+    assert.ok(
+        indexOf0End < endOrder.indexOf(2),
+        "item 0 should finish before item 2",
+    );
+    assert.ok(
+        indexOf1End < endOrder.indexOf(2),
+        "item 1 should finish before item 2",
+    );
 });
 
 test("batchProcess propagates errors from batch items", async () => {
@@ -91,7 +136,7 @@ test("batchProcess propagates errors from batch items", async () => {
             batchProcess(items, 3, async (item) => {
                 if (item === 2) throw new Error("item 2 failed");
             }),
-        { message: "item 2 failed" }
+        { message: "item 2 failed" },
     );
 });
 
@@ -101,7 +146,6 @@ test("batchProcess with batch size of 1 processes sequentially", async () => {
 
     await batchProcess(items, 1, async (item) => {
         order.push(item);
-        await new Promise((resolve) => setTimeout(resolve, 5));
     });
 
     // Should be strictly sequential
@@ -109,7 +153,8 @@ test("batchProcess with batch size of 1 processes sequentially", async () => {
 });
 
 test("collectLikeableTrackIds deduplicates and trims IDs while preserving order", async () => {
-    const { collectLikeableTrackIds } = await import("../../hooks/useCollectionLikeAll");
+    const { collectLikeableTrackIds } =
+        await import("../../hooks/useCollectionLikeAll");
 
     const ids = collectLikeableTrackIds([
         { id: " track-1 " },

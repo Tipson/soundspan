@@ -25,8 +25,8 @@ export function asyncHandler<
     fn: (
         req: Request<P, ResBody, ReqBody, ReqQuery, Locals>,
         res: Response<ResBody, Locals>,
-        next: NextFunction
-    ) => Promise<unknown>
+        next: NextFunction,
+    ) => Promise<unknown>,
 ): RequestHandler<P, ResBody, ReqBody, ReqQuery, Locals> {
     return (req, res, next) => {
         // The chain is returned (Express 4 ignores handler return values) so

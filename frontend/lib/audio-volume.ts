@@ -13,7 +13,7 @@ export function clampAudioVolume(value: number): number {
  * to a stable and valid value.
  */
 export function resolveInitialAudioVolume(
-    raw: string | null | undefined
+    raw: string | null | undefined,
 ): number {
     if (!raw) return DEFAULT_AUDIO_VOLUME;
     return clampAudioVolume(Number.parseFloat(raw));

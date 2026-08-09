@@ -60,7 +60,7 @@ type MockTrack = {
 function makeTracks(
     count: number,
     prefix: string,
-    options: { artistGroups?: number } = {}
+    options: { artistGroups?: number } = {},
 ): MockTrack[] {
     const artistGroups = Math.max(1, options.artistGroups ?? count);
     return Array.from({ length: count }, (_, index) => ({
@@ -77,7 +77,10 @@ function makeTracks(
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockLastFmService = lastFmService as jest.Mocked<typeof lastFmService>;
 
-function countMaxPerArtist(trackIds: string[], tracksById: Map<string, MockTrack>): number {
+function countMaxPerArtist(
+    trackIds: string[],
+    tracksById: Map<string, MockTrack>,
+): number {
     const counts = new Map<string, number>();
     for (const trackId of trackIds) {
         const track = tracksById.get(trackId);
@@ -88,7 +91,10 @@ function countMaxPerArtist(trackIds: string[], tracksById: Map<string, MockTrack
     return Math.max(...Array.from(counts.values()));
 }
 
-function countUniqueArtists(trackIds: string[], tracksById: Map<string, MockTrack>): number {
+function countUniqueArtists(
+    trackIds: string[],
+    tracksById: Map<string, MockTrack>,
+): number {
     const unique = new Set<string>();
     for (const trackId of trackIds) {
         const track = tracksById.get(trackId);
@@ -130,7 +136,9 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         expect(mix!.trackIds).toHaveLength(20);
 
         const tracksById = new Map(tracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
     });
 
     it("generateTopTracksMix preserves ranked order for surviving strict-cap selections", async () => {
@@ -180,15 +188,18 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             },
         }));
 
-        const fallbackLibraryTracks: MockTrack[] = Array.from({ length: 80 }, (_, i) => ({
-            id: `fallback-track-${i + 1}`,
-            album: {
-                coverUrl: `fallback-cover-${i + 1}.jpg`,
-                artist: {
-                    id: `fallback-artist-${Math.floor(i / 2)}`,
+        const fallbackLibraryTracks: MockTrack[] = Array.from(
+            { length: 80 },
+            (_, i) => ({
+                id: `fallback-track-${i + 1}`,
+                album: {
+                    coverUrl: `fallback-cover-${i + 1}.jpg`,
+                    artist: {
+                        id: `fallback-artist-${Math.floor(i / 2)}`,
+                    },
                 },
-            },
-        }));
+            }),
+        );
 
         (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue(playStats);
         (mockPrisma.track.findMany as jest.Mock)
@@ -200,12 +211,19 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         expect(mix!.trackIds).toHaveLength(20);
 
         const tracksById = new Map(
-            [...rankedTracks, ...fallbackLibraryTracks].map((track) => [track.id, track])
+            [...rankedTracks, ...fallbackLibraryTracks].map((track) => [
+                track.id,
+                track,
+            ]),
         );
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
-        expect(mix!.trackIds.some((trackId) => trackId.startsWith("fallback-track-"))).toBe(
-            true
-        );
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
+        expect(
+            mix!.trackIds.some((trackId) =>
+                trackId.startsWith("fallback-track-"),
+            ),
+        ).toBe(true);
     });
 
     it("generateGenreMix expands candidate pool and preserves strict diversity", async () => {
@@ -217,42 +235,59 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             },
         ]);
 
-        const baseGenreTracks: MockTrack[] = Array.from({ length: 8 }, (_, i) => ({
-            id: `genre-base-${i + 1}`,
-            album: {
-                coverUrl: `genre-base-cover-${i + 1}.jpg`,
-                artist: {
-                    id: i < 6 ? "genre-dominant" : `genre-base-artist-${i}`,
+        const baseGenreTracks: MockTrack[] = Array.from(
+            { length: 8 },
+            (_, i) => ({
+                id: `genre-base-${i + 1}`,
+                album: {
+                    coverUrl: `genre-base-cover-${i + 1}.jpg`,
+                    artist: {
+                        id: i < 6 ? "genre-dominant" : `genre-base-artist-${i}`,
+                    },
                 },
-            },
-        }));
+            }),
+        );
         (mockPrisma.trackGenre.findMany as jest.Mock).mockResolvedValue(
-            baseGenreTracks.map((track) => ({ track }))
+            baseGenreTracks.map((track) => ({ track })),
         );
 
-        const fallbackGenreTracks: MockTrack[] = Array.from({ length: 24 }, (_, i) => ({
-            id: `genre-fallback-${i + 1}`,
-            album: {
-                coverUrl: `genre-fallback-cover-${i + 1}.jpg`,
-                artist: {
-                    id: `genre-fallback-artist-${i + 1}`,
+        const fallbackGenreTracks: MockTrack[] = Array.from(
+            { length: 24 },
+            (_, i) => ({
+                id: `genre-fallback-${i + 1}`,
+                album: {
+                    coverUrl: `genre-fallback-cover-${i + 1}.jpg`,
+                    artist: {
+                        id: `genre-fallback-artist-${i + 1}`,
+                    },
                 },
-            },
-        }));
-        (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(fallbackGenreTracks);
+            }),
+        );
+        (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
+            fallbackGenreTracks,
+        );
 
         const mix = await service.generateGenreMix("user-1", "2026-02-13");
         expect(mix).not.toBeNull();
         expect(mix!.trackIds).toHaveLength(20);
-        expect(mix!.trackIds.some((trackId) => trackId.startsWith("genre-fallback-"))).toBe(
-            true
-        );
+        expect(
+            mix!.trackIds.some((trackId) =>
+                trackId.startsWith("genre-fallback-"),
+            ),
+        ).toBe(true);
 
         const tracksById = new Map(
-            [...baseGenreTracks, ...fallbackGenreTracks].map((track) => [track.id, track])
+            [...baseGenreTracks, ...fallbackGenreTracks].map((track) => [
+                track.id,
+                track,
+            ]),
         );
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
-        expect(countUniqueArtists(mix!.trackIds, tracksById)).toBeGreaterThanOrEqual(11);
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
+        expect(
+            countUniqueArtists(mix!.trackIds, tracksById),
+        ).toBeGreaterThanOrEqual(11);
     });
 
     it("generateEraMix rotates by decade and enforces diversity", async () => {
@@ -267,7 +302,10 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             album: {
                 coverUrl: `era-cover-${i + 1}.jpg`,
                 artist: {
-                    id: i < 8 ? "era-dominant" : `era-artist-${Math.floor(i / 2)}`,
+                    id:
+                        i < 8
+                            ? "era-dominant"
+                            : `era-artist-${Math.floor(i / 2)}`,
                 },
             },
         }));
@@ -279,7 +317,9 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         expect(mix!.name).toMatch(/Your \d{4}s Mix/);
 
         const tracksById = new Map(eraTracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
     });
 
     it("generateRediscoverMix keeps target size with capped artist concentration", async () => {
@@ -289,21 +329,31 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             album: {
                 coverUrl: `rediscover-cover-${i + 1}.jpg`,
                 artist: {
-                    id: i < 12 ? "rediscover-dominant" : `rediscover-artist-${Math.floor(i / 2)}`,
+                    id:
+                        i < 12
+                            ? "rediscover-dominant"
+                            : `rediscover-artist-${Math.floor(i / 2)}`,
                 },
             },
         }));
 
-        (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(rediscoverTracks);
+        (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
+            rediscoverTracks,
+        );
 
         const mix = await service.generateRediscoverMix("user-1", "2026-02-13");
         expect(mix).not.toBeNull();
         expect(mix!.trackIds).toHaveLength(20);
 
         const tracksById = new Map(
-            rediscoverTracks.map((track) => [track.id, track as unknown as MockTrack])
+            rediscoverTracks.map((track) => [
+                track.id,
+                track as unknown as MockTrack,
+            ]),
         );
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
     });
 
     it("generatePartyMix applies artist diversity and returns target size", async () => {
@@ -312,7 +362,10 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             album: {
                 coverUrl: `party-cover-${i + 1}.jpg`,
                 artist: {
-                    id: i < 8 ? "party-dominant" : `party-artist-${Math.floor(i / 2)}`,
+                    id:
+                        i < 8
+                            ? "party-dominant"
+                            : `party-artist-${Math.floor(i / 2)}`,
                 },
             },
         }));
@@ -329,8 +382,12 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         expect(mix).not.toBeNull();
         expect(mix!.trackIds).toHaveLength(20);
 
-        const tracksById = new Map(partyTracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
+        const tracksById = new Map(
+            partyTracks.map((track) => [track.id, track]),
+        );
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
     });
 
     it("generatePartyMix fallback preserves canonical and user-genre matching in paged scan", async () => {
@@ -403,7 +460,7 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
                 "match-canonical-1",
                 "match-album-user-1",
                 "match-artist-user-1",
-            ])
+            ]),
         );
     });
 
@@ -424,30 +481,48 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         expect(mix).not.toBeNull();
         expect(mix!.trackIds).toHaveLength(10);
 
-        const tracksById = new Map(chillTracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
-        expect(countUniqueArtists(mix!.trackIds, tracksById)).toBeGreaterThanOrEqual(6);
+        const tracksById = new Map(
+            chillTracks.map((track) => [track.id, track]),
+        );
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
+        expect(
+            countUniqueArtists(mix!.trackIds, tracksById),
+        ).toBeGreaterThanOrEqual(6);
     });
 
     it("generateWorkoutMix uses enhanced pool and keeps artist cap", async () => {
-        const workoutTracks: MockTrack[] = Array.from({ length: 34 }, (_, i) => ({
-            id: `workout-track-${i + 1}`,
-            album: {
-                coverUrl: `workout-cover-${i + 1}.jpg`,
-                artist: {
-                    id: i < 10 ? "workout-dominant" : `workout-artist-${Math.floor(i / 2)}`,
+        const workoutTracks: MockTrack[] = Array.from(
+            { length: 34 },
+            (_, i) => ({
+                id: `workout-track-${i + 1}`,
+                album: {
+                    coverUrl: `workout-cover-${i + 1}.jpg`,
+                    artist: {
+                        id:
+                            i < 10
+                                ? "workout-dominant"
+                                : `workout-artist-${Math.floor(i / 2)}`,
+                    },
                 },
-            },
-        }));
+            }),
+        );
 
-        (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(workoutTracks);
+        (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(
+            workoutTracks,
+        );
 
         const mix = await service.generateWorkoutMix("user-1", "2026-02-13");
         expect(mix).not.toBeNull();
         expect(mix!.trackIds).toHaveLength(20);
 
-        const tracksById = new Map(workoutTracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
+        const tracksById = new Map(
+            workoutTracks.map((track) => [track.id, track]),
+        );
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
     });
 
     it("generateFocusMix applies unique-first diversity path", async () => {
@@ -471,9 +546,15 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         expect(mix).not.toBeNull();
         expect(mix!.trackIds).toHaveLength(20);
 
-        const tracksById = new Map(focusTracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(2);
-        expect(countUniqueArtists(mix!.trackIds, tracksById)).toBeGreaterThanOrEqual(11);
+        const tracksById = new Map(
+            focusTracks.map((track) => [track.id, track]),
+        );
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(2);
+        expect(
+            countUniqueArtists(mix!.trackIds, tracksById),
+        ).toBeGreaterThanOrEqual(11);
     });
 
     it("generateArtistSimilarMix handles dominant-artist pools with controlled fallback", async () => {
@@ -493,20 +574,26 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             { name: "Similar 3" },
         ]);
 
-        const dominantTracks: MockTrack[] = Array.from({ length: 8 }, (_, i) => ({
-            id: `sim-dominant-${i + 1}`,
-            album: {
-                coverUrl: `sim-dominant-cover-${i + 1}.jpg`,
-                artist: { id: "similar-dominant-artist" },
-            },
-        }));
-        const uniqueTracks: MockTrack[] = Array.from({ length: 17 }, (_, i) => ({
-            id: `sim-unique-${i + 1}`,
-            album: {
-                coverUrl: `sim-unique-cover-${i + 1}.jpg`,
-                artist: { id: `similar-artist-${i + 1}` },
-            },
-        }));
+        const dominantTracks: MockTrack[] = Array.from(
+            { length: 8 },
+            (_, i) => ({
+                id: `sim-dominant-${i + 1}`,
+                album: {
+                    coverUrl: `sim-dominant-cover-${i + 1}.jpg`,
+                    artist: { id: "similar-dominant-artist" },
+                },
+            }),
+        );
+        const uniqueTracks: MockTrack[] = Array.from(
+            { length: 17 },
+            (_, i) => ({
+                id: `sim-unique-${i + 1}`,
+                album: {
+                    coverUrl: `sim-unique-cover-${i + 1}.jpg`,
+                    artist: { id: `similar-artist-${i + 1}` },
+                },
+            }),
+        );
 
         const libraryArtists = [
             {
@@ -516,7 +603,9 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
                 albums: [{ tracks: [track] }],
             })),
         ];
-        (mockPrisma.artist.findMany as jest.Mock).mockResolvedValue(libraryArtists);
+        (mockPrisma.artist.findMany as jest.Mock).mockResolvedValue(
+            libraryArtists,
+        );
 
         const mix = await service.generateArtistSimilarMix("user-1");
         expect(mix).not.toBeNull();
@@ -524,31 +613,39 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         expect(mockLastFmService.getSimilarArtists).toHaveBeenCalledWith(
             "top-mbid",
             "Top Artist",
-            20
+            20,
         );
 
         const allTracks = [...dominantTracks, ...uniqueTracks];
         const tracksById = new Map(allTracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(4);
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(4);
     });
 
     it("generateRandomDiscoveryMix applies diversity in dominant discovery pools", async () => {
         (mockPrisma.album.count as jest.Mock).mockResolvedValue(100);
 
-        const dominantTracks: MockTrack[] = Array.from({ length: 10 }, (_, i) => ({
-            id: `disc-dominant-${i + 1}`,
-            album: {
-                coverUrl: `disc-dominant-cover-${i + 1}.jpg`,
-                artist: { id: "discovery-dominant-artist" },
-            },
-        }));
-        const uniqueTracks: MockTrack[] = Array.from({ length: 16 }, (_, i) => ({
-            id: `disc-unique-${i + 1}`,
-            album: {
-                coverUrl: `disc-unique-cover-${i + 1}.jpg`,
-                artist: { id: `discovery-artist-${i + 1}` },
-            },
-        }));
+        const dominantTracks: MockTrack[] = Array.from(
+            { length: 10 },
+            (_, i) => ({
+                id: `disc-dominant-${i + 1}`,
+                album: {
+                    coverUrl: `disc-dominant-cover-${i + 1}.jpg`,
+                    artist: { id: "discovery-dominant-artist" },
+                },
+            }),
+        );
+        const uniqueTracks: MockTrack[] = Array.from(
+            { length: 16 },
+            (_, i) => ({
+                id: `disc-unique-${i + 1}`,
+                album: {
+                    coverUrl: `disc-unique-cover-${i + 1}.jpg`,
+                    artist: { id: `discovery-artist-${i + 1}` },
+                },
+            }),
+        );
         const allTracks = [...dominantTracks, ...uniqueTracks];
 
         (mockPrisma.album.findMany as jest.Mock).mockResolvedValue([
@@ -574,18 +671,26 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             },
         ]);
 
-        const mix = await service.generateRandomDiscoveryMix("user-1", "2026-02-13");
+        const mix = await service.generateRandomDiscoveryMix(
+            "user-1",
+            "2026-02-13",
+        );
         expect(mix).not.toBeNull();
         expect(mix!.trackIds).toHaveLength(20);
 
         const tracksById = new Map(allTracks.map((track) => [track.id, track]));
-        expect(countMaxPerArtist(mix!.trackIds, tracksById)).toBeLessThanOrEqual(4);
+        expect(
+            countMaxPerArtist(mix!.trackIds, tracksById),
+        ).toBeLessThanOrEqual(4);
     });
 
     it("generateRandomDiscoveryMix returns null when total album count is below minimum", async () => {
         (mockPrisma.album.count as jest.Mock).mockResolvedValue(9);
 
-        const mix = await service.generateRandomDiscoveryMix("user-1", "2026-02-17");
+        const mix = await service.generateRandomDiscoveryMix(
+            "user-1",
+            "2026-02-17",
+        );
 
         expect(mix).toBeNull();
         expect(mockPrisma.album.findMany).not.toHaveBeenCalled();
@@ -603,7 +708,10 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             },
         ]);
 
-        const mix = await service.generateRandomDiscoveryMix("user-1", "2026-02-17");
+        const mix = await service.generateRandomDiscoveryMix(
+            "user-1",
+            "2026-02-17",
+        );
 
         expect(mix).toBeNull();
     });
@@ -612,10 +720,12 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         (mockPrisma.genre.findMany as jest.Mock).mockResolvedValue([]);
         (mockPrisma.track.findMany as jest.Mock)
             .mockResolvedValueOnce(
-                makeTracks(4, "party-album-fallback", { artistGroups: 4 })
+                makeTracks(4, "party-album-fallback", { artistGroups: 4 }),
             )
             .mockResolvedValueOnce([])
-            .mockResolvedValueOnce(makeTracks(3, "party-audio-fallback", { artistGroups: 3 }));
+            .mockResolvedValueOnce(
+                makeTracks(3, "party-audio-fallback", { artistGroups: 3 }),
+            );
 
         const mix = await service.generatePartyMix("user-1", "2026-02-17");
 

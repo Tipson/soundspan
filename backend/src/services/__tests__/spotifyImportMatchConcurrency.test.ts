@@ -11,8 +11,8 @@
 // task essentially back-to-back (add() invokes fn() synchronously, so all
 // six matchTrack() calls are in flight before any of their mocked DB reads
 // resolve), so it does NOT collapse the concurrency being tested here: the
-// per-track DB delays below (assigned in REVERSE of input order, via real
-// setTimeout) still produce genuine out-of-order resolution among the six
+// per-track deferred DB reads below are released in reverse input order and
+// produce genuine out-of-order resolution among the six
 // in-flight matchTrack() calls. A naive "collect results as they complete"
 // implementation would scramble the output; a correct
 // Promise.all(tracks.map(...)) implementation is immune to this -- array
@@ -142,7 +142,10 @@ describe("spotify import matchTrack concurrency", () => {
         });
         jest.doMock("../acquisitionService", () => ({
             acquisitionService: {
-                acquireAlbum: jest.fn(async () => ({ success: true, source: "soulseek" })),
+                acquireAlbum: jest.fn(async () => ({
+                    success: true,
+                    source: "soulseek",
+                })),
                 acquireTracks: jest.fn(async () => []),
             },
         }));
@@ -179,8 +182,15 @@ describe("spotify import matchTrack concurrency", () => {
         };
     }
 
-    function delay(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
+    function createDeferred(): {
+        promise: Promise<void>;
+        resolve: () => void;
+    } {
+        let resolve!: () => void;
+        const promise = new Promise<void>((resolvePromise) => {
+            resolve = resolvePromise;
+        });
+        return { promise, resolve };
     }
 
     it("keeps matchedTracks in input order and unmatchedByAlbum grouping order stable when per-track DB reads resolve out of order under concurrency", async () => {
@@ -189,12 +199,42 @@ describe("spotify import matchTrack concurrency", () => {
         // 6 tracks, interleaving matched/unmatched, with two unmatched tracks
         // (T2, T4) sharing an album key to also pin grouping/accumulation order.
         const tracks = [
-            makeTrack({ spotifyId: "sp-1", title: "Song One", artist: "Artist Solo One", album: "Album One" }), // matched
-            makeTrack({ spotifyId: "sp-2", title: "Song Two", artist: "Artist Group", album: "Shared Album" }), // unmatched, key A
-            makeTrack({ spotifyId: "sp-3", title: "Song Three", artist: "Artist Solo Three", album: "Album Three" }), // matched
-            makeTrack({ spotifyId: "sp-4", title: "Song Four", artist: "Artist Group", album: "Shared Album" }), // unmatched, key A (2nd track)
-            makeTrack({ spotifyId: "sp-5", title: "Song Five", artist: "Artist Other", album: "Other Album" }), // unmatched, key B
-            makeTrack({ spotifyId: "sp-6", title: "Song Six", artist: "Artist Solo Six", album: "Album Six" }), // matched
+            makeTrack({
+                spotifyId: "sp-1",
+                title: "Song One",
+                artist: "Artist Solo One",
+                album: "Album One",
+            }), // matched
+            makeTrack({
+                spotifyId: "sp-2",
+                title: "Song Two",
+                artist: "Artist Group",
+                album: "Shared Album",
+            }), // unmatched, key A
+            makeTrack({
+                spotifyId: "sp-3",
+                title: "Song Three",
+                artist: "Artist Solo Three",
+                album: "Album Three",
+            }), // matched
+            makeTrack({
+                spotifyId: "sp-4",
+                title: "Song Four",
+                artist: "Artist Group",
+                album: "Shared Album",
+            }), // unmatched, key A (2nd track)
+            makeTrack({
+                spotifyId: "sp-5",
+                title: "Song Five",
+                artist: "Artist Other",
+                album: "Other Album",
+            }), // unmatched, key B
+            makeTrack({
+                spotifyId: "sp-6",
+                title: "Song Six",
+                artist: "Artist Solo Six",
+                album: "Album Six",
+            }), // matched
         ];
 
         const localTrackByTitle: Record<string, unknown> = {
@@ -202,48 +242,66 @@ describe("spotify import matchTrack concurrency", () => {
                 id: "local-1",
                 title: "Song One",
                 albumId: "album-local-1",
-                album: { title: "Album One", artist: { name: "Artist Solo One" } },
+                album: {
+                    title: "Album One",
+                    artist: { name: "Artist Solo One" },
+                },
             },
             "Song Three": {
                 id: "local-3",
                 title: "Song Three",
                 albumId: "album-local-3",
-                album: { title: "Album Three", artist: { name: "Artist Solo Three" } },
+                album: {
+                    title: "Album Three",
+                    artist: { name: "Artist Solo Three" },
+                },
             },
             "Song Six": {
                 id: "local-6",
                 title: "Song Six",
                 albumId: "album-local-6",
-                album: { title: "Album Six", artist: { name: "Artist Solo Six" } },
+                album: {
+                    title: "Album Six",
+                    artist: { name: "Artist Solo Six" },
+                },
             },
         };
 
-        // Artificial delays assigned in REVERSE of input order: track 1 (first
-        // in input) resolves slowest, track 6 (last in input) resolves
-        // instantly. Under real concurrency this produces genuine out-of-order
-        // completion.
-        const delayMsByTitle: Record<string, number> = {
-            "Song One": 45,
-            "Song Two": 36,
-            "Song Three": 27,
-            "Song Four": 18,
-            "Song Five": 9,
-            "Song Six": 0,
+        const titles = tracks.map((track) => track.title as string);
+        const readGates = Object.fromEntries(
+            titles.map((title) => [title, createDeferred()]),
+        ) as Record<string, ReturnType<typeof createDeferred>>;
+        const readCompletions = Object.fromEntries(
+            titles.map((title) => [title, createDeferred()]),
+        ) as Record<string, ReturnType<typeof createDeferred>>;
+        const allReadsStarted = createDeferred();
+        let startedReadCount = 0;
+
+        const releaseRead = async (title: string): Promise<void> => {
+            readGates[title].resolve();
+            await readCompletions[title].promise;
         };
 
         (prisma.track.findFirst as jest.Mock).mockImplementation(
             async (query: any) => {
                 const title = query?.where?.title?.equals;
-                await delay(delayMsByTitle[title] ?? 0);
+                startedReadCount += 1;
+                if (startedReadCount === tracks.length) {
+                    allReadsStarted.resolve();
+                }
+                await readGates[title].promise;
+                readCompletions[title].resolve();
                 return localTrackByTitle[title] ?? null;
-            }
+            },
         );
         (musicBrainzService.searchArtist as jest.Mock).mockResolvedValue([]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const previewPromise = (
+            spotifyImportService as any
+        ).buildPreviewFromTracklist(
             tracks,
             {
                 id: "playlist-concurrency",
@@ -253,19 +311,23 @@ describe("spotify import matchTrack concurrency", () => {
                 imageUrl: null,
                 trackCount: tracks.length,
             },
-            "Spotify"
+            "Spotify",
         );
+
+        await allReadsStarted.promise;
+        await releaseRead("Song Six");
+        await releaseRead("Song Five");
+        await releaseRead("Song Four");
+        await releaseRead("Song Three");
+        await releaseRead("Song Two");
+        await releaseRead("Song One");
+        const preview = await previewPromise;
 
         // matchedTracks must be in exact input order, regardless of the
         // reversed DB-resolution order above.
-        expect(preview.matchedTracks.map((m: any) => m.spotifyTrack.spotifyId)).toEqual([
-            "sp-1",
-            "sp-2",
-            "sp-3",
-            "sp-4",
-            "sp-5",
-            "sp-6",
-        ]);
+        expect(
+            preview.matchedTracks.map((m: any) => m.spotifyTrack.spotifyId),
+        ).toEqual(["sp-1", "sp-2", "sp-3", "sp-4", "sp-5", "sp-6"]);
         expect(preview.matchedTracks.map((m: any) => m.matchType)).toEqual([
             "exact",
             "none",
@@ -284,14 +346,19 @@ describe("spotify import matchTrack concurrency", () => {
         // tracks stay in [sp-2, sp-4] order even though sp-4 resolved its DB
         // read before sp-2 did.
         expect(
-            preview.albumsToDownload.map((a: any) => `${a.artistName}|||${a.albumName}`)
-        ).toEqual(["Artist Group|||Shared Album", "Artist Other|||Other Album"]);
+            preview.albumsToDownload.map(
+                (a: any) => `${a.artistName}|||${a.albumName}`,
+            ),
+        ).toEqual([
+            "Artist Group|||Shared Album",
+            "Artist Other|||Other Album",
+        ]);
 
         const sharedAlbumGroup = preview.albumsToDownload.find(
-            (a: any) => a.artistName === "Artist Group"
+            (a: any) => a.artistName === "Artist Group",
         );
         expect(
-            sharedAlbumGroup.tracksNeeded.map((t: any) => t.spotifyId)
+            sharedAlbumGroup.tracksNeeded.map((t: any) => t.spotifyId),
         ).toEqual(["sp-2", "sp-4"]);
     });
 });

@@ -24,7 +24,7 @@ interface Track {
 function simulatePlayNextInsert(
     queue: Track[],
     currentIndex: number,
-    newTrack: Track
+    newTrack: Track,
 ): { newQueue: Track[]; insertAt: number } {
     const insertAt = currentIndex + 1;
     const newQueue = [...queue];
@@ -36,7 +36,7 @@ function simulatePlayNextInsert(
 function simulateShuffleIndexUpdate(
     prevIndices: number[],
     insertAt: number,
-    currentIndex: number
+    currentIndex: number,
 ): number[] {
     if (prevIndices.length === 0) return prevIndices;
     // Shift indices >= insertAt up by 1
@@ -52,7 +52,7 @@ function simulateShuffleIndexUpdate(
 /** Simulate upNextInsertRef cursor bump after playNext */
 function simulateUpNextCursorBump(
     currentCursor: number,
-    insertAt: number
+    insertAt: number,
 ): number {
     return Math.max(currentCursor, insertAt) + 1;
 }
@@ -66,7 +66,11 @@ const trackNew: Track = { id: "new", title: "New Track" };
 test("playNext inserts track at currentIndex + 1", () => {
     const queue = [trackA, trackB, trackC];
     const currentIndex = 0;
-    const { newQueue, insertAt } = simulatePlayNextInsert(queue, currentIndex, trackNew);
+    const { newQueue, insertAt } = simulatePlayNextInsert(
+        queue,
+        currentIndex,
+        trackNew,
+    );
 
     assert.equal(insertAt, 1);
     assert.equal(newQueue.length, 4);
@@ -79,7 +83,11 @@ test("playNext inserts track at currentIndex + 1", () => {
 test("playNext inserts after middle track", () => {
     const queue = [trackA, trackB, trackC, trackD];
     const currentIndex = 2; // playing trackC
-    const { newQueue, insertAt } = simulatePlayNextInsert(queue, currentIndex, trackNew);
+    const { newQueue, insertAt } = simulatePlayNextInsert(
+        queue,
+        currentIndex,
+        trackNew,
+    );
 
     assert.equal(insertAt, 3);
     assert.equal(newQueue.length, 5);
@@ -91,7 +99,11 @@ test("playNext inserts after middle track", () => {
 test("playNext inserts at end when playing last track", () => {
     const queue = [trackA, trackB, trackC];
     const currentIndex = 2; // playing last track
-    const { newQueue, insertAt } = simulatePlayNextInsert(queue, currentIndex, trackNew);
+    const { newQueue, insertAt } = simulatePlayNextInsert(
+        queue,
+        currentIndex,
+        trackNew,
+    );
 
     assert.equal(insertAt, 3);
     assert.equal(newQueue.length, 4);
@@ -102,7 +114,11 @@ test("playNext inserts at end when playing last track", () => {
 test("playNext into single-track queue inserts at position 1", () => {
     const queue = [trackA];
     const currentIndex = 0;
-    const { newQueue, insertAt } = simulatePlayNextInsert(queue, currentIndex, trackNew);
+    const { newQueue, insertAt } = simulatePlayNextInsert(
+        queue,
+        currentIndex,
+        trackNew,
+    );
 
     assert.equal(insertAt, 1);
     assert.equal(newQueue.length, 2);
@@ -127,7 +143,11 @@ test("shuffle indices shift correctly after playNext insert", () => {
     const insertAt = 1;
     const currentIndex = 0;
 
-    const newIndices = simulateShuffleIndexUpdate(prevIndices, insertAt, currentIndex);
+    const newIndices = simulateShuffleIndexUpdate(
+        prevIndices,
+        insertAt,
+        currentIndex,
+    );
 
     // After shift: indices >= 1 get +1, so [0, 3, 2]
     // Insert new track (index 1) after current (pos 0 in shuffle)

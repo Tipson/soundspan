@@ -8,7 +8,7 @@ import {
 const candidate = (
     id: string,
     artistKey: string,
-    coverArt: string
+    coverArt: string,
 ): RadioMosaicCandidate => ({
     id,
     artistKey,
@@ -46,7 +46,7 @@ test("reuses artists only after unique artist options are exhausted", () => {
     assert.equal(
         new Set(tiles.map((tile) => tile.coverArt)).size,
         6,
-        "Should still avoid cover-art reuse when unique covers exist"
+        "Should still avoid cover-art reuse when unique covers exist",
     );
 });
 
@@ -60,6 +60,6 @@ test("allows tile reuse only when unique artist and cover options are insufficie
     assert.equal(tiles.length, 6);
     assert.ok(
         new Set(tiles.map((tile) => tile.coverArt)).size < 6,
-        "Expected cover reuse only because unique options are insufficient"
+        "Expected cover reuse only because unique options are insufficient",
     );
 });

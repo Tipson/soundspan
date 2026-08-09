@@ -48,7 +48,7 @@ function isValidQuantileLadder(value: unknown): value is number[] {
         (entry, index) =>
             typeof entry === "number" &&
             Number.isFinite(entry) &&
-            (index === 0 || entry >= value[index - 1])
+            (index === 0 || entry >= value[index - 1]),
     );
 }
 
@@ -58,7 +58,9 @@ function isValidQuantileLadder(value: unknown): value is number[] {
  * timestamp, or a non-finite/non-monotonic quantile ladder returns `null` so
  * the caller recomputes instead of forwarding corrupt data to clients.
  */
-export function parseCachedCalibration(value: string): CalibrationPayload | null {
+export function parseCachedCalibration(
+    value: string,
+): CalibrationPayload | null {
     try {
         const parsed = JSON.parse(value) as Record<string, unknown>;
         if (
@@ -86,10 +88,13 @@ function validateEmbeddings(embeddings: number[][]): void {
         dimensions > 0 &&
         embeddings.every(
             (embedding) =>
-                embedding.length === dimensions && embedding.every(Number.isFinite)
+                embedding.length === dimensions &&
+                embedding.every(Number.isFinite),
         );
     if (!valid) {
-        throw new Error("Calibration sample contains insufficient or invalid embeddings");
+        throw new Error(
+            "Calibration sample contains insufficient or invalid embeddings",
+        );
     }
 }
 
@@ -156,7 +161,7 @@ export async function computeCalibration(): Promise<CalibrationPayload> {
     });
     const sampledIds = pickRandom(
         idRows.map((row) => row.trackId),
-        CALIBRATION_SAMPLE_SIZE
+        CALIBRATION_SAMPLE_SIZE,
     );
 
     const rows = await prisma.$queryRaw<{ embedding: string }[]>`

@@ -21,8 +21,7 @@ test("shouldSkipPlaybackStatePoll enforces cooldown window", () => {
     const nowMs = 1_000_000;
     const insideCooldown =
         nowMs - (PLAYBACK_POLL_AFTER_LOCAL_SAVE_COOLDOWN_MS - 1);
-    const outsideCooldown =
-        nowMs - PLAYBACK_POLL_AFTER_LOCAL_SAVE_COOLDOWN_MS;
+    const outsideCooldown = nowMs - PLAYBACK_POLL_AFTER_LOCAL_SAVE_COOLDOWN_MS;
 
     assert.equal(shouldSkipPlaybackStatePoll(insideCooldown, nowMs), true);
     assert.equal(shouldSkipPlaybackStatePoll(outsideCooldown, nowMs), false);

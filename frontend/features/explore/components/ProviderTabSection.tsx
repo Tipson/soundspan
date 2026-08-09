@@ -18,7 +18,15 @@ import { TidalFeaturedShelvesSection } from "./TidalFeaturedShelvesSection";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { FeaturedPlaylistsGrid } from "@/features/home/components/FeaturedPlaylistsGrid";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
-import type { YtMusicCategory, YtMusicHomeShelf, YtMusicMixPreview, PlaylistPreview, TidalMixPreview, TidalBrowseShelf, TidalGenre } from "@/hooks/useQueries";
+import type {
+    YtMusicCategory,
+    YtMusicHomeShelf,
+    YtMusicMixPreview,
+    PlaylistPreview,
+    TidalMixPreview,
+    TidalBrowseShelf,
+    TidalGenre,
+} from "@/hooks/useQueries";
 
 type TabId = "youtube" | "tidal";
 
@@ -50,7 +58,15 @@ function YouTubeContent({
     isMoodsLoading,
     homeShelves,
     chartPlaylists,
-}: Pick<ProviderTabSectionProps, "ytMusicMixes" | "moodCategories" | "genreCategories" | "isMoodsLoading" | "homeShelves" | "chartPlaylists">) {
+}: Pick<
+    ProviderTabSectionProps,
+    | "ytMusicMixes"
+    | "moodCategories"
+    | "genreCategories"
+    | "isMoodsLoading"
+    | "homeShelves"
+    | "chartPlaylists"
+>) {
     return (
         <div className="space-y-8">
             <YtMusicMixesSection mixes={ytMusicMixes} />
@@ -62,10 +78,7 @@ function YouTubeContent({
             <FeaturedShelvesSection homeShelves={homeShelves} />
             {chartPlaylists.length > 0 && (
                 <section>
-                    <SectionHeader
-                        title="Charts"
-                        badge={<YouTubeBadge />}
-                    />
+                    <SectionHeader title="Charts" badge={<YouTubeBadge />} />
                     <FeaturedPlaylistsGrid playlists={chartPlaylists} />
                 </section>
             )}
@@ -82,7 +95,14 @@ function TidalContent({
     tidalGenres,
     tidalHomeShelves,
     tidalExploreShelves,
-}: Pick<ProviderTabSectionProps, "tidalMixes" | "tidalMoods" | "tidalGenres" | "tidalHomeShelves" | "tidalExploreShelves">) {
+}: Pick<
+    ProviderTabSectionProps,
+    | "tidalMixes"
+    | "tidalMoods"
+    | "tidalGenres"
+    | "tidalHomeShelves"
+    | "tidalExploreShelves"
+>) {
     return (
         <div className="space-y-8">
             <TidalMixesSection mixes={tidalMixes} />

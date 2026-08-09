@@ -14,8 +14,7 @@ const originalSegmentedEnv: Record<
     (typeof SEGMENTED_ENV_KEYS)[number],
     string | undefined
 > = {
-    SEGMENTED_STREAMING_CACHE_PATH:
-        process.env.SEGMENTED_STREAMING_CACHE_PATH,
+    SEGMENTED_STREAMING_CACHE_PATH: process.env.SEGMENTED_STREAMING_CACHE_PATH,
     SEGMENTED_STREAMING_CACHE_MAX_GB:
         process.env.SEGMENTED_STREAMING_CACHE_MAX_GB,
     SEGMENTED_STREAMING_CACHE_PRUNE_INTERVAL_MS:
@@ -53,7 +52,9 @@ type PruneDirectoryFixture = {
 };
 
 type LoadCacheServiceOptions = {
-    env?: Partial<Record<(typeof SEGMENTED_ENV_KEYS)[number], string | undefined>>;
+    env?: Partial<
+        Record<(typeof SEGMENTED_ENV_KEYS)[number], string | undefined>
+    >;
     transcodeCachePath?: string;
     transcodeCacheMaxGb?: number;
     buildCachePathImpl?: (basePath: string, ...segments: string[]) => string;
@@ -142,7 +143,8 @@ const loadCacheService = async (options: LoadCacheServiceOptions = {}) => {
     jest.doMock("../../../config", () => ({
         config: {
             music: {
-                transcodeCachePath: options.transcodeCachePath ?? "/config/transcodes",
+                transcodeCachePath:
+                    options.transcodeCachePath ?? "/config/transcodes",
                 transcodeCacheMaxGb: options.transcodeCacheMaxGb ?? 10,
             },
         },
@@ -155,8 +157,9 @@ const loadCacheService = async (options: LoadCacheServiceOptions = {}) => {
     jest.doMock("../../cacheHelpers", () => ({
         buildCachePath: (...args: Parameters<typeof mockBuildCachePath>) =>
             mockBuildCachePath(...args),
-        buildSha256CacheKey: (...args: Parameters<typeof mockBuildSha256CacheKey>) =>
-            mockBuildSha256CacheKey(...args),
+        buildSha256CacheKey: (
+            ...args: Parameters<typeof mockBuildSha256CacheKey>
+        ) => mockBuildSha256CacheKey(...args),
     }));
 
     const module = await import("../cacheService");
@@ -209,7 +212,11 @@ const configurePruneTree = (
     mockStat.mockImplementation(async (targetPath: string) => {
         for (const directory of directories) {
             for (const file of directory.files) {
-                const filePath = path.join(dashRoot, directory.cacheKey, file.name);
+                const filePath = path.join(
+                    dashRoot,
+                    directory.cacheKey,
+                    file.name,
+                );
                 if (targetPath === filePath) {
                     return {
                         size: file.sizeBytes,
@@ -272,7 +279,8 @@ describe("segmentedStreamingCacheService", () => {
             });
 
             expect(mocks.mockBuildSha256CacheKey).toHaveBeenCalledWith({
-                identity: "track-2:/music/track-2.flac:2026-02-24T00:00:00.000Z",
+                identity:
+                    "track-2:/music/track-2.flac:2026-02-24T00:00:00.000Z",
                 suffix: "medium:dash-v2",
                 length: 24,
             });
@@ -291,7 +299,11 @@ describe("segmentedStreamingCacheService", () => {
 
             expect(paths).toEqual({
                 cacheKey: "cache-key",
-                outputDir: path.join("/env/cache", "segmented-dash", "cache-key"),
+                outputDir: path.join(
+                    "/env/cache",
+                    "segmented-dash",
+                    "cache-key",
+                ),
                 manifestPath: path.join(
                     "/env/cache",
                     "segmented-dash",
@@ -311,7 +323,8 @@ describe("segmentedStreamingCacheService", () => {
         it("creates the DASH output directory recursively", async () => {
             const { cacheService, mocks } = await loadCacheService();
 
-            const paths = await cacheService.ensureDashAssetDirectory("cache-dir");
+            const paths =
+                await cacheService.ensureDashAssetDirectory("cache-dir");
 
             expect(paths).toEqual({
                 cacheKey: "cache-dir",
@@ -354,7 +367,9 @@ describe("segmentedStreamingCacheService", () => {
             const { cacheService, mocks } = await loadCacheService();
             mocks.mockAccess.mockResolvedValue(undefined);
 
-            await expect(cacheService.hasDashManifest("cache-hit")).resolves.toBe(true);
+            await expect(
+                cacheService.hasDashManifest("cache-hit"),
+            ).resolves.toBe(true);
             expect(mocks.mockAccess).toHaveBeenCalledWith(
                 path.join(
                     "/config/transcodes",
@@ -369,9 +384,9 @@ describe("segmentedStreamingCacheService", () => {
             const { cacheService, mocks } = await loadCacheService();
             mocks.mockAccess.mockRejectedValue(createErrno("ENOENT"));
 
-            await expect(cacheService.hasDashManifest("cache-miss")).resolves.toBe(
-                false,
-            );
+            await expect(
+                cacheService.hasDashManifest("cache-miss"),
+            ).resolves.toBe(false);
         });
 
         it("returns sorted DASH segment filenames and filters non-segment files", async () => {
@@ -384,7 +399,9 @@ describe("segmentedStreamingCacheService", () => {
                 "chunk-00001.m4s",
             ]);
 
-            await expect(cacheService.listDashSegments("cache-list")).resolves.toEqual([
+            await expect(
+                cacheService.listDashSegments("cache-list"),
+            ).resolves.toEqual([
                 "chunk-00001.m4s",
                 "chunk-00002.webm",
                 "chunk-00010.m4s",
@@ -420,7 +437,9 @@ describe("segmentedStreamingCacheService", () => {
             const { cacheService, mocks } = await loadCacheService({
                 env: {
                     SEGMENTED_STREAMING_CACHE_PATH: "/prune-cache",
-                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(maxBytes / BYTES_PER_GB),
+                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(
+                        maxBytes / BYTES_PER_GB,
+                    ),
                     SEGMENTED_STREAMING_CACHE_PRUNE_TARGET_RATIO: "0.5",
                     SEGMENTED_STREAMING_CACHE_MIN_AGE_MS: "1000",
                 },
@@ -502,7 +521,9 @@ describe("segmentedStreamingCacheService", () => {
             const { cacheService, mocks } = await loadCacheService({
                 env: {
                     SEGMENTED_STREAMING_CACHE_PATH: "/protect-cache",
-                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(maxBytes / BYTES_PER_GB),
+                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(
+                        maxBytes / BYTES_PER_GB,
+                    ),
                     SEGMENTED_STREAMING_CACHE_PRUNE_TARGET_RATIO: "0.5",
                     SEGMENTED_STREAMING_CACHE_MIN_AGE_MS: "600000",
                 },
@@ -516,7 +537,8 @@ describe("segmentedStreamingCacheService", () => {
                         {
                             name: "chunk-00001.m4s",
                             sizeBytes: 900,
-                            modifiedAtMs: baseNow.getTime() - 2 * 60 * 60 * 1000,
+                            modifiedAtMs:
+                                baseNow.getTime() - 2 * 60 * 60 * 1000,
                         },
                     ],
                 },
@@ -569,7 +591,9 @@ describe("segmentedStreamingCacheService", () => {
             const { cacheService, mocks } = await loadCacheService({
                 env: {
                     SEGMENTED_STREAMING_CACHE_PATH: "/warn-cache",
-                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(maxBytes / BYTES_PER_GB),
+                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(
+                        maxBytes / BYTES_PER_GB,
+                    ),
                     SEGMENTED_STREAMING_CACHE_PRUNE_TARGET_RATIO: "0.5",
                     SEGMENTED_STREAMING_CACHE_MIN_AGE_MS: "1000",
                 },
@@ -643,12 +667,17 @@ describe("segmentedStreamingCacheService", () => {
             const { cacheService, mocks } = await loadCacheService({
                 env: {
                     SEGMENTED_STREAMING_CACHE_PATH: "/protected-only-cache",
-                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(maxBytes / BYTES_PER_GB),
+                    SEGMENTED_STREAMING_CACHE_MAX_GB: String(
+                        maxBytes / BYTES_PER_GB,
+                    ),
                     SEGMENTED_STREAMING_CACHE_PRUNE_TARGET_RATIO: "0.5",
                     SEGMENTED_STREAMING_CACHE_MIN_AGE_MS: "600000",
                 },
             });
-            const dashRoot = path.join("/protected-only-cache", "segmented-dash");
+            const dashRoot = path.join(
+                "/protected-only-cache",
+                "segmented-dash",
+            );
 
             configurePruneTree(mocks.mockReaddir, mocks.mockStat, dashRoot, [
                 {
@@ -657,7 +686,8 @@ describe("segmentedStreamingCacheService", () => {
                         {
                             name: "chunk-00001.m4s",
                             sizeBytes: 900,
-                            modifiedAtMs: baseNow.getTime() - 2 * 60 * 60 * 1000,
+                            modifiedAtMs:
+                                baseNow.getTime() - 2 * 60 * 60 * 1000,
                         },
                     ],
                 },
@@ -696,7 +726,9 @@ describe("segmentedStreamingCacheService", () => {
             });
             mocks.mockReaddir.mockRejectedValue(createErrno("ENOENT"));
 
-            await expect(cacheService.pruneDashCacheIfNeeded()).resolves.toEqual({
+            await expect(
+                cacheService.pruneDashCacheIfNeeded(),
+            ).resolves.toEqual({
                 inspectedEntries: 0,
                 removedEntries: 0,
                 skippedActiveEntries: 0,
@@ -719,9 +751,11 @@ describe("segmentedStreamingCacheService", () => {
             let resolvePrune:
                 | ((value: typeof defaultPruneResult) => void)
                 | undefined;
-            const inFlightPrune = new Promise<typeof defaultPruneResult>((resolve) => {
-                resolvePrune = resolve;
-            });
+            const inFlightPrune = new Promise<typeof defaultPruneResult>(
+                (resolve) => {
+                    resolvePrune = resolve;
+                },
+            );
             const pruneSpy = jest
                 .spyOn(cacheService, "pruneDashCacheIfNeeded")
                 .mockReturnValue(inFlightPrune);
@@ -806,7 +840,11 @@ describe("segmentedStreamingCacheService", () => {
 
             expect(cacheService.getDashAssetPaths("env-key")).toEqual({
                 cacheKey: "env-key",
-                outputDir: path.join("/env-override", "segmented-dash", "env-key"),
+                outputDir: path.join(
+                    "/env-override",
+                    "segmented-dash",
+                    "env-key",
+                ),
                 manifestPath: path.join(
                     "/env-override",
                     "segmented-dash",
@@ -814,7 +852,9 @@ describe("segmentedStreamingCacheService", () => {
                     "manifest.mpd",
                 ),
             });
-            await expect(cacheService.pruneDashCacheIfNeeded()).resolves.toEqual(
+            await expect(
+                cacheService.pruneDashCacheIfNeeded(),
+            ).resolves.toEqual(
                 expect.objectContaining({
                     maxBytes: Math.floor(explicitMaxGb * BYTES_PER_GB),
                 }),
@@ -831,7 +871,9 @@ describe("segmentedStreamingCacheService", () => {
             });
             mocks.mockReaddir.mockRejectedValue(createErrno("ENOENT"));
 
-            await expect(cacheService.pruneDashCacheIfNeeded()).resolves.toEqual(
+            await expect(
+                cacheService.pruneDashCacheIfNeeded(),
+            ).resolves.toEqual(
                 expect.objectContaining({
                     maxBytes: fallbackMaxGb * BYTES_PER_GB,
                 }),
@@ -847,7 +889,9 @@ describe("segmentedStreamingCacheService", () => {
             });
             mocks.mockReaddir.mockRejectedValue(createErrno("ENOENT"));
 
-            await expect(cacheService.pruneDashCacheIfNeeded()).resolves.toEqual(
+            await expect(
+                cacheService.pruneDashCacheIfNeeded(),
+            ).resolves.toEqual(
                 expect.objectContaining({
                     maxBytes: 10 * BYTES_PER_GB,
                 }),

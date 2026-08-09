@@ -42,7 +42,9 @@ export default function SearchPage() {
     const isPodcastTab = filterTab === "podcasts";
     const viewParam = searchParams.get("view");
     const sectionView: SearchSectionView =
-        viewParam === "tracks" || viewParam === "albums" || viewParam === "artists"
+        viewParam === "tracks" ||
+        viewParam === "albums" ||
+        viewParam === "artists"
             ? viewParam
             : null;
     const isTracksView = !isPodcastTab && sectionView === "tracks";
@@ -121,7 +123,7 @@ export default function SearchPage() {
     const showSoulseek = filterTab === "all" || filterTab === "soulseek";
     const showPodcastResults = filterTab === "all" || isPodcastTab;
     const discoverPodcastResults = discoverResults.filter(
-        (result) => result.type === "podcast"
+        (result) => result.type === "podcast",
     );
     const hasPodcastResults =
         (libraryResults?.podcasts?.length || 0) > 0 ||
@@ -294,26 +296,38 @@ export default function SearchPage() {
                         {/* Right Column: Songs */}
                         <div>
                             <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                                {showSoulseek && soulseekResults.length > 0
-                                    ? "Songs"
-                                    : showSoulseek && (isSoulseekSearching || isSoulseekPolling)
-                                    ? <>
+                                {showSoulseek && soulseekResults.length > 0 ? (
+                                    "Songs"
+                                ) : showSoulseek &&
+                                  (isSoulseekSearching || isSoulseekPolling) ? (
+                                    <>
                                         <span>Songs</span>
                                         <span className="inline-flex items-center gap-2 text-sm font-normal text-gray-400">
-                                            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                                                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="40 20" />
+                                            <svg
+                                                className="w-4 h-4 animate-spin"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <circle
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="10"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeDasharray="40 20"
+                                                />
                                             </svg>
                                             Searching...
                                         </span>
-                                      </>
-                                    : (
-                                        <Link
-                                            href={sectionViewLinks.tracks}
-                                            className="hover:underline"
-                                        >
-                                            Songs in Your Library
-                                        </Link>
-                                    )}
+                                    </>
+                                ) : (
+                                    <Link
+                                        href={sectionViewLinks.tracks}
+                                        className="hover:underline"
+                                    >
+                                        Songs in Your Library
+                                    </Link>
+                                )}
                             </h2>
                             {showSoulseek && soulseekResults.length > 0 ? (
                                 <SoulseekSongsList
@@ -321,10 +335,14 @@ export default function SearchPage() {
                                     downloadingFiles={downloadingFiles}
                                     onDownload={handleDownload}
                                 />
-                            ) : showSoulseek && (isSoulseekSearching || isSoulseekPolling) ? (
+                            ) : showSoulseek &&
+                              (isSoulseekSearching || isSoulseekPolling) ? (
                                 <div className="space-y-2">
                                     {[1, 2, 3].map((i) => (
-                                        <div key={i} className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse">
+                                        <div
+                                            key={i}
+                                            className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse"
+                                        >
                                             <div className="w-10 h-10 rounded bg-white/10" />
                                             <div className="flex-1 space-y-2">
                                                 <div className="h-4 bg-white/10 rounded w-3/4" />
@@ -381,15 +399,29 @@ export default function SearchPage() {
                                     <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
                                         <span>Soulseek</span>
                                         <span className="inline-flex items-center gap-2 text-sm font-normal text-gray-400">
-                                            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                                                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="40 20" />
+                                            <svg
+                                                className="w-4 h-4 animate-spin"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <circle
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="10"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeDasharray="40 20"
+                                                />
                                             </svg>
                                             Searching P2P network... (~45s)
                                         </span>
                                     </h2>
                                     <div className="space-y-2">
                                         {[1, 2, 3].map((i) => (
-                                            <div key={i} className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse">
+                                            <div
+                                                key={i}
+                                                className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse"
+                                            >
                                                 <div className="w-10 h-10 rounded bg-white/10" />
                                                 <div className="flex-1 space-y-2">
                                                     <div className="h-4 bg-white/10 rounded w-3/4" />
@@ -526,7 +558,9 @@ export default function SearchPage() {
                         <div className="flex flex-col items-center justify-center py-24 text-center">
                             <SearchIcon className="w-16 h-16 text-gray-400 mb-4" />
                             <h3 className="text-xl font-bold text-white mb-2">
-                                {isPodcastTab ? "No podcasts found" : "No results found"}
+                                {isPodcastTab
+                                    ? "No podcasts found"
+                                    : "No results found"}
                             </h3>
                             <p className="text-gray-400">
                                 {isPodcastTab

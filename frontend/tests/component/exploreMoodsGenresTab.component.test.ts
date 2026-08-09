@@ -4,8 +4,15 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const state = {
-    moodCategories: [{ title: "Chill", items: [{ title: "Lo-Fi", params: "chill-lofi" }] }],
-    genreCategories: [{ title: "Rock", items: [{ title: "Classic Rock", params: "classic-rock" }] }],
+    moodCategories: [
+        { title: "Chill", items: [{ title: "Lo-Fi", params: "chill-lofi" }] },
+    ],
+    genreCategories: [
+        {
+            title: "Rock",
+            items: [{ title: "Classic Rock", params: "classic-rock" }],
+        },
+    ],
     isLoading: false,
 };
 
@@ -31,8 +38,13 @@ mock.module("lucide-react", {
 });
 
 mock.module("next/link", {
-    defaultExport: ({ children, href }: { children: React.ReactNode; href: string }) =>
-        React.createElement("a", { href }, children),
+    defaultExport: ({
+        children,
+        href,
+    }: {
+        children: React.ReactNode;
+        href: string;
+    }) => React.createElement("a", { href }, children),
 });
 
 mock.module("@/lib/api", {
@@ -40,11 +52,17 @@ mock.module("@/lib/api", {
         api: {
             get: async () => ({
                 playlists: [
-                    { playlistId: "pl-1", title: "Chill Vibes", thumbnailUrl: null, author: "YT Music" },
+                    {
+                        playlistId: "pl-1",
+                        title: "Chill Vibes",
+                        thumbnailUrl: null,
+                        author: "YT Music",
+                    },
                 ],
                 source: "ytmusic",
             }),
-            getBrowseImageUrl: (url: string) => `/api/browse/image?url=${encodeURIComponent(url)}`,
+            getBrowseImageUrl: (url: string) =>
+                `/api/browse/image?url=${encodeURIComponent(url)}`,
         },
     },
 });
@@ -60,36 +78,41 @@ mock.module("@/components/ui/YouTubeBadge", {
 });
 
 beforeEach(() => {
-    state.moodCategories = [{ title: "Chill", items: [{ title: "Lo-Fi", params: "chill-lofi" }] }];
-    state.genreCategories = [{ title: "Rock", items: [{ title: "Classic Rock", params: "classic-rock" }] }];
+    state.moodCategories = [
+        { title: "Chill", items: [{ title: "Lo-Fi", params: "chill-lofi" }] },
+    ];
+    state.genreCategories = [
+        {
+            title: "Rock",
+            items: [{ title: "Classic Rock", params: "classic-rock" }],
+        },
+    ];
     state.isLoading = false;
 });
 
 test("MoodsGenresSection renders mood categories section", async () => {
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: state.isLoading,
-        })
+        }),
     );
 
     assert.match(html, /Moods/);
 });
 
 test("MoodsGenresSection renders genre categories section", async () => {
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: state.isLoading,
-        })
+        }),
     );
 
     assert.match(html, /Genres/);
@@ -97,15 +120,14 @@ test("MoodsGenresSection renders genre categories section", async () => {
 
 test("MoodsGenresSection hides moods section when no mood categories", async () => {
     state.moodCategories = [];
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: false,
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /Moods/);
@@ -114,15 +136,14 @@ test("MoodsGenresSection hides moods section when no mood categories", async () 
 
 test("MoodsGenresSection hides genres section when no genre categories", async () => {
     state.genreCategories = [];
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: false,
-        })
+        }),
     );
 
     assert.match(html, /Moods/);
@@ -130,15 +151,14 @@ test("MoodsGenresSection hides genres section when no genre categories", async (
 });
 
 test("MoodsGenresSection renders category pill buttons with params", async () => {
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: false,
-        })
+        }),
     );
 
     assert.match(html, /Lo-Fi/);
@@ -146,15 +166,14 @@ test("MoodsGenresSection renders category pill buttons with params", async () =>
 });
 
 test("MoodsGenresSection does not contain /browse links in initial render", async () => {
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: false,
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /\/browse/);
@@ -163,15 +182,14 @@ test("MoodsGenresSection does not contain /browse links in initial render", asyn
 test("MoodsGenresSection returns null when both categories empty and not loading", async () => {
     state.moodCategories = [];
     state.genreCategories = [];
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: false,
-        })
+        }),
     );
 
     assert.equal(html, "");
@@ -180,15 +198,14 @@ test("MoodsGenresSection returns null when both categories empty and not loading
 test("MoodsGenresSection does not return null while loading (preserves layout space)", async () => {
     state.moodCategories = [];
     state.genreCategories = [];
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: true,
-        })
+        }),
     );
 
     // While loading with empty data, component renders container (not null)
@@ -196,15 +213,14 @@ test("MoodsGenresSection does not return null while loading (preserves layout sp
 });
 
 test("MoodsGenresSection does not render radio stations section", async () => {
-    const { MoodsGenresSection } = await import(
-        "../../features/explore/components/MoodsGenresSection"
-    );
+    const { MoodsGenresSection } =
+        await import("../../features/explore/components/MoodsGenresSection");
     const html = renderToStaticMarkup(
         React.createElement(MoodsGenresSection, {
             moodCategories: state.moodCategories,
             genreCategories: state.genreCategories,
             isLoading: false,
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /Radio Stations/);

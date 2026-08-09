@@ -1,11 +1,8 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/auth", () => ({
-    requireAuthOrToken: (
-        _req: Request,
-        _res: Response,
-        next: () => void
-    ) => next(),
+    requireAuthOrToken: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../middleware/rateLimiter", () => ({
@@ -82,10 +79,13 @@ const mockFetch = jest.fn();
 
 import router from "../audiobooks";
 
-function getHandler(path: string, method: "get" | "post" | "delete" | "options") {
+function getHandler(
+    path: string,
+    method: "get" | "post" | "delete" | "options",
+) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -128,7 +128,10 @@ function createRes() {
             res.headersSent = true;
             return res;
         }),
-        on: jest.fn(function (event: string, handler: (...args: unknown[]) => void) {
+        on: jest.fn(function (
+            event: string,
+            handler: (...args: unknown[]) => void,
+        ) {
             eventHandlers[event] = handler;
             return res;
         }),
@@ -208,12 +211,16 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("handles debug-series disabled, success, and failure branches", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
 
         const disabledRes = createRes();
         await debugSeriesHandler({ user: { id: "u1" } } as any, disabledRes);
         expect(disabledRes.statusCode).toBe(400);
-        expect(disabledRes.body).toEqual({ error: "Audiobookshelf not enabled" });
+        expect(disabledRes.body).toEqual({
+            error: "Audiobookshelf not enabled",
+        });
 
         audiobookshelfService.getAllAudiobooks.mockResolvedValueOnce([
             {
@@ -250,11 +257,11 @@ describe("audiobooks advanced runtime", () => {
                     id: "b1",
                     media: expect.any(Object),
                 },
-            })
+            }),
         );
 
         audiobookshelfService.getAllAudiobooks.mockRejectedValueOnce(
-            new Error("debug fetch failed")
+            new Error("debug fetch failed"),
         );
         const errorRes = createRes();
         await debugSeriesHandler({ user: { id: "u1" } } as any, errorRes);
@@ -263,56 +270,80 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("serves OPTIONS preflight for cover endpoint", async () => {
-        const req = { params: { id: "book-1" }, headers: { origin: "https://app.example" } } as any;
+        const req = {
+            params: { id: "book-1" },
+            headers: { origin: "https://app.example" },
+        } as any;
         const res = createRes();
 
         await coverOptionsHandler(req, res);
 
         expect(res.statusCode).toBe(204);
-        expect(res.headers["Access-Control-Allow-Origin"]).toBe("https://app.example");
+        expect(res.headers["Access-Control-Allow-Origin"]).toBe(
+            "https://app.example",
+        );
         expect(res.headers["Access-Control-Allow-Credentials"]).toBe("true");
-        expect(res.headers["Access-Control-Allow-Methods"]).toBe("GET, OPTIONS");
+        expect(res.headers["Access-Control-Allow-Methods"]).toBe(
+            "GET, OPTIONS",
+        );
         expect(res.end).toHaveBeenCalled();
     });
 
     it("serves local cover paths and fallback disk covers", async () => {
         prisma.audiobook.findUnique
-            .mockResolvedValueOnce({ localCoverPath: "/cache/book-1.jpg", coverUrl: null })
+            .mockResolvedValueOnce({
+                localCoverPath: "/cache/book-1.jpg",
+                coverUrl: null,
+            })
             .mockResolvedValueOnce({ localCoverPath: null, coverUrl: null });
 
-        fsExistsSync.mockImplementation((targetPath: string) =>
-            targetPath === "/cache/book-1.jpg" ||
-            targetPath === "/music/cover-cache/audiobooks/book-2.jpg"
+        fsExistsSync.mockImplementation(
+            (targetPath: string) =>
+                targetPath === "/cache/book-1.jpg" ||
+                targetPath === "/music/cover-cache/audiobooks/book-2.jpg",
         );
 
         const localRes = createRes();
         await coverHandler(
-            { params: { id: "book-1" }, headers: { origin: "https://app.example" } } as any,
-            localRes
+            {
+                params: { id: "book-1" },
+                headers: { origin: "https://app.example" },
+            } as any,
+            localRes,
         );
         expect(localRes.statusCode).toBe(200);
         expect(localRes.sentFilePath).toBe("/cache/book-1.jpg");
         expect(localRes.headers["Cache-Control"]).toBe(
-            "public, max-age=31536000, immutable"
+            "public, max-age=31536000, immutable",
         );
 
         const fallbackRes = createRes();
         await coverHandler(
             { params: { id: "book-2" }, headers: {} } as any,
-            fallbackRes
+            fallbackRes,
         );
 
         expect(prisma.audiobook.update).toHaveBeenCalledWith({
             where: { id: "book-2" },
-            data: { localCoverPath: "/music/cover-cache/audiobooks/book-2.jpg" },
+            data: {
+                localCoverPath: "/music/cover-cache/audiobooks/book-2.jpg",
+            },
         });
-        expect(fallbackRes.sentFilePath).toBe("/music/cover-cache/audiobooks/book-2.jpg");
+        expect(fallbackRes.sentFilePath).toBe(
+            "/music/cover-cache/audiobooks/book-2.jpg",
+        );
     });
 
     it("proxies cover from audiobookshelf and handles proxy miss/error", async () => {
         prisma.audiobook.findUnique
-            .mockResolvedValueOnce({ localCoverPath: null, coverUrl: "items/covers/book-3.jpg" })
-            .mockResolvedValueOnce({ localCoverPath: null, coverUrl: "items/covers/book-4.jpg" })
+            .mockResolvedValueOnce({
+                localCoverPath: null,
+                coverUrl: "items/covers/book-3.jpg",
+            })
+            .mockResolvedValueOnce({
+                localCoverPath: null,
+                coverUrl: "items/covers/book-4.jpg",
+            })
             .mockResolvedValueOnce({ localCoverPath: null, coverUrl: null });
 
         mockFetch.mockResolvedValueOnce({
@@ -327,8 +358,11 @@ describe("audiobooks advanced runtime", () => {
 
         const proxyRes = createRes();
         await coverHandler(
-            { params: { id: "book-3" }, headers: { origin: "https://app.example" } } as any,
-            proxyRes
+            {
+                params: { id: "book-3" },
+                headers: { origin: "https://app.example" },
+            } as any,
+            proxyRes,
         );
 
         expect(mockFetch).toHaveBeenCalledWith(
@@ -338,7 +372,7 @@ describe("audiobooks advanced runtime", () => {
                     Authorization: "Bearer abs-token",
                 },
                 signal: expect.any(AbortSignal),
-            }
+            },
         );
         expect(proxyRes.statusCode).toBe(200);
         expect(proxyRes.body).toEqual(Buffer.from([1, 2, 3]));
@@ -347,21 +381,32 @@ describe("audiobooks advanced runtime", () => {
 
         mockFetch.mockRejectedValueOnce(new Error("proxy down"));
         const proxyMissRes = createRes();
-        await coverHandler({ params: { id: "book-4" }, headers: {} } as any, proxyMissRes);
+        await coverHandler(
+            { params: { id: "book-4" }, headers: {} } as any,
+            proxyMissRes,
+        );
         expect(proxyMissRes.statusCode).toBe(404);
         expect(proxyMissRes.body).toEqual({ error: "Cover not found" });
 
         const noCoverRes = createRes();
-        await coverHandler({ params: { id: "book-5" }, headers: {} } as any, noCoverRes);
+        await coverHandler(
+            { params: { id: "book-5" }, headers: {} } as any,
+            noCoverRes,
+        );
         expect(noCoverRes.statusCode).toBe(404);
         expect(noCoverRes.body).toEqual({ error: "Cover not found" });
     });
 
     it("returns 500 when cover lookup throws unexpectedly", async () => {
-        prisma.audiobook.findUnique.mockRejectedValueOnce(new Error("cover db failed"));
+        prisma.audiobook.findUnique.mockRejectedValueOnce(
+            new Error("cover db failed"),
+        );
 
         const res = createRes();
-        await coverHandler({ params: { id: "book-err" }, headers: {} } as any, res);
+        await coverHandler(
+            { params: { id: "book-err" }, headers: {} } as any,
+            res,
+        );
 
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({
@@ -370,11 +415,13 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("serves audiobook details from cache/fallback and handles missing/error states", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
         const disabledRes = createRes();
         await detailsHandler(
             { params: { id: "book-1" }, user: { id: "u1" } } as any,
-            disabledRes
+            disabledRes,
         );
         expect(disabledRes.statusCode).toBe(200);
         expect(disabledRes.body).toEqual({ configured: false, enabled: false });
@@ -408,7 +455,7 @@ describe("audiobooks advanced runtime", () => {
         const detailRes = createRes();
         await detailsHandler(
             { params: { id: "book-1" }, user: { id: "u1" } } as any,
-            detailRes
+            detailRes,
         );
 
         expect(audiobookCacheService.getAudiobook).not.toHaveBeenCalled();
@@ -426,7 +473,7 @@ describe("audiobooks advanced runtime", () => {
                     isFinished: false,
                     lastPlayedAt: playedAt,
                 },
-            })
+            }),
         );
 
         prisma.audiobook.findUnique.mockResolvedValueOnce({
@@ -453,17 +500,19 @@ describe("audiobooks advanced runtime", () => {
             libraryId: "lib-2",
         });
         audiobookshelfService.getAudiobook.mockRejectedValueOnce(
-            new Error("api unavailable")
+            new Error("api unavailable"),
         );
         prisma.audiobookProgress.findUnique.mockResolvedValueOnce(null);
 
         const staleRes = createRes();
         await detailsHandler(
             { params: { id: "book-2" }, user: { id: "u1" } } as any,
-            staleRes
+            staleRes,
         );
 
-        expect(audiobookCacheService.getAudiobook).toHaveBeenCalledWith("book-2");
+        expect(audiobookCacheService.getAudiobook).toHaveBeenCalledWith(
+            "book-2",
+        );
         expect(staleRes.statusCode).toBe(200);
         expect(staleRes.body.chapters).toEqual([]);
         expect(staleRes.body.audioFiles).toEqual([]);
@@ -474,16 +523,18 @@ describe("audiobooks advanced runtime", () => {
         const missingRes = createRes();
         await detailsHandler(
             { params: { id: "book-404" }, user: { id: "u1" } } as any,
-            missingRes
+            missingRes,
         );
         expect(missingRes.statusCode).toBe(404);
         expect(missingRes.body).toEqual({ error: "Audiobook not found" });
 
-        prisma.audiobook.findUnique.mockRejectedValueOnce(new Error("details exploded"));
+        prisma.audiobook.findUnique.mockRejectedValueOnce(
+            new Error("details exploded"),
+        );
         const errorRes = createRes();
         await detailsHandler(
             { params: { id: "book-err" }, user: { id: "u1" } } as any,
-            errorRes
+            errorRes,
         );
         expect(errorRes.statusCode).toBe(500);
         expect(errorRes.body).toEqual({
@@ -492,14 +543,22 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("streams audiobook content with headers/defaults and handles failures", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
         const disabledRes = createRes();
         await streamHandler(
-            { params: { id: "stream-1" }, headers: {}, user: { id: "u1" } } as any,
-            disabledRes
+            {
+                params: { id: "stream-1" },
+                headers: {},
+                user: { id: "u1" },
+            } as any,
+            disabledRes,
         );
         expect(disabledRes.statusCode).toBe(503);
-        expect(disabledRes.body).toEqual({ error: "Audiobookshelf is not configured" });
+        expect(disabledRes.body).toEqual({
+            error: "Audiobookshelf is not configured",
+        });
 
         const stream = createMockStream();
         audiobookshelfService.streamAudiobook.mockResolvedValueOnce({
@@ -519,7 +578,7 @@ describe("audiobooks advanced runtime", () => {
                 headers: { range: "bytes=0-10" },
                 user: { id: "u1" },
             } as any,
-            successRes
+            successRes,
         );
 
         expect(successRes.statusCode).toBe(206);
@@ -541,8 +600,12 @@ describe("audiobooks advanced runtime", () => {
 
         const defaultRes = createRes();
         await streamHandler(
-            { params: { id: "stream-3" }, headers: {}, user: { id: "u1" } } as any,
-            defaultRes
+            {
+                params: { id: "stream-3" },
+                headers: {},
+                user: { id: "u1" },
+            } as any,
+            defaultRes,
         );
 
         expect(defaultRes.statusCode).toBe(200);
@@ -557,8 +620,12 @@ describe("audiobooks advanced runtime", () => {
         });
         const streamErrorRes = createRes();
         await streamHandler(
-            { params: { id: "stream-4" }, headers: {}, user: { id: "u1" } } as any,
-            streamErrorRes
+            {
+                params: { id: "stream-4" },
+                headers: {},
+                user: { id: "u1" },
+            } as any,
+            streamErrorRes,
         );
         errorStream.emit("error", new Error("stream write failed"));
         expect(streamErrorRes.statusCode).toBe(500);
@@ -574,20 +641,28 @@ describe("audiobooks advanced runtime", () => {
         });
         const headersSentRes = createRes();
         await streamHandler(
-            { params: { id: "stream-5" }, headers: {}, user: { id: "u1" } } as any,
-            headersSentRes
+            {
+                params: { id: "stream-5" },
+                headers: {},
+                user: { id: "u1" },
+            } as any,
+            headersSentRes,
         );
         headersSentRes.headersSent = true;
         postHeaderStream.emit("error", new Error("late error"));
         expect(headersSentRes.end).toHaveBeenCalled();
 
         audiobookshelfService.streamAudiobook.mockRejectedValueOnce(
-            new Error("service stream failed")
+            new Error("service stream failed"),
         );
         const catchRes = createRes();
         await streamHandler(
-            { params: { id: "stream-6" }, headers: {}, user: { id: "u1" } } as any,
-            catchRes
+            {
+                params: { id: "stream-6" },
+                headers: {},
+                user: { id: "u1" },
+            } as any,
+            catchRes,
         );
         expect(catchRes.statusCode).toBe(500);
         expect(catchRes.body).toEqual({
@@ -596,7 +671,9 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("updates progress with sanitization/fallbacks and handles sync/error branches", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
         const disabledRes = createRes();
         await progressHandler(
             {
@@ -604,7 +681,7 @@ describe("audiobooks advanced runtime", () => {
                 body: { currentTime: 1, duration: 2, isFinished: false },
                 user: { id: "u1", username: "user1" },
             } as any,
-            disabledRes
+            disabledRes,
         );
         expect(disabledRes.statusCode).toBe(200);
         expect(disabledRes.body).toEqual({
@@ -636,10 +713,14 @@ describe("audiobooks advanced runtime", () => {
         await progressHandler(
             {
                 params: { id: "book-2" },
-                body: { currentTime: -5, duration: Number.NaN, isFinished: true },
+                body: {
+                    currentTime: -5,
+                    duration: Number.NaN,
+                    isFinished: true,
+                },
                 user: { id: "u1", username: "user1" },
             } as any,
-            successRes
+            successRes,
         );
 
         expect(prisma.audiobookProgress.upsert).toHaveBeenCalledWith(
@@ -657,13 +738,13 @@ describe("audiobooks advanced runtime", () => {
                     duration: 360,
                     isFinished: true,
                 }),
-            })
+            }),
         );
         expect(audiobookshelfService.updateProgress).toHaveBeenCalledWith(
             "book-2",
             0,
             360,
-            true
+            true,
         );
         expect(successRes.statusCode).toBe(200);
         expect(successRes.body).toEqual({
@@ -688,7 +769,7 @@ describe("audiobooks advanced runtime", () => {
             isFinished: false,
         });
         audiobookshelfService.updateProgress.mockRejectedValueOnce(
-            new Error("remote sync failed")
+            new Error("remote sync failed"),
         );
 
         const syncFailRes = createRes();
@@ -698,7 +779,7 @@ describe("audiobooks advanced runtime", () => {
                 body: { currentTime: 60, duration: 0, isFinished: false },
                 user: { id: "u1", username: "user1" },
             } as any,
-            syncFailRes
+            syncFailRes,
         );
 
         expect(prisma.audiobookProgress.upsert).toHaveBeenCalledWith(
@@ -709,7 +790,7 @@ describe("audiobooks advanced runtime", () => {
                     coverUrl: "saved-cover.jpg",
                     duration: 240,
                 }),
-            })
+            }),
         );
         expect(syncFailRes.statusCode).toBe(200);
         expect(syncFailRes.body).toEqual({
@@ -721,7 +802,9 @@ describe("audiobooks advanced runtime", () => {
             },
         });
 
-        prisma.audiobook.findUnique.mockRejectedValueOnce(new Error("progress failed"));
+        prisma.audiobook.findUnique.mockRejectedValueOnce(
+            new Error("progress failed"),
+        );
         const errorRes = createRes();
         await progressHandler(
             {
@@ -729,7 +812,7 @@ describe("audiobooks advanced runtime", () => {
                 body: { currentTime: 10, duration: 100 },
                 user: { id: "u1", username: "user1" },
             } as any,
-            errorRes
+            errorRes,
         );
 
         expect(errorRes.statusCode).toBe(500);
@@ -739,14 +822,16 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("deletes progress with disabled, success, remote-failure, and error paths", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
         const disabledRes = createRes();
         await deleteProgressHandler(
             {
                 params: { id: "book-1" },
                 user: { id: "u1", username: "user1" },
             } as any,
-            disabledRes
+            disabledRes,
         );
         expect(disabledRes.statusCode).toBe(200);
         expect(disabledRes.body).toEqual({
@@ -760,7 +845,7 @@ describe("audiobooks advanced runtime", () => {
                 params: { id: "book-2" },
                 user: { id: "u1", username: "user1" },
             } as any,
-            successRes
+            successRes,
         );
         expect(prisma.audiobookProgress.deleteMany).toHaveBeenCalledWith({
             where: {
@@ -772,7 +857,7 @@ describe("audiobooks advanced runtime", () => {
             "book-2",
             0,
             0,
-            false
+            false,
         );
         expect(successRes.statusCode).toBe(200);
         expect(successRes.body).toEqual({
@@ -781,7 +866,7 @@ describe("audiobooks advanced runtime", () => {
         });
 
         audiobookshelfService.updateProgress.mockRejectedValueOnce(
-            new Error("reset failed")
+            new Error("reset failed"),
         );
         const remoteFailRes = createRes();
         await deleteProgressHandler(
@@ -789,7 +874,7 @@ describe("audiobooks advanced runtime", () => {
                 params: { id: "book-3" },
                 user: { id: "u1", username: "user1" },
             } as any,
-            remoteFailRes
+            remoteFailRes,
         );
         expect(remoteFailRes.statusCode).toBe(200);
         expect(remoteFailRes.body).toEqual({
@@ -798,7 +883,7 @@ describe("audiobooks advanced runtime", () => {
         });
 
         prisma.audiobookProgress.deleteMany.mockRejectedValueOnce(
-            new Error("delete failed")
+            new Error("delete failed"),
         );
         const errorRes = createRes();
         await deleteProgressHandler(
@@ -806,7 +891,7 @@ describe("audiobooks advanced runtime", () => {
                 params: { id: "book-4" },
                 user: { id: "u1", username: "user1" },
             } as any,
-            errorRes
+            errorRes,
         );
         expect(errorRes.statusCode).toBe(500);
         expect(errorRes.body).toEqual({
@@ -815,22 +900,24 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("covers search/list/series non-happy branches", async () => {
-        getSystemSettings.mockResolvedValueOnce({ audiobookshelfEnabled: false });
+        getSystemSettings.mockResolvedValueOnce({
+            audiobookshelfEnabled: false,
+        });
         const searchDisabledRes = createRes();
         await searchHandler(
             { query: { q: "dune" }, user: { id: "u1" } } as any,
-            searchDisabledRes
+            searchDisabledRes,
         );
         expect(searchDisabledRes.statusCode).toBe(200);
         expect(searchDisabledRes.body).toEqual([]);
 
         audiobookshelfService.searchAudiobooks.mockRejectedValueOnce(
-            new Error("search failed")
+            new Error("search failed"),
         );
         const searchErrorRes = createRes();
         await searchHandler(
             { query: { q: "dune" }, user: { id: "u1" } } as any,
-            searchErrorRes
+            searchErrorRes,
         );
         expect(searchErrorRes.statusCode).toBe(500);
         expect(searchErrorRes.body).toEqual({
@@ -844,7 +931,9 @@ describe("audiobooks advanced runtime", () => {
         expect(listRes.statusCode).toBe(200);
         expect(listRes.body).toEqual([]);
 
-        prisma.audiobook.findMany.mockRejectedValueOnce(new Error("list failed"));
+        prisma.audiobook.findMany.mockRejectedValueOnce(
+            new Error("list failed"),
+        );
         const listErrorRes = createRes();
         await listHandler({ user: { id: "u1" } } as any, listErrorRes);
         expect(listErrorRes.statusCode).toBe(500);
@@ -852,14 +941,16 @@ describe("audiobooks advanced runtime", () => {
             error: "Failed to fetch audiobooks",
         });
 
-        prisma.audiobook.findMany.mockRejectedValueOnce(new Error("series failed"));
+        prisma.audiobook.findMany.mockRejectedValueOnce(
+            new Error("series failed"),
+        );
         const seriesErrorRes = createRes();
         await seriesHandler(
             {
                 params: { seriesName: encodeURIComponent("Series Name") },
                 user: { id: "u1" },
             } as any,
-            seriesErrorRes
+            seriesErrorRes,
         );
         expect(seriesErrorRes.statusCode).toBe(500);
         expect(seriesErrorRes.body).toEqual({

@@ -58,11 +58,20 @@ async function validateShareLink(token: string) {
     if (!shareLink) return null;
     if (shareLink.revoked) return null;
     if (isExpired(shareLink.expiresAt)) return null;
-    if (shareLink.maxPlays !== null && shareLink.playCount >= shareLink.maxPlays) return null;
+    if (
+        shareLink.maxPlays !== null &&
+        shareLink.playCount >= shareLink.maxPlays
+    )
+        return null;
     return shareLink;
 }
 
-const trackStreamSelect = { id: true, title: true, filePath: true, fileModified: true } as const;
+const trackStreamSelect = {
+    id: true,
+    title: true,
+    filePath: true,
+    fileModified: true,
+} as const;
 
 function resolveNativeCoverPath(nativePath: string): string | null {
     const trimmed = nativePath.replace(/^\/+/, "").trim();
@@ -70,7 +79,10 @@ function resolveNativeCoverPath(nativePath: string): string | null {
     if (trimmed.length > 0 && !trimmed.startsWith("albums/")) {
         candidates.push(`albums/${trimmed}`);
     }
-    const coversDir = path.resolve(config.music.transcodeCachePath, "../covers");
+    const coversDir = path.resolve(
+        config.music.transcodeCachePath,
+        "../covers",
+    );
     for (const candidate of candidates) {
         const resolved = safeResolvePath(coversDir, candidate);
         if (resolved && fs.existsSync(resolved)) {
@@ -82,21 +94,30 @@ function resolveNativeCoverPath(nativePath: string): string | null {
 
 async function resolveTrackOwnership(
     shareLink: { resourceType: string; resourceId: string },
-    trackId: string
+    trackId: string,
 ) {
     if (shareLink.resourceType === "track") {
         if (shareLink.resourceId !== trackId) return null;
-        return prisma.track.findUnique({ where: { id: trackId }, select: trackStreamSelect });
+        return prisma.track.findUnique({
+            where: { id: trackId },
+            select: trackStreamSelect,
+        });
     }
     if (shareLink.resourceType === "album") {
-        return prisma.track.findFirst({ where: { id: trackId, albumId: shareLink.resourceId }, select: trackStreamSelect });
+        return prisma.track.findFirst({
+            where: { id: trackId, albumId: shareLink.resourceId },
+            select: trackStreamSelect,
+        });
     }
     if (shareLink.resourceType === "playlist") {
         const item = await prisma.playlistItem.findFirst({
             where: { playlistId: shareLink.resourceId, trackId },
         });
         if (!item) return null;
-        return prisma.track.findUnique({ where: { id: trackId }, select: trackStreamSelect });
+        return prisma.track.findUnique({
+            where: { id: trackId },
+            select: trackStreamSelect,
+        });
     }
     return null;
 }
@@ -308,7 +329,7 @@ router.get("/", requireAuth, async (req, res) => {
             links.map((link) => ({
                 ...link,
                 accessPath: `/api/share-links/access/${link.token}`,
-            }))
+            })),
         );
     } catch (error) {
         logger.error("List share links error:", error);
@@ -407,7 +428,7 @@ router.get("/access/:token", async (req, res) => {
 
         const resource = await resolveSharedResource(
             shareLink.resourceType,
-            shareLink.resourceId
+            shareLink.resourceId,
         );
         if (!resource) {
             return res.status(404).json({ error: "Share link not found" });
@@ -426,8 +447,18 @@ router.get("/access/:token", async (req, res) => {
                     id: shareLink.id,
                     revoked: false,
                     AND: [
-                        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-                        { OR: [{ lastStreamedAt: null }, { lastStreamedAt: { lt: windowStart } }] },
+                        {
+                            OR: [
+                                { expiresAt: null },
+                                { expiresAt: { gt: now } },
+                            ],
+                        },
+                        {
+                            OR: [
+                                { lastStreamedAt: null },
+                                { lastStreamedAt: { lt: windowStart } },
+                            ],
+                        },
                         ...(shareLink.maxPlays !== null
                             ? [{ playCount: { lt: shareLink.maxPlays } }]
                             : []),
@@ -503,7 +534,9 @@ router.get("/access/:token/stream/:trackId", async (req, res) => {
         }
 
         if (!track.filePath || !track.fileModified) {
-            return res.status(404).json({ error: "Track not available for streaming" });
+            return res
+                .status(404)
+                .json({ error: "Track not available for streaming" });
         }
 
         await prisma.shareLink.update({
@@ -512,36 +545,47 @@ router.get("/access/:token/stream/:trackId", async (req, res) => {
         });
 
         const normalizedFilePath = track.filePath.replace(/\\/g, "/");
-        const absolutePath = path.join(config.music.musicPath, normalizedFilePath);
+        const absolutePath = path.join(
+            config.music.musicPath,
+            normalizedFilePath,
+        );
 
         const streamingService = new AudioStreamingService(
             config.music.musicPath,
             config.music.transcodeCachePath,
-            config.music.transcodeCacheMaxGb
+            config.music.transcodeCacheMaxGb,
         );
 
         try {
-            const { filePath, mimeType } = await streamingService.getStreamFilePath(
-                track.id,
-                "original",
-                track.fileModified,
-                absolutePath
-            );
+            const { filePath, mimeType } =
+                await streamingService.getStreamFilePath(
+                    track.id,
+                    "original",
+                    track.fileModified,
+                    absolutePath,
+                );
 
             if (req.query.download === "true") {
                 res.setHeader(
                     "Content-Disposition",
-                    `attachment; filename="${path.basename(filePath)}"`
+                    `attachment; filename="${path.basename(filePath)}"`,
                 );
             }
 
-            await streamingService.streamFileWithRangeSupport(req, res, filePath, mimeType);
+            await streamingService.streamFileWithRangeSupport(
+                req,
+                res,
+                filePath,
+                mimeType,
+            );
         } finally {
             streamingService.destroy();
         }
     } catch (error) {
         if (error instanceof z.ZodError) {
-            return res.status(400).json({ error: "Invalid request", details: error.issues });
+            return res
+                .status(400)
+                .json({ error: "Invalid request", details: error.issues });
         }
         logger.error("Share stream error:", error);
         res.status(500).json({ error: "Failed to stream shared track" });
@@ -580,7 +624,13 @@ router.get("/access/:token/zip", async (req, res) => {
             return res.status(404).json({ error: "Share link not found" });
         }
 
-        let tracks: { id: string; title: string; filePath: string | null; fileModified: Date | null; artistName: string }[] = [];
+        let tracks: {
+            id: string;
+            title: string;
+            filePath: string | null;
+            fileModified: Date | null;
+            artistName: string;
+        }[] = [];
 
         if (shareLink.resourceType === "track") {
             const track = await prisma.track.findUnique({
@@ -594,7 +644,15 @@ router.get("/access/:token/zip", async (req, res) => {
                 },
             });
             if (track) {
-                tracks = [{ id: track.id, title: track.title, filePath: track.filePath, fileModified: track.fileModified, artistName: track.album.artist.name }];
+                tracks = [
+                    {
+                        id: track.id,
+                        title: track.title,
+                        filePath: track.filePath,
+                        fileModified: track.fileModified,
+                        artistName: track.album.artist.name,
+                    },
+                ];
             }
         } else if (shareLink.resourceType === "album") {
             const album = await prisma.album.findUnique({
@@ -603,12 +661,20 @@ router.get("/access/:token/zip", async (req, res) => {
                     artist: { select: { name: true } },
                     tracks: {
                         orderBy: [{ discNo: "asc" }, { trackNo: "asc" }],
-                        select: { id: true, title: true, filePath: true, fileModified: true },
+                        select: {
+                            id: true,
+                            title: true,
+                            filePath: true,
+                            fileModified: true,
+                        },
                     },
                 },
             });
             if (album) {
-                tracks = album.tracks.map((t) => ({ ...t, artistName: album.artist.name }));
+                tracks = album.tracks.map((t) => ({
+                    ...t,
+                    artistName: album.artist.name,
+                }));
             }
         } else if (shareLink.resourceType === "playlist") {
             const items = await prisma.playlistItem.findMany({
@@ -621,7 +687,9 @@ router.get("/access/:token/zip", async (req, res) => {
                             title: true,
                             filePath: true,
                             fileModified: true,
-                            album: { select: { artist: { select: { name: true } } } },
+                            album: {
+                                select: { artist: { select: { name: true } } },
+                            },
                         },
                     },
                 },
@@ -630,22 +698,33 @@ router.get("/access/:token/zip", async (req, res) => {
                 if (!item.track) {
                     return [];
                 }
-                return [{
-                    id: item.track.id,
-                    title: item.track.title,
-                    filePath: item.track.filePath,
-                    fileModified: item.track.fileModified,
-                    artistName: item.track.album.artist.name,
-                }];
+                return [
+                    {
+                        id: item.track.id,
+                        title: item.track.title,
+                        filePath: item.track.filePath,
+                        fileModified: item.track.fileModified,
+                        artistName: item.track.album.artist.name,
+                    },
+                ];
             });
         }
 
         const streamableTracks = tracks.filter(
-            (t): t is { id: string; title: string; filePath: string; fileModified: Date; artistName: string } =>
-                t.filePath !== null && t.fileModified !== null
+            (
+                t,
+            ): t is {
+                id: string;
+                title: string;
+                filePath: string;
+                fileModified: Date;
+                artistName: string;
+            } => t.filePath !== null && t.fileModified !== null,
         );
         if (streamableTracks.length === 0) {
-            return res.status(404).json({ error: "No streamable tracks found" });
+            return res
+                .status(404)
+                .json({ error: "No streamable tracks found" });
         }
 
         // archiver v8 is ESM-only with named class exports; node 24 loads it via require(esm)
@@ -655,7 +734,7 @@ router.get("/access/:token/zip", async (req, res) => {
         res.setHeader("Content-Type", "application/zip");
         res.setHeader(
             "Content-Disposition",
-            `attachment; filename="soundspan-share.zip"`
+            `attachment; filename="soundspan-share.zip"`,
         );
 
         archive.on("error", (err) => {
@@ -665,7 +744,10 @@ router.get("/access/:token/zip", async (req, res) => {
 
         archive.on("warning", (err) => {
             if (err.code === "ENOENT") {
-                logger.warn("Zip archive: file not found, skipping:", err.message);
+                logger.warn(
+                    "Zip archive: file not found, skipping:",
+                    err.message,
+                );
             } else {
                 logger.error("Zip archive warning:", err);
                 res.destroy(err);
@@ -676,20 +758,30 @@ router.get("/access/:token/zip", async (req, res) => {
 
         for (const track of streamableTracks) {
             const normalizedFilePath = track.filePath.replace(/\\/g, "/");
-            const resolvedPath = safeResolvePath(config.music.musicPath, normalizedFilePath);
+            const resolvedPath = safeResolvePath(
+                config.music.musicPath,
+                normalizedFilePath,
+            );
             if (!resolvedPath) {
-                logger.warn(`Zip: skipping track with unsafe path: ${track.id}`);
+                logger.warn(
+                    `Zip: skipping track with unsafe path: ${track.id}`,
+                );
                 continue;
             }
             const ext = path.extname(resolvedPath) || ".mp3";
-            const safeName = `${track.artistName} - ${track.title}`.replace(/[/\\?%*:|"<>]/g, "_");
+            const safeName = `${track.artistName} - ${track.title}`.replace(
+                /[/\\?%*:|"<>]/g,
+                "_",
+            );
             archive.file(resolvedPath, { name: `${safeName}${ext}` });
         }
 
         await archive.finalize();
     } catch (error) {
         if (error instanceof z.ZodError) {
-            return res.status(400).json({ error: "Invalid request", details: error.issues });
+            return res
+                .status(400)
+                .json({ error: "Invalid request", details: error.issues });
         }
         logger.error("Share zip error:", error);
         if (!res.headersSent) {
@@ -759,7 +851,9 @@ router.get("/access/:token/cover", async (req, res) => {
         res.send(result.buffer);
     } catch (error) {
         if (error instanceof z.ZodError) {
-            return res.status(400).json({ error: "Invalid request", details: error.issues });
+            return res
+                .status(400)
+                .json({ error: "Invalid request", details: error.issues });
         }
         logger.error("Share cover proxy error:", error);
         res.status(500).json({ error: "Failed to proxy cover image" });

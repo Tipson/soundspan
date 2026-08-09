@@ -9,7 +9,9 @@ import { TidalCard } from "./TidalSection";
 interface DownloadServicesSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (
+        service: string,
+    ) => Promise<{ success: boolean; version?: string; error?: string }>;
     testingServices: Record<string, boolean>;
 }
 

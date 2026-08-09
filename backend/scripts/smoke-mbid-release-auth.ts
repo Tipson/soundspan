@@ -3,13 +3,21 @@ import { createPrismaClient } from "../src/utils/prismaClientFactory";
 
 type JsonRecord = Record<string, unknown>;
 
-const backendBaseUrl = (process.env.BACKEND_BASE_URL ?? "http://127.0.0.1:3006").replace(/\/+$/, "");
-const frontendBaseUrl = (process.env.FRONTEND_BASE_URL ?? "http://127.0.0.1:3030").replace(/\/+$/, "");
+const backendBaseUrl = (
+    process.env.BACKEND_BASE_URL ?? "http://127.0.0.1:3006"
+).replace(/\/+$/, "");
+const frontendBaseUrl = (
+    process.env.FRONTEND_BASE_URL ?? "http://127.0.0.1:3030"
+).replace(/\/+$/, "");
 const testUsername = process.env.SOUNDSPAN_TEST_USERNAME ?? "predeploy";
-const testPassword = process.env.SOUNDSPAN_TEST_PASSWORD ?? "predeploy-password";
+const testPassword =
+    process.env.SOUNDSPAN_TEST_PASSWORD ?? "predeploy-password";
 const bootstrapUser = process.env.SMOKE_BOOTSTRAP_USER !== "false";
 
-function assertCondition(condition: unknown, message: string): asserts condition {
+function assertCondition(
+    condition: unknown,
+    message: string,
+): asserts condition {
     if (!condition) {
         throw new Error(message);
     }
@@ -38,7 +46,9 @@ async function requestJson(
         method: options?.method ?? "GET",
         headers: {
             "Content-Type": "application/json",
-            ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options?.token
+                ? { Authorization: `Bearer ${options.token}` }
+                : {}),
         },
         body: options?.body ? JSON.stringify(options.body) : undefined,
     });
@@ -88,14 +98,20 @@ async function loginForToken(baseUrl: string): Promise<string> {
         },
     });
 
-    assertCondition(status === 200, `login failed (${status}): ${JSON.stringify(body)}`);
+    assertCondition(
+        status === 200,
+        `login failed (${status}): ${JSON.stringify(body)}`,
+    );
     assertCondition(
         body.requires2FA !== true,
         "smoke user requires 2FA; disable 2FA for deterministic smoke checks",
     );
 
     const token = asString(body.token);
-    assertCondition(token, `login response missing token: ${JSON.stringify(body)}`);
+    assertCondition(
+        token,
+        `login response missing token: ${JSON.stringify(body)}`,
+    );
     return token;
 }
 
@@ -166,7 +182,9 @@ async function runSurfaceMatrix(
         "Not authenticated",
     );
 
-    const authReleases = await requestJson(`${baseUrl}${releasePath}`, { token });
+    const authReleases = await requestJson(`${baseUrl}${releasePath}`, {
+        token,
+    });
     assertCondition(
         authReleases.status === 400 ||
             authReleases.status === 404 ||
@@ -187,7 +205,8 @@ async function runSurfaceMatrix(
     }
     if (authReleases.status === 200) {
         assertCondition(
-            typeof authReleases.body.total === "number" && Array.isArray(authReleases.body.releases),
+            typeof authReleases.body.total === "number" &&
+                Array.isArray(authReleases.body.releases),
             `${label} auth interactive releases (200) missing expected payload fields: ${JSON.stringify(authReleases.body)}`,
         );
     }
@@ -207,13 +226,16 @@ async function runSurfaceMatrix(
         "Not authenticated",
     );
 
-    const authGrabMissingFields = await requestJson(`${baseUrl}/api/downloads/grab`, {
-        method: "POST",
-        token,
-        body: {
-            albumMbid: "rg-1",
+    const authGrabMissingFields = await requestJson(
+        `${baseUrl}/api/downloads/grab`,
+        {
+            method: "POST",
+            token,
+            body: {
+                albumMbid: "rg-1",
+            },
         },
-    });
+    );
     assertStatusAndError(
         `${label} auth interactive grab missing-fields`,
         authGrabMissingFields,

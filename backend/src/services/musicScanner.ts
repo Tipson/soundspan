@@ -18,7 +18,9 @@ import { backfillAllArtistCounts } from "./artistCountsService";
 
 type LibraryHealthRecordDelegate = {
     upsert(args: Prisma.LibraryHealthRecordUpsertArgs): Promise<unknown>;
-    deleteMany(args: Prisma.LibraryHealthRecordDeleteManyArgs): Promise<unknown>;
+    deleteMany(
+        args: Prisma.LibraryHealthRecordDeleteManyArgs,
+    ): Promise<unknown>;
 };
 
 function getLibraryHealthRecordDelegate(): LibraryHealthRecordDelegate {
@@ -69,7 +71,7 @@ export class MusicScannerService {
 
     constructor(
         progressCallback?: (progress: ScanProgress) => void,
-        coverCachePath?: string
+        coverCachePath?: string,
     ) {
         this.progressCallback = progressCallback;
         if (coverCachePath) {
@@ -81,7 +83,7 @@ export class MusicScannerService {
         trackId: string,
         status: "MISSING_FROM_DISK" | "UNREADABLE_METADATA",
         filePath: string,
-        detail?: string
+        detail?: string,
     ): Promise<void> {
         await getLibraryHealthRecordDelegate().upsert({
             where: { trackId },
@@ -134,7 +136,7 @@ export class MusicScannerService {
         });
 
         const tracksByPath = new Map(
-            existingTracks.map((t) => [t.filePath, t])
+            existingTracks.map((t) => [t.filePath, t]),
         );
 
         // Check if one-time disc-number backfill is needed
@@ -143,7 +145,7 @@ export class MusicScannerService {
         const needsDiscBackfill = !(settings?.discNoBackfillDone ?? false);
         if (needsDiscBackfill) {
             logger.info(
-                "[Scanner] One-time disc-number backfill — will re-read disc metadata from all files"
+                "[Scanner] One-time disc-number backfill — will re-read disc metadata from all files",
             );
         }
 
@@ -191,7 +193,7 @@ export class MusicScannerService {
                     await this.processAudioFile(
                         audioFile,
                         relativePath,
-                        musicPath
+                        musicPath,
                     );
                 } catch (err: any) {
                     const relativePath = path.relative(musicPath, audioFile);
@@ -201,7 +203,7 @@ export class MusicScannerService {
                             existingTrack.id,
                             "UNREADABLE_METADATA",
                             existingTrack.filePath,
-                            err.message || String(err)
+                            err.message || String(err),
                         );
                     }
                     const error = {
@@ -223,10 +225,10 @@ export class MusicScannerService {
 
         // Step 4: Record health issues for tracked files that no longer exist
         const scannedPaths = new Set(
-            audioFiles.map((f) => path.relative(musicPath, f))
+            audioFiles.map((f) => path.relative(musicPath, f)),
         );
         const tracksToRemove = existingTracks.filter(
-            (t) => !scannedPaths.has(t.filePath)
+            (t) => !scannedPaths.has(t.filePath),
         );
 
         if (tracksToRemove.length > 0) {
@@ -235,12 +237,12 @@ export class MusicScannerService {
                     this.markTrackHealthIssue(
                         track.id,
                         "MISSING_FROM_DISK",
-                        track.filePath
-                    )
-                )
+                        track.filePath,
+                    ),
+                ),
             );
             logger.debug(
-                `Recorded ${tracksToRemove.length} missing tracks in library health`
+                `Recorded ${tracksToRemove.length} missing tracks in library health`,
             );
         }
 
@@ -253,7 +255,9 @@ export class MusicScannerService {
         });
 
         if (tracksToRemove.length === 0 && orphanedAlbums.length > 0) {
-            logger.debug(`Removing ${orphanedAlbums.length} orphaned albums...`);
+            logger.debug(
+                `Removing ${orphanedAlbums.length} orphaned albums...`,
+            );
             await prisma.album.deleteMany({
                 where: {
                     id: { in: orphanedAlbums.map((a) => a.id) },
@@ -275,7 +279,7 @@ export class MusicScannerService {
                     orphanedArtists.length
                 } orphaned artists: ${orphanedArtists
                     .map((a) => a.name)
-                    .join(", ")}`
+                    .join(", ")}`,
             );
             await prisma.artist.deleteMany({
                 where: {
@@ -286,7 +290,7 @@ export class MusicScannerService {
 
         result.duration = Date.now() - startTime;
         logger.debug(
-            `Scan complete: +${result.tracksAdded} ~${result.tracksUpdated} -${result.tracksRemoved} (${result.duration}ms)`
+            `Scan complete: +${result.tracksAdded} ~${result.tracksUpdated} -${result.tracksRemoved} (${result.duration}ms)`,
         );
 
         // Mark disc-number backfill as done so future scans skip unchanged files normally
@@ -294,7 +298,9 @@ export class MusicScannerService {
             await prisma.systemSettings.updateMany({
                 data: { discNoBackfillDone: true },
             });
-            logger.info("[Scanner] Disc-number backfill complete — flagged as done");
+            logger.info(
+                "[Scanner] Disc-number backfill complete — flagged as done",
+            );
         }
 
         // Update artist denormalized counts in background (non-blocking).
@@ -344,7 +350,7 @@ export class MusicScannerService {
      */
     private async isDiscoveryDownload(
         artistName: string,
-        albumTitle: string
+        albumTitle: string,
     ): Promise<boolean> {
         if (!artistName || !albumTitle) return false;
 
@@ -357,15 +363,15 @@ export class MusicScannerService {
             this.normalizeForMatching(primaryArtist);
 
         logger.debug(
-            `[Scanner] Checking discovery: "${artistName}" -> "${normalizedArtist}"`
+            `[Scanner] Checking discovery: "${artistName}" -> "${normalizedArtist}"`,
         );
         if (primaryArtist !== artistName) {
             logger.debug(
-                `[Scanner]   Primary artist: "${primaryArtist}" -> "${normalizedPrimaryArtist}"`
+                `[Scanner]   Primary artist: "${primaryArtist}" -> "${normalizedPrimaryArtist}"`,
             );
         }
         logger.debug(
-            `[Scanner]   Album: "${albumTitle}" -> "${normalizedAlbum}"`
+            `[Scanner]   Album: "${albumTitle}" -> "${normalizedAlbum}"`,
         );
 
         try {
@@ -378,17 +384,17 @@ export class MusicScannerService {
             });
 
             logger.debug(
-                `[Scanner]   Found ${discoveryJobs.length} discovery jobs to check`
+                `[Scanner]   Found ${discoveryJobs.length} discovery jobs to check`,
             );
 
             // Pass 1: Exact match after normalization
             for (const job of discoveryJobs) {
                 const metadata = job.metadata as any;
                 const jobArtist = this.normalizeForMatching(
-                    metadata?.artistName || ""
+                    metadata?.artistName || "",
                 );
                 const jobAlbum = this.normalizeForMatching(
-                    metadata?.albumTitle || ""
+                    metadata?.albumTitle || "",
                 );
 
                 if (
@@ -405,10 +411,10 @@ export class MusicScannerService {
             for (const job of discoveryJobs) {
                 const metadata = job.metadata as any;
                 const jobArtist = this.normalizeForMatching(
-                    metadata?.artistName || ""
+                    metadata?.artistName || "",
                 );
                 const jobAlbum = this.normalizeForMatching(
-                    metadata?.albumTitle || ""
+                    metadata?.albumTitle || "",
                 );
 
                 // Try matching both full artist name and extracted primary artist
@@ -427,7 +433,7 @@ export class MusicScannerService {
                 if (artistMatch && albumMatch) {
                     logger.debug(`[Scanner] PARTIAL MATCH: job ${job.id}`);
                     logger.debug(
-                        `[Scanner]   Job: "${jobArtist}" - "${jobAlbum}"`
+                        `[Scanner]   Job: "${jobArtist}" - "${jobAlbum}"`,
                     );
                     return true;
                 }
@@ -438,7 +444,7 @@ export class MusicScannerService {
             for (const job of discoveryJobs) {
                 const metadata = job.metadata as any;
                 const jobAlbum = this.normalizeForMatching(
-                    metadata?.albumTitle || ""
+                    metadata?.albumTitle || "",
                 );
 
                 if (
@@ -446,10 +452,10 @@ export class MusicScannerService {
                     normalizedAlbum.length > 3
                 ) {
                     logger.debug(
-                        `[Scanner] ALBUM-ONLY MATCH (featured artist): job ${job.id}`
+                        `[Scanner] ALBUM-ONLY MATCH (featured artist): job ${job.id}`,
                     );
                     logger.debug(
-                        `[Scanner]   Track artist "${normalizedArtist}" is likely featured on "${jobAlbum}"`
+                        `[Scanner]   Track artist "${normalizedArtist}" is likely featured on "${jobAlbum}"`,
                     );
                     return true;
                 }
@@ -462,12 +468,12 @@ export class MusicScannerService {
                         albumTitle: { equals: albumTitle, mode: "insensitive" },
                         status: { in: ["ACTIVE", "LIKED"] },
                     },
-                }
+                },
             );
 
             if (discoveryAlbumByTitle) {
                 logger.debug(
-                    `[Scanner] DiscoveryAlbum match (by title): ${discoveryAlbumByTitle.id}`
+                    `[Scanner] DiscoveryAlbum match (by title): ${discoveryAlbumByTitle.id}`,
                 );
                 return true;
             }
@@ -497,10 +503,10 @@ export class MusicScannerService {
 
                 if (!existingLibraryAlbum) {
                     logger.debug(
-                        `[Scanner] DiscoveryAlbum match (by artist): ${discoveryAlbumByArtist.id}`
+                        `[Scanner] DiscoveryAlbum match (by artist): ${discoveryAlbumByArtist.id}`,
                     );
                     logger.debug(
-                        `[Scanner]   Artist "${artistName}" is a discovery-only artist`
+                        `[Scanner]   Artist "${artistName}" is a discovery-only artist`,
                     );
                     return true;
                 }
@@ -530,7 +536,7 @@ export class MusicScannerService {
             }
             if (current.depth > MAX_SCAN_DEPTH) {
                 logger.warn(
-                    `[Scanner] Skipping directory beyond maximum scan depth: ${current.dir}`
+                    `[Scanner] Skipping directory beyond maximum scan depth: ${current.dir}`,
                 );
                 continue;
             }
@@ -570,7 +576,7 @@ export class MusicScannerService {
     private async processAudioFile(
         absolutePath: string,
         relativePath: string,
-        musicPath: string
+        musicPath: string,
     ): Promise<void> {
         // Extract metadata in two stages. The cheap header-only parse yields
         // a duration for most formats (FLAC STREAMINFO, MP3 Xing, MP4 atoms).
@@ -601,16 +607,14 @@ export class MusicScannerService {
         // This prevents featured artists from creating separate album entries
         // e.g., "Artist A feat. Artist B" track should still be under "Artist A"'s album
         let rawArtistName =
-            metadata.common.albumartist ||
-            metadata.common.artist ||
-            "";
+            metadata.common.albumartist || metadata.common.artist || "";
 
         // Folder fallback: If metadata is empty, try to parse from folder structure
         if (!rawArtistName || rawArtistName.trim() === "") {
             const folderPath = path.dirname(relativePath);
             const folderName = path.basename(folderPath);
             let parsedArtist = parseArtistFromPath(folderName);
-            
+
             // If the immediate parent folder didn't yield an artist (e.g. it's an album
             // folder like "Robbin' The Hood"), try the grandparent folder which may be
             // the artist folder in an Artist/Album/Track directory structure.
@@ -618,13 +622,20 @@ export class MusicScannerService {
                 const grandparentPath = path.dirname(folderPath);
                 const grandparentName = path.basename(grandparentPath);
                 // Only use grandparent if it's a real folder name (not empty, not the root)
-                if (grandparentName && grandparentName !== "." && grandparentName !== "/") {
+                if (
+                    grandparentName &&
+                    grandparentName !== "." &&
+                    grandparentName !== "/"
+                ) {
                     // The grandparent folder is likely the artist name itself
                     // (e.g., "Sublime" in Sublime/Robbin' The Hood/track.flac)
                     const gpParsed = parseArtistFromPath(grandparentName);
                     if (gpParsed) {
                         parsedArtist = gpParsed;
-                    } else if (grandparentName.length >= 2 && !/^\d+$/.test(grandparentName)) {
+                    } else if (
+                        grandparentName.length >= 2 &&
+                        !/^\d+$/.test(grandparentName)
+                    ) {
                         // Use the grandparent folder name directly as the artist
                         parsedArtist = grandparentName;
                     }
@@ -633,13 +644,13 @@ export class MusicScannerService {
 
             if (parsedArtist) {
                 logger.debug(
-                    `[Scanner] No metadata artist found, using folder: "${folderName}" -> "${parsedArtist}"`
+                    `[Scanner] No metadata artist found, using folder: "${folderName}" -> "${parsedArtist}"`,
                 );
                 rawArtistName = parsedArtist;
             } else {
                 rawArtistName = "Unknown Artist";
                 logger.warn(
-                    `[Scanner] Unknown Artist assigned for: ${relativePath} (no metadata, folder parse failed: "${folderName}")`
+                    `[Scanner] Unknown Artist assigned for: ${relativePath} (no metadata, folder parse failed: "${folderName}")`,
                 );
             }
         }
@@ -691,7 +702,7 @@ export class MusicScannerService {
 
             if (currentNameIsLowercase && newNameIsCapitalized) {
                 logger.debug(
-                    `Updating artist name capitalization: "${artist.name}" -> "${artistName}"`
+                    `Updating artist name capitalization: "${artist.name}" -> "${artistName}"`,
                 );
                 artist = await prisma.artist.update({
                     where: { id: artist.id },
@@ -709,7 +720,7 @@ export class MusicScannerService {
                         // Get artists whose normalized names start with similar prefix
                         startsWith: normalizedArtistName.substring(
                             0,
-                            Math.min(3, normalizedArtistName.length)
+                            Math.min(3, normalizedArtistName.length),
                         ),
                     },
                 },
@@ -725,7 +736,7 @@ export class MusicScannerService {
             for (const candidate of similarArtists) {
                 if (areArtistNamesSimilar(artistName, candidate.name, 95)) {
                     logger.debug(
-                        `Fuzzy match found: "${artistName}" -> "${candidate.name}"`
+                        `Fuzzy match found: "${artistName}" -> "${candidate.name}"`,
                     );
                     artist = candidate as any;
                     break;
@@ -753,7 +764,7 @@ export class MusicScannerService {
                     if (tempArtist) {
                         // Consolidate: update temp artist to real MBID
                         logger.debug(
-                            `[SCANNER] Consolidating temp artist "${tempArtist.name}" with real MBID: ${artistMbid}`
+                            `[SCANNER] Consolidating temp artist "${tempArtist.name}" with real MBID: ${artistMbid}`,
                         );
                         try {
                             artist = await prisma.artist.update({
@@ -763,7 +774,7 @@ export class MusicScannerService {
                         } catch (error: any) {
                             if (error.code === "P2002") {
                                 logger.debug(
-                                    `[SCANNER] MBID ${artistMbid} already belongs to another artist, reusing canonical record`
+                                    `[SCANNER] MBID ${artistMbid} already belongs to another artist, reusing canonical record`,
                                 );
                                 artist = await prisma.artist.findUnique({
                                     where: { mbid: artistMbid },
@@ -772,7 +783,7 @@ export class MusicScannerService {
                                     // Rare race edge case: keep temp artist linkage for this file
                                     // and let later scans consolidate once canonical row is visible.
                                     logger.warn(
-                                        `[SCANNER] MBID collision detected for ${artistMbid}, but canonical artist lookup returned null; keeping temp artist linkage`
+                                        `[SCANNER] MBID collision detected for ${artistMbid}, but canonical artist lookup returned null; keeping temp artist linkage`,
                                     );
                                     artist = tempArtist;
                                 }
@@ -792,7 +803,8 @@ export class MusicScannerService {
                             name: artistName,
                             normalizedName: normalizedArtistName,
                             mbid:
-                                artistMbid || `temp-${Date.now()}-${Math.random()}`,
+                                artistMbid ||
+                                `temp-${Date.now()}-${Math.random()}`,
                             enrichmentStatus: "pending",
                         },
                     });
@@ -804,7 +816,7 @@ export class MusicScannerService {
                         });
                         if (existingArtist) {
                             logger.debug(
-                                `[SCANNER] Artist create raced on MBID ${artistMbid}; reusing existing artist "${existingArtist.name}"`
+                                `[SCANNER] Artist create raced on MBID ${artistMbid}; reusing existing artist "${existingArtist.name}"`,
                             );
                             artist = existingArtist;
                         } else {
@@ -822,7 +834,7 @@ export class MusicScannerService {
         const isDiscoveryByPath = this.isDiscoveryPath(relativePath);
         const isDiscoveryByJob = await this.isDiscoveryDownload(
             artistName,
-            albumTitle
+            albumTitle,
         );
 
         let isDiscoveryArtist = false;
@@ -836,15 +848,15 @@ export class MusicScannerService {
             // albums and still have no owned library albums.
             if (artistAlbums.length > 0) {
                 const hasLibraryAlbums = artistAlbums.some(
-                    (candidateAlbum) => candidateAlbum.location === "LIBRARY"
+                    (candidateAlbum) => candidateAlbum.location === "LIBRARY",
                 );
                 const hasDiscoveryAlbums = artistAlbums.some(
-                    (candidateAlbum) => candidateAlbum.location === "DISCOVER"
+                    (candidateAlbum) => candidateAlbum.location === "DISCOVER",
                 );
                 isDiscoveryArtist = hasDiscoveryAlbums && !hasLibraryAlbums;
                 if (isDiscoveryArtist) {
                     logger.debug(
-                        `[Scanner] Discovery-only artist detected: ${artistName}`
+                        `[Scanner] Discovery-only artist detected: ${artistName}`,
                     );
                 }
             }
@@ -888,8 +900,7 @@ export class MusicScannerService {
 
         if (!album) {
             // Create new album (un-tagged files get a unique temporary MBID).
-            const rgMbid =
-                albumMbid || `temp-${Date.now()}-${Math.random()}`;
+            const rgMbid = albumMbid || `temp-${Date.now()}-${Math.random()}`;
 
             try {
                 album = await prisma.album.create({
@@ -915,7 +926,7 @@ export class MusicScannerService {
                     });
                     if (existingAlbum) {
                         logger.debug(
-                            `[SCANNER] Album create raced on rgMbid ${rgMbid}; reusing existing album "${existingAlbum.title}"`
+                            `[SCANNER] Album create raced on rgMbid ${rgMbid}; reusing existing album "${existingAlbum.title}"`,
                         );
                         album = existingAlbum;
                     } else {
@@ -940,12 +951,12 @@ export class MusicScannerService {
                         "..",
                         "cache",
                         "covers",
-                        nativePath
+                        nativePath,
                     );
                     // Use the extractor's cache path instead
                     const extractorCachePath = path.join(
                         (this.coverArtExtractor as any).coverCachePath,
-                        nativePath
+                        nativePath,
                     );
                     if (!fs.existsSync(extractorCachePath)) {
                         needsExtraction = true;
@@ -956,7 +967,7 @@ export class MusicScannerService {
                     const coverPath =
                         await this.coverArtExtractor.extractCoverArt(
                             absolutePath,
-                            album.id
+                            album.id,
                         );
                     if (coverPath) {
                         await prisma.album.update({
@@ -969,7 +980,7 @@ export class MusicScannerService {
                             const deezerCover =
                                 await deezerService.getAlbumCover(
                                     artistName,
-                                    albumTitle
+                                    albumTitle,
                                 );
                             if (deezerCover) {
                                 await prisma.album.update({
@@ -988,7 +999,7 @@ export class MusicScannerService {
         if (!isDiscoveryAlbum) {
             if (album.location !== "LIBRARY") {
                 logger.info(
-                    `[Scanner] Promoting album "${album.title}" (${album.id}) from ${album.location} to LIBRARY after local scan`
+                    `[Scanner] Promoting album "${album.title}" (${album.id}) from ${album.location} to LIBRARY after local scan`,
                 );
                 album = await prisma.album.update({
                     where: { id: album.id },

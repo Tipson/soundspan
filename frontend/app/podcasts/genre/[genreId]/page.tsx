@@ -53,12 +53,11 @@ export default function GenrePage() {
 
         setLoading(true);
         try {
-
             // Call the paginated endpoint
             const data = await api.getPodcastsByGenrePaginated(
                 parseInt(genreId),
                 LIMIT,
-                offset
+                offset,
             );
 
             if (data.length < LIMIT) {
@@ -85,7 +84,7 @@ export default function GenrePage() {
                     loadMorePodcasts();
                 }
             },
-            { threshold: 0.1 }
+            { threshold: 0.1 },
         );
 
         if (loadMoreRef.current) {

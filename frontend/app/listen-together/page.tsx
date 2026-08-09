@@ -21,7 +21,10 @@ import {
     RefreshCw,
     Disc3,
 } from "lucide-react";
-import { TrackOverflowMenu, TrackMenuButton } from "@/components/ui/TrackOverflowMenu";
+import {
+    TrackOverflowMenu,
+    TrackMenuButton,
+} from "@/components/ui/TrackOverflowMenu";
 import { useAuth } from "@/lib/auth-context";
 import { useListenTogether } from "@/lib/listen-together-context";
 import { api } from "@/lib/api";
@@ -81,7 +84,7 @@ function CoverThumb({
             <div
                 className={cn(
                     "flex items-center justify-center bg-surface-hover rounded flex-shrink-0",
-                    className
+                    className,
                 )}
                 style={{ width: size, height: size }}
             >
@@ -95,7 +98,10 @@ function CoverThumb({
 
     return (
         <div
-            className={cn("relative overflow-hidden bg-surface-hover rounded flex-shrink-0", className)}
+            className={cn(
+                "relative overflow-hidden bg-surface-hover rounded flex-shrink-0",
+                className,
+            )}
             style={{ width: size, height: size }}
         >
             <Image
@@ -141,7 +147,7 @@ function LobbyView() {
     const [isCreating, setIsCreating] = useState(false);
     const [isJoining, setIsJoining] = useState(false);
     const [discoverGroups, setDiscoverGroups] = useState<DiscoverableGroup[]>(
-        []
+        [],
     );
     const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
     const routeChecking = socketRouteStatus === "checking";
@@ -170,7 +176,7 @@ function LobbyView() {
         if (!canUseListenTogether) {
             toast.error(
                 socketRouteError ??
-                    "Listen Together socket route is not configured"
+                    "Listen Together socket route is not configured",
             );
             return;
         }
@@ -188,7 +194,7 @@ function LobbyView() {
         if (!canUseListenTogether) {
             toast.error(
                 socketRouteError ??
-                    "Listen Together socket route is not configured"
+                    "Listen Together socket route is not configured",
             );
             return;
         }
@@ -203,7 +209,7 @@ function LobbyView() {
         if (!canUseListenTogether) {
             toast.error(
                 socketRouteError ??
-                    "Listen Together socket route is not configured"
+                    "Listen Together socket route is not configured",
             );
             return;
         }
@@ -303,9 +309,7 @@ function LobbyView() {
                                     aria-checked={isPublic}
                                     className={cn(
                                         "relative h-6 w-11 rounded-full transition-colors",
-                                        isPublic
-                                            ? "bg-brand"
-                                            : "bg-[#3a3a3a]"
+                                        isPublic ? "bg-brand" : "bg-[#3a3a3a]",
                                     )}
                                 >
                                     <span
@@ -313,7 +317,7 @@ function LobbyView() {
                                             "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all",
                                             isPublic
                                                 ? "left-[22px]"
-                                                : "left-0.5"
+                                                : "left-0.5",
                                         )}
                                     />
                                 </button>
@@ -337,7 +341,7 @@ function LobbyView() {
                                         "relative h-6 w-11 rounded-full transition-colors",
                                         useCurrentQueue
                                             ? "bg-brand"
-                                            : "bg-[#3a3a3a]"
+                                            : "bg-[#3a3a3a]",
                                     )}
                                 >
                                     <span
@@ -345,7 +349,7 @@ function LobbyView() {
                                             "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all",
                                             useCurrentQueue
                                                 ? "left-[22px]"
-                                                : "left-0.5"
+                                                : "left-0.5",
                                         )}
                                     />
                                 </button>
@@ -361,7 +365,10 @@ function LobbyView() {
                                 }
                             >
                                 {isCreating ? (
-                                    <GradientSpinner size="sm" className="mr-2" />
+                                    <GradientSpinner
+                                        size="sm"
+                                        className="mr-2"
+                                    />
                                 ) : (
                                     <Radio className="w-4 h-4 mr-2" />
                                 )}
@@ -402,7 +409,10 @@ function LobbyView() {
                                 }
                             >
                                 {isJoining && (
-                                    <GradientSpinner size="sm" className="mr-2" />
+                                    <GradientSpinner
+                                        size="sm"
+                                        className="mr-2"
+                                    />
                                 )}
                                 Join
                             </button>
@@ -619,7 +629,10 @@ function ActiveGroupView() {
                                 ) : hasConnectedOnce ? (
                                     <>
                                         <WifiOff className="w-3 h-3 text-red-500" />{" "}
-                                        Reconnecting{reconnectAttempt > 0 ? ` (${reconnectAttempt})` : "..."}
+                                        Reconnecting
+                                        {reconnectAttempt > 0
+                                            ? ` (${reconnectAttempt})`
+                                            : "..."}
                                     </>
                                 ) : (
                                     <>
@@ -708,7 +721,7 @@ function ActiveGroupView() {
                                             syncRemoveFromQueue(idx)
                                         }
                                     />
-                                )
+                                ),
                             )}
                         </div>
                     )}
@@ -749,7 +762,7 @@ function ActiveGroupView() {
                                                 "w-2 h-2 rounded-full",
                                                 member.isConnected
                                                     ? "bg-green-500"
-                                                    : "bg-content-disabled"
+                                                    : "bg-content-disabled",
                                             )}
                                             title={
                                                 member.isConnected
@@ -804,7 +817,7 @@ function QueueItem({
                 "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group",
                 isCurrentTrack
                     ? "bg-brand/8 border-l-2 border-brand"
-                    : "hover:bg-surface-overlay"
+                    : "hover:bg-surface-overlay",
             )}
         >
             {/* Track Number / EQ / Play */}
@@ -819,7 +832,9 @@ function QueueItem({
                         <span className="text-xs">{index + 1}</span>
                     </button>
                 ) : (
-                    <span className="text-xs text-content-disabled">{index + 1}</span>
+                    <span className="text-xs text-content-disabled">
+                        {index + 1}
+                    </span>
                 )}
             </div>
 
@@ -839,7 +854,7 @@ function QueueItem({
                             "text-sm truncate",
                             isCurrentTrack
                                 ? "text-brand font-medium"
-                                : "text-white"
+                                : "text-white",
                         )}
                     >
                         {item.title}
@@ -868,17 +883,19 @@ function QueueItem({
                 }}
                 showPlayNext={false}
                 showAddToQueue={false}
-                extraItemsAfter={canRemove ? (
-                    <TrackMenuButton
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onRemove();
-                        }}
-                        icon={<Trash2 className="h-4 w-4" />}
-                        label="Remove from queue"
-                        className="text-red-400 hover:text-red-300"
-                    />
-                ) : undefined}
+                extraItemsAfter={
+                    canRemove ? (
+                        <TrackMenuButton
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove();
+                            }}
+                            icon={<Trash2 className="h-4 w-4" />}
+                            label="Remove from queue"
+                            className="text-red-400 hover:text-red-300"
+                        />
+                    ) : undefined
+                }
             />
         </div>
     );

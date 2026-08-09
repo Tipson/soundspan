@@ -22,27 +22,11 @@ export function AboutSection({ description }: AboutSectionProps) {
             <Card className="p-6">
                 <div
                     className="text-gray-300 text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(description || "") }}
+                    dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(description || ""),
+                    }}
                 />
             </Card>
         </section>
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

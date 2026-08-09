@@ -35,7 +35,11 @@ export function AudiobookCard({
 
     return (
         <Link
-            href={seriesBadge ? `/audiobooks/series/${encodeURIComponent(title)}` : `/audiobooks/${id}`}
+            href={
+                seriesBadge
+                    ? `/audiobooks/series/${encodeURIComponent(title)}`
+                    : `/audiobooks/${id}`
+            }
             data-tv-card
             data-tv-card-index={index}
             tabIndex={0}
@@ -59,10 +63,10 @@ export function AudiobookCard({
                                 <Book className="w-16 h-16 text-gray-400" />
                             </div>
                         )}
-                        
+
                         {/* Book Spine Shadow */}
                         <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-r from-black/40 to-transparent pointer-events-none" />
-                        
+
                         {/* Book Gloss */}
                         <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/20 pointer-events-none" />
 
@@ -90,7 +94,7 @@ export function AudiobookCard({
                             </div>
                         )}
                     </div>
-                    
+
                     {/* Shelf Shadow */}
                     <div className="absolute -bottom-1 left-0 right-0 h-2 bg-gradient-to-b from-surface-hover/50 to-transparent rounded-b-sm" />
                 </div>
@@ -108,18 +112,3 @@ export function AudiobookCard({
         </Link>
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

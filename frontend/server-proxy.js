@@ -37,7 +37,7 @@ function isImportPreviewPath(pathname) {
     ];
     return candidates.some(
         (prefix) =>
-            normalized === prefix || normalized.startsWith(`${prefix}/`)
+            normalized === prefix || normalized.startsWith(`${prefix}/`),
     );
 }
 
@@ -61,7 +61,7 @@ function resolveProxyTimeoutMs(pathname, env = process.env) {
     }
 
     const importPreviewTimeout = parsePositiveTimeoutMs(
-        env.PROXY_IMPORT_PREVIEW_TIMEOUT_MS
+        env.PROXY_IMPORT_PREVIEW_TIMEOUT_MS,
     );
     if (importPreviewTimeout !== null) {
         return importPreviewTimeout;
@@ -85,12 +85,12 @@ function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
     return (proxyReq, req, res) => {
         const timeoutMs = resolveProxyTimeoutMs(
             getRequestPathname(req?.url),
-            env ?? process.env
+            env ?? process.env,
         );
 
         const timer = setTimeout(() => {
             logger.error(
-                `[${name}] ${req?.method} ${req?.url} timed out after ${timeoutMs}ms waiting for the first upstream byte`
+                `[${name}] ${req?.method} ${req?.url} timed out after ${timeoutMs}ms waiting for the first upstream byte`,
             );
             if (
                 res &&
@@ -105,7 +105,7 @@ function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
                         code: "UPSTREAM_TIMEOUT",
                         description:
                             "The frontend could not get a response from the backend in time.",
-                    })
+                    }),
                 );
             }
             if (typeof proxyReq.destroy === "function") {
@@ -155,7 +155,7 @@ function createProxyErrorHandler({ name, logger, errorMessage, errorCode }) {
                     JSON.stringify({
                         error: errorMessage,
                         code: errorCode,
-                    })
+                    }),
                 );
             }
             return;
@@ -197,12 +197,17 @@ function buildBackendProxyOptions({
         ? Math.max(
               120000,
               resolveProxyTimeoutMs("/api/", activeEnv),
-              resolveProxyTimeoutMs(IMPORT_PREVIEW_PATH_PREFIX, activeEnv)
+              resolveProxyTimeoutMs(IMPORT_PREVIEW_PATH_PREFIX, activeEnv),
           )
         : 120000;
 
     const on = {
-        error: createProxyErrorHandler({ name, logger, errorMessage, errorCode }),
+        error: createProxyErrorHandler({
+            name,
+            logger,
+            errorMessage,
+            errorCode,
+        }),
     };
     if (firstByteTimeout) {
         on.proxyReq = createFirstByteTimeoutProxyReqHandler({

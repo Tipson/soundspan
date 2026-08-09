@@ -57,7 +57,8 @@ const AlbumCardItem = memo(
         );
 
         const coverArtUrl = useMemo(
-            () => (album.coverArt ? api.getCoverArtUrl(album.coverArt, 200) : null),
+            () =>
+                album.coverArt ? api.getCoverArtUrl(album.coverArt, 200) : null,
             [album.coverArt],
         );
 
@@ -70,9 +71,15 @@ const AlbumCardItem = memo(
                 tabIndex={0}
                 className="group"
             >
-                <div className="p-3 rounded-md cursor-pointer hover:bg-white/5 transition-colors" style={{ transform: "translateZ(0)" }}>
+                <div
+                    className="p-3 rounded-md cursor-pointer hover:bg-white/5 transition-colors"
+                    style={{ transform: "translateZ(0)" }}
+                >
                     <div className="relative aspect-square mb-3">
-                        <div className="w-full h-full bg-surface-highlight rounded-md flex items-center justify-center overflow-hidden" style={{ contain: "content" }}>
+                        <div
+                            className="w-full h-full bg-surface-highlight rounded-md flex items-center justify-center overflow-hidden"
+                            style={{ contain: "content" }}
+                        >
                             {coverArtUrl ? (
                                 <CachedImage
                                     src={coverArtUrl}

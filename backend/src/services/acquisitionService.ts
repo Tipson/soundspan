@@ -93,7 +93,7 @@ class AcquisitionService {
         // Initialize album queue with default concurrency (will be updated from settings)
         this.albumQueue = new PQueue({ concurrency: 4 });
         logger.debug(
-            "[Acquisition] Initialized album queue with default concurrency=4"
+            "[Acquisition] Initialized album queue with default concurrency=4",
         );
     }
 
@@ -109,7 +109,7 @@ class AcquisitionService {
             this.albumQueue.concurrency = concurrency;
             this.lastConcurrency = concurrency;
             logger.debug(
-                `[Acquisition] Updated album queue concurrency to ${concurrency}`
+                `[Acquisition] Updated album queue concurrency to ${concurrency}`,
             );
         }
     }
@@ -136,7 +136,7 @@ class AcquisitionService {
         // Case 1: No sources available
         if (!hasSoulseek && !hasLidarr) {
             logger.debug(
-                "[Acquisition] Available sources: Lidarr=false, Soulseek=false"
+                "[Acquisition] Available sources: Lidarr=false, Soulseek=false",
             );
             logger.error("[Acquisition] No download sources configured");
             return {
@@ -150,13 +150,13 @@ class AcquisitionService {
         // Case 2: Only one source available - use it regardless of preference
         if (hasSoulseek && !hasLidarr) {
             logger.debug(
-                "[Acquisition] Available sources: Lidarr=false, Soulseek=true"
+                "[Acquisition] Available sources: Lidarr=false, Soulseek=true",
             );
             logger.debug(
-                "[Acquisition] Using Soulseek as primary source (only source available)"
+                "[Acquisition] Using Soulseek as primary source (only source available)",
             );
             logger.debug(
-                "[Acquisition] No fallback configured (only one source available)"
+                "[Acquisition] No fallback configured (only one source available)",
             );
             return {
                 hasPrimarySource: true,
@@ -168,13 +168,13 @@ class AcquisitionService {
 
         if (hasLidarr && !hasSoulseek) {
             logger.debug(
-                "[Acquisition] Available sources: Lidarr=true, Soulseek=false"
+                "[Acquisition] Available sources: Lidarr=true, Soulseek=false",
             );
             logger.debug(
-                "[Acquisition] Using Lidarr as primary source (only source available)"
+                "[Acquisition] Using Lidarr as primary source (only source available)",
             );
             logger.debug(
-                "[Acquisition] No fallback configured (only one source available)"
+                "[Acquisition] No fallback configured (only one source available)",
             );
             return {
                 hasPrimarySource: true,
@@ -195,23 +195,27 @@ class AcquisitionService {
 
         // Only auto-enable fallback if the setting is truly undefined/null (first-time users)
         // "none" = explicit "Skip Track" choice, respect it (Fixes #68)
-        if (!useFallback && (primaryFailureFallback === undefined || primaryFailureFallback === null)) {
+        if (
+            !useFallback &&
+            (primaryFailureFallback === undefined ||
+                primaryFailureFallback === null)
+        ) {
             useFallback = true;
             logger.debug(
-                `[Acquisition] Auto-enabled fallback: ${alternative} (both sources configured)`
+                `[Acquisition] Auto-enabled fallback: ${alternative} (both sources configured)`,
             );
         }
 
         logger.debug(
-            "[Acquisition] Available sources: Lidarr=true, Soulseek=true"
+            "[Acquisition] Available sources: Lidarr=true, Soulseek=true",
         );
         logger.debug(
-            `[Acquisition] Using ${userPrimary} as primary source (user preference)`
+            `[Acquisition] Using ${userPrimary} as primary source (user preference)`,
         );
         logger.debug(
             `[Acquisition] Fallback configured: ${
                 useFallback ? alternative : "none"
-            }`
+            }`,
         );
 
         return {
@@ -229,7 +233,7 @@ class AcquisitionService {
     private async updateJobStatusText(
         jobId: string,
         source: "lidarr" | "soulseek",
-        attemptNumber: number
+        attemptNumber: number,
     ): Promise<void> {
         const sourceLabel = source.charAt(0).toUpperCase() + source.slice(1);
         const statusText = `${sourceLabel} #${attemptNumber}`;
@@ -273,13 +277,13 @@ class AcquisitionService {
      */
     async acquireAlbum(
         request: AlbumAcquisitionRequest,
-        context: AcquisitionContext
+        context: AcquisitionContext,
     ): Promise<AcquisitionResult> {
         // Update queue concurrency from user settings
         await this.updateQueueConcurrency();
 
         return this.albumQueue.add(() =>
-            this.acquireAlbumInternal(request, context)
+            this.acquireAlbumInternal(request, context),
         );
     }
 
@@ -288,27 +292,27 @@ class AcquisitionService {
      */
     private async acquireAlbumInternal(
         request: AlbumAcquisitionRequest,
-        context: AcquisitionContext
+        context: AcquisitionContext,
     ): Promise<AcquisitionResult> {
         logger.debug(
-            `\n[Acquisition] Acquiring album: ${request.artistName} - ${request.albumTitle} (queue: ${this.albumQueue.size} pending, ${this.albumQueue.pending} active)`
+            `\n[Acquisition] Acquiring album: ${request.artistName} - ${request.albumTitle} (queue: ${this.albumQueue.size} pending, ${this.albumQueue.pending} active)`,
         );
 
         // Verify artist name before acquisition
         try {
             const correction = await lastFmService.getArtistCorrection(
-                request.artistName
+                request.artistName,
             );
             if (correction?.corrected) {
                 logger.debug(
-                    `[Acquisition] Artist corrected: "${request.artistName}" → "${correction.canonicalName}"`
+                    `[Acquisition] Artist corrected: "${request.artistName}" → "${correction.canonicalName}"`,
                 );
                 request = { ...request, artistName: correction.canonicalName };
             }
         } catch (error) {
             logger.warn(
                 `[Acquisition] Artist correction failed for "${request.artistName}":`,
-                error
+                error,
             );
         }
 
@@ -333,23 +337,21 @@ class AcquisitionService {
             // Fallback to Lidarr if Soulseek fails and fallback is configured
             if (!result.success) {
                 logger.debug(
-                    `[Acquisition] Soulseek failed: ${result.error || "unknown error"}`
+                    `[Acquisition] Soulseek failed: ${result.error || "unknown error"}`,
                 );
                 logger.debug(
-                    `[Acquisition] Fallback available: hasFallback=${behavior.hasFallbackSource}, source=${behavior.fallbackSource}`
+                    `[Acquisition] Fallback available: hasFallback=${behavior.hasFallbackSource}, source=${behavior.fallbackSource}`,
                 );
 
                 if (
                     behavior.hasFallbackSource &&
                     behavior.fallbackSource === "lidarr"
                 ) {
-                    logger.debug(
-                        `[Acquisition] Attempting Lidarr fallback...`
-                    );
+                    logger.debug(`[Acquisition] Attempting Lidarr fallback...`);
                     result = await this.acquireAlbumViaLidarr(request, context);
                 } else {
                     logger.debug(
-                        `[Acquisition] No fallback configured or fallback not Lidarr`
+                        `[Acquisition] No fallback configured or fallback not Lidarr`,
                     );
                 }
             }
@@ -360,10 +362,10 @@ class AcquisitionService {
             // Fallback to Soulseek if Lidarr fails and fallback is configured
             if (!result.success) {
                 logger.debug(
-                    `[Acquisition] Lidarr failed: ${result.error || "unknown error"}`
+                    `[Acquisition] Lidarr failed: ${result.error || "unknown error"}`,
                 );
                 logger.debug(
-                    `[Acquisition] Fallback available: hasFallback=${behavior.hasFallbackSource}, source=${behavior.fallbackSource}`
+                    `[Acquisition] Fallback available: hasFallback=${behavior.hasFallbackSource}, source=${behavior.fallbackSource}`,
                 );
 
                 if (
@@ -371,12 +373,15 @@ class AcquisitionService {
                     behavior.fallbackSource === "soulseek"
                 ) {
                     logger.debug(
-                        `[Acquisition] Attempting Soulseek fallback...`
+                        `[Acquisition] Attempting Soulseek fallback...`,
                     );
-                    result = await this.acquireAlbumViaSoulseek(request, context);
+                    result = await this.acquireAlbumViaSoulseek(
+                        request,
+                        context,
+                    );
                 } else {
                     logger.debug(
-                        `[Acquisition] No fallback configured or fallback not Soulseek`
+                        `[Acquisition] No fallback configured or fallback not Soulseek`,
                     );
                 }
             }
@@ -400,17 +405,17 @@ class AcquisitionService {
      */
     async acquireTracks(
         requests: TrackAcquisitionRequest[],
-        context: AcquisitionContext
+        context: AcquisitionContext,
     ): Promise<AcquisitionResult[]> {
         logger.debug(
-            `\n[Acquisition] Acquiring ${requests.length} individual tracks via Soulseek`
+            `\n[Acquisition] Acquiring ${requests.length} individual tracks via Soulseek`,
         );
 
         // Check Soulseek availability
         const soulseekAvailable = await soulseekService.isAvailable();
         if (!soulseekAvailable) {
             logger.error(
-                `[Acquisition] Soulseek not available for track downloads`
+                `[Acquisition] Soulseek not available for track downloads`,
             );
             return requests.map(() => ({
                 success: false,
@@ -441,11 +446,11 @@ class AcquisitionService {
             const batchResult = await soulseekService.searchAndDownloadBatch(
                 tracksToDownload,
                 musicPath,
-                settings?.soulseekConcurrentDownloads || 4 // concurrency
+                settings?.soulseekConcurrentDownloads || 4, // concurrency
             );
 
             logger.debug(
-                `[Acquisition] Batch result: ${batchResult.successful}/${requests.length} tracks downloaded`
+                `[Acquisition] Batch result: ${batchResult.successful}/${requests.length} tracks downloaded`,
             );
 
             // Create individual results for each track
@@ -454,7 +459,7 @@ class AcquisitionService {
                 // Check if this specific track had an error in the batch result
                 const trackKey = `${req.artistName} - ${req.trackTitle}`;
                 const trackError = batchResult.errors.find((e) =>
-                    e.startsWith(trackKey)
+                    e.startsWith(trackKey),
                 );
                 const success = !trackError;
 
@@ -470,7 +475,7 @@ class AcquisitionService {
             return results;
         } catch (error: any) {
             logger.error(
-                `[Acquisition] Batch track download error: ${error.message}`
+                `[Acquisition] Batch track download error: ${error.message}`,
             );
             return requests.map(() => ({
                 success: false,
@@ -490,10 +495,10 @@ class AcquisitionService {
      */
     private async acquireAlbumViaSoulseek(
         request: AlbumAcquisitionRequest,
-        context: AcquisitionContext
+        context: AcquisitionContext,
     ): Promise<AcquisitionResult> {
         logger.debug(
-            `[Acquisition/Soulseek] Downloading: ${request.artistName} - ${request.albumTitle}`
+            `[Acquisition/Soulseek] Downloading: ${request.artistName} - ${request.albumTitle}`,
         );
 
         // Get music path
@@ -521,7 +526,7 @@ class AcquisitionService {
             await this.updateJobStatusText(
                 job.id,
                 "soulseek",
-                soulseekAttempts
+                soulseekAttempts,
             );
 
             let tracks: Array<{ title: string; position?: number }>;
@@ -530,7 +535,7 @@ class AcquisitionService {
             if (request.requestedTracks && request.requestedTracks.length > 0) {
                 tracks = request.requestedTracks;
                 logger.debug(
-                    `[Acquisition/Soulseek] Using ${tracks.length} requested tracks (not full album)`
+                    `[Acquisition/Soulseek] Using ${tracks.length} requested tracks (not full album)`,
                 );
             } else {
                 // Strategy 1: Get track list from MusicBrainz
@@ -539,17 +544,20 @@ class AcquisitionService {
                 // Strategy 2: Fallback to Last.fm (always try when MusicBrainz fails)
                 if (!tracks || tracks.length === 0) {
                     logger.debug(
-                        `[Acquisition/Soulseek] MusicBrainz has no tracks, trying Last.fm`
+                        `[Acquisition/Soulseek] MusicBrainz has no tracks, trying Last.fm`,
                     );
 
                     try {
                         const albumInfo = await lastFmService.getAlbumInfo(
                             request.artistName,
-                            request.albumTitle
+                            request.albumTitle,
                         );
                         const lastFmTracks = albumInfo?.tracks?.track || [];
 
-                        if (Array.isArray(lastFmTracks) && lastFmTracks.length > 0) {
+                        if (
+                            Array.isArray(lastFmTracks) &&
+                            lastFmTracks.length > 0
+                        ) {
                             tracks = lastFmTracks.map((t: any) => ({
                                 title: t.name || t.title,
                                 position: t["@attr"]?.rank
@@ -557,12 +565,12 @@ class AcquisitionService {
                                     : undefined,
                             }));
                             logger.debug(
-                                `[Acquisition/Soulseek] Got ${tracks.length} tracks from Last.fm`
+                                `[Acquisition/Soulseek] Got ${tracks.length} tracks from Last.fm`,
                             );
                         }
                     } catch (lastfmError: any) {
                         logger.warn(
-                            `[Acquisition/Soulseek] Last.fm fallback failed: ${lastfmError.message}`
+                            `[Acquisition/Soulseek] Last.fm fallback failed: ${lastfmError.message}`,
                         );
                     }
                 }
@@ -572,7 +580,7 @@ class AcquisitionService {
                     await this.updateJobStatus(
                         job.id,
                         "failed",
-                        "Could not get track list from MusicBrainz or Last.fm"
+                        "Could not get track list from MusicBrainz or Last.fm",
                     );
                     return {
                         success: false,
@@ -581,7 +589,7 @@ class AcquisitionService {
                 }
 
                 logger.debug(
-                    `[Acquisition/Soulseek] Found ${tracks.length} tracks for album`
+                    `[Acquisition/Soulseek] Found ${tracks.length} tracks for album`,
                 );
             }
 
@@ -596,7 +604,7 @@ class AcquisitionService {
             const batchResult = await soulseekService.searchAndDownloadBatch(
                 tracksToDownload,
                 musicPath,
-                settings?.soulseekConcurrentDownloads || 4 // concurrency
+                settings?.soulseekConcurrentDownloads || 4, // concurrency
             );
 
             if (batchResult.successful === 0) {
@@ -604,7 +612,7 @@ class AcquisitionService {
                 await this.updateJobStatus(
                     job.id,
                     "failed",
-                    `No tracks found on Soulseek (searched ${tracks.length} tracks)`
+                    `No tracks found on Soulseek (searched ${tracks.length} tracks)`,
                 );
                 return {
                     success: false,
@@ -619,7 +627,7 @@ class AcquisitionService {
             const isSuccess = batchResult.successful >= successThreshold;
 
             logger.debug(
-                `[Acquisition/Soulseek] Downloaded ${batchResult.successful}/${tracks.length} tracks (threshold: ${successThreshold})`
+                `[Acquisition/Soulseek] Downloaded ${batchResult.successful}/${tracks.length} tracks (threshold: ${successThreshold})`,
             );
 
             // Mark job as completed immediately (Soulseek doesn't use webhooks)
@@ -628,7 +636,7 @@ class AcquisitionService {
                 isSuccess ? "completed" : "failed",
                 isSuccess
                     ? undefined
-                    : `Only ${batchResult.successful}/${tracks.length} tracks found`
+                    : `Only ${batchResult.successful}/${tracks.length} tracks found`,
             );
 
             // Update job metadata with track counts
@@ -660,11 +668,11 @@ class AcquisitionService {
                 await this.updateJobStatus(
                     job.id,
                     "failed",
-                    error.message
+                    error.message,
                 ).catch((e) =>
                     logger.error(
-                        `[Acquisition/Soulseek] Failed to update job status: ${e.message}`
-                    )
+                        `[Acquisition/Soulseek] Failed to update job status: ${e.message}`,
+                    ),
                 );
             }
             return { success: false, error: error.message };
@@ -681,10 +689,10 @@ class AcquisitionService {
      */
     private async acquireAlbumViaLidarr(
         request: AlbumAcquisitionRequest,
-        context: AcquisitionContext
+        context: AcquisitionContext,
     ): Promise<AcquisitionResult> {
         logger.debug(
-            `[Acquisition/Lidarr] Downloading: ${request.artistName} - ${request.albumTitle}`
+            `[Acquisition/Lidarr] Downloading: ${request.artistName} - ${request.albumTitle}`,
         );
 
         if (!request.mbid) {
@@ -712,12 +720,12 @@ class AcquisitionService {
                 request.albumTitle,
                 request.mbid,
                 context.userId,
-                isDiscovery
+                isDiscovery,
             );
 
             if (result.success) {
                 logger.debug(
-                    `[Acquisition/Lidarr] Download started (correlation: ${result.correlationId})`
+                    `[Acquisition/Lidarr] Download started (correlation: ${result.correlationId})`,
                 );
 
                 return {
@@ -728,7 +736,7 @@ class AcquisitionService {
                 };
             } else {
                 logger.error(
-                    `[Acquisition/Lidarr] Failed to start: ${result.error}`
+                    `[Acquisition/Lidarr] Failed to start: ${result.error}`,
                 );
 
                 // Mark job as failed
@@ -749,11 +757,11 @@ class AcquisitionService {
                 await this.updateJobStatus(
                     job.id,
                     "failed",
-                    error.message
+                    error.message,
                 ).catch((e) =>
                     logger.error(
-                        `[Acquisition/Lidarr] Failed to update job status: ${e.message}`
-                    )
+                        `[Acquisition/Lidarr] Failed to update job status: ${e.message}`,
+                    ),
                 );
             }
             return { success: false, error: error.message };
@@ -770,27 +778,35 @@ class AcquisitionService {
      */
     private async createDownloadJob(
         request: AlbumAcquisitionRequest,
-        context: AcquisitionContext
+        context: AcquisitionContext,
     ): Promise<any> {
         // Check for existing job first
         if (context.existingJobId) {
             logger.debug(
-                `[Acquisition] Using existing download job: ${context.existingJobId}`
+                `[Acquisition] Using existing download job: ${context.existingJobId}`,
             );
             return { id: context.existingJobId };
         }
 
         // Validate userId before creating download job to prevent foreign key constraint violations
-        if (!context.userId || typeof context.userId !== 'string' || context.userId === 'NaN' || context.userId === 'undefined' || context.userId === 'null') {
+        if (
+            !context.userId ||
+            typeof context.userId !== "string" ||
+            context.userId === "NaN" ||
+            context.userId === "undefined" ||
+            context.userId === "null"
+        ) {
             logger.error(
                 `[Acquisition] Invalid userId in context: ${JSON.stringify({
                     userId: context.userId,
                     typeofUserId: typeof context.userId,
                     albumTitle: request.albumTitle,
-                    artistName: request.artistName
-                })}`
+                    artistName: request.artistName,
+                })}`,
             );
-            throw new Error(`Invalid userId in acquisition context: ${context.userId}`);
+            throw new Error(
+                `Invalid userId in acquisition context: ${context.userId}`,
+            );
         }
 
         const jobData: any = {
@@ -824,7 +840,7 @@ class AcquisitionService {
         logger.debug(
             `[Acquisition] Created download job: ${job.id} (type: ${
                 jobData.metadata.downloadType || "library"
-            })`
+            })`,
         );
 
         return job;
@@ -840,7 +856,7 @@ class AcquisitionService {
     private async updateJobStatus(
         jobId: string,
         status: string,
-        error?: string
+        error?: string,
     ): Promise<void> {
         await prisma.downloadJob.update({
             where: { id: jobId },
@@ -857,7 +873,7 @@ class AcquisitionService {
         logger.debug(
             `[Acquisition] Updated job ${jobId}: status=${status}${
                 error ? `, error=${error}` : ""
-            }`
+            }`,
         );
     }
 }

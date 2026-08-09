@@ -54,7 +54,10 @@ export const PANEL_CLOSE_CLASS =
     "rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60";
 
-const FEATURE_LABELS: ReadonlyArray<{ key: keyof VibeFeatures; label: string }> = [
+const FEATURE_LABELS: ReadonlyArray<{
+    key: keyof VibeFeatures;
+    label: string;
+}> = [
     { key: "energy", label: "Energy" },
     { key: "valence", label: "Mood" },
     { key: "danceability", label: "Groove" },
@@ -127,17 +130,33 @@ function MatchBreakdown({
     );
 }
 
-function MatchToggle({ title, expanded, toggle }: {
+function MatchToggle({
+    title,
+    expanded,
+    toggle,
+}: {
     title: string;
     expanded: boolean;
     toggle: () => void;
 }) {
     return (
-        <button type="button" onClick={toggle} aria-expanded={expanded}
-            aria-label={expanded ? `Hide why ${title} matches` : `Show why ${title} matches`}
+        <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={expanded}
+            aria-label={
+                expanded
+                    ? `Hide why ${title} matches`
+                    : `Show why ${title} matches`
+            }
             title={expanded ? "Hide match breakdown" : "Why this match?"}
-            className="shrink-0 inline-flex items-center justify-center w-8 h-8 -ml-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60">
-            {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            className="shrink-0 inline-flex items-center justify-center w-8 h-8 -ml-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
+        >
+            {expanded ? (
+                <ChevronDown className="w-3.5 h-3.5" />
+            ) : (
+                <ChevronRight className="w-3.5 h-3.5" />
+            )}
         </button>
     );
 }
@@ -174,7 +193,9 @@ export function NeighborRow({
                     distance={n.distance}
                     quantiles={quantiles}
                     accentClass="text-indigo-300/80"
-                    onClick={(e) => (e.shiftKey ? onQueue(n.id) : onNavigate(n.id))}
+                    onClick={(e) =>
+                        e.shiftKey ? onQueue(n.id) : onNavigate(n.id)
+                    }
                     hint={
                         offMap
                             ? "Not on the map — click to play, shift-click to queue"
@@ -182,7 +203,11 @@ export function NeighborRow({
                     }
                     className="flex-1"
                 />
-                <MatchToggle title={n.title} expanded={expanded} toggle={onToggleExpand} />
+                <MatchToggle
+                    title={n.title}
+                    expanded={expanded}
+                    toggle={onToggleExpand}
+                />
             </div>
             {expanded && (
                 <MatchBreakdown
@@ -200,8 +225,13 @@ function TravelHeader({ view }: { view: TravelView }) {
         <>
             <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm font-semibold text-white">Travel</span>
-                <button type="button" onClick={view.close} aria-label="Exit travel (Esc)"
-                    title="Exit travel (Esc)" className={PANEL_CLOSE_CLASS}>
+                <button
+                    type="button"
+                    onClick={view.close}
+                    aria-label="Exit travel (Esc)"
+                    title="Exit travel (Esc)"
+                    className={PANEL_CLOSE_CLASS}
+                >
                     <X className="w-4 h-4" />
                 </button>
             </div>
@@ -212,14 +242,24 @@ function TravelHeader({ view }: { view: TravelView }) {
     );
 }
 
-function TravelBreadcrumb({ items }: { items: TravelView["breadcrumbTitles"] }) {
+function TravelBreadcrumb({
+    items,
+}: {
+    items: TravelView["breadcrumbTitles"];
+}) {
     if (items.length <= 1) return null;
     return (
         <div className="flex items-center flex-wrap gap-0.5 mb-2 text-xs text-gray-400">
             {items.map((item, index) => (
                 <span key={`${item.id}-${index}`} className="flex items-center">
-                    {index > 0 && <ChevronRight className="w-3 h-3 text-gray-400" />}
-                    <span className={index === items.length - 1 ? "text-indigo-300" : ""}>
+                    {index > 0 && (
+                        <ChevronRight className="w-3 h-3 text-gray-400" />
+                    )}
+                    <span
+                        className={
+                            index === items.length - 1 ? "text-indigo-300" : ""
+                        }
+                    >
                         {item.title}
                     </span>
                 </span>
@@ -230,11 +270,19 @@ function TravelBreadcrumb({ items }: { items: TravelView["breadcrumbTitles"] }) 
 
 function CompassSelector({ view }: { view: TravelView }) {
     return (
-        <div role="group" aria-label="Compass direction" className="flex flex-wrap gap-1.5 mb-2">
+        <div
+            role="group"
+            aria-label="Compass direction"
+            className="flex flex-wrap gap-1.5 mb-2"
+        >
             {COMPASS_DIRECTIONS.map((direction) => (
-                <button key={direction} type="button" onClick={() => view.setDirection(direction)}
+                <button
+                    key={direction}
+                    type="button"
+                    onClick={() => view.setDirection(direction)}
                     aria-pressed={view.direction === direction}
-                    className={`inline-flex items-center min-h-[36px] px-3 py-1.5 rounded-full border text-xs whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${view.direction === direction ? "border-indigo-400/60 bg-indigo-500/30 text-white" : "border-white/10 text-gray-300 hover:bg-white/5 hover:text-white"}`}>
+                    className={`inline-flex items-center min-h-[36px] px-3 py-1.5 rounded-full border text-xs whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${view.direction === direction ? "border-indigo-400/60 bg-indigo-500/30 text-white" : "border-white/10 text-gray-300 hover:bg-white/5 hover:text-white"}`}
+                >
                     {DIRECTION_LABEL[direction]}
                 </button>
             ))}
@@ -243,31 +291,52 @@ function CompassSelector({ view }: { view: TravelView }) {
 }
 
 function TravelStatus({ view }: { view: TravelView }) {
-    const empty = !view.loading && !view.error &&
-        view.onMapNeighbors.length === 0 && view.offMapNeighbors.length === 0;
+    const empty =
+        !view.loading &&
+        !view.error &&
+        view.onMapNeighbors.length === 0 &&
+        view.offMapNeighbors.length === 0;
     return (
         <>
-            {view.loading && <p className="flex items-center gap-2 text-xs text-gray-400 py-2">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Finding nearby vibes…
-            </p>}
-            {view.error && <p className="text-xs text-red-400 py-2">{view.error}</p>}
-            {empty && <p className="text-xs text-gray-400 py-2">
-                No neighbours in this direction — try “Any”.
-            </p>}
+            {view.loading && (
+                <p className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Finding
+                    nearby vibes…
+                </p>
+            )}
+            {view.error && (
+                <p className="text-xs text-red-400 py-2">{view.error}</p>
+            )}
+            {empty && (
+                <p className="text-xs text-gray-400 py-2">
+                    No neighbours in this direction — try “Any”.
+                </p>
+            )}
         </>
     );
 }
 
-function NeighborList({ view, expandedId, toggle }: {
+function NeighborList({
+    view,
+    expandedId,
+    toggle,
+}: {
     view: TravelView;
     expandedId: string | null;
     toggle: (id: string) => void;
 }) {
     const row = (neighbor: CompassCandidate, offMap: boolean) => (
-        <NeighborRow key={neighbor.id} n={neighbor} offMap={offMap}
-            onNavigate={view.navigate} onQueue={view.queue} quantiles={view.quantiles}
-            originFeatures={view.originFeatures} expanded={expandedId === neighbor.id}
-            onToggleExpand={() => toggle(neighbor.id)} />
+        <NeighborRow
+            key={neighbor.id}
+            n={neighbor}
+            offMap={offMap}
+            onNavigate={view.navigate}
+            onQueue={view.queue}
+            quantiles={view.quantiles}
+            originFeatures={view.originFeatures}
+            expanded={expandedId === neighbor.id}
+            onToggleExpand={() => toggle(neighbor.id)}
+        />
     );
     return (
         <div className="flex flex-col">
@@ -279,15 +348,23 @@ function NeighborList({ view, expandedId, toggle }: {
 
 export function TravelPanel({ view }: { view: TravelView }) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
-    const toggleExpanded = (id: string) => setExpandedId((previous) =>
-        previous === id ? null : id);
+    const toggleExpanded = (id: string) =>
+        setExpandedId((previous) => (previous === id ? null : id));
     return (
-        <div className={VIBE_PANEL_CLASS} style={VIBE_PANEL_STYLE} data-vibe-panel="travel">
+        <div
+            className={VIBE_PANEL_CLASS}
+            style={VIBE_PANEL_STYLE}
+            data-vibe-panel="travel"
+        >
             <TravelHeader view={view} />
             <TravelBreadcrumb items={view.breadcrumbTitles} />
             <CompassSelector view={view} />
             <TravelStatus view={view} />
-            <NeighborList view={view} expandedId={expandedId} toggle={toggleExpanded} />
+            <NeighborList
+                view={view}
+                expandedId={expandedId}
+                toggle={toggleExpanded}
+            />
         </div>
     );
 }

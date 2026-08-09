@@ -34,32 +34,35 @@ export function useSettingsData() {
     const [loadError, setLoadError] = useState(false);
     const lastLoadAttemptAtRef = useRef(0);
 
-    const loadSettings = useCallback(async (options?: { background?: boolean }) => {
-        const isBackground = options?.background === true;
-        try {
-            lastLoadAttemptAtRef.current = Date.now();
-            if (!isBackground) {
-                setIsLoading(true);
+    const loadSettings = useCallback(
+        async (options?: { background?: boolean }) => {
+            const isBackground = options?.background === true;
+            try {
+                lastLoadAttemptAtRef.current = Date.now();
+                if (!isBackground) {
+                    setIsLoading(true);
+                }
+                const data = await api.getSettings();
+                setSettings({
+                    ...data,
+                    displayName: data.displayName ?? "",
+                    shareOnlinePresence: data.shareOnlinePresence ?? false,
+                    shareListeningStatus: data.shareListeningStatus ?? false,
+                    showYtMusicExplore: data.showYtMusicExplore ?? true,
+                    showTidalExplore: data.showTidalExplore ?? true,
+                });
+                setLoadError(false);
+            } catch (error) {
+                logger.error("Failed to load user settings", { error });
+                setLoadError(true);
+            } finally {
+                if (!isBackground) {
+                    setIsLoading(false);
+                }
             }
-            const data = await api.getSettings();
-            setSettings({
-                ...data,
-                displayName: data.displayName ?? "",
-                shareOnlinePresence: data.shareOnlinePresence ?? false,
-                shareListeningStatus: data.shareListeningStatus ?? false,
-                showYtMusicExplore: data.showYtMusicExplore ?? true,
-                showTidalExplore: data.showTidalExplore ?? true,
-            });
-            setLoadError(false);
-        } catch (error) {
-            logger.error("Failed to load user settings", { error });
-            setLoadError(true);
-        } finally {
-            if (!isBackground) {
-                setIsLoading(false);
-            }
-        }
-    }, []);
+        },
+        [],
+    );
 
     useEffect(() => {
         if (isAuthenticated) {
@@ -81,7 +84,7 @@ export function useSettingsData() {
             if (
                 shouldRetryFailedSettingsLoad(
                     loadError,
-                    lastLoadAttemptAtRef.current
+                    lastLoadAttemptAtRef.current,
                 )
             ) {
                 void loadSettings({ background: true });

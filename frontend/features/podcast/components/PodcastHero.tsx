@@ -102,15 +102,23 @@ export function PodcastHero({
                         {/* Description - truncated */}
                         {description && (
                             <p className="text-sm text-white/60 line-clamp-2 max-w-3xl mb-2 hidden md:block">
-                                {description.replace(/<[^>]*>/g, "").substring(0, 150)}...
+                                {description
+                                    .replace(/<[^>]*>/g, "")
+                                    .substring(0, 150)}
+                                ...
                             </p>
                         )}
 
                         {/* Metadata row */}
                         <div className="flex flex-wrap items-center gap-1.5 text-sm text-white/70">
-                            <span className="font-semibold text-white">{author}</span>
+                            <span className="font-semibold text-white">
+                                {author}
+                            </span>
                             <span className="mx-1">•</span>
-                            <span>{episodeCount} {episodeCount === 1 ? "episode" : "episodes"}</span>
+                            <span>
+                                {episodeCount}{" "}
+                                {episodeCount === 1 ? "episode" : "episodes"}
+                            </span>
                             {inProgressCount > 0 && (
                                 <>
                                     <span className="mx-1">•</span>
@@ -140,9 +148,7 @@ export function PodcastHero({
 
             {/* Action Bar - Full Width */}
             {children && (
-                <div className="relative px-4 md:px-8 pb-4">
-                    {children}
-                </div>
+                <div className="relative px-4 md:px-8 pb-4">{children}</div>
             )}
         </div>
     );

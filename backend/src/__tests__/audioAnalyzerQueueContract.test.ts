@@ -1,7 +1,11 @@
 import fs from "fs";
 import path from "path";
 
-function extractSection(source: string, startMarker: string, endMarker: string): string {
+function extractSection(
+    source: string,
+    startMarker: string,
+    endMarker: string,
+): string {
     const start = source.indexOf(startMarker);
     if (start === -1) {
         throw new Error(`Missing start marker: ${startMarker}`);
@@ -17,32 +21,32 @@ describe("audio analyzer queue contract", () => {
     it("accepts both pending and pre-claimed processing tracks in batch guard", () => {
         const analyzerPath = path.resolve(
             __dirname,
-            "../../../services/audio-analyzer/analyzer.py"
+            "../../../services/audio-analyzer/analyzer.py",
         );
         const analyzerSource = fs.readFileSync(analyzerPath, "utf8");
 
         const processBatchSection = extractSection(
             analyzerSource,
             "def _claim_tracks_for_processing",
-            "def _save_completed_future"
+            "def _save_completed_future",
         );
 
         expect(processBatchSection).toContain(
-            `AND "analysisStatus" IN ('pending', 'processing')`
+            `AND "analysisStatus" IN ('pending', 'processing')`,
         );
         expect(processBatchSection).not.toContain(
-            `AND "analysisStatus" = 'pending'`
+            `AND "analysisStatus" = 'pending'`,
         );
     });
 
     it("keeps producer/consumer queue-state contract aligned", () => {
         const analyzerPath = path.resolve(
             __dirname,
-            "../../../services/audio-analyzer/analyzer.py"
+            "../../../services/audio-analyzer/analyzer.py",
         );
         const enrichmentWorkerPath = path.resolve(
             __dirname,
-            "../workers/unifiedEnrichment.ts"
+            "../workers/unifiedEnrichment.ts",
         );
 
         const analyzerSource = fs.readFileSync(analyzerPath, "utf8");
@@ -51,24 +55,25 @@ describe("audio analyzer queue contract", () => {
         const reconciliationSection = extractSection(
             analyzerSource,
             "def _run_db_reconciliation",
-            "def start"
+            "def start",
         );
         const queueAudioSection = extractSection(
             enrichmentSource,
             "async function queueAudioAnalysis",
-            "async function queueVibeEmbeddings"
+            "async function queueVibeEmbeddings",
         );
         const processBatchSection = extractSection(
             analyzerSource,
             "def _claim_tracks_for_processing",
-            "def _save_completed_future"
+            "def _save_completed_future",
         );
 
         const producersPreclaimProcessing =
-            reconciliationSection.includes(`SET "analysisStatus" = 'processing'`) ||
-            queueAudioSection.includes(`analysisStatus: "processing"`);
+            reconciliationSection.includes(
+                `SET "analysisStatus" = 'processing'`,
+            ) || queueAudioSection.includes(`analysisStatus: "processing"`);
         const consumerAcceptsProcessing = processBatchSection.includes(
-            `AND "analysisStatus" IN ('pending', 'processing')`
+            `AND "analysisStatus" IN ('pending', 'processing')`,
         );
 
         expect(producersPreclaimProcessing).toBe(true);

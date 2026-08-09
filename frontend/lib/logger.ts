@@ -104,11 +104,12 @@ function emit(
         : `[${level.toUpperCase()}] ${message}`;
     const { context, passthrough } = splitArgs(args);
 
-    const method = level === "debug"
-        ? console.debug
-        : level === "info"
-            ? console.info
-            : level === "warn"
+    const method =
+        level === "debug"
+            ? console.debug
+            : level === "info"
+              ? console.info
+              : level === "warn"
                 ? console.warn
                 : console.error;
 

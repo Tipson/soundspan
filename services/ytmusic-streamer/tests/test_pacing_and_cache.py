@@ -5,10 +5,10 @@ from __future__ import annotations
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
-
 
 SERVICES_ROOT = Path(__file__).resolve().parents[2]
 if str(SERVICES_ROOT) not in sys.path:
@@ -28,10 +28,7 @@ def test_pacer_is_thread_safe_and_serializes():
     with ThreadPoolExecutor(max_workers=8) as executor:
         completion_times = sorted(executor.map(wait_and_record, range(8)))
 
-    spacings = [
-        later - earlier
-        for earlier, later in zip(completion_times, completion_times[1:])
-    ]
+    spacings = [later - earlier for earlier, later in pairwise(completion_times)]
     assert all(spacing >= 0.015 for spacing in spacings)
     assert completion_times[-1] - started_at >= 7 * 0.02 * 0.8
 
@@ -61,9 +58,7 @@ def test_search_cache_cleanup_and_bound(monkeypatch):
     monkeypatch.setattr(app, "SEARCH_CACHE_MAX", 2)
     app._search_cache.clear()
     for query in ("q1", "q2", "q3"):
-        app._set_cached_search(
-            "u", query, None, 5, "native", [{"videoId": "a"}]
-        )
+        app._set_cached_search("u", query, None, 5, "native", [{"videoId": "a"}])
 
     assert len(app._search_cache) <= 2
 

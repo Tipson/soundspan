@@ -2,15 +2,33 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, type ImportJob } from "@/lib/api";
-import { Loader2, CheckCircle2, XCircle, Ban, Clock, ArrowRight } from "lucide-react";
+import {
+    Loader2,
+    CheckCircle2,
+    XCircle,
+    Ban,
+    Clock,
+    ArrowRight,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+const STATUS_CONFIG: Record<
+    string,
+    { icon: React.ElementType; color: string; label: string }
+> = {
     pending: { icon: Clock, color: "text-gray-400", label: "Pending" },
     resolving: { icon: Loader2, color: "text-blue-400", label: "Resolving" },
-    creating_playlist: { icon: Loader2, color: "text-blue-400", label: "Creating" },
+    creating_playlist: {
+        icon: Loader2,
+        color: "text-blue-400",
+        label: "Creating",
+    },
     cancelling: { icon: Loader2, color: "text-amber-400", label: "Cancelling" },
-    completed: { icon: CheckCircle2, color: "text-emerald-400", label: "Completed" },
+    completed: {
+        icon: CheckCircle2,
+        color: "text-emerald-400",
+        label: "Completed",
+    },
     failed: { icon: XCircle, color: "text-red-400", label: "Failed" },
     cancelled: { icon: Ban, color: "text-gray-400", label: "Cancelled" },
 };
@@ -24,8 +42,12 @@ function JobStatusBadge({ status }: { status: string }) {
         status === "cancelling";
 
     return (
-        <span className={`flex items-center gap-1.5 text-xs font-medium ${config.color}`}>
-            <Icon className={`w-3.5 h-3.5 ${isAnimated ? "animate-spin" : ""}`} />
+        <span
+            className={`flex items-center gap-1.5 text-xs font-medium ${config.color}`}
+        >
+            <Icon
+                className={`w-3.5 h-3.5 ${isAnimated ? "animate-spin" : ""}`}
+            />
             {config.label}
         </span>
     );
@@ -61,7 +83,7 @@ export function ImportsTab() {
                 j.status === "pending" ||
                 j.status === "resolving" ||
                 j.status === "creating_playlist" ||
-                j.status === "cancelling"
+                j.status === "cancelling",
         );
         if (!hasActive) return;
 
@@ -114,11 +136,14 @@ export function ImportsTab() {
                         <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm text-white truncate">
-                                    {job.requestedPlaylistName || job.playlistName}
+                                    {job.requestedPlaylistName ||
+                                        job.playlistName}
                                 </p>
                                 <p className="text-xs text-gray-400 truncate mt-0.5">
                                     {job.sourceType} &middot;{" "}
-                                    {new Date(job.createdAt).toLocaleDateString()}
+                                    {new Date(
+                                        job.createdAt,
+                                    ).toLocaleDateString()}
                                 </p>
                             </div>
                             <JobStatusBadge status={job.status} />
@@ -128,7 +153,9 @@ export function ImportsTab() {
                             <div className="mt-2 h-1 bg-white/5 rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                                    style={{ width: `${Math.min(100, job.progress)}%` }}
+                                    style={{
+                                        width: `${Math.min(100, job.progress)}%`,
+                                    }}
                                 />
                             </div>
                         )}
@@ -150,17 +177,20 @@ export function ImportsTab() {
                                     Cancel
                                 </button>
                             )}
-                            {job.status === "completed" && job.createdPlaylistId && (
-                                <button
-                                    onClick={() =>
-                                        router.push(`/playlist/${job.createdPlaylistId}`)
-                                    }
-                                    className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
-                                >
-                                    View Playlist
-                                    <ArrowRight className="w-3 h-3" />
-                                </button>
-                            )}
+                            {job.status === "completed" &&
+                                job.createdPlaylistId && (
+                                    <button
+                                        onClick={() =>
+                                            router.push(
+                                                `/playlist/${job.createdPlaylistId}`,
+                                            )
+                                        }
+                                        className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
+                                    >
+                                        View Playlist
+                                        <ArrowRight className="w-3 h-3" />
+                                    </button>
+                                )}
                             {job.status === "failed" && job.error && (
                                 <p className="text-xs text-red-400/60 truncate">
                                     {job.error}

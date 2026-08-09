@@ -85,7 +85,7 @@ async function waitFor(
         if (predicate()) {
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await Promise.resolve();
     }
     throw new Error(message);
 }
@@ -170,7 +170,12 @@ test("rejects invalid snapshot payload shapes from storage", () => {
         JSON.stringify({
             groupId: "group-123",
             isHost: "not-boolean",
-            playback: { isPlaying: true, positionMs: 1, serverTime: 2, currentIndex: 3 },
+            playback: {
+                isPlaying: true,
+                positionMs: 1,
+                serverTime: 2,
+                currentIndex: 3,
+            },
         }),
     );
     assert.equal(getListenTogetherSessionSnapshot(), null);
@@ -224,11 +229,17 @@ test("tracks membership pending state through storage and active-or-pending help
     assert.equal(isListenTogetherMembershipPending(), false);
 
     setListenTogetherMembershipPending(true);
-    assert.equal(values.get(LISTEN_TOGETHER_MEMBERSHIP_PENDING_STORAGE_KEY), "1");
+    assert.equal(
+        values.get(LISTEN_TOGETHER_MEMBERSHIP_PENDING_STORAGE_KEY),
+        "1",
+    );
     assert.equal(isListenTogetherMembershipPending(), true);
 
     setListenTogetherMembershipPending(false);
-    assert.equal(values.has(LISTEN_TOGETHER_MEMBERSHIP_PENDING_STORAGE_KEY), false);
+    assert.equal(
+        values.has(LISTEN_TOGETHER_MEMBERSHIP_PENDING_STORAGE_KEY),
+        false,
+    );
     assert.equal(isListenTogetherMembershipPending(), false);
 
     setListenTogetherSessionSnapshot(snapshot);
@@ -272,16 +283,22 @@ test("requestListenTogetherGroupResync joins explicit target group", async () =>
     const originalJoinGroup = listenTogetherSocket.joinGroup;
     const joinedGroups: string[] = [];
 
-    (listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }).joinGroup =
-        async (groupId: string) => {
-            joinedGroups.push(groupId);
-        };
+    (
+        listenTogetherSocket as unknown as {
+            joinGroup: (groupId: string) => Promise<void>;
+        }
+    ).joinGroup = async (groupId: string) => {
+        joinedGroups.push(groupId);
+    };
 
     try {
         await requestListenTogetherGroupResync("group-explicit");
     } finally {
-        (listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }).joinGroup =
-            originalJoinGroup.bind(listenTogetherSocket);
+        (
+            listenTogetherSocket as unknown as {
+                joinGroup: (groupId: string) => Promise<void>;
+            }
+        ).joinGroup = originalJoinGroup.bind(listenTogetherSocket);
     }
 
     assert.deepEqual(joinedGroups, ["group-explicit"]);
@@ -291,16 +308,22 @@ test("requestListenTogetherGroupResync no-ops when no target group is available"
     const originalJoinGroup = listenTogetherSocket.joinGroup;
     const joinedGroups: string[] = [];
 
-    (listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }).joinGroup =
-        async (groupId: string) => {
-            joinedGroups.push(groupId);
-        };
+    (
+        listenTogetherSocket as unknown as {
+            joinGroup: (groupId: string) => Promise<void>;
+        }
+    ).joinGroup = async (groupId: string) => {
+        joinedGroups.push(groupId);
+    };
 
     try {
         await requestListenTogetherGroupResync();
     } finally {
-        (listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }).joinGroup =
-            originalJoinGroup.bind(listenTogetherSocket);
+        (
+            listenTogetherSocket as unknown as {
+                joinGroup: (groupId: string) => Promise<void>;
+            }
+        ).joinGroup = originalJoinGroup.bind(listenTogetherSocket);
     }
 
     assert.deepEqual(joinedGroups, []);
@@ -324,19 +347,18 @@ test("host track operation retries retryable conflicts when group is active", as
         return 0 as unknown as ReturnType<typeof setTimeout>;
     }) as typeof setTimeout;
     socketState.currentGroupId = "group-retry";
-    (
-        listenTogetherSocket as unknown as { next: () => Promise<void> }
-    ).next = async () => {
-        attempts += 1;
-        if (attempts === 1) {
-            throw Object.assign(new Error("conflict"), {
-                code: "CONFLICT",
-                transient: true,
-                retryable: true,
-                retryAfterMs: 73.9,
-            });
-        }
-    };
+    (listenTogetherSocket as unknown as { next: () => Promise<void> }).next =
+        async () => {
+            attempts += 1;
+            if (attempts === 1) {
+                throw Object.assign(new Error("conflict"), {
+                    code: "CONFLICT",
+                    transient: true,
+                    retryable: true,
+                    retryAfterMs: 73.9,
+                });
+            }
+        };
 
     try {
         enqueueLatestListenTogetherHostTrackOperation({ action: "next" });
@@ -345,8 +367,9 @@ test("host track operation retries retryable conflicts when group is active", as
         (
             listenTogetherSocket as unknown as { next: () => Promise<void> }
         ).next = originalNext.bind(listenTogetherSocket);
-        (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout =
-            originalSetTimeout;
+        (
+            globalThis as unknown as { setTimeout: typeof setTimeout }
+        ).setTimeout = originalSetTimeout;
     }
 
     assert.equal(attempts, 2);
@@ -371,16 +394,15 @@ test("host track conflict retries are skipped when there is no active group", as
         return 0 as unknown as ReturnType<typeof setTimeout>;
     }) as typeof setTimeout;
     socketState.currentGroupId = null;
-    (
-        listenTogetherSocket as unknown as { next: () => Promise<void> }
-    ).next = async () => {
-        attempts += 1;
-        throw Object.assign(new Error("conflict"), {
-            code: "CONFLICT",
-            transient: true,
-            retryable: true,
-        });
-    };
+    (listenTogetherSocket as unknown as { next: () => Promise<void> }).next =
+        async () => {
+            attempts += 1;
+            throw Object.assign(new Error("conflict"), {
+                code: "CONFLICT",
+                transient: true,
+                retryable: true,
+            });
+        };
 
     try {
         enqueueLatestListenTogetherHostTrackOperation({ action: "next" });
@@ -389,43 +411,59 @@ test("host track conflict retries are skipped when there is no active group", as
         (
             listenTogetherSocket as unknown as { next: () => Promise<void> }
         ).next = originalNext.bind(listenTogetherSocket);
-        (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout =
-            originalSetTimeout;
+        (
+            globalThis as unknown as { setTimeout: typeof setTimeout }
+        ).setTimeout = originalSetTimeout;
     }
 
     assert.equal(attempts, 1);
     assert.deepEqual(delays, [120]);
 });
 
-test("host track operation retry callback runs through real timer scheduling", async () => {
+test("host track operation retry callback runs through timer scheduling", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
     const originalNext = listenTogetherSocket.next;
     const socketState = listenTogetherSocket as unknown as {
         currentGroupId: string | null;
     };
+    let scheduledRetry: (() => void) | undefined;
     let attempts = 0;
 
+    (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((
+        callback: (...args: unknown[]) => void,
+    ) => {
+        scheduledRetry = () => callback();
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
     socketState.currentGroupId = "group-real-timer";
-    (
-        listenTogetherSocket as unknown as { next: () => Promise<void> }
-    ).next = async () => {
-        attempts += 1;
-        if (attempts === 1) {
-            throw Object.assign(new Error("conflict"), {
-                code: "CONFLICT",
-                transient: true,
-                retryable: true,
-                retryAfterMs: 1,
-            });
-        }
-    };
+    (listenTogetherSocket as unknown as { next: () => Promise<void> }).next =
+        async () => {
+            attempts += 1;
+            if (attempts === 1) {
+                throw Object.assign(new Error("conflict"), {
+                    code: "CONFLICT",
+                    transient: true,
+                    retryable: true,
+                    retryAfterMs: 1,
+                });
+            }
+        };
 
     try {
         enqueueLatestListenTogetherHostTrackOperation({ action: "next" });
+        await waitFor(
+            () => typeof scheduledRetry === "function",
+            "retry callback was not scheduled",
+        );
+        scheduledRetry?.();
         await waitFor(() => attempts === 2, "retry callback did not execute");
     } finally {
         (
             listenTogetherSocket as unknown as { next: () => Promise<void> }
         ).next = originalNext.bind(listenTogetherSocket);
+        (
+            globalThis as unknown as { setTimeout: typeof setTimeout }
+        ).setTimeout = originalSetTimeout;
     }
 
     assert.equal(attempts, 2);
@@ -446,7 +484,9 @@ test("host track operation failures trigger group resync", async () => {
         throw new Error("forced failure");
     };
     (
-        listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }
+        listenTogetherSocket as unknown as {
+            joinGroup: (groupId: string) => Promise<void>;
+        }
     ).joinGroup = async (groupId: string) => {
         joinedGroups.push(groupId);
     };
@@ -462,7 +502,9 @@ test("host track operation failures trigger group resync", async () => {
             listenTogetherSocket as unknown as { previous: () => Promise<void> }
         ).previous = originalPrevious.bind(listenTogetherSocket);
         (
-            listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }
+            listenTogetherSocket as unknown as {
+                joinGroup: (groupId: string) => Promise<void>;
+            }
         ).joinGroup = originalJoinGroup.bind(listenTogetherSocket);
     }
 
@@ -479,12 +521,16 @@ test("host track recovery swallows resync errors", async () => {
 
     socketState.currentGroupId = "group-resync-fail";
     (
-        listenTogetherSocket as unknown as { setTrack: (index: number) => Promise<void> }
+        listenTogetherSocket as unknown as {
+            setTrack: (index: number) => Promise<void>;
+        }
     ).setTrack = async () => {
         throw new Error("forced failure");
     };
     (
-        listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }
+        listenTogetherSocket as unknown as {
+            joinGroup: (groupId: string) => Promise<void>;
+        }
     ).joinGroup = async () => {
         joinAttempts += 1;
         throw new Error("join failed");
@@ -501,10 +547,14 @@ test("host track recovery swallows resync errors", async () => {
         );
     } finally {
         (
-            listenTogetherSocket as unknown as { setTrack: (index: number) => Promise<void> }
+            listenTogetherSocket as unknown as {
+                setTrack: (index: number) => Promise<void>;
+            }
         ).setTrack = originalSetTrack.bind(listenTogetherSocket);
         (
-            listenTogetherSocket as unknown as { joinGroup: (groupId: string) => Promise<void> }
+            listenTogetherSocket as unknown as {
+                joinGroup: (groupId: string) => Promise<void>;
+            }
         ).joinGroup = originalJoinGroup.bind(listenTogetherSocket);
     }
 
@@ -512,7 +562,10 @@ test("host track recovery swallows resync errors", async () => {
 });
 
 test("createSegmentedStreamingSession forwards trimmed startup headers", async () => {
-    const requestCalls: Array<{ endpoint: string; options: Record<string, unknown> }> = [];
+    const requestCalls: Array<{
+        endpoint: string;
+        options: Record<string, unknown>;
+    }> = [];
     const apiClient = api as unknown as {
         baseUrl: string;
         request: (
@@ -574,7 +627,10 @@ test("createSegmentedStreamingSession forwards trimmed startup headers", async (
 });
 
 test("createSegmentedStreamingSession omits startup headers for invalid inputs", async () => {
-    const requestCalls: Array<{ endpoint: string; options: Record<string, unknown> }> = [];
+    const requestCalls: Array<{
+        endpoint: string;
+        options: Record<string, unknown>;
+    }> = [];
     const apiClient = api as unknown as {
         baseUrl: string;
         request: (
@@ -595,7 +651,8 @@ test("createSegmentedStreamingSession omits startup headers for invalid inputs",
         requestCalls.push({ endpoint, options });
         return {
             sessionId: "session-2",
-            manifestUrl: "https://cdn.example.com/streaming/v1/sessions/session-2/manifest.mpd",
+            manifestUrl:
+                "https://cdn.example.com/streaming/v1/sessions/session-2/manifest.mpd",
             sessionToken: "token-2",
             expiresAt: "2099-01-01T00:00:00.000Z",
         };

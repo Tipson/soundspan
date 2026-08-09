@@ -66,10 +66,7 @@ const makeTrack = (id: string, title: string): DiscoverTrack => ({
 const playlist: DiscoverPlaylist = {
     weekStart: "2026-07-20",
     weekEnd: "2026-07-26",
-    tracks: [
-        makeTrack("t1", "Song 1"),
-        makeTrack("t2", "Song 2"),
-    ],
+    tracks: [makeTrack("t1", "Song 1"), makeTrack("t2", "Song 2")],
     unavailable: [],
     totalCount: 2,
     unavailableCount: 0,
@@ -102,11 +99,10 @@ beforeEach(() => {
 });
 
 test("DiscoverActionBar renders all consolidated buttons when playlist has tracks", async () => {
-    const { DiscoverActionBar } = await import(
-        "../../features/discover/components/DiscoverActionBar"
-    );
+    const { DiscoverActionBar } =
+        await import("../../features/discover/components/DiscoverActionBar");
     const html = renderToStaticMarkup(
-        React.createElement(DiscoverActionBar, baseProps)
+        React.createElement(DiscoverActionBar, baseProps),
     );
 
     assert.match(html, /<span>Play All<\/span>/);
@@ -118,14 +114,13 @@ test("DiscoverActionBar renders all consolidated buttons when playlist has track
 });
 
 test("DiscoverActionBar hides play-related buttons when playlist is null", async () => {
-    const { DiscoverActionBar } = await import(
-        "../../features/discover/components/DiscoverActionBar"
-    );
+    const { DiscoverActionBar } =
+        await import("../../features/discover/components/DiscoverActionBar");
     const html = renderToStaticMarkup(
         React.createElement(DiscoverActionBar, {
             ...baseProps,
             playlist: null,
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /<span>Play All<\/span>/);
@@ -138,14 +133,13 @@ test("DiscoverActionBar hides play-related buttons when playlist is null", async
 });
 
 test("DiscoverActionBar hides play-related buttons when playlist has no tracks", async () => {
-    const { DiscoverActionBar } = await import(
-        "../../features/discover/components/DiscoverActionBar"
-    );
+    const { DiscoverActionBar } =
+        await import("../../features/discover/components/DiscoverActionBar");
     const html = renderToStaticMarkup(
         React.createElement(DiscoverActionBar, {
             ...baseProps,
             playlist: { ...playlist, tracks: [], totalCount: 0 },
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /<span>Play All<\/span>/);
@@ -154,15 +148,14 @@ test("DiscoverActionBar hides play-related buttons when playlist has no tracks",
 });
 
 test("DiscoverActionBar shows Pause when playlist is playing", async () => {
-    const { DiscoverActionBar } = await import(
-        "../../features/discover/components/DiscoverActionBar"
-    );
+    const { DiscoverActionBar } =
+        await import("../../features/discover/components/DiscoverActionBar");
     const html = renderToStaticMarkup(
         React.createElement(DiscoverActionBar, {
             ...baseProps,
             isPlaylistPlaying: true,
             isPlaying: true,
-        })
+        }),
     );
 
     assert.match(html, /<span>Pause<\/span>/);
@@ -170,14 +163,13 @@ test("DiscoverActionBar shows Pause when playlist is playing", async () => {
 });
 
 test("DiscoverActionBar hides Shuffle when onShuffle is not provided", async () => {
-    const { DiscoverActionBar } = await import(
-        "../../features/discover/components/DiscoverActionBar"
-    );
+    const { DiscoverActionBar } =
+        await import("../../features/discover/components/DiscoverActionBar");
     const html = renderToStaticMarkup(
         React.createElement(DiscoverActionBar, {
             ...baseProps,
             onShuffle: undefined,
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /title="Shuffle all"/);
@@ -186,14 +178,13 @@ test("DiscoverActionBar hides Shuffle when onShuffle is not provided", async () 
 });
 
 test("DiscoverActionBar hides Add to Queue when onAddAllToQueue is not provided", async () => {
-    const { DiscoverActionBar } = await import(
-        "../../features/discover/components/DiscoverActionBar"
-    );
+    const { DiscoverActionBar } =
+        await import("../../features/discover/components/DiscoverActionBar");
     const html = renderToStaticMarkup(
         React.createElement(DiscoverActionBar, {
             ...baseProps,
             onAddAllToQueue: undefined,
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /title="Add all to queue"/);

@@ -28,12 +28,17 @@ describe("runAnnQuery (F14 ivfflat.probes helper)", () => {
         mockTransaction.mockReset();
         // Each $queryRaw call returns a descriptor of the args it was handed so
         // the test can inspect the exact statements placed in the tx batch.
-        mockQueryRaw.mockImplementation((...args: unknown[]) => ({ __sqlArgs: args }));
+        mockQueryRaw.mockImplementation((...args: unknown[]) => ({
+            __sqlArgs: args,
+        }));
     });
 
     it("runs the ANN query and set_config(probes) in one $transaction batch and returns the ANN rows", async () => {
         const annRows = [{ track_id: "t1" }, { track_id: "t2" }];
-        mockTransaction.mockResolvedValueOnce([[{ set_config: "17" }], annRows]);
+        mockTransaction.mockResolvedValueOnce([
+            [{ set_config: "17" }],
+            annRows,
+        ]);
 
         const annQuery = Prisma.sql`
             SELECT te.track_id FROM track_embeddings te
@@ -87,7 +92,7 @@ describe("runAnnQuery (F14 ivfflat.probes helper)", () => {
     // the app) and silently keeps the prior value, i.e. probes=1, resurrecting
     // the exact near-random-recall bug this helper fixes. So out-of-range input
     // must be clamped BEFORE it reaches set_config.
-    it("clamps probes below 1 up to the domain floor (0 -> \"1\")", async () => {
+    it('clamps probes below 1 up to the domain floor (0 -> "1")', async () => {
         mockTransaction.mockResolvedValueOnce([[{ set_config: "1" }], []]);
 
         await runAnnQuery(Prisma.sql`SELECT 1`, 0);

@@ -55,7 +55,10 @@ export function Sidebar() {
     const [playlistSort, setPlaylistSort] = useState<PlaylistSort>("updated");
     const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
     const [isSortFilterOpen, setIsSortFilterOpen] = useState(false);
-    const [sortFilterPos, setSortFilterPos] = useState<{ top: number; left: number } | null>(null);
+    const [sortFilterPos, setSortFilterPos] = useState<{
+        top: number;
+        left: number;
+    } | null>(null);
     const sortFilterRef = useRef<HTMLDivElement>(null);
     const sortFilterBtnRef = useRef<HTMLButtonElement>(null);
     const hasLoadedPlaylists = useRef(false);
@@ -70,7 +73,10 @@ export function Sidebar() {
             // No toast - notification will appear in the activity panel
             window.dispatchEvent(new CustomEvent("notifications-changed"));
         } catch (error) {
-            sharedFrontendLogger.error("Failed to trigger library scan:", error);
+            sharedFrontendLogger.error(
+                "Failed to trigger library scan:",
+                error,
+            );
             toast.error("Failed to start scan. Please try again.");
         } finally {
             // Keep syncing for a bit to show the animation
@@ -109,7 +115,10 @@ export function Sidebar() {
                 const data = await api.getPlaylists();
                 setPlaylists(data);
             } catch (error) {
-                sharedFrontendLogger.error("Failed to reload playlists:", error);
+                sharedFrontendLogger.error(
+                    "Failed to reload playlists:",
+                    error,
+                );
             }
         };
 
@@ -161,7 +170,10 @@ export function Sidebar() {
     useEffect(() => {
         if (!isSortFilterOpen) return;
         const handleClick = (e: MouseEvent) => {
-            if (sortFilterRef.current && !sortFilterRef.current.contains(e.target as Node)) {
+            if (
+                sortFilterRef.current &&
+                !sortFilterRef.current.contains(e.target as Node)
+            ) {
                 setIsSortFilterOpen(false);
             }
         };
@@ -191,7 +203,9 @@ export function Sidebar() {
                 return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
             }
             // updated (default) — most recently updated first
-            return (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? "");
+            return (b.updatedAt ?? b.createdAt ?? "").localeCompare(
+                a.updatedAt ?? a.createdAt ?? "",
+            );
         });
 
     const isFiltered = playlistFilter !== "all" || playlistSort !== "updated";
@@ -216,38 +230,31 @@ export function Sidebar() {
                             <h2 className="brand-wordmark text-2xl font-black text-white tracking-tight">
                                 {BRAND_NAME}
                             </h2>
-                            {(
-                                !currentTrack &&
-                                !currentAudiobook &&
-                                !currentPodcast
-                            ) ?
+                            {!currentTrack &&
+                            !currentAudiobook &&
+                            !currentPodcast ? (
                                 <p className="text-sm text-gray-400 font-medium">
                                     Stream Your Way
                                 </p>
-                            :   <div className="text-xs text-gray-400 truncate">
+                            ) : (
+                                <div className="text-xs text-gray-400 truncate">
                                     <span className="text-gray-400">
                                         Listening to:{" "}
                                     </span>
                                     <span className="text-white font-medium">
-                                        {(
-                                            playbackType === "track" &&
-                                            currentTrack
-                                        ) ?
-                                            `${currentTrack.artist?.name} - ${currentTrack.album?.title}`
-                                        : (
-                                            playbackType === "audiobook" &&
-                                            currentAudiobook
-                                        ) ?
-                                            currentAudiobook.title
-                                        : (
-                                            playbackType === "podcast" &&
-                                            currentPodcast
-                                        ) ?
-                                            currentPodcast.podcastTitle
-                                        :   ""}
+                                        {playbackType === "track" &&
+                                        currentTrack
+                                            ? `${currentTrack.artist?.name} - ${currentTrack.album?.title}`
+                                            : playbackType === "audiobook" &&
+                                                currentAudiobook
+                                              ? currentAudiobook.title
+                                              : playbackType === "podcast" &&
+                                                  currentPodcast
+                                                ? currentPodcast.podcastTitle
+                                                : ""}
                                     </span>
                                 </div>
-                            }
+                            )}
                         </div>
                     </div>
 
@@ -258,9 +265,9 @@ export function Sidebar() {
                             disabled={isSyncing}
                             className={cn(
                                 "w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300",
-                                isSyncing ?
-                                    "bg-[#1DB954] text-black"
-                                :   "bg-white/10 text-white hover:bg-white/15 active:scale-95",
+                                isSyncing
+                                    ? "bg-[#1DB954] text-black"
+                                    : "bg-white/10 text-white hover:bg-white/15 active:scale-95",
                             )}
                             aria-label={
                                 isSyncing ? "Syncing library" : "Sync library"
@@ -274,7 +281,6 @@ export function Sidebar() {
                                 )}
                             />
                         </button>
-
                     </div>
                 </div>
             )}
@@ -282,7 +288,9 @@ export function Sidebar() {
             {/* Navigation */}
             <nav
                 className={cn(
-                    isMobileOrTablet ? "pt-4 space-y-1 px-6" : "pt-6 space-y-1 px-3",
+                    isMobileOrTablet
+                        ? "pt-4 space-y-1 px-6"
+                        : "pt-6 space-y-1 px-3",
                 )}
                 role="navigation"
                 aria-label="Main navigation"
@@ -300,18 +308,18 @@ export function Sidebar() {
                             className={cn(
                                 "block rounded-lg transition-all duration-200 group relative overflow-hidden",
                                 isMobileOrTablet ? "px-4 py-3.5" : "px-4 py-3",
-                                isActive ?
-                                    "bg-white/10 text-white"
-                                :   "text-gray-400 hover:text-white hover:bg-white/5 active:bg-white/[0.07]",
+                                isActive
+                                    ? "bg-white/10 text-white"
+                                    : "text-gray-400 hover:text-white hover:bg-white/5 active:bg-white/[0.07]",
                             )}
                         >
                             <div className="relative z-10 flex items-center gap-2">
                                 <span
                                     className={cn(
                                         "font-semibold transition-all duration-200",
-                                        isMobileOrTablet ? "text-base" : (
-                                            "text-sm"
-                                        ),
+                                        isMobileOrTablet
+                                            ? "text-base"
+                                            : "text-sm",
                                         isActive && "text-white",
                                     )}
                                 >
@@ -332,7 +340,12 @@ export function Sidebar() {
             </nav>
 
             {/* Playlists Section */}
-            <div className={cn("flex-1 overflow-hidden flex flex-col", isMobileOrTablet ? "mt-8" : "mt-4")}>
+            <div
+                className={cn(
+                    "flex-1 overflow-hidden flex flex-col",
+                    isMobileOrTablet ? "mt-8" : "mt-4",
+                )}
+            >
                 <div
                     className={cn(
                         "flex items-center justify-between group",
@@ -360,8 +373,12 @@ export function Sidebar() {
                                 onClick={() => {
                                     setIsSortFilterOpen((v) => {
                                         if (!v && sortFilterBtnRef.current) {
-                                            const rect = sortFilterBtnRef.current.getBoundingClientRect();
-                                            setSortFilterPos({ top: rect.top, left: rect.right + 8 });
+                                            const rect =
+                                                sortFilterBtnRef.current.getBoundingClientRect();
+                                            setSortFilterPos({
+                                                top: rect.top,
+                                                left: rect.right + 8,
+                                            });
                                         }
                                         return !v;
                                     });
@@ -370,7 +387,7 @@ export function Sidebar() {
                                     "w-7 h-7 flex items-center justify-center rounded-md transition-all duration-300 border border-white/5",
                                     isFiltered
                                         ? "bg-ai/20 text-ai-hover border-ai/30"
-                                        : "bg-white/5 text-gray-400 hover:text-white hover:bg-gradient-to-br hover:from-ai hover:to-[#00c8ff] hover:scale-110 shadow-lg shadow-transparent hover:shadow-ai/30 hover:border-transparent"
+                                        : "bg-white/5 text-gray-400 hover:text-white hover:bg-gradient-to-br hover:from-ai hover:to-[#00c8ff] hover:scale-110 shadow-lg shadow-transparent hover:shadow-ai/30 hover:border-transparent",
                                 )}
                                 aria-label="Sort and filter playlists"
                                 title="Sort & Filter"
@@ -381,24 +398,31 @@ export function Sidebar() {
                             {isSortFilterOpen && sortFilterPos && (
                                 <div
                                     className="fixed w-44 bg-surface-hover border border-white/10 rounded-lg shadow-xl shadow-black/40 py-1 z-[10000]"
-                                    style={{ top: sortFilterPos.top, left: sortFilterPos.left }}
+                                    style={{
+                                        top: sortFilterPos.top,
+                                        left: sortFilterPos.left,
+                                    }}
                                 >
                                     <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                                         Sort
                                     </div>
-                                    {([
-                                        ["updated", "Updated date"],
-                                        ["created", "Created date"],
-                                        ["alphabetical", "Alphabetical"],
-                                    ] as const).map(([value, label]) => (
+                                    {(
+                                        [
+                                            ["updated", "Updated date"],
+                                            ["created", "Created date"],
+                                            ["alphabetical", "Alphabetical"],
+                                        ] as const
+                                    ).map(([value, label]) => (
                                         <button
                                             key={value}
-                                            onClick={() => setPlaylistSort(value)}
+                                            onClick={() =>
+                                                setPlaylistSort(value)
+                                            }
                                             className={cn(
                                                 "w-full text-left px-3 py-1.5 text-sm transition-colors",
                                                 playlistSort === value
                                                     ? "text-white bg-white/5"
-                                                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                                                    : "text-gray-400 hover:text-white hover:bg-white/5",
                                             )}
                                         >
                                             {label}
@@ -410,19 +434,23 @@ export function Sidebar() {
                                     <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                                         Show
                                     </div>
-                                    {([
-                                        ["all", "All playlists"],
-                                        ["mine", "Your playlists"],
-                                        ["others", "Shared playlists"],
-                                    ] as const).map(([value, label]) => (
+                                    {(
+                                        [
+                                            ["all", "All playlists"],
+                                            ["mine", "Your playlists"],
+                                            ["others", "Shared playlists"],
+                                        ] as const
+                                    ).map(([value, label]) => (
                                         <button
                                             key={value}
-                                            onClick={() => setPlaylistFilter(value)}
+                                            onClick={() =>
+                                                setPlaylistFilter(value)
+                                            }
                                             className={cn(
                                                 "w-full text-left px-3 py-1.5 text-sm transition-colors",
                                                 playlistFilter === value
                                                     ? "text-white bg-white/5"
-                                                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                                                    : "text-gray-400 hover:text-white hover:bg-white/5",
                                             )}
                                         >
                                             {label}
@@ -450,45 +478,52 @@ export function Sidebar() {
                     )}
                 >
                     {/* Pinned: My Liked */}
-                    {likedTotal > 0 && (() => {
-                        const isLikedActive = pathname === "/playlist/my-liked";
-                        return (
-                            <Link
-                                href="/playlist/my-liked"
-                                prefetch={false}
-                                className={cn(
-                                    "block px-3 py-2.5 rounded-lg transition-all duration-300 group relative overflow-hidden",
-                                    isLikedActive
-                                        ? "bg-gradient-to-r from-ai/10 to-transparent text-white border-l-2 border-ai shadow-md shadow-ai/5"
-                                        : "text-gray-400 hover:text-white hover:bg-white/[0.05] border-l-2 border-transparent hover:border-l-2 hover:border-ai/30",
-                                )}
-                            >
-                                {!isLikedActive && (
-                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-ai/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                                )}
-                                <div className="flex items-center gap-1.5">
-                                    <Heart className="w-3.5 h-3.5 shrink-0 text-brand fill-brand relative z-10" />
-                                    <div
-                                        className={cn(
-                                            "text-sm font-medium truncate relative z-10 transition-all duration-200 flex-1",
-                                            isLikedActive ? "font-semibold" : "group-hover:translate-x-0.5",
-                                        )}
-                                    >
-                                        My Liked
-                                    </div>
-                                </div>
-                                <div
+                    {likedTotal > 0 &&
+                        (() => {
+                            const isLikedActive =
+                                pathname === "/playlist/my-liked";
+                            return (
+                                <Link
+                                    href="/playlist/my-liked"
+                                    prefetch={false}
                                     className={cn(
-                                        "text-xs truncate relative z-10 mt-0.5 transition-colors duration-200",
-                                        isLikedActive ? "text-gray-400" : "text-gray-400 group-hover:text-gray-400",
+                                        "block px-3 py-2.5 rounded-lg transition-all duration-300 group relative overflow-hidden",
+                                        isLikedActive
+                                            ? "bg-gradient-to-r from-ai/10 to-transparent text-white border-l-2 border-ai shadow-md shadow-ai/5"
+                                            : "text-gray-400 hover:text-white hover:bg-white/[0.05] border-l-2 border-transparent hover:border-l-2 hover:border-ai/30",
                                     )}
                                 >
-                                    Playlist &bull; {likedTotal} track{likedTotal !== 1 ? "s" : ""}
-                                </div>
-                            </Link>
-                        );
-                    })()}
-                    {isLoadingPlaylists ?
+                                    {!isLikedActive && (
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-ai/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                                    )}
+                                    <div className="flex items-center gap-1.5">
+                                        <Heart className="w-3.5 h-3.5 shrink-0 text-brand fill-brand relative z-10" />
+                                        <div
+                                            className={cn(
+                                                "text-sm font-medium truncate relative z-10 transition-all duration-200 flex-1",
+                                                isLikedActive
+                                                    ? "font-semibold"
+                                                    : "group-hover:translate-x-0.5",
+                                            )}
+                                        >
+                                            My Liked
+                                        </div>
+                                    </div>
+                                    <div
+                                        className={cn(
+                                            "text-xs truncate relative z-10 mt-0.5 transition-colors duration-200",
+                                            isLikedActive
+                                                ? "text-gray-400"
+                                                : "text-gray-400 group-hover:text-gray-400",
+                                        )}
+                                    >
+                                        Playlist &bull; {likedTotal} track
+                                        {likedTotal !== 1 ? "s" : ""}
+                                    </div>
+                                </Link>
+                            );
+                        })()}
+                    {isLoadingPlaylists ? (
                         // Loading skeleton with shimmer
                         <>
                             {[1, 2, 3, 4, 5].map((i) => (
@@ -507,75 +542,75 @@ export function Sidebar() {
                                 </div>
                             ))}
                         </>
-                    : filteredSortedPlaylists.length > 0 ?
-                        filteredSortedPlaylists
-                            .map((playlist) => {
-                                const isActive =
-                                    pathname === `/playlist/${playlist.id}`;
-                                const isShared = playlist.isOwner === false;
-                                return (
-                                    <Link
-                                        key={playlist.id}
-                                        href={`/playlist/${playlist.id}`}
-                                        prefetch={false}
-                                        className={cn(
-                                            "block px-3 py-2.5 rounded-lg transition-all duration-300 group relative overflow-hidden",
-                                            isActive ?
-                                                "bg-gradient-to-r from-ai/10 to-transparent text-white border-l-2 border-ai shadow-md shadow-ai/5"
-                                            :   "text-gray-400 hover:text-white hover:bg-white/[0.05] border-l-2 border-transparent hover:border-l-2 hover:border-ai/30",
-                                        )}
-                                    >
-                                        {/* Hover shimmer effect */}
-                                        {!isActive && (
-                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-ai/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                                        )}
+                    ) : filteredSortedPlaylists.length > 0 ? (
+                        filteredSortedPlaylists.map((playlist) => {
+                            const isActive =
+                                pathname === `/playlist/${playlist.id}`;
+                            const isShared = playlist.isOwner === false;
+                            return (
+                                <Link
+                                    key={playlist.id}
+                                    href={`/playlist/${playlist.id}`}
+                                    prefetch={false}
+                                    className={cn(
+                                        "block px-3 py-2.5 rounded-lg transition-all duration-300 group relative overflow-hidden",
+                                        isActive
+                                            ? "bg-gradient-to-r from-ai/10 to-transparent text-white border-l-2 border-ai shadow-md shadow-ai/5"
+                                            : "text-gray-400 hover:text-white hover:bg-white/[0.05] border-l-2 border-transparent hover:border-l-2 hover:border-ai/30",
+                                    )}
+                                >
+                                    {/* Hover shimmer effect */}
+                                    {!isActive && (
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-ai/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                                    )}
 
-                                        <div className="flex items-center gap-1.5">
-                                            <div
-                                                className={cn(
-                                                    "text-sm font-medium truncate relative z-10 transition-all duration-200 flex-1",
-                                                    isActive ? "font-semibold"
-                                                    :   "group-hover:translate-x-0.5",
-                                                )}
-                                            >
-                                                {playlist.name}
-                                            </div>
-                                            {isShared && (
-                                                <span
-                                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-ai"
-                                                    title={`Shared by ${
-                                                        playlist.user
-                                                            ?.username ||
-                                                        "someone"
-                                                    }`}
-                                                />
-                                            )}
-                                        </div>
+                                    <div className="flex items-center gap-1.5">
                                         <div
                                             className={cn(
-                                                "text-xs truncate relative z-10 mt-0.5 transition-colors duration-200",
-                                                isActive ? "text-gray-400" : (
-                                                    "text-gray-400 group-hover:text-gray-400"
-                                                ),
+                                                "text-sm font-medium truncate relative z-10 transition-all duration-200 flex-1",
+                                                isActive
+                                                    ? "font-semibold"
+                                                    : "group-hover:translate-x-0.5",
                                             )}
                                         >
-                                            {isShared ?
-                                                `by ${
-                                                    playlist.user?.username ||
-                                                    "Shared"
-                                                }`
-                                            :   "Playlist"}{" "}
-                                            • {playlist.trackCount} track
-                                            {playlist.trackCount !== 1 ?
-                                                "s"
-                                            :   ""}
+                                            {playlist.name}
                                         </div>
-                                    </Link>
-                                );
-                            })
-                    :   <div className="px-4 py-8 text-center">
+                                        {isShared && (
+                                            <span
+                                                className="shrink-0 w-1.5 h-1.5 rounded-full bg-ai"
+                                                title={`Shared by ${
+                                                    playlist.user?.username ||
+                                                    "someone"
+                                                }`}
+                                            />
+                                        )}
+                                    </div>
+                                    <div
+                                        className={cn(
+                                            "text-xs truncate relative z-10 mt-0.5 transition-colors duration-200",
+                                            isActive
+                                                ? "text-gray-400"
+                                                : "text-gray-400 group-hover:text-gray-400",
+                                        )}
+                                    >
+                                        {isShared
+                                            ? `by ${
+                                                  playlist.user?.username ||
+                                                  "Shared"
+                                              }`
+                                            : "Playlist"}{" "}
+                                        • {playlist.trackCount} track
+                                        {playlist.trackCount !== 1 ? "s" : ""}
+                                    </div>
+                                </Link>
+                            );
+                        })
+                    ) : (
+                        <div className="px-4 py-8 text-center">
                             <div className="text-sm text-gray-400 mb-2">
-                                {isFiltered ? "No matching playlists" : "No playlists yet"}
+                                {isFiltered
+                                    ? "No matching playlists"
+                                    : "No playlists yet"}
                             </div>
                             <div className="text-xs text-gray-400">
                                 {isFiltered
@@ -583,7 +618,7 @@ export function Sidebar() {
                                     : "Create your first playlist to get started"}
                             </div>
                         </div>
-                    }
+                    )}
                 </div>
             </div>
         </>

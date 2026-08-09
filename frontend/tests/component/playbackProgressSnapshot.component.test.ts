@@ -4,13 +4,14 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
-const apiStub = new Proxy(
-    {},
-    { get: () => async () => null },
-) as Record<string, unknown>;
+const apiStub = new Proxy({}, { get: () => async () => null }) as Record<
+    string,
+    unknown
+>;
 if (typeof mock.module === "function") {
     mock.module("@/lib/api", { namedExports: { api: apiStub } });
 }
@@ -27,7 +28,8 @@ after(async () => {
 test("progress ticks update snapshots without re-rendering status consumers", async () => {
     localStorage.clear();
     const { createRoot } = await import("react-dom/client");
-    const { AudioStateProvider } = await import("../../lib/audio-state-context");
+    const { AudioStateProvider } =
+        await import("../../lib/audio-state-context");
     const { AudioPlaybackProvider, usePlaybackStatus } =
         await import("../../lib/audio-playback-context");
     const { PlaybackProgressSnapshot } =

@@ -17,7 +17,7 @@ function candidate(
     similarity: number,
     energy: number | null,
     valence: number | null,
-    moods?: Record<string, number> | null
+    moods?: Record<string, number> | null,
 ): CompassCandidate {
     return {
         id,
@@ -123,26 +123,26 @@ test("compassNeighbors ranks by similarity desc within a direction", () => {
     const out = compassNeighbors(origin, cands, "happier");
     assert.deepEqual(
         out.map((c) => c.id),
-        ["high", "mid", "low"]
+        ["high", "mid", "low"],
     );
 });
 
 test("compassNeighbors caps to top-N", () => {
     const cands = Array.from({ length: 12 }, (_, i) =>
-        candidate(`t${i}`, i / 12, 0.5, 0.5)
+        candidate(`t${i}`, i / 12, 0.5, 0.5),
     );
     const out = compassNeighbors(origin, cands, "any", 3);
     assert.equal(out.length, 3);
     // Highest similarities: t11, t10, t9.
     assert.deepEqual(
         out.map((c) => c.id),
-        ["t11", "t10", "t9"]
+        ["t11", "t10", "t9"],
     );
 });
 
 test("compassNeighbors defaults to DEFAULT_COMPASS_COUNT", () => {
     const cands = Array.from({ length: 20 }, (_, i) =>
-        candidate(`t${i}`, i, 0.5, 0.5)
+        candidate(`t${i}`, i, 0.5, 0.5),
     );
     assert.equal(compassNeighbors(origin, cands, "any").length, 8);
 });

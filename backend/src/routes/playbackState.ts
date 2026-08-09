@@ -20,7 +20,7 @@ function getPlaybackDeviceId(req: express.Request): string {
 
 function sanitizeOptionalString(
     value: unknown,
-    maxLen: number
+    maxLen: number,
 ): string | undefined {
     if (typeof value !== "string") return undefined;
     const trimmed = value.trim();
@@ -34,18 +34,16 @@ function sanitizeOptionalString(
  * composite "podcastId:episodeId" id; missing podcastId/episodeId fields are
  * derived from the composite id. Returns null when the identity is unusable.
  */
-function sanitizeEpisodeQueueItem(
-    item: any
-): Record<string, unknown> | null {
+function sanitizeEpisodeQueueItem(item: any): Record<string, unknown> | null {
     const id = String(item.id || "");
     const [idPodcastId = "", idEpisodeId = ""] = id.split(":");
     const podcastId = String(item.podcastId || idPodcastId || "").substring(
         0,
-        128
+        128,
     );
     const episodeId = String(item.episodeId || idEpisodeId || "").substring(
         0,
-        128
+        128,
     );
     if (!podcastId || !episodeId) return null;
 
@@ -73,8 +71,7 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
         mediaSource: item.mediaSource,
         streamSource: item.streamSource,
         sourceType: item.sourceType,
-        providerTrackId:
-            item.provider?.providerTrackId ?? item.providerTrackId,
+        providerTrackId: item.provider?.providerTrackId ?? item.providerTrackId,
         tidalTrackId: item.provider?.tidalTrackId ?? item.tidalTrackId,
         youtubeVideoId: item.provider?.youtubeVideoId ?? item.youtubeVideoId,
         youtubeAudioFormat:
@@ -86,7 +83,7 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
             ? {
                   providerTrackId: sanitizeOptionalString(
                       provider.providerTrackId,
-                      128
+                      128,
                   ),
               }
             : {}),
@@ -98,7 +95,7 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
             ? {
                   youtubeVideoId: sanitizeOptionalString(
                       provider.youtubeVideoId,
-                      64
+                      64,
                   ),
               }
             : {}),
@@ -118,10 +115,7 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
         artist: item.artist
             ? {
                   id: String(item.artist.id || ""),
-                  name: String(item.artist.name || "Unknown").substring(
-                      0,
-                      200
-                  ),
+                  name: String(item.artist.name || "Unknown").substring(0, 200),
               }
             : null,
         album: item.album
@@ -129,7 +123,7 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
                   id: String(item.album.id || ""),
                   title: String(item.album.title || "Unknown").substring(
                       0,
-                      500
+                      500,
                   ),
                   coverArt: item.album.coverArt
                       ? String(item.album.coverArt).substring(0, 1000)
@@ -310,7 +304,9 @@ router.post("/", requireAuth, async (req, res) => {
         // Validate playback type
         const validPlaybackTypes = ["track", "audiobook", "podcast"];
         if (!validPlaybackTypes.includes(playbackType)) {
-            logger.warn(`[PlaybackState] Invalid playbackType: ${playbackType}`);
+            logger.warn(
+                `[PlaybackState] Invalid playbackType: ${playbackType}`,
+            );
             return res.status(400).json({ error: "Invalid playbackType" });
         }
 
@@ -345,7 +341,7 @@ router.post("/", requireAuth, async (req, res) => {
                         })
                         .filter(
                             (item: Record<string, unknown> | null) =>
-                                item !== null
+                                item !== null,
                         );
                     if (safeQueue.length === 0) {
                         safeQueue = null;
@@ -379,7 +375,8 @@ router.post("/", requireAuth, async (req, res) => {
             ...(hasExplicitIsPlaying ? { isPlaying: safeIsPlaying } : {}),
         };
         if (safeQueue !== undefined) {
-            updatePayload.queue = safeQueue === null ? Prisma.DbNull : safeQueue;
+            updatePayload.queue =
+                safeQueue === null ? Prisma.DbNull : safeQueue;
         }
         if (hasExplicitCurrentIndex || safeQueue !== undefined) {
             updatePayload.currentIndex = safeCurrentIndex;
@@ -425,8 +422,14 @@ router.post("/", requireAuth, async (req, res) => {
 
         res.json(playbackState);
     } catch (error: any) {
-        logger.error("[PlaybackState] Error saving state:", error?.message || error);
-        logger.error("[PlaybackState] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+        logger.error(
+            "[PlaybackState] Error saving state:",
+            error?.message || error,
+        );
+        logger.error(
+            "[PlaybackState] Full error:",
+            JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
+        );
         if (error?.code) {
             logger.error("[PlaybackState] Error code:", error.code);
         }
@@ -434,9 +437,9 @@ router.post("/", requireAuth, async (req, res) => {
             logger.error("[PlaybackState] Prisma meta:", error.meta);
         }
         // Return more specific error for debugging
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Internal server error",
-            details: error?.message || "Unknown error"
+            details: error?.message || "Unknown error",
         });
     }
 });

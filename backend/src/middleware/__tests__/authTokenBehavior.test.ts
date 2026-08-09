@@ -152,7 +152,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
         await authModule.requireAuthOrToken(
             asReq(req),
             asRes(res),
-            asNext(next)
+            asNext(next),
         );
         return { req, res, next };
     }
@@ -170,7 +170,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
             const result = await runRequireAuth(
                 createReq({
                     headers: { authorization: `Bearer ${accessToken()}` },
-                })
+                }),
             );
 
             expect(result.next).toHaveBeenCalled();
@@ -185,7 +185,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
             const result = await runRequireAuth(
                 createReq({
                     headers: { authorization: `Bearer ${refreshToken()}` },
-                })
+                }),
             );
 
             expectRejected(result);
@@ -201,7 +201,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
                     type: "device-link",
                 },
                 TEST_SECRET,
-                { expiresIn: "24h" }
+                { expiresIn: "24h" },
             );
 
             const result = await runRequireAuth(
@@ -209,7 +209,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
                     headers: {
                         authorization: `Bearer ${unexpectedType}`,
                     },
-                })
+                }),
             );
 
             expectRejected(result);
@@ -217,7 +217,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
 
         it("ignores ?token= even when it carries a valid access token", async () => {
             const result = await runRequireAuth(
-                createReq({ query: { token: accessToken() } })
+                createReq({ query: { token: accessToken() } }),
             );
 
             expectRejected(result);
@@ -232,11 +232,11 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
                     tokenVersion: testUser.tokenVersion,
                 },
                 TEST_SECRET,
-                { expiresIn: "-1s" }
+                { expiresIn: "-1s" },
             );
 
             const result = await runRequireAuth(
-                createReq({ headers: { authorization: `Bearer ${expired}` } })
+                createReq({ headers: { authorization: `Bearer ${expired}` } }),
             );
 
             expectRejected(result);
@@ -251,11 +251,11 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
                     tokenVersion: testUser.tokenVersion,
                 },
                 WRONG_SECRET,
-                { expiresIn: "24h" }
+                { expiresIn: "24h" },
             );
 
             const result = await runRequireAuth(
-                createReq({ headers: { authorization: `Bearer ${forged}` } })
+                createReq({ headers: { authorization: `Bearer ${forged}` } }),
             );
 
             expectRejected(result);
@@ -270,7 +270,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
             });
 
             const result = await runRequireAuth(
-                createReq({ headers: { authorization: `Bearer ${none}` } })
+                createReq({ headers: { authorization: `Bearer ${none}` } }),
             );
 
             expectRejected(result);
@@ -285,7 +285,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
             const result = await runRequireAuth(
                 createReq({
                     headers: { authorization: `Bearer ${accessToken()}` },
-                })
+                }),
             );
 
             expectRejected(result);
@@ -299,13 +299,13 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
                     role: testUser.role,
                 },
                 TEST_SECRET,
-                { expiresIn: "24h" }
+                { expiresIn: "24h" },
             );
 
             const result = await runRequireAuth(
                 createReq({
                     headers: { authorization: `Bearer ${versionless}` },
-                })
+                }),
             );
 
             expectRejected(result);
@@ -319,7 +319,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
             const result = await runRequireAuth(
                 createReq({
                     headers: { authorization: `Bearer ${noUserId}` },
-                })
+                }),
             );
 
             expectRejected(result);
@@ -329,7 +329,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
     describe("requireAuthOrToken (query + Bearer)", () => {
         it("accepts a real access token via ?token=", async () => {
             const result = await runRequireAuthOrToken(
-                createReq({ query: { token: accessToken() } })
+                createReq({ query: { token: accessToken() } }),
             );
 
             expect(result.next).toHaveBeenCalled();
@@ -342,7 +342,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
 
         it("rejects a refresh token via ?token=", async () => {
             const result = await runRequireAuthOrToken(
-                createReq({ query: { token: refreshToken() } })
+                createReq({ query: { token: refreshToken() } }),
             );
 
             expectRejected(result);
@@ -352,7 +352,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
             const result = await runRequireAuthOrToken(
                 createReq({
                     headers: { authorization: `Bearer ${refreshToken()}` },
-                })
+                }),
             );
 
             expectRejected(result);
@@ -375,7 +375,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
         it("throws when given a refresh token", () => {
             expect(authModule.verifyAccessToken).toBeDefined();
             expect(() =>
-                authModule.verifyAccessToken!(refreshToken())
+                authModule.verifyAccessToken!(refreshToken()),
             ).toThrow();
         });
 
@@ -389,12 +389,12 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
                     type: "device-link",
                 },
                 TEST_SECRET,
-                { expiresIn: "24h" }
+                { expiresIn: "24h" },
             );
 
             expect(authModule.verifyAccessToken).toBeDefined();
             expect(() =>
-                authModule.verifyAccessToken!(unexpectedType)
+                authModule.verifyAccessToken!(unexpectedType),
             ).toThrow();
         });
 
@@ -403,7 +403,7 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
 
             expect(authModule.verifyAccessToken).toBeDefined();
             expect(() =>
-                authModule.verifyAccessToken!(stringPayload)
+                authModule.verifyAccessToken!(stringPayload),
             ).toThrow();
         });
 
@@ -413,17 +413,15 @@ describe("auth middleware behavioral token validation (real jsonwebtoken)", () =
             });
 
             expect(authModule.verifyAccessToken).toBeDefined();
-            expect(() =>
-                authModule.verifyAccessToken!(noUserId)
-            ).toThrow();
+            expect(() => authModule.verifyAccessToken!(noUserId)).toThrow();
         });
 
         it("throws when given an unsigned alg:none token", () => {
             expect(authModule.verifyAccessToken).toBeDefined();
             expect(() =>
                 authModule.verifyAccessToken!(
-                    makeAlgNoneToken({ userId: testUser.id })
-                )
+                    makeAlgNoneToken({ userId: testUser.id }),
+                ),
             ).toThrow();
         });
     });

@@ -152,12 +152,15 @@ export function TrackRow({
                             mode={preferenceMode}
                             buttonSizeClassName="h-8 w-8"
                             iconSizeClassName="h-4 w-4"
-                            metadata={buildPreferenceMetadata({ id: item.id, title: item.title, artist: item.artistName, duration: item.duration })}
+                            metadata={buildPreferenceMetadata({
+                                id: item.id,
+                                title: item.title,
+                                artist: item.artistName,
+                                duration: item.duration,
+                            })}
                         />
                     )}
-                    {overflowProps && (
-                        <TrackOverflowMenu {...overflowProps} />
-                    )}
+                    {overflowProps && <TrackOverflowMenu {...overflowProps} />}
                 </div>
             )}
         </div>

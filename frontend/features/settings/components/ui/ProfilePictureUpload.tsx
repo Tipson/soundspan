@@ -61,7 +61,7 @@ export function ProfilePictureUpload({
             onChanged?.();
         } catch (err) {
             toast.error(
-                err instanceof Error ? err.message : "Failed to upload"
+                err instanceof Error ? err.message : "Failed to upload",
             );
         } finally {
             setIsUploading(false);

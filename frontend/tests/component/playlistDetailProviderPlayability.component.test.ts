@@ -59,7 +59,10 @@ mock.module("next/navigation", {
 
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 mock.module("@/components/ui/ConfirmDialog", {
@@ -84,7 +87,11 @@ mock.module("@/components/player/TrackPreferenceButtons", {
 mock.module("@/components/ui/TrackOverflowMenu", {
     namedExports: {
         TrackOverflowMenu: () =>
-            React.createElement("button", { type: "button", "aria-label": "Track actions" }, "actions"),
+            React.createElement(
+                "button",
+                { type: "button", "aria-label": "Track actions" },
+                "actions",
+            ),
         TrackMenuButton: ({ label }: { label: string }) =>
             React.createElement("span", null, label),
     },
@@ -200,7 +207,9 @@ mock.module("@/lib/api", {
             deletePlaylist: async () => undefined,
             hidePlaylist: async () => undefined,
             unhidePlaylist: async () => undefined,
-            getFreshPreviewUrl: async () => ({ previewUrl: "https://preview.local" }),
+            getFreshPreviewUrl: async () => ({
+                previewUrl: "https://preview.local",
+            }),
             retryPendingTrack: async () => ({ success: true }),
             removePendingTrack: async () => undefined,
         },
@@ -216,7 +225,7 @@ mock.module("@/utils/cn", {
 
 mock.module("@/utils/shuffle", {
     namedExports: {
-        shuffleArray: <T,>(arr: T[]) => arr,
+        shuffleArray: <T>(arr: T[]) => arr,
     },
 });
 
@@ -275,7 +284,11 @@ beforeEach(() => {
                 id: "tidal-1",
                 type: "track",
                 sort: 2,
-                provider: { source: "tidal", label: "TIDAL", tidalTrackId: 991 },
+                provider: {
+                    source: "tidal",
+                    label: "TIDAL",
+                    tidalTrackId: 991,
+                },
                 playback: { isPlayable: true, reason: null, message: null },
                 track: {
                     id: "tidal:991",
@@ -350,7 +363,11 @@ beforeEach(() => {
                 id: "tidal-1",
                 type: "track",
                 sort: 2,
-                provider: { source: "tidal", label: "TIDAL", tidalTrackId: 991 },
+                provider: {
+                    source: "tidal",
+                    label: "TIDAL",
+                    tidalTrackId: 991,
+                },
                 playback: { isPlayable: true, reason: null, message: null },
                 track: {
                     id: "tidal:991",
@@ -413,8 +430,8 @@ test("playlist detail renders consolidated action bar buttons", async () => {
         React.createElement(
             QueryClientProvider,
             { client: queryClient },
-            React.createElement(PlaylistDetailPage)
-        )
+            React.createElement(PlaylistDetailPage),
+        ),
     );
 
     // Canonical order: Play, Shuffle, Add to Queue, Like All, Radio
@@ -434,15 +451,20 @@ test("playlist detail renders overflow menu for remote tracks (tidal + youtube)"
         React.createElement(
             QueryClientProvider,
             { client: queryClient },
-            React.createElement(PlaylistDetailPage)
-        )
+            React.createElement(PlaylistDetailPage),
+        ),
     );
 
     // The mock TrackOverflowMenu renders <button aria-label="Track actions">actions</button>.
     // We expect 3 overflow menus: one for local, one for tidal, one for youtube.
     // The unplayable/missing track should NOT get an overflow menu.
-    const overflowCount = (html.match(/aria-label="Track actions"/g) || []).length;
-    assert.equal(overflowCount, 3, `Expected 3 overflow menus (local + tidal + youtube), got ${overflowCount}`);
+    const overflowCount = (html.match(/aria-label="Track actions"/g) || [])
+        .length;
+    assert.equal(
+        overflowCount,
+        3,
+        `Expected 3 overflow menus (local + tidal + youtube), got ${overflowCount}`,
+    );
 });
 
 test("playlist detail renders provider badges and unplayable fallback messaging", async () => {
@@ -454,8 +476,8 @@ test("playlist detail renders provider badges and unplayable fallback messaging"
         React.createElement(
             QueryClientProvider,
             { client: queryClient },
-            React.createElement(PlaylistDetailPage)
-        )
+            React.createElement(PlaylistDetailPage),
+        ),
     );
 
     assert.match(html, /1 local \/ 1 TIDAL \/ 1 YouTube/);

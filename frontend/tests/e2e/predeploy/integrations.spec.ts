@@ -18,11 +18,11 @@ test.describe("Integrations", () => {
         await mediaServersLink.click();
 
         // Wait for the Audiobookshelf section to appear
-        const absContainer = page.locator('#audiobookshelf');
+        const absContainer = page.locator("#audiobookshelf");
         await expect(absContainer).toBeVisible({ timeout: 5000 });
 
         // Enable Audiobookshelf if not already
-        const enableToggle = page.locator('#abs-enabled');
+        const enableToggle = page.locator("#abs-enabled");
         if (await enableToggle.isVisible({ timeout: 2000 })) {
             const isChecked = await enableToggle.isChecked();
             if (!isChecked) {
@@ -30,8 +30,12 @@ test.describe("Integrations", () => {
                 await page.waitForTimeout(500);
             }
         }
-        const urlInput = absContainer.locator('input[placeholder*="localhost:13378" i]');
-        const apiKeyInput = absContainer.getByRole('textbox', { name: 'Enter API key' });
+        const urlInput = absContainer.locator(
+            'input[placeholder*="localhost:13378" i]',
+        );
+        const apiKeyInput = absContainer.getByRole("textbox", {
+            name: "Enter API key",
+        });
 
         if (await urlInput.isVisible({ timeout: 2000 })) {
             await urlInput.fill(process.env.SOUNDSPAN_TEST_ABS_URL!);
@@ -41,17 +45,20 @@ test.describe("Integrations", () => {
         }
 
         // Click test connection within Audiobookshelf section
-        const testBtn = absContainer.getByRole("button", { name: /test connection/i });
+        const testBtn = absContainer.getByRole("button", {
+            name: /test connection/i,
+        });
         await expect(testBtn).toBeVisible({ timeout: 3000 });
         await testBtn.click();
 
         // Wait for result - should show version number on success
         await page.waitForTimeout(3000);
         const pageText = await page.textContent("body");
-        const hasResult = pageText?.includes("Connected") ||
-                         pageText?.includes("v2.") ||
-                         pageText?.includes("Failed") ||
-                         pageText?.includes("error");
+        const hasResult =
+            pageText?.includes("Connected") ||
+            pageText?.includes("v2.") ||
+            pageText?.includes("Failed") ||
+            pageText?.includes("error");
         expect(hasResult).toBeTruthy();
     });
 
@@ -66,8 +73,16 @@ test.describe("Integrations", () => {
         await lidarrSection.click();
 
         // Fill in test credentials
-        const urlInput = page.locator('input[placeholder*="url" i], input[name*="lidarr" i][name*="url" i]').first();
-        const apiKeyInput = page.locator('input[placeholder*="api" i], input[name*="apikey" i], input[type="password"]').first();
+        const urlInput = page
+            .locator(
+                'input[placeholder*="url" i], input[name*="lidarr" i][name*="url" i]',
+            )
+            .first();
+        const apiKeyInput = page
+            .locator(
+                'input[placeholder*="api" i], input[name*="apikey" i], input[type="password"]',
+            )
+            .first();
 
         if (await urlInput.isVisible()) {
             await urlInput.fill(process.env.SOUNDSPAN_TEST_LIDARR_URL!);
@@ -84,10 +99,11 @@ test.describe("Integrations", () => {
             // Should show success or connection result
             await page.waitForTimeout(3000);
             const pageText = await page.textContent("body");
-            const hasResult = pageText?.includes("success") ||
-                             pageText?.includes("connected") ||
-                             pageText?.includes("failed") ||
-                             pageText?.includes("error");
+            const hasResult =
+                pageText?.includes("success") ||
+                pageText?.includes("connected") ||
+                pageText?.includes("failed") ||
+                pageText?.includes("error");
             expect(hasResult).toBeTruthy();
         }
     });
@@ -105,13 +121,19 @@ test.describe("Integrations", () => {
 
             // Fill credentials
             const userInput = page.locator('input[placeholder*="username" i]');
-            const passInput = page.locator('input[placeholder*="password" i], input[type="password"]');
+            const passInput = page.locator(
+                'input[placeholder*="password" i], input[type="password"]',
+            );
 
             if (await userInput.first().isVisible()) {
-                await userInput.first().fill(process.env.SOUNDSPAN_TEST_SOULSEEK_USER!);
+                await userInput
+                    .first()
+                    .fill(process.env.SOUNDSPAN_TEST_SOULSEEK_USER!);
             }
             if (await passInput.first().isVisible()) {
-                await passInput.first().fill(process.env.SOUNDSPAN_TEST_SOULSEEK_PASS!);
+                await passInput
+                    .first()
+                    .fill(process.env.SOUNDSPAN_TEST_SOULSEEK_PASS!);
             }
 
             // Test connection
@@ -121,9 +143,10 @@ test.describe("Integrations", () => {
                 await page.waitForTimeout(5000);
 
                 const pageText = await page.textContent("body");
-                const hasResult = pageText?.includes("success") ||
-                                 pageText?.includes("connected") ||
-                                 pageText?.includes("failed");
+                const hasResult =
+                    pageText?.includes("success") ||
+                    pageText?.includes("connected") ||
+                    pageText?.includes("failed");
                 expect(hasResult).toBeTruthy();
             }
         }

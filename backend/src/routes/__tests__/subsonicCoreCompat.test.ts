@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -203,7 +205,9 @@ describe("subsonic core compatibility handlers", () => {
         expect(payload.indexes.index).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    artist: expect.arrayContaining([expect.objectContaining({ id: "ar-artist-1" })]),
+                    artist: expect.arrayContaining([
+                        expect.objectContaining({ id: "ar-artist-1" }),
+                    ]),
                 }),
             ]),
         );
@@ -237,7 +241,9 @@ describe("subsonic core compatibility handlers", () => {
         expect(payload.indexes.index).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    artist: expect.arrayContaining([expect.objectContaining({ id: "ar-artist-2" })]),
+                    artist: expect.arrayContaining([
+                        expect.objectContaining({ id: "ar-artist-2" }),
+                    ]),
                 }),
             ]),
         );
@@ -320,7 +326,9 @@ describe("subsonic core compatibility handlers", () => {
                 _max: { playedAt: new Date("2026-01-05T00:00:00.000Z") },
             },
         ]);
-        mockTrackFindMany.mockResolvedValue([{ id: "track-1", albumId: "album-1" }]);
+        mockTrackFindMany.mockResolvedValue([
+            { id: "track-1", albumId: "album-1" },
+        ]);
         mockAlbumFindMany.mockResolvedValue([
             {
                 id: "album-1",

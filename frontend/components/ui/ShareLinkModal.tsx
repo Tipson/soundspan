@@ -5,7 +5,10 @@ import { Copy, Link2, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type ShareLinkRecord } from "@/lib/api";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { buildAbsoluteShareUrl, type ShareResourceType } from "@/lib/shareLinks";
+import {
+    buildAbsoluteShareUrl,
+    type ShareResourceType,
+} from "@/lib/shareLinks";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 
@@ -42,8 +45,8 @@ export function ShareLinkModal({
                     (link) =>
                         link.resourceType === resourceType &&
                         link.resourceId === resourceId &&
-                        !link.revoked
-                )
+                        !link.revoked,
+                ),
             );
         } catch (error) {
             sharedFrontendLogger.error("Failed to load share links", error);
@@ -74,7 +77,7 @@ export function ShareLinkModal({
                 : resourceType === "playlist"
                   ? "playlist"
                   : "track",
-        [resourceType]
+        [resourceType],
     );
 
     const handleCreate = async () => {
@@ -83,11 +86,16 @@ export function ShareLinkModal({
             const response = await api.createShareLink({
                 resourceType,
                 resourceId,
-                expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+                expiresAt: expiresAt
+                    ? new Date(expiresAt).toISOString()
+                    : undefined,
                 maxPlays: maxPlays ? Number(maxPlays) : undefined,
             });
             setCreatedLink(
-                buildAbsoluteShareUrl(response.accessPath, window.location.origin)
+                buildAbsoluteShareUrl(
+                    response.accessPath,
+                    window.location.origin,
+                ),
             );
             await loadExistingLinks();
             toast.success(`Share link created for ${resourceLabel}`);
@@ -118,7 +126,9 @@ export function ShareLinkModal({
         try {
             setRevokingId(id);
             await api.revokeShareLink(id);
-            setExistingLinks((current) => current.filter((link) => link.id !== id));
+            setExistingLinks((current) =>
+                current.filter((link) => link.id !== id),
+            );
             toast.success("Share link revoked");
         } catch (error) {
             sharedFrontendLogger.error("Failed to revoke share link", error);
@@ -168,8 +178,9 @@ export function ShareLinkModal({
                                 {resourceName}
                             </p>
                             <p className="mt-1 text-sm text-gray-400">
-                                Create a shareable link for this {resourceLabel}. You can
-                                optionally limit how long it works and how many times it can be used.
+                                Create a shareable link for this {resourceLabel}
+                                . You can optionally limit how long it works and
+                                how many times it can be used.
                             </p>
                         </div>
                     </div>
@@ -178,24 +189,33 @@ export function ShareLinkModal({
                 {!createdLink ? (
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="share-link-expires-at" className="mb-2 block text-sm font-medium text-gray-300">
+                            <label
+                                htmlFor="share-link-expires-at"
+                                className="mb-2 block text-sm font-medium text-gray-300"
+                            >
                                 Expires at
                             </label>
                             <input
                                 id="share-link-expires-at"
                                 type="datetime-local"
                                 value={expiresAt}
-                                onChange={(event) => setExpiresAt(event.target.value)}
+                                onChange={(event) =>
+                                    setExpiresAt(event.target.value)
+                                }
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                                 style={{ colorScheme: "dark" }}
                             />
                             <p className="mt-2 text-xs text-gray-400">
-                                Leave empty to keep the link active until you revoke it.
+                                Leave empty to keep the link active until you
+                                revoke it.
                             </p>
                         </div>
 
                         <div>
-                            <label htmlFor="share-link-max-plays" className="mb-2 block text-sm font-medium text-gray-300">
+                            <label
+                                htmlFor="share-link-max-plays"
+                                className="mb-2 block text-sm font-medium text-gray-300"
+                            >
                                 Max plays
                             </label>
                             <input
@@ -205,7 +225,9 @@ export function ShareLinkModal({
                                 step="1"
                                 inputMode="numeric"
                                 value={maxPlays}
-                                onChange={(event) => setMaxPlays(event.target.value)}
+                                onChange={(event) =>
+                                    setMaxPlays(event.target.value)
+                                }
                                 placeholder="Unlimited"
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50"
                             />
@@ -234,7 +256,10 @@ export function ShareLinkModal({
                             Your share link is ready.
                         </div>
                         <div>
-                            <label htmlFor="share-link-output" className="mb-2 block text-sm font-medium text-gray-300">
+                            <label
+                                htmlFor="share-link-output"
+                                className="mb-2 block text-sm font-medium text-gray-300"
+                            >
                                 Share link
                             </label>
                             <div className="flex gap-2">
@@ -244,7 +269,10 @@ export function ShareLinkModal({
                                     value={createdLink}
                                     className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white focus:outline-none"
                                 />
-                                <Button variant="secondary" onClick={() => void handleCopy()}>
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => void handleCopy()}
+                                >
                                     <Copy className="mr-2 h-4 w-4" />
                                     Copy
                                 </Button>
@@ -291,7 +319,7 @@ export function ShareLinkModal({
                             {existingLinks.map((link) => {
                                 const absoluteUrl = buildAbsoluteShareUrl(
                                     link.accessPath,
-                                    window.location.origin
+                                    window.location.origin,
                                 );
                                 return (
                                     <div
@@ -310,15 +338,25 @@ export function ShareLinkModal({
                                             <div className="flex items-center gap-2">
                                                 <Button
                                                     variant="secondary"
-                                                    onClick={() => void copyLinkToClipboard(absoluteUrl)}
+                                                    onClick={() =>
+                                                        void copyLinkToClipboard(
+                                                            absoluteUrl,
+                                                        )
+                                                    }
                                                 >
                                                     <Copy className="mr-2 h-4 w-4" />
                                                     Copy
                                                 </Button>
                                                 <Button
                                                     variant="danger"
-                                                    onClick={() => void handleRevoke(link.id)}
-                                                    disabled={revokingId === link.id}
+                                                    onClick={() =>
+                                                        void handleRevoke(
+                                                            link.id,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        revokingId === link.id
+                                                    }
                                                 >
                                                     {revokingId === link.id ? (
                                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

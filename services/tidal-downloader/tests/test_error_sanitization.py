@@ -7,7 +7,6 @@ import types
 
 import pytest
 
-
 MARKER = "sekrit-token-abc123"
 
 
@@ -62,9 +61,7 @@ async def test_search_api_error_sanitized(client, monkeypatch, caplog):
     monkeypatch.setattr(
         app,
         "_build_api",
-        lambda *_args, **_kwargs: types.SimpleNamespace(
-            get_search=_raise_api_error
-        ),
+        lambda *_args, **_kwargs: types.SimpleNamespace(get_search=_raise_api_error),
     )
 
     with caplog.at_level(logging.ERROR, logger="tidal-downloader"):
@@ -93,9 +90,7 @@ async def test_user_auth_restore_failure_sanitized(client, monkeypatch, caplog):
     monkeypatch.setattr(
         app,
         "_build_api",
-        lambda *_args, **_kwargs: types.SimpleNamespace(
-            get_session=_raise_api_error
-        ),
+        lambda *_args, **_kwargs: types.SimpleNamespace(get_session=_raise_api_error),
     )
     monkeypatch.setattr(app, "AuthAPI", FailingAuthAPI)
 
@@ -139,9 +134,7 @@ async def test_browse_home_error_sanitized(client, monkeypatch, caplog):
 
 
 @pytest.mark.anyio
-async def test_download_album_per_track_error_sanitized(
-    client, monkeypatch, caplog
-):
+async def test_download_album_per_track_error_sanitized(client, monkeypatch, caplog):
     """Per-track album failures are logged without exposing internal details."""
     import app
 
@@ -152,11 +145,7 @@ async def test_download_album_per_track_error_sanitized(
             cover=None,
         ),
         get_album_items=lambda album_id, limit=100, offset=0: types.SimpleNamespace(
-            items=[
-                types.SimpleNamespace(
-                    item=types.SimpleNamespace(isrc="x", id=11, title="T")
-                )
-            ],
+            items=[types.SimpleNamespace(item=types.SimpleNamespace(isrc="x", id=11, title="T"))],
             limit=100,
             totalNumberOfItems=1,
         ),

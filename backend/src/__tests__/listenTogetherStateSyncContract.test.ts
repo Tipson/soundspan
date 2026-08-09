@@ -6,19 +6,19 @@ describe("listen together state sync contract", () => {
         __dirname,
         "..",
         "services",
-        "listenTogetherSocket.ts"
+        "listenTogetherSocket.ts",
     );
     const clusterSyncPath = path.join(
         __dirname,
         "..",
         "services",
-        "listenTogetherClusterSync.ts"
+        "listenTogetherClusterSync.ts",
     );
     const managerPath = path.join(
         __dirname,
         "..",
         "services",
-        "listenTogetherManager.ts"
+        "listenTogetherManager.ts",
     );
 
     const socketSource = fs.readFileSync(socketServicePath, "utf8");
@@ -28,7 +28,9 @@ describe("listen together state sync contract", () => {
     it("starts cluster sync and applies external snapshots", () => {
         expect(socketSource).toContain("listenTogetherClusterSync");
         expect(socketSource).toContain(".start((snapshot)");
-        expect(socketSource).toContain("groupManager.applyExternalSnapshot(snapshot)");
+        expect(socketSource).toContain(
+            "groupManager.applyExternalSnapshot(snapshot)",
+        );
     });
 
     it("publishes snapshots on group mutation callbacks", () => {
@@ -37,16 +39,24 @@ describe("listen together state sync contract", () => {
     });
 
     it("supports disabling state sync by env flag", () => {
-        expect(clusterSyncSource).toContain("LISTEN_TOGETHER_STATE_SYNC_ENABLED");
         expect(clusterSyncSource).toContain(
-            "process.env.LISTEN_TOGETHER_STATE_SYNC_ENABLED !== \"false\""
+            "LISTEN_TOGETHER_STATE_SYNC_ENABLED",
+        );
+        expect(clusterSyncSource).toContain(
+            'process.env.LISTEN_TOGETHER_STATE_SYNC_ENABLED !== "false"',
         );
     });
 
     it("group manager can apply externally synced snapshots", () => {
-        expect(managerSource).toContain("applyExternalSnapshot(snapshot: GroupSnapshot)");
-        expect(managerSource).toContain("Preserve local socket presence for users connected to this pod.");
+        expect(managerSource).toContain(
+            "applyExternalSnapshot(snapshot: GroupSnapshot)",
+        );
+        expect(managerSource).toContain(
+            "Preserve local socket presence for users connected to this pod.",
+        );
         expect(managerSource).toContain("shouldApplyIncomingPlayback(");
-        expect(managerSource).toContain("incomingServerTime >= existing.playback.lastPositionUpdate");
+        expect(managerSource).toContain(
+            "incomingServerTime >= existing.playback.lastPositionUpdate",
+        );
     });
 });

@@ -4,7 +4,8 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 export const BASELINE = 130;
-export const HEX_UTILITY_REGEX = /(bg|text|border|ring|ring-offset|from|via|to|shadow|fill|stroke|divide|outline|accent|caret|decoration|placeholder)-\[#[0-9a-fA-F]{3,6}\]/g;
+export const HEX_UTILITY_REGEX =
+    /(bg|text|border|ring|ring-offset|from|via|to|shadow|fill|stroke|divide|outline|accent|caret|decoration|placeholder)-\[#[0-9a-fA-F]{3,6}\]/g;
 
 const SOURCE_DIRECTORIES = ["app", "components", "features"];
 const EXCLUDED_FILE = "components/player/AudioPlaybackOrchestrator.tsx";
@@ -20,7 +21,7 @@ export function countArbitraryHexClasses(source) {
 
 function collectSourceFiles(rootDir) {
     const directories = SOURCE_DIRECTORIES.map((directory) =>
-        path.join(rootDir, directory)
+        path.join(rootDir, directory),
     );
     const files = [];
 
@@ -62,11 +63,13 @@ export function scanRepo(rootDir) {
 
 function main() {
     const count = scanRepo(process.cwd());
-    console.log(`hardcoded arbitrary hex utilities: ${count} (baseline ${BASELINE})`);
+    console.log(
+        `hardcoded arbitrary hex utilities: ${count} (baseline ${BASELINE})`,
+    );
 
     if (count > BASELINE) {
         console.error(
-            "hardcoded arbitrary hex utility baseline exceeded; use a token from app/globals.css @theme instead of a new arbitrary hex"
+            "hardcoded arbitrary hex utility baseline exceeded; use a token from app/globals.css @theme instead of a new arbitrary hex",
         );
         process.exit(1);
     }
@@ -74,6 +77,9 @@ function main() {
     process.exit(0);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+    process.argv[1] &&
+    import.meta.url === pathToFileURL(process.argv[1]).href
+) {
     main();
 }

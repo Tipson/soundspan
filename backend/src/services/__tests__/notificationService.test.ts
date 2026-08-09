@@ -39,7 +39,7 @@ describe("notificationService", () => {
                 type: "system",
                 title: "hello",
                 message: "world",
-            })
+            }),
         ).resolves.toEqual({ id: "n1" });
 
         expect(mockPrisma.notification.create).toHaveBeenCalledWith({
@@ -95,10 +95,21 @@ describe("notificationService", () => {
         await expect(notificationService.deleteOldCleared(7)).resolves.toEqual({
             count: 2,
         });
-        await notificationService.notifyDownloadComplete("u1", "Album", "a1", "ar1");
+        await notificationService.notifyDownloadComplete(
+            "u1",
+            "Album",
+            "a1",
+            "ar1",
+        );
         await notificationService.notifyDownloadFailed("u1", "Album", "oops");
         await notificationService.notifyPlaylistReady("u1", "Mix", "p1", 12);
-        await notificationService.notifyImportComplete("u1", "Mix", "p1", 8, 10);
+        await notificationService.notifyImportComplete(
+            "u1",
+            "Mix",
+            "p1",
+            8,
+            10,
+        );
         await notificationService.notifySystem("u1", "Title", "Body");
 
         expect(mockPrisma.notification.deleteMany).toHaveBeenCalledWith({
@@ -108,7 +119,7 @@ describe("notificationService", () => {
             },
         });
         expect(mockLogger.debug).toHaveBeenCalledWith(
-            "[NOTIFICATION] Cleaned up 2 old notifications"
+            "[NOTIFICATION] Cleaned up 2 old notifications",
         );
         expect(mockPrisma.notification.create).toHaveBeenCalledTimes(5);
     });
@@ -129,7 +140,7 @@ describe("notificationService", () => {
             },
         });
         expect(mockLogger.debug).not.toHaveBeenCalledWith(
-            expect.stringContaining("Cleaned up")
+            expect.stringContaining("Cleaned up"),
         );
     });
 

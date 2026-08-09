@@ -12,7 +12,9 @@ const input = await new Promise((resolve) => {
 process.stdout.write(input);
 
 if (!input.includes("start of coverage report")) {
-    console.error("targeted coverage check failed: raw coverage report was not produced");
+    console.error(
+        "targeted coverage check failed: raw coverage report was not produced",
+    );
     process.exit(1);
 }
 
@@ -33,7 +35,9 @@ const requiredTests = [
 
 for (const testName of requiredTests) {
     if (!input.includes(testName)) {
-        console.error(`targeted coverage check failed: missing required branch test "${testName}"`);
+        console.error(
+            `targeted coverage check failed: missing required branch test "${testName}"`,
+        );
         process.exit(1);
     }
 }
@@ -52,7 +56,9 @@ const coverageRows = input
 for (const expectation of coverageExpectations) {
     const row = coverageRows.find((line) => line.includes(expectation.file));
     if (!row) {
-        console.error(`targeted coverage check failed: coverage row missing for ${expectation.file}`);
+        console.error(
+            `targeted coverage check failed: coverage row missing for ${expectation.file}`,
+        );
         process.exit(1);
     }
 
@@ -66,26 +72,26 @@ for (const expectation of coverageExpectations) {
 
     if (line !== expectation.line || funcs !== expectation.funcs) {
         console.error(
-            `targeted coverage check failed: ${expectation.file} line/functions coverage drifted (${lineText}/${funcsText})`
+            `targeted coverage check failed: ${expectation.file} line/functions coverage drifted (${lineText}/${funcsText})`,
         );
         process.exit(1);
     }
 
     if (branch < expectation.branch) {
         console.error(
-            `targeted coverage check failed: ${expectation.file} branch coverage dropped below the tolerated helper-artifact floor (${branchText} < ${expectation.branch.toFixed(2)})`
+            `targeted coverage check failed: ${expectation.file} branch coverage dropped below the tolerated helper-artifact floor (${branchText} < ${expectation.branch.toFixed(2)})`,
         );
         process.exit(1);
     }
 
     if (uncovered.length > 0) {
         console.error(
-            `targeted coverage check failed: ${expectation.file} reported uncovered source lines (${uncovered})`
+            `targeted coverage check failed: ${expectation.file} reported uncovered source lines (${uncovered})`,
         );
         process.exit(1);
     }
 }
 
 console.log(
-    "targeted coverage check passed: raw coverage only reported the known Node/tsx helper-branch artifact"
+    "targeted coverage check passed: raw coverage only reported the known Node/tsx helper-branch artifact",
 );

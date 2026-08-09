@@ -42,12 +42,16 @@ describe("db connection pool config", () => {
             "postgresql://soundspan:secret@db.example:5432/soundspan";
         process.argv[1] = options?.argv1 ?? "/app/dist/index.js";
 
-        const prismaClientCtor = jest.fn().mockImplementation((opts: unknown) => ({
-            __opts: opts,
-        }));
-        const prismaPgCtor = jest.fn().mockImplementation((config: unknown) => ({
-            __config: config,
-        }));
+        const prismaClientCtor = jest
+            .fn()
+            .mockImplementation((opts: unknown) => ({
+                __opts: opts,
+            }));
+        const prismaPgCtor = jest
+            .fn()
+            .mockImplementation((config: unknown) => ({
+                __config: config,
+            }));
         const logger = {
             info: jest.fn(),
             warn: jest.fn(),
@@ -137,7 +141,7 @@ describe("db connection pool config", () => {
         const poolConfig = prismaPgCtor.mock.calls[0][0];
         expect(poolConfig.max).toBe(12);
         expect(logger.info).toHaveBeenCalledWith(
-            expect.stringContaining("role=all")
+            expect.stringContaining("role=all"),
         );
     });
 

@@ -139,9 +139,9 @@ export class IosStandaloneAudioContextBridge {
             if (!context) {
                 return;
             }
-            context.createMediaElementSource(element).connect(
-                context.destination,
-            );
+            context
+                .createMediaElementSource(element)
+                .connect(context.destination);
             this.context = context;
             this.bridgedElement = element;
             sharedFrontendLogger.info(

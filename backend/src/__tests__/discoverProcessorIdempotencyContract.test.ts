@@ -4,14 +4,14 @@ import path from "path";
 describe("discover processor idempotency contract", () => {
     const processorPath = path.resolve(
         __dirname,
-        "../workers/processors/discoverProcessor.ts"
+        "../workers/processors/discoverProcessor.ts",
     );
     const source = fs.readFileSync(processorPath, "utf8");
 
     it("uses a per-user redis claim lock before generating playlists", () => {
         expect(source).toContain("discover:processor:lock");
         expect(source).toContain(
-            'createIORedisClient(\n    "discover-processor-locks"'
+            'createIORedisClient(\n    "discover-processor-locks"',
         );
         expect(source).toContain("DISCOVER_PROCESSOR_LOCK_TTL_MS");
         expect(source).toContain('"NX"');

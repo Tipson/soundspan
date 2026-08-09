@@ -35,9 +35,8 @@ router.get(
     async (req, res) => {
         try {
             // Check if Audiobookshelf is enabled
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (!settings?.audiobookshelfEnabled) {
@@ -78,7 +77,7 @@ router.get(
                 error: "Failed to fetch continue listening",
             });
         }
-    }
+    },
 );
 
 /**
@@ -106,7 +105,8 @@ router.get(
 router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
     try {
         const { getSystemSettings } = await import("../utils/systemSettings");
-        const { notificationService } = await import("../services/notificationService");
+        const { notificationService } =
+            await import("../services/notificationService");
         const settings = await getSystemSettings();
 
         if (!settings?.audiobookshelfEnabled) {
@@ -123,7 +123,7 @@ router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
             where: { series: { not: null } },
         });
         logger.debug(
-            `[Audiobooks] Sync complete. Books with series: ${seriesCount}`
+            `[Audiobooks] Sync complete. Books with series: ${seriesCount}`,
         );
 
         // Send notification to user
@@ -131,7 +131,7 @@ router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
             await notificationService.notifySystem(
                 req.user.id,
                 "Audiobook Sync Complete",
-                `Synced ${result.synced || 0} audiobooks (${seriesCount} with series)`
+                `Synced ${result.synced || 0} audiobooks (${seriesCount} with series)`,
             );
         }
 
@@ -184,7 +184,7 @@ router.get("/debug-series", requireAuthOrToken, async (req, res) => {
         // Get raw data from Audiobookshelf
         const rawBooks = await audiobookshelfService.getAllAudiobooks();
         logger.debug(
-            `[Audiobooks] Got ${rawBooks.length} books from Audiobookshelf`
+            `[Audiobooks] Got ${rawBooks.length} books from Audiobookshelf`,
         );
 
         // Find books with series data
@@ -194,7 +194,7 @@ router.get("/debug-series", requireAuthOrToken, async (req, res) => {
         });
 
         logger.debug(
-            `[Audiobooks] Books with series data: ${booksWithSeries.length}`
+            `[Audiobooks] Books with series data: ${booksWithSeries.length}`,
         );
 
         // Extract series info from all books (first 20)
@@ -358,7 +358,7 @@ router.get("/", requireAuthOrToken, apiLimiter, async (req, res) => {
                   })
                 : [];
         const progressMap = new Map(
-            progressEntries.map((entry) => [entry.audiobookshelfId, entry])
+            progressEntries.map((entry) => [entry.audiobookshelfId, entry]),
         );
 
         // Get user's progress for each audiobook
@@ -444,9 +444,8 @@ router.get<{ seriesName: string }>(
     async (req, res) => {
         try {
             // Check if Audiobookshelf is enabled
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (!settings?.audiobookshelfEnabled) {
@@ -480,7 +479,7 @@ router.get<{ seriesName: string }>(
                 seriesProgressEntries.map((entry) => [
                     entry.audiobookshelfId,
                     entry,
-                ])
+                ]),
             );
 
             const seriesBooks = audiobooks.map((book) => {
@@ -528,7 +527,7 @@ router.get<{ seriesName: string }>(
                 error: "Failed to fetch series",
             });
         }
-    }
+    },
 );
 
 /**
@@ -611,7 +610,7 @@ router.get("/:id/cover", async (req, res) => {
                 config.music.musicPath,
                 "cover-cache",
                 "audiobooks",
-                `${id}.jpg`
+                `${id}.jpg`,
             );
             if (fs.existsSync(fallbackPath)) {
                 coverPath = fallbackPath;
@@ -628,7 +627,10 @@ router.get("/:id/cover", async (req, res) => {
         // If local cover exists, serve it
         if (coverPath && fs.existsSync(coverPath)) {
             const origin = req.headers.origin || "http://localhost:3030";
-            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            res.setHeader(
+                "Cache-Control",
+                "public, max-age=31536000, immutable",
+            );
             res.setHeader("Access-Control-Allow-Origin", origin);
             res.setHeader("Access-Control-Allow-Credentials", "true");
             res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
@@ -637,13 +639,14 @@ router.get("/:id/cover", async (req, res) => {
 
         // Fallback: proxy from Audiobookshelf if coverUrl is available
         if (audiobook?.coverUrl) {
-            const { getSystemSettings } = await import("../utils/systemSettings");
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
-            
+
             if (settings?.audiobookshelfUrl && settings?.audiobookshelfApiKey) {
                 const baseUrl = settings.audiobookshelfUrl.replace(/\/$/, "");
                 const coverApiUrl = `${baseUrl}/api/${audiobook.coverUrl}`;
-                
+
                 try {
                     const response = await fetch(coverApiUrl, {
                         headers: {
@@ -651,21 +654,35 @@ router.get("/:id/cover", async (req, res) => {
                         },
                         signal: AbortSignal.timeout(15000),
                     });
-                    
+
                     if (response.ok) {
-                        const origin = req.headers.origin || "http://localhost:3030";
-                        res.setHeader("Content-Type", response.headers.get("content-type") || "image/jpeg");
+                        const origin =
+                            req.headers.origin || "http://localhost:3030";
+                        res.setHeader(
+                            "Content-Type",
+                            response.headers.get("content-type") ||
+                                "image/jpeg",
+                        );
                         res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours for proxied
                         res.setHeader("Access-Control-Allow-Origin", origin);
-                        res.setHeader("Access-Control-Allow-Credentials", "true");
-                        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-                        
+                        res.setHeader(
+                            "Access-Control-Allow-Credentials",
+                            "true",
+                        );
+                        res.setHeader(
+                            "Cross-Origin-Resource-Policy",
+                            "cross-origin",
+                        );
+
                         // Stream the response body to client
                         const buffer = await response.arrayBuffer();
                         return res.send(Buffer.from(buffer));
                     }
                 } catch (proxyError: any) {
-                    logger.error(`[Audiobook Cover] Proxy error for ${id}:`, proxyError.message);
+                    logger.error(
+                        `[Audiobook Cover] Proxy error for ${id}:`,
+                        proxyError.message,
+                    );
                 }
             }
         }
@@ -708,97 +725,106 @@ router.get("/:id/cover", async (req, res) => {
  * GET /audiobooks/:id
  * Get a specific audiobook with full details (from cache, fallback to API)
  */
-router.get<{ id: string }>("/:id", requireAuthOrToken, apiLimiter, async (req, res) => {
-    try {
-        // Check if Audiobookshelf is enabled
-        const { getSystemSettings } = await import("../utils/systemSettings");
-        const settings = await getSystemSettings();
-
-        if (!settings?.audiobookshelfEnabled) {
-            return res.status(200).json({ configured: false, enabled: false });
-        }
-
-        const { id } = req.params;
-
-        // Try to get from cache first
-        let audiobook = await prisma.audiobook.findUnique({
-            where: { id },
-        });
-
-        // If not cached or stale, fetch from API and cache it
-        if (
-            !audiobook ||
-            audiobook.lastSyncedAt <
-                new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        ) {
-            logger.debug(
-                `[AUDIOBOOK] Audiobook ${id} not cached or stale, fetching...`
-            );
-            audiobook = await audiobookCacheService.getAudiobook(id);
-        }
-
-        if (!audiobook) {
-            return res.status(404).json({ error: "Audiobook not found" });
-        }
-
-        // Get chapters and audio files from API (these change less frequently)
-        let absBook;
+router.get<{ id: string }>(
+    "/:id",
+    requireAuthOrToken,
+    apiLimiter,
+    async (req, res) => {
         try {
-            absBook = await audiobookshelfService.getAudiobook(id);
-        } catch (apiError: any) {
-            logger.warn(
-                `  Failed to fetch live data from Audiobookshelf for ${id}, using cached data only:`,
-                apiError.message
-            );
-            // Continue with cached data only if API call fails
-            absBook = { media: { chapters: [], audioFiles: [] } };
-        }
+            // Check if Audiobookshelf is enabled
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
+            const settings = await getSystemSettings();
 
-        // Get user's progress
-        const progress = await prisma.audiobookProgress.findUnique({
-            where: {
-                userId_audiobookshelfId: {
-                    userId: req.user!.id,
-                    audiobookshelfId: id,
+            if (!settings?.audiobookshelfEnabled) {
+                return res
+                    .status(200)
+                    .json({ configured: false, enabled: false });
+            }
+
+            const { id } = req.params;
+
+            // Try to get from cache first
+            let audiobook = await prisma.audiobook.findUnique({
+                where: { id },
+            });
+
+            // If not cached or stale, fetch from API and cache it
+            if (
+                !audiobook ||
+                audiobook.lastSyncedAt <
+                    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            ) {
+                logger.debug(
+                    `[AUDIOBOOK] Audiobook ${id} not cached or stale, fetching...`,
+                );
+                audiobook = await audiobookCacheService.getAudiobook(id);
+            }
+
+            if (!audiobook) {
+                return res.status(404).json({ error: "Audiobook not found" });
+            }
+
+            // Get chapters and audio files from API (these change less frequently)
+            let absBook;
+            try {
+                absBook = await audiobookshelfService.getAudiobook(id);
+            } catch (apiError: any) {
+                logger.warn(
+                    `  Failed to fetch live data from Audiobookshelf for ${id}, using cached data only:`,
+                    apiError.message,
+                );
+                // Continue with cached data only if API call fails
+                absBook = { media: { chapters: [], audioFiles: [] } };
+            }
+
+            // Get user's progress
+            const progress = await prisma.audiobookProgress.findUnique({
+                where: {
+                    userId_audiobookshelfId: {
+                        userId: req.user!.id,
+                        audiobookshelfId: id,
+                    },
                 },
-            },
-        });
+            });
 
-        const response = {
-            id: audiobook.id,
-            title: audiobook.title,
-            author: audiobook.author || "Unknown Author",
-            narrator: audiobook.narrator,
-            description: audiobook.description,
-            coverUrl:
-                audiobook.localCoverPath || audiobook.coverUrl
-                    ? `/audiobooks/${audiobook.id}/cover`
+            const response = {
+                id: audiobook.id,
+                title: audiobook.title,
+                author: audiobook.author || "Unknown Author",
+                narrator: audiobook.narrator,
+                description: audiobook.description,
+                coverUrl:
+                    audiobook.localCoverPath || audiobook.coverUrl
+                        ? `/audiobooks/${audiobook.id}/cover`
+                        : null,
+                duration: audiobook.duration || 0,
+                chapters: absBook.media?.chapters || [],
+                audioFiles: absBook.media?.audioFiles || [],
+                libraryId: audiobook.libraryId,
+                progress: progress
+                    ? {
+                          currentTime: progress.currentTime,
+                          progress:
+                              progress.duration > 0
+                                  ? (progress.currentTime / progress.duration) *
+                                    100
+                                  : 0,
+                          isFinished: progress.isFinished,
+                          lastPlayedAt: progress.lastPlayedAt,
+                      }
                     : null,
-            duration: audiobook.duration || 0,
-            chapters: absBook.media?.chapters || [],
-            audioFiles: absBook.media?.audioFiles || [],
-            libraryId: audiobook.libraryId,
-            progress: progress
-                ? {
-                      currentTime: progress.currentTime,
-                      progress:
-                          progress.duration > 0
-                              ? (progress.currentTime / progress.duration) * 100
-                              : 0,
-                      isFinished: progress.isFinished,
-                      lastPlayedAt: progress.lastPlayedAt,
-                  }
-                : null,
-        };
+            };
 
-        res.json(response);
-    } catch (error: any) {
-        logger.error("Error fetching audiobook__", error);
-        res.status(500).json({
-            error: "Failed to fetch audiobook",
-        });
-    }
-});
+            res.json(response);
+        } catch (error: any) {
+            logger.error("Error fetching audiobook__", error);
+            res.status(500).json({
+                error: "Failed to fetch audiobook",
+            });
+        }
+    },
+);
 
 /**
  * @openapi
@@ -841,89 +867,99 @@ router.get<{ id: string }>("/:id", requireAuthOrToken, apiLimiter, async (req, r
  * GET /audiobooks/:id/stream
  * Proxy the audiobook stream with authentication
  */
-router.get<{ id: string }>("/:id/stream", requireAuthOrToken, async (req, res) => {
-    try {
-        logger.debug(
-            `[Audiobook Stream] Request for audiobook: ${req.params.id}`
-        );
-        logger.debug(`[Audiobook Stream] User: ${req.user?.id || "unknown"}`);
+router.get<{ id: string }>(
+    "/:id/stream",
+    requireAuthOrToken,
+    async (req, res) => {
+        try {
+            logger.debug(
+                `[Audiobook Stream] Request for audiobook: ${req.params.id}`,
+            );
+            logger.debug(
+                `[Audiobook Stream] User: ${req.user?.id || "unknown"}`,
+            );
 
-        // Check if Audiobookshelf is enabled
-        const { getSystemSettings } = await import("../utils/systemSettings");
-        const settings = await getSystemSettings();
+            // Check if Audiobookshelf is enabled
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
+            const settings = await getSystemSettings();
 
-        if (!settings?.audiobookshelfEnabled) {
-            logger.debug("[Audiobook Stream] Audiobookshelf not enabled");
-            return res
-                .status(503)
-                .json({ error: "Audiobookshelf is not configured" });
-        }
-
-        const { id } = req.params;
-        const rangeHeader = req.headers.range as string | undefined;
-
-        logger.debug(
-            `[Audiobook Stream] Fetching stream for ${id}, range: ${
-                rangeHeader || "none"
-            }`
-        );
-
-        const { stream, headers, status } =
-            await audiobookshelfService.streamAudiobook(id, rangeHeader);
-
-        logger.debug(
-            `[Audiobook Stream] Got stream, status: ${status}, content-type: ${headers["content-type"]}`
-        );
-
-        const responseStatus = status || (rangeHeader ? 206 : 200);
-        res.status(responseStatus);
-
-        // Set content type - ensure it's audio
-        // axios >=1.18 types indexed header access as a union; coerce to string.
-        const contentType = String(headers["content-type"] || "audio/mpeg");
-        res.setHeader("Content-Type", contentType);
-
-        // Set other headers
-        if (headers["content-length"]) {
-            res.setHeader("Content-Length", String(headers["content-length"]));
-        }
-        if (headers["accept-ranges"]) {
-            res.setHeader("Accept-Ranges", headers["accept-ranges"]);
-        } else {
-            res.setHeader("Accept-Ranges", "bytes");
-        }
-        if (headers["content-range"]) {
-            res.setHeader("Content-Range", headers["content-range"]);
-        }
-
-        res.setHeader("Cache-Control", "public, max-age=0");
-
-        // Clean up upstream stream when client disconnects (e.g., skips track, closes browser)
-        res.on("close", () => {
-            if (!stream.destroyed) {
-                stream.destroy();
+            if (!settings?.audiobookshelfEnabled) {
+                logger.debug("[Audiobook Stream] Audiobookshelf not enabled");
+                return res
+                    .status(503)
+                    .json({ error: "Audiobookshelf is not configured" });
             }
-        });
 
-        stream.pipe(res);
+            const { id } = req.params;
+            const rangeHeader = req.headers.range as string | undefined;
 
-        stream.on("error", (error: any) => {
-            logger.error("[Audiobook Stream] Stream error:", error);
-            if (!res.headersSent) {
-                res.status(500).json({
-                    error: "Failed to stream audiobook",
-                });
+            logger.debug(
+                `[Audiobook Stream] Fetching stream for ${id}, range: ${
+                    rangeHeader || "none"
+                }`,
+            );
+
+            const { stream, headers, status } =
+                await audiobookshelfService.streamAudiobook(id, rangeHeader);
+
+            logger.debug(
+                `[Audiobook Stream] Got stream, status: ${status}, content-type: ${headers["content-type"]}`,
+            );
+
+            const responseStatus = status || (rangeHeader ? 206 : 200);
+            res.status(responseStatus);
+
+            // Set content type - ensure it's audio
+            // axios >=1.18 types indexed header access as a union; coerce to string.
+            const contentType = String(headers["content-type"] || "audio/mpeg");
+            res.setHeader("Content-Type", contentType);
+
+            // Set other headers
+            if (headers["content-length"]) {
+                res.setHeader(
+                    "Content-Length",
+                    String(headers["content-length"]),
+                );
+            }
+            if (headers["accept-ranges"]) {
+                res.setHeader("Accept-Ranges", headers["accept-ranges"]);
             } else {
-                res.end();
+                res.setHeader("Accept-Ranges", "bytes");
             }
-        });
-    } catch (error: any) {
-        logger.error("[Audiobook Stream] Error:", error.message);
-        res.status(500).json({
-            error: "Failed to stream audiobook",
-        });
-    }
-});
+            if (headers["content-range"]) {
+                res.setHeader("Content-Range", headers["content-range"]);
+            }
+
+            res.setHeader("Cache-Control", "public, max-age=0");
+
+            // Clean up upstream stream when client disconnects (e.g., skips track, closes browser)
+            res.on("close", () => {
+                if (!stream.destroyed) {
+                    stream.destroy();
+                }
+            });
+
+            stream.pipe(res);
+
+            stream.on("error", (error: any) => {
+                logger.error("[Audiobook Stream] Stream error:", error);
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        error: "Failed to stream audiobook",
+                    });
+                } else {
+                    res.end();
+                }
+            });
+        } catch (error: any) {
+            logger.error("[Audiobook Stream] Error:", error.message);
+            res.status(500).json({
+                error: "Failed to stream audiobook",
+            });
+        }
+    },
+);
 
 /**
  * @openapi
@@ -974,9 +1010,8 @@ router.post<{ id: string }>(
     async (req, res) => {
         try {
             // Check if Audiobookshelf is enabled
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (!settings?.audiobookshelfEnabled) {
@@ -1008,20 +1043,20 @@ router.post<{ id: string }>(
             logger.debug(`   Audiobook ID: ${id}`);
             logger.debug(
                 `   Current Time: ${currentTime}s (${Math.floor(
-                    currentTime / 60
-                )} mins)`
+                    currentTime / 60,
+                )} mins)`,
             );
             logger.debug(
                 `   Duration: ${durationValue}s (${Math.floor(
-                    durationValue / 60
-                )} mins)`
+                    durationValue / 60,
+                )} mins)`,
             );
             if (durationValue > 0) {
                 logger.debug(
                     `   Progress: ${(
                         (currentTime / durationValue) *
                         100
-                    ).toFixed(1)}%`
+                    ).toFixed(1)}%`,
                 );
             } else {
                 logger.debug("   Progress: duration unknown");
@@ -1106,13 +1141,13 @@ router.post<{ id: string }>(
                     id,
                     currentTime,
                     fallbackDuration,
-                    isFinished
+                    isFinished,
                 );
                 logger.debug(`   Progress synced to Audiobookshelf`);
             } catch (error) {
                 logger.error(
                     "Failed to sync progress to Audiobookshelf:",
-                    error
+                    error,
                 );
                 // Continue anyway - local progress is saved
             }
@@ -1134,7 +1169,7 @@ router.post<{ id: string }>(
                 error: "Failed to update progress",
             });
         }
-    }
+    },
 );
 
 /**
@@ -1170,9 +1205,8 @@ router.delete<{ id: string }>(
     async (req, res) => {
         try {
             // Check if Audiobookshelf is enabled
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (!settings?.audiobookshelfEnabled) {
@@ -1205,7 +1239,7 @@ router.delete<{ id: string }>(
             } catch (error) {
                 logger.error(
                     "Failed to reset progress in Audiobookshelf:",
-                    error
+                    error,
                 );
                 // Continue anyway - local progress is deleted
             }
@@ -1220,7 +1254,7 @@ router.delete<{ id: string }>(
                 error: "Failed to remove progress",
             });
         }
-    }
+    },
 );
 
 export default router;

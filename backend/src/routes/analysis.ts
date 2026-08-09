@@ -53,10 +53,18 @@ router.get("/status", requireAuth, async (req, res) => {
         });
 
         const total = statusCounts.reduce((sum, s) => sum + s._count, 0);
-        const completed = statusCounts.find(s => s.analysisStatus === "completed")?._count || 0;
-        const failed = statusCounts.find(s => s.analysisStatus === "failed")?._count || 0;
-        const processing = statusCounts.find(s => s.analysisStatus === "processing")?._count || 0;
-        const pending = statusCounts.find(s => s.analysisStatus === "pending")?._count || 0;
+        const completed =
+            statusCounts.find((s) => s.analysisStatus === "completed")
+                ?._count || 0;
+        const failed =
+            statusCounts.find((s) => s.analysisStatus === "failed")?._count ||
+            0;
+        const processing =
+            statusCounts.find((s) => s.analysisStatus === "processing")
+                ?._count || 0;
+        const pending =
+            statusCounts.find((s) => s.analysisStatus === "pending")?._count ||
+            0;
 
         // Get queue length from Redis
         const queueLength = await redisClient.lLen(ANALYSIS_QUEUE);
@@ -80,7 +88,8 @@ router.get("/status", requireAuth, async (req, res) => {
             isComplete: pending === 0 && processing === 0 && queueLength === 0,
             clap: {
                 withEmbeddings,
-                embeddingProgress: total > 0 ? Math.round((withEmbeddings / total) * 100) : 0,
+                embeddingProgress:
+                    total > 0 ? Math.round((withEmbeddings / total) * 100) : 0,
             },
         });
     } catch (error: any) {
@@ -137,9 +146,10 @@ router.post("/start", requireAuth, requireAdmin, async (req, res) => {
                 filePath: true,
                 duration: true,
             },
-            orderBy: priority === "recent"
-                ? { fileModified: "desc" }
-                : { title: "asc" },
+            orderBy:
+                priority === "recent"
+                    ? { fileModified: "desc" }
+                    : { title: "asc" },
             take: Math.min(limit, 1000),
         });
 
@@ -153,11 +163,14 @@ router.post("/start", requireAuth, requireAdmin, async (req, res) => {
         // Queue tracks for analysis
         const pipeline = redisClient.multi();
         for (const track of tracks) {
-            pipeline.rPush(ANALYSIS_QUEUE, JSON.stringify({
-                trackId: track.id,
-                filePath: track.filePath,
-                duration: track.duration,
-            }));
+            pipeline.rPush(
+                ANALYSIS_QUEUE,
+                JSON.stringify({
+                    trackId: track.id,
+                    filePath: track.filePath,
+                    duration: track.duration,
+                }),
+            );
         }
         await pipeline.exec();
 
@@ -247,48 +260,57 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
  * POST /api/analysis/analyze/:trackId
  * Queue a specific track for analysis
  */
-router.post<{ trackId: string }>("/analyze/:trackId", requireAuth, async (req, res) => {
-    try {
-        const { trackId } = req.params;
+router.post<{ trackId: string }>(
+    "/analyze/:trackId",
+    requireAuth,
+    async (req, res) => {
+        try {
+            const { trackId } = req.params;
 
-        const track = await prisma.track.findUnique({
-            where: { id: trackId },
-            select: {
-                id: true,
-                filePath: true,
-                duration: true,
-                analysisStatus: true,
-            },
-        });
-
-        if (!track) {
-            return res.status(404).json({ error: "Track not found" });
-        }
-
-        // Queue for analysis
-        await redisClient.rPush(ANALYSIS_QUEUE, JSON.stringify({
-            trackId: track.id,
-            filePath: track.filePath,
-            duration: track.duration,
-        }));
-
-        // Mark as pending if not already
-        if (track.analysisStatus !== "processing") {
-            await prisma.track.update({
+            const track = await prisma.track.findUnique({
                 where: { id: trackId },
-                data: { analysisStatus: "pending" },
+                select: {
+                    id: true,
+                    filePath: true,
+                    duration: true,
+                    analysisStatus: true,
+                },
+            });
+
+            if (!track) {
+                return res.status(404).json({ error: "Track not found" });
+            }
+
+            // Queue for analysis
+            await redisClient.rPush(
+                ANALYSIS_QUEUE,
+                JSON.stringify({
+                    trackId: track.id,
+                    filePath: track.filePath,
+                    duration: track.duration,
+                }),
+            );
+
+            // Mark as pending if not already
+            if (track.analysisStatus !== "processing") {
+                await prisma.track.update({
+                    where: { id: trackId },
+                    data: { analysisStatus: "pending" },
+                });
+            }
+
+            res.json({
+                message: "Track queued for analysis",
+                trackId,
+            });
+        } catch (error: any) {
+            logger.error("Analyze track error:", error);
+            res.status(500).json({
+                error: "Failed to queue track for analysis",
             });
         }
-
-        res.json({
-            message: "Track queued for analysis",
-            trackId,
-        });
-    } catch (error: any) {
-        logger.error("Analyze track error:", error);
-        res.status(500).json({ error: "Failed to queue track for analysis" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -320,58 +342,62 @@ router.post<{ trackId: string }>("/analyze/:trackId", requireAuth, async (req, r
  * GET /api/analysis/track/:trackId
  * Get analysis data for a specific track
  */
-router.get<{ trackId: string }>("/track/:trackId", requireAuth, async (req, res) => {
-    try {
-        const { trackId } = req.params;
+router.get<{ trackId: string }>(
+    "/track/:trackId",
+    requireAuth,
+    async (req, res) => {
+        try {
+            const { trackId } = req.params;
 
-        const track = await prisma.track.findUnique({
-            where: { id: trackId },
-            select: {
-                id: true,
-                title: true,
-                analysisStatus: true,
-                analysisError: true,
-                analyzedAt: true,
-                analysisVersion: true,
-                analysisMode: true,
-                bpm: true,
-                beatsCount: true,
-                key: true,
-                keyScale: true,
-                keyStrength: true,
-                energy: true,
-                loudness: true,
-                dynamicRange: true,
-                danceability: true,
-                valence: true,
-                arousal: true,
-                instrumentalness: true,
-                acousticness: true,
-                speechiness: true,
-                // MusiCNN mood predictions
-                moodHappy: true,
-                moodSad: true,
-                moodRelaxed: true,
-                moodAggressive: true,
-                moodParty: true,
-                moodAcoustic: true,
-                moodElectronic: true,
-                moodTags: true,
-                essentiaGenres: true,
-                lastfmTags: true,
-            },
-        });
+            const track = await prisma.track.findUnique({
+                where: { id: trackId },
+                select: {
+                    id: true,
+                    title: true,
+                    analysisStatus: true,
+                    analysisError: true,
+                    analyzedAt: true,
+                    analysisVersion: true,
+                    analysisMode: true,
+                    bpm: true,
+                    beatsCount: true,
+                    key: true,
+                    keyScale: true,
+                    keyStrength: true,
+                    energy: true,
+                    loudness: true,
+                    dynamicRange: true,
+                    danceability: true,
+                    valence: true,
+                    arousal: true,
+                    instrumentalness: true,
+                    acousticness: true,
+                    speechiness: true,
+                    // MusiCNN mood predictions
+                    moodHappy: true,
+                    moodSad: true,
+                    moodRelaxed: true,
+                    moodAggressive: true,
+                    moodParty: true,
+                    moodAcoustic: true,
+                    moodElectronic: true,
+                    moodTags: true,
+                    essentiaGenres: true,
+                    lastfmTags: true,
+                },
+            });
 
-        if (!track) {
-            return res.status(404).json({ error: "Track not found" });
+            if (!track) {
+                return res.status(404).json({ error: "Track not found" });
+            }
+
+            res.json(track);
+        } catch (error: any) {
+            logger.error("Get track analysis error:", error);
+            res.status(500).json({ error: "Failed to get track analysis" });
         }
-
-        res.json(track);
-    } catch (error: any) {
-        logger.error("Get track analysis error:", error);
-        res.status(500).json({ error: "Failed to get track analysis" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -420,21 +446,37 @@ router.get("/features", requireAuth, async (req, res) => {
         }
 
         // Calculate averages
-        const avgBpm = analyzed.reduce((sum, t) => sum + (t.bpm || 0), 0) / analyzed.length;
-        const avgEnergy = analyzed.reduce((sum, t) => sum + (t.energy || 0), 0) / analyzed.length;
-        const avgDanceability = analyzed.reduce((sum, t) => sum + (t.danceability || 0), 0) / analyzed.length;
-        const avgValence = analyzed.reduce((sum, t) => sum + (t.valence || 0), 0) / analyzed.length;
+        const avgBpm =
+            analyzed.reduce((sum, t) => sum + (t.bpm || 0), 0) /
+            analyzed.length;
+        const avgEnergy =
+            analyzed.reduce((sum, t) => sum + (t.energy || 0), 0) /
+            analyzed.length;
+        const avgDanceability =
+            analyzed.reduce((sum, t) => sum + (t.danceability || 0), 0) /
+            analyzed.length;
+        const avgValence =
+            analyzed.reduce((sum, t) => sum + (t.valence || 0), 0) /
+            analyzed.length;
 
         // Key distribution
-        const majorCount = analyzed.filter(t => t.keyScale === "major").length;
-        const minorCount = analyzed.filter(t => t.keyScale === "minor").length;
+        const majorCount = analyzed.filter(
+            (t) => t.keyScale === "major",
+        ).length;
+        const minorCount = analyzed.filter(
+            (t) => t.keyScale === "minor",
+        ).length;
 
         // BPM distribution (buckets)
         const bpmBuckets = {
-            slow: analyzed.filter(t => (t.bpm || 0) < 90).length,
-            moderate: analyzed.filter(t => (t.bpm || 0) >= 90 && (t.bpm || 0) < 120).length,
-            upbeat: analyzed.filter(t => (t.bpm || 0) >= 120 && (t.bpm || 0) < 150).length,
-            fast: analyzed.filter(t => (t.bpm || 0) >= 150).length,
+            slow: analyzed.filter((t) => (t.bpm || 0) < 90).length,
+            moderate: analyzed.filter(
+                (t) => (t.bpm || 0) >= 90 && (t.bpm || 0) < 120,
+            ).length,
+            upbeat: analyzed.filter(
+                (t) => (t.bpm || 0) >= 120 && (t.bpm || 0) < 150,
+            ).length,
+            fast: analyzed.filter((t) => (t.bpm || 0) >= 150).length,
         };
 
         res.json({
@@ -482,10 +524,10 @@ router.get("/workers", requireAuth, requireAdmin, async (req, res) => {
         const settings = await getSystemSettings();
         const cpuCores = os.cpus().length;
         const currentWorkers = settings?.audioAnalyzerWorkers || 2;
-        
+
         // Recommended: 50% of CPU cores, min 2, max 8
         const recommended = Math.max(2, Math.min(8, Math.floor(cpuCores / 2)));
-        
+
         res.json({
             workers: currentWorkers,
             cpuCores,
@@ -536,30 +578,30 @@ router.get("/workers", requireAuth, requireAdmin, async (req, res) => {
 router.put("/workers", requireAuth, requireAdmin, async (req, res) => {
     try {
         const { workers } = req.body;
-        
-        if (typeof workers !== 'number' || workers < 1 || workers > 8) {
-            return res.status(400).json({ 
-                error: "Workers must be a number between 1 and 8" 
+
+        if (typeof workers !== "number" || workers < 1 || workers > 8) {
+            return res.status(400).json({
+                error: "Workers must be a number between 1 and 8",
             });
         }
-        
+
         // Update SystemSettings
         await prisma.systemSettings.update({
             where: { id: "default" },
             data: { audioAnalyzerWorkers: workers },
         });
-        
+
         // Publish control signal to Redis for Python worker to pick up
         await redisClient.publish(
             "audio:analysis:control",
-            JSON.stringify({ command: "set_workers", count: workers })
+            JSON.stringify({ command: "set_workers", count: workers }),
         );
-        
+
         const cpuCores = os.cpus().length;
         const recommended = Math.max(2, Math.min(8, Math.floor(cpuCores / 2)));
-        
+
         logger.info(`Audio analyzer workers updated to ${workers}`);
-        
+
         res.json({
             workers,
             cpuCores,
@@ -568,7 +610,9 @@ router.put("/workers", requireAuth, requireAdmin, async (req, res) => {
         });
     } catch (error: any) {
         logger.error("Update workers config error:", error);
-        res.status(500).json({ error: "Failed to update worker configuration" });
+        res.status(500).json({
+            error: "Failed to update worker configuration",
+        });
     }
 });
 
@@ -609,7 +653,9 @@ router.get("/clap-workers", requireAuth, requireAdmin, async (req, res) => {
         });
     } catch (error: any) {
         logger.error("Get CLAP workers config error:", error);
-        res.status(500).json({ error: "Failed to get CLAP worker configuration" });
+        res.status(500).json({
+            error: "Failed to get CLAP worker configuration",
+        });
     }
 });
 
@@ -652,9 +698,9 @@ router.put("/clap-workers", requireAuth, requireAdmin, async (req, res) => {
     try {
         const { workers } = req.body;
 
-        if (typeof workers !== 'number' || workers < 1 || workers > 8) {
+        if (typeof workers !== "number" || workers < 1 || workers > 8) {
             return res.status(400).json({
-                error: "CLAP workers must be a number between 1 and 8"
+                error: "CLAP workers must be a number between 1 and 8",
             });
         }
 
@@ -667,7 +713,7 @@ router.put("/clap-workers", requireAuth, requireAdmin, async (req, res) => {
         // Publish control signal to Redis for CLAP analyzer to pick up
         await redisClient.publish(
             "audio:clap:control",
-            JSON.stringify({ command: "set_workers", count: workers })
+            JSON.stringify({ command: "set_workers", count: workers }),
         );
 
         const cpuCores = os.cpus().length;
@@ -683,7 +729,9 @@ router.put("/clap-workers", requireAuth, requireAdmin, async (req, res) => {
         });
     } catch (error: any) {
         logger.error("Update CLAP workers config error:", error);
-        res.status(500).json({ error: "Failed to update CLAP worker configuration" });
+        res.status(500).json({
+            error: "Failed to update CLAP worker configuration",
+        });
     }
 });
 
@@ -741,7 +789,9 @@ router.post("/vibe/start", requireAuth, requireAdmin, async (req, res) => {
         }
 
         // Find tracks without vibe embeddings (all tracks if force was used)
-        const tracks = await prisma.$queryRaw<{ id: string; filePath: string; duration: number; title: string }[]>`
+        const tracks = await prisma.$queryRaw<
+            { id: string; filePath: string; duration: number; title: string }[]
+        >`
             SELECT t.id, t."filePath", t.duration, t.title
             FROM "Track" t
             LEFT JOIN track_embeddings te ON t.id = te.track_id
@@ -770,11 +820,14 @@ router.post("/vibe/start", requireAuth, requireAdmin, async (req, res) => {
         // Queue tracks for CLAP embedding
         const pipeline = redisClient.multi();
         for (const track of tracks) {
-            pipeline.rPush(VIBE_QUEUE, JSON.stringify({
-                trackId: track.id,
-                filePath: track.filePath,
-                duration: track.duration,
-            }));
+            pipeline.rPush(
+                VIBE_QUEUE,
+                JSON.stringify({
+                    trackId: track.id,
+                    filePath: track.filePath,
+                    duration: track.duration,
+                }),
+            );
         }
         await pipeline.exec();
 
@@ -783,7 +836,9 @@ router.post("/vibe/start", requireAuth, requireAdmin, async (req, res) => {
             await enrichmentFailureService.clearFailure("vibe", track.id);
         }
 
-        logger.info(`Queued ${tracks.length} tracks for vibe embedding${force ? " (force reset)" : ""}`);
+        logger.info(
+            `Queued ${tracks.length} tracks for vibe embedding${force ? " (force reset)" : ""}`,
+        );
 
         res.json({
             message: `Queued ${tracks.length} tracks for vibe embedding`,
@@ -833,7 +888,7 @@ router.post("/vibe/retry", requireAuth, requireAdmin, async (req, res) => {
         }
 
         // Get track details for failed tracks
-        const trackIds = failures.map(f => f.entityId);
+        const trackIds = failures.map((f) => f.entityId);
         const tracks = await prisma.track.findMany({
             where: { id: { in: trackIds } },
             select: { id: true, filePath: true, duration: true, title: true },
@@ -856,16 +911,21 @@ router.post("/vibe/retry", requireAuth, requireAdmin, async (req, res) => {
         // Queue for retry
         const pipeline = redisClient.multi();
         for (const track of tracks) {
-            pipeline.rPush(VIBE_QUEUE, JSON.stringify({
-                trackId: track.id,
-                filePath: track.filePath,
-                duration: track.duration,
-            }));
+            pipeline.rPush(
+                VIBE_QUEUE,
+                JSON.stringify({
+                    trackId: track.id,
+                    filePath: track.filePath,
+                    duration: track.duration,
+                }),
+            );
         }
         await pipeline.exec();
 
         // Reset retry counts
-        await enrichmentFailureService.resetRetryCount(failures.map(f => f.id));
+        await enrichmentFailureService.resetRetryCount(
+            failures.map((f) => f.id),
+        );
 
         logger.info(`Retrying ${tracks.length} failed vibe embeddings`);
 

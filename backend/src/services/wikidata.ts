@@ -22,7 +22,7 @@ class WikidataService {
 
     async getArtistInfo(
         artistName: string,
-        mbid: string
+        mbid: string,
     ): Promise<WikidataResult> {
         const cacheKey = `wikidata:${mbid}`;
 
@@ -57,7 +57,7 @@ class WikidataService {
                 await redisClient.setEx(
                     cacheKey,
                     2592000,
-                    JSON.stringify(result)
+                    JSON.stringify(result),
                 );
             } catch (err) {
                 logger.warn("Redis set error:", err);
@@ -78,12 +78,15 @@ class WikidataService {
       LIMIT 1
     `;
 
-        const response = await this.client.get("https://query.wikidata.org/sparql", {
-            params: {
-                query: sparqlQuery,
-                format: "json",
+        const response = await this.client.get(
+            "https://query.wikidata.org/sparql",
+            {
+                params: {
+                    query: sparqlQuery,
+                    format: "json",
+                },
             },
-        });
+        );
 
         const bindings = response.data.results?.bindings || [];
         if (bindings.length === 0) return null;
@@ -93,12 +96,12 @@ class WikidataService {
     }
 
     private async getWikipediaSummary(
-        wikidataId: string
+        wikidataId: string,
     ): Promise<string | undefined> {
         try {
             // Get English Wikipedia article title
             const response = await this.client.get(
-                `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`
+                `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`,
             );
 
             const entity = response.data.entities?.[wikidataId];
@@ -109,25 +112,25 @@ class WikidataService {
             // Get article summary from Wikipedia API
             const summaryResponse = await this.client.get(
                 "https://en.wikipedia.org/api/rest_v1/page/summary/" +
-                    encodeURIComponent(enWikiTitle)
+                    encodeURIComponent(enWikiTitle),
             );
 
             return summaryResponse.data.extract;
         } catch (error) {
             logger.error(
                 `Failed to get Wikipedia summary for ${wikidataId}:`,
-                error
+                error,
             );
             return undefined;
         }
     }
 
     private async getWikidataImage(
-        wikidataId: string
+        wikidataId: string,
     ): Promise<string | undefined> {
         try {
             const response = await this.client.get(
-                `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`
+                `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`,
             );
 
             const entity = response.data.entities?.[wikidataId];
@@ -152,7 +155,7 @@ class WikidataService {
         } catch (error) {
             logger.error(
                 `Failed to get Wikidata image for ${wikidataId}:`,
-                error
+                error,
             );
             return undefined;
         }

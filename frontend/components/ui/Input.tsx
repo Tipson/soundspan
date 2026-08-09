@@ -34,7 +34,7 @@ export function Input({
                         error &&
                             "border-red-500/50 focus:ring-red-500/50 focus:border-red-500",
                         rightIcon && "pr-12",
-                        className
+                        className,
                     )}
                     {...props}
                 />

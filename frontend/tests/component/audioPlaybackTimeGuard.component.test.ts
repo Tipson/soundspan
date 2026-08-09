@@ -70,7 +70,11 @@ describe("timeupdate during loading is dropped", () => {
 
     test("timeupdate at 0.0 during loading is rejected", () => {
         const result = simulateTimeupdateGuard(
-            { isLoading: true, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: true,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             0.0,
             "t1",
         );
@@ -80,7 +84,11 @@ describe("timeupdate during loading is dropped", () => {
 
     test("timeupdate at 0.1 during loading is rejected (below threshold)", () => {
         const result = simulateTimeupdateGuard(
-            { isLoading: true, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: true,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             0.1,
             "t1",
         );
@@ -101,7 +109,11 @@ describe("timeupdate after load completes passes through", () => {
 
     test("timeupdate passes when not loading", () => {
         const result = simulateTimeupdateGuard(
-            { isLoading: false, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: false,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             5.0,
             "t1",
         );
@@ -111,7 +123,11 @@ describe("timeupdate after load completes passes through", () => {
 
     test("timeupdate with mismatched trackId is still rejected after load", () => {
         const result = simulateTimeupdateGuard(
-            { isLoading: false, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: false,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             5.0,
             "t2",
         );
@@ -159,7 +175,11 @@ describe("progress_before_load_event clears isLoadingRef", () => {
 
     test("timeupdate at threshold clears loading and accepts", () => {
         const result = simulateTimeupdateGuard(
-            { isLoading: true, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: true,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             0.2,
             "t1",
         );
@@ -169,7 +189,11 @@ describe("progress_before_load_event clears isLoadingRef", () => {
 
     test("timeupdate above threshold clears loading and accepts", () => {
         const result = simulateTimeupdateGuard(
-            { isLoading: true, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: true,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             1.5,
             "t1",
         );
@@ -180,7 +204,11 @@ describe("progress_before_load_event clears isLoadingRef", () => {
     test("subsequent timeupdate after clearing passes without re-clearing", () => {
         // First call clears loading
         const first = simulateTimeupdateGuard(
-            { isLoading: true, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: true,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             0.5,
             "t1",
         );
@@ -188,7 +216,11 @@ describe("progress_before_load_event clears isLoadingRef", () => {
 
         // Simulate subsequent call with loading already false
         const second = simulateTimeupdateGuard(
-            { isLoading: false, activeSelection: trackSelection, seekState: noSeek },
+            {
+                isLoading: false,
+                activeSelection: trackSelection,
+                seekState: noSeek,
+            },
             1.0,
             "t1",
         );

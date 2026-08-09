@@ -12,10 +12,7 @@ import {
     useMemo,
 } from "react";
 import { useAudioState } from "./audio-state-context";
-import {
-    playbackStateMachine,
-    type PlaybackState,
-} from "./audio";
+import { playbackStateMachine, type PlaybackState } from "./audio";
 import { api } from "@/lib/api";
 import {
     createMigratingStorageKey,
@@ -69,7 +66,7 @@ export interface AudioPlaybackContextType {
     setCurrentTime: (time: number) => void;
     setCurrentTimeFromEngine: (
         time: number,
-        invocationTrackId?: string | null
+        invocationTrackId?: string | null,
     ) => void; // For timeupdate events - respects seek lock and active track guards
     setDuration: (duration: number) => void;
     setIsBuffering: (buffering: boolean) => void;
@@ -103,7 +100,7 @@ export interface PlaybackStatusContextType {
     setCurrentTime: (time: number) => void;
     setCurrentTimeFromEngine: (
         time: number,
-        invocationTrackId?: string | null
+        invocationTrackId?: string | null,
     ) => void;
     setDuration: (duration: number) => void;
     setIsBuffering: (buffering: boolean) => void;
@@ -129,7 +126,7 @@ const STORAGE_KEYS = {
     CURRENT_TIME: createMigratingStorageKey("current_time"),
     CURRENT_TIME_TRACK_ID: createMigratingStorageKey("current_time_track_id"),
     LAST_PLAYBACK_STATE_SAVE_AT: createMigratingStorageKey(
-        LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX
+        LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,
     ),
 };
 
@@ -157,16 +154,18 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         try {
             const saved = readStorage(STORAGE_KEYS.CURRENT_TIME);
             return saved ? parseFloat(saved) : 0;
-        } catch { return 0; }
+        } catch {
+            return 0;
+        }
     });
     const [duration, setDuration] = useState(0);
     const [isBuffering, setIsBuffering] = useState(false);
     const [targetSeekPosition, setTargetSeekPosition] = useState<number | null>(
-        null
+        null,
     );
     const [canSeek, setCanSeek] = useState(true); // Default true for music, false for uncached podcasts
     const [downloadProgress, setDownloadProgress] = useState<number | null>(
-        null
+        null,
     );
     const [audioError, setAudioError] = useState<string | null>(null);
     const [playbackState, setPlaybackState] = useState<PlaybackState>("IDLE");
@@ -187,7 +186,9 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
     const lastPublishedTimeRef = useRef<number>(currentTime);
     const state = useAudioState();
     const initialTrackId =
-        state.playbackType === "track" ? state.currentTrack?.id ?? null : null;
+        state.playbackType === "track"
+            ? (state.currentTrack?.id ?? null)
+            : null;
     const lastTrackIdentityRef = useRef<{
         playbackType: "track" | "audiobook" | "podcast" | null;
         trackId: string | null;
@@ -208,7 +209,9 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
 
     useLayoutEffect(() => {
         const activeTrackId =
-            state.playbackType === "track" ? state.currentTrack?.id ?? null : null;
+            state.playbackType === "track"
+                ? (state.currentTrack?.id ?? null)
+                : null;
         const previousTrackIdentity = lastTrackIdentityRef.current;
         let nextTrackEpoch = trackPersistenceEpochRef.current;
 
@@ -278,11 +281,13 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
             setIsPlaying((prev) => {
                 const nextIsPlaying = resolveMachinePlaybackIntent(
                     ctx.state,
-                    prev
+                    prev,
                 );
                 return prev !== nextIsPlaying ? nextIsPlaying : prev;
             });
-            setIsBuffering((prev) => prev !== machineIsBuffering ? machineIsBuffering : prev);
+            setIsBuffering((prev) =>
+                prev !== machineIsBuffering ? machineIsBuffering : prev,
+            );
 
             // Update error state
             if (ctx.state === "ERROR" && ctx.error) {
@@ -401,7 +406,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         try {
             writeMigratingStorageItem(
                 STORAGE_KEYS.IS_PLAYING,
-                isPlaying ? "true" : "false"
+                isPlaying ? "true" : "false",
             );
         } catch {
             // Ignore storage failures (private mode/quota/etc.)
@@ -419,7 +424,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
                 if (cancelled) return;
                 const resolvedIntent = resolveHydratedPlaybackIntent(
                     serverState,
-                    initialIsPlayingRef.current
+                    initialIsPlayingRef.current,
                 );
                 if (resolvedIntent !== initialIsPlayingRef.current) {
                     setIsPlaying(resolvedIntent);
@@ -490,26 +495,32 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         lastTrackResetEpochRef.current = currentTrackEpoch;
         currentTimeRef.current = 0;
         lastPublishedTimeRef.current = 0;
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- must zero local playback state immediately on active track swap
-        setCurrentTime((prev) => prev === 0 ? prev : 0);
+        setCurrentTime((prev) => (prev === 0 ? prev : 0));
         lastSaveTimeRef.current = 0;
 
         try {
             writeMigratingStorageItem(STORAGE_KEYS.CURRENT_TIME, "0");
             writeMigratingStorageItem(
                 STORAGE_KEYS.CURRENT_TIME_TRACK_ID,
-                state.currentTrack.id
+                state.currentTrack.id,
             );
         } catch {
             // Ignore storage failures (private mode/quota/etc.)
         }
-    }, [isHydrated, state.playbackType, state.currentTrack?.id, trackPersistenceEpoch]);
+    }, [
+        isHydrated,
+        state.playbackType,
+        state.currentTrack?.id,
+        trackPersistenceEpoch,
+    ]);
 
     // Save currentTime to localStorage (throttled to avoid excessive writes)
     useEffect(() => {
         if (!isHydrated || typeof window === "undefined") return;
         const invocationTrackId =
-            state.playbackType === "track" ? state.currentTrack?.id ?? null : null;
+            state.playbackType === "track"
+                ? (state.currentTrack?.id ?? null)
+                : null;
         const invocationTrackEpoch = resolveTrackPersistenceEpoch(
             trackPersistenceEpoch,
             trackPersistenceEpochRef.current,
@@ -541,16 +552,19 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
             // savePlaybackProgressToServer, which reads the same ref.
             writeMigratingStorageItem(
                 STORAGE_KEYS.CURRENT_TIME,
-                currentTimeRef.current.toString()
+                currentTimeRef.current.toString(),
             );
             if (state.playbackType === "track" && invocationTrackId) {
                 writeMigratingStorageItem(
                     STORAGE_KEYS.CURRENT_TIME_TRACK_ID,
-                    invocationTrackId
+                    invocationTrackId,
                 );
             }
         } catch (error) {
-            sharedFrontendLogger.error("[AudioPlayback] Failed to save currentTime:", error);
+            sharedFrontendLogger.error(
+                "[AudioPlayback] Failed to save currentTime:",
+                error,
+            );
         }
     }, [
         currentTime,
@@ -562,7 +576,9 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
 
     // Ref for reading audio state inside the stable savePlaybackProgressToServer callback.
     const audioStateRef = useRef(state);
-    useEffect(() => { audioStateRef.current = state; }, [state]);
+    useEffect(() => {
+        audioStateRef.current = state;
+    }, [state]);
     const progressSaveInFlightRef = useRef(false);
 
     const savePlaybackProgressToServer = useCallback(
@@ -602,7 +618,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
             const limitedQueue = currentAudioState.queue?.slice(0, 100) || [];
             const adjustedIndex = Math.min(
                 currentAudioState.currentIndex,
-                limitedQueue.length > 0 ? limitedQueue.length - 1 : 0
+                limitedQueue.length > 0 ? limitedQueue.length - 1 : 0,
             );
 
             progressSaveInFlightRef.current = true;
@@ -618,19 +634,25 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
                     isShuffle: currentAudioState.isShuffle,
                     isPlaying,
                     currentTime: clampNonNegativePlaybackTime(
-                        currentTimeRef.current
+                        currentTimeRef.current,
                     ),
                 });
                 if (!isPersistenceSnapshotActive(invocationSnapshot)) return;
                 lastServerProgressSaveRef.current = now;
                 writeMigratingStorageItem(
                     STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT,
-                    now.toString()
+                    now.toString(),
                 );
             } catch (err) {
                 // Ignore auth/state sync failures to avoid disrupting playback.
-                if (err instanceof Error && err.message !== "Not authenticated") {
-                    sharedFrontendLogger.warn("[AudioPlayback] Failed to save playback progress:", err);
+                if (
+                    err instanceof Error &&
+                    err.message !== "Not authenticated"
+                ) {
+                    sharedFrontendLogger.warn(
+                        "[AudioPlayback] Failed to save playback progress:",
+                        err,
+                    );
                 }
             } finally {
                 progressSaveInFlightRef.current = false;
@@ -645,7 +667,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
             isPlaying,
             trackPersistenceEpoch,
             isPersistenceSnapshotActive,
-        ]
+        ],
     );
 
     // Persist playback position periodically while playing.
@@ -657,14 +679,24 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         }, PLAYBACK_PROGRESS_SAVE_INTERVAL_MS);
 
         return () => window.clearInterval(intervalId);
-    }, [isHydrated, isPlaying, state.playbackType, savePlaybackProgressToServer]);
+    }, [
+        isHydrated,
+        isPlaying,
+        state.playbackType,
+        savePlaybackProgressToServer,
+    ]);
 
     // Persist immediately when paused/stopped on a selected item.
     useEffect(() => {
         if (!isHydrated || !state.playbackType) return;
         if (isPlaying) return;
         void savePlaybackProgressToServer(true);
-    }, [isHydrated, state.playbackType, isPlaying, savePlaybackProgressToServer]);
+    }, [
+        isHydrated,
+        state.playbackType,
+        isPlaying,
+        savePlaybackProgressToServer,
+    ]);
 
     // Best-effort persistence on tab close/navigation.
     useEffect(() => {
@@ -678,10 +710,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         };
     }, [isHydrated, savePlaybackProgressToServer]);
 
-    const progressValue = useMemo(
-        () => ({ currentTime }),
-        [currentTime]
-    );
+    const progressValue = useMemo(() => ({ currentTime }), [currentTime]);
 
     // Memoize to prevent re-renders when values haven't changed
     const statusValue = useMemo(
@@ -727,7 +756,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
             lockSeek,
             unlockSeek,
             clearAudioError,
-        ]
+        ],
     );
 
     return (
@@ -746,7 +775,7 @@ export function usePlaybackStatus(): PlaybackStatusContextType {
     const context = useContext(PlaybackStatusContext);
     if (!context) {
         throw new Error(
-            "usePlaybackStatus must be used within AudioPlaybackProvider"
+            "usePlaybackStatus must be used within AudioPlaybackProvider",
         );
     }
     return context;
@@ -759,7 +788,7 @@ export function usePlaybackProgress(): PlaybackProgressContextType {
     const context = useContext(PlaybackProgressContext);
     if (!context) {
         throw new Error(
-            "usePlaybackProgress must be used within AudioPlaybackProvider"
+            "usePlaybackProgress must be used within AudioPlaybackProvider",
         );
     }
     return context;
@@ -778,11 +807,11 @@ export function useAudioPlayback(): AudioPlaybackContextType {
             status && progress
                 ? { ...status, currentTime: progress.currentTime }
                 : null,
-        [status, progress]
+        [status, progress],
     );
     if (!composite) {
         throw new Error(
-            'useAudioPlayback must be used within AudioPlaybackProvider'
+            "useAudioPlayback must be used within AudioPlaybackProvider",
         );
     }
     return composite;

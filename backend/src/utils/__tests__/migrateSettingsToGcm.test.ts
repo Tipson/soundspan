@@ -40,7 +40,9 @@ describe("migrate-settings-to-gcm planColumnReencryption", () => {
 
     it("skips values already in the v2 envelope (idempotent re-runs)", () => {
         const alreadyV2 = "v2:aa:bb:cc:dd";
-        expect(planColumnReencryption(alreadyV2)).toEqual({ action: "skip-v2" });
+        expect(planColumnReencryption(alreadyV2)).toEqual({
+            action: "skip-v2",
+        });
     });
 
     it("re-encrypts a previously-plaintext value into a v2 envelope", () => {
@@ -56,7 +58,7 @@ describe("migrate-settings-to-gcm planColumnReencryption", () => {
         // Legacy ciphertext written under the SAME key the module loaded.
         const v1 = legacyEncrypt(
             "lidarr-key",
-            process.env.SETTINGS_ENCRYPTION_KEY as string
+            process.env.SETTINGS_ENCRYPTION_KEY as string,
         );
         const outcome = planColumnReencryption(v1);
         expect(outcome.action).toBe("reencrypt");
@@ -69,7 +71,7 @@ describe("migrate-settings-to-gcm planColumnReencryption", () => {
         // Legacy ciphertext under a DIFFERENT key — the module cannot decrypt it.
         const undecryptable = legacyEncrypt(
             "lost-forever",
-            "a-totally-different-32byte-key-000000"
+            "a-totally-different-32byte-key-000000",
         );
         const outcome = planColumnReencryption(undecryptable);
         expect(outcome.action).toBe("skip-error");
@@ -124,7 +126,7 @@ describe("migrate-settings-to-gcm migrateModelRows", () => {
             delegate,
             ENCRYPTED_SETTINGS_COLUMNS.userSettings,
             ENCRYPTED_MODEL_PRIMARY_KEYS.userSettings,
-            true
+            true,
         );
 
         expect(findManyCalls[0].select).toMatchObject({
@@ -149,7 +151,7 @@ describe("migrate-settings-to-gcm migrateModelRows", () => {
             delegate,
             ["lidarrApiKey"],
             ENCRYPTED_MODEL_PRIMARY_KEYS.systemSettings,
-            false
+            false,
         );
 
         expect(updateCalls).toHaveLength(0);
@@ -159,7 +161,7 @@ describe("migrate-settings-to-gcm migrateModelRows", () => {
     it("skips v2 rows without updating and counts undecryptable values as skipped", async () => {
         const undecryptable = legacyEncrypt(
             "lost",
-            "a-totally-different-32byte-key-000000"
+            "a-totally-different-32byte-key-000000",
         );
         const { delegate, updateCalls } = fakeDelegate([
             { id: "u1", subsonicPassword: "v2:aa:bb:cc:dd" },
@@ -171,7 +173,7 @@ describe("migrate-settings-to-gcm migrateModelRows", () => {
             delegate,
             ["subsonicPassword"],
             ENCRYPTED_MODEL_PRIMARY_KEYS.user,
-            true
+            true,
         );
 
         expect(updateCalls).toHaveLength(0);

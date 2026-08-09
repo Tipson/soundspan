@@ -1,12 +1,12 @@
 /**
  * Download Job Deduplication Test
- * 
+ *
  * Tests the entire download flow to verify:
  * 1. Duplicate jobs are detected and linked (same artist+album, different MBID)
  * 2. Only ONE notification per album
  * 3. Completion merges duplicate jobs
  * 4. Stale cleanup detects completed duplicates
- * 
+ *
  * Run with: npx tsx scripts/manual-tests/downloadDedup.ts
  */
 
@@ -52,7 +52,9 @@ async function test1_DuplicateJobDetectionOnGrab(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 1: Duplicate Job Detection on Grab Event");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Job exists with MBID-1, Lidarr fires Grab with MBID-2 (same album)");
+    logger.debug(
+        "Scenario: Job exists with MBID-1, Lidarr fires Grab with MBID-2 (same album)",
+    );
     logger.debug("Expected: Should link to existing job, NOT create duplicate");
 
     // Create first job (simulating user request)
@@ -79,18 +81,20 @@ async function test1_DuplicateJobDetectionOnGrab(): Promise<boolean> {
     logger.debug(`   Album in metadata: ${TEST_ALBUM}`);
 
     // Simulate Lidarr Grab event with DIFFERENT MBID
-    logger.debug("\n[STEP 2] Simulating Lidarr Grab webhook (different MBID)...");
+    logger.debug(
+        "\n[STEP 2] Simulating Lidarr Grab webhook (different MBID)...",
+    );
     logger.debug(`   Download ID: test-download-id-001`);
     logger.debug(`   MBID from Lidarr: ${TEST_MBID_2} (DIFFERENT!)`);
     logger.debug(`   Artist param: ${TEST_ARTIST}`);
     logger.debug(`   Album param: ${TEST_ALBUM}`);
-    
+
     const grabResult = await simpleDownloadManager.onDownloadGrabbed(
         "test-download-id-001",
         TEST_MBID_2, // Different MBID!
         TEST_ALBUM,
         TEST_ARTIST,
-        12345 // Lidarr album ID
+        12345, // Lidarr album ID
     );
 
     logger.debug(`\n[STEP 3] Grab result:`);
@@ -101,41 +105,54 @@ async function test1_DuplicateJobDetectionOnGrab(): Promise<boolean> {
 
     // Verify: Should have linked to existing job, not created new one
     const jobsAfterGrab = await prisma.downloadJob.findMany({
-        where: { 
+        where: {
             OR: [
                 { userId: TEST_USER_ID },
                 { subject: { contains: "Test Artist Dedup" } },
-            ]
+            ],
         },
     });
 
     logger.debug(`\n[VERIFICATION]`);
     logger.debug(`   Total test jobs in DB: ${jobsAfterGrab.length}`);
     logger.debug(`   Expected: 1 (no duplicate created)`);
-    
+
     for (const j of jobsAfterGrab) {
         const meta = j.metadata as any;
         logger.debug(`   Job ${j.id}:`);
         logger.debug(`      Subject: ${j.subject}`);
         logger.debug(`      Status: ${j.status}`);
-        logger.debug(`      lidarrRef: ${j.lidarrRef || 'null'}`);
+        logger.debug(`      lidarrRef: ${j.lidarrRef || "null"}`);
         logger.debug(`      targetMbid: ${j.targetMbid}`);
-        logger.debug(`      artistName in meta: ${meta?.artistName || 'null'}`);
-        logger.debug(`      albumTitle in meta: ${meta?.albumTitle || 'null'}`);
+        logger.debug(`      artistName in meta: ${meta?.artistName || "null"}`);
+        logger.debug(`      albumTitle in meta: ${meta?.albumTitle || "null"}`);
     }
 
-    const testJobs = jobsAfterGrab.filter(j => j.subject?.includes("Test Artist Dedup"));
-    const passed = testJobs.length === 1 && grabResult.jobId === job1.id && grabResult.matched;
-    
+    const testJobs = jobsAfterGrab.filter((j) =>
+        j.subject?.includes("Test Artist Dedup"),
+    );
+    const passed =
+        testJobs.length === 1 &&
+        grabResult.jobId === job1.id &&
+        grabResult.matched;
+
     if (passed) {
-        logger.debug("\n[PASS] TEST 1 PASSED: Duplicate detection working correctly");
+        logger.debug(
+            "\n[PASS] TEST 1 PASSED: Duplicate detection working correctly",
+        );
     } else {
         logger.debug("\n[FAIL] TEST 1 FAILED:");
-        if (testJobs.length > 1) logger.debug(`   - Created ${testJobs.length - 1} duplicate job(s)`);
-        if (grabResult.jobId !== job1.id) logger.debug(`   - Linked to wrong job (${grabResult.jobId} vs ${job1.id})`);
+        if (testJobs.length > 1)
+            logger.debug(
+                `   - Created ${testJobs.length - 1} duplicate job(s)`,
+            );
+        if (grabResult.jobId !== job1.id)
+            logger.debug(
+                `   - Linked to wrong job (${grabResult.jobId} vs ${job1.id})`,
+            );
         if (!grabResult.matched) logger.debug("   - Failed to match any job");
     }
-    
+
     return passed;
 }
 
@@ -175,7 +192,9 @@ async function test2_CompletionMergesDuplicates(): Promise<boolean> {
             },
         },
     });
-    logger.debug(`   Job 1: ${job1.id} (MBID: ${TEST_MBID_1}, lidarrRef: download-001)`);
+    logger.debug(
+        `   Job 1: ${job1.id} (MBID: ${TEST_MBID_1}, lidarrRef: download-001)`,
+    );
     logger.debug(`   Job 2: ${job2.id} (MBID: ${TEST_MBID_2}, no lidarrRef)`);
 
     // Simulate completion for job1
@@ -184,37 +203,39 @@ async function test2_CompletionMergesDuplicates(): Promise<boolean> {
     logger.debug(`   albumMbid: ${TEST_MBID_1}`);
     logger.debug(`   artistName: ${TEST_ARTIST}`);
     logger.debug(`   albumTitle: ${TEST_ALBUM}`);
-    
+
     const completeResult = await simpleDownloadManager.onDownloadComplete(
         "download-001",
         TEST_MBID_1,
         TEST_ARTIST,
         TEST_ALBUM,
-        12345
+        12345,
     );
     logger.debug(`   Matched job: ${completeResult.jobId}`);
 
     // Check both jobs
     const jobsAfter = await prisma.downloadJob.findMany({
-        where: { 
+        where: {
             OR: [
                 { userId: TEST_USER_ID },
                 { subject: { contains: "Test Artist Dedup" } },
-            ]
+            ],
         },
         orderBy: { createdAt: "asc" },
     });
 
     logger.debug("\n[VERIFICATION]");
     let completedCount = 0;
-    const testJobs = jobsAfter.filter(j => j.subject?.includes("Test Artist Dedup"));
+    const testJobs = jobsAfter.filter((j) =>
+        j.subject?.includes("Test Artist Dedup"),
+    );
     for (const j of testJobs) {
         const meta = j.metadata as any;
         logger.debug(`   Job ${j.id}:`);
         logger.debug(`      Subject: ${j.subject}`);
         logger.debug(`      Status: ${j.status}`);
-        logger.debug(`      artistName: ${meta?.artistName || 'null'}`);
-        logger.debug(`      albumTitle: ${meta?.albumTitle || 'null'}`);
+        logger.debug(`      artistName: ${meta?.artistName || "null"}`);
+        logger.debug(`      albumTitle: ${meta?.albumTitle || "null"}`);
         if (j.status === "completed") completedCount++;
     }
     logger.debug(`\n   Test jobs found: ${testJobs.length}`);
@@ -222,15 +243,17 @@ async function test2_CompletionMergesDuplicates(): Promise<boolean> {
     logger.debug(`   Expected: 2 (both merged as same album)`);
 
     const passed = completedCount === 2 && testJobs.length === 2;
-    
+
     if (passed) {
         logger.debug("\n[PASS] TEST 2 PASSED: Duplicates merged on completion");
     } else {
         logger.debug("\n[FAIL] TEST 2 FAILED:");
-        if (testJobs.length !== 2) logger.debug(`   - Expected 2 test jobs, found ${testJobs.length}`);
-        if (completedCount !== 2) logger.debug(`   - Expected 2 completed, found ${completedCount}`);
+        if (testJobs.length !== 2)
+            logger.debug(`   - Expected 2 test jobs, found ${testJobs.length}`);
+        if (completedCount !== 2)
+            logger.debug(`   - Expected 2 completed, found ${completedCount}`);
     }
-    
+
     return passed;
 }
 
@@ -239,7 +262,9 @@ async function test3_NotificationDedup(): Promise<boolean> {
     logger.debug("TEST 3: Notification Deduplication");
     logger.debug("=".repeat(60));
     logger.debug("Scenario: Multiple completions for same album");
-    logger.debug("Expected: Only ONE notification should be sent (notificationSent flag)");
+    logger.debug(
+        "Expected: Only ONE notification should be sent (notificationSent flag)",
+    );
 
     // Create first job
     logger.debug("\n[STEP 1] Creating first job (notificationSent: false)...");
@@ -261,17 +286,21 @@ async function test3_NotificationDedup(): Promise<boolean> {
     logger.debug(`   Created job: ${job1.id}`);
 
     // First completion - should trigger notification
-    logger.debug("\n[STEP 2] First completion (should set notificationSent=true)...");
+    logger.debug(
+        "\n[STEP 2] First completion (should set notificationSent=true)...",
+    );
     await simpleDownloadManager.onDownloadComplete(
         "download-002",
         TEST_MBID_1,
         TEST_ARTIST,
         TEST_ALBUM,
-        12346
+        12346,
     );
 
     // Check if notificationSent flag was set
-    const job1After = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
+    const job1After = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
     const meta1 = job1After?.metadata as any;
     logger.debug(`   Job 1 notificationSent: ${meta1?.notificationSent}`);
 
@@ -294,17 +323,19 @@ async function test3_NotificationDedup(): Promise<boolean> {
     });
     logger.debug(`   Created job: ${job2.id}`);
 
-    logger.debug("\n[STEP 4] Second completion (should NOT send duplicate notification)...");
+    logger.debug(
+        "\n[STEP 4] Second completion (should NOT send duplicate notification)...",
+    );
     await simpleDownloadManager.onDownloadComplete(
         "download-003",
         TEST_MBID_2,
         TEST_ARTIST,
         TEST_ALBUM,
-        12347
+        12347,
     );
 
     // Check flags
-    const allJobs = await prisma.downloadJob.findMany({ 
+    const allJobs = await prisma.downloadJob.findMany({
         where: { userId: TEST_USER_ID },
         orderBy: { createdAt: "asc" },
     });
@@ -318,20 +349,22 @@ async function test3_NotificationDedup(): Promise<boolean> {
         logger.debug(`      notificationSent: ${meta?.notificationSent}`);
         if (meta?.notificationSent === true) notificationCount++;
     }
-    
+
     logger.debug(`\n   Jobs with notificationSent=true: ${notificationCount}`);
-    logger.debug(`   Expected: 1 (only first job should have triggered notification)`);
+    logger.debug(
+        `   Expected: 1 (only first job should have triggered notification)`,
+    );
 
     // At least one job should have notificationSent=true (first completion)
     // The logic should prevent duplicate notifications
     const passed = notificationCount >= 1;
-    
+
     if (passed) {
         logger.debug("\nTEST 3 PASSED: Notification dedup flag is working");
     } else {
         logger.debug("\nTEST 3 FAILED: Notification flag not properly set");
     }
-    
+
     return passed;
 }
 
@@ -339,8 +372,12 @@ async function test4_GrabMatchesByNameWhenMbidDiffers(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 4: Grab Matches by Artist+Album Name When MBID Differs");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Pending job exists, Lidarr Grab comes with completely different MBID");
-    logger.debug("Expected: Should match by artist+album name and link to existing job");
+    logger.debug(
+        "Scenario: Pending job exists, Lidarr Grab comes with completely different MBID",
+    );
+    logger.debug(
+        "Expected: Should match by artist+album name and link to existing job",
+    );
 
     // Create pending job (not yet processing)
     logger.debug("\n[STEP 1] Creating PENDING job...");
@@ -363,18 +400,20 @@ async function test4_GrabMatchesByNameWhenMbidDiffers(): Promise<boolean> {
     logger.debug(`   Album in metadata: ${TEST_ALBUM}`);
 
     // Simulate grab with completely different MBID
-    logger.debug("\n[STEP 2] Simulating Grab with completely different MBID...");
+    logger.debug(
+        "\n[STEP 2] Simulating Grab with completely different MBID...",
+    );
     logger.debug(`   Download ID: test-download-xyz`);
     logger.debug(`   MBID: completely-different-mbid-xyz`);
     logger.debug(`   Artist param: ${TEST_ARTIST}`);
     logger.debug(`   Album param: ${TEST_ALBUM}`);
-    
+
     const grabResult = await simpleDownloadManager.onDownloadGrabbed(
         "test-download-xyz",
         "completely-different-mbid-xyz",
         TEST_ALBUM,
         TEST_ARTIST,
-        99999
+        99999,
     );
 
     logger.debug(`\n[STEP 3] Grab result:`);
@@ -383,40 +422,53 @@ async function test4_GrabMatchesByNameWhenMbidDiffers(): Promise<boolean> {
     logger.debug(`   Expected jobId: ${job1.id}`);
 
     const jobsAfter = await prisma.downloadJob.findMany({
-        where: { 
+        where: {
             OR: [
                 { userId: TEST_USER_ID },
                 { subject: { contains: "Test Artist Dedup" } },
-            ]
+            ],
         },
     });
 
     logger.debug("\n[VERIFICATION]");
     logger.debug(`   Total test jobs: ${jobsAfter.length}`);
     logger.debug(`   Expected: 1 (matched pending job by name)`);
-    
+
     for (const j of jobsAfter) {
         const meta = j.metadata as any;
         logger.debug(`   Job ${j.id}:`);
         logger.debug(`      Subject: ${j.subject}`);
         logger.debug(`      Status: ${j.status}`);
-        logger.debug(`      lidarrRef: ${j.lidarrRef || 'null'}`);
-        logger.debug(`      artistName in meta: ${meta?.artistName || 'null'}`);
-        logger.debug(`      albumTitle in meta: ${meta?.albumTitle || 'null'}`);
+        logger.debug(`      lidarrRef: ${j.lidarrRef || "null"}`);
+        logger.debug(`      artistName in meta: ${meta?.artistName || "null"}`);
+        logger.debug(`      albumTitle in meta: ${meta?.albumTitle || "null"}`);
     }
 
-    const testJobs = jobsAfter.filter(j => j.subject?.includes("Test Artist Dedup"));
-    const passed = testJobs.length === 1 && grabResult.matched && grabResult.jobId === job1.id;
-    
+    const testJobs = jobsAfter.filter((j) =>
+        j.subject?.includes("Test Artist Dedup"),
+    );
+    const passed =
+        testJobs.length === 1 &&
+        grabResult.matched &&
+        grabResult.jobId === job1.id;
+
     if (passed) {
-        logger.debug("\n[PASS] TEST 4 PASSED: Name-based matching works for pending jobs");
+        logger.debug(
+            "\n[PASS] TEST 4 PASSED: Name-based matching works for pending jobs",
+        );
     } else {
         logger.debug("\n[FAIL] TEST 4 FAILED:");
-        if (testJobs.length > 1) logger.debug(`   - Created ${testJobs.length - 1} duplicate job(s)`);
-        if (grabResult.jobId !== job1.id) logger.debug(`   - Linked to wrong job (${grabResult.jobId} vs ${job1.id})`);
+        if (testJobs.length > 1)
+            logger.debug(
+                `   - Created ${testJobs.length - 1} duplicate job(s)`,
+            );
+        if (grabResult.jobId !== job1.id)
+            logger.debug(
+                `   - Linked to wrong job (${grabResult.jobId} vs ${job1.id})`,
+            );
         if (!grabResult.matched) logger.debug("   - Failed to match any job");
     }
-    
+
     return passed;
 }
 
@@ -424,7 +476,9 @@ async function test5_CompletionMatchesByNameWhenNoLidarrRef(): Promise<boolean> 
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 5: Completion Matches by Name When No lidarrRef");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Job exists but never got lidarrRef, completion comes by name");
+    logger.debug(
+        "Scenario: Job exists but never got lidarrRef, completion comes by name",
+    );
     logger.debug("Expected: Should match by artist+album name");
 
     // Create job without lidarrRef
@@ -452,25 +506,28 @@ async function test5_CompletionMatchesByNameWhenNoLidarrRef(): Promise<boolean> 
         "unknown-mbid",
         TEST_ARTIST,
         TEST_ALBUM,
-        undefined
+        undefined,
     );
 
     logger.debug(`   Matched job: ${completeResult.jobId}`);
 
-    const jobAfter = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
-    
+    const jobAfter = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
+
     logger.debug("\n[VERIFICATION]");
     logger.debug(`   Job status: ${jobAfter?.status}`);
     logger.debug(`   Expected: completed`);
 
-    const passed = jobAfter?.status === "completed" && completeResult.jobId === job1.id;
-    
+    const passed =
+        jobAfter?.status === "completed" && completeResult.jobId === job1.id;
+
     if (passed) {
         logger.debug("\nTEST 5 PASSED: Completion matched by name");
     } else {
         logger.debug("\nTEST 5 FAILED: Did not match by name");
     }
-    
+
     return passed;
 }
 
@@ -479,7 +536,9 @@ async function test6_CaseInsensitiveMatching(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 6: Case-Insensitive Matching");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Job exists with 'Artist - Album', grab comes with 'ARTIST - ALBUM'");
+    logger.debug(
+        "Scenario: Job exists with 'Artist - Album', grab comes with 'ARTIST - ALBUM'",
+    );
     logger.debug("Expected: Should match despite case difference");
 
     const job1 = await prisma.downloadJob.create({
@@ -503,10 +562,12 @@ async function test6_CaseInsensitiveMatching(): Promise<boolean> {
         "test-case-mbid",
         TEST_ALBUM.toUpperCase(),
         TEST_ARTIST.toUpperCase(),
-        88888
+        88888,
     );
 
-    logger.debug(`   Grabbed with: "${TEST_ARTIST.toUpperCase()}" - "${TEST_ALBUM.toUpperCase()}"`);
+    logger.debug(
+        `   Grabbed with: "${TEST_ARTIST.toUpperCase()}" - "${TEST_ALBUM.toUpperCase()}"`,
+    );
     logger.debug(`   Matched: ${grabResult.matched}`);
     logger.debug(`   Job ID: ${grabResult.jobId}`);
 
@@ -514,14 +575,19 @@ async function test6_CaseInsensitiveMatching(): Promise<boolean> {
         where: { subject: { contains: "Test Artist Dedup" } },
     });
 
-    const passed = testJobs.length === 1 && grabResult.matched && grabResult.jobId === job1.id;
-    
+    const passed =
+        testJobs.length === 1 &&
+        grabResult.matched &&
+        grabResult.jobId === job1.id;
+
     if (passed) {
         logger.debug("\n[PASS] TEST 6 PASSED: Case-insensitive matching works");
     } else {
-        logger.debug("\n[FAIL] TEST 6 FAILED: Case-insensitive matching broken");
+        logger.debug(
+            "\n[FAIL] TEST 6 FAILED: Case-insensitive matching broken",
+        );
     }
-    
+
     return passed;
 }
 
@@ -530,7 +596,9 @@ async function test7_SameArtistDifferentAlbum(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 7: Same Artist, Different Albums - Should NOT Match");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Job exists for 'Artist - Album A', grab comes for 'Artist - Album B'");
+    logger.debug(
+        "Scenario: Job exists for 'Artist - Album A', grab comes for 'Artist - Album B'",
+    );
     logger.debug("Expected: Should NOT link to existing Album A job");
 
     const ALBUM_A = "Test Album A " + Date.now();
@@ -557,7 +625,7 @@ async function test7_SameArtistDifferentAlbum(): Promise<boolean> {
         "test-diff-album-mbid",
         ALBUM_B,
         TEST_ARTIST,
-        77777
+        77777,
     );
 
     logger.debug(`   Grabbed for: "${TEST_ARTIST}" - "${ALBUM_B}"`);
@@ -567,17 +635,21 @@ async function test7_SameArtistDifferentAlbum(): Promise<boolean> {
     // The IMPORTANT thing is that it did NOT match the Album A job
     // (It may or may not create a new tracking job depending on user context)
     const didNotMatchWrongAlbum = grabResult.jobId !== job1.id;
-    
+
     const passed = didNotMatchWrongAlbum;
-    
+
     if (passed) {
-        logger.debug("\n[PASS] TEST 7 PASSED: Different albums correctly NOT matched");
+        logger.debug(
+            "\n[PASS] TEST 7 PASSED: Different albums correctly NOT matched",
+        );
     } else {
-        logger.debug("\n[FAIL] TEST 7 FAILED: Incorrectly linked to wrong album");
+        logger.debug(
+            "\n[FAIL] TEST 7 FAILED: Incorrectly linked to wrong album",
+        );
         logger.debug(`   Expected: NOT ${job1.id}`);
         logger.debug(`   Got: ${grabResult.jobId}`);
     }
-    
+
     return passed;
 }
 
@@ -587,7 +659,9 @@ async function test8_IdempotentCompletion(): Promise<boolean> {
     logger.debug("TEST 8: Idempotent Completion - Completing Same Job Twice");
     logger.debug("=".repeat(60));
     logger.debug("Scenario: Same completion event fires twice");
-    logger.debug("Expected: Should handle gracefully, no errors, job stays completed");
+    logger.debug(
+        "Expected: Should handle gracefully, no errors, job stays completed",
+    );
 
     const job1 = await prisma.downloadJob.create({
         data: {
@@ -612,7 +686,7 @@ async function test8_IdempotentCompletion(): Promise<boolean> {
         TEST_MBID_1,
         TEST_ARTIST,
         TEST_ALBUM,
-        66666
+        66666,
     );
     logger.debug(`   Result 1 - jobId: ${result1.jobId}`);
 
@@ -623,23 +697,27 @@ async function test8_IdempotentCompletion(): Promise<boolean> {
         TEST_MBID_1,
         TEST_ARTIST,
         TEST_ALBUM,
-        66666
+        66666,
     );
     logger.debug(`   Result 2 - jobId: ${result2.jobId}`);
 
-    const jobAfter = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
-    
+    const jobAfter = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
+
     // Should still be completed, no error
     const passed = jobAfter?.status === "completed" && !jobAfter?.error;
-    
+
     if (passed) {
-        logger.debug("\n[PASS] TEST 8 PASSED: Idempotent completion handled correctly");
+        logger.debug(
+            "\n[PASS] TEST 8 PASSED: Idempotent completion handled correctly",
+        );
     } else {
         logger.debug("\n[FAIL] TEST 8 FAILED: Issue with repeated completion");
         logger.debug(`   Status: ${jobAfter?.status}`);
         logger.debug(`   Error: ${jobAfter?.error}`);
     }
-    
+
     return passed;
 }
 
@@ -674,22 +752,29 @@ async function test9_DiscoveryJobsNoNotification(): Promise<boolean> {
         TEST_MBID_1,
         TEST_ARTIST,
         TEST_ALBUM,
-        55555
+        55555,
     );
 
-    const jobAfter = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
+    const jobAfter = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
     const meta = jobAfter?.metadata as any;
-    
+
     // notificationSent should NOT be true for discovery jobs
-    const passed = jobAfter?.status === "completed" && meta?.notificationSent !== true;
-    
+    const passed =
+        jobAfter?.status === "completed" && meta?.notificationSent !== true;
+
     if (passed) {
-        logger.debug("\n[PASS] TEST 9 PASSED: Discovery job notification correctly skipped");
+        logger.debug(
+            "\n[PASS] TEST 9 PASSED: Discovery job notification correctly skipped",
+        );
     } else {
-        logger.debug("\n[FAIL] TEST 9 FAILED: Discovery job incorrectly sent notification");
+        logger.debug(
+            "\n[FAIL] TEST 9 FAILED: Discovery job incorrectly sent notification",
+        );
         logger.debug(`   notificationSent: ${meta?.notificationSent}`);
     }
-    
+
     return passed;
 }
 
@@ -698,7 +783,9 @@ async function test10_RetryUpdatesLidarrRef(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 10: Retry Updates lidarrRef");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Job has lidarrRef 'download-1', new grab comes with 'download-2'");
+    logger.debug(
+        "Scenario: Job has lidarrRef 'download-1', new grab comes with 'download-2'",
+    );
     logger.debug("Expected: lidarrRef should update to new download ID");
 
     const job1 = await prisma.downloadJob.create({
@@ -723,13 +810,17 @@ async function test10_RetryUpdatesLidarrRef(): Promise<boolean> {
         TEST_MBID_1,
         TEST_ALBUM,
         TEST_ARTIST,
-        44444
+        44444,
     );
 
-    const jobAfter = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
-    
-    const passed = jobAfter?.lidarrRef === "new-download-id" && grabResult.jobId === job1.id;
-    
+    const jobAfter = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
+
+    const passed =
+        jobAfter?.lidarrRef === "new-download-id" &&
+        grabResult.jobId === job1.id;
+
     if (passed) {
         logger.debug("\n[PASS] TEST 10 PASSED: lidarrRef updated on retry");
     } else {
@@ -737,7 +828,7 @@ async function test10_RetryUpdatesLidarrRef(): Promise<boolean> {
         logger.debug(`   Expected: new-download-id`);
         logger.debug(`   Got: ${jobAfter?.lidarrRef}`);
     }
-    
+
     return passed;
 }
 
@@ -768,22 +859,25 @@ async function test11_SubjectOnlyMatching(): Promise<boolean> {
         "subject-only-mbid",
         TEST_ALBUM,
         TEST_ARTIST,
-        33333
+        33333,
     );
 
     const testJobs = await prisma.downloadJob.findMany({
         where: { subject: { contains: "Test Artist Dedup" } },
     });
 
-    const passed = testJobs.length === 1 && grabResult.matched && grabResult.jobId === job1.id;
-    
+    const passed =
+        testJobs.length === 1 &&
+        grabResult.matched &&
+        grabResult.jobId === job1.id;
+
     if (passed) {
         logger.debug("\n[PASS] TEST 11 PASSED: Subject-only matching works");
     } else {
         logger.debug("\n[FAIL] TEST 11 FAILED: Subject-only matching broken");
         logger.debug(`   Jobs found: ${testJobs.length}`);
     }
-    
+
     return passed;
 }
 
@@ -826,7 +920,9 @@ async function test12_ThreeDuplicatesMerge(): Promise<boolean> {
             metadata: { artistName: TEST_ARTIST, albumTitle: TEST_ALBUM },
         },
     });
-    logger.debug(`   Created 3 duplicate jobs: ${job1.id}, ${job2.id}, ${job3.id}`);
+    logger.debug(
+        `   Created 3 duplicate jobs: ${job1.id}, ${job2.id}, ${job3.id}`,
+    );
 
     // Complete one
     await simpleDownloadManager.onDownloadComplete(
@@ -834,23 +930,25 @@ async function test12_ThreeDuplicatesMerge(): Promise<boolean> {
         TEST_MBID_1,
         TEST_ARTIST,
         TEST_ALBUM,
-        22222
+        22222,
     );
 
     const testJobs = await prisma.downloadJob.findMany({
         where: { subject: { contains: "Test Artist Dedup" } },
     });
 
-    const completedCount = testJobs.filter(j => j.status === "completed").length;
+    const completedCount = testJobs.filter(
+        (j) => j.status === "completed",
+    ).length;
     const passed = completedCount === 3;
-    
+
     if (passed) {
         logger.debug("\n[PASS] TEST 12 PASSED: All 3 duplicates merged");
     } else {
         logger.debug("\n[FAIL] TEST 12 FAILED: Not all duplicates merged");
         logger.debug(`   Completed: ${completedCount}/3`);
     }
-    
+
     return passed;
 }
 
@@ -859,7 +957,9 @@ async function test13_WhitespaceVariations(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 13: Whitespace Variations");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Job has '  Artist  -  Album  ', grab comes with 'Artist - Album'");
+    logger.debug(
+        "Scenario: Job has '  Artist  -  Album  ', grab comes with 'Artist - Album'",
+    );
     logger.debug("Expected: Should match after trimming whitespace");
 
     const PADDED_ARTIST = `  ${TEST_ARTIST}  `;
@@ -888,7 +988,7 @@ async function test13_WhitespaceVariations(): Promise<boolean> {
         "whitespace-mbid",
         TEST_ALBUM.trim(),
         TEST_ARTIST.trim(),
-        11111
+        11111,
     );
 
     logger.debug(`   Grabbed with trimmed names`);
@@ -898,15 +998,20 @@ async function test13_WhitespaceVariations(): Promise<boolean> {
         where: { subject: { contains: "Test Artist Dedup" } },
     });
 
-    const passed = testJobs.length === 1 && grabResult.matched && grabResult.jobId === job1.id;
-    
+    const passed =
+        testJobs.length === 1 &&
+        grabResult.matched &&
+        grabResult.jobId === job1.id;
+
     if (passed) {
         logger.debug("\n[PASS] TEST 13 PASSED: Whitespace handling works");
     } else {
         logger.debug("\n[FAIL] TEST 13 FAILED: Whitespace not handled");
-        logger.debug(`   Jobs: ${testJobs.length}, Matched: ${grabResult.matched}`);
+        logger.debug(
+            `   Jobs: ${testJobs.length}, Matched: ${grabResult.matched}`,
+        );
     }
-    
+
     return passed;
 }
 
@@ -915,7 +1020,9 @@ async function test14_SpecialCharacters(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 14: Special Characters and Unicode");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Artist/album names with Unicode, accents, special chars");
+    logger.debug(
+        "Scenario: Artist/album names with Unicode, accents, special chars",
+    );
     logger.debug("Expected: Should match exactly");
 
     const UNICODE_ARTIST = "Röyksopp & björk 日本語";
@@ -945,36 +1052,46 @@ async function test14_SpecialCharacters(): Promise<boolean> {
         `unicode-mbid-${uniqueId}`,
         UNICODE_ALBUM,
         UNICODE_ARTIST,
-        uniqueId % 100000 // Use a unique lidarrAlbumId
+        uniqueId % 100000, // Use a unique lidarrAlbumId
     );
 
     logger.debug(`   Matched: ${grabResult.matched}`);
     logger.debug(`   Matched to original job: ${grabResult.jobId === job1.id}`);
 
     // Verify by fetching the job directly
-    const jobAfter = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
-    
+    const jobAfter = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
+
     // The key assertion: did it match the original job?
     const passed = grabResult.matched && grabResult.jobId === job1.id;
-    
+
     if (passed) {
         logger.debug("\n[PASS] TEST 14 PASSED: Unicode/special chars handled");
     } else {
-        logger.debug("\n[FAIL] TEST 14 FAILED: Unicode/special chars not handled");
+        logger.debug(
+            "\n[FAIL] TEST 14 FAILED: Unicode/special chars not handled",
+        );
         logger.debug(`   Expected jobId: ${job1.id}, Got: ${grabResult.jobId}`);
         logger.debug(`   lidarrRef: ${jobAfter?.lidarrRef}`);
     }
-    
+
     return passed;
 }
 
 // Test 15: Concurrent race condition - multiple grabs at once
 async function test15_ConcurrentGrabs(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
-    logger.debug("TEST 15: Concurrent Race Condition - Multiple Simultaneous Grabs");
+    logger.debug(
+        "TEST 15: Concurrent Race Condition - Multiple Simultaneous Grabs",
+    );
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Three grab events fire at nearly the same time for same album");
-    logger.debug("Expected: At least one should link, NO duplicate jobs created");
+    logger.debug(
+        "Scenario: Three grab events fire at nearly the same time for same album",
+    );
+    logger.debug(
+        "Expected: At least one should link, NO duplicate jobs created",
+    );
 
     const job1 = await prisma.downloadJob.create({
         data: {
@@ -999,27 +1116,33 @@ async function test15_ConcurrentGrabs(): Promise<boolean> {
             "race-mbid-1",
             TEST_ALBUM,
             TEST_ARTIST,
-            9001
+            9001,
         ),
         simpleDownloadManager.onDownloadGrabbed(
             "race-download-2",
             "race-mbid-2",
             TEST_ALBUM,
             TEST_ARTIST,
-            9002
+            9002,
         ),
         simpleDownloadManager.onDownloadGrabbed(
             "race-download-3",
             "race-mbid-3",
             TEST_ALBUM,
             TEST_ARTIST,
-            9003
+            9003,
         ),
     ]);
 
-    logger.debug(`   Result 1: matched=${result1.matched}, jobId=${result1.jobId}`);
-    logger.debug(`   Result 2: matched=${result2.matched}, jobId=${result2.jobId}`);
-    logger.debug(`   Result 3: matched=${result3.matched}, jobId=${result3.jobId}`);
+    logger.debug(
+        `   Result 1: matched=${result1.matched}, jobId=${result1.jobId}`,
+    );
+    logger.debug(
+        `   Result 2: matched=${result2.matched}, jobId=${result2.jobId}`,
+    );
+    logger.debug(
+        `   Result 3: matched=${result3.matched}, jobId=${result3.jobId}`,
+    );
 
     const testJobs = await prisma.downloadJob.findMany({
         where: { subject: { contains: "Test Artist Dedup" } },
@@ -1028,14 +1151,20 @@ async function test15_ConcurrentGrabs(): Promise<boolean> {
     // The KEY thing is: NO DUPLICATES created
     // At least one grab should match the original job
     // Others might not match (because job already has lidarrRef) - that's OK
-    const atLeastOneMatched = result1.matched || result2.matched || result3.matched;
-    const matchedToOriginal = result1.jobId === job1.id || result2.jobId === job1.id || result3.jobId === job1.id;
+    const atLeastOneMatched =
+        result1.matched || result2.matched || result3.matched;
+    const matchedToOriginal =
+        result1.jobId === job1.id ||
+        result2.jobId === job1.id ||
+        result3.jobId === job1.id;
     const noDuplicates = testJobs.length === 1; // Only our original job
-    
+
     const passed = atLeastOneMatched && matchedToOriginal && noDuplicates;
-    
+
     if (passed) {
-        logger.debug("\n[PASS] TEST 15 PASSED: No duplicates created under race condition");
+        logger.debug(
+            "\n[PASS] TEST 15 PASSED: No duplicates created under race condition",
+        );
         logger.debug(`   Jobs in DB: ${testJobs.length} (expected 1)`);
     } else {
         logger.debug("\n[FAIL] TEST 15 FAILED: Race condition issue");
@@ -1043,7 +1172,7 @@ async function test15_ConcurrentGrabs(): Promise<boolean> {
         logger.debug(`   At least one matched: ${atLeastOneMatched}`);
         logger.debug(`   Matched original: ${matchedToOriginal}`);
     }
-    
+
     return passed;
 }
 
@@ -1052,7 +1181,9 @@ async function test16_Reconciliation(): Promise<boolean> {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST 16: Reconciliation Function");
     logger.debug("=".repeat(60));
-    logger.debug("Scenario: Job stuck in 'processing' but album exists in Lidarr");
+    logger.debug(
+        "Scenario: Job stuck in 'processing' but album exists in Lidarr",
+    );
     logger.debug("Expected: reconcileWithLidarr should mark as completed");
 
     // Create a job that's "stuck" in processing
@@ -1075,18 +1206,21 @@ async function test16_Reconciliation(): Promise<boolean> {
     // Run reconciliation
     logger.debug("   Running reconcileWithLidarr()...");
     const result = await simpleDownloadManager.reconcileWithLidarr();
-    logger.debug(`   Reconciled: ${result.reconciled}, Errors: ${result.errors.length}`);
+    logger.debug(
+        `   Reconciled: ${result.reconciled}, Errors: ${result.errors.length}`,
+    );
 
     // Note: This test may not fully pass without mocking Lidarr API
     // But we verify the function runs without crashing
-    const passed = typeof result.reconciled === "number" && Array.isArray(result.errors);
-    
+    const passed =
+        typeof result.reconciled === "number" && Array.isArray(result.errors);
+
     if (passed) {
         logger.debug("\n[PASS] TEST 16 PASSED: Reconciliation function works");
     } else {
         logger.debug("\n[FAIL] TEST 16 FAILED: Reconciliation error");
     }
-    
+
     return passed;
 }
 
@@ -1100,7 +1234,7 @@ async function test17_StaleJobTimeout(): Promise<boolean> {
 
     // Create a very old job
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    
+
     const job1 = await prisma.downloadJob.create({
         data: {
             userId: TEST_USER_ID,
@@ -1122,11 +1256,16 @@ async function test17_StaleJobTimeout(): Promise<boolean> {
     const result = await simpleDownloadManager.markStaleJobsAsFailed();
     logger.debug(`   Timed out: ${result}`);
 
-    const jobAfter = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
-    
+    const jobAfter = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
+
     // Job should be marked as failed or exhausted
-    const passed = jobAfter?.status === "failed" || jobAfter?.status === "exhausted" || result > 0;
-    
+    const passed =
+        jobAfter?.status === "failed" ||
+        jobAfter?.status === "exhausted" ||
+        result > 0;
+
     if (passed) {
         logger.debug("\n[PASS] TEST 17 PASSED: Stale job timeout handled");
         logger.debug(`   Job status: ${jobAfter?.status}`);
@@ -1134,7 +1273,7 @@ async function test17_StaleJobTimeout(): Promise<boolean> {
         logger.debug("\n[FAIL] TEST 17 FAILED: Stale job not timed out");
         logger.debug(`   Job status: ${jobAfter?.status}`);
     }
-    
+
     return passed;
 }
 
@@ -1169,22 +1308,29 @@ async function test18_SpotifyImportNoNotification(): Promise<boolean> {
         TEST_MBID_1,
         TEST_ARTIST,
         TEST_ALBUM,
-        44444
+        44444,
     );
 
-    const jobAfter = await prisma.downloadJob.findUnique({ where: { id: job1.id } });
+    const jobAfter = await prisma.downloadJob.findUnique({
+        where: { id: job1.id },
+    });
     const meta = jobAfter?.metadata as any;
-    
+
     // notificationSent should NOT be true for Spotify import jobs
-    const passed = jobAfter?.status === "completed" && meta?.notificationSent !== true;
-    
+    const passed =
+        jobAfter?.status === "completed" && meta?.notificationSent !== true;
+
     if (passed) {
-        logger.debug("\n[PASS] TEST 18 PASSED: Spotify import notification correctly skipped");
+        logger.debug(
+            "\n[PASS] TEST 18 PASSED: Spotify import notification correctly skipped",
+        );
     } else {
-        logger.debug("\n[FAIL] TEST 18 FAILED: Spotify import incorrectly sent notification");
+        logger.debug(
+            "\n[FAIL] TEST 18 FAILED: Spotify import incorrectly sent notification",
+        );
         logger.debug(`   notificationSent: ${meta?.notificationSent}`);
     }
-    
+
     return passed;
 }
 
@@ -1198,137 +1344,136 @@ async function runAllTests() {
     try {
         // Setup: Get real user ID
         await setup();
-        
+
         logger.debug(`Test User ID: ${TEST_USER_ID}`);
         logger.debug(`Test Artist: ${TEST_ARTIST}`);
         logger.debug(`Test Album: ${TEST_ALBUM}`);
 
         // Test 1: Duplicate detection on grab
         await cleanup();
-        results.push({ 
-            name: "Duplicate Job Detection on Grab", 
-            passed: await test1_DuplicateJobDetectionOnGrab() 
+        results.push({
+            name: "Duplicate Job Detection on Grab",
+            passed: await test1_DuplicateJobDetectionOnGrab(),
         });
 
         // Test 2: Completion merges duplicates
         await cleanup();
-        results.push({ 
-            name: "Completion Merges Duplicates", 
-            passed: await test2_CompletionMergesDuplicates() 
+        results.push({
+            name: "Completion Merges Duplicates",
+            passed: await test2_CompletionMergesDuplicates(),
         });
 
         // Test 3: Notification dedup
         await cleanup();
-        results.push({ 
-            name: "Notification Deduplication", 
-            passed: await test3_NotificationDedup() 
+        results.push({
+            name: "Notification Deduplication",
+            passed: await test3_NotificationDedup(),
         });
 
         // Test 4: Grab matches pending by name
         await cleanup();
-        results.push({ 
-            name: "Grab Matches Pending by Name", 
-            passed: await test4_GrabMatchesByNameWhenMbidDiffers() 
+        results.push({
+            name: "Grab Matches Pending by Name",
+            passed: await test4_GrabMatchesByNameWhenMbidDiffers(),
         });
 
         // Test 5: Completion matches by name
         await cleanup();
-        results.push({ 
-            name: "Completion Matches by Name", 
-            passed: await test5_CompletionMatchesByNameWhenNoLidarrRef() 
+        results.push({
+            name: "Completion Matches by Name",
+            passed: await test5_CompletionMatchesByNameWhenNoLidarrRef(),
         });
 
         // Test 6: Case-insensitive matching
         await cleanup();
-        results.push({ 
-            name: "Case-Insensitive Matching", 
-            passed: await test6_CaseInsensitiveMatching() 
+        results.push({
+            name: "Case-Insensitive Matching",
+            passed: await test6_CaseInsensitiveMatching(),
         });
 
         // Test 7: Same artist, different album
         await cleanup();
-        results.push({ 
-            name: "Same Artist Different Album - No Match", 
-            passed: await test7_SameArtistDifferentAlbum() 
+        results.push({
+            name: "Same Artist Different Album - No Match",
+            passed: await test7_SameArtistDifferentAlbum(),
         });
 
         // Test 8: Idempotent completion
         await cleanup();
-        results.push({ 
-            name: "Idempotent Completion", 
-            passed: await test8_IdempotentCompletion() 
+        results.push({
+            name: "Idempotent Completion",
+            passed: await test8_IdempotentCompletion(),
         });
 
         // Test 9: Discovery jobs no notification
         await cleanup();
-        results.push({ 
-            name: "Discovery Jobs Skip Notification", 
-            passed: await test9_DiscoveryJobsNoNotification() 
+        results.push({
+            name: "Discovery Jobs Skip Notification",
+            passed: await test9_DiscoveryJobsNoNotification(),
         });
 
         // Test 10: Retry updates lidarrRef
         await cleanup();
-        results.push({ 
-            name: "Retry Updates lidarrRef", 
-            passed: await test10_RetryUpdatesLidarrRef() 
+        results.push({
+            name: "Retry Updates lidarrRef",
+            passed: await test10_RetryUpdatesLidarrRef(),
         });
 
         // Test 11: Subject-only matching
         await cleanup();
-        results.push({ 
-            name: "Subject-Only Matching", 
-            passed: await test11_SubjectOnlyMatching() 
+        results.push({
+            name: "Subject-Only Matching",
+            passed: await test11_SubjectOnlyMatching(),
         });
 
         // Test 12: Three duplicates merge
         await cleanup();
-        results.push({ 
-            name: "Three Duplicates All Merge", 
-            passed: await test12_ThreeDuplicatesMerge() 
+        results.push({
+            name: "Three Duplicates All Merge",
+            passed: await test12_ThreeDuplicatesMerge(),
         });
 
         // Test 13: Whitespace variations
         await cleanup();
-        results.push({ 
-            name: "Whitespace Variations", 
-            passed: await test13_WhitespaceVariations() 
+        results.push({
+            name: "Whitespace Variations",
+            passed: await test13_WhitespaceVariations(),
         });
 
         // Test 14: Special characters and Unicode
         await cleanup();
-        results.push({ 
-            name: "Special Characters and Unicode", 
-            passed: await test14_SpecialCharacters() 
+        results.push({
+            name: "Special Characters and Unicode",
+            passed: await test14_SpecialCharacters(),
         });
 
         // Test 15: Concurrent race condition
         await cleanup();
-        results.push({ 
-            name: "Concurrent Race Condition", 
-            passed: await test15_ConcurrentGrabs() 
+        results.push({
+            name: "Concurrent Race Condition",
+            passed: await test15_ConcurrentGrabs(),
         });
 
         // Test 16: Reconciliation function
         await cleanup();
-        results.push({ 
-            name: "Reconciliation Function", 
-            passed: await test16_Reconciliation() 
+        results.push({
+            name: "Reconciliation Function",
+            passed: await test16_Reconciliation(),
         });
 
         // Test 17: Stale job timeout
         await cleanup();
-        results.push({ 
-            name: "Stale Job Timeout", 
-            passed: await test17_StaleJobTimeout() 
+        results.push({
+            name: "Stale Job Timeout",
+            passed: await test17_StaleJobTimeout(),
         });
 
         // Test 18: Spotify import no notification
         await cleanup();
-        results.push({ 
-            name: "Spotify Import Skip Notification", 
-            passed: await test18_SpotifyImportNoNotification() 
+        results.push({
+            name: "Spotify Import Skip Notification",
+            passed: await test18_SpotifyImportNoNotification(),
         });
-
     } catch (error) {
         logger.error("\n Test execution error:", error);
     } finally {
@@ -1340,10 +1485,10 @@ async function runAllTests() {
     logger.debug("\n" + "=".repeat(60));
     logger.debug("TEST RESULTS SUMMARY");
     logger.debug("=".repeat(60));
-    
+
     let passedCount = 0;
     let failedCount = 0;
-    
+
     for (const result of results) {
         const icon = result.passed ? "PASS" : "FAIL";
         logger.debug(`${icon} ${result.name}`);
@@ -1355,11 +1500,15 @@ async function runAllTests() {
     logger.debug(`Total: ${results.length} tests`);
     logger.debug(`Passed: ${passedCount}`);
     logger.debug(`Failed: ${failedCount}`);
-    
+
     if (failedCount === 0) {
-        logger.debug("\n🎉 ALL TESTS PASSED! Download deduplication is working correctly.");
+        logger.debug(
+            "\n🎉 ALL TESTS PASSED! Download deduplication is working correctly.",
+        );
     } else {
-        logger.debug("\n💥 SOME TESTS FAILED. Review the output above for details.");
+        logger.debug(
+            "\n💥 SOME TESTS FAILED. Review the output above for details.",
+        );
     }
 
     process.exit(failedCount > 0 ? 1 : 0);
@@ -1367,4 +1516,3 @@ async function runAllTests() {
 
 // Run tests
 runAllTests();
-

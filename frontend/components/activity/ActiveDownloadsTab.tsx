@@ -149,7 +149,7 @@ export function ActiveDownloadsTab({
                                             "text-xs font-medium capitalize",
                                             download.status === "processing"
                                                 ? "text-blue-400"
-                                                : "text-yellow-400"
+                                                : "text-yellow-400",
                                         )}
                                     >
                                         {download.status}
@@ -167,17 +167,20 @@ export function ActiveDownloadsTab({
                                                         "lidarr"
                                                         ? "text-ai-hover"
                                                         : download.metadata
-                                                              .currentSource ===
-                                                          "tidal"
-                                                        ? "text-cyan-400"
-                                                        : download.metadata
-                                                              .currentSource ===
-                                                          "youtube"
-                                                        ? "text-red-400"
-                                                        : "text-teal-400"
+                                                                .currentSource ===
+                                                            "tidal"
+                                                          ? "text-cyan-400"
+                                                          : download.metadata
+                                                                  .currentSource ===
+                                                              "youtube"
+                                                            ? "text-red-400"
+                                                            : "text-teal-400",
                                                 )}
                                             >
-                                                {String(download.metadata.statusText)}
+                                                {String(
+                                                    download.metadata
+                                                        .statusText,
+                                                )}
                                             </span>
                                         </>
                                     )}
@@ -196,10 +199,13 @@ export function ActiveDownloadsTab({
                                         •
                                     </span>
                                     <span className="text-xs text-white/30">
-                                        {formatRelativeTime(download.createdAt, {
-                                            justNowLabel: "Just started",
-                                            suffix: "",
-                                        })}
+                                        {formatRelativeTime(
+                                            download.createdAt,
+                                            {
+                                                justNowLabel: "Just started",
+                                                suffix: "",
+                                            },
+                                        )}
                                     </span>
                                 </div>
                             </div>

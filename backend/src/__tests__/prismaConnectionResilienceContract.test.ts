@@ -56,7 +56,9 @@ describe("prisma connection resilience contract", () => {
     });
 
     it("uses transactional enrichment progress reads to reduce connection churn under HA load", () => {
-        expect(unifiedEnrichmentSource).toContain("getEnrichmentProgress.dbReads");
+        expect(unifiedEnrichmentSource).toContain(
+            "getEnrichmentProgress.dbReads",
+        );
         expect(unifiedEnrichmentSource).toContain("prisma.$transaction([");
     });
 

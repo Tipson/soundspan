@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 
 # Shared secret the `client` fixture presents on every request so the F31

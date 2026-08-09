@@ -1,6 +1,6 @@
-import * as fs from 'fs';
+import * as fs from "fs";
 import { logger } from "./logger";
-import * as path from 'path';
+import * as path from "path";
 
 /**
  * Dedicated logger for Spotify Import and Playlist operations.
@@ -18,8 +18,8 @@ import * as path from 'path';
 
 const LOGS_DIR = process.env.PLAYLIST_LOG_DIR
     ? path.resolve(process.env.PLAYLIST_LOG_DIR)
-    : path.join(process.cwd(), 'logs', 'playlists');
-const SESSION_LOG = path.join(LOGS_DIR, 'session.log');
+    : path.join(process.cwd(), "logs", "playlists");
+const SESSION_LOG = path.join(LOGS_DIR, "session.log");
 
 // Clear session log on module load (fresh start)
 let sessionInitialized = false;
@@ -29,7 +29,7 @@ function ensureLogsDir(): void {
     try {
         fs.mkdirSync(LOGS_DIR, { recursive: true });
     } catch (error) {
-        logger.error('Failed to create playlist logs directory:', {
+        logger.error("Failed to create playlist logs directory:", {
             logsDir: LOGS_DIR,
             error,
         });
@@ -52,14 +52,18 @@ function initSessionLog(): void {
     try {
         fs.writeFileSync(SESSION_LOG, header);
     } catch (error) {
-        logger.error('Failed to initialize session log:', error);
+        logger.error("Failed to initialize session log:", error);
     }
 }
 
 // Write to session log (unified log for all components)
-function writeToSessionLog(component: string, level: string, message: string): void {
+function writeToSessionLog(
+    component: string,
+    level: string,
+    message: string,
+): void {
     initSessionLog();
-    const timestamp = new Date().toISOString().split('T')[1].replace('Z', '');
+    const timestamp = new Date().toISOString().split("T")[1].replace("Z", "");
     const line = `[${timestamp}] [${component}] [${level}] ${message}\n`;
 
     try {
@@ -83,9 +87,9 @@ export function getSessionLogPath(): string {
 export function readSessionLog(): string {
     try {
         if (fs.existsSync(SESSION_LOG)) {
-            return fs.readFileSync(SESSION_LOG, 'utf-8');
+            return fs.readFileSync(SESSION_LOG, "utf-8");
         }
-        return 'No session log found';
+        return "No session log found";
     } catch (error) {
         return `Error reading session log: ${error}`;
     }
@@ -95,12 +99,16 @@ export function readSessionLog(): string {
  * Log a message from any component to the unified session log
  * Use this for SLSKD, organize, etc.
  */
-export function sessionLog(component: string, message: string, level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' = 'INFO'): void {
+export function sessionLog(
+    component: string,
+    message: string,
+    level: "INFO" | "WARN" | "ERROR" | "DEBUG" = "INFO",
+): void {
     writeToSessionLog(component, level, message);
 
     // Also log to console with component prefix
     const prefix = `[${component}]`;
-    if (level === 'ERROR') {
+    if (level === "ERROR") {
         logger.error(prefix, message);
     } else {
         logger.debug(prefix, message);
@@ -123,12 +131,12 @@ class PlaylistLogger {
     constructor(jobId: string) {
         this.jobId = jobId;
         ensureLogsDir();
-        
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         this.logFile = path.join(LOGS_DIR, `import_${jobId}_${timestamp}.log`);
-        
+
         // Write header
-        this.write('INFO', `=== SPOTIFY IMPORT JOB: ${jobId} ===`);
+        this.write("INFO", `=== SPOTIFY IMPORT JOB: ${jobId} ===`);
     }
 
     private write(level: string, message: string): void {
@@ -136,10 +144,10 @@ class PlaylistLogger {
         this.buffer.push(line);
 
         // Write to unified session log
-        writeToSessionLog('IMPORT', level, message);
+        writeToSessionLog("IMPORT", level, message);
 
         // Also log to console
-        if (level === 'ERROR') {
+        if (level === "ERROR") {
             logger.error(`[Playlist Logger] ${message}`);
         } else {
             logger.debug(`[Playlist Logger] ${message}`);
@@ -151,84 +159,110 @@ class PlaylistLogger {
 
     private flush(): void {
         try {
-            fs.appendFileSync(this.logFile, this.buffer.join(''));
+            fs.appendFileSync(this.logFile, this.buffer.join(""));
             this.buffer = [];
         } catch (error) {
-            logger.error(`[Playlist Logger] Failed to write to ${this.logFile}:`, error);
+            logger.error(
+                `[Playlist Logger] Failed to write to ${this.logFile}:`,
+                error,
+            );
         }
     }
 
     info(message: string): void {
-        this.write('INFO', message);
+        this.write("INFO", message);
     }
 
     error(message: string): void {
-        this.write('ERROR', message);
+        this.write("ERROR", message);
     }
 
     warn(message: string): void {
-        this.write('WARN', message);
+        this.write("WARN", message);
     }
 
     debug(message: string): void {
-        this.write('DEBUG', message);
+        this.write("DEBUG", message);
     }
 
     // Alias for info - used for generic logging
     log(message: string): void {
-        this.write('DEBUG', message);
+        this.write("DEBUG", message);
     }
 
     // Structured logging methods
-    logJobStart(playlistName: string, trackCount: number, userId: string): void {
+    logJobStart(
+        playlistName: string,
+        trackCount: number,
+        userId: string,
+    ): void {
         this.info(`Playlist: "${playlistName}" (${trackCount} tracks)`);
         this.info(`User: ${userId}`);
-        this.info('');
+        this.info("");
     }
 
     logTrackMatchingStart(): void {
-        this.info('--- TRACK MATCHING ---');
+        this.info("--- TRACK MATCHING ---");
     }
 
     logTrackMatch(
-        index: number, 
-        total: number, 
-        title: string, 
-        artist: string, 
-        matched: boolean, 
-        matchedTrackId?: string
+        index: number,
+        total: number,
+        title: string,
+        artist: string,
+        matched: boolean,
+        matchedTrackId?: string,
     ): void {
-        const status = matched ? '✓' : '✗';
-        const result = matched 
-            ? `MATCHED -> ${matchedTrackId}` 
-            : 'NOT FOUND';
-        this.info(`[${index}/${total}] ${status} "${title}" by ${artist} - ${result}`);
+        const status = matched ? "✓" : "✗";
+        const result = matched ? `MATCHED -> ${matchedTrackId}` : "NOT FOUND";
+        this.info(
+            `[${index}/${total}] ${status} "${title}" by ${artist} - ${result}`,
+        );
     }
 
     logAlbumDownloadStart(count: number): void {
-        this.info('');
-        this.info('--- ALBUM DOWNLOADS ---');
+        this.info("");
+        this.info("--- ALBUM DOWNLOADS ---");
         this.info(`Requesting ${count} album(s) from Lidarr`);
     }
 
-    logAlbumQueued(albumName: string, artistName: string, mbid: string, lidarrId?: number): void {
-        const lidarrInfo = lidarrId ? ` (Lidarr ID: ${lidarrId})` : '';
-        this.info(`✓ Queued: "${albumName}" by ${artistName} [MBID: ${mbid}]${lidarrInfo}`);
+    logAlbumQueued(
+        albumName: string,
+        artistName: string,
+        mbid: string,
+        lidarrId?: number,
+    ): void {
+        const lidarrInfo = lidarrId ? ` (Lidarr ID: ${lidarrId})` : "";
+        this.info(
+            `✓ Queued: "${albumName}" by ${artistName} [MBID: ${mbid}]${lidarrInfo}`,
+        );
     }
 
-    logAlbumFailed(albumName: string, artistName: string, reason: string): void {
+    logAlbumFailed(
+        albumName: string,
+        artistName: string,
+        reason: string,
+    ): void {
         this.error(`✗ Failed: "${albumName}" by ${artistName} - ${reason}`);
     }
 
     logSlskdFallbackStart(albumName: string, artistName: string): void {
-        this.info('');
-        this.info('--- SOULSEEK FALLBACK ---');
+        this.info("");
+        this.info("--- SOULSEEK FALLBACK ---");
         this.info(`Trying Soulseek for: "${albumName}" by ${artistName}`);
     }
 
-    logSlskdSearchResult(found: boolean, quality?: string, username?: string, trackCount?: number, sizeMB?: number): void {
+    logSlskdSearchResult(
+        found: boolean,
+        quality?: string,
+        username?: string,
+        trackCount?: number,
+        sizeMB?: number,
+    ): void {
         if (found) {
-            this.info(`✓ Soulseek match: ${quality} from ${username} (${trackCount} tracks, ${sizeMB}MB)`);
+            this.info(
+                `✓ Soulseek match: ${quality} from ${username} (${trackCount} tracks, ${sizeMB}MB)`,
+            );
         } else {
             this.info(`✗ Soulseek: No suitable results found`);
         }
@@ -242,24 +276,40 @@ class PlaylistLogger {
         this.error(`✗ Soulseek download failed: ${reason}`);
     }
 
-    logDownloadProgress(completed: number, failed: number, pending: number): void {
-        this.info(`Download status: ${completed} completed, ${failed} failed, ${pending} pending`);
+    logDownloadProgress(
+        completed: number,
+        failed: number,
+        pending: number,
+    ): void {
+        this.info(
+            `Download status: ${completed} completed, ${failed} failed, ${pending} pending`,
+        );
     }
 
     logPlaylistCreationStart(): void {
-        this.info('');
-        this.info('--- PLAYLIST CREATION ---');
+        this.info("");
+        this.info("--- PLAYLIST CREATION ---");
     }
 
-    logPlaylistCreated(playlistId: string, trackCount: number, totalTracks: number): void {
+    logPlaylistCreated(
+        playlistId: string,
+        trackCount: number,
+        totalTracks: number,
+    ): void {
         this.info(`Created playlist: ${playlistId}`);
         this.info(`Tracks added: ${trackCount}/${totalTracks}`);
     }
 
-    logJobComplete(tracksMatched: number, tracksTotal: number, playlistId: string | null): void {
-        this.info('');
-        this.info('=== JOB COMPLETE ===');
-        this.info(`Final result: ${tracksMatched}/${tracksTotal} tracks matched`);
+    logJobComplete(
+        tracksMatched: number,
+        tracksTotal: number,
+        playlistId: string | null,
+    ): void {
+        this.info("");
+        this.info("=== JOB COMPLETE ===");
+        this.info(
+            `Final result: ${tracksMatched}/${tracksTotal} tracks matched`,
+        );
         if (playlistId) {
             this.info(`Playlist ID: ${playlistId}`);
         }
@@ -267,8 +317,8 @@ class PlaylistLogger {
     }
 
     logJobFailed(error: string): void {
-        this.info('');
-        this.error('=== JOB FAILED ===');
+        this.info("");
+        this.error("=== JOB FAILED ===");
         this.error(error);
         this.error(`Log file: ${this.logFile}`);
     }
@@ -292,15 +342,14 @@ export function createPlaylistLogger(jobId: string): PlaylistLogger {
  */
 export function logPlaylistEvent(message: string): void {
     ensureLogsDir();
-    const line = formatLogLine('INFO', message);
-    const eventsFile = path.join(LOGS_DIR, 'events.log');
-    
+    const line = formatLogLine("INFO", message);
+    const eventsFile = path.join(LOGS_DIR, "events.log");
+
     logger.debug(`[Playlist] ${message}`);
-    
+
     try {
         fs.appendFileSync(eventsFile, line);
     } catch (error) {
         logger.error(`Failed to write to events log:`, error);
     }
 }
-

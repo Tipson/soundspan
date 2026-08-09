@@ -4,11 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const marker = (label: string) =>
-    function Marker({
-        children,
-    }: {
-        children?: React.ReactNode;
-    }) {
+    function Marker({ children }: { children?: React.ReactNode }) {
         return React.createElement("div", null, label, children);
     };
 
@@ -83,13 +79,11 @@ const artistState = {
 const discoverState = {
     loading: false,
     isGenerating: false,
-    batchStatus: null as
-        | {
-              status: "scanning" | "generating";
-              completed: number;
-              total: number;
-          }
-        | null,
+    batchStatus: null as {
+        status: "scanning" | "generating";
+        completed: number;
+        total: number;
+    } | null,
     config: {
         playlistSize: 30,
         exclusionMonths: 6,
@@ -468,7 +462,9 @@ mock.module("@/features/discover/hooks/useDiscoverProviderGapFill", {
         useDiscoverProviderGapFill: () => ({
             tracks:
                 discoverState.providerTracks ||
-                ((discoverState.playlist?.tracks as Array<Record<string, unknown>>) ??
+                ((discoverState.playlist?.tracks as Array<
+                    Record<string, unknown>
+                >) ??
                     []),
             providerCounts: discoverState.providerCounts,
             isMatching: discoverState.providerMatching,
@@ -642,7 +638,7 @@ test("album route shows loading screen while album data is loading", async () =>
 
     const AlbumPage = (await import("../../app/album/[id]/page")).default;
     const html = renderToStaticMarkup(
-        React.createElement(AlbumPage, { params: resolvedParams("album-1") })
+        React.createElement(AlbumPage, { params: resolvedParams("album-1") }),
     );
 
     assert.match(html, /loading-screen/);
@@ -653,7 +649,7 @@ test("album route shows error state when album payload is missing", async () => 
 
     const AlbumPage = (await import("../../app/album/[id]/page")).default;
     const html = renderToStaticMarkup(
-        React.createElement(AlbumPage, { params: resolvedParams("album-404") })
+        React.createElement(AlbumPage, { params: resolvedParams("album-404") }),
     );
 
     assert.match(html, /Error Loading Album/);
@@ -673,7 +669,7 @@ test("album route renders placeholders while details are loading without tracks"
 
     const AlbumPage = (await import("../../app/album/[id]/page")).default;
     const html = renderToStaticMarkup(
-        React.createElement(AlbumPage, { params: resolvedParams("album-1") })
+        React.createElement(AlbumPage, { params: resolvedParams("album-1") }),
     );
 
     assert.match(html, /animate-pulse/);
@@ -694,7 +690,7 @@ test("album route forwards provider matching and discovery fallback source to ch
 
     const AlbumPage = (await import("../../app/album/[id]/page")).default;
     const html = renderToStaticMarkup(
-        React.createElement(AlbumPage, { params: resolvedParams("album-1") })
+        React.createElement(AlbumPage, { params: resolvedParams("album-1") }),
     );
 
     assert.match(html, /album-track-list/);
@@ -773,7 +769,10 @@ test("artist route renders popular tracks and provider matching metadata", async
     assert.match(html, /available-albums/);
     assert.match(html, /similar-artists/);
     assert.equal(capture.artistPopularTracks?.isProviderMatching, true);
-    assert.equal(capture.artistPopularTracks?.popularHref, "/artist/artist-1/popular");
+    assert.equal(
+        capture.artistPopularTracks?.popularHref,
+        "/artist/artist-1/popular",
+    );
     assert.equal(capture.artistActionBar?.source, "discovery");
 });
 

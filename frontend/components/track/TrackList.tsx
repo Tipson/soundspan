@@ -92,7 +92,11 @@ export function TrackList<T>({
 
         const slots = rowSlots?.(item, index, state);
         const overflow = rowOverflow?.(item, index, state);
-        const sep = separator?.(item, index, index > 0 ? items[index - 1] : null);
+        const sep = separator?.(
+            item,
+            index,
+            index > 0 ? items[index - 1] : null,
+        );
 
         const row = (
             <TrackRow
@@ -202,8 +206,7 @@ export function TrackList<T>({
                             setDragIndex(index);
                             e.dataTransfer.effectAllowed = "move";
                             e.dataTransfer.setData("text/plain", String(index));
-                            const rowElement =
-                                e.currentTarget.parentElement;
+                            const rowElement = e.currentTarget.parentElement;
                             if (rowElement) {
                                 e.dataTransfer.setDragImage(
                                     rowElement,
@@ -240,7 +243,12 @@ export function TrackList<T>({
                         initialItemCount={items.length}
                         defaultItemHeight={estimatedItemHeight}
                         itemContent={renderRow}
-                        style={{ height: Math.min(items.length * estimatedItemHeight, 600) }}
+                        style={{
+                            height: Math.min(
+                                items.length * estimatedItemHeight,
+                                600,
+                            ),
+                        }}
                     />
                 </div>
             </>

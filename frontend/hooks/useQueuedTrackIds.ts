@@ -16,13 +16,17 @@ export function useQueuedTrackIds(): ReadonlySet<string> {
     const { isInGroup, activeGroup } = useListenTogether();
 
     const queuedTrackIdSignature = useMemo(() => {
-        const activeQueue = isInGroup ? activeGroup?.playback?.queue ?? [] : queue;
+        const activeQueue = isInGroup
+            ? (activeGroup?.playback?.queue ?? [])
+            : queue;
         return serializeQueuedTrackIds(activeQueue.map((track) => track.id));
     }, [isInGroup, activeGroup?.playback?.queue, queue]);
 
     return useMemo(
         () =>
-            new Set(JSON.parse(queuedTrackIdSignature) as string[]) as ReadonlySet<string>,
-        [queuedTrackIdSignature]
+            new Set(
+                JSON.parse(queuedTrackIdSignature) as string[],
+            ) as ReadonlySet<string>,
+        [queuedTrackIdSignature],
     );
 }

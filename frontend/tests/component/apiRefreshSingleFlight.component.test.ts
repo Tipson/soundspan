@@ -23,7 +23,7 @@ test("shares one token refresh across concurrent 401 responses", async () => {
     api.setToken("access-old", "refresh-old");
     (globalThis as { fetch: typeof fetch }).fetch = (async (
         input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1]
+        init?: Parameters<typeof fetch>[1],
     ) => {
         const url = String(input);
         requestedUrls.push(url);
@@ -72,5 +72,8 @@ test("shares one token refresh across concurrent 401 responses", async () => {
 
     assert.equal(refreshCount, 1);
     assert.deepEqual(results, [{ ok: true }, { ok: true }, { ok: true }]);
-    assert.equal(requestedUrls.filter((url) => url.endsWith("/api/auth/refresh")).length, 1);
+    assert.equal(
+        requestedUrls.filter((url) => url.endsWith("/api/auth/refresh")).length,
+        1,
+    );
 });

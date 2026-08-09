@@ -129,7 +129,8 @@ function getHandler(path: string, method: "post") {
 
     const layer = stack.find(
         (entry) =>
-            entry.route?.path === path && Boolean(entry.route?.methods?.[method])
+            entry.route?.path === path &&
+            Boolean(entry.route?.methods?.[method]),
     );
     if (!layer) {
         throw new Error(`Route not found: ${method.toUpperCase()} ${path}`);

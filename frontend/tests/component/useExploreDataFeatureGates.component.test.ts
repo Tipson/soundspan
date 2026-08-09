@@ -66,7 +66,10 @@ mock.module("@/hooks/useQueries", {
     namedExports: {
         useRecommendationsQuery: (limit: number, enabled: boolean) => {
             queryCalls.recommendations.push([limit, enabled]);
-            return { data: { artists: [{ id: "artist-1" }] }, isLoading: false };
+            return {
+                data: { artists: [{ id: "artist-1" }] },
+                isLoading: false,
+            };
         },
         useDiscoverWeeklySummaryQuery: (enabled: boolean) => {
             queryCalls.discoverWeekly.push([enabled]);
@@ -107,9 +110,8 @@ mock.module("@/hooks/useQueries", {
 });
 
 async function renderHook() {
-    const { useExploreData } = await import(
-        "../../features/explore/hooks/useExploreData"
-    );
+    const { useExploreData } =
+        await import("../../features/explore/hooks/useExploreData");
     const capturedRef = {
         current: null as ReturnType<typeof useExploreData> | null,
     };
@@ -121,8 +123,8 @@ async function renderHook() {
         React.createElement(
             QueryClientProvider,
             { client: new QueryClient() },
-            React.createElement(Probe)
-        )
+            React.createElement(Probe),
+        ),
     );
     if (!capturedRef.current) throw new Error("useExploreData did not run");
     return capturedRef.current;

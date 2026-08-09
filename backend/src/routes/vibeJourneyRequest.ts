@@ -31,7 +31,8 @@ export type JourneyRequestResult =
     | { ok: false; status: number; error: string };
 
 const requestBodySchema = z.custom<Record<string, unknown>>(
-    (value) => typeof value === "object" && value !== null && !Array.isArray(value)
+    (value) =>
+        typeof value === "object" && value !== null && !Array.isArray(value),
 );
 const nonEmptyStringSchema = z.string().min(1);
 const moodSchema = z.enum(VALID_MOODS);
@@ -44,7 +45,7 @@ const stepsSchema = z
     .number()
     .refine(Number.isInteger)
     .transform((value) =>
-        Math.min(Math.max(MIN_JOURNEY_STEPS, value), MAX_JOURNEY_STEPS)
+        Math.min(Math.max(MIN_JOURNEY_STEPS, value), MAX_JOURNEY_STEPS),
     )
     .default(DEFAULT_JOURNEY_STEPS);
 
@@ -78,9 +79,14 @@ export function parseJourneyRequest(body: unknown): JourneyRequestResult {
         return reject(400, "Provide exactly one of toTrackId or mood");
     }
 
-    const mood = moodSchema.safeParse(suppliedMood.success ? suppliedMood.data : null);
+    const mood = moodSchema.safeParse(
+        suppliedMood.success ? suppliedMood.data : null,
+    );
     if (suppliedMood.success && !mood.success) {
-        return reject(400, `Invalid mood. Must be one of: ${VALID_MOODS.join(", ")}`);
+        return reject(
+            400,
+            `Invalid mood. Must be one of: ${VALID_MOODS.join(", ")}`,
+        );
     }
     if (toTrackId.success && toTrackId.data === fromTrackId.data) {
         return reject(400, "Origin and destination are the same track");
@@ -91,7 +97,10 @@ export function parseJourneyRequest(body: unknown): JourneyRequestResult {
         return reject(400, "excludeTrackIds must be an array of strings");
     }
     if (!boundedExcludeArraySchema.safeParse(excludeArray.data).success) {
-        return reject(400, `excludeTrackIds cannot exceed ${MAX_JOURNEY_EXCLUDE_TRACK_IDS} entries`);
+        return reject(
+            400,
+            `excludeTrackIds cannot exceed ${MAX_JOURNEY_EXCLUDE_TRACK_IDS} entries`,
+        );
     }
     const excludeTrackIds = excludeTrackIdsSchema.safeParse(excludeArray.data);
     if (!excludeTrackIds.success) {

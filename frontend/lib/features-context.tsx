@@ -74,7 +74,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                           showVersion: false,
                           loading: false,
                       }
-                    : prev
+                    : prev,
             );
         }
     }, []);

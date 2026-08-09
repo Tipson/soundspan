@@ -8,22 +8,21 @@ import type {
  */
 export function buildOptimisticTrackPreferenceResponse(
     trackId: string,
-    signal: TrackPreferenceSignal
+    signal: TrackPreferenceSignal,
 ): TrackPreferenceResponse {
     const now = new Date().toISOString();
     const state =
-        signal === "thumbs_up" ? "liked"
-        : signal === "thumbs_down" ? "disliked"
-        : "neutral";
+        signal === "thumbs_up"
+            ? "liked"
+            : signal === "thumbs_down"
+              ? "disliked"
+              : "neutral";
 
     return {
         trackId,
         signal,
         state,
-        score:
-            signal === "thumbs_up" ? 1
-            : signal === "thumbs_down" ? -1
-            : 0,
+        score: signal === "thumbs_up" ? 1 : signal === "thumbs_down" ? -1 : 0,
         likedAt: signal === "thumbs_up" ? now : null,
         dislikedAt: signal === "thumbs_down" ? now : null,
         updatedAt: now,
@@ -31,11 +30,14 @@ export function buildOptimisticTrackPreferenceResponse(
 }
 
 export interface TrackPreferenceOptimisticQueryClient {
-    cancelQueries: (options: { queryKey: readonly [string, string]; exact: boolean }) => Promise<unknown>;
+    cancelQueries: (options: {
+        queryKey: readonly [string, string];
+        exact: boolean;
+    }) => Promise<unknown>;
     getQueryData: <T>(queryKey: readonly [string, string]) => T | undefined;
     setQueryData: (
         queryKey: readonly [string, string],
-        data: TrackPreferenceResponse
+        data: TrackPreferenceResponse,
     ) => void;
 }
 
@@ -45,7 +47,7 @@ export interface TrackPreferenceOptimisticQueryClient {
 export function applyOptimisticTrackPreferenceMutation(
     queryClient: TrackPreferenceOptimisticQueryClient,
     trackId: string,
-    nextSignal: TrackPreferenceSignal
+    nextSignal: TrackPreferenceSignal,
 ) {
     const canonicalQueryKey = ["track-preference", trackId] as const;
 
@@ -59,7 +61,7 @@ export function applyOptimisticTrackPreferenceMutation(
         queryClient.getQueryData<TrackPreferenceResponse>(canonicalQueryKey);
     queryClient.setQueryData(
         canonicalQueryKey,
-        buildOptimisticTrackPreferenceResponse(trackId, nextSignal)
+        buildOptimisticTrackPreferenceResponse(trackId, nextSignal),
     );
 
     return { canonicalQueryKey, previousPreference };

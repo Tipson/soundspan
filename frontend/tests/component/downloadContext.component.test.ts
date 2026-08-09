@@ -4,8 +4,9 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const emptyDownloadStatus = {
     activeDownloads: [],
@@ -50,9 +51,8 @@ type DownloadContextApi = ReturnType<
 >;
 
 async function mountDownloadProvider(strictMode = false) {
-    const { DownloadProvider, useDownloadContext } = await import(
-        "../../lib/download-context"
-    );
+    const { DownloadProvider, useDownloadContext } =
+        await import("../../lib/download-context");
     const { createRoot } = await import("react-dom/client");
     const latestRef: { current: DownloadContextApi | null } = { current: null };
 
@@ -64,7 +64,7 @@ async function mountDownloadProvider(strictMode = false) {
     const provider = React.createElement(
         DownloadProvider,
         null,
-        React.createElement(Probe)
+        React.createElement(Probe),
     );
     const tree = strictMode
         ? React.createElement(React.StrictMode, null, provider)
@@ -93,18 +93,18 @@ test("adding a pending download returns its id and synchronously rejects duplica
     const harness = await mountDownloadProvider();
     let firstId: string | null = null;
     await harness.act(() => {
-        firstId = harness.latest().addPendingDownload("album", "Album", "mbid-1");
+        firstId = harness
+            .latest()
+            .addPendingDownload("album", "Album", "mbid-1");
     });
 
     assert.equal(typeof firstId, "string");
     assert.equal(harness.latest().isPendingByMbid("mbid-1"), true);
     let duplicateId: string | null = "unexpected";
     await harness.act(() => {
-        duplicateId = harness.latest().addPendingDownload(
-            "album",
-            "Album",
-            "mbid-1"
-        );
+        duplicateId = harness
+            .latest()
+            .addPendingDownload("album", "Album", "mbid-1");
     });
     assert.equal(duplicateId, null);
     assert.equal(harness.latest().pendingDownloads.length, 1);

@@ -6,7 +6,10 @@ import { Disc } from "lucide-react";
 import { Podcast } from "../types";
 import { memo } from "react";
 import { api } from "@/lib/api";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 
 interface PodcastsGridProps {
     podcasts: Podcast[];
@@ -63,8 +66,11 @@ const PodcastCard = memo(
         );
     },
     (prevProps, nextProps) => {
-        return prevProps.podcast.id === nextProps.podcast.id && prevProps.index === nextProps.index;
-    }
+        return (
+            prevProps.podcast.id === nextProps.podcast.id &&
+            prevProps.index === nextProps.index
+        );
+    },
 );
 
 const PodcastsGrid = memo(function PodcastsGrid({

@@ -56,7 +56,7 @@ const mockLogger = {
 const mockBackfillAllArtistCounts = jest.fn();
 const mockGetAlbumCover = jest.fn();
 const mockNormalizeArtistName = jest.fn((name: string) =>
-    name.trim().toLowerCase()
+    name.trim().toLowerCase(),
 );
 const mockAreArtistNamesSimilar = jest.fn(() => false);
 const mockCanonicalizeVariousArtists = jest.fn((name: string) => name);
@@ -72,9 +72,13 @@ jest.mock("fs", () => ({
     existsSync: mockExistsSync,
 }));
 
-jest.mock("music-metadata", () => ({
-    parseFile: mockParseFile,
-}), { virtual: true });
+jest.mock(
+    "music-metadata",
+    () => ({
+        parseFile: mockParseFile,
+    }),
+    { virtual: true },
+);
 
 jest.mock("p-queue", () => ({
     __esModule: true,
@@ -123,7 +127,8 @@ jest.mock("../artistCountsService", () => ({
     backfillAllArtistCounts: mockBackfillAllArtistCounts,
 }));
 
-const { MusicScannerService } = require("../musicScanner") as typeof import("../musicScanner");
+const { MusicScannerService } =
+    require("../musicScanner") as typeof import("../musicScanner");
 
 describe("MusicScannerService.scanLibrary", () => {
     beforeEach(() => {
@@ -155,7 +160,9 @@ describe("MusicScannerService.scanLibrary", () => {
         mockPrisma.track.upsert.mockResolvedValue({});
         mockPrisma.track.deleteMany.mockResolvedValue({ count: 0 });
         mockPrisma.libraryHealthRecord.upsert.mockResolvedValue({});
-        mockPrisma.libraryHealthRecord.deleteMany.mockResolvedValue({ count: 0 });
+        mockPrisma.libraryHealthRecord.deleteMany.mockResolvedValue({
+            count: 0,
+        });
 
         mockPrisma.systemSettings.findFirst.mockResolvedValue({
             discNoBackfillDone: true,
@@ -219,7 +226,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
         mockPrisma.track.findMany.mockResolvedValue([
             {
@@ -241,7 +248,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 tracksUpdated: 0,
                 tracksRemoved: 0,
                 errors: [],
-            })
+            }),
         );
         expect(mockParseFile).not.toHaveBeenCalled();
         expect(mockPrisma.track.upsert).not.toHaveBeenCalled();
@@ -255,7 +262,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
         mockPrisma.systemSettings.findFirst.mockResolvedValue({
             discNoBackfillDone: false,
@@ -280,7 +287,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 tracksUpdated: 1,
                 tracksRemoved: 0,
                 errors: [],
-            })
+            }),
         );
         expect(mockParseFile).toHaveBeenCalledWith(audioFile);
         expect(mockParseFile).not.toHaveBeenCalledWith(audioFile, {
@@ -297,7 +304,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
 
         const result = await scanner.scanLibrary("/music");
@@ -308,7 +315,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 tracksUpdated: 0,
                 tracksRemoved: 0,
                 errors: [],
-            })
+            }),
         );
         expect(mockParseFile).toHaveBeenCalledWith(audioFile);
         expect(mockParseFile).not.toHaveBeenCalledWith(audioFile, {
@@ -328,7 +335,7 @@ describe("MusicScannerService.scanLibrary", () => {
                     title: "Test Track",
                     mime: "audio/flac",
                 }),
-            })
+            }),
         );
         expect(mockBackfillAllArtistCounts).toHaveBeenCalledTimes(1);
     });
@@ -339,7 +346,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
 
         const common = {
@@ -350,15 +357,17 @@ describe("MusicScannerService.scanLibrary", () => {
             artist: "Test Artist",
         };
         // Header-only parse: opus keeps duration in the last page → missing.
-        mockParseFile.mockImplementation(async (_path: string, options?: { duration?: boolean }) => {
-            if (options?.duration) {
-                return {
-                    common,
-                    format: { duration: 145.6, codec: "opus" },
-                } as any;
-            }
-            return { common, format: { codec: "opus" } } as any;
-        });
+        mockParseFile.mockImplementation(
+            async (_path: string, options?: { duration?: boolean }) => {
+                if (options?.duration) {
+                    return {
+                        common,
+                        format: { duration: 145.6, codec: "opus" },
+                    } as any;
+                }
+                return { common, format: { codec: "opus" } } as any;
+            },
+        );
 
         const result = await scanner.scanLibrary("/music");
 
@@ -372,7 +381,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 create: expect.objectContaining({
                     duration: 145,
                 }),
-            })
+            }),
         );
     });
 
@@ -381,7 +390,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue(["/music/Crystal Castles/Crystal Castles/01.flac"]);
         // A tagged file from the 2010 self-titled album (distinct release group).
         mockParseFile.mockResolvedValue({
@@ -420,7 +429,7 @@ describe("MusicScannerService.scanLibrary", () => {
                     title: "Crystal Castles",
                     rgMbid: "rg-2010",
                 }),
-            })
+            }),
         );
     });
 
@@ -429,7 +438,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue(["/music/Artist/Untagged.flac"]);
         // Default parseFile mock has no musicbrainz_releasegroupid (un-tagged).
         mockPrisma.album.findFirst.mockResolvedValue(null);
@@ -460,7 +469,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([]);
         mockPrisma.track.findMany.mockResolvedValue([
             {
@@ -484,7 +493,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 tracksUpdated: 0,
                 tracksRemoved: 0,
                 errors: [],
-            })
+            }),
         );
         expect(mockPrisma.track.deleteMany).not.toHaveBeenCalled();
         expect(mockPrisma.libraryHealthRecord.upsert).toHaveBeenCalledWith({
@@ -512,7 +521,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
         mockParseFile.mockRejectedValueOnce(new Error("metadata read failed"));
 
@@ -534,7 +543,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
         mockPrisma.track.findMany.mockResolvedValue([
             {
@@ -553,7 +562,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 tracksUpdated: 1,
                 tracksRemoved: 0,
                 errors: [{ file: audioFile, error: "metadata read failed" }],
-            })
+            }),
         );
         expect(mockPrisma.libraryHealthRecord.upsert).toHaveBeenCalledWith({
             where: { trackId: "track-existing-1" },
@@ -578,7 +587,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
         mockPrisma.track.findMany.mockResolvedValue([
             {
@@ -587,7 +596,9 @@ describe("MusicScannerService.scanLibrary", () => {
                 fileModified: new Date("2026-01-01T00:00:00.000Z"),
             },
         ]);
-        mockPrisma.track.upsert.mockResolvedValueOnce({ id: "track-existing-2" });
+        mockPrisma.track.upsert.mockResolvedValueOnce({
+            id: "track-existing-2",
+        });
 
         const result = await scanner.scanLibrary("/music");
 
@@ -597,7 +608,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 tracksUpdated: 1,
                 tracksRemoved: 0,
                 errors: [],
-            })
+            }),
         );
         expect(mockPrisma.libraryHealthRecord.deleteMany).toHaveBeenCalledWith({
             where: { trackId: "track-existing-2" },
@@ -621,7 +632,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([goodFile, badFile]);
 
         mockPrisma.track.findMany.mockResolvedValue([]);
@@ -655,7 +666,7 @@ describe("MusicScannerService.scanLibrary", () => {
                         error: "metadata read failed",
                     },
                 ],
-            })
+            }),
         );
         expect(progress[progress.length - 1]).toEqual(
             expect.objectContaining({
@@ -663,7 +674,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 filesTotal: 2,
                 currentFile: "Broken/Bad.flac",
                 errors: [{ file: badFile, error: "metadata read failed" }],
-            })
+            }),
         );
         expect(queueInstances[0].add).toHaveBeenCalledTimes(2);
         expect(queueInstances[0].onIdle).toHaveBeenCalledTimes(1);
@@ -675,7 +686,7 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
 
         queueInstances[0].add = jest
@@ -683,7 +694,7 @@ describe("MusicScannerService.scanLibrary", () => {
             .mockRejectedValue(new Error("queue unavailable"));
 
         await expect(scanner.scanLibrary("/music")).rejects.toThrow(
-            "queue unavailable"
+            "queue unavailable",
         );
         expect(mockPrisma.track.upsert).not.toHaveBeenCalled();
     });
@@ -694,10 +705,10 @@ describe("MusicScannerService.scanLibrary", () => {
 
         jest.spyOn(
             MusicScannerService.prototype as any,
-            "findAudioFiles"
+            "findAudioFiles",
         ).mockResolvedValue([audioFile]);
         mockBackfillAllArtistCounts.mockRejectedValueOnce(
-            new Error("backfill timeout")
+            new Error("backfill timeout"),
         );
 
         const result = await scanner.scanLibrary("/music");
@@ -705,7 +716,7 @@ describe("MusicScannerService.scanLibrary", () => {
         expect(result.tracksAdded).toBe(1);
         expect(mockLogger.error).toHaveBeenCalledWith(
             "[Scan] Artist counts update failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(result.errors).toEqual([]);
     });
@@ -731,18 +742,18 @@ describe("MusicScannerService helper methods", () => {
     it("detects discovery paths and normalizes metadata strings", () => {
         const scanner = new MusicScannerService() as any;
 
-        expect(scanner.isDiscoveryPath("Discovery/Artist/Album/track.flac")).toBe(
-            true
-        );
-        expect(scanner.isDiscoveryPath("discover\\Artist\\Album\\track.flac")).toBe(
-            true
-        );
+        expect(
+            scanner.isDiscoveryPath("Discovery/Artist/Album/track.flac"),
+        ).toBe(true);
+        expect(
+            scanner.isDiscoveryPath("discover\\Artist\\Album\\track.flac"),
+        ).toBe(true);
         expect(scanner.isDiscoveryPath("library/Artist/Album/track.flac")).toBe(
-            false
+            false,
         );
 
         expect(scanner.normalizeForMatching("  Café   Déjà   Vu  ")).toBe(
-            "cafe deja vu"
+            "cafe deja vu",
         );
     });
 
@@ -752,12 +763,15 @@ describe("MusicScannerService helper methods", () => {
         mockPrisma.downloadJob.findMany.mockResolvedValueOnce([
             {
                 id: "job-exact",
-                metadata: { artistName: "Artist Name", albumTitle: "Album Name" },
+                metadata: {
+                    artistName: "Artist Name",
+                    albumTitle: "Album Name",
+                },
             },
         ]);
 
         await expect(
-            scanner.isDiscoveryDownload("Artist Name", "Album Name")
+            scanner.isDiscoveryDownload("Artist Name", "Album Name"),
         ).resolves.toBe(true);
 
         mockPrisma.downloadJob.findMany.mockResolvedValueOnce([
@@ -771,7 +785,7 @@ describe("MusicScannerService helper methods", () => {
         ]);
 
         await expect(
-            scanner.isDiscoveryDownload("Artist Name", "Album Name (Deluxe)")
+            scanner.isDiscoveryDownload("Artist Name", "Album Name (Deluxe)"),
         ).resolves.toBe(true);
     });
 
@@ -785,15 +799,20 @@ describe("MusicScannerService helper methods", () => {
         mockPrisma.album.findFirst.mockResolvedValueOnce(null);
 
         await expect(
-            scanner.isDiscoveryDownload("Featured Artist", "Some Album")
+            scanner.isDiscoveryDownload("Featured Artist", "Some Album"),
         ).resolves.toBe(true);
         expect(mockPrisma.album.findFirst).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: {
-                    artist: { name: { equals: "Featured Artist", mode: "insensitive" } },
+                    artist: {
+                        name: {
+                            equals: "Featured Artist",
+                            mode: "insensitive",
+                        },
+                    },
                     location: "LIBRARY",
                 },
-            })
+            }),
         );
     });
 
@@ -809,15 +828,17 @@ describe("MusicScannerService helper methods", () => {
         });
 
         await expect(
-            scanner.isDiscoveryDownload("Library Artist", "Some Album")
+            scanner.isDiscoveryDownload("Library Artist", "Some Album"),
         ).resolves.toBe(false);
         expect(mockPrisma.album.findFirst).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: {
-                    artist: { name: { equals: "Library Artist", mode: "insensitive" } },
+                    artist: {
+                        name: { equals: "Library Artist", mode: "insensitive" },
+                    },
                     location: "LIBRARY",
                 },
-            })
+            }),
         );
     });
 
@@ -834,7 +855,7 @@ describe("MusicScannerService helper methods", () => {
             },
         ]);
         await expect(
-            scanner.isDiscoveryDownload("Featured Guest", "Shared Album")
+            scanner.isDiscoveryDownload("Featured Guest", "Shared Album"),
         ).resolves.toBe(true);
 
         mockPrisma.downloadJob.findMany.mockResolvedValueOnce([]);
@@ -842,7 +863,7 @@ describe("MusicScannerService helper methods", () => {
             id: "discovery-by-title",
         });
         await expect(
-            scanner.isDiscoveryDownload("Any Artist", "Unique Album")
+            scanner.isDiscoveryDownload("Any Artist", "Unique Album"),
         ).resolves.toBe(true);
 
         mockPrisma.downloadJob.findMany.mockResolvedValueOnce([]);
@@ -851,7 +872,7 @@ describe("MusicScannerService helper methods", () => {
             .mockResolvedValueOnce({ id: "discovery-by-artist" });
         mockPrisma.album.findFirst.mockResolvedValueOnce(null);
         await expect(
-            scanner.isDiscoveryDownload("Discovery Artist", "Other Album")
+            scanner.isDiscoveryDownload("Discovery Artist", "Other Album"),
         ).resolves.toBe(true);
 
         mockPrisma.downloadJob.findMany.mockResolvedValueOnce([]);
@@ -863,16 +884,18 @@ describe("MusicScannerService helper methods", () => {
             location: "LIBRARY",
         });
         await expect(
-            scanner.isDiscoveryDownload("Discovery Artist", "Other Album")
+            scanner.isDiscoveryDownload("Discovery Artist", "Other Album"),
         ).resolves.toBe(false);
     });
 
     it("returns false when discovery matching throws", async () => {
         const scanner = new MusicScannerService() as any;
-        mockPrisma.downloadJob.findMany.mockRejectedValueOnce(new Error("db down"));
+        mockPrisma.downloadJob.findMany.mockRejectedValueOnce(
+            new Error("db down"),
+        );
 
         await expect(
-            scanner.isDiscoveryDownload("Artist Name", "Album Name")
+            scanner.isDiscoveryDownload("Artist Name", "Album Name"),
         ).resolves.toBe(false);
         expect(mockLogger.error).toHaveBeenCalled();
     });
@@ -886,7 +909,7 @@ describe("MusicScannerService helper methods", () => {
         mockPrisma.album.findFirst.mockResolvedValueOnce(null);
 
         await expect(
-            scanner.isDiscoveryDownload("Non Matching Artist", "Strange Album")
+            scanner.isDiscoveryDownload("Non Matching Artist", "Strange Album"),
         ).resolves.toBe(false);
     });
 
@@ -902,11 +925,11 @@ describe("MusicScannerService helper methods", () => {
         await expect(
             scanner.isDiscoveryDownload(
                 "Primary Artist feat. Guest",
-                "Normalization Album"
-            )
+                "Normalization Album",
+            ),
         ).resolves.toBe(false);
         expect(mockLogger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Primary artist:")
+            expect.stringContaining("Primary artist:"),
         );
     });
 
@@ -938,7 +961,11 @@ describe("MusicScannerService helper methods", () => {
 
         const files = await scanner.findAudioFiles("/music");
         expect(files.sort()).toEqual(
-            ["/music/Artist/Track.mp3", "/music/Artist/Sub/Song.flac", "/music/Artist/Sub/Demo.wav"].sort()
+            [
+                "/music/Artist/Track.mp3",
+                "/music/Artist/Sub/Song.flac",
+                "/music/Artist/Sub/Demo.wav",
+            ].sort(),
         );
     });
 
@@ -963,7 +990,7 @@ describe("MusicScannerService helper methods", () => {
         ]);
         expect(mockReaddir).not.toHaveBeenCalledWith(
             "/music/ancestor",
-            expect.any(Object)
+            expect.any(Object),
         );
     });
 
@@ -974,9 +1001,10 @@ describe("MusicScannerService helper methods", () => {
             ...Array.from({ length: 65 }, (_, index) => `d${index + 1}`),
         ].join("/");
         mockReaddir.mockImplementation(async (dir: string) => {
-            const depth = dir === "/music"
-                ? 0
-                : Number(dir.slice(dir.lastIndexOf("/d") + 2));
+            const depth =
+                dir === "/music"
+                    ? 0
+                    : Number(dir.slice(dir.lastIndexOf("/d") + 2));
             if (depth > 64) {
                 throw new Error("depth limit was exceeded");
             }
@@ -991,11 +1019,11 @@ describe("MusicScannerService helper methods", () => {
         expect(files).toContain("/music/Track-0.flac");
         expect(mockReaddir).not.toHaveBeenCalledWith(
             tooDeepPath,
-            expect.any(Object)
+            expect.any(Object),
         );
         expect(mockLogger.warn).toHaveBeenCalledTimes(1);
         expect(mockLogger.warn).toHaveBeenCalledWith(
-            expect.stringContaining(tooDeepPath)
+            expect.stringContaining(tooDeepPath),
         );
     });
 
@@ -1021,7 +1049,7 @@ describe("MusicScannerService helper methods", () => {
         expect(files).toEqual(["/music/Artist/Visible.mp3"]);
         expect(mockReaddir).not.toHaveBeenCalledWith(
             "/music/.hidden",
-            expect.any(Object)
+            expect.any(Object),
         );
     });
 });
@@ -1086,7 +1114,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
             return "";
         });
         mockNormalizeArtistName.mockImplementation((name: string) =>
-            name.trim().toLowerCase()
+            name.trim().toLowerCase(),
         );
         mockPrisma.artist.create.mockResolvedValueOnce({
             id: "artist-sublime",
@@ -1098,17 +1126,19 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Sublime/Robbin' The Hood/01 Track.flac",
             "Sublime/Robbin' The Hood/01 Track.flac",
-            "/music"
+            "/music",
         );
 
-        expect(mockParseArtistFromPath).toHaveBeenCalledWith("Robbin' The Hood");
+        expect(mockParseArtistFromPath).toHaveBeenCalledWith(
+            "Robbin' The Hood",
+        );
         expect(mockParseArtistFromPath).toHaveBeenCalledWith("Sublime");
         expect(mockPrisma.artist.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({
                     name: "Sublime",
                 }),
-            })
+            }),
         );
     });
 
@@ -1117,7 +1147,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
 
         mockParseArtistFromPath.mockReturnValue("");
         mockNormalizeArtistName.mockImplementation((name: string) =>
-            name.trim().toLowerCase()
+            name.trim().toLowerCase(),
         );
         mockPrisma.artist.create.mockResolvedValueOnce({
             id: "artist-direct-grandparent",
@@ -1129,7 +1159,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Grandparent Artist/Unparseable Album/01 Track.flac",
             "Grandparent Artist/Unparseable Album/01 Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.create).toHaveBeenCalledWith(
@@ -1137,7 +1167,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
                 data: expect.objectContaining({
                     name: "Grandparent Artist",
                 }),
-            })
+            }),
         );
     });
 
@@ -1155,7 +1185,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/2024/Album Name/01 Track.flac",
             "2024/Album Name/01 Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.create).toHaveBeenCalledWith(
@@ -1163,7 +1193,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
                 data: expect.objectContaining({
                     name: "Unknown Artist",
                 }),
-            })
+            }),
         );
         expect(mockLogger.warn).toHaveBeenCalled();
     });
@@ -1180,7 +1210,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/discovery/Discovery Artist/Discovery Album/01 Track.flac",
             "discovery/Discovery Artist/Discovery Album/01 Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.album.create).toHaveBeenCalledWith(
@@ -1189,40 +1219,48 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
                     location: "DISCOVER",
                     title: "Album Name",
                 }),
-            })
+            }),
         );
         expect(mockPrisma.ownedAlbum.upsert).not.toHaveBeenCalled();
     });
 
     it("falls back to Deezer cover when extractor returns no local art", async () => {
-        const scanner = new MusicScannerService(undefined, "/tmp/covers") as any;
+        const scanner = new MusicScannerService(
+            undefined,
+            "/tmp/covers",
+        ) as any;
         mockExtractCoverArt.mockResolvedValueOnce(null);
-        mockGetAlbumCover.mockResolvedValueOnce("https://example.com/cover.jpg");
+        mockGetAlbumCover.mockResolvedValueOnce(
+            "https://example.com/cover.jpg",
+        );
 
         await scanner.processAudioFile(
             "/music/DiscFallback/Track.flac",
             "DiscFallback/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockExtractCoverArt).toHaveBeenCalledWith(
             "/music/DiscFallback/Track.flac",
-            "album-new"
+            "album-new",
         );
         expect(mockGetAlbumCover).toHaveBeenCalledWith(
             "DiscFallback",
-            "Album Name"
+            "Album Name",
         );
         expect(mockPrisma.album.update).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "album-new" },
                 data: { coverUrl: "https://example.com/cover.jpg" },
-            })
+            }),
         );
     });
 
     it("updates an existing temp artist MBID when real MBID is discovered", async () => {
-        const scanner = new MusicScannerService(undefined, "/tmp/covers") as any;
+        const scanner = new MusicScannerService(
+            undefined,
+            "/tmp/covers",
+        ) as any;
 
         mockPrisma.artist.findFirst
             .mockResolvedValueOnce(null)
@@ -1260,7 +1298,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/RealArtist/Track.flac",
             "RealArtist/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.findFirst).toHaveBeenCalledWith({
@@ -1277,7 +1315,10 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
     });
 
     it("retries artist creation on unique-constraint conflicts and uses existing MBID", async () => {
-        const scanner = new MusicScannerService(undefined, "/tmp/covers") as any;
+        const scanner = new MusicScannerService(
+            undefined,
+            "/tmp/covers",
+        ) as any;
         const conflict = new Error("duplicate");
         (conflict as Error & { code: string }).code = "P2002";
 
@@ -1313,7 +1354,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Existing/Track.flac",
             "Existing/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.create).toHaveBeenCalledTimes(1);
@@ -1327,7 +1368,10 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
     });
 
     it("creates deterministic temporary IDs when Date and RNG are controlled", async () => {
-        const scanner = new MusicScannerService(undefined, "/tmp/covers") as any;
+        const scanner = new MusicScannerService(
+            undefined,
+            "/tmp/covers",
+        ) as any;
         const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1700000000000);
         const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.12345);
 
@@ -1368,7 +1412,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Temp Artist/Track.flac",
             "Temp Artist/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.create).toHaveBeenCalledWith(
@@ -1376,14 +1420,14 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
                 data: expect.objectContaining({
                     mbid: "temp-1700000000000-0.12345",
                 }),
-            })
+            }),
         );
         expect(mockPrisma.album.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({
                     rgMbid: "temp-1700000000000-0.12345",
                 }),
-            })
+            }),
         );
 
         nowSpy.mockRestore();
@@ -1423,7 +1467,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Of Mice & Men/Track.flac",
             "Of Mice & Men/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.findFirst).toHaveBeenNthCalledWith(1, {
@@ -1470,7 +1514,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Artist Name/Track.flac",
             "Artist Name/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.findFirst).toHaveBeenCalledWith({
@@ -1514,7 +1558,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/The Weeknd/Track.flac",
             "The Weeknd/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.findMany).toHaveBeenCalledTimes(1);
@@ -1522,7 +1566,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         expect(mockAreArtistNamesSimilar).toHaveBeenCalledWith(
             "The Weeknd",
             "The Weeknd",
-            95
+            95,
         );
     });
 
@@ -1564,7 +1608,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/ArtistTemp/Track.flac",
             "ArtistTemp/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.artist.update).toHaveBeenCalledWith({
@@ -1573,8 +1617,8 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         });
         expect(mockLogger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "MBID collision detected for mbid-collision, but canonical artist lookup returned null; keeping temp artist linkage"
-            )
+                "MBID collision detected for mbid-collision, but canonical artist lookup returned null; keeping temp artist linkage",
+            ),
         );
         expect(mockPrisma.artist.create).not.toHaveBeenCalled();
     });
@@ -1616,8 +1660,8 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
             scanner.processAudioFile(
                 "/music/ArtistTemp/Track.flac",
                 "ArtistTemp/Track.flac",
-                "/music"
-            )
+                "/music",
+            ),
         ).rejects.toThrow("update failed");
         expect(mockPrisma.track.upsert).not.toHaveBeenCalled();
     });
@@ -1656,8 +1700,8 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
             scanner.processAudioFile(
                 "/music/Conflict/Track.flac",
                 "Conflict/Track.flac",
-                "/music"
-            )
+                "/music",
+            ),
         ).rejects.toThrow("conflict");
 
         expect(mockPrisma.artist.create).toHaveBeenCalledTimes(1);
@@ -1692,8 +1736,8 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
             scanner.processAudioFile(
                 "/music/NoMBID/Track.flac",
                 "NoMBID/Track.flac",
-                "/music"
-            )
+                "/music",
+            ),
         ).rejects.toThrow("mbidless conflict");
         expect(mockPrisma.track.upsert).not.toHaveBeenCalled();
     });
@@ -1735,7 +1779,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Album Band/Track.flac",
             "Album Band/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.album.findFirst).toHaveBeenCalledWith({
@@ -1789,7 +1833,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/John Williams/Hook (Original Motion Picture Soundtrack)/01 Track Title.flac",
             "John Williams/Hook (Original Motion Picture Soundtrack)/01 Track Title.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.album.update).toHaveBeenCalledWith({
@@ -1847,7 +1891,7 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
         await scanner.processAudioFile(
             "/music/Discovery Artist/Track.flac",
             "Discovery Artist/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.album.create).toHaveBeenCalledWith(
@@ -1855,16 +1899,21 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
                 data: expect.objectContaining({
                     location: "DISCOVER",
                 }),
-            })
+            }),
         );
         expect(mockPrisma.ownedAlbum.upsert).not.toHaveBeenCalled();
         expect(mockLogger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Discovery-only artist detected: Discovery Artist")
+            expect.stringContaining(
+                "Discovery-only artist detected: Discovery Artist",
+            ),
         );
     });
 
     it("retries native cover extraction when cached extractor image is missing", async () => {
-        const scanner = new MusicScannerService(undefined, "/tmp/covers") as any;
+        const scanner = new MusicScannerService(
+            undefined,
+            "/tmp/covers",
+        ) as any;
 
         mockParseFile.mockResolvedValue({
             common: {
@@ -1896,23 +1945,25 @@ describe("MusicScannerService.processAudioFile artist fallbacks", () => {
             rgMbid: "temp-cover",
         });
         mockExtractCoverArt.mockResolvedValueOnce("native-cover-path.jpg");
-        mockExistsSync.mockImplementation((value) => !String(value).includes("/tmp/covers/cover-path.jpg"));
+        mockExistsSync.mockImplementation(
+            (value) => !String(value).includes("/tmp/covers/cover-path.jpg"),
+        );
 
         await scanner.processAudioFile(
             "/music/Cover Artist/Track.flac",
             "Cover Artist/Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockExtractCoverArt).toHaveBeenCalledWith(
             "/music/Cover Artist/Track.flac",
-            "album-cover"
+            "album-cover",
         );
         expect(mockPrisma.album.update).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "album-cover" },
                 data: { coverUrl: "native:native-cover-path.jpg" },
-            })
+            }),
         );
     });
 });
@@ -1994,7 +2045,7 @@ describe("MusicScannerService.processAudioFile album resolution (PR #5 regressio
         await scanner.processAudioFile(
             "/music/Artist B/Shared Album/01 Track.flac",
             "Artist B/Shared Album/01 Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.album.findFirst).toHaveBeenCalledWith({
@@ -2014,7 +2065,7 @@ describe("MusicScannerService.processAudioFile album resolution (PR #5 regressio
                 update: expect.objectContaining({
                     albumId: "album-other-artist",
                 }),
-            })
+            }),
         );
     });
 
@@ -2042,7 +2093,7 @@ describe("MusicScannerService.processAudioFile album resolution (PR #5 regressio
         await scanner.processAudioFile(
             "/music/Artist B/Shared Album/01 Track.flac",
             "Artist B/Shared Album/01 Track.flac",
-            "/music"
+            "/music",
         );
 
         expect(mockPrisma.album.create).toHaveBeenCalledTimes(1);
@@ -2054,7 +2105,7 @@ describe("MusicScannerService.processAudioFile album resolution (PR #5 regressio
             expect.objectContaining({
                 create: expect.objectContaining({ albumId: "album-raced" }),
                 update: expect.objectContaining({ albumId: "album-raced" }),
-            })
+            }),
         );
     });
 
@@ -2072,8 +2123,8 @@ describe("MusicScannerService.processAudioFile album resolution (PR #5 regressio
             scanner.processAudioFile(
                 "/music/Artist B/Shared Album/01 Track.flac",
                 "Artist B/Shared Album/01 Track.flac",
-                "/music"
-            )
+                "/music",
+            ),
         ).rejects.toThrow("unique violation on rgMbid");
         expect(mockPrisma.track.upsert).not.toHaveBeenCalled();
     });
@@ -2108,7 +2159,7 @@ describe("MusicScannerService.processAudioFile album resolution (PR #5 regressio
         await scanner.processAudioFile(
             "/music/Artist B/Mixed Album/02 Untagged Track.flac",
             "Artist B/Mixed Album/02 Untagged Track.flac",
-            "/music"
+            "/music",
         );
 
         // Exact-title match within the artist across ALL albums — not just
@@ -2121,7 +2172,7 @@ describe("MusicScannerService.processAudioFile album resolution (PR #5 regressio
             expect.objectContaining({
                 create: expect.objectContaining({ albumId: "album-real" }),
                 update: expect.objectContaining({ albumId: "album-real" }),
-            })
+            }),
         );
     });
 });

@@ -8,10 +8,23 @@ type ProxyModule = {
 
 async function loadProxyModule(): Promise<ProxyModule> {
     const mod = await import("../../proxy");
-    const proxy = (mod as { proxy?: ProxyModule["proxy"]; default?: { proxy?: ProxyModule["proxy"] } }).proxy
-        ?? (mod as { default?: { proxy?: ProxyModule["proxy"] } }).default?.proxy;
-    const config = (mod as { config?: ProxyModule["config"]; default?: { config?: ProxyModule["config"] } }).config
-        ?? (mod as { default?: { config?: ProxyModule["config"] } }).default?.config;
+    const proxy =
+        (
+            mod as {
+                proxy?: ProxyModule["proxy"];
+                default?: { proxy?: ProxyModule["proxy"] };
+            }
+        ).proxy ??
+        (mod as { default?: { proxy?: ProxyModule["proxy"] } }).default?.proxy;
+    const config =
+        (
+            mod as {
+                config?: ProxyModule["config"];
+                default?: { config?: ProxyModule["config"] };
+            }
+        ).config ??
+        (mod as { default?: { config?: ProxyModule["config"] } }).default
+            ?.config;
 
     assert.ok(proxy, "proxy export is available");
     assert.ok(config, "config export is available");
@@ -74,11 +87,16 @@ test("proxy keeps /api boundary paths and redirects similarly named non-api path
 
     const apiLikePath = proxy(request("/apiish/"));
     assert.equal(apiLikePath.status, 308);
-    assert.equal(apiLikePath.headers.get("location"), "https://soundspan.test/apiish");
+    assert.equal(
+        apiLikePath.headers.get("location"),
+        "https://soundspan.test/apiish",
+    );
 });
 
 test("proxy exports matcher config for non-static routes", async () => {
     const { config } = await loadProxyModule();
 
-    assert.deepEqual(config.matcher, ["/((?!_next/static|_next/image|favicon.ico|assets/).*)"]);
+    assert.deepEqual(config.matcher, [
+        "/((?!_next/static|_next/image|favicon.ico|assets/).*)",
+    ]);
 });

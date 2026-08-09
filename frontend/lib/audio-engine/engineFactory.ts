@@ -9,17 +9,16 @@ import { HowlerEngineAdapter } from "./howlerEngineAdapter";
  * - Everything else -> HowlerEngineAdapter (standard web audio)
  */
 export async function createAudioEngine(): Promise<AudioEngine> {
-  if (isTauriEnvironment()) {
-    const native = await needsNativeAudio();
-    if (native) {
-      const { TauriNativeEngineAdapter } = await import(
-        "./tauriNativeEngineAdapter"
-      );
-      return new TauriNativeEngineAdapter();
+    if (isTauriEnvironment()) {
+        const native = await needsNativeAudio();
+        if (native) {
+            const { TauriNativeEngineAdapter } =
+                await import("./tauriNativeEngineAdapter");
+            return new TauriNativeEngineAdapter();
+        }
     }
-  }
 
-  return new HowlerEngineAdapter();
+    return new HowlerEngineAdapter();
 }
 
 /**
@@ -27,5 +26,5 @@ export async function createAudioEngine(): Promise<AudioEngine> {
  * Use createAudioEngine() for proper platform detection.
  */
 export function createDefaultAudioEngine(): AudioEngine {
-  return new HowlerEngineAdapter();
+    return new HowlerEngineAdapter();
 }

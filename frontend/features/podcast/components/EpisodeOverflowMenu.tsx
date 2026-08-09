@@ -32,7 +32,10 @@ export function EpisodeOverflowMenu({
         if (!isOpen) return;
 
         const handleOutsideClick = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(event.target as Node)
+            ) {
                 setIsOpen(false);
             }
         };
@@ -63,7 +66,7 @@ export function EpisodeOverflowMenu({
             playEpisodeNext(episode, podcast);
             setIsOpen(false);
         },
-        [episode, podcast, playEpisodeNext]
+        [episode, podcast, playEpisodeNext],
     );
 
     const handleAddToQueue = useCallback(
@@ -72,13 +75,16 @@ export function EpisodeOverflowMenu({
             addEpisodeToQueue(episode, podcast);
             setIsOpen(false);
         },
-        [episode, podcast, addEpisodeToQueue]
+        [episode, podcast, addEpisodeToQueue],
     );
 
     return (
         <div
             ref={menuRef}
-            className={cn("relative flex items-center justify-center", className)}
+            className={cn(
+                "relative flex items-center justify-center",
+                className,
+            )}
         >
             <button
                 type="button"
@@ -88,7 +94,7 @@ export function EpisodeOverflowMenu({
                     isOpen
                         ? "bg-[#2a2a2a] text-white"
                         : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
-                    triggerClassName
+                    triggerClassName,
                 )}
                 aria-label="Episode actions"
                 aria-expanded={isOpen}

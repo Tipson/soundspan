@@ -3,7 +3,10 @@
 import { Heart, Zap, RefreshCw } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { MixCard } from "@/components/MixCard";
 import { HomeHero } from "@/features/home/components/HomeHero";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
@@ -24,7 +27,10 @@ function PlaylistSkeleton() {
     return (
         <div className="flex gap-3 overflow-hidden">
             {[...Array(8)].map((_, i) => (
-                <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-[170px] lg:w-[180px] p-3">
+                <div
+                    key={i}
+                    className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-[170px] lg:w-[180px] p-3"
+                >
                     <div className="aspect-square rounded-md bg-white/5 animate-pulse mb-3" />
                     <div className="h-4 bg-white/5 rounded animate-pulse w-3/4 mb-2" />
                     <div className="h-3 bg-white/5 rounded animate-pulse w-1/2" />
@@ -62,7 +68,8 @@ export default function HomePage() {
         return <LoadingScreen />;
     }
 
-    const hasMadeForYou = likedSummary !== null || discoverWeekly !== null || mixes.length > 0;
+    const hasMadeForYou =
+        likedSummary !== null || discoverWeekly !== null || mixes.length > 0;
 
     return (
         <div className="relative">
@@ -99,20 +106,22 @@ export default function HomePage() {
                                 title="Made For You"
                                 rightAction={
                                     autoPlaylists ? (
-                                    <button
-                                        onClick={handleRefreshMixes}
-                                        disabled={isRefreshingMixes}
-                                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors font-semibold group bg-white/5 hover:bg-white/10 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isRefreshingMixes ? (
-                                            <GradientSpinner size="sm" />
-                                        ) : (
-                                            <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-                                        )}
-                                        <span className="hidden sm:inline">
-                                            {isRefreshingMixes ? "Refreshing..." : "Refresh"}
-                                        </span>
-                                    </button>
+                                        <button
+                                            onClick={handleRefreshMixes}
+                                            disabled={isRefreshingMixes}
+                                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors font-semibold group bg-white/5 hover:bg-white/10 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isRefreshingMixes ? (
+                                                <GradientSpinner size="sm" />
+                                            ) : (
+                                                <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+                                            )}
+                                            <span className="hidden sm:inline">
+                                                {isRefreshingMixes
+                                                    ? "Refreshing..."
+                                                    : "Refresh"}
+                                            </span>
+                                        </button>
                                     ) : undefined
                                 }
                             />
@@ -128,7 +137,10 @@ export default function HomePage() {
                                                 <Heart className="w-12 h-12 text-pink-500 fill-pink-500" />
                                             }
                                             overlayIcon={
-                                                <Heart className="w-6 h-6 text-pink-500" strokeWidth={2.5} />
+                                                <Heart
+                                                    className="w-6 h-6 text-pink-500"
+                                                    strokeWidth={2.5}
+                                                />
                                             }
                                             index={0}
                                         />
@@ -145,7 +157,10 @@ export default function HomePage() {
                                                 <Zap className="w-12 h-12 text-blue-400" />
                                             }
                                             overlayIcon={
-                                                <Zap className="w-6 h-6 text-pink-500" strokeWidth={2.5} />
+                                                <Zap
+                                                    className="w-6 h-6 text-pink-500"
+                                                    strokeWidth={2.5}
+                                                />
                                             }
                                             index={1}
                                         />
@@ -175,22 +190,29 @@ export default function HomePage() {
                     {/* Popular Artists */}
                     {popularArtists.length > 0 && (
                         <section>
-                            <SectionHeader title="Popular Artists" badge={<LastFmBadge />} />
+                            <SectionHeader
+                                title="Popular Artists"
+                                badge={<LastFmBadge />}
+                            />
                             <PopularArtistsGrid artists={popularArtists} />
                         </section>
                     )}
 
                     {/* Trending Community Playlists */}
-                    {(isCommunityPlaylistsLoading || communityPlaylists.length > 0) && (
+                    {(isCommunityPlaylistsLoading ||
+                        communityPlaylists.length > 0) && (
                         <section>
                             <SectionHeader
                                 title="Trending Community Playlists"
                                 badge={<YouTubeBadge />}
                             />
-                            {isCommunityPlaylistsLoading && communityPlaylists.length === 0 ? (
+                            {isCommunityPlaylistsLoading &&
+                            communityPlaylists.length === 0 ? (
                                 <PlaylistSkeleton />
                             ) : (
-                                <FeaturedPlaylistsGrid playlists={communityPlaylists} />
+                                <FeaturedPlaylistsGrid
+                                    playlists={communityPlaylists}
+                                />
                             )}
                         </section>
                     )}
@@ -198,7 +220,10 @@ export default function HomePage() {
                     {/* Popular Podcasts */}
                     {recentPodcasts.length > 0 && (
                         <section>
-                            <SectionHeader title="Popular Podcasts" showAllHref="/podcasts" />
+                            <SectionHeader
+                                title="Popular Podcasts"
+                                showAllHref="/podcasts"
+                            />
                             <PodcastsGrid podcasts={recentPodcasts} />
                         </section>
                     )}
@@ -206,13 +231,15 @@ export default function HomePage() {
                     {/* Audiobooks */}
                     {recentAudiobooks.length > 0 && (
                         <section>
-                            <SectionHeader title="Audiobooks" showAllHref="/audiobooks" />
+                            <SectionHeader
+                                title="Audiobooks"
+                                showAllHref="/audiobooks"
+                            />
                             <AudiobooksGrid audiobooks={recentAudiobooks} />
                         </section>
                     )}
                 </div>
             </div>
-
         </div>
     );
 }

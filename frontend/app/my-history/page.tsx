@@ -15,7 +15,11 @@ import { useToast } from "@/lib/toast-context";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { TrackList } from "@/components/track";
-import type { TrackRowItem, TrackRowSlots, OverflowConfig } from "@/components/track";
+import type {
+    TrackRowItem,
+    TrackRowSlots,
+    OverflowConfig,
+} from "@/components/track";
 
 interface PlayHistoryTrack {
     id: string;
@@ -71,11 +75,9 @@ function toAudioTrack(track: PlayHistoryTrack) {
         filePath: track.filePath,
         streamSource,
         tidalTrackId:
-            track.tidalTrackId ??
-            (track.provider?.tidalTrackId ?? undefined),
+            track.tidalTrackId ?? track.provider?.tidalTrackId ?? undefined,
         youtubeVideoId:
-            track.youtubeVideoId ??
-            (track.provider?.youtubeVideoId ?? undefined),
+            track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         artist: {
             id: artist?.id ?? undefined,
             name: artist?.name || "Unknown Artist",
@@ -84,7 +86,8 @@ function toAudioTrack(track: PlayHistoryTrack) {
         album: {
             id: track.album?.id ?? undefined,
             title: track.album?.title || "Unknown Album",
-            coverArt: track.album?.coverArt || track.album?.coverUrl || undefined,
+            coverArt:
+                track.album?.coverArt || track.album?.coverUrl || undefined,
         },
     };
 }
@@ -102,16 +105,25 @@ function formatPlayedAt(isoDate: string): string {
 
 function historyToRowItem(entry: PlayHistoryEntry): TrackRowItem {
     const track = entry.track;
-    const streamSource = track.streamSource ?? (track.source === "tidal" || track.source === "youtube" ? track.source : undefined);
+    const streamSource =
+        track.streamSource ??
+        (track.source === "tidal" || track.source === "youtube"
+            ? track.source
+            : undefined);
     const isRemote = streamSource === "tidal" || streamSource === "youtube";
     const coverArt = track.album?.coverArt || track.album?.coverUrl;
     return {
         id: track.id,
         title: track.title,
         displayTitle: track.displayTitle,
-        artistName: track.artist?.name || track.album?.artist?.name || "Unknown Artist",
+        artistName:
+            track.artist?.name || track.album?.artist?.name || "Unknown Artist",
         duration: track.duration,
-        coverArtUrl: coverArt ? (isRemote ? api.getBrowseImageUrl(coverArt) : api.getCoverArtUrl(coverArt, 100)) : null,
+        coverArtUrl: coverArt
+            ? isRemote
+                ? api.getBrowseImageUrl(coverArt)
+                : api.getCoverArtUrl(coverArt, 100)
+            : null,
     };
 }
 
@@ -136,8 +148,13 @@ export default function MyHistoryPage() {
             try {
                 setLoading(true);
                 setError(null);
-                const data = await api.get<PlayHistoryEntry[]>("/plays?limit=250");
-                setHistory(Array.isArray(data) ? data.filter((entry) => Boolean(entry.track?.id)) : []);
+                const data =
+                    await api.get<PlayHistoryEntry[]>("/plays?limit=250");
+                setHistory(
+                    Array.isArray(data)
+                        ? data.filter((entry) => Boolean(entry.track?.id))
+                        : [],
+                );
             } catch (err) {
                 sharedFrontendLogger.error("Failed to load play history:", err);
                 setError("Failed to load your listening history");
@@ -151,7 +168,7 @@ export default function MyHistoryPage() {
 
     const audioTracks = useMemo(
         () => history.map((entry) => toAudioTrack(entry.track)),
-        [history]
+        [history],
     );
 
     const handlePlayFromHistory = useCallback(
@@ -163,33 +180,48 @@ export default function MyHistoryPage() {
         [audioTracks, playTracks, toast],
     );
 
-    const historyRowSlots = useCallback((entry: PlayHistoryEntry): TrackRowSlots => {
-        const track = entry.track;
-        const streamSource = track.streamSource ?? (track.source === "tidal" || track.source === "youtube" ? track.source : undefined);
-        const isRemote = streamSource === "tidal" || streamSource === "youtube";
-        return {
-            leadingColumn: null,
-            subtitleExtra: (
-                <>
-                    {isRemote && (
-                        <div className="mt-1 flex items-center gap-1.5">
-                            {streamSource === "tidal" ? <TidalBadge /> : <YouTubeBadge />}
-                        </div>
-                    )}
-                    <p className="text-[11px] text-gray-400 truncate">
-                        {track.album?.title || "Unknown Album"}
-                    </p>
-                    <p className="text-[11px] text-gray-400 mt-1">
-                        Played {formatPlayedAt(entry.playedAt)}
-                    </p>
-                </>
-            ),
-        };
-    }, []);
+    const historyRowSlots = useCallback(
+        (entry: PlayHistoryEntry): TrackRowSlots => {
+            const track = entry.track;
+            const streamSource =
+                track.streamSource ??
+                (track.source === "tidal" || track.source === "youtube"
+                    ? track.source
+                    : undefined);
+            const isRemote =
+                streamSource === "tidal" || streamSource === "youtube";
+            return {
+                leadingColumn: null,
+                subtitleExtra: (
+                    <>
+                        {isRemote && (
+                            <div className="mt-1 flex items-center gap-1.5">
+                                {streamSource === "tidal" ? (
+                                    <TidalBadge />
+                                ) : (
+                                    <YouTubeBadge />
+                                )}
+                            </div>
+                        )}
+                        <p className="text-[11px] text-gray-400 truncate">
+                            {track.album?.title || "Unknown Album"}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                            Played {formatPlayedAt(entry.playedAt)}
+                        </p>
+                    </>
+                ),
+            };
+        },
+        [],
+    );
 
-    const historyRowOverflow = useCallback((entry: PlayHistoryEntry): OverflowConfig => ({
-        track: toAudioTrack(entry.track),
-    }), []);
+    const historyRowOverflow = useCallback(
+        (entry: PlayHistoryEntry): OverflowConfig => ({
+            track: toAudioTrack(entry.track),
+        }),
+        [],
+    );
 
     if (!isAuthenticated) {
         return null;
@@ -266,7 +298,6 @@ export default function MyHistoryPage() {
                     </section>
                 )}
             </div>
-
         </div>
     );
 }

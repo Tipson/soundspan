@@ -42,7 +42,7 @@ function emptyStats(): ModelMigrationStats {
 async function migrateModel(
     modelName: EncryptedModelName,
     columns: readonly string[],
-    apply: boolean
+    apply: boolean,
 ): Promise<ModelMigrationStats> {
     // Dynamic delegate access — this is a one-off migration over a small set of
     // hand-listed models, not runtime app code.
@@ -63,23 +63,23 @@ async function migrateModel(
         delegate,
         columns,
         ENCRYPTED_MODEL_PRIMARY_KEYS[modelName],
-        apply
+        apply,
     );
 
     console.log(
-        `[migrate-gcm] ${modelName}: rows=${stats.rows} reencrypted=${stats.reencrypted} alreadyV2=${stats.alreadyV2} skippedErrors=${stats.skippedErrors}`
+        `[migrate-gcm] ${modelName}: rows=${stats.rows} reencrypted=${stats.reencrypted} alreadyV2=${stats.alreadyV2} skippedErrors=${stats.skippedErrors}`,
     );
     return stats;
 }
 
 async function run(apply: boolean): Promise<void> {
     console.log(
-        `[migrate-gcm] starting settings v1→v2 re-encryption (${apply ? "APPLY — writing" : "DRY RUN — no writes"})`
+        `[migrate-gcm] starting settings v1→v2 re-encryption (${apply ? "APPLY — writing" : "DRY RUN — no writes"})`,
     );
 
     const totals = emptyStats();
     for (const modelName of Object.keys(
-        ENCRYPTED_SETTINGS_COLUMNS
+        ENCRYPTED_SETTINGS_COLUMNS,
     ) as EncryptedModelName[]) {
         const columns = ENCRYPTED_SETTINGS_COLUMNS[modelName];
         const stats = await migrateModel(modelName, columns, apply);
@@ -90,11 +90,11 @@ async function run(apply: boolean): Promise<void> {
     }
 
     console.log(
-        `[migrate-gcm] ${apply ? "complete" : "dry run complete"}: rows=${totals.rows} reencrypted=${totals.reencrypted} alreadyV2=${totals.alreadyV2} skippedErrors=${totals.skippedErrors}`
+        `[migrate-gcm] ${apply ? "complete" : "dry run complete"}: rows=${totals.rows} reencrypted=${totals.reencrypted} alreadyV2=${totals.alreadyV2} skippedErrors=${totals.skippedErrors}`,
     );
     if (!apply && totals.reencrypted > 0) {
         console.log(
-            "[migrate-gcm] re-run with --apply to write these changes (back up the database first)."
+            "[migrate-gcm] re-run with --apply to write these changes (back up the database first).",
         );
     }
 }

@@ -25,7 +25,7 @@ describe("worker startup maintenance queue contract", () => {
         expect(indexSource).not.toContain("cleanupExpiredCache()");
         expect(indexSource).not.toContain("audiobookCacheService.syncAll()");
         expect(indexSource).not.toContain(
-            "downloadQueueManager.reconcileOnStartup()"
+            "downloadQueueManager.reconcileOnStartup()",
         );
         expect(indexSource).not.toContain("backfillAllArtistCounts()");
         expect(indexSource).not.toContain("backfillAllImages()");
@@ -34,7 +34,7 @@ describe("worker startup maintenance queue contract", () => {
         expect(workerSource).not.toContain("cleanupExpiredCache()");
         expect(workerSource).not.toContain("audiobookCacheService.syncAll()");
         expect(workerSource).not.toContain(
-            "downloadQueueManager.reconcileOnStartup()"
+            "downloadQueueManager.reconcileOnStartup()",
         );
         expect(workerSource).not.toContain("backfillAllArtistCounts()");
         expect(workerSource).not.toContain("backfillAllImages()");

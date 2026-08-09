@@ -29,7 +29,9 @@ export const toSegmentedTraceErrorFields = (
             ? ((error as NodeJS.ErrnoException).code as string)
             : "UNKNOWN_ERROR";
     const errorMessage =
-        error instanceof Error ? error.message : String(error ?? "Unknown error");
+        error instanceof Error
+            ? error.message
+            : String(error ?? "Unknown error");
 
     return {
         errorCode,

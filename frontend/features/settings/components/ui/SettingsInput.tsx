@@ -15,18 +15,18 @@ interface SettingsInputProps {
 /**
  * Renders the SettingsInput component.
  */
-export function SettingsInput({ 
-    id, 
-    type = "text", 
-    value, 
-    onChange, 
+export function SettingsInput({
+    id,
+    type = "text",
+    value,
+    onChange,
     placeholder,
     disabled,
-    className = ""
+    className = "",
 }: SettingsInputProps) {
     const [showPassword, setShowPassword] = useState(false);
     const isPassword = type === "password";
-    
+
     return (
         <div className={`relative ${className}`}>
             <input
@@ -44,8 +44,8 @@ export function SettingsInput({
                     placeholder:text-gray-400
                     transition-colors
                     hover:bg-line-muted focus:bg-line-muted
-                    ${isPassword ? 'pr-10' : ''}
-                    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${isPassword ? "pr-10" : ""}
+                    ${disabled ? "opacity-50 cursor-not-allowed" : ""}
                 `}
             />
             {isPassword && (

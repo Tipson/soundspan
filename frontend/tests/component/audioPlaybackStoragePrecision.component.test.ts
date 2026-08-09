@@ -26,15 +26,16 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Any api method resolves to null so mount-time playback-state hydration is a
 // no-op. The audio contexts and the storage-migration module stay REAL.
-const apiStub = new Proxy(
-    {},
-    { get: () => async () => null },
-) as Record<string, unknown>;
+const apiStub = new Proxy({}, { get: () => async () => null }) as Record<
+    string,
+    unknown
+>;
 mock.module("@/lib/api", { namedExports: { api: apiStub } });
 
 after(() => {
@@ -52,16 +53,18 @@ test("localStorage resume snapshot stores the full-precision engine clock, not t
     localStorage.clear();
 
     const { createRoot } = await import("react-dom/client");
-    const { AudioStateProvider } = await import("../../lib/audio-state-context");
-    const { AudioPlaybackProvider, useAudioPlayback } = await import(
-        "../../lib/audio-playback-context"
-    );
-    const { createMigratingStorageKey, readMigratingStorageItem } = await import(
-        "../../lib/storage-migration"
-    );
+    const { AudioStateProvider } =
+        await import("../../lib/audio-state-context");
+    const { AudioPlaybackProvider, useAudioPlayback } =
+        await import("../../lib/audio-playback-context");
+    const { createMigratingStorageKey, readMigratingStorageItem } =
+        await import("../../lib/storage-migration");
     const currentTimeKey = createMigratingStorageKey("current_time");
 
-    type EngineTickFn = (time: number, invocationTrackId?: string | null) => void;
+    type EngineTickFn = (
+        time: number,
+        invocationTrackId?: string | null,
+    ) => void;
     // Ref-shaped mutation container: the react-hooks lint rule forbids
     // reassigning outer variables inside a component, but allows writes to the
     // `.current` field of *Ref-named values (house pattern, see

@@ -67,9 +67,9 @@ describe("subsonicResponse", () => {
 
             expect(type).toHaveBeenCalledWith("application/xml");
             const xml = send.mock.calls[0][0] as string;
-            expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(
-                true,
-            );
+            expect(
+                xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'),
+            ).toBe(true);
             expect(xml).toContain('<subsonic-response status="ok"');
             expect(xml).toContain("<ping/>");
         });

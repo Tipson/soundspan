@@ -11,7 +11,12 @@ export interface BrowseCardProps {
 }
 
 /** Renders a square-thumbnail browse card, linked when href is provided. */
-export function BrowseCard({ href, imageUrl, title, subtitle }: BrowseCardProps) {
+export function BrowseCard({
+    href,
+    imageUrl,
+    title,
+    subtitle,
+}: BrowseCardProps) {
     const inner = (
         <>
             <div className="aspect-square rounded-md bg-white/5 overflow-hidden mb-2">
@@ -24,11 +29,17 @@ export function BrowseCard({ href, imageUrl, title, subtitle }: BrowseCardProps)
                 )}
             </div>
             <p className="text-sm text-white truncate">{title}</p>
-            {subtitle && <p className="text-xs text-gray-400 truncate">{subtitle}</p>}
+            {subtitle && (
+                <p className="text-xs text-gray-400 truncate">{subtitle}</p>
+            )}
         </>
     );
     if (href) {
-        return <Link href={href} className="group cursor-pointer">{inner}</Link>;
+        return (
+            <Link href={href} className="group cursor-pointer">
+                {inner}
+            </Link>
+        );
     }
     return <div className="group">{inner}</div>;
 }

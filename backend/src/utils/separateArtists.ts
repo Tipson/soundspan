@@ -20,7 +20,7 @@
  */
 export function separateArtists<T>(
     items: T[],
-    getArtistKey: (item: T) => string
+    getArtistKey: (item: T) => string,
 ): T[] {
     if (items.length <= 1) return items;
 
@@ -38,7 +38,7 @@ export function separateArtists<T>(
 
     // 2. Sort buckets by size descending (stable — ties keep insertion order)
     const buckets = Array.from(bucketMap.values()).sort(
-        (a, b) => b.length - a.length
+        (a, b) => b.length - a.length,
     );
 
     // 3. Interleave round-robin
@@ -67,7 +67,7 @@ export function separateArtists<T>(
 export function separateArtistsPreservingOrder<T>(
     items: T[],
     getArtistKey: (item: T) => string,
-    maxSwapDistance: number = 3
+    maxSwapDistance: number = 3,
 ): T[] {
     if (items.length <= 1) return items;
 

@@ -13,9 +13,7 @@ export function LoadingScreen({ message = "Loading..." }: LoadingScreenProps) {
             <div className="flex flex-col items-center gap-4">
                 <GradientSpinner size="lg" />
                 {message && (
-                    <p className="text-white text-sm font-medium">
-                        {message}
-                    </p>
+                    <p className="text-white text-sm font-medium">{message}</p>
                 )}
             </div>
         </div>

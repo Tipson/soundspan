@@ -15,7 +15,7 @@ function fixtures(coords: Array<[number, number]>, maskBits?: number[]) {
     const ids = coords.map((_, i) => ({ id: `t${i}` }));
     const positions = new Float32Array(coords.flat());
     const mask = new Uint8Array(
-        maskBits ?? Array.from({ length: coords.length }, () => 1)
+        maskBits ?? Array.from({ length: coords.length }, () => 1),
     );
     return { ids, positions, mask };
 }
@@ -78,7 +78,7 @@ test("collectHits collects only visible dots within the radius", () => {
             [0.11, 0.1],
             [0.4, 0.4],
         ],
-        [1, 0, 1]
+        [1, 0, 1],
     );
     const seen = new Set<string>();
     const out: string[] = [];
@@ -112,7 +112,10 @@ test("collectHits dedupes across calls and preserves first-touch order", () => {
 
 test("collectHits stops at the cap", () => {
     // 150 dots stacked on the same spot.
-    const coords = Array.from({ length: 150 }, () => [0.5, 0.5] as [number, number]);
+    const coords = Array.from(
+        { length: 150 },
+        () => [0.5, 0.5] as [number, number],
+    );
     const { ids, positions, mask } = fixtures(coords);
     const seen = new Set<string>();
     const out: string[] = [];
@@ -146,7 +149,7 @@ test("collectHits clamps an oversized or invalid cap to the hard sweep cap", () 
     // can tighten the bound but never widen it past SWEEP_CAP.
     const coords = Array.from(
         { length: SWEEP_CAP + 50 },
-        () => [0.5, 0.5] as [number, number]
+        () => [0.5, 0.5] as [number, number],
     );
     const { ids, positions, mask } = fixtures(coords);
     for (const badCap of [SWEEP_CAP + 1000, Infinity, NaN, 0, -3]) {

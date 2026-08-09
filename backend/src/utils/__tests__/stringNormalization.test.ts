@@ -1,7 +1,4 @@
-import {
-    normalizeFullwidth,
-    normalizeQuotes,
-} from "../stringNormalization";
+import { normalizeFullwidth, normalizeQuotes } from "../stringNormalization";
 
 describe("stringNormalization", () => {
     describe("normalizeQuotes", () => {

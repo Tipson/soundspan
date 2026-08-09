@@ -52,7 +52,15 @@ mock.module("@/hooks/usePlayButtonFeedback", {
 const noop = () => undefined;
 
 const baseArtist = { id: "artist-1", name: "Test Artist" };
-const baseAlbums = [{ id: "album-1", title: "Album One", year: 2024, owned: true, availability: "available" }];
+const baseAlbums = [
+    {
+        id: "album-1",
+        title: "Album One",
+        year: 2024,
+        owned: true,
+        availability: "available",
+    },
+];
 
 const baseProps = {
     artist: baseArtist,
@@ -69,9 +77,8 @@ const baseProps = {
 };
 
 test("ArtistActionBar renders canonical button set for library artist", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
@@ -79,7 +86,7 @@ test("ArtistActionBar renders canonical button set for library artist", async ()
             onAddToPlaylist: noop,
             onLikeAll: noop,
             onStartRadio: noop,
-        })
+        }),
     );
 
     // Canonical order: Play, Shuffle, Add to Queue, Add to Playlist, Like All, Download, Radio
@@ -93,16 +100,15 @@ test("ArtistActionBar renders canonical button set for library artist", async ()
 });
 
 test("ArtistActionBar hides Add to Queue when callback is not provided", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             // onAddAllToQueue not provided
             onAddToPlaylist: noop,
             onLikeAll: noop,
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /title="Add all to queue"/);
@@ -110,15 +116,14 @@ test("ArtistActionBar hides Add to Queue when callback is not provided", async (
 });
 
 test("ArtistActionBar hides Add to Playlist and Like All for non-library artist", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             source: "discovery" as const,
             // Non-library: no playlist/like callbacks
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /title="Add all to playlist"/);
@@ -129,15 +134,14 @@ test("ArtistActionBar hides Add to Playlist and Like All for non-library artist"
 });
 
 test("ArtistActionBar shows Pause when artist is currently playing", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             isPlaying: true,
             isPlayingThisArtist: true,
-        })
+        }),
     );
 
     assert.match(html, /<span>Pause<\/span>/);
@@ -146,15 +150,14 @@ test("ArtistActionBar shows Pause when artist is currently playing", async () =>
 });
 
 test("ArtistActionBar shows spinner on Like All button when isLikingAll is true", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             onLikeAll: noop,
             isLikingAll: true,
-        })
+        }),
     );
 
     assert.match(html, /title="Like all tracks"/);
@@ -163,46 +166,43 @@ test("ArtistActionBar shows spinner on Like All button when isLikingAll is true"
 });
 
 test("ArtistActionBar shows heart icon when not liking", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             onLikeAll: noop,
             isLikingAll: false,
-        })
+        }),
     );
 
     assert.match(html, /data-icon="heart"/);
 });
 
 test("ArtistActionBar hides download button when downloadsEnabled is false", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             downloadsEnabled: false,
             // source is library and albums have availability != unavailable
             // but downloadsEnabled overrides
-        })
+        }),
     );
 
     assert.doesNotMatch(html, /title="Download all tracks"/);
 });
 
 test("ArtistActionBar shows Listen Together locked state", async () => {
-    const { ArtistActionBar } = await import(
-        "../../features/artist/components/ArtistActionBar"
-    );
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             isInListenTogetherGroup: true,
             onAddAllToQueue: noop,
-        })
+        }),
     );
 
     // Play and Shuffle should be locked (different styling, no standard buttons)

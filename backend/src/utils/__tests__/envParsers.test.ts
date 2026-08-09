@@ -67,7 +67,7 @@ describe("envParsers", () => {
 
         it("splits comma-delimited entries and trims whitespace", () => {
             expect(
-                parseEnvCsv(" https://app.example.com, http://localhost:3030 ")
+                parseEnvCsv(" https://app.example.com, http://localhost:3030 "),
             ).toEqual(["https://app.example.com", "http://localhost:3030"]);
         });
 

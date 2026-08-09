@@ -11,7 +11,7 @@ the final output path from a yt-dlp info dict.
 import glob
 import os
 import re
-from typing import Any, Optional
+from typing import Any
 
 # Audio file extensions produced by the download postprocessors (plus raw
 # bestaudio containers in case postprocessing is skipped).
@@ -21,7 +21,7 @@ AUDIO_EXTENSIONS = {".mp3", ".opus", ".flac", ".m4a", ".ogg", ".webm"}
 ACTIVE_DOWNLOAD_STATUSES = {"queued", "downloading", "processing"}
 
 
-def find_active_download_job(jobs: dict, video_id: str) -> Optional[dict]:
+def find_active_download_job(jobs: dict, video_id: str) -> dict | None:
     """
     Return a non-terminal download job for video_id from the in-memory job
     store, or None. POST /yt/download reuses such a job instead of starting
@@ -32,12 +32,10 @@ def find_active_download_job(jobs: dict, video_id: str) -> Optional[dict]:
     though the postprocessor is about to replace it.
     """
     for job in jobs.values():
-        if (
-            job.get("video_id") == video_id
-            and job.get("status") in ACTIVE_DOWNLOAD_STATUSES
-        ):
+        if job.get("video_id") == video_id and job.get("status") in ACTIVE_DOWNLOAD_STATUSES:
             return job
     return None
+
 
 # yt-dlp format selectors used by the /yt/ stream proxy and downloads,
 # keyed by the app's quality levels. /yt/info extracts with the same
@@ -70,7 +68,7 @@ _VIDEO_ID_PATTERNS = [
 ]
 
 
-def _match_video_id(url: str) -> Optional[str]:
+def _match_video_id(url: str) -> str | None:
     """Return the 11-char video ID for a single-video URL/bare ID, else None."""
     for pattern in _VIDEO_ID_PATTERNS:
         match = re.search(pattern, url)
@@ -163,9 +161,7 @@ def classify_youtube_url(url: str) -> dict:
         return {
             "kind": "channel",
             "channel": ucid.group(1),
-            "enumerate_url": (
-                f"https://www.youtube.com/channel/{ucid.group(1)}/videos"
-            ),
+            "enumerate_url": (f"https://www.youtube.com/channel/{ucid.group(1)}/videos"),
         }
     legacy = _CHANNEL_LEGACY_RE.search(text)
     if legacy:
@@ -193,7 +189,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
     yt-dlp's reported playlist_count exceeds what we kept after a fetch cap).
     Tolerant of malformed input (returns an empty summary).
     """
-    empty = {
+    empty: dict[str, Any] = {
         "title": "",
         "uploader": "",
         "totalCount": None,
@@ -219,9 +215,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
                 "videoId": video_id,
                 "title": str(entry.get("title") or ""),
                 "uploader": str(entry.get("uploader") or entry.get("channel") or ""),
-                "duration": int(duration)
-                if isinstance(duration, (int, float))
-                else None,
+                "duration": int(duration) if isinstance(duration, (int, float)) else None,
             }
         )
 
@@ -232,8 +226,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
     cap = max(0, max_entries)
     capped = entries[:cap]
     truncated = bool(
-        len(entries) > len(capped)
-        or (total_count is not None and total_count > len(capped))
+        len(entries) > len(capped) or (total_count is not None and total_count > len(capped))
     )
     return {
         "title": str(info.get("title") or ""),
@@ -245,9 +238,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
     }
 
 
-def bulk_album_metadata(
-    source: Optional[str], kind: Optional[str] = None
-) -> Optional[dict]:
+def bulk_album_metadata(source: str | None, kind: str | None = None) -> dict | None:
     """
     Audio tags to stamp on a bulk-download file so a *channel's* videos group
     under one artist/album instead of each video's own (often per-DJ) YouTube
@@ -276,9 +267,7 @@ def bulk_album_metadata(
     return {"artist": label, "album_artist": label, "album": label}
 
 
-def build_tag_rewrite_command(
-    filepath: str, tags: dict, tmp_path: str
-) -> list:
+def build_tag_rewrite_command(filepath: str, tags: dict, tmp_path: str) -> list:
     """
     Build the ffmpeg argv that rewrites `tags` onto `filepath`, stream-copying
     (no re-encode) into `tmp_path`. ffmpeg-written tags stay readable by the
@@ -306,7 +295,7 @@ def build_tag_rewrite_command(
     return cmd
 
 
-def find_existing_download(output_dir: str, video_id: str) -> Optional[str]:
+def find_existing_download(output_dir: str, video_id: str) -> str | None:
     """
     Return the path of an already-downloaded audio file for video_id in
     output_dir, or None. Files are written as "%(title)s [%(id)s].%(ext)s",
@@ -320,14 +309,12 @@ def find_existing_download(output_dir: str, video_id: str) -> Optional[str]:
         f"*{glob.escape('[' + video_id + ']')}.*",
     )
     matches = [
-        path
-        for path in glob.glob(pattern)
-        if os.path.splitext(path)[1].lower() in AUDIO_EXTENSIONS
+        path for path in glob.glob(pattern) if os.path.splitext(path)[1].lower() in AUDIO_EXTENSIONS
     ]
     return matches[0] if matches else None
 
 
-def resolve_download_filepath(info: Any, audio_format: str) -> Optional[str]:
+def resolve_download_filepath(info: Any, audio_format: str) -> str | None:
     """
     Resolve the final output file from a yt-dlp info dict after a download.
 

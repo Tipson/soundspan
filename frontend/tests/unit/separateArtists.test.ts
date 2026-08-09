@@ -20,8 +20,14 @@ test("returns the same array for empty and single-item inputs", () => {
     const empty: QueueItem[] = [];
     const single: QueueItem[] = [{ id: "a-1", artist: "a" }];
 
-    assert.equal(separateArtists(empty, (item) => item.artist), empty);
-    assert.equal(separateArtists(single, (item) => item.artist), single);
+    assert.equal(
+        separateArtists(empty, (item) => item.artist),
+        empty,
+    );
+    assert.equal(
+        separateArtists(single, (item) => item.artist),
+        single,
+    );
 });
 
 test("avoids adjacent same-artist pairs when distribution allows", () => {

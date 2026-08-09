@@ -24,9 +24,13 @@ export interface SleepTimerActions {
  * The timer persists across player mode switches within a session because
  * state is held in the hook, not in the audio element.
  */
-export function useSleepTimer(onExpire: () => void): [SleepTimerState, SleepTimerActions] {
+export function useSleepTimer(
+    onExpire: () => void,
+): [SleepTimerState, SleepTimerActions] {
     const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
-    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(
+        null,
+    );
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const onExpireRef = useRef(onExpire);
 
@@ -44,35 +48,32 @@ export function useSleepTimer(onExpire: () => void): [SleepTimerState, SleepTime
         setRemainingSeconds(null);
     }, []);
 
-    const setTimer = useCallback(
-        (minutes: number) => {
-            // Clear any existing timer first.
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
+    const setTimer = useCallback((minutes: number) => {
+        // Clear any existing timer first.
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
 
-            const totalSeconds = Math.max(1, Math.round(minutes * 60));
-            setDurationMinutes(minutes);
-            setRemainingSeconds(totalSeconds);
+        const totalSeconds = Math.max(1, Math.round(minutes * 60));
+        setDurationMinutes(minutes);
+        setRemainingSeconds(totalSeconds);
 
-            intervalRef.current = setInterval(() => {
-                setRemainingSeconds((prev) => {
-                    if (prev === null || prev <= 1) {
-                        // Timer expired.
-                        if (intervalRef.current) {
-                            clearInterval(intervalRef.current);
-                            intervalRef.current = null;
-                        }
-                        setDurationMinutes(null);
-                        onExpireRef.current();
-                        return null;
+        intervalRef.current = setInterval(() => {
+            setRemainingSeconds((prev) => {
+                if (prev === null || prev <= 1) {
+                    // Timer expired.
+                    if (intervalRef.current) {
+                        clearInterval(intervalRef.current);
+                        intervalRef.current = null;
                     }
-                    return prev - 1;
-                });
-            }, 1000);
-        },
-        []
-    );
+                    setDurationMinutes(null);
+                    onExpireRef.current();
+                    return null;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    }, []);
 
     // Cleanup on unmount.
     useEffect(() => {

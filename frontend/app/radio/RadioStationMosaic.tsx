@@ -57,16 +57,16 @@ export function RadioStationMosaic({
                 const response = await api.getRadioTracks(
                     filter.type,
                     filter.value,
-                    96
+                    96,
                 );
                 const candidates = createRadioMosaicCandidates(
-                    (response.tracks || []) as Track[]
+                    (response.tracks || []) as Track[],
                 );
                 return selectRadioMosaicTiles(candidates, tileCount);
             } catch (error) {
                 sharedFrontendLogger.error(
                     "[RadioStationMosaic] Failed to fetch station tracks:",
-                    error
+                    error,
                 );
                 return [];
             }
@@ -75,8 +75,9 @@ export function RadioStationMosaic({
     });
 
     const coverUrls = useMemo(
-        () => (tiles || []).map((tile) => api.getCoverArtUrl(tile.coverArt, 200)),
-        [tiles]
+        () =>
+            (tiles || []).map((tile) => api.getCoverArtUrl(tile.coverArt, 200)),
+        [tiles],
     );
 
     return (

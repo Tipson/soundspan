@@ -18,7 +18,7 @@ jest.mock(
     () => ({
         parseFile: (...args: unknown[]) => mockParseFile(...args),
     }),
-    { virtual: true }
+    { virtual: true },
 );
 
 jest.mock("../../utils/logger", () => ({
@@ -63,7 +63,10 @@ describe("CoverArtExtractor", () => {
         });
 
         const extractor = new CoverArtExtractor("/tmp/covers");
-        const result = await extractor.extractCoverArt("/music/song.mp3", "album-1");
+        const result = await extractor.extractCoverArt(
+            "/music/song.mp3",
+            "album-1",
+        );
 
         expect(result).toBe("album-1.jpg");
         expect(mockParseFile).not.toHaveBeenCalled();
@@ -78,7 +81,10 @@ describe("CoverArtExtractor", () => {
         mockParseFile.mockResolvedValueOnce({ common: { picture: [] } });
 
         const extractor = new CoverArtExtractor("/tmp/covers");
-        const result = await extractor.extractCoverArt("/music/song2.mp3", "album-2");
+        const result = await extractor.extractCoverArt(
+            "/music/song2.mp3",
+            "album-2",
+        );
 
         expect(result).toBeNull();
         expect(mockWriteFile).not.toHaveBeenCalled();
@@ -97,14 +103,17 @@ describe("CoverArtExtractor", () => {
         });
 
         const extractor = new CoverArtExtractor("/tmp/covers");
-        const result = await extractor.extractCoverArt("/music/song3.mp3", "album-3");
+        const result = await extractor.extractCoverArt(
+            "/music/song3.mp3",
+            "album-3",
+        );
 
         expect(mockWriteFile).toHaveBeenCalledWith(
             "/tmp/covers/album-3.jpg",
-            Buffer.from([1, 2, 3, 4])
+            Buffer.from([1, 2, 3, 4]),
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[COVER-ART] Extracted cover art from song3.mp3: album-3.jpg"
+            "[COVER-ART] Extracted cover art from song3.mp3: album-3.jpg",
         );
         expect(result).toBe("album-3.jpg");
     });
@@ -118,12 +127,15 @@ describe("CoverArtExtractor", () => {
         mockParseFile.mockRejectedValueOnce(new Error("parse failed"));
 
         const extractor = new CoverArtExtractor("/tmp/covers");
-        const result = await extractor.extractCoverArt("/music/song4.mp3", "album-4");
+        const result = await extractor.extractCoverArt(
+            "/music/song4.mp3",
+            "album-4",
+        );
 
         expect(result).toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[COVER-ART] Failed to extract from /music/song4.mp3:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 

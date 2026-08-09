@@ -35,7 +35,9 @@ export interface DebouncedStorageFlush {
  * Successive `schedule()` calls within `delayMs` coalesce — only the last-scheduled
  * callback fires once the delay elapses.
  */
-export function createDebouncedStorageFlush(delayMs: number): DebouncedStorageFlush {
+export function createDebouncedStorageFlush(
+    delayMs: number,
+): DebouncedStorageFlush {
     let timerId: ReturnType<typeof setTimeout> | null = null;
     let pendingFn: (() => void) | null = null;
 
@@ -74,11 +76,10 @@ export function createDebouncedStorageFlush(delayMs: number): DebouncedStorageFl
 /** Returns true when playback-state polling should be skipped due to a recent local save. */
 export function shouldSkipPlaybackStatePoll(
     lastLocalSaveAtMs: number,
-    nowMs = Date.now()
+    nowMs = Date.now(),
 ): boolean {
     return (
         lastLocalSaveAtMs > 0 &&
-        nowMs - lastLocalSaveAtMs <
-            PLAYBACK_POLL_AFTER_LOCAL_SAVE_COOLDOWN_MS
+        nowMs - lastLocalSaveAtMs < PLAYBACK_POLL_AFTER_LOCAL_SAVE_COOLDOWN_MS
     );
 }

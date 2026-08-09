@@ -32,7 +32,8 @@ jest.mock("../../utils/db", () => ({
         },
         libraryHealthRecord: {
             upsert: (...args: unknown[]) => mockLibraryHealthUpsert(...args),
-            deleteMany: (...args: unknown[]) => mockLibraryHealthDeleteMany(...args),
+            deleteMany: (...args: unknown[]) =>
+                mockLibraryHealthDeleteMany(...args),
         },
     },
 }));
@@ -109,10 +110,10 @@ describe("FileValidatorService", () => {
         expect(result.tracksMissing.sort()).toEqual(["missing", "traversal"]);
         expect(result.duration).toBeGreaterThanOrEqual(0);
         const missingRecordCall = mockLibraryHealthUpsert.mock.calls.find(
-            ([arg]) => arg.where?.trackId === "missing"
+            ([arg]) => arg.where?.trackId === "missing",
         )?.[0];
         const traversalRecordCall = mockLibraryHealthUpsert.mock.calls.find(
-            ([arg]) => arg.where?.trackId === "traversal"
+            ([arg]) => arg.where?.trackId === "traversal",
         )?.[0];
 
         expect(missingRecordCall).toBeDefined();
@@ -126,7 +127,7 @@ describe("FileValidatorService", () => {
                     status: "MISSING_FROM_DISK",
                     filePath: "missing.mp3",
                 }),
-            })
+            }),
         );
         expect(mockLibraryHealthUpsert).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -134,29 +135,29 @@ describe("FileValidatorService", () => {
                 update: expect.objectContaining({
                     filePath: "../../etc/passwd",
                 }),
-            })
+            }),
         );
         expect(mockLibraryHealthDeleteMany).toHaveBeenCalledWith({
             where: {
                 trackId: {
                     in: expect.arrayContaining(
-                        Array.from({ length: 100 }, (_, i) => `ok-${i}`)
+                        Array.from({ length: 100 }, (_, i) => `ok-${i}`),
                     ),
                 },
                 status: "MISSING_FROM_DISK",
             },
         });
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "[FileValidator] Path traversal attempt detected: ../../etc/passwd"
+            "[FileValidator] Path traversal attempt detected: ../../etc/passwd",
         );
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[FileValidator] Error checking undefined:",
-            expect.any(String)
+            expect.any(String),
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
             expect.stringMatching(
-                /\[FileValidator\] Progress: 100\/\d+ tracks checked, \d+ missing/
-            )
+                /\[FileValidator\] Progress: 100\/\d+ tracks checked, \d+ missing/,
+            ),
         );
     });
 
@@ -178,7 +179,7 @@ describe("FileValidatorService", () => {
                 tracksChecked: 1,
                 tracksRemoved: 0,
                 tracksMissing: [],
-            })
+            }),
         );
         expect(mockLibraryHealthUpsert).not.toHaveBeenCalled();
         expect(mockLibraryHealthDeleteMany).toHaveBeenCalledWith({
@@ -195,7 +196,9 @@ describe("FileValidatorService", () => {
         const service = new FileValidatorService();
         mockFindUnique.mockResolvedValueOnce(null);
 
-        await expect(service.validateTrack("missing-track-id")).resolves.toBe(false);
+        await expect(service.validateTrack("missing-track-id")).resolves.toBe(
+            false,
+        );
         expect(mockLibraryHealthUpsert).not.toHaveBeenCalled();
         expect(mockLibraryHealthDeleteMany).not.toHaveBeenCalled();
     });
@@ -224,7 +227,7 @@ describe("FileValidatorService", () => {
             },
         });
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "[FileValidator] Path traversal attempt detected: ../escape.mp3"
+            "[FileValidator] Path traversal attempt detected: ../escape.mp3",
         );
     });
 
@@ -253,7 +256,7 @@ describe("FileValidatorService", () => {
             },
         });
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[FileValidator] Track file missing, recording health issue: Missing Track"
+            "[FileValidator] Track file missing, recording health issue: Missing Track",
         );
     });
 

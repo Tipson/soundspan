@@ -1,4 +1,14 @@
-import { Play, Pause, Shuffle, Download, Radio, ListMusic, Loader2, Plus, Heart } from "lucide-react";
+import {
+    Play,
+    Pause,
+    Shuffle,
+    Download,
+    Radio,
+    ListMusic,
+    Loader2,
+    Plus,
+    Heart,
+} from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { Artist } from "../types";
 import type { Album } from "../types";
@@ -54,12 +64,15 @@ export function ArtistActionBar({
     isInListenTogetherGroup = false,
 }: ArtistActionBarProps) {
     const availableAlbums = albums.filter(
-        (album) => album.availability !== "unavailable"
+        (album) => album.availability !== "unavailable",
     );
-    const showDownloadAll = downloadsEnabled && (source === "discovery" || availableAlbums.length > 0);
+    const showDownloadAll =
+        downloadsEnabled &&
+        (source === "discovery" || availableAlbums.length > 0);
     const showPause = isPlaying && isPlayingThisArtist;
     const showRadio = source === "library" && onStartRadio;
-    const lockMessage = "Listen Together is active — use Add to Queue to add tracks to the shared session.";
+    const lockMessage =
+        "Listen Together is active — use Add to Queue to add tracks to the shared session.";
     const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
         usePlayButtonFeedback();
 
@@ -101,35 +114,33 @@ export function ArtistActionBar({
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
-
                     </div>
                 ) : (
                     <>
-                    {/* Play Button */}
-                    <button
-                        onClick={handlePlayPauseClick}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
-                        style={{ backgroundColor: BRAND_PLAY }}
-                    >
-                        {showPlaySpinner ? (
-                            <Loader2 className="w-5 h-5 animate-spin text-black" />
-                        ) : showPause ? (
-                            <Pause className="w-5 h-5 fill-current text-black" />
-                        ) : (
-                            <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                        )}
-                        <span>{showPause ? "Pause" : "Play All"}</span>
-                    </button>
+                        {/* Play Button */}
+                        <button
+                            onClick={handlePlayPauseClick}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
+                            style={{ backgroundColor: BRAND_PLAY }}
+                        >
+                            {showPlaySpinner ? (
+                                <Loader2 className="w-5 h-5 animate-spin text-black" />
+                            ) : showPause ? (
+                                <Pause className="w-5 h-5 fill-current text-black" />
+                            ) : (
+                                <Play className="w-5 h-5 fill-current text-black ml-0.5" />
+                            )}
+                            <span>{showPause ? "Pause" : "Play All"}</span>
+                        </button>
 
-                    {/* Shuffle Button */}
-                    <button
-                        onClick={onShuffle}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        title="Shuffle play"
-                    >
-                        <Shuffle className="w-5 h-5" />
-                    </button>
-
+                        {/* Shuffle Button */}
+                        <button
+                            onClick={onShuffle}
+                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            title="Shuffle play"
+                        >
+                            <Shuffle className="w-5 h-5" />
+                        </button>
                     </>
                 )}
 
@@ -161,7 +172,7 @@ export function ArtistActionBar({
                             "h-8 w-8 rounded-full flex items-center justify-center transition-all",
                             isLikingAll
                                 ? "cursor-not-allowed text-white/35"
-                                : "text-white/60 hover:bg-white/10 hover:text-white"
+                                : "text-white/60 hover:bg-white/10 hover:text-white",
                         )}
                         title="Like all tracks"
                     >
@@ -181,9 +192,13 @@ export function ArtistActionBar({
                             "h-8 w-8 rounded-full flex items-center justify-center transition-all",
                             isPendingDownload
                                 ? "bg-white/5 text-white/50 cursor-not-allowed"
-                                : "hover:bg-white/10 text-white/60 hover:text-white"
+                                : "hover:bg-white/10 text-white/60 hover:text-white",
                         )}
-                        title={isPendingDownload ? "Downloading all tracks" : "Download all tracks"}
+                        title={
+                            isPendingDownload
+                                ? "Downloading all tracks"
+                                : "Download all tracks"
+                        }
                     >
                         {isPendingDownload ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
@@ -206,9 +221,7 @@ export function ArtistActionBar({
             </div>
 
             {isInListenTogetherGroup && (
-                <p className="text-xs text-white/40">
-                    {lockMessage}
-                </p>
+                <p className="text-xs text-white/40">{lockMessage}</p>
             )}
         </div>
     );

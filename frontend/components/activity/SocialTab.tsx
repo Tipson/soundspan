@@ -21,18 +21,22 @@ function formatLastSeen(isoDate: string): string {
     return "today";
 }
 
-function getListeningStatusDisplay(status: SocialOnlineUser["listeningStatus"]) {
+function getListeningStatusDisplay(
+    status: SocialOnlineUser["listeningStatus"],
+) {
     switch (status) {
         case "playing":
             return {
                 label: "Playing",
-                badgeClass: "text-green-300 border-green-400/30 bg-green-400/10",
+                badgeClass:
+                    "text-green-300 border-green-400/30 bg-green-400/10",
                 dotClass: "bg-green-400",
             };
         case "paused":
             return {
                 label: "Paused",
-                badgeClass: "text-amber-300 border-amber-400/30 bg-amber-400/10",
+                badgeClass:
+                    "text-amber-300 border-amber-400/30 bg-amber-400/10",
                 dotClass: "bg-amber-400",
             };
         case "idle":
@@ -81,7 +85,9 @@ export function SocialTab({
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center px-6">
                 <Users className="w-8 h-8 text-white/20 mb-3" />
-                <p className="text-sm text-white/40">Social status unavailable</p>
+                <p className="text-sm text-white/40">
+                    Social status unavailable
+                </p>
                 <p className="text-xs text-white/30 mt-1">
                     Presence data could not be loaded right now.
                 </p>
@@ -124,7 +130,7 @@ export function SocialTab({
             >
                 {users.map((user) => {
                     const listeningStatus = getListeningStatusDisplay(
-                        user.listeningStatus
+                        user.listeningStatus,
                     );
                     const track = user.listeningTrack;
                     const showTrack =
@@ -149,7 +155,9 @@ export function SocialTab({
                                 <div className="w-8 h-8 rounded-full bg-white/10 text-white/80 text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden">
                                     {user.hasProfilePicture ? (
                                         <Image
-                                            src={api.getProfilePictureUrl(user.id)}
+                                            src={api.getProfilePictureUrl(
+                                                user.id,
+                                            )}
                                             alt={user.displayName}
                                             width={32}
                                             height={32}
@@ -169,14 +177,14 @@ export function SocialTab({
                                         <span
                                             className={cn(
                                                 "inline-flex items-center gap-1 text-[10px] uppercase tracking-wide rounded border px-1.5 py-0.5",
-                                                listeningStatus.badgeClass
+                                                listeningStatus.badgeClass,
                                             )}
                                             title={`Listening status: ${listeningStatus.label}`}
                                         >
                                             <span
                                                 className={cn(
                                                     "w-1.5 h-1.5 rounded-full",
-                                                    listeningStatus.dotClass
+                                                    listeningStatus.dotClass,
                                                 )}
                                             />
                                             {listeningStatus.label}
@@ -205,7 +213,7 @@ export function SocialTab({
                                                     <Image
                                                         src={api.getCoverArtUrl(
                                                             track.coverArt,
-                                                            32
+                                                            32,
                                                         )}
                                                         alt=""
                                                         fill
@@ -256,9 +264,11 @@ export function SocialTab({
                                 <div
                                     className={cn(
                                         "text-[11px] text-white/30 shrink-0 pt-0.5",
-                                        user.listeningTrack && "text-white/40"
+                                        user.listeningTrack && "text-white/40",
                                     )}
-                                    title={new Date(user.lastHeartbeatAt).toLocaleString()}
+                                    title={new Date(
+                                        user.lastHeartbeatAt,
+                                    ).toLocaleString()}
                                 >
                                     {formatLastSeen(user.lastHeartbeatAt)}
                                 </div>

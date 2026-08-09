@@ -26,8 +26,12 @@ const mockLogger = {
     error: jest.fn(),
 };
 
-const mockHttpAgent = jest.fn().mockImplementation(() => ({ kind: "http-agent" }));
-const mockHttpsAgent = jest.fn().mockImplementation(() => ({ kind: "https-agent" }));
+const mockHttpAgent = jest
+    .fn()
+    .mockImplementation(() => ({ kind: "http-agent" }));
+const mockHttpsAgent = jest
+    .fn()
+    .mockImplementation(() => ({ kind: "https-agent" }));
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -117,14 +121,18 @@ type TidalStreamingPrivate = {
     clearUserQualityCache(userId: string): void;
     textSimilarity(expected: string, candidate: string): number;
     durationSimilarity(expected?: number, candidate?: number): number | null;
-    scoreCandidate(track: MatchTrackInput, candidate: MatchCandidateInput): number;
+    scoreCandidate(
+        track: MatchTrackInput,
+        candidate: MatchCandidateInput,
+    ): number;
     selectBestCandidate(
         track: Pick<MatchTrackInput, "artist" | "title">,
-        candidates: RankedCandidate[]
+        candidates: RankedCandidate[],
     ): RankedCandidate | null;
 };
 
-const privateService = tidalStreamingService as unknown as TidalStreamingPrivate;
+const privateService =
+    tidalStreamingService as unknown as TidalStreamingPrivate;
 
 function resetServiceState(service: TidalStreamingPrivate): void {
     service.availabilityCache = null;
@@ -134,7 +142,9 @@ function resetServiceState(service: TidalStreamingPrivate): void {
     service.qualityCache?.clear?.();
 }
 
-function loadIsolatedService(envOverrides: Record<string, string | undefined> = {}) {
+function loadIsolatedService(
+    envOverrides: Record<string, string | undefined> = {},
+) {
     const nextEnv: NodeJS.ProcessEnv = {
         ...ORIGINAL_ENV,
         ...envOverrides,
@@ -203,7 +213,7 @@ describe("tidal streaming service", () => {
                     baseURL: "http://sidecar.test:9000",
                     timeout: 30000,
                     headers: { "Content-Type": "application/json" },
-                })
+                }),
             );
         });
 
@@ -220,18 +230,24 @@ describe("tidal streaming service", () => {
                         "Content-Type": "application/json",
                         "x-internal-secret": "sek-123",
                     }),
-                })
+                }),
             );
         });
 
         it("caches sidecar availability responses", async () => {
             mockClient.get.mockResolvedValueOnce({ data: { status: "ok" } });
 
-            await expect(tidalStreamingService.isAvailable()).resolves.toBe(true);
-            await expect(tidalStreamingService.isAvailable()).resolves.toBe(true);
+            await expect(tidalStreamingService.isAvailable()).resolves.toBe(
+                true,
+            );
+            await expect(tidalStreamingService.isAvailable()).resolves.toBe(
+                true,
+            );
 
             expect(mockClient.get).toHaveBeenCalledTimes(1);
-            expect(mockClient.get).toHaveBeenCalledWith("/health", { timeout: 5000 });
+            expect(mockClient.get).toHaveBeenCalledWith("/health", {
+                timeout: 5000,
+            });
         });
 
         it("reads system settings for enabled state and falls back safely", async () => {
@@ -242,7 +258,9 @@ describe("tidal streaming service", () => {
 
             await expect(tidalStreamingService.isEnabled()).resolves.toBe(true);
             await expect(tidalStreamingService.isEnabled()).resolves.toBe(true);
-            expect(mockPrisma.systemSettings.findUnique).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.systemSettings.findUnique).toHaveBeenCalledTimes(
+                1,
+            );
             expect(mockPrisma.systemSettings.findUnique).toHaveBeenCalledWith({
                 where: { id: "default" },
                 select: { tidalEnabled: true },
@@ -250,10 +268,12 @@ describe("tidal streaming service", () => {
 
             privateService.enabledCache = null;
             mockPrisma.systemSettings.findUnique.mockRejectedValueOnce(
-                new Error("db unavailable")
+                new Error("db unavailable"),
             );
 
-            await expect(tidalStreamingService.isEnabled()).resolves.toBe(false);
+            await expect(tidalStreamingService.isEnabled()).resolves.toBe(
+                false,
+            );
         });
     });
 
@@ -264,7 +284,7 @@ describe("tidal streaming service", () => {
                 tidalOAuthJson: "encrypted-oauth",
             });
             await expect(
-                tidalStreamingService.getAuthStatus("user-1")
+                tidalStreamingService.getAuthStatus("user-1"),
             ).resolves.toEqual({
                 authenticated: true,
                 credentialsConfigured: true,
@@ -275,17 +295,17 @@ describe("tidal streaming service", () => {
                 tidalOAuthJson: null,
             });
             await expect(
-                tidalStreamingService.getAuthStatus("user-2")
+                tidalStreamingService.getAuthStatus("user-2"),
             ).resolves.toEqual({
                 authenticated: false,
                 credentialsConfigured: false,
             });
 
             mockPrisma.userSettings.findUnique.mockRejectedValueOnce(
-                new Error("status read failure")
+                new Error("status read failure"),
             );
             await expect(
-                tidalStreamingService.getAuthStatus("user-3")
+                tidalStreamingService.getAuthStatus("user-3"),
             ).resolves.toEqual({
                 authenticated: false,
                 credentialsConfigured: false,
@@ -297,13 +317,13 @@ describe("tidal streaming service", () => {
                 data: { authenticated: true },
             });
             await expect(
-                tidalStreamingService.checkSidecarAuthStatus("user/1")
+                tidalStreamingService.checkSidecarAuthStatus("user/1"),
             ).resolves.toBe(true);
             // Uses the shared client (which carries x-internal-secret), not a
             // bare axios.get with a raw env URL.
             expect(mockClient.get).toHaveBeenCalledWith(
                 "/user/auth/status?user_id=user%2F1",
-                { timeout: 5000 }
+                { timeout: 5000 },
             );
             expect(mockAxiosGet).not.toHaveBeenCalled();
 
@@ -311,7 +331,7 @@ describe("tidal streaming service", () => {
                 data: { authenticated: false },
             });
             await expect(
-                tidalStreamingService.checkSidecarAuthStatus("user-2")
+                tidalStreamingService.checkSidecarAuthStatus("user-2"),
             ).resolves.toBe(false);
         });
 
@@ -324,7 +344,7 @@ describe("tidal streaming service", () => {
             mockClient.post.mockResolvedValueOnce({ data: { success: true } });
 
             await expect(
-                tidalStreamingService.restoreOAuth("user/1", oauthJson)
+                tidalStreamingService.restoreOAuth("user/1", oauthJson),
             ).resolves.toBe(true);
 
             expect(mockClient.post).toHaveBeenCalledWith(
@@ -334,7 +354,7 @@ describe("tidal streaming service", () => {
                     refresh_token: "old-refresh",
                     user_id: "legacy-user",
                     country_code: "US",
-                }
+                },
             );
             expect(mockPrisma.userSettings.update).not.toHaveBeenCalled();
             expect(mockEncrypt).not.toHaveBeenCalled();
@@ -359,7 +379,7 @@ describe("tidal streaming service", () => {
             });
 
             await expect(
-                tidalStreamingService.restoreOAuth("user-1", oauthJson)
+                tidalStreamingService.restoreOAuth("user-1", oauthJson),
             ).resolves.toBe(true);
 
             expect(mockEncrypt).toHaveBeenCalledTimes(1);
@@ -371,7 +391,7 @@ describe("tidal streaming service", () => {
                     user_id: "tidal-999",
                     tidal_user_id: "tidal-999",
                     country_code: "CA",
-                })
+                }),
             );
             expect(mockPrisma.userSettings.update).toHaveBeenCalledWith({
                 where: { userId: "user-1" },
@@ -379,8 +399,8 @@ describe("tidal streaming service", () => {
             });
             expect(mockLogger.info).toHaveBeenCalledWith(
                 expect.stringContaining(
-                    "[TIDAL-STREAM] Refreshed and persisted new token for user user-1"
-                )
+                    "[TIDAL-STREAM] Refreshed and persisted new token for user user-1",
+                ),
             );
         });
 
@@ -393,25 +413,25 @@ describe("tidal streaming service", () => {
             await expect(
                 tidalStreamingService.restoreOAuth(
                     "user-err",
-                    JSON.stringify({ access_token: "a", refresh_token: "r" })
-                )
+                    JSON.stringify({ access_token: "a", refresh_token: "r" }),
+                ),
             ).resolves.toBe(false);
 
             expect(mockLogger.error).toHaveBeenCalledWith(
                 expect.stringContaining(
-                    "[TIDAL-STREAM] Failed to restore OAuth for user user-err:"
+                    "[TIDAL-STREAM] Failed to restore OAuth for user user-err:",
                 ),
-                { error: "invalid token" }
+                { error: "invalid token" },
             );
         });
 
         it("clears sidecar auth and logs warnings on failure", async () => {
             mockClient.post.mockResolvedValueOnce({ data: { success: true } });
             await expect(
-                tidalStreamingService.clearAuth("clear-user")
+                tidalStreamingService.clearAuth("clear-user"),
             ).resolves.toBeUndefined();
             expect(mockClient.post).toHaveBeenCalledWith(
-                "/user/auth/clear?user_id=clear-user"
+                "/user/auth/clear?user_id=clear-user",
             );
 
             mockClient.post.mockRejectedValueOnce({
@@ -419,13 +439,13 @@ describe("tidal streaming service", () => {
                 message: "clear failed",
             });
             await expect(
-                tidalStreamingService.clearAuth("clear-user")
+                tidalStreamingService.clearAuth("clear-user"),
             ).resolves.toBeUndefined();
             expect(mockLogger.warn).toHaveBeenCalledWith(
                 expect.stringContaining(
-                    "[TIDAL-STREAM] Failed to clear auth for user clear-user:"
+                    "[TIDAL-STREAM] Failed to clear auth for user clear-user:",
                 ),
-                "clear failed"
+                "clear failed",
             );
         });
     });
@@ -441,9 +461,9 @@ describe("tidal streaming service", () => {
                 interval: 5,
             };
             mockClient.post.mockResolvedValueOnce({ data: authPayload });
-            await expect(tidalStreamingService.initiateDeviceAuth()).resolves.toEqual(
-                authPayload
-            );
+            await expect(
+                tidalStreamingService.initiateDeviceAuth(),
+            ).resolves.toEqual(authPayload);
 
             const tokenPayload = {
                 access_token: "access",
@@ -454,18 +474,20 @@ describe("tidal streaming service", () => {
             };
             mockClient.post.mockResolvedValueOnce({ data: tokenPayload });
             await expect(
-                tidalStreamingService.pollDeviceAuth("dev-code")
+                tidalStreamingService.pollDeviceAuth("dev-code"),
             ).resolves.toEqual(tokenPayload);
 
-            mockClient.post.mockRejectedValueOnce({ response: { status: 428 } });
+            mockClient.post.mockRejectedValueOnce({
+                response: { status: 428 },
+            });
             await expect(
-                tidalStreamingService.pollDeviceAuth("dev-code")
+                tidalStreamingService.pollDeviceAuth("dev-code"),
             ).resolves.toBeNull();
 
             const searchData = { tracks: [{ id: 1 }] };
             mockClient.post.mockResolvedValueOnce({ data: searchData });
             await expect(
-                tidalStreamingService.search("user 1/alpha", "nujabes")
+                tidalStreamingService.search("user 1/alpha", "nujabes"),
             ).resolves.toEqual(searchData);
 
             const batchData = {
@@ -475,7 +497,7 @@ describe("tidal streaming service", () => {
             await expect(
                 tidalStreamingService.searchBatch("user 1/alpha", [
                     { query: "artist track", limit: 5 },
-                ])
+                ]),
             ).resolves.toEqual(batchData);
 
             const infoPayload = {
@@ -486,7 +508,7 @@ describe("tidal streaming service", () => {
             };
             mockClient.get.mockResolvedValueOnce({ data: infoPayload });
             await expect(
-                tidalStreamingService.getStreamInfo("user-1", 77, "LOSSLESS")
+                tidalStreamingService.getStreamInfo("user-1", 77, "LOSSLESS"),
             ).resolves.toEqual(infoPayload);
 
             mockClient.get.mockResolvedValueOnce({
@@ -499,8 +521,8 @@ describe("tidal streaming service", () => {
                     "user-1",
                     77,
                     "HI_RES_LOSSLESS",
-                    "bytes=0-1023"
-                )
+                    "bytes=0-1023",
+                ),
             ).resolves.toEqual({
                 data: { stream: true },
                 headers: { "content-type": "audio/flac" },
@@ -517,16 +539,16 @@ describe("tidal streaming service", () => {
             expect(mockClient.post).toHaveBeenNthCalledWith(
                 4,
                 "/user/search?user_id=user%201%2Falpha",
-                { query: "nujabes" }
+                { query: "nujabes" },
             );
             expect(mockClient.post).toHaveBeenNthCalledWith(
                 5,
                 "/user/search/batch?user_id=user%201%2Falpha",
-                [{ query: "artist track", limit: 5 }]
+                [{ query: "artist track", limit: 5 }],
             );
             expect(mockClient.get).toHaveBeenNthCalledWith(
                 1,
-                "/user/stream-info/77?user_id=user-1&quality=LOSSLESS"
+                "/user/stream-info/77?user_id=user-1&quality=LOSSLESS",
             );
             expect(mockClient.get).toHaveBeenNthCalledWith(
                 2,
@@ -535,7 +557,7 @@ describe("tidal streaming service", () => {
                     responseType: "stream",
                     headers: { Range: "bytes=0-1023" },
                     timeout: 300000,
-                }
+                },
             );
         });
 
@@ -556,10 +578,10 @@ describe("tidal streaming service", () => {
             mockClient.get.mockResolvedValueOnce({ data: trackPayload });
 
             await expect(
-                tidalStreamingService.getTrack("user/1", 42)
+                tidalStreamingService.getTrack("user/1", 42),
             ).resolves.toEqual(trackPayload);
             expect(mockClient.get).toHaveBeenCalledWith(
-                "/user/track/42?user_id=user%2F1"
+                "/user/track/42?user_id=user%2F1",
             );
 
             const trackError = {
@@ -569,33 +591,38 @@ describe("tidal streaming service", () => {
             mockClient.get.mockRejectedValueOnce(trackError);
 
             await expect(
-                tidalStreamingService.getTrack("user/1", 42)
+                tidalStreamingService.getTrack("user/1", 42),
             ).resolves.toBeNull();
             expect(mockLogger.debug).toHaveBeenCalledWith(
                 "[TIDAL-STREAM] getTrack failed for trackId=42:",
-                { error: "not found" }
+                { error: "not found" },
             );
         });
     });
 
     describe("matching helpers", () => {
         it("normalizes text and computes similarity across sanitized variants", () => {
-            expect(privateService.textSimilarity("Don't Stop (feat. Guest)", "dont stop")).toBe(1);
-            expect(privateService.textSimilarity("Signal Pt. 2", "signal pt2")).toBeCloseTo(
-                0.98,
-                5
-            );
-            expect(privateService.textSimilarity("The Big Song", "Big Song Live")).toBeCloseTo(
-                0.45,
-                5
-            );
+            expect(
+                privateService.textSimilarity(
+                    "Don't Stop (feat. Guest)",
+                    "dont stop",
+                ),
+            ).toBe(1);
+            expect(
+                privateService.textSimilarity("Signal Pt. 2", "signal pt2"),
+            ).toBeCloseTo(0.98, 5);
+            expect(
+                privateService.textSimilarity("The Big Song", "Big Song Live"),
+            ).toBeCloseTo(0.45, 5);
         });
 
         it("calculates duration similarity using normalized seconds", () => {
             expect(privateService.durationSimilarity(180000, 180)).toBe(1);
             expect(privateService.durationSimilarity(210, 216)).toBe(0.75);
             expect(privateService.durationSimilarity(210, 246)).toBe(0);
-            expect(privateService.durationSimilarity(undefined, 180)).toBeNull();
+            expect(
+                privateService.durationSimilarity(undefined, 180),
+            ).toBeNull();
         });
 
         it("scores strong candidates above weak or mismatched candidates", () => {
@@ -626,9 +653,18 @@ describe("tidal streaming service", () => {
                 album: { title: "Other Album" },
             };
 
-            const idealScore = privateService.scoreCandidate(track, idealCandidate);
-            const wrongIsrcScore = privateService.scoreCandidate(track, wrongIsrcCandidate);
-            const karaokeScore = privateService.scoreCandidate(track, karaokeCandidate);
+            const idealScore = privateService.scoreCandidate(
+                track,
+                idealCandidate,
+            );
+            const wrongIsrcScore = privateService.scoreCandidate(
+                track,
+                wrongIsrcCandidate,
+            );
+            const karaokeScore = privateService.scoreCandidate(
+                track,
+                karaokeCandidate,
+            );
 
             expect(idealScore).toBeGreaterThan(wrongIsrcScore);
             expect(wrongIsrcScore).toBeGreaterThan(karaokeScore);
@@ -659,7 +695,10 @@ describe("tidal streaming service", () => {
                 album: { title: "Album Cut" },
             });
 
-            expect(matchingIsrcScore - mismatchedIsrcScore).toBeCloseTo(0.55, 5);
+            expect(matchingIsrcScore - mismatchedIsrcScore).toBeCloseTo(
+                0.55,
+                5,
+            );
         });
 
         it("selects the best candidate only when thresholds are satisfied", () => {
@@ -667,28 +706,32 @@ describe("tidal streaming service", () => {
                 .spyOn(privateService, "scoreCandidate")
                 .mockImplementation(
                     (_track, candidate) =>
-                        (candidate as unknown as RankedCandidate).__score
+                        (candidate as unknown as RankedCandidate).__score,
                 );
 
             expect(
-                privateService.selectBestCandidate({ artist: "A", title: "B" }, [
-                    { id: "too-low", __score: 0.53 },
-                ])
+                privateService.selectBestCandidate(
+                    { artist: "A", title: "B" },
+                    [{ id: "too-low", __score: 0.53 }],
+                ),
             ).toBeNull();
 
             expect(
-                privateService.selectBestCandidate({ artist: "A", title: "B" }, [
-                    { id: "ambiguous-a", __score: 0.61 },
-                    { id: "ambiguous-b", __score: 0.56 },
-                ])
+                privateService.selectBestCandidate(
+                    { artist: "A", title: "B" },
+                    [
+                        { id: "ambiguous-a", __score: 0.61 },
+                        { id: "ambiguous-b", __score: 0.56 },
+                    ],
+                ),
             ).toBeNull();
 
             const winner = { id: "winner", __score: 0.72 };
             expect(
-                privateService.selectBestCandidate({ artist: "A", title: "B" }, [
-                    winner,
-                    { id: "runner-up", __score: 0.4 },
-                ])
+                privateService.selectBestCandidate(
+                    { artist: "A", title: "B" },
+                    [winner, { id: "runner-up", __score: 0.4 }],
+                ),
             ).toBe(winner);
 
             scoreSpy.mockRestore();
@@ -724,8 +767,8 @@ describe("tidal streaming service", () => {
                     "Song Name - Remaster 2011",
                     "Album Name",
                     210,
-                    "USAB12345678"
-                )
+                    "USAB12345678",
+                ),
             ).resolves.toEqual({
                 id: 101,
                 title: "Song Name",
@@ -736,7 +779,7 @@ describe("tidal streaming service", () => {
 
             expect(mockClient.post).toHaveBeenCalledWith(
                 "/user/search?user_id=user-1",
-                { query: "Artist Name Song Name" }
+                { query: "Artist Name Song Name" },
             );
         });
 
@@ -786,7 +829,7 @@ describe("tidal streaming service", () => {
                         title: "Ballad",
                         duration: 200,
                     },
-                ])
+                ]),
             ).resolves.toEqual([
                 {
                     id: 401,
@@ -803,7 +846,7 @@ describe("tidal streaming service", () => {
                 [
                     { query: "Artist One Anthem", limit: 8 },
                     { query: "Artist Two Ballad", limit: 8 },
-                ]
+                ],
             );
         });
     });
@@ -817,10 +860,10 @@ describe("tidal streaming service", () => {
                 tidalStreamingQuality: "LOSSLESS",
             });
             await expect(
-                productionService.getUserPreferredQuality("user-1")
+                productionService.getUserPreferredQuality("user-1"),
             ).resolves.toBe("LOSSLESS");
             await expect(
-                productionService.getUserPreferredQuality("user-1")
+                productionService.getUserPreferredQuality("user-1"),
             ).resolves.toBe("LOSSLESS");
 
             expect(mockPrisma.userSettings.findUnique).toHaveBeenCalledTimes(1);
@@ -835,18 +878,18 @@ describe("tidal streaming service", () => {
             });
 
             await expect(
-                productionService.getUserPreferredQuality("user-1")
+                productionService.getUserPreferredQuality("user-1"),
             ).resolves.toBe("LOW");
             expect(mockPrisma.userSettings.findUnique).toHaveBeenCalledTimes(2);
         });
 
         it("falls back to HIGH when reading the quality preference fails", async () => {
             mockPrisma.userSettings.findUnique.mockRejectedValueOnce(
-                new Error("read failed")
+                new Error("read failed"),
             );
 
             await expect(
-                tidalStreamingService.getUserPreferredQuality("user-err")
+                tidalStreamingService.getUserPreferredQuality("user-err"),
             ).resolves.toBe("HIGH");
         });
     });
@@ -864,7 +907,8 @@ describe("tidal streaming service", () => {
                 methodName: "getExploreShelves",
                 args: ["user-1", "LOSSLESS"],
                 response: { shelves: [{ title: "Explore", contents: [] }] },
-                expectedPath: "/user/browse/explore?user_id=user-1&quality=LOSSLESS",
+                expectedPath:
+                    "/user/browse/explore?user_id=user-1&quality=LOSSLESS",
                 expectedResult: [{ title: "Explore", contents: [] }],
             },
             {
@@ -962,21 +1006,28 @@ describe("tidal streaming service", () => {
             },
         ])(
             "$methodName proxies browse responses from the sidecar",
-            async ({ methodName, args, response, expectedPath, expectedResult }) => {
+            async ({
+                methodName,
+                args,
+                response,
+                expectedPath,
+                expectedResult,
+            }) => {
                 mockClient.get.mockResolvedValueOnce({ data: response });
-                const browseService = tidalStreamingService as unknown as Record<
-                    string,
-                    (...methodArgs: unknown[]) => Promise<unknown>
-                >;
+                const browseService =
+                    tidalStreamingService as unknown as Record<
+                        string,
+                        (...methodArgs: unknown[]) => Promise<unknown>
+                    >;
 
                 await expect(
-                    browseService[methodName](...args)
+                    browseService[methodName](...args),
                 ).resolves.toEqual(expectedResult);
 
                 expect(mockClient.get).toHaveBeenCalledWith(expectedPath, {
                     timeout: 15000,
                 });
-            }
+            },
         );
 
         it("proxies detailed browse playlist and mix requests", async () => {
@@ -994,13 +1045,13 @@ describe("tidal streaming service", () => {
                     "user-1",
                     "playlist/42",
                     "LOSSLESS",
-                    25
-                )
+                    25,
+                ),
             ).resolves.toEqual(playlistPayload);
             expect(mockClient.get).toHaveBeenNthCalledWith(
                 1,
                 "/user/browse/playlist/playlist%2F42?user_id=user-1&quality=LOSSLESS&limit=25",
-                { timeout: 15000 }
+                { timeout: 15000 },
             );
 
             const publicPlaylistPayload = {
@@ -1010,19 +1061,21 @@ describe("tidal streaming service", () => {
                 thumbnailUrl: null,
                 tracks: [],
             };
-            mockClient.get.mockResolvedValueOnce({ data: publicPlaylistPayload });
+            mockClient.get.mockResolvedValueOnce({
+                data: publicPlaylistPayload,
+            });
 
             await expect(
                 tidalStreamingService.getPublicBrowsePlaylist(
                     "public/1",
                     "HIGH",
-                    50
-                )
+                    50,
+                ),
             ).resolves.toEqual(publicPlaylistPayload);
             expect(mockClient.get).toHaveBeenNthCalledWith(
                 2,
                 "/browse/playlist/public%2F1?quality=HIGH&limit=50",
-                { timeout: 15000 }
+                { timeout: 15000 },
             );
 
             const mixPayload = {
@@ -1035,12 +1088,12 @@ describe("tidal streaming service", () => {
             mockClient.get.mockResolvedValueOnce({ data: mixPayload });
 
             await expect(
-                tidalStreamingService.getBrowseMix("user-1", "mix/7", "HIGH")
+                tidalStreamingService.getBrowseMix("user-1", "mix/7", "HIGH"),
             ).resolves.toEqual(mixPayload);
             expect(mockClient.get).toHaveBeenNthCalledWith(
                 3,
                 "/user/browse/mix/mix%2F7?user_id=user-1&quality=HIGH",
-                { timeout: 15000 }
+                { timeout: 15000 },
             );
         });
     });

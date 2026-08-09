@@ -4,8 +4,9 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const clearDiscoverPlaylist = mock.fn(async () => ({
     success: true,
@@ -53,9 +54,8 @@ const config = {
 };
 
 async function mountDiscoverSettings(onPlaylistCleared: () => void) {
-    const { DiscoverSettings } = await import(
-        "../../features/discover/components/DiscoverSettings"
-    );
+    const { DiscoverSettings } =
+        await import("../../features/discover/components/DiscoverSettings");
     const { createRoot } = await import("react-dom/client");
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -67,7 +67,7 @@ async function mountDiscoverSettings(onPlaylistCleared: () => void) {
                 config: config as never,
                 onUpdateConfig: () => undefined,
                 onPlaylistCleared,
-            })
+            }),
         );
     });
 
@@ -81,8 +81,8 @@ async function mountDiscoverSettings(onPlaylistCleared: () => void) {
 }
 
 function findButton(container: HTMLElement, text: string): HTMLButtonElement {
-    const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
-        candidate.textContent?.includes(text)
+    const button = Array.from(container.querySelectorAll("button")).find(
+        (candidate) => candidate.textContent?.includes(text),
     );
     assert.ok(button instanceof HTMLButtonElement, `button not found: ${text}`);
     return button;
@@ -106,7 +106,7 @@ test("clears the discovery playlist only after dialog confirmation", async (t) =
 
     assert.match(
         harness.container.textContent ?? "",
-        /Clear Discovery Playlist\?|cannot be undone/
+        /Clear Discovery Playlist\?|cannot be undone/,
     );
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 0);
 

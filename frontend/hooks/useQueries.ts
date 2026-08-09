@@ -16,11 +16,19 @@
  * - Playlists: 1 minute (user may be actively modifying)
  */
 
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+    useQuery,
+    useInfiniteQuery,
+    useMutation,
+    useQueryClient,
+} from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { AddToPlaylistRef } from "@/lib/trackRef";
 import type { Artist, Album, Track } from "@/features/library/types";
-import { isGenreCategory, isHiddenGenreItem } from "@/features/explore/genreClassification";
+import {
+    isGenreCategory,
+    isHiddenGenreItem,
+} from "@/features/explore/genreClassification";
 
 export const queryKeys = {
     // Artist queries
@@ -95,11 +103,7 @@ export const queryKeys = {
 
     // Audiobooks
     audiobooks: (params?: { limit?: number; offset?: number }) =>
-        [
-            "audiobooks",
-            params?.limit ?? null,
-            params?.offset ?? null,
-        ] as const,
+        ["audiobooks", params?.limit ?? null, params?.offset ?? null] as const,
     audiobook: (id: string) => ["audiobook", id] as const,
 
     // Podcasts
@@ -404,19 +408,28 @@ export function useLibraryArtistsQuery({
  *
  * Cache time: 2 minutes (may change as user adds music)
  */
-export function useLibraryAlbumsInfiniteQuery(
-    {
-        filter = "owned",
-        sortBy = "name",
-        limit = 40,
-        enabled = true,
-    }: Omit<LibraryAlbumsParams, 'page'> & { enabled?: boolean } = {},
-) {
-    return useInfiniteQuery<AlbumsPageResponse, Error, { pages: AlbumsPageResponse[], pageParams: number[] }, readonly unknown[], number>({
+export function useLibraryAlbumsInfiniteQuery({
+    filter = "owned",
+    sortBy = "name",
+    limit = 40,
+    enabled = true,
+}: Omit<LibraryAlbumsParams, "page"> & { enabled?: boolean } = {}) {
+    return useInfiniteQuery<
+        AlbumsPageResponse,
+        Error,
+        { pages: AlbumsPageResponse[]; pageParams: number[] },
+        readonly unknown[],
+        number
+    >({
         queryKey: queryKeys.libraryAlbums({ filter, sortBy, limit }),
         queryFn: async ({ pageParam }) => {
             const offset = (pageParam - 1) * limit;
-            const response = await api.getAlbums({ limit, offset, filter, sortBy });
+            const response = await api.getAlbums({
+                limit,
+                offset,
+                filter,
+                sortBy,
+            });
             return {
                 albums: response.albums,
                 total: response.total,
@@ -424,9 +437,12 @@ export function useLibraryAlbumsInfiniteQuery(
                 limit: response.limit,
             };
         },
-        getNextPageParam: (lastPage: AlbumsPageResponse, allPages: AlbumsPageResponse[]) => {
+        getNextPageParam: (
+            lastPage: AlbumsPageResponse,
+            allPages: AlbumsPageResponse[],
+        ) => {
             const totalItems = lastPage.total;
-            const fetchedItems = allPages.flatMap(page => page.albums).length;
+            const fetchedItems = allPages.flatMap((page) => page.albums).length;
             return fetchedItems < totalItems ? allPages.length + 1 : undefined;
         },
         initialPageParam: 1,
@@ -439,19 +455,28 @@ export function useLibraryAlbumsInfiniteQuery(
  *
  * Cache time: 2 minutes (may change as user adds music)
  */
-export function useLibraryArtistsInfiniteQuery(
-    {
-        filter = "owned",
-        sortBy = "name",
-        limit = 40,
-        enabled = true,
-    }: Omit<LibraryArtistsParams, 'page'> & { enabled?: boolean } = {},
-) {
-    return useInfiniteQuery<ArtistsPageResponse, Error, { pages: ArtistsPageResponse[], pageParams: number[] }, readonly unknown[], number>({
+export function useLibraryArtistsInfiniteQuery({
+    filter = "owned",
+    sortBy = "name",
+    limit = 40,
+    enabled = true,
+}: Omit<LibraryArtistsParams, "page"> & { enabled?: boolean } = {}) {
+    return useInfiniteQuery<
+        ArtistsPageResponse,
+        Error,
+        { pages: ArtistsPageResponse[]; pageParams: number[] },
+        readonly unknown[],
+        number
+    >({
         queryKey: queryKeys.libraryArtists({ filter, sortBy, limit }),
         queryFn: async ({ pageParam }) => {
             const offset = (pageParam - 1) * limit;
-            const response = await api.getArtists({ limit, offset, filter, sortBy });
+            const response = await api.getArtists({
+                limit,
+                offset,
+                filter,
+                sortBy,
+            });
             return {
                 artists: response.artists,
                 total: response.total,
@@ -459,9 +484,14 @@ export function useLibraryArtistsInfiniteQuery(
                 limit: response.limit,
             };
         },
-        getNextPageParam: (lastPage: ArtistsPageResponse, allPages: ArtistsPageResponse[]) => {
+        getNextPageParam: (
+            lastPage: ArtistsPageResponse,
+            allPages: ArtistsPageResponse[],
+        ) => {
             const totalItems = lastPage.total;
-            const fetchedItems = allPages.flatMap(page => page.artists).length;
+            const fetchedItems = allPages.flatMap(
+                (page) => page.artists,
+            ).length;
             return fetchedItems < totalItems ? allPages.length + 1 : undefined;
         },
         initialPageParam: 1,
@@ -501,14 +531,18 @@ export function useLibraryAlbumsQuery({
  *
  * Cache time: 2 minutes (may change as user adds music)
  */
-export function useLibraryTracksInfiniteQuery(
-    {
-        sortBy = "name",
-        limit = 40,
-        enabled = true,
-    }: Omit<LibraryTracksParams, 'page'> & { enabled?: boolean } = {},
-) {
-    return useInfiniteQuery<TracksPageResponse, Error, { pages: TracksPageResponse[], pageParams: number[] }, readonly unknown[], number>({
+export function useLibraryTracksInfiniteQuery({
+    sortBy = "name",
+    limit = 40,
+    enabled = true,
+}: Omit<LibraryTracksParams, "page"> & { enabled?: boolean } = {}) {
+    return useInfiniteQuery<
+        TracksPageResponse,
+        Error,
+        { pages: TracksPageResponse[]; pageParams: number[] },
+        readonly unknown[],
+        number
+    >({
         queryKey: queryKeys.libraryTracks({ sortBy, limit }),
         queryFn: async ({ pageParam }) => {
             const offset = (pageParam - 1) * limit;
@@ -520,9 +554,12 @@ export function useLibraryTracksInfiniteQuery(
                 limit: response.limit,
             };
         },
-        getNextPageParam: (lastPage: TracksPageResponse, allPages: TracksPageResponse[]) => {
+        getNextPageParam: (
+            lastPage: TracksPageResponse,
+            allPages: TracksPageResponse[],
+        ) => {
             const totalItems = lastPage.total;
-            const fetchedItems = allPages.flatMap(page => page.tracks).length;
+            const fetchedItems = allPages.flatMap((page) => page.tracks).length;
             return fetchedItems < totalItems ? allPages.length + 1 : undefined;
         },
         initialPageParam: 1,
@@ -568,7 +605,10 @@ export function useLibraryTracksQuery({
  * @example
  * const { data } = useRecommendationsQuery(10);
  */
-export function useRecommendationsQuery(limit: number = 10, enabled: boolean = true) {
+export function useRecommendationsQuery(
+    limit: number = 10,
+    enabled: boolean = true,
+) {
     return useQuery({
         queryKey: queryKeys.recommendations(limit),
         queryFn: () => api.getRecommendationsForYou(limit),
@@ -687,7 +727,7 @@ export function useDiscoverSearchQuery(
 export function useDiscoverSimilarArtistsQuery(
     artistName: string,
     mbid: string = "",
-    limit: number = 6
+    limit: number = 6,
 ) {
     return useQuery({
         queryKey: queryKeys.discoverSimilar(artistName, mbid, limit),
@@ -1149,7 +1189,7 @@ function resolveChartThumbnail(item: YtMusicChartEntry): string | null {
  */
 export function mapYtMusicChartsToFeaturedPlaylists(
     charts: Record<string, YtMusicChartEntry[]> | undefined,
-    limit: number
+    limit: number,
 ): PlaylistPreview[] {
     if (!charts || typeof charts !== "object" || limit <= 0) {
         return [];
@@ -1158,7 +1198,9 @@ export function mapYtMusicChartsToFeaturedPlaylists(
     const sectionPriority = ["songs", "trending", "videos"];
     const orderedSections = [
         ...sectionPriority.filter((section) => Array.isArray(charts[section])),
-        ...Object.keys(charts).filter((section) => !sectionPriority.includes(section)),
+        ...Object.keys(charts).filter(
+            (section) => !sectionPriority.includes(section),
+        ),
     ];
 
     const featured: PlaylistPreview[] = [];
@@ -1316,7 +1358,8 @@ export function useYtMusicCategoriesQuery(options?: { enabled?: boolean }) {
                     const filtered = {
                         ...cat,
                         items: (cat.items ?? []).filter(
-                            (item) => !item.title || !isHiddenGenreItem(item.title),
+                            (item) =>
+                                !item.title || !isHiddenGenreItem(item.title),
                         ),
                     };
                     if ((filtered.items?.length ?? 0) > 0) {

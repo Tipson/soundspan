@@ -12,6 +12,8 @@
     ],
     "scripts": {
         "build": "npm exec --yes --package typescript -- tsc -p tsconfig.json",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
         "typecheck": "npm exec --yes --package typescript -- tsc -p tsconfig.json --noEmit"
     },
     "exports": {
@@ -19,5 +21,8 @@
             "types": "./dist/index.d.ts",
             "default": "./dist/index.js"
         }
+    },
+    "devDependencies": {
+        "prettier": "3.8.2"
     }
 }

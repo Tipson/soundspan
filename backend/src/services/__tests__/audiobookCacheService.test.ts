@@ -160,9 +160,9 @@ describe("audiobook cache service behavior", () => {
                     "/srv/music",
                     "cover-cache",
                     "audiobooks",
-                    "book-1.jpg"
+                    "book-1.jpg",
                 ),
-            })
+            }),
         );
 
         expect(fetchMock).toHaveBeenCalledWith(
@@ -172,7 +172,7 @@ describe("audiobook cache service behavior", () => {
                     Authorization: "Bearer api-key",
                 },
                 signal: expect.anything(),
-            }
+            },
         );
     });
 
@@ -182,21 +182,23 @@ describe("audiobook cache service behavior", () => {
 
         await (service as any).downloadCover(
             "book-timeout",
-            "http://abs.local/timeout.jpg"
+            "http://abs.local/timeout.jpg",
         );
 
         expect(fetchMock).toHaveBeenCalledWith(
             "http://abs.local/timeout.jpg",
             expect.objectContaining({
                 signal: expect.any(AbortSignal),
-            })
+            }),
         );
     });
 
     it("continues syncing when cover cache directory is unavailable", async () => {
         const service = new AudiobookCacheService();
         fsPromises.mkdir.mockRejectedValueOnce(new Error("EACCES"));
-        mockGetAllAudiobooks.mockResolvedValue([buildBook({ id: "book-nocache" })]);
+        mockGetAllAudiobooks.mockResolvedValue([
+            buildBook({ id: "book-nocache" }),
+        ]);
 
         const result = await service.syncAll();
 
@@ -204,18 +206,20 @@ describe("audiobook cache service behavior", () => {
         expect(result.failed).toBe(0);
         expect(fetchMock).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Cover cache directory unavailable")
+            expect.stringContaining("Cover cache directory unavailable"),
         );
     });
 
     it("rethrows syncAll fatal failures", async () => {
         const service = new AudiobookCacheService();
-        mockGetAllAudiobooks.mockRejectedValueOnce(new Error("upstream failure"));
+        mockGetAllAudiobooks.mockRejectedValueOnce(
+            new Error("upstream failure"),
+        );
 
         await expect(service.syncAll()).rejects.toThrow("upstream failure");
         expect(logger.error).toHaveBeenCalledWith(
             " Audiobook sync failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -229,7 +233,7 @@ describe("audiobook cache service behavior", () => {
 
         expect(prisma.audiobook.upsert).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("missing title")
+            expect.stringContaining("missing title"),
         );
     });
 
@@ -237,21 +241,23 @@ describe("audiobook cache service behavior", () => {
         const service = new AudiobookCacheService();
 
         await expect(
-            (service as any).getFullCoverUrl("items/book-9/cover")
+            (service as any).getFullCoverUrl("items/book-9/cover"),
         ).resolves.toBe("http://abs.local/api/items/book-9/cover");
 
         mockGetSystemSettings.mockResolvedValueOnce({});
         await expect(
-            (service as any).getFullCoverUrl("items/book-9/cover")
+            (service as any).getFullCoverUrl("items/book-9/cover"),
         ).resolves.toBeNull();
 
-        mockGetSystemSettings.mockRejectedValueOnce(new Error("settings failed"));
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("settings failed"),
+        );
         await expect(
-            (service as any).getFullCoverUrl("items/book-9/cover")
+            (service as any).getFullCoverUrl("items/book-9/cover"),
         ).resolves.toBeNull();
         expect(logger.error).toHaveBeenCalledWith(
             "Failed to get Audiobookshelf base URL:",
-            "settings failed"
+            "settings failed",
         );
     });
 
@@ -259,7 +265,7 @@ describe("audiobook cache service behavior", () => {
         const service = new AudiobookCacheService();
 
         await expect(
-            (service as any).downloadCover("book-a", "http://abs.local/a.jpg")
+            (service as any).downloadCover("book-a", "http://abs.local/a.jpg"),
         ).resolves.toBeNull();
 
         (service as any).coverCacheAvailable = true;
@@ -268,7 +274,7 @@ describe("audiobook cache service behavior", () => {
             audiobookshelfApiKey: null,
         });
         await expect(
-            (service as any).downloadCover("book-b", "http://abs.local/b.jpg")
+            (service as any).downloadCover("book-b", "http://abs.local/b.jpg"),
         ).resolves.toBeNull();
 
         mockGetSystemSettings.mockResolvedValueOnce({
@@ -280,7 +286,7 @@ describe("audiobook cache service behavior", () => {
             statusText: "Forbidden",
         });
         await expect(
-            (service as any).downloadCover("book-c", "http://abs.local/c.jpg")
+            (service as any).downloadCover("book-c", "http://abs.local/c.jpg"),
         ).resolves.toBeNull();
 
         mockGetSystemSettings.mockResolvedValueOnce({
@@ -295,15 +301,15 @@ describe("audiobook cache service behavior", () => {
 
         const savedPath = await (service as any).downloadCover(
             "book-d",
-            "http://abs.local/d.jpg"
+            "http://abs.local/d.jpg",
         );
 
         expect(savedPath).toBe(
-            path.join("/srv/music", "cover-cache", "audiobooks", "book-d.jpg")
+            path.join("/srv/music", "cover-cache", "audiobooks", "book-d.jpg"),
         );
         expect(fsPromises.writeFile).toHaveBeenCalledWith(
             path.join("/srv/music", "cover-cache", "audiobooks", "book-d.jpg"),
-            expect.any(Buffer)
+            expect.any(Buffer),
         );
     });
 
@@ -335,7 +341,9 @@ describe("audiobook cache service behavior", () => {
         const refreshed = await service.getAudiobook("book-stale");
         expect(mockGetAudiobook).toHaveBeenCalledWith("book-stale");
         expect(prisma.audiobook.upsert).toHaveBeenCalled();
-        expect(refreshed).toEqual(expect.objectContaining({ title: "Refreshed" }));
+        expect(refreshed).toEqual(
+            expect.objectContaining({ title: "Refreshed" }),
+        );
     });
 
     it("falls back to stale cache when refresh fails and throws when no cache exists", async () => {
@@ -354,7 +362,7 @@ describe("audiobook cache service behavior", () => {
         mockGetAudiobook.mockRejectedValueOnce(new Error("not reachable"));
 
         await expect(service.getAudiobook("book-missing")).rejects.toThrow(
-            "Audiobook not found in cache and sync failed: not reachable"
+            "Audiobook not found in cache and sync failed: not reachable",
         );
     });
 
@@ -371,7 +379,7 @@ describe("audiobook cache service behavior", () => {
                     "/srv/music",
                     "cover-cache",
                     "audiobooks",
-                    "keep.jpg"
+                    "keep.jpg",
                 ),
             },
             { localCoverPath: null },
@@ -380,19 +388,14 @@ describe("audiobook cache service behavior", () => {
 
         await expect(service.cleanupOrphanedCovers()).resolves.toBe(1);
         expect(fsPromises.unlink).toHaveBeenCalledWith(
-            path.join(
-                "/srv/music",
-                "cover-cache",
-                "audiobooks",
-                "orphan.jpg"
-            )
+            path.join("/srv/music", "cover-cache", "audiobooks", "orphan.jpg"),
         );
 
         prisma.audiobook.findMany.mockResolvedValueOnce([]);
         fsPromises.readdir.mockRejectedValueOnce(new Error("readdir failed"));
         await expect(service.cleanupOrphanedCovers()).resolves.toBe(0);
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Failed to read cover cache directory")
+            expect.stringContaining("Failed to read cover cache directory"),
         );
     });
 });

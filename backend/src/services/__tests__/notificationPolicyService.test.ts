@@ -34,9 +34,7 @@ function createJob(overrides: JobOverrides = {}) {
         status: overrides.status ?? "processing",
         metadata: overrides.metadata ?? {},
         error: overrides.error ?? null,
-        createdAt:
-            overrides.createdAt ??
-            new Date("2026-02-17T10:00:00.000Z"),
+        createdAt: overrides.createdAt ?? new Date("2026-02-17T10:00:00.000Z"),
     } as any;
 }
 
@@ -48,10 +46,12 @@ describe("notificationPolicyService", () => {
     });
 
     it("returns no notification when the job cannot be found", async () => {
-        (mockPrisma.downloadJob.findUnique as jest.Mock).mockResolvedValue(null);
+        (mockPrisma.downloadJob.findUnique as jest.Mock).mockResolvedValue(
+            null,
+        );
 
         await expect(
-            notificationPolicyService.evaluateNotification("missing", "failed")
+            notificationPolicyService.evaluateNotification("missing", "failed"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Job not found",
@@ -73,18 +73,19 @@ describe("notificationPolicyService", () => {
         "suppresses notifications for $name",
         async ({ metadata }: { metadata: Record<string, unknown> }) => {
             (mockPrisma.downloadJob.findUnique as jest.Mock).mockResolvedValue(
-                createJob({ status: "completed", metadata })
+                createJob({ status: "completed", metadata }),
             );
 
-            const decision = await notificationPolicyService.evaluateNotification(
-                "job-1",
-                "complete"
-            );
+            const decision =
+                await notificationPolicyService.evaluateNotification(
+                    "job-1",
+                    "complete",
+                );
 
             expect(decision.shouldNotify).toBe(false);
             expect(decision.reason).toContain("batch notification only");
             expect(mockPrisma.downloadJob.findFirst).not.toHaveBeenCalled();
-        }
+        },
     );
 
     it("suppresses when a notification was already sent for the same job", async () => {
@@ -92,11 +93,11 @@ describe("notificationPolicyService", () => {
             createJob({
                 status: "completed",
                 metadata: { notificationSent: true },
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "complete")
+            notificationPolicyService.evaluateNotification("job-1", "complete"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Notification already sent for this job",
@@ -113,12 +114,12 @@ describe("notificationPolicyService", () => {
                     artistName: "Artist",
                     albumTitle: "Album",
                 },
-            })
+            }),
         );
 
         const decision = await notificationPolicyService.evaluateNotification(
             "job-1",
-            "complete"
+            "complete",
         );
 
         expect(decision).toEqual({
@@ -143,7 +144,7 @@ describe("notificationPolicyService", () => {
                     artistName: "  Radiohead  ",
                     albumTitle: " OK Computer ",
                 },
-            })
+            }),
         );
         (mockPrisma.downloadJob.findFirst as jest.Mock).mockResolvedValue(
             createJob({
@@ -154,27 +155,27 @@ describe("notificationPolicyService", () => {
                     albumTitle: "ok computer",
                     notificationSent: true,
                 },
-            })
+            }),
         );
 
         const decision = await notificationPolicyService.evaluateNotification(
             "job-1",
-            "complete"
+            "complete",
         );
 
         expect(decision.shouldNotify).toBe(false);
         expect(decision.reason).toBe(
-            "Another job for same album already sent notification"
+            "Another job for same album already sent notification",
         );
     });
 
     it("rejects non-complete events for completed jobs", async () => {
         (mockPrisma.downloadJob.findUnique as jest.Mock).mockResolvedValue(
-            createJob({ status: "completed" })
+            createJob({ status: "completed" }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "failed")
+            notificationPolicyService.evaluateNotification("job-1", "failed"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Invalid event type for completed job",
@@ -185,11 +186,11 @@ describe("notificationPolicyService", () => {
 
     it("suppresses processing completion events until status becomes completed", async () => {
         (mockPrisma.downloadJob.findUnique as jest.Mock).mockResolvedValue(
-            createJob({ status: "processing" })
+            createJob({ status: "processing" }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "complete")
+            notificationPolicyService.evaluateNotification("job-1", "complete"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Job still processing - wait for status update to completed",
@@ -204,15 +205,15 @@ describe("notificationPolicyService", () => {
                 status: "processing",
                 metadata: {
                     startedAt: new Date(
-                        "2026-02-17T10:40:00.000Z"
+                        "2026-02-17T10:40:00.000Z",
                     ).toISOString(),
                     retryWindowMinutes: 30,
                 },
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "retry")
+            notificationPolicyService.evaluateNotification("job-1", "retry"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Job in active retry window - suppressing notification",
@@ -227,15 +228,15 @@ describe("notificationPolicyService", () => {
                 status: "processing",
                 metadata: {
                     startedAt: new Date(
-                        "2026-02-17T09:59:00.000Z"
+                        "2026-02-17T09:59:00.000Z",
                     ).toISOString(),
                     retryWindowMinutes: 30,
                 },
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "failed")
+            notificationPolicyService.evaluateNotification("job-1", "failed"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Retry window expired but job still processing - extending timeout",
@@ -250,15 +251,15 @@ describe("notificationPolicyService", () => {
                 status: "processing",
                 metadata: {
                     startedAt: new Date(
-                        "2026-02-17T10:50:00.000Z"
+                        "2026-02-17T10:50:00.000Z",
                     ).toISOString(),
                     retryWindowMinutes: 30,
                 },
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "timeout")
+            notificationPolicyService.evaluateNotification("job-1", "timeout"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Still in retry window - extending timeout",
@@ -273,11 +274,11 @@ describe("notificationPolicyService", () => {
                 status: "processing",
                 createdAt: new Date("2026-02-17T09:00:00.000Z"),
                 metadata: {},
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "timeout")
+            notificationPolicyService.evaluateNotification("job-1", "timeout"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Timeout expired - caller should mark as failed",
@@ -286,11 +287,11 @@ describe("notificationPolicyService", () => {
 
     it("rejects invalid events for failed jobs", async () => {
         (mockPrisma.downloadJob.findUnique as jest.Mock).mockResolvedValue(
-            createJob({ status: "failed" })
+            createJob({ status: "failed" }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "retry")
+            notificationPolicyService.evaluateNotification("job-1", "retry"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Invalid event type for failed job",
@@ -303,11 +304,11 @@ describe("notificationPolicyService", () => {
                 status: "failed",
                 error: "permission denied while moving file",
                 metadata: {},
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "failed")
+            notificationPolicyService.evaluateNotification("job-1", "failed"),
         ).resolves.toEqual({
             shouldNotify: true,
             reason: "Critical error requires user intervention",
@@ -321,11 +322,11 @@ describe("notificationPolicyService", () => {
                 status: "failed",
                 error: "no sources found after lookup",
                 metadata: {},
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "failed")
+            notificationPolicyService.evaluateNotification("job-1", "failed"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Transient failure - suppressed (may succeed on retry)",
@@ -338,11 +339,11 @@ describe("notificationPolicyService", () => {
                 status: "exhausted",
                 error: "all releases exhausted across indexers",
                 metadata: {},
-            })
+            }),
         );
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "timeout")
+            notificationPolicyService.evaluateNotification("job-1", "timeout"),
         ).resolves.toEqual({
             shouldNotify: true,
             reason: "Permanent failure after retries exhausted",
@@ -359,7 +360,7 @@ describe("notificationPolicyService", () => {
                     artistName: "Portishead",
                     albumTitle: "Dummy",
                 },
-            })
+            }),
         );
         (mockPrisma.downloadJob.findFirst as jest.Mock).mockResolvedValue(
             createJob({
@@ -370,12 +371,12 @@ describe("notificationPolicyService", () => {
                     albumTitle: "dummy",
                     notificationSent: true,
                 },
-            })
+            }),
         );
 
         const decision = await notificationPolicyService.evaluateNotification(
             "job-1",
-            "failed"
+            "failed",
         );
 
         expect(decision).toEqual({
@@ -390,14 +391,14 @@ describe("notificationPolicyService", () => {
             .mockResolvedValueOnce(createJob({ status: "mystery" }));
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-1", "failed")
+            notificationPolicyService.evaluateNotification("job-1", "failed"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Job not started yet",
         });
 
         await expect(
-            notificationPolicyService.evaluateNotification("job-2", "failed")
+            notificationPolicyService.evaluateNotification("job-2", "failed"),
         ).resolves.toEqual({
             shouldNotify: false,
             reason: "Unknown status: mystery",

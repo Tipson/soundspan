@@ -61,7 +61,8 @@ export function KeyboardShortcutsTooltip() {
 
                     <div className="mt-3 pt-3 border-t border-white/10">
                         <p className="text-[10px] text-gray-400 leading-relaxed">
-                            Shortcuts work anywhere except when typing in text fields.
+                            Shortcuts work anywhere except when typing in text
+                            fields.
                         </p>
                     </div>
                 </div>

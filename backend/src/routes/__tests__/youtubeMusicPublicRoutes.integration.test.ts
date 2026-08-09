@@ -31,16 +31,10 @@ jest.mock("../../middleware/auth", () => ({
 }));
 
 jest.mock("../../middleware/rateLimiter", () => ({
-    ytMusicSearchLimiter: (
-        _req: Request,
-        _res: Response,
-        next: NextFunction
-    ) => next(),
-    ytMusicStreamLimiter: (
-        _req: Request,
-        _res: Response,
-        next: NextFunction
-    ) => next(),
+    ytMusicSearchLimiter: (_req: Request, _res: Response, next: NextFunction) =>
+        next(),
+    ytMusicStreamLimiter: (_req: Request, _res: Response, next: NextFunction) =>
+        next(),
 }));
 
 jest.mock("../../utils/logger", () => ({
@@ -71,7 +65,9 @@ jest.mock("../../services/youtubeMusic", () => ({
         findMatchForTrack: jest.fn(),
         findMatchesForAlbum: jest.fn(),
     },
-    normalizeYtMusicStreamQuality: jest.fn((quality: string) => `norm:${quality}`),
+    normalizeYtMusicStreamQuality: jest.fn(
+        (quality: string) => `norm:${quality}`,
+    ),
 }));
 
 jest.mock("../../utils/systemSettings", () => ({
@@ -122,11 +118,13 @@ describe("youtube music public stream routes integration", () => {
 
     it("requires auth for /api/ytmusic/stream-info-public/:videoId", async () => {
         const res = await request(app).get(
-            "/api/ytmusic/stream-info-public/video-1"
+            "/api/ytmusic/stream-info-public/video-1",
         );
 
         expect(res.status).toBe(401);
-        expect(res.body).toEqual(expect.objectContaining({ error: expect.any(String) }));
+        expect(res.body).toEqual(
+            expect.objectContaining({ error: expect.any(String) }),
+        );
     });
 
     it("returns 403 when ytmusic is disabled", async () => {
@@ -140,7 +138,7 @@ describe("youtube music public stream routes integration", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: expect.stringContaining("not enabled"),
-            })
+            }),
         );
         expect(mockGetStreamInfo).not.toHaveBeenCalled();
     });
@@ -171,7 +169,7 @@ describe("youtube music public stream routes integration", () => {
         expect(mockGetStreamInfo).toHaveBeenCalledWith(
             "__public__",
             "video-1",
-            "norm:low"
+            "norm:low",
         );
     });
 
@@ -218,7 +216,7 @@ describe("youtube music public stream routes integration", () => {
             "__public__",
             "video-2",
             "norm:HIGH",
-            "bytes=0-9"
+            "bytes=0-9",
         );
     });
 });

@@ -1,11 +1,5 @@
 import assert from "node:assert/strict";
-import {
-    afterEach,
-    before,
-    beforeEach,
-    mock,
-    test,
-} from "node:test";
+import { afterEach, before, beforeEach, mock, test } from "node:test";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -206,14 +200,30 @@ type EffectCallback = () => void | (() => void);
 
 type HookSlot =
     | { kind: "ref"; value: { current: unknown } }
-    | { kind: "callback"; deps: readonly unknown[] | undefined; fn: (...args: unknown[]) => unknown }
-    | { kind: "effect" | "layout"; deps: readonly unknown[] | undefined; cleanup: (() => void) | null };
+    | {
+          kind: "callback";
+          deps: readonly unknown[] | undefined;
+          fn: (...args: unknown[]) => unknown;
+      }
+    | {
+          kind: "effect" | "layout";
+          deps: readonly unknown[] | undefined;
+          cleanup: (() => void) | null;
+      };
 
 class HookRuntime {
     private slots: HookSlot[] = [];
     private cursor = 0;
-    private pendingLayouts: Array<{ index: number; callback: EffectCallback; deps: readonly unknown[] | undefined }> = [];
-    private pendingEffects: Array<{ index: number; callback: EffectCallback; deps: readonly unknown[] | undefined }> = [];
+    private pendingLayouts: Array<{
+        index: number;
+        callback: EffectCallback;
+        deps: readonly unknown[] | undefined;
+    }> = [];
+    private pendingEffects: Array<{
+        index: number;
+        callback: EffectCallback;
+        deps: readonly unknown[] | undefined;
+    }> = [];
 
     render(component: () => unknown): void {
         this.cursor = 0;
@@ -228,7 +238,10 @@ class HookRuntime {
 
     unmount(): void {
         for (const slot of this.slots) {
-            if ((slot.kind === "effect" || slot.kind === "layout") && slot.cleanup) {
+            if (
+                (slot.kind === "effect" || slot.kind === "layout") &&
+                slot.cleanup
+            ) {
                 slot.cleanup();
                 slot.cleanup = null;
             }
@@ -274,7 +287,10 @@ class HookRuntime {
         return slot.fn as T;
     }
 
-    useEffect(callback: EffectCallback, deps: readonly unknown[] | undefined): void {
+    useEffect(
+        callback: EffectCallback,
+        deps: readonly unknown[] | undefined,
+    ): void {
         this.registerEffect("effect", callback, deps);
     }
 
@@ -312,17 +328,24 @@ class HookRuntime {
         callback: EffectCallback,
         deps: readonly unknown[] | undefined,
     ): void {
-        const queue = kind === "layout" ? this.pendingLayouts : this.pendingEffects;
+        const queue =
+            kind === "layout" ? this.pendingLayouts : this.pendingEffects;
         queue.push({ index, callback, deps });
     }
 
     private flush(
-        queue: Array<{ index: number; callback: EffectCallback; deps: readonly unknown[] | undefined }>,
+        queue: Array<{
+            index: number;
+            callback: EffectCallback;
+            deps: readonly unknown[] | undefined;
+        }>,
         expectedKind: "effect" | "layout",
     ): void {
         for (const entry of queue) {
             const slot = this.slots[entry.index];
-            assert.ok(slot && (slot.kind === "effect" || slot.kind === "layout"));
+            assert.ok(
+                slot && (slot.kind === "effect" || slot.kind === "layout"),
+            );
             assert.equal(slot.kind, expectedKind);
             if (slot.cleanup) {
                 slot.cleanup();
@@ -413,7 +436,10 @@ const apiCalls = {
         sessionToken: string;
         payload: Record<string, unknown>;
     }>,
-    getPodcastEpisodeCacheStatus: [] as Array<{ podcastId: string; episodeId: string }>,
+    getPodcastEpisodeCacheStatus: [] as Array<{
+        podcastId: string;
+        episodeId: string;
+    }>,
     updatePodcastProgress: [] as Array<{
         podcastId: string;
         episodeId: string;
@@ -549,10 +575,7 @@ const resetHarnessState = (): void => {
     seekSubscribers.clear();
 };
 
-const applyValue = <T>(
-    incoming: T | ((previous: T) => T),
-    previous: T,
-): T => {
+const applyValue = <T>(incoming: T | ((previous: T) => T), previous: T): T => {
     if (typeof incoming === "function") {
         return (incoming as (value: T) => T)(previous);
     }
@@ -567,7 +590,9 @@ mock.module("react", {
                 __defaultValue: defaultValue,
             }),
             useContext: (context: { __defaultValue: unknown } | null) =>
-                context?.__defaultValue ?? { prefetchQuery: async () => undefined },
+                context?.__defaultValue ?? {
+                    prefetchQuery: async () => undefined,
+                },
             useRef: <T>(value: T) => hookRuntime.useRef(value),
             useCallback: <T extends (...args: unknown[]) => unknown>(
                 fn: T,
@@ -575,10 +600,14 @@ mock.module("react", {
             ) => hookRuntime.useCallback(fn, deps),
             useEffect: (effect: EffectCallback, deps?: readonly unknown[]) =>
                 hookRuntime.useEffect(effect, deps),
-            useLayoutEffect: (effect: EffectCallback, deps?: readonly unknown[]) =>
-                hookRuntime.useLayoutEffect(effect, deps),
+            useLayoutEffect: (
+                effect: EffectCallback,
+                deps?: readonly unknown[],
+            ) => hookRuntime.useLayoutEffect(effect, deps),
             useState: <T>(initial: T | (() => T)) => [
-                typeof initial === "function" ? (initial as () => T)() : initial,
+                typeof initial === "function"
+                    ? (initial as () => T)()
+                    : initial,
                 () => undefined,
             ],
             useMemo: <T>(factory: () => T) => factory(),
@@ -628,21 +657,60 @@ mock.module("@/lib/audio-state-context", {
             volume: audioState.volume,
             isMuted: audioState.isMuted,
             repeatMode: audioState.repeatMode,
-            setCurrentAudiobook: (value: Audiobook | null | ((previous: Audiobook | null) => Audiobook | null)) => {
-                audioState.currentAudiobook = applyValue(value, audioState.currentAudiobook);
-                audioStateSetterCalls.setCurrentAudiobook.push(audioState.currentAudiobook);
+            setCurrentAudiobook: (
+                value:
+                    | Audiobook
+                    | null
+                    | ((previous: Audiobook | null) => Audiobook | null),
+            ) => {
+                audioState.currentAudiobook = applyValue(
+                    value,
+                    audioState.currentAudiobook,
+                );
+                audioStateSetterCalls.setCurrentAudiobook.push(
+                    audioState.currentAudiobook,
+                );
             },
-            setCurrentTrack: (value: Track | null | ((previous: Track | null) => Track | null)) => {
-                audioState.currentTrack = applyValue(value, audioState.currentTrack);
-                audioStateSetterCalls.setCurrentTrack.push(audioState.currentTrack);
+            setCurrentTrack: (
+                value:
+                    | Track
+                    | null
+                    | ((previous: Track | null) => Track | null),
+            ) => {
+                audioState.currentTrack = applyValue(
+                    value,
+                    audioState.currentTrack,
+                );
+                audioStateSetterCalls.setCurrentTrack.push(
+                    audioState.currentTrack,
+                );
             },
-            setCurrentPodcast: (value: Podcast | null | ((previous: Podcast | null) => Podcast | null)) => {
-                audioState.currentPodcast = applyValue(value, audioState.currentPodcast);
-                audioStateSetterCalls.setCurrentPodcast.push(audioState.currentPodcast);
+            setCurrentPodcast: (
+                value:
+                    | Podcast
+                    | null
+                    | ((previous: Podcast | null) => Podcast | null),
+            ) => {
+                audioState.currentPodcast = applyValue(
+                    value,
+                    audioState.currentPodcast,
+                );
+                audioStateSetterCalls.setCurrentPodcast.push(
+                    audioState.currentPodcast,
+                );
             },
-            setPlaybackType: (value: PlaybackType | ((previous: PlaybackType) => PlaybackType)) => {
-                audioState.playbackType = applyValue(value, audioState.playbackType);
-                audioStateSetterCalls.setPlaybackType.push(audioState.playbackType);
+            setPlaybackType: (
+                value:
+                    | PlaybackType
+                    | ((previous: PlaybackType) => PlaybackType),
+            ) => {
+                audioState.playbackType = applyValue(
+                    value,
+                    audioState.playbackType,
+                );
+                audioStateSetterCalls.setPlaybackType.push(
+                    audioState.playbackType,
+                );
             },
             queue: audioState.queue,
             currentIndex: audioState.currentIndex,
@@ -729,9 +797,9 @@ mock.module("@/lib/audio-load-preemption", {
             preemptChecks.push(input);
             return Boolean(
                 input.isLoading &&
-                    input.currentMediaId &&
-                    input.previousMediaId &&
-                    input.currentMediaId !== input.previousMediaId
+                input.currentMediaId &&
+                input.previousMediaId &&
+                input.currentMediaId !== input.previousMediaId,
             );
         },
     },
@@ -750,10 +818,18 @@ mock.module("@/lib/api", {
                 `https://stream.test/yt/${videoId}`,
             getAudiobookStreamUrl: (bookId: string) =>
                 `https://stream.test/audiobook/${bookId}`,
-            getPodcastEpisodeStreamUrl: (podcastId: string, episodeId: string) =>
-                `https://stream.test/podcast/${podcastId}/${episodeId}`,
-            getPodcastEpisodeCacheStatus: async (podcastId: string, episodeId: string) => {
-                apiCalls.getPodcastEpisodeCacheStatus.push({ podcastId, episodeId });
+            getPodcastEpisodeStreamUrl: (
+                podcastId: string,
+                episodeId: string,
+            ) => `https://stream.test/podcast/${podcastId}/${episodeId}`,
+            getPodcastEpisodeCacheStatus: async (
+                podcastId: string,
+                episodeId: string,
+            ) => {
+                apiCalls.getPodcastEpisodeCacheStatus.push({
+                    podcastId,
+                    episodeId,
+                });
                 return {
                     cached: podcastCacheStatus.cached,
                     downloading: podcastCacheStatus.downloading,
@@ -780,7 +856,8 @@ mock.module("@/lib/api", {
                 });
                 const next = handoffSessionQueue.shift();
                 if (next instanceof Error) throw next;
-                const resolved = next ?? makeSegmentedSession("default-handoff");
+                const resolved =
+                    next ?? makeSegmentedSession("default-handoff");
                 const resolvedAny = resolved as Record<string, unknown>;
                 return {
                     ...resolved,
@@ -819,7 +896,9 @@ mock.module("@/lib/api", {
                 });
             },
             getStreamingAuthToken: () => "test-auth-token",
-            reportPlaybackClientMetric: async (payload: Record<string, unknown>) => {
+            reportPlaybackClientMetric: async (
+                payload: Record<string, unknown>,
+            ) => {
                 apiCalls.reportPlaybackClientMetric.push(payload);
             },
             getYtMusicStatus: async () => ({
@@ -906,8 +985,7 @@ mock.module("@/lib/audio-engine/segmentedPlaybackRegressionPolicy", {
             isLoading: boolean;
             requestLoadId: number;
             activeLoadId: number;
-        }) =>
-            input.isLoading && input.requestLoadId === input.activeLoadId,
+        }) => input.isLoading && input.requestLoadId === input.activeLoadId,
     },
 });
 
@@ -918,7 +996,9 @@ mock.module("@/lib/audio-engine/segmentedRepresentationPolicy", {
             const parts = uri.split("/");
             return parts[parts.length - 1] ?? null;
         },
-        resolveSegmentRepresentationIdFromName: (segmentName: string | null | undefined) => {
+        resolveSegmentRepresentationIdFromName: (
+            segmentName: string | null | undefined,
+        ) => {
             if (!segmentName) return null;
             return segmentName.split("_")[0] ?? null;
         },
@@ -1131,9 +1211,8 @@ mock.module("@soundspan/media-metadata-contract", {
 let orchestratorComponent: (() => null) | null = null;
 
 before(async () => {
-    const orchestratorModule = await import(
-        "../../components/player/AudioPlaybackOrchestrator"
-    );
+    const orchestratorModule =
+        await import("../../components/player/AudioPlaybackOrchestrator");
     orchestratorComponent =
         orchestratorModule.AudioPlaybackOrchestrator as unknown as () => null;
 });
@@ -1169,7 +1248,9 @@ const flushAsync = async (ticks = 6): Promise<void> => {
     }
 };
 
-const enableWindowMetrics = (runtimeConfig: Record<string, unknown> = {}): void => {
+const enableWindowMetrics = (
+    runtimeConfig: Record<string, unknown> = {},
+): void => {
     (globalThis as unknown as { window?: Record<string, unknown> }).window = {
         __SOUNDSPAN_RUNTIME_CONFIG__: runtimeConfig,
         addEventListener: () => undefined,
@@ -1182,13 +1263,12 @@ const getClientMetricEvents = (
 ): Array<Record<string, unknown>> => {
     return loggerCalls.info
         .map((args) => args[1])
-        .filter(
-            (payload): payload is Record<string, unknown> =>
-                Boolean(
-                    payload &&
-                        typeof payload === "object" &&
-                        (payload as { event?: string }).event === eventName,
-                ),
+        .filter((payload): payload is Record<string, unknown> =>
+            Boolean(
+                payload &&
+                typeof payload === "object" &&
+                (payload as { event?: string }).event === eventName,
+            ),
         );
 };
 
@@ -1209,14 +1289,13 @@ test("loads direct track, applies output state, and syncs play/pause transitions
     assert.equal(format, "flac");
     assert.ok(playbackCalls.setDuration.includes(210));
     assert.ok(
-        playbackCalls.setStreamProfile.some(
-            (profile) =>
-                Boolean(
-                    profile &&
-                        typeof profile === "object" &&
-                        "mode" in profile &&
-                        (profile as { mode: string }).mode === "direct"
-                ),
+        playbackCalls.setStreamProfile.some((profile) =>
+            Boolean(
+                profile &&
+                typeof profile === "object" &&
+                "mode" in profile &&
+                (profile as { mode: string }).mode === "direct",
+            ),
         ),
     );
 
@@ -1286,7 +1365,11 @@ test("creates segmented startup session and loads DASH source", async () => {
             sessionId: string;
             mimeType: string;
         },
-        { withCredentials: boolean; autoplay: boolean; requestHeaders?: Record<string, string> },
+        {
+            withCredentials: boolean;
+            autoplay: boolean;
+            requestHeaders?: Record<string, string>;
+        },
     ];
     assert.equal(source.protocol, "dash");
     assert.equal(source.trackId, "seg-track");
@@ -1294,17 +1377,19 @@ test("creates segmented startup session and loads DASH source", async () => {
     assert.equal(source.mimeType, "application/dash+xml");
     assert.equal(options.withCredentials, true);
     assert.equal(options.autoplay, false);
-    assert.equal(options.requestHeaders?.["x-streaming-session-token"], "seg-session-token");
+    assert.equal(
+        options.requestHeaders?.["x-streaming-session-token"],
+        "seg-session-token",
+    );
 
     assert.ok(
-        playbackCalls.setStreamProfile.some(
-            (profile) =>
-                Boolean(
-                    profile &&
-                        typeof profile === "object" &&
-                        "mode" in profile &&
-                        (profile as { mode: string }).mode === "dash"
-                ),
+        playbackCalls.setStreamProfile.some((profile) =>
+            Boolean(
+                profile &&
+                typeof profile === "object" &&
+                "mode" in profile &&
+                (profile as { mode: string }).mode === "dash",
+            ),
         ),
     );
 });
@@ -1506,8 +1591,15 @@ test("consumes prewarmed segmented session while prewarm validation is still in-
         assert.equal(apiCalls.createSegmentedStreamingSession.length, 2);
 
         const loadedSessionIds = engine.loadCalls
-            .map((call) => (call.args[0] as { sessionId?: string } | undefined)?.sessionId ?? null)
-            .filter((sessionId): sessionId is string => typeof sessionId === "string");
+            .map(
+                (call) =>
+                    (call.args[0] as { sessionId?: string } | undefined)
+                        ?.sessionId ?? null,
+            )
+            .filter(
+                (sessionId): sessionId is string =>
+                    typeof sessionId === "string",
+            );
         assert.ok(loadedSessionIds.includes("inflight-prewarm"));
     } finally {
         if (originalFetch) {
@@ -1650,7 +1742,9 @@ test("listen-together followers resync on unexpected stop instead of starting lo
     const track = makeTrack("lt-follower-stop-track");
     audioState.currentTrack = track;
     audioState.queue = [track];
-    segmentedSessionQueue.push(makeSegmentedSession("lt-follower-stop-session"));
+    segmentedSessionQueue.push(
+        makeSegmentedSession("lt-follower-stop-session"),
+    );
 
     renderOrchestrator();
     await flushAsync(14);
@@ -1728,12 +1822,8 @@ test("handles manifest-stall audio engine events through startup recovery path",
     renderOrchestrator();
     await flushAsync(14);
 
-    assert.ok(
-        engine.onCalls.some((call) => call.event === "manifeststall"),
-    );
-    assert.ok(
-        engine.onCalls.some((call) => call.event === "manifest-stall"),
-    );
+    assert.ok(engine.onCalls.some((call) => call.event === "manifeststall"));
+    assert.ok(engine.onCalls.some((call) => call.event === "manifest-stall"));
 
     engine.emit("manifeststall", {
         trackId: "manifest-stall-track",
@@ -1865,7 +1955,8 @@ test("segmented startup create failure uses transient heuristic when backend hin
     const transientFailure = createFailures.find(
         (metric) =>
             metric.trackId === "hintless-transient" &&
-            metric.reason === "network timeout while creating segmented session",
+            metric.reason ===
+                "network timeout while creating segmented session",
     );
     assert.ok(transientFailure);
     assert.equal(transientFailure.isTransient, true);

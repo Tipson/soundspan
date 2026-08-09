@@ -223,8 +223,15 @@ export class NativeAudioElementEngine implements AudioEngine {
         this.telemetry = options.telemetry ?? defaultTelemetry;
     }
 
-    load(source: AudioEngineSource | string, options?: AudioEngineLoadOptions): void;
-    load(source: AudioEngineSource | string, autoplay?: boolean, format?: string): void;
+    load(
+        source: AudioEngineSource | string,
+        options?: AudioEngineLoadOptions,
+    ): void;
+    load(
+        source: AudioEngineSource | string,
+        autoplay?: boolean,
+        format?: string,
+    ): void;
     load(
         source: AudioEngineSource | string,
         optionsOrAutoplay: AudioEngineLoadOptions | boolean = {},
@@ -312,7 +319,9 @@ export class NativeAudioElementEngine implements AudioEngine {
     }
 
     isPlaying(): boolean {
-        return Boolean(this.element && !this.element.paused && !this.element.ended);
+        return Boolean(
+            this.element && !this.element.paused && !this.element.ended,
+        );
     }
 
     on<T extends AudioEngineEventType>(
@@ -331,12 +340,15 @@ export class NativeAudioElementEngine implements AudioEngine {
         event: T,
         handler: AudioEngineEventHandler<T>,
     ): void {
-        this.listeners.get(event)?.delete(
-            handler as unknown as AnyAudioEventHandler,
-        );
+        this.listeners
+            .get(event)
+            ?.delete(handler as unknown as AnyAudioEventHandler);
     }
 
-    preload(source: AudioEngineSource | string, options?: AudioEngineLoadOptions): void;
+    preload(
+        source: AudioEngineSource | string,
+        options?: AudioEngineLoadOptions,
+    ): void;
     preload(source: AudioEngineSource | string, format?: string): void;
     preload(
         source: AudioEngineSource | string,
@@ -586,7 +598,9 @@ export class NativeAudioElementEngine implements AudioEngine {
                     return;
                 }
                 const errorName =
-                    err instanceof Error && err.name ? err.name : "UnknownError";
+                    err instanceof Error && err.name
+                        ? err.name
+                        : "UnknownError";
                 const errorMessage =
                     err instanceof Error ? err.message : String(err);
                 this.dispatch({

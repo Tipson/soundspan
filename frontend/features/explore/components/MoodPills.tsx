@@ -25,14 +25,38 @@ const MOOD_PILLS: {
     gradient: string;
 }[] = [
     { mood: "sad", label: "Sad", gradient: "from-blue-600 to-indigo-700" },
-    { mood: "melancholy", label: "Melancholy", gradient: "from-slate-500 to-gray-600" },
-    { mood: "acoustic", label: "Acoustic", gradient: "from-amber-600 to-yellow-700" },
+    {
+        mood: "melancholy",
+        label: "Melancholy",
+        gradient: "from-slate-500 to-gray-600",
+    },
+    {
+        mood: "acoustic",
+        label: "Acoustic",
+        gradient: "from-amber-600 to-yellow-700",
+    },
     { mood: "chill", label: "Chill", gradient: "from-teal-500 to-cyan-600" },
-    { mood: "focus", label: "Focus", gradient: "from-emerald-500 to-green-600" },
-    { mood: "happy", label: "Happy", gradient: "from-yellow-500 to-orange-500" },
-    { mood: "energetic", label: "Energetic", gradient: "from-orange-500 to-red-500" },
+    {
+        mood: "focus",
+        label: "Focus",
+        gradient: "from-emerald-500 to-green-600",
+    },
+    {
+        mood: "happy",
+        label: "Happy",
+        gradient: "from-yellow-500 to-orange-500",
+    },
+    {
+        mood: "energetic",
+        label: "Energetic",
+        gradient: "from-orange-500 to-red-500",
+    },
     { mood: "party", label: "Party", gradient: "from-pink-500 to-purple-600" },
-    { mood: "aggressive", label: "Aggressive", gradient: "from-red-600 to-rose-700" },
+    {
+        mood: "aggressive",
+        label: "Aggressive",
+        gradient: "from-red-600 to-rose-700",
+    },
 ];
 
 /**
@@ -56,7 +80,10 @@ export function MoodPills() {
                 setPresetsLoaded(true);
             })
             .catch((error) => {
-                sharedFrontendLogger.error("Failed to load mood presets:", error);
+                sharedFrontendLogger.error(
+                    "Failed to load mood presets:",
+                    error,
+                );
                 setPresetsLoaded(true);
             });
     }, [autoPlaylists]);
@@ -104,12 +131,16 @@ export function MoodPills() {
                 window.dispatchEvent(new CustomEvent("mixes-updated"));
             } else {
                 toast.error("Not enough tracks for this mood", {
-                    description: "Try analyzing more music or choose a different mood",
+                    description:
+                        "Try analyzing more music or choose a different mood",
                 });
             }
         } catch (error: unknown) {
             sharedFrontendLogger.error("Failed to generate mood mix:", error);
-            const errorMessage = error instanceof Error ? error.message : "Failed to generate mix";
+            const errorMessage =
+                error instanceof Error
+                    ? error.message
+                    : "Failed to generate mix";
             toast.error(errorMessage);
         } finally {
             setGenerating(null);
@@ -120,18 +151,23 @@ export function MoodPills() {
 
     return (
         <div className="flex flex-wrap gap-2">
-            {autoPlaylists && MOOD_PILLS.map(({ mood, label, gradient }) => {
-                const isGenerating = generating === mood;
-                const trackCount = getTrackCount(mood);
-                const isDisabled = !presetsLoaded || trackCount < 5;
+            {autoPlaylists &&
+                MOOD_PILLS.map(({ mood, label, gradient }) => {
+                    const isGenerating = generating === mood;
+                    const trackCount = getTrackCount(mood);
+                    const isDisabled = !presetsLoaded || trackCount < 5;
 
-                return (
-                    <button
-                        key={mood}
-                        onClick={() => handleMoodClick(mood, label)}
-                        disabled={generating !== null || isDisabled}
-                        title={isDisabled ? `Need at least 5 tracks (have ${trackCount})` : `Play ${label} mix`}
-                        className={`
+                    return (
+                        <button
+                            key={mood}
+                            onClick={() => handleMoodClick(mood, label)}
+                            disabled={generating !== null || isDisabled}
+                            title={
+                                isDisabled
+                                    ? `Need at least 5 tracks (have ${trackCount})`
+                                    : `Play ${label} mix`
+                            }
+                            className={`
                             px-4 py-2 rounded-full text-sm font-medium text-white
                             bg-gradient-to-r ${gradient}
                             transition-all duration-150
@@ -139,28 +175,30 @@ export function MoodPills() {
                             disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100
                             flex items-center gap-1.5
                         `}
-                    >
-                        {isGenerating ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : null}
-                        {label}
-                    </button>
-                );
-            })}
-            {audioAnalysis && <Link
-                href="/vibe"
-                title="Vibe Map"
-                className="
+                        >
+                            {isGenerating ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : null}
+                            {label}
+                        </button>
+                    );
+                })}
+            {audioAnalysis && (
+                <Link
+                    href="/vibe"
+                    title="Vibe Map"
+                    className="
                     px-4 py-2 rounded-full text-sm font-medium text-white
                     bg-gradient-to-r from-violet-500 to-fuchsia-600
                     transition-all duration-150
                     hover:opacity-90 hover:scale-[1.03] active:scale-[0.97]
                     flex items-center gap-1.5
                 "
-            >
-                <AudioWaveform className="w-3.5 h-3.5" />
-                Vibe Map
-            </Link>}
+                >
+                    <AudioWaveform className="w-3.5 h-3.5" />
+                    Vibe Map
+                </Link>
+            )}
         </div>
     );
 }

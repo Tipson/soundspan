@@ -76,14 +76,14 @@ describe("remoteTrackMetadataResolver", () => {
                     title: "  Unknown Track  ",
                     artist: "Artist",
                     album: "Album",
-                })
+                }),
             ).toBe(true);
             expect(
                 hasPlaceholderRemoteTrackMetadata({
                     title: "",
                     artist: "Artist",
                     album: "Album",
-                })
+                }),
             ).toBe(true);
         });
 
@@ -93,14 +93,14 @@ describe("remoteTrackMetadataResolver", () => {
                     title: "Title",
                     artist: " unknown artist ",
                     album: "Album",
-                })
+                }),
             ).toBe(true);
             expect(
                 hasPlaceholderRemoteTrackMetadata({
                     title: "Title",
                     artist: "Unknown",
                     album: "Album",
-                })
+                }),
             ).toBe(true);
         });
 
@@ -110,14 +110,14 @@ describe("remoteTrackMetadataResolver", () => {
                     title: "Title",
                     artist: "Artist",
                     album: "  single  ",
-                })
+                }),
             ).toBe(true);
             expect(
                 hasPlaceholderRemoteTrackMetadata({
                     title: "Title",
                     artist: "Artist",
                     album: "Unknown Album",
-                })
+                }),
             ).toBe(true);
         });
 
@@ -127,7 +127,7 @@ describe("remoteTrackMetadataResolver", () => {
                     title: "Track Name",
                     artist: "Artist Name",
                     album: "Album Name",
-                })
+                }),
             ).toBe(false);
         });
     });
@@ -358,7 +358,7 @@ describe("remoteTrackMetadataResolver", () => {
             });
             expect(mockedLogger.__childLogger.warn).toHaveBeenCalledWith(
                 "Failed to resolve inline metadata for tidal track",
-                providerError
+                providerError,
             );
         });
 
@@ -390,7 +390,9 @@ describe("remoteTrackMetadataResolver", () => {
         });
 
         it("returns normalized metadata when both youtube lookups return null", async () => {
-            mockYtGetSong.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+            mockYtGetSong
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce(null);
 
             const lookup: RemoteTrackLookup = {
                 provider: "youtube",
@@ -406,8 +408,16 @@ describe("remoteTrackMetadataResolver", () => {
 
             const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
 
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(1, "user-7", "abc123");
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(2, "__public__", "abc123");
+            expect(mockYtGetSong).toHaveBeenNthCalledWith(
+                1,
+                "user-7",
+                "abc123",
+            );
+            expect(mockYtGetSong).toHaveBeenNthCalledWith(
+                2,
+                "__public__",
+                "abc123",
+            );
             expect(resolved).toEqual({
                 title: "Unknown",
                 artist: "Unknown",
@@ -452,10 +462,18 @@ describe("remoteTrackMetadataResolver", () => {
 
             expect(mockedLogger.__childLogger.debug).toHaveBeenCalledWith(
                 "Falling back to __public__ YT metadata lookup for videoId=video-8",
-                lookupError
+                lookupError,
             );
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(1, "user-8", "video-8");
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(2, "__public__", "video-8");
+            expect(mockYtGetSong).toHaveBeenNthCalledWith(
+                1,
+                "user-8",
+                "video-8",
+            );
+            expect(mockYtGetSong).toHaveBeenNthCalledWith(
+                2,
+                "__public__",
+                "video-8",
+            );
             expect(resolved).toEqual({
                 title: "Real YT Title",
                 artist: "Real YT Artist",
@@ -522,7 +540,7 @@ describe("remoteTrackMetadataResolver", () => {
 
             expect(mockedLogger.__childLogger.warn).toHaveBeenCalledWith(
                 "Failed to resolve inline metadata for youtube track",
-                fallbackError
+                fallbackError,
             );
             expect(resolved).toEqual({
                 title: "Unknown",
@@ -565,7 +583,8 @@ describe("remoteTrackMetadataResolver", () => {
                 },
             }));
 
-            const isolatedModule = await import("../remoteTrackMetadataResolver");
+            const isolatedModule =
+                await import("../remoteTrackMetadataResolver");
 
             const resolved =
                 await isolatedModule.resolveRemoteTrackMetadataForRequest({
@@ -591,7 +610,7 @@ describe("remoteTrackMetadataResolver", () => {
             });
             expect(fallbackWarn).toHaveBeenCalledWith(
                 "Failed to resolve inline metadata for youtube track",
-                expect.any(Error)
+                expect.any(Error),
             );
             expect(fallbackDebug).not.toHaveBeenCalled();
         });

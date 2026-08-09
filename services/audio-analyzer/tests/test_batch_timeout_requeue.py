@@ -1,15 +1,14 @@
 """Red-phase contracts for audio analyzer batch-timeout reliability."""
 
-from concurrent.futures import Future
 import importlib.util
-import json
-from pathlib import Path
 import sys
+from collections.abc import Iterator
+from concurrent.futures import Future
+from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
-
 
 ANALYZER_PATH = Path(__file__).resolve().parents[1] / "analyzer.py"
 
@@ -162,8 +161,8 @@ def test_partition_unfinished_tracks_classifies_each_future_state(
         running: ("running", "/running.flac"),
     }
 
-    completed_unconsumed, never_started, attempted = (
-        module.partition_unfinished_tracks(futures_map, {"finalized"})
+    completed_unconsumed, never_started, attempted = module.partition_unfinished_tracks(
+        futures_map, {"finalized"}
     )
 
     assert completed_unconsumed == [("completed", "/completed.flac")]

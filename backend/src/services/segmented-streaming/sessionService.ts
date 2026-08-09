@@ -40,19 +40,13 @@ const READINESS_MICROCACHE_TTL_MS = 1_500;
 const STARTUP_MIN_TIMELINE_SEGMENTS = 3;
 const STARTUP_SEGMENT_EXTENSIONS = ["m4s", "webm"] as const;
 
-const SEGMENTED_QUALITY_VALUES = [
-    "original",
-    "high",
-    "medium",
-    "low",
-] as const;
+const SEGMENTED_QUALITY_VALUES = ["original", "high", "medium", "low"] as const;
 const SEGMENTED_SESSION_MANIFEST_PROFILE_VALUES = [
     "startup_single",
     "steady_state_dual",
 ] as const;
-const SEGMENTED_SOURCE_TYPE_VALUES: ReadonlyArray<SegmentedStreamingSourceType> = [
-    "local",
-];
+const SEGMENTED_SOURCE_TYPE_VALUES: ReadonlyArray<SegmentedStreamingSourceType> =
+    ["local"];
 const DEFAULT_SEGMENTED_SESSION_MANIFEST_PROFILE: SegmentedSessionManifestProfile =
     "steady_state_dual";
 
@@ -158,11 +152,17 @@ interface ReadinessPollBackoffState {
 }
 
 class SegmentedSessionService {
-    private readonly inMemorySessions = new Map<string, SegmentedSessionRecord>();
+    private readonly inMemorySessions = new Map<
+        string,
+        SegmentedSessionRecord
+    >();
     private readonly manifestReadyInFlight = new Map<string, Promise<void>>();
     private readonly segmentReadyInFlight = new Map<string, Promise<void>>();
     private readonly segmentReadyMicrocache = new Map<string, number>();
-    private readonly playbackErrorRepairInFlight = new Map<string, Promise<void>>();
+    private readonly playbackErrorRepairInFlight = new Map<
+        string,
+        Promise<void>
+    >();
     private readonly playbackErrorRepairQueued = new Set<string>();
 
     async createLocalSession(
@@ -195,7 +195,11 @@ class SegmentedSessionService {
             trackLookupMs = segmentedTraceDurationMs(trackLookupStartedAtMs);
 
             if (!track) {
-                throw new SegmentedSessionError("Track not found", 404, "TRACK_NOT_FOUND");
+                throw new SegmentedSessionError(
+                    "Track not found",
+                    404,
+                    "TRACK_NOT_FOUND",
+                );
             }
 
             if (!track.filePath || !track.fileModified) {
@@ -207,15 +211,22 @@ class SegmentedSessionService {
             }
 
             const normalizedFilePath = track.filePath.replace(/\\/g, "/");
-            const sourcePath = path.join(config.music.musicPath, normalizedFilePath);
+            const sourcePath = path.join(
+                config.music.musicPath,
+                normalizedFilePath,
+            );
             phase = "source_access";
             const sourceAccessStartedAtMs = Date.now();
 
             try {
                 await fsPromises.access(sourcePath);
-                sourceAccessMs = segmentedTraceDurationMs(sourceAccessStartedAtMs);
+                sourceAccessMs = segmentedTraceDurationMs(
+                    sourceAccessStartedAtMs,
+                );
             } catch {
-                sourceAccessMs = segmentedTraceDurationMs(sourceAccessStartedAtMs);
+                sourceAccessMs = segmentedTraceDurationMs(
+                    sourceAccessStartedAtMs,
+                );
                 throw new SegmentedSessionError(
                     "Track source file was not found on disk",
                     404,
@@ -225,13 +236,15 @@ class SegmentedSessionService {
 
             phase = "asset_build";
             const assetBuildStartedAtMs = Date.now();
-            const asset = await segmentedManifestService.getOrCreateLocalDashAsset({
-                trackId: track.id,
-                sourcePath,
-                sourceModified: track.fileModified,
-                quality: quality as SegmentedManifestQuality,
-                manifestProfile: manifestProfile as SegmentedManifestProfile,
-            });
+            const asset =
+                await segmentedManifestService.getOrCreateLocalDashAsset({
+                    trackId: track.id,
+                    sourcePath,
+                    sourceModified: track.fileModified,
+                    quality: quality as SegmentedManifestQuality,
+                    manifestProfile:
+                        manifestProfile as SegmentedManifestProfile,
+                });
             assetBuildMs = segmentedTraceDurationMs(assetBuildStartedAtMs);
 
             const sessionId = randomUUID();
@@ -352,7 +365,8 @@ class SegmentedSessionService {
 
             // Allow expired token claims for active sessions so in-flight segment
             // requests can continue while heartbeat-issued tokens rotate.
-            payload = this.decodeSessionTokenIgnoringExpiration(normalizedToken);
+            payload =
+                this.decodeSessionTokenIgnoringExpiration(normalizedToken);
         }
 
         const scopeMatches =
@@ -413,7 +427,9 @@ class SegmentedSessionService {
     ): Promise<SegmentedSessionHeartbeatResponse> {
         const now = new Date();
         const expiresAt = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000);
-        const normalizedPositionSec = normalizePositionSec(snapshot.positionSec);
+        const normalizedPositionSec = normalizePositionSec(
+            snapshot.positionSec,
+        );
         const normalizedIsPlaying = normalizeIsPlaying(snapshot.isPlaying);
 
         const updatedSession: SegmentedSessionRecord = {
@@ -422,7 +438,8 @@ class SegmentedSessionService {
             lastHeartbeatAt: now.toISOString(),
             lastKnownPositionSec:
                 normalizedPositionSec ?? session.lastKnownPositionSec,
-            lastKnownIsPlaying: normalizedIsPlaying ?? session.lastKnownIsPlaying,
+            lastKnownIsPlaying:
+                normalizedIsPlaying ?? session.lastKnownIsPlaying,
         };
 
         await this.persistSession(updatedSession);
@@ -502,7 +519,10 @@ class SegmentedSessionService {
             sessionId,
             trackId: input.trackId?.trim() || undefined,
         }).finally(() => {
-            if (this.playbackErrorRepairInFlight.get(sessionId) === repairPromise) {
+            if (
+                this.playbackErrorRepairInFlight.get(sessionId) ===
+                repairPromise
+            ) {
                 this.playbackErrorRepairInFlight.delete(sessionId);
             }
         });
@@ -667,7 +687,9 @@ class SegmentedSessionService {
         microcache.set(key, Date.now() + READINESS_MICROCACHE_TTL_MS);
     }
 
-    private async persistSession(session: SegmentedSessionRecord): Promise<void> {
+    private async persistSession(
+        session: SegmentedSessionRecord,
+    ): Promise<void> {
         const key = this.getSessionKey(session.sessionId);
         this.inMemorySessions.set(session.sessionId, session);
 
@@ -784,7 +806,9 @@ class SegmentedSessionService {
         });
     }
 
-    private decodeSessionToken(sessionToken: string): SegmentedSessionTokenPayload {
+    private decodeSessionToken(
+        sessionToken: string,
+    ): SegmentedSessionTokenPayload {
         try {
             const decoded = jwt.verify(sessionToken, SESSION_TOKEN_SECRET);
             if (!isSegmentedSessionTokenPayload(decoded)) {
@@ -832,7 +856,9 @@ class SegmentedSessionService {
                     playbackQuality: true,
                 },
             });
-            const settingsQuality = normalizeQuality(userSettings?.playbackQuality);
+            const settingsQuality = normalizeQuality(
+                userSettings?.playbackQuality,
+            );
             if (settingsQuality) {
                 return settingsQuality;
             }
@@ -926,10 +952,8 @@ class SegmentedSessionService {
             if (!hasInFlightBuild) {
                 if (!selfHealAttempted) {
                     selfHealAttempted = true;
-                    const selfHealTriggered = await this.trySelfHealMissingAsset(
-                        session,
-                        assetType,
-                    );
+                    const selfHealTriggered =
+                        await this.trySelfHealMissingAsset(session, assetType);
                     if (selfHealTriggered) {
                         resetReadinessPollBackoffState(pollBackoffState);
                         await waitForNextReadinessPoll(
@@ -1018,10 +1042,11 @@ class SegmentedSessionService {
             if (!hasInFlightBuild) {
                 if (!selfHealAttempted) {
                     selfHealAttempted = true;
-                    const selfHealTriggered = await this.trySelfHealMissingAsset(
-                        session,
-                        "startup_window",
-                    );
+                    const selfHealTriggered =
+                        await this.trySelfHealMissingAsset(
+                            session,
+                            "startup_window",
+                        );
                     if (selfHealTriggered) {
                         resetReadinessPollBackoffState(pollBackoffState);
                         await waitForNextReadinessPoll(
@@ -1054,14 +1079,14 @@ class SegmentedSessionService {
     private async hasStartupWindowReady(
         session: SegmentedSessionRecord,
     ): Promise<boolean> {
-        const startupReadiness = await this.readManifestStartupReadiness(session);
+        const startupReadiness =
+            await this.readManifestStartupReadiness(session);
         if (!startupReadiness) {
             return false;
         }
 
         if (
-            startupReadiness.startupSegmentCount <
-            STARTUP_MIN_TIMELINE_SEGMENTS
+            startupReadiness.startupSegmentCount < STARTUP_MIN_TIMELINE_SEGMENTS
         ) {
             return false;
         }
@@ -1129,7 +1154,9 @@ class SegmentedSessionService {
         }
     }
 
-    private async anyPathExists(candidatePaths: readonly string[]): Promise<boolean> {
+    private async anyPathExists(
+        candidatePaths: readonly string[],
+    ): Promise<boolean> {
         for (const candidatePath of candidatePaths) {
             if (await pathExists(candidatePath)) {
                 return true;
@@ -1157,7 +1184,10 @@ class SegmentedSessionService {
             }
 
             const normalizedFilePath = track.filePath.replace(/\\/g, "/");
-            const sourcePath = path.join(config.music.musicPath, normalizedFilePath);
+            const sourcePath = path.join(
+                config.music.musicPath,
+                normalizedFilePath,
+            );
             await fsPromises.access(sourcePath);
 
             await segmentedManifestService.getOrCreateLocalDashAsset({
@@ -1200,23 +1230,29 @@ class SegmentedSessionService {
                 params.userId,
             );
             if (!session) {
-                logSegmentedStreamingTrace("session.asset.playback_error_repair_skipped", {
-                    sessionId: params.sessionId,
-                    reason: "session_not_found",
-                    totalMs: segmentedTraceDurationMs(startedAtMs),
-                });
+                logSegmentedStreamingTrace(
+                    "session.asset.playback_error_repair_skipped",
+                    {
+                        sessionId: params.sessionId,
+                        reason: "session_not_found",
+                        totalMs: segmentedTraceDurationMs(startedAtMs),
+                    },
+                );
                 return;
             }
 
             if (params.trackId && params.trackId !== session.trackId) {
-                logSegmentedStreamingTrace("session.asset.playback_error_repair_skipped", {
-                    sessionId: session.sessionId,
-                    trackId: session.trackId,
-                    requestedTrackId: params.trackId,
-                    cacheKey: session.cacheKey,
-                    reason: "track_id_mismatch",
-                    totalMs: segmentedTraceDurationMs(startedAtMs),
-                });
+                logSegmentedStreamingTrace(
+                    "session.asset.playback_error_repair_skipped",
+                    {
+                        sessionId: session.sessionId,
+                        trackId: session.trackId,
+                        requestedTrackId: params.trackId,
+                        cacheKey: session.cacheKey,
+                        reason: "track_id_mismatch",
+                        totalMs: segmentedTraceDurationMs(startedAtMs),
+                    },
+                );
                 return;
             }
 
@@ -1229,18 +1265,24 @@ class SegmentedSessionService {
                 },
             });
             if (!track?.filePath || !track.fileModified) {
-                logSegmentedStreamingTrace("session.asset.playback_error_repair_skipped", {
-                    sessionId: session.sessionId,
-                    trackId: session.trackId,
-                    cacheKey: session.cacheKey,
-                    reason: "track_source_unavailable",
-                    totalMs: segmentedTraceDurationMs(startedAtMs),
-                });
+                logSegmentedStreamingTrace(
+                    "session.asset.playback_error_repair_skipped",
+                    {
+                        sessionId: session.sessionId,
+                        trackId: session.trackId,
+                        cacheKey: session.cacheKey,
+                        reason: "track_source_unavailable",
+                        totalMs: segmentedTraceDurationMs(startedAtMs),
+                    },
+                );
                 return;
             }
 
             const normalizedFilePath = track.filePath.replace(/\\/g, "/");
-            const sourcePath = path.join(config.music.musicPath, normalizedFilePath);
+            const sourcePath = path.join(
+                config.music.musicPath,
+                normalizedFilePath,
+            );
             await fsPromises.access(sourcePath);
             await segmentedSegmentService.forceRegenerateDashSegments({
                 trackId: track.id,
@@ -1251,20 +1293,26 @@ class SegmentedSessionService {
                     session.manifestProfile as SegmentedManifestProfile,
             });
 
-            logSegmentedStreamingTrace("session.asset.playback_error_repair_queued", {
-                sessionId: session.sessionId,
-                trackId: session.trackId,
-                cacheKey: session.cacheKey,
-                quality: session.quality,
-                totalMs: segmentedTraceDurationMs(startedAtMs),
-            });
+            logSegmentedStreamingTrace(
+                "session.asset.playback_error_repair_queued",
+                {
+                    sessionId: session.sessionId,
+                    trackId: session.trackId,
+                    cacheKey: session.cacheKey,
+                    quality: session.quality,
+                    totalMs: segmentedTraceDurationMs(startedAtMs),
+                },
+            );
         } catch (error) {
-            logSegmentedStreamingTrace("session.asset.playback_error_repair_error", {
-                sessionId: params.sessionId,
-                trackId: params.trackId,
-                ...toSegmentedTraceErrorFields(error),
-                totalMs: segmentedTraceDurationMs(startedAtMs),
-            });
+            logSegmentedStreamingTrace(
+                "session.asset.playback_error_repair_error",
+                {
+                    sessionId: params.sessionId,
+                    trackId: params.trackId,
+                    ...toSegmentedTraceErrorFields(error),
+                    totalMs: segmentedTraceDurationMs(startedAtMs),
+                },
+            );
         }
     }
 }
@@ -1387,8 +1435,7 @@ const isSegmentedSessionQuality = (
 
 const isSegmentedSessionSourceType = (
     value: unknown,
-): value is SegmentedSessionSourceType =>
-    value === "local";
+): value is SegmentedSessionSourceType => value === "local";
 
 const isSegmentedSessionManifestProfile = (
     value: unknown,
@@ -1423,24 +1470,28 @@ const isSegmentedSessionTokenPayload = (
 };
 
 const countManifestTimelineSegments = (manifest: string): number[] => {
-    const timelineSectionRegex = /<SegmentTimeline>([\s\S]*?)<\/SegmentTimeline>/gi;
+    const timelineSectionRegex =
+        /<SegmentTimeline>([\s\S]*?)<\/SegmentTimeline>/gi;
     const segmentCounts: number[] = [];
 
-    let timelineMatch: RegExpExecArray | null = timelineSectionRegex.exec(manifest);
+    let timelineMatch: RegExpExecArray | null =
+        timelineSectionRegex.exec(manifest);
     while (timelineMatch) {
         const timelineBody = timelineMatch[1];
         let segmentCount = 0;
         const segmentEntryRegex = /<S\b([^>]*)\/?>/gi;
-        let entryMatch: RegExpExecArray | null = segmentEntryRegex.exec(timelineBody);
+        let entryMatch: RegExpExecArray | null =
+            segmentEntryRegex.exec(timelineBody);
         while (entryMatch) {
             const attributes = entryMatch[1] ?? "";
             const repeatMatch = /\br="(-?\d+)"/i.exec(attributes);
             const repeatCount = repeatMatch
                 ? Number.parseInt(repeatMatch[1], 10)
                 : 0;
-            segmentCount += Number.isFinite(repeatCount) && repeatCount >= 0
-                ? repeatCount + 1
-                : 1;
+            segmentCount +=
+                Number.isFinite(repeatCount) && repeatCount >= 0
+                    ? repeatCount + 1
+                    : 1;
             entryMatch = segmentEntryRegex.exec(timelineBody);
         }
 
@@ -1451,11 +1502,14 @@ const countManifestTimelineSegments = (manifest: string): number[] => {
     return segmentCounts;
 };
 
-const extractManifestStartupReadiness = (manifest: string): {
+const extractManifestStartupReadiness = (
+    manifest: string,
+): {
     startupRepresentationId: string;
     startupSegmentCount: number;
 } | null => {
-    const startupTimelineSegmentCounts = countManifestTimelineSegments(manifest);
+    const startupTimelineSegmentCounts =
+        countManifestTimelineSegments(manifest);
     if (startupTimelineSegmentCounts.length === 0) {
         return null;
     }
@@ -1464,8 +1518,11 @@ const extractManifestStartupReadiness = (manifest: string): {
         /<Representation\b[^>]*\bid=(?:"([^"]+)"|'([^']+)')/i,
     );
     const matchedRepresentationId = startupRepresentationMatch
-        ? (startupRepresentationMatch[1] ?? startupRepresentationMatch[2] ?? "")
-            .trim()
+        ? (
+              startupRepresentationMatch[1] ??
+              startupRepresentationMatch[2] ??
+              ""
+          ).trim()
         : "";
 
     return {
@@ -1489,13 +1546,22 @@ const buildStartupSegmentCandidatesForRepresentation = (
             path.resolve(assetDir, `init-${representationToken}.${extension}`),
         ),
         firstChunkPaths: STARTUP_SEGMENT_EXTENSIONS.map((extension) =>
-            path.resolve(assetDir, `chunk-${representationToken}-00001.${extension}`),
+            path.resolve(
+                assetDir,
+                `chunk-${representationToken}-00001.${extension}`,
+            ),
         ),
         secondChunkPaths: STARTUP_SEGMENT_EXTENSIONS.map((extension) =>
-            path.resolve(assetDir, `chunk-${representationToken}-00002.${extension}`),
+            path.resolve(
+                assetDir,
+                `chunk-${representationToken}-00002.${extension}`,
+            ),
         ),
         thirdChunkPaths: STARTUP_SEGMENT_EXTENSIONS.map((extension) =>
-            path.resolve(assetDir, `chunk-${representationToken}-00003.${extension}`),
+            path.resolve(
+                assetDir,
+                `chunk-${representationToken}-00003.${extension}`,
+            ),
         ),
     };
 };
@@ -1506,9 +1572,7 @@ const wait = async (durationMs: number): Promise<void> => {
     });
 };
 
-const resolveReadinessDeadlineAtMs = (
-    deadlineAtMsInput?: number,
-): number => {
+const resolveReadinessDeadlineAtMs = (deadlineAtMsInput?: number): number => {
     if (
         typeof deadlineAtMsInput === "number" &&
         Number.isFinite(deadlineAtMsInput)
@@ -1541,9 +1605,7 @@ const computeNextReadinessPollDelayMs = (
 
     state.nextBaseDelayMs = Math.min(
         ASSET_READY_POLL_MAX_INTERVAL_MS,
-        Math.ceil(
-            state.nextBaseDelayMs * ASSET_READY_POLL_BACKOFF_MULTIPLIER,
-        ),
+        Math.ceil(state.nextBaseDelayMs * ASSET_READY_POLL_BACKOFF_MULTIPLIER),
     );
     return nextDelayMs;
 };

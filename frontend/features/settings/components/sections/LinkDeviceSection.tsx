@@ -23,8 +23,9 @@ export function LinkDeviceSection() {
             </div>
 
             <p className="text-sm text-gray-400 mb-4">
-                Generate a QR code or 6-digit code to quickly link a compatible device.
-                For general mobile playback, use the soundspan PWA or a Subsonic-compatible client.
+                Generate a QR code or 6-digit code to quickly link a compatible
+                device. For general mobile playback, use the soundspan PWA or a
+                Subsonic-compatible client.
             </p>
 
             <Link
@@ -38,17 +39,3 @@ export function LinkDeviceSection() {
         </div>
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

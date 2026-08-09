@@ -11,10 +11,7 @@ import { musicBrainzService } from "../services/musicbrainz";
 import { lastFmService } from "../services/lastfm";
 import { simpleDownloadManager } from "../services/simpleDownloadManager";
 import { mapInteractiveRelease } from "../services/releaseContracts";
-import {
-    sendInternalRouteError,
-    sendRouteError,
-} from "./routeErrorResponse";
+import { sendInternalRouteError, sendRouteError } from "./routeErrorResponse";
 import crypto from "crypto";
 
 const router = Router();
@@ -43,11 +40,12 @@ router.use(requireAuthOrToken);
  */
 router.get("/availability", async (req, res) => {
     try {
-        const [lidarrEnabled, soulseekAvailable, tidalAvailable] = await Promise.all([
-            lidarrService.isEnabled(),
-            soulseekService.isAvailable(),
-            tidalService.isAvailable(),
-        ]);
+        const [lidarrEnabled, soulseekAvailable, tidalAvailable] =
+            await Promise.all([
+                lidarrService.isEnabled(),
+                soulseekService.isAvailable(),
+                tidalService.isAvailable(),
+            ]);
 
         res.json({
             enabled: lidarrEnabled || soulseekAvailable || tidalAvailable,
@@ -72,7 +70,7 @@ router.get("/availability", async (req, res) => {
  */
 async function verifyArtistName(
     artistName: string,
-    artistMbid?: string
+    artistMbid?: string,
 ): Promise<{
     verifiedName: string;
     wasCorrected: boolean;
@@ -98,7 +96,7 @@ async function verifyArtistName(
         } catch (error) {
             logger.warn(
                 `MusicBrainz lookup failed for MBID ${artistMbid}:`,
-                error
+                error,
             );
         }
     }
@@ -108,7 +106,7 @@ async function verifyArtistName(
         const correction = await lastFmService.getArtistCorrection(artistName);
         if (correction?.corrected) {
             logger.debug(
-                `[VERIFY] LastFM correction: "${artistName}" → "${correction.canonicalName}"`
+                `[VERIFY] LastFM correction: "${artistName}" → "${correction.canonicalName}"`,
             );
             return {
                 verifiedName: correction.canonicalName,
@@ -120,7 +118,7 @@ async function verifyArtistName(
     } catch (error) {
         logger.warn(
             `LastFM correction lookup failed for "${artistName}":`,
-            error
+            error,
         );
     }
 
@@ -208,11 +206,12 @@ router.post("/", async (req, res) => {
 
         // Check if at least one download service is available
         const settings = await getSystemSettings();
-        const [lidarrEnabled, soulseekAvailable, tidalAvailable] = await Promise.all([
-            lidarrService.isEnabled(),
-            soulseekService.isAvailable(),
-            tidalService.isAvailable(),
-        ]);
+        const [lidarrEnabled, soulseekAvailable, tidalAvailable] =
+            await Promise.all([
+                lidarrService.isEnabled(),
+                soulseekService.isAvailable(),
+                tidalService.isAvailable(),
+            ]);
 
         if (!lidarrEnabled && !soulseekAvailable && !tidalAvailable) {
             return res.status(400).json({
@@ -234,7 +233,7 @@ router.post("/", async (req, res) => {
                 mbid,
                 subject,
                 rootFolderPath,
-                downloadType
+                downloadType,
             );
 
             return res.json({
@@ -256,7 +255,7 @@ router.post("/", async (req, res) => {
             const verification = await verifyArtistName(artistName);
             if (verification.wasCorrected) {
                 logger.debug(
-                    `[DOWNLOAD] Artist name verified: "${artistName}" → "${verification.verifiedName}" (source: ${verification.source})`
+                    `[DOWNLOAD] Artist name verified: "${artistName}" → "${verification.verifiedName}" (source: ${verification.source})`,
                 );
                 verifiedArtistName = verification.verifiedName;
             }
@@ -287,7 +286,7 @@ router.post("/", async (req, res) => {
             if (existingJobs.length > 0) {
                 const existingJob = existingJobs[0];
                 logger.debug(
-                    `[DOWNLOAD] Job already exists for ${mbid}: ${existingJob.id} (${existingJob.status})`
+                    `[DOWNLOAD] Job already exists for ${mbid}: ${existingJob.id} (${existingJob.status})`,
                 );
                 return { duplicate: true, job: existingJob };
             }
@@ -327,7 +326,7 @@ router.post("/", async (req, res) => {
         const job = jobResult.job;
 
         logger.debug(
-            `[DOWNLOAD] Triggering Lidarr: ${type} "${subject}" -> ${rootFolderPath}`
+            `[DOWNLOAD] Triggering Lidarr: ${type} "${subject}" -> ${rootFolderPath}`,
         );
 
         // Process in background
@@ -338,11 +337,11 @@ router.post("/", async (req, res) => {
             subject,
             rootFolderPath,
             verifiedArtistName,
-            albumTitle
+            albumTitle,
         ).catch((error) => {
             logger.error(
                 `Download processing failed for job ${job.id}:`,
-                error
+                error,
             );
         });
 
@@ -387,7 +386,7 @@ async function processArtistDownload(
     artistMbid: string,
     artistName: string,
     rootFolderPath: string,
-    downloadType: string
+    downloadType: string,
 ): Promise<{ id: string; subject: string }[]> {
     logger.debug(`\n Processing artist download: ${artistName}`);
     logger.debug(`   Artist MBID: ${artistMbid}`);
@@ -407,11 +406,11 @@ async function processArtistDownload(
             canonicalArtistName = mbArtist.name;
             if (canonicalArtistName !== artistName) {
                 logger.debug(
-                    `   ✓ Canonical name resolved: "${artistName}" → "${canonicalArtistName}"`
+                    `   ✓ Canonical name resolved: "${artistName}" → "${canonicalArtistName}"`,
                 );
             } else {
                 logger.debug(
-                    `   ✓ Name matches canonical: "${canonicalArtistName}"`
+                    `   ✓ Name matches canonical: "${canonicalArtistName}"`,
                 );
             }
         }
@@ -419,18 +418,17 @@ async function processArtistDownload(
         logger.warn(`   ⚠ MusicBrainz lookup failed: ${mbError.message}`);
         // Fallback to LastFM correction
         try {
-            const correction = await lastFmService.getArtistCorrection(
-                artistName
-            );
+            const correction =
+                await lastFmService.getArtistCorrection(artistName);
             if (correction?.canonicalName) {
                 canonicalArtistName = correction.canonicalName;
                 logger.debug(
-                    `   ✓ Name resolved via LastFM: "${artistName}" → "${canonicalArtistName}"`
+                    `   ✓ Name resolved via LastFM: "${artistName}" → "${canonicalArtistName}"`,
                 );
             }
         } catch (lfmError) {
             logger.warn(
-                `   ⚠ LastFM correction also failed, using original name`
+                `   ⚠ LastFM correction also failed, using original name`,
             );
         }
     }
@@ -440,7 +438,7 @@ async function processArtistDownload(
         const lidarrArtist = await lidarrService.addArtist(
             artistMbid,
             canonicalArtistName,
-            rootFolderPath
+            rootFolderPath,
         );
 
         if (!lidarrArtist) {
@@ -454,11 +452,11 @@ async function processArtistDownload(
         const releaseGroups = await musicBrainzService.getReleaseGroups(
             artistMbid,
             ["album", "ep"],
-            100
+            100,
         );
 
         logger.debug(
-            `   Found ${releaseGroups.length} albums/EPs from MusicBrainz`
+            `   Found ${releaseGroups.length} albums/EPs from MusicBrainz`,
         );
 
         if (releaseGroups.length === 0) {
@@ -480,7 +478,9 @@ async function processArtistDownload(
             });
 
             if (existingAlbum) {
-                logger.debug(`   Skipping "${albumTitle}" - already in library`);
+                logger.debug(
+                    `   Skipping "${albumTitle}" - already in library`,
+                );
                 continue;
             }
 
@@ -566,7 +566,7 @@ async function processArtistDownload(
                         jobResult.reason === "recently_failed"
                             ? "recently failed"
                             : "already in download queue"
-                    }`
+                    }`,
                 );
                 continue;
             }
@@ -583,7 +583,7 @@ async function processArtistDownload(
                 albumSubject,
                 rootFolderPath,
                 artistName,
-                albumTitle
+                albumTitle,
             ).catch((error) => {
                 logger.error(`Download failed for ${albumSubject}:`, error);
             });
@@ -607,7 +607,7 @@ async function failJobWithoutDispatch(
     jobMetadata: unknown,
     source: string,
     message: string,
-    statusText: string
+    statusText: string,
 ) {
     logger.error(`[Downloads] ${message} — job ${jobId} not dispatched`);
 
@@ -645,7 +645,7 @@ async function processDownload(
     subject: string,
     rootFolderPath: string,
     artistName?: string,
-    albumTitle?: string
+    albumTitle?: string,
 ) {
     const job = await prisma.downloadJob.findUnique({ where: { id: jobId } });
     if (!job) {
@@ -668,7 +668,9 @@ async function processDownload(
             }
         }
 
-        logger.debug(`Parsed: Artist="${parsedArtist}", Album="${parsedAlbum}"`);
+        logger.debug(
+            `Parsed: Artist="${parsedArtist}", Album="${parsedAlbum}"`,
+        );
 
         // Check configured download source and service availability
         const settings = await getSystemSettings();
@@ -707,7 +709,7 @@ async function processDownload(
                     job.metadata,
                     configuredSource,
                     reason,
-                    `${configuredSource} unavailable — skipped`
+                    `${configuredSource} unavailable — skipped`,
                 );
                 return;
             }
@@ -723,7 +725,7 @@ async function processDownload(
                         job.metadata,
                         configuredSource,
                         `${configuredSource} is unavailable and the configured fallback (${fallback}) is also unavailable`,
-                        `${configuredSource} and fallback ${fallback} unavailable`
+                        `${configuredSource} and fallback ${fallback} unavailable`,
                     );
                     return;
                 }
@@ -731,18 +733,37 @@ async function processDownload(
             } else if (configuredSource === "tidal") {
                 // Legacy auto-detect (no stored fallback preference):
                 // TIDAL is down, so prefer Soulseek, then Lidarr
-                effectiveSource = soulseekAvail ? "soulseek" : lidarrAvail ? "lidarr" : "soulseek";
+                effectiveSource = soulseekAvail
+                    ? "soulseek"
+                    : lidarrAvail
+                      ? "lidarr"
+                      : "soulseek";
             } else if (configuredSource === "soulseek") {
-                effectiveSource = tidalAvail ? "tidal" : lidarrAvail ? "lidarr" : "soulseek";
+                effectiveSource = tidalAvail
+                    ? "tidal"
+                    : lidarrAvail
+                      ? "lidarr"
+                      : "soulseek";
             } else {
-                effectiveSource = tidalAvail ? "tidal" : soulseekAvail ? "soulseek" : "lidarr";
+                effectiveSource = tidalAvail
+                    ? "tidal"
+                    : soulseekAvail
+                      ? "soulseek"
+                      : "lidarr";
             }
         }
 
-        logger.debug(`Download source: configured=${configuredSource}, effective=${effectiveSource}`);
+        logger.debug(
+            `Download source: configured=${configuredSource}, effective=${effectiveSource}`,
+        );
 
         if (effectiveSource === "tidal" && tidalAvail) {
-            await processTidalDownload(jobId, parsedArtist, parsedAlbum, job.userId);
+            await processTidalDownload(
+                jobId,
+                parsedArtist,
+                parsedAlbum,
+                job.userId,
+            );
         } else {
             // Non-TIDAL dispatch goes through simpleDownloadManager, which
             // is Lidarr-backed — there is no per-source dispatch below this
@@ -753,7 +774,7 @@ async function processDownload(
                 parsedArtist,
                 parsedAlbum,
                 mbid,
-                job.userId
+                job.userId,
             );
 
             if (!result.success) {
@@ -770,7 +791,7 @@ async function processTidalDownload(
     jobId: string,
     artistName: string,
     albumTitle: string,
-    userId: string
+    userId: string,
 ) {
     const existingJob = await prisma.downloadJob.findUnique({
         where: { id: jobId },
@@ -801,7 +822,7 @@ async function processTidalDownload(
 
             if (fallback && fallback !== "none" && fallback !== "tidal") {
                 logger.debug(
-                    `[TIDAL] Album not found, falling back to ${fallback}`
+                    `[TIDAL] Album not found, falling back to ${fallback}`,
                 );
                 await prisma.downloadJob.update({
                     where: { id: jobId },
@@ -820,22 +841,24 @@ async function processTidalDownload(
                         artistName,
                         albumTitle,
                         existingMetadata.albumMbid || "",
-                        userId
+                        userId,
                     );
                     if (!result.success) {
-                        logger.error(`Fallback ${fallback} failed: ${result.error}`);
+                        logger.error(
+                            `Fallback ${fallback} failed: ${result.error}`,
+                        );
                     }
                     return;
                 }
             }
 
             throw new Error(
-                `Album not found on TIDAL: ${artistName} - ${albumTitle}`
+                `Album not found on TIDAL: ${artistName} - ${albumTitle}`,
             );
         }
 
         logger.debug(
-            `[TIDAL] Found album: "${match.title}" by ${match.artist} (ID: ${match.albumId}, ${match.numberOfTracks} tracks)`
+            `[TIDAL] Found album: "${match.title}" by ${match.artist} (ID: ${match.albumId}, ${match.numberOfTracks} tracks)`,
         );
 
         // Update status before download
@@ -855,12 +878,12 @@ async function processTidalDownload(
         const result = await tidalService.downloadAlbum(match.albumId);
 
         logger.debug(
-            `[TIDAL] Download complete: ${result.downloaded}/${result.total_tracks} tracks`
+            `[TIDAL] Download complete: ${result.downloaded}/${result.total_tracks} tracks`,
         );
 
         if (result.downloaded === 0) {
             throw new Error(
-                `All ${result.total_tracks} tracks failed to download`
+                `All ${result.total_tracks} tracks failed to download`,
             );
         }
 
@@ -899,10 +922,13 @@ async function processTidalDownload(
         });
 
         logger.debug(
-            `[TIDAL] Scan queued for: ${result.artist} - ${result.album_title}`
+            `[TIDAL] Scan queued for: ${result.artist} - ${result.album_title}`,
         );
     } catch (error: any) {
-        logger.error(`[TIDAL] Download failed for job ${jobId}:`, error.message);
+        logger.error(
+            `[TIDAL] Download failed for job ${jobId}:`,
+            error.message,
+        );
 
         await prisma.downloadJob.update({
             where: { id: jobId },
@@ -957,7 +983,7 @@ router.delete("/clear-all", async (req, res) => {
         const result = await prisma.downloadJob.deleteMany({ where });
 
         logger.debug(
-            ` Cleared ${result.count} download jobs for user ${userId}`
+            ` Cleared ${result.count} download jobs for user ${userId}`,
         );
         res.json({ success: true, deleted: result.count });
     } catch (error) {
@@ -1129,7 +1155,7 @@ router.get("/releases/:albumMbid", async (req, res) => {
         }
 
         logger.debug(
-            `[INTERACTIVE] Searching releases for ${albumTitle || albumMbid}`
+            `[INTERACTIVE] Searching releases for ${albumTitle || albumMbid}`,
         );
 
         let lidarrAlbumId: number | null = null;
@@ -1137,16 +1163,16 @@ router.get("/releases/:albumMbid", async (req, res) => {
         const searchResults = await lidarrService.searchAlbum(
             artistName,
             albumTitle,
-            albumMbid
+            albumMbid,
         );
         if (searchResults.length > 0) {
             const exactMatch = searchResults.find(
-                (album) => album.foreignAlbumId === albumMbid
+                (album) => album.foreignAlbumId === albumMbid,
             );
             if (exactMatch) {
                 lidarrAlbumId = exactMatch.id;
                 logger.debug(
-                    `[INTERACTIVE] Found album in Lidarr lookup: ${lidarrAlbumId}`
+                    `[INTERACTIVE] Found album in Lidarr lookup: ${lidarrAlbumId}`,
                 );
             }
         }
@@ -1161,35 +1187,36 @@ router.get("/releases/:albumMbid", async (req, res) => {
             } catch (error) {
                 logger.warn(
                     `[INTERACTIVE] Failed resolving artist MBID for ${albumMbid}:`,
-                    error
+                    error,
                 );
             }
 
             if (artistMbid) {
                 const settings = await getSystemSettings();
-                const baseMusicPath = settings?.musicPath || config.music.musicPath;
+                const baseMusicPath =
+                    settings?.musicPath || config.music.musicPath;
 
                 const artist = await lidarrService.addArtist(
                     artistMbid,
                     artistName,
                     baseMusicPath,
                     false, // no auto-search
-                    false // don't auto-monitor all albums
+                    false, // don't auto-monitor all albums
                 );
 
                 if (artist) {
                     const retryResults = await lidarrService.searchAlbum(
                         artistName,
                         albumTitle,
-                        albumMbid
+                        albumMbid,
                     );
                     const retryMatch = retryResults.find(
-                        (album) => album.foreignAlbumId === albumMbid
+                        (album) => album.foreignAlbumId === albumMbid,
                     );
                     if (retryMatch) {
                         lidarrAlbumId = retryMatch.id;
                         logger.debug(
-                            `[INTERACTIVE] Found album after artist add: ${lidarrAlbumId}`
+                            `[INTERACTIVE] Found album after artist add: ${lidarrAlbumId}`,
                         );
                     }
                 }
@@ -1278,10 +1305,14 @@ router.post("/grab", async (req, res) => {
         const normalizedAlbumMbid =
             typeof albumMbid === "string" ? albumMbid.trim() : "";
 
-        if (!guid || !Number.isFinite(parsedLidarrAlbumId) || parsedLidarrAlbumId <= 0) {
-            return res
-                .status(400)
-                .json({ error: "Missing required fields: guid, lidarrAlbumId" });
+        if (
+            !guid ||
+            !Number.isFinite(parsedLidarrAlbumId) ||
+            parsedLidarrAlbumId <= 0
+        ) {
+            return res.status(400).json({
+                error: "Missing required fields: guid, lidarrAlbumId",
+            });
         }
 
         const lidarrEnabled = await lidarrService.isEnabled();

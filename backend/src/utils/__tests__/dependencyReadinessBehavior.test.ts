@@ -76,7 +76,9 @@ describe("dependency readiness tracker behavior", () => {
         jest.doMock("../logger", () => ({ logger }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { createDependencyReadinessTracker } = require("../dependencyReadiness");
+        const {
+            createDependencyReadinessTracker,
+        } = require("../dependencyReadiness");
         const tracker = createDependencyReadinessTracker("test");
         return {
             tracker,
@@ -176,7 +178,7 @@ describe("dependency readiness tracker behavior", () => {
         expect(degraded.overallHealthy).toBe(false);
         expect(tracker.isHealthy()).toBe(false);
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Dependencies unhealthy")
+            expect.stringContaining("Dependencies unhealthy"),
         );
     });
 

@@ -67,13 +67,13 @@ describe("youtubeMusic service branch coverage", () => {
         await ytMusicService.restoreOAuthWithCredentials(
             "u1",
             '{"token":"x"}',
-            "client-id"
+            "client-id",
         );
 
         expect(mockClient.post).toHaveBeenCalledWith(
             "/auth/restore",
             { oauth_json: '{"token":"x"}' },
-            { params: { user_id: "u1" } }
+            { params: { user_id: "u1" } },
         );
     });
 
@@ -119,7 +119,7 @@ describe("youtubeMusic service branch coverage", () => {
                 albumTitle: "Album Via Name",
                 durationSec: 3723,
                 thumbnailUrl: "https://img/a.jpg",
-            })
+            }),
         );
         expect(result.results[1]).toEqual(
             expect.objectContaining({
@@ -127,14 +127,14 @@ describe("youtubeMusic service branch coverage", () => {
                 artistName: "Artist Via String",
                 albumTitle: "Album Via String",
                 durationSec: 225,
-            })
+            }),
         );
         expect(result.results[2]).toEqual(
             expect.objectContaining({
                 providerTrackId: "v-unknown-artist",
                 artistName: "Unknown Artist",
                 durationSec: null,
-            })
+            }),
         );
     });
 
@@ -157,10 +157,16 @@ describe("youtubeMusic service branch coverage", () => {
             timeout: 120000,
         });
 
-        await expect(ytMusicService.getLibraryPlaylists("u1")).resolves.toEqual([]);
-        expect(mockClient.get).toHaveBeenNthCalledWith(3, "/library/playlists", {
-            params: { user_id: "u1", limit: 25, mixes_only: false },
-        });
+        await expect(ytMusicService.getLibraryPlaylists("u1")).resolves.toEqual(
+            [],
+        );
+        expect(mockClient.get).toHaveBeenNthCalledWith(
+            3,
+            "/library/playlists",
+            {
+                params: { user_id: "u1", limit: 25, mixes_only: false },
+            },
+        );
     });
 
     it("retries batch search on ETIMEDOUT and then succeeds", async () => {
@@ -169,7 +175,9 @@ describe("youtubeMusic service branch coverage", () => {
             .mockRejectedValueOnce({ code: "ETIMEDOUT" })
             .mockResolvedValueOnce({
                 data: {
-                    results: [{ results: [{ videoId: "v1" }], total: 1, error: null }],
+                    results: [
+                        { results: [{ videoId: "v1" }], total: 1, error: null },
+                    ],
                 },
             });
 
@@ -202,7 +210,11 @@ describe("youtubeMusic service branch coverage", () => {
 
         jest.spyOn(ytMusicService, "searchBatch")
             .mockResolvedValueOnce([
-                { results: [{ videoId: "ignored" }], total: 1, error: "failed" },
+                {
+                    results: [{ videoId: "ignored" }],
+                    total: 1,
+                    error: "failed",
+                },
                 { results: [], total: 0, error: null },
             ])
             .mockResolvedValueOnce([

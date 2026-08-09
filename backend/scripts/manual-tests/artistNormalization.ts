@@ -1,6 +1,6 @@
 /**
  * Artist Normalization Test Suite
- * 
+ *
  * Tests the artist name normalization utilities to verify:
  * 1. Hip-hop collaborations: "Ric Wilson x Chromeo x A-Trak" → "Ric Wilson"
  * 2. Featured artists stripped: "Artist feat. Someone" → "Artist"
@@ -8,7 +8,7 @@
  * 4. Empty string validation: Never returns empty, returns "Unknown Artist"
  * 5. Orchestra collaborations: "Philip Glass, Atlanta Symphony Orchestra" → "Philip Glass"
  * 6. Folder fallback: "Paramore - After Laughter (2017) FLAC" → "Paramore"
- * 
+ *
  * Run with: npx tsx scripts/manual-tests/artistNormalization.ts
  */
 
@@ -42,7 +42,7 @@ const extractPrimaryArtistTests: TestCase[] = [
         expected: "Artist A",
         func: extractPrimaryArtist,
     },
-    
+
     // Featured artists
     {
         name: "Featured artist: feat.",
@@ -74,7 +74,7 @@ const extractPrimaryArtistTests: TestCase[] = [
         expected: "Artist",
         func: extractPrimaryArtist,
     },
-    
+
     // Band name preservation
     {
         name: "Band name: Of Mice & Men (preserved)",
@@ -106,7 +106,7 @@ const extractPrimaryArtistTests: TestCase[] = [
         expected: "Earth, Wind & Fire",
         func: extractPrimaryArtist,
     },
-    
+
     // Collaborations that should split
     {
         name: "Collaboration: CHVRCHES & Robert Smith",
@@ -114,7 +114,7 @@ const extractPrimaryArtistTests: TestCase[] = [
         expected: "CHVRCHES",
         func: extractPrimaryArtist,
     },
-    
+
     // Orchestra collaborations
     {
         name: "Orchestra collaboration: Philip Glass, Atlanta Symphony Orchestra",
@@ -128,7 +128,7 @@ const extractPrimaryArtistTests: TestCase[] = [
         expected: "Yo-Yo Ma",
         func: extractPrimaryArtist,
     },
-    
+
     // Edge cases: Empty strings
     {
         name: "Empty string returns Unknown Artist",
@@ -142,7 +142,7 @@ const extractPrimaryArtistTests: TestCase[] = [
         expected: "Unknown Artist",
         func: extractPrimaryArtist,
     },
-    
+
     // No collaboration - returns as-is
     {
         name: "Single artist: Radiohead (preserved)",
@@ -274,7 +274,7 @@ function runTests(): void {
     for (const test of extractPrimaryArtistTests) {
         const result = test.func(test.input);
         const passed = result === test.expected;
-        
+
         if (passed) {
             console.log(`✅ PASS: ${test.name}`);
             totalPassed++;
@@ -293,7 +293,7 @@ function runTests(): void {
     for (const test of parseArtistFromPathTests) {
         const result = test.func(test.input);
         const passed = result === test.expected;
-        
+
         if (passed) {
             console.log(`✅ PASS: ${test.name}`);
             totalPassed++;
@@ -312,7 +312,7 @@ function runTests(): void {
     for (const test of variousArtistsTests) {
         const result = test.func(test.input);
         const passed = result === test.expected;
-        
+
         if (passed) {
             console.log(`✅ PASS: ${test.name}`);
             totalPassed++;
@@ -331,7 +331,7 @@ function runTests(): void {
     for (const test of normalizeArtistNameTests) {
         const result = test.func(test.input);
         const passed = result === test.expected;
-        
+
         if (passed) {
             console.log(`✅ PASS: ${test.name}`);
             totalPassed++;
@@ -347,7 +347,7 @@ function runTests(): void {
     // Run areArtistNamesSimilar tests
     console.log("\n🔍 areArtistNamesSimilar() Tests");
     console.log("-".repeat(70));
-    
+
     const similarityTests = [
         { name1: "Ólafur Arnalds", name2: "Olafur Arnalds", expected: true },
         { name1: "Of Mice & Men", name2: "Of Mice And Men", expected: true },
@@ -358,9 +358,11 @@ function runTests(): void {
     for (const test of similarityTests) {
         const result = areArtistNamesSimilar(test.name1, test.name2);
         const passed = result === test.expected;
-        
+
         if (passed) {
-            console.log(`✅ PASS: "${test.name1}" ≈ "${test.name2}" → ${result}`);
+            console.log(
+                `✅ PASS: "${test.name1}" ≈ "${test.name2}" → ${result}`,
+            );
             totalPassed++;
         } else {
             console.log(`❌ FAIL: "${test.name1}" ≈ "${test.name2}"`);
@@ -377,11 +379,15 @@ function runTests(): void {
     console.log(`Total: ${totalPassed + totalFailed} tests`);
     console.log(`Passed: ${totalPassed}`);
     console.log(`Failed: ${totalFailed}`);
-    
+
     if (totalFailed === 0) {
-        console.log("\n🎉 ALL TESTS PASSED! Artist normalization is working correctly.");
+        console.log(
+            "\n🎉 ALL TESTS PASSED! Artist normalization is working correctly.",
+        );
     } else {
-        console.log("\n💥 SOME TESTS FAILED. Review the output above for details.");
+        console.log(
+            "\n💥 SOME TESTS FAILED. Review the output above for details.",
+        );
     }
 
     process.exit(totalFailed > 0 ? 1 : 0);

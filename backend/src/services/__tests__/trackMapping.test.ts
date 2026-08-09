@@ -68,7 +68,7 @@ describe("TrackMapping data model", () => {
             expect(mockPrisma.trackTidal.upsert).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: { tidalId: 12345678 },
-                })
+                }),
             );
         });
 
@@ -108,7 +108,8 @@ describe("TrackMapping data model", () => {
                 artist: "Test Artist",
                 album: "Test Album",
                 duration: 212,
-                thumbnailUrl: "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
+                thumbnailUrl:
+                    "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
                 createdAt: new Date(),
             };
 
@@ -129,7 +130,7 @@ describe("TrackMapping data model", () => {
             expect(mockPrisma.trackYtMusic.upsert).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: { videoId: "dQw4w9WgXcQ" },
-                })
+                }),
             );
         });
 
@@ -311,7 +312,7 @@ describe("TrackMapping data model", () => {
             expect(mockPrisma.trackMapping.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: { trackId: "track_1" },
-                })
+                }),
             );
         });
     });
@@ -415,7 +416,7 @@ describe("TrackMapping data model", () => {
             };
 
             mockPrisma.trackMapping.findUnique.mockResolvedValueOnce(
-                mappingAfterDeletion
+                mappingAfterDeletion,
             );
 
             const result = await mockPrisma.trackMapping.findUnique({

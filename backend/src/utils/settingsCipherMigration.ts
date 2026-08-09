@@ -64,7 +64,7 @@ export async function migrateModelRows(
     columns: readonly string[],
     primaryKey: string,
     apply: boolean,
-    warn: (message: string) => void = console.warn
+    warn: (message: string) => void = console.warn,
 ): Promise<ModelMigrationStats> {
     const stats: ModelMigrationStats = {
         rows: 0,
@@ -92,12 +92,12 @@ export async function migrateModelRows(
                 stats.skippedErrors += 1;
                 warn(
                     `[migrate-gcm] ${modelName}.${column} (${primaryKey}=${String(
-                        row[primaryKey]
+                        row[primaryKey],
                     )}) could not be decrypted; leaving as-is: ${
                         outcome.error instanceof Error
                             ? outcome.error.message
                             : String(outcome.error)
-                    }`
+                    }`,
                 );
             }
         }

@@ -6,8 +6,14 @@ import {
 } from "../../lib/playback-intent";
 
 test("resolveHydratedPlaybackIntent restores resumed and paused states from server", () => {
-    assert.equal(resolveHydratedPlaybackIntent({ isPlaying: true }, false), true);
-    assert.equal(resolveHydratedPlaybackIntent({ isPlaying: false }, true), false);
+    assert.equal(
+        resolveHydratedPlaybackIntent({ isPlaying: true }, false),
+        true,
+    );
+    assert.equal(
+        resolveHydratedPlaybackIntent({ isPlaying: false }, true),
+        false,
+    );
 });
 
 test("resolveHydratedPlaybackIntent falls back to local intent when server field is absent", () => {

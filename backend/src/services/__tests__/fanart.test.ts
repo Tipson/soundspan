@@ -103,7 +103,7 @@ describe("fanart service", () => {
         const image = await fanartService.getArtistImage("mbid-bg");
 
         expect(image).toBe(
-            "https://assets.fanart.tv/fanart/music/mbid-bg/artistbackground/background-file.jpg"
+            "https://assets.fanart.tv/fanart/music/mbid-bg/artistbackground/background-file.jpg",
         );
         expect(mockAxiosGet).toHaveBeenCalledWith("/music/mbid-bg", {
             params: { api_key: "env-key" },
@@ -111,7 +111,7 @@ describe("fanart service", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "fanart:artist:mbid-bg",
             7 * 24 * 60 * 60,
-            "https://assets.fanart.tv/fanart/music/mbid-bg/artistbackground/background-file.jpg"
+            "https://assets.fanart.tv/fanart/music/mbid-bg/artistbackground/background-file.jpg",
         );
     });
 
@@ -139,7 +139,7 @@ describe("fanart service", () => {
         });
         const logo = await fanartService.getArtistImage("mbid-logo");
         expect(logo).toBe(
-            "https://assets.fanart.tv/fanart/music/mbid-logo/hdmusiclogo/logo-file.png"
+            "https://assets.fanart.tv/fanart/music/mbid-logo/hdmusiclogo/logo-file.png",
         );
     });
 
@@ -152,14 +152,16 @@ describe("fanart service", () => {
         mockAxiosGet.mockRejectedValueOnce({ response: { status: 404 } });
         const missing = await fanartService.getArtistImage("mbid-missing");
         expect(missing).toBeNull();
-        expect(mockLoggerDebug).toHaveBeenCalledWith("Fanart.tv: No images found");
+        expect(mockLoggerDebug).toHaveBeenCalledWith(
+            "Fanart.tv: No images found",
+        );
 
         mockAxiosGet.mockRejectedValueOnce({ message: "upstream error" });
         const errored = await fanartService.getArtistImage("mbid-error");
         expect(errored).toBeNull();
         expect(mockLoggerError).toHaveBeenCalledWith(
             "   Fanart.tv error:",
-            "upstream error"
+            "upstream error",
         );
     });
 
@@ -175,7 +177,7 @@ describe("fanart service", () => {
 
         expect(image).toBe("https://cache/album.jpg");
         expect(mockRedisGet).toHaveBeenCalledWith(
-            "fanart:album:album-mbid-cache"
+            "fanart:album:album-mbid-cache",
         );
         expect(mockAxiosGet).not.toHaveBeenCalled();
     });
@@ -216,7 +218,7 @@ describe("fanart service", () => {
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "fanart:album:album-mbid-2",
             7 * 24 * 60 * 60,
-            "https://fanart/cdart2.png"
+            "https://fanart/cdart2.png",
         );
     });
 

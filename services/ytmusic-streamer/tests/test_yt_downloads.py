@@ -19,9 +19,7 @@ async def test_downloads_list_returns_jobs_newest_first(client):
 
     app_module._yt_download_jobs.clear()
     older = app_module._new_yt_download_job("vid00000001", source="Chan A")
-    newer = app_module._new_yt_download_job(
-        "vid00000002", status="completed", source="Chan A"
-    )
+    newer = app_module._new_yt_download_job("vid00000002", status="completed", source="Chan A")
     # Keep both recent (so the 6h TTL prune does not drop the terminal one),
     # but guarantee a strict ordering for the newest-first assertion.
     newer["created_at"] = older["created_at"] + 5
@@ -134,9 +132,7 @@ def test_download_request_model_has_no_output_dir():
 
 
 @pytest.mark.anyio
-async def test_post_download_ignores_client_output_dir(
-    client, tmp_path, monkeypatch
-):
+async def test_post_download_ignores_client_output_dir(client, tmp_path, monkeypatch):
     """A client-supplied output_dir is ignored: the idempotency check (and
     the download itself) always target the server-configured
     YT_DOWNLOAD_DIR, never a caller-chosen path."""

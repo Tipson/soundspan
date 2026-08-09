@@ -29,7 +29,7 @@ const MUSIC_PATH = process.env.MUSIC_PATH || "/music";
 async function backfillDiscNumber(dryRun: boolean = false) {
     console.log("=== Backfill discNo Script ===\n");
     console.log(
-        `Mode: ${dryRun ? "DRY RUN (no changes)" : "LIVE (will update database)"}\n`
+        `Mode: ${dryRun ? "DRY RUN (no changes)" : "LIVE (will update database)"}\n`,
     );
     console.log(`Music path: ${MUSIC_PATH}\n`);
 
@@ -67,7 +67,7 @@ async function backfillDiscNumber(dryRun: boolean = false) {
                     if (dryRun) {
                         console.log(
                             `  Would update: ${track.album.artist?.name} - ${track.album.title} / ` +
-                            `Track ${track.trackNo} "${track.title}" → Disc ${discNo}`
+                                `Track ${track.trackNo} "${track.title}" → Disc ${discNo}`,
                         );
                     } else {
                         await prisma.track.update({
@@ -84,7 +84,7 @@ async function backfillDiscNumber(dryRun: boolean = false) {
                 errors++;
                 if (errors <= 5) {
                     console.warn(
-                        `  ⚠ Could not read "${track.filePath}": ${err.message}`
+                        `  ⚠ Could not read "${track.filePath}": ${err.message}`,
                     );
                 }
             }
@@ -92,7 +92,9 @@ async function backfillDiscNumber(dryRun: boolean = false) {
 
         console.log(`\n=== Results ===`);
         console.log(`  Updated:  ${updated} tracks with actual disc numbers`);
-        console.log(`  Skipped:  ${skipped} tracks (already disc 1 or no disc metadata)`);
+        console.log(
+            `  Skipped:  ${skipped} tracks (already disc 1 or no disc metadata)`,
+        );
         console.log(`  Errors:   ${errors} tracks (file not readable)`);
 
         if (dryRun && updated > 0) {

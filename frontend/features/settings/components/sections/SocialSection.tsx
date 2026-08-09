@@ -13,7 +13,11 @@ interface SocialSectionProps {
 /**
  * Renders the SocialSection component.
  */
-export function SocialSection({ settings, onUpdate, onReloadSettings }: SocialSectionProps) {
+export function SocialSection({
+    settings,
+    onUpdate,
+    onReloadSettings,
+}: SocialSectionProps) {
     return (
         <SettingsSection id="social" title="Social">
             <SettingsRow

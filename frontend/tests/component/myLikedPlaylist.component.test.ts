@@ -43,13 +43,12 @@ const state = {
     currentTrack: null as { id: string } | null,
 };
 
-const icon =
-    (name: string) => {
-        const MockIcon = (props: Record<string, unknown> = {}) =>
-            React.createElement("svg", { ...props, "data-icon": name });
-        MockIcon.displayName = `MockIcon${name.replace(/[^a-zA-Z0-9]/g, "")}`;
-        return MockIcon;
-    };
+const icon = (name: string) => {
+    const MockIcon = (props: Record<string, unknown> = {}) =>
+        React.createElement("svg", { ...props, "data-icon": name });
+    MockIcon.displayName = `MockIcon${name.replace(/[^a-zA-Z0-9]/g, "")}`;
+    return MockIcon;
+};
 
 mock.module("lucide-react", {
     namedExports: {
@@ -69,7 +68,10 @@ mock.module("lucide-react", {
 mock.module("@/components/ui/CachedImage", {
     namedExports: {
         CachedImage: (props: Record<string, unknown>) =>
-            React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+            React.createElement("img", {
+                src: props.src as string,
+                alt: props.alt as string,
+            }),
     },
 });
 
@@ -88,7 +90,10 @@ mock.module("next/navigation", {
 
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 mock.module("@/lib/audio-state-context", {
@@ -161,7 +166,10 @@ mock.module("@/lib/api", {
             getCoverArtUrl: (url: string) => url,
             getBrowseImageUrl: (url: string) => url,
             getTidalBrowseImageUrl: (url: string) => `tidal:${url}`,
-            setTrackPreference: async () => ({ trackId: "track-1", signal: "clear" }),
+            setTrackPreference: async () => ({
+                trackId: "track-1",
+                signal: "clear",
+            }),
         },
     },
 });
@@ -195,7 +203,7 @@ mock.module("@/utils/formatTime", {
 
 mock.module("@/utils/shuffle", {
     namedExports: {
-        shuffleArray: <T,>(arr: T[]) => arr,
+        shuffleArray: <T>(arr: T[]) => arr,
     },
 });
 
@@ -243,12 +251,18 @@ mock.module("@/components/ui/TrackOverflowMenu", {
 
 mock.module("@/components/layout/PageHeader", {
     namedExports: {
-        PageHeader: ({ title, subtitle }: { title: string; subtitle?: string }) =>
+        PageHeader: ({
+            title,
+            subtitle,
+        }: {
+            title: string;
+            subtitle?: string;
+        }) =>
             React.createElement(
                 "div",
                 { "data-testid": "page-header" },
                 React.createElement("h1", null, title),
-                subtitle ? React.createElement("p", null, subtitle) : null
+                subtitle ? React.createElement("p", null, subtitle) : null,
             ),
     },
 });
@@ -289,8 +303,8 @@ function renderWithQueryClient(Component: React.ComponentType) {
         React.createElement(
             QueryClientProvider,
             { client: queryClient },
-            React.createElement(Component)
-        )
+            React.createElement(Component),
+        ),
     );
 }
 
@@ -349,7 +363,10 @@ test("shows Pause primary action and active like controls when a liked track is 
             id: "my-liked",
             name: "My Liked",
         },
-        tracks: [makeTrack("track-1", "First Track"), makeTrack("track-2", "Second Track")],
+        tracks: [
+            makeTrack("track-1", "First Track"),
+            makeTrack("track-2", "Second Track"),
+        ],
         total: 2,
     };
     state.currentTrack = { id: "track-2" };
@@ -363,7 +380,11 @@ test("shows Pause primary action and active like controls when a liked track is 
     assert.match(html, /data-icon="pause"/);
 
     const thumbButtons = html.match(/data-testid="liked-track-thumb"/g) ?? [];
-    assert.equal(thumbButtons.length, 2, "expected one thumb control per liked track");
+    assert.equal(
+        thumbButtons.length,
+        2,
+        "expected one thumb control per liked track",
+    );
     assert.match(html, /data-track-id="track-1"/);
     assert.match(html, /data-track-id="track-2"/);
     assert.match(html, /data-mode="up-only"/);
@@ -382,7 +403,11 @@ test("overflow menu for remote liked tracks enables Go to Artist and Start Radio
         duration: 200,
         filePath: null,
         artist: { id: "remote-artist-cuid", name: "Tidal Artist" },
-        album: { id: "remote-album-cuid", title: "Tidal Album", coverArt: null },
+        album: {
+            id: "remote-album-cuid",
+            title: "Tidal Album",
+            coverArt: null,
+        },
         streamSource: "tidal",
         tidalTrackId: 991,
     };
@@ -403,27 +428,36 @@ test("overflow menu for remote liked tracks enables Go to Artist and Start Radio
     assert.match(
         html,
         /data-track-id="tidal:991"[^>]*data-show-go-to-artist="true"/,
-        "Remote track overflow menu should enable Go to Artist"
+        "Remote track overflow menu should enable Go to Artist",
     );
     assert.match(
         html,
         /data-track-id="tidal:991"[^>]*data-show-start-radio="true"/,
-        "Remote track overflow menu should enable Start Radio"
+        "Remote track overflow menu should enable Start Radio",
     );
 });
 
 test("resolveLikedTrackCoverUrl uses provider-specific proxies for remote sources", async () => {
-    const { resolveLikedTrackCoverUrl } = await import("../../app/playlist/my-liked/page");
+    const { resolveLikedTrackCoverUrl } =
+        await import("../../app/playlist/my-liked/page");
 
     const tidalTrack = {
         ...makeTrack("tidal-track", "Tidal Track"),
         streamSource: "tidal" as const,
-        album: { id: "a1", title: "Album", coverArt: "https://img.tidal.com/cover.jpg" },
+        album: {
+            id: "a1",
+            title: "Album",
+            coverArt: "https://img.tidal.com/cover.jpg",
+        },
     };
     const ytTrack = {
         ...makeTrack("yt-track", "YT Track"),
         streamSource: "youtube" as const,
-        album: { id: "a2", title: "Album", coverArt: "https://i.ytimg.com/cover.jpg" },
+        album: {
+            id: "a2",
+            title: "Album",
+            coverArt: "https://i.ytimg.com/cover.jpg",
+        },
     };
     const localTrack = {
         ...makeTrack("local-track", "Local Track"),
@@ -432,14 +466,14 @@ test("resolveLikedTrackCoverUrl uses provider-specific proxies for remote source
 
     assert.equal(
         resolveLikedTrackCoverUrl(tidalTrack as any, 200),
-        "tidal:https://img.tidal.com/cover.jpg"
+        "tidal:https://img.tidal.com/cover.jpg",
     );
     assert.equal(
         resolveLikedTrackCoverUrl(ytTrack as any, 200),
-        "https://i.ytimg.com/cover.jpg"
+        "https://i.ytimg.com/cover.jpg",
     );
     assert.equal(
         resolveLikedTrackCoverUrl(localTrack as any, 200),
-        "/cover/local.jpg"
+        "/cover/local.jpg",
     );
 });

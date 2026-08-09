@@ -27,7 +27,10 @@ export function DiscoverSettings({
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
     // Generic handler for config changes with debounce
-    function handleConfigChange<K extends keyof DiscoverConfig>(key: K, value: DiscoverConfig[K]) {
+    function handleConfigChange<K extends keyof DiscoverConfig>(
+        key: K,
+        value: DiscoverConfig[K],
+    ) {
         // Update local state immediately for responsive UI
         if (config) {
             onUpdateConfig({ ...config, [key]: value });
@@ -53,7 +56,7 @@ export function DiscoverSettings({
 
             if (result.activeDeleted > 0) {
                 toast.success(
-                    `Removed ${result.activeDeleted} recommendation${result.activeDeleted !== 1 ? "s" : ""}`
+                    `Removed ${result.activeDeleted} recommendation${result.activeDeleted !== 1 ? "s" : ""}`,
                 );
             } else {
                 toast.info("No recommendations to clear");
@@ -83,22 +86,25 @@ export function DiscoverSettings({
                             step="5"
                             value={config?.playlistSize || 10}
                             onChange={(e) =>
-                                handleConfigChange("playlistSize", parseInt(e.target.value))
+                                handleConfigChange(
+                                    "playlistSize",
+                                    parseInt(e.target.value),
+                                )
                             }
                             className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-ai"
                         />
                         <p className="text-xs text-gray-400 mt-2">
-                            Local-first recommendations. Larger playlists include more variety.
+                            Local-first recommendations. Larger playlists
+                            include more variety.
                         </p>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium mb-2">
-                            Album Exclusion: {
-                                (config?.exclusionMonths ?? 6) === 0 
-                                    ? "Disabled" 
-                                    : `${config?.exclusionMonths ?? 6} months`
-                            }
+                            Album Exclusion:{" "}
+                            {(config?.exclusionMonths ?? 6) === 0
+                                ? "Disabled"
+                                : `${config?.exclusionMonths ?? 6} months`}
                         </label>
                         <input
                             type="range"
@@ -107,12 +113,16 @@ export function DiscoverSettings({
                             step="1"
                             value={config?.exclusionMonths ?? 6}
                             onChange={(e) =>
-                                handleConfigChange("exclusionMonths", parseInt(e.target.value))
+                                handleConfigChange(
+                                    "exclusionMonths",
+                                    parseInt(e.target.value),
+                                )
                             }
                             className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-ai"
                         />
                         <p className="text-xs text-gray-400 mt-2">
-                            How long to wait before recommending the same album again. Set to 0 to disable.
+                            How long to wait before recommending the same album
+                            again. Set to 0 to disable.
                         </p>
                     </div>
 
@@ -122,8 +132,8 @@ export function DiscoverSettings({
                             Clear Playlist
                         </label>
                         <p className="text-xs text-gray-400 mb-3">
-                            Remove the current recommendation list for this week.
-                            Your library is not modified.
+                            Remove the current recommendation list for this
+                            week. Your library is not modified.
                         </p>
                         <button
                             onClick={() => {

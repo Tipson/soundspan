@@ -46,10 +46,12 @@ export function MiniPlayer() {
     const isMobileOrTablet = isMobile || isTablet;
 
     const { title, subtitle, coverUrl, hasMedia } = useMediaInfo(100);
-    const {
-        qualityBadge,
-    } = useStreamBitrate();
-    const currentMediaId = currentTrack?.id || currentAudiobook?.id || currentPodcast?.id || "default";
+    const { qualityBadge } = useStreamBitrate();
+    const currentMediaId =
+        currentTrack?.id ||
+        currentAudiobook?.id ||
+        currentPodcast?.id ||
+        "default";
     const artworkLayoutId = `mobile-player-artwork-${currentMediaId}`;
 
     // Calculate progress percentage
@@ -111,7 +113,11 @@ export function MiniPlayer() {
                 >
                     <motion.div
                         layoutId={artworkLayoutId}
-                        transition={{ type: "spring", stiffness: 320, damping: 34 }}
+                        transition={{
+                            type: "spring",
+                            stiffness: 320,
+                            damping: 34,
+                        }}
                         className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-black/30"
                     >
                         {coverUrl ? (
@@ -201,7 +207,7 @@ export function MiniPlayer() {
                                     ? "bg-red-500 text-white hover:bg-red-400"
                                     : isBuffering
                                       ? "bg-white/80 text-black"
-                                      : "bg-white text-black hover:scale-105"
+                                      : "bg-white text-black hover:scale-105",
                             )}
                             aria-label={
                                 audioError

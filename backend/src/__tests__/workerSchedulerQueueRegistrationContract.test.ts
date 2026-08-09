@@ -7,10 +7,10 @@ describe("worker scheduler queue registration contract", () => {
         const workersSource = fs.readFileSync(workersPath, "utf8");
 
         const start = workersSource.indexOf(
-            "async function registerSchedulerJobs(): Promise<void> {"
+            "async function registerSchedulerJobs(): Promise<void> {",
         );
         const end = workersSource.indexOf(
-            "// Register processors with named job types"
+            "// Register processors with named job types",
         );
         const registerBlock = workersSource.slice(start, end);
 

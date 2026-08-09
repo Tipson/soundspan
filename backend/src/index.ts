@@ -59,8 +59,15 @@ import lyricsRoutes from "./routes/lyrics";
 import listenTogetherRoutes from "./routes/listenTogether";
 import subsonicRoutes from "./routes/subsonic";
 import { segmentedSegmentService } from "./services/segmented-streaming/segmentService";
-import { setupListenTogetherSocket, shutdownListenTogetherSocket } from "./services/listenTogetherSocket";
-import { startPersistLoop, stopPersistLoop, persistAllGroups } from "./services/listenTogether";
+import {
+    setupListenTogetherSocket,
+    shutdownListenTogetherSocket,
+} from "./services/listenTogetherSocket";
+import {
+    startPersistLoop,
+    stopPersistLoop,
+    persistAllGroups,
+} from "./services/listenTogether";
 import { createServer } from "http";
 import type { Socket } from "net";
 import { errorHandler } from "./middleware/errorHandler";
@@ -102,13 +109,15 @@ function isCompressionExcludedPath(path: string): boolean {
 }
 
 function resolveBackendProcessRole(): BackendProcessRole {
-    const raw = (process.env.BACKEND_PROCESS_ROLE || "all").trim().toLowerCase();
+    const raw = (process.env.BACKEND_PROCESS_ROLE || "all")
+        .trim()
+        .toLowerCase();
     if (raw === "all" || raw === "api" || raw === "worker") {
         return raw;
     }
 
     logger.warn(
-        `[Startup] Invalid BACKEND_PROCESS_ROLE="${process.env.BACKEND_PROCESS_ROLE}", defaulting to "all"`
+        `[Startup] Invalid BACKEND_PROCESS_ROLE="${process.env.BACKEND_PROCESS_ROLE}", defaulting to "all"`,
     );
     return "all";
 }
@@ -124,7 +133,7 @@ const HTTP_SERVER_CLOSE_TIMEOUT_MS = 12_000;
 
 if (backendProcessRole === "worker") {
     logger.error(
-        '[Startup] BACKEND_PROCESS_ROLE="worker" is not supported by src/index.ts. Use worker entrypoint: `npx tsx src/worker.ts`.'
+        '[Startup] BACKEND_PROCESS_ROLE="worker" is not supported by src/index.ts. Use worker entrypoint: `npx tsx src/worker.ts`.',
     );
     process.exit(1);
 }
@@ -133,7 +142,7 @@ if (backendProcessRole === "worker") {
 app.use(
     helmet({
         crossOriginResourcePolicy: { policy: "cross-origin" },
-    })
+    }),
 );
 app.use(
     cors({
@@ -143,17 +152,17 @@ app.use(
             const allowed = isOriginAllowed(
                 origin,
                 config.allowedOrigins,
-                config.nodeEnv
+                config.nodeEnv,
             );
             if (!allowed) {
                 logger.warn(
-                    `[CORS] Origin ${origin} not in ALLOWED_ORIGINS allowlist; denying`
+                    `[CORS] Origin ${origin} not in ALLOWED_ORIGINS allowlist; denying`,
                 );
             }
             callback(null, allowed);
         },
         credentials: true,
-    })
+    }),
 );
 app.use(
     compression({
@@ -171,7 +180,7 @@ app.use(
             }
             return compression.filter(req, res);
         },
-    })
+    }),
 );
 app.use(express.json({ limit: "1mb" })); // Increased from 100KB default to support large queue payloads
 
@@ -219,7 +228,7 @@ app.use(
             sameSite: "lax",
             maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
         },
-    })
+    }),
 );
 
 // Routes - All API routes prefixed with /api for clear separation from frontend
@@ -257,7 +266,7 @@ if (config.features.discovery) {
     app.use(
         "/api/recommendations",
         apiLimiter,
-        require("./routes/recommendations").default
+        require("./routes/recommendations").default,
     );
 } else {
     app.use("/api/recommendations", apiLimiter, createFeatureDisabledHandler());
@@ -274,7 +283,7 @@ if (config.features.discovery) {
     app.use("/api/discover", apiLimiter, require("./routes/discover").default);
 } else {
     logger.info(
-        "[Features] Discovery disabled (DISCOVERY_ENABLED=false); /api/discover and /api/recommendations return 404"
+        "[Features] Discovery disabled (DISCOVERY_ENABLED=false); /api/discover and /api/recommendations return 404",
     );
     app.use("/api/discover", apiLimiter, createFeatureDisabledHandler());
 }
@@ -282,7 +291,7 @@ if (config.features.autoPlaylists) {
     app.use("/api/mixes", apiLimiter, require("./routes/mixes").default);
 } else {
     logger.info(
-        "[Features] Auto playlists disabled (AUTO_PLAYLISTS_ENABLED=false); /api/mixes returns 404"
+        "[Features] Auto playlists disabled (AUTO_PLAYLISTS_ENABLED=false); /api/mixes returns 404",
     );
     app.use("/api/mixes", apiLimiter, createFeatureDisabledHandler());
 }
@@ -294,7 +303,7 @@ if (config.features.audioAnalysis) {
     app.use("/api/analysis", apiLimiter, require("./routes/analysis").default);
 } else {
     logger.info(
-        "[Features] Audio analysis disabled (AUDIO_ANALYSIS_ENABLED=false); /api/analysis and /api/vibe return 404"
+        "[Features] Audio analysis disabled (AUDIO_ANALYSIS_ENABLED=false); /api/analysis and /api/vibe return 404",
     );
     // Keep the CLAP analyzer machine callbacks (/vibe/failure, /vibe/success)
     // reachable so analyzers draining in-flight work (e.g. AIO deployments)
@@ -303,7 +312,7 @@ if (config.features.audioAnalysis) {
         "/api/analysis",
         apiLimiter,
         require("./routes/analysisInternal").default,
-        createFeatureDisabledHandler()
+        createFeatureDisabledHandler(),
     );
 }
 app.use("/api/admin", apiLimiter, adminRoutes);
@@ -388,9 +397,7 @@ app.get("/api/health/ready", async (req, res) => {
 // The raw JSON spec requires auth in production unless DOCS_PUBLIC=true.
 // Actual API calls from "Try it out" are protected by each endpoint's own auth.
 const specMiddleware =
-    config.nodeEnv === "production" && !config.docsPublic
-        ? [requireAuth]
-        : [];
+    config.nodeEnv === "production" && !config.docsPublic ? [requireAuth] : [];
 
 app.use(
     "/api/docs",
@@ -398,7 +405,7 @@ app.use(
     swaggerUi.setup(swaggerSpec, {
         customCss: ".swagger-ui .topbar { display: none }",
         customSiteTitle: BRAND_API_DOCS_TITLE,
-    })
+    }),
 );
 
 // Serve raw OpenAPI spec (auth-gated in production)
@@ -421,7 +428,7 @@ async function checkPostgresConnection() {
         });
         logger.error("Unable to connect to PostgreSQL. Please ensure:");
         logger.error(
-            "  1. PostgreSQL is running on the correct port (default: 5433)"
+            "  1. PostgreSQL is running on the correct port (default: 5433)",
         );
         logger.error("  2. DATABASE_URL in .env is correct");
         logger.error("  3. Database credentials are valid");
@@ -439,7 +446,7 @@ async function checkRedisConnection() {
             // Check if Redis client is actually connected
             if (!redisClient.isReady) {
                 throw new Error(
-                    "Redis client is not ready - connection failed or still connecting"
+                    "Redis client is not ready - connection failed or still connecting",
                 );
             }
 
@@ -448,10 +455,14 @@ async function checkRedisConnection() {
             logger.debug("✓ Redis connection verified");
             return; // Success – exit the loop
         } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorMsg =
+                error instanceof Error ? error.message : String(error);
 
             if (attempt < MAX_RETRIES) {
-                const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS);
+                const delay = Math.min(
+                    BASE_DELAY_MS * Math.pow(2, attempt - 1),
+                    MAX_DELAY_MS,
+                );
                 logger.warn(
                     `Redis connection attempt ${attempt}/${MAX_RETRIES} failed: ${errorMsg} – retrying in ${delay}ms`,
                 );
@@ -463,7 +474,7 @@ async function checkRedisConnection() {
                 });
                 logger.error("Unable to connect to Redis. Please ensure:");
                 logger.error(
-                    "  1. Redis is running on the correct port (default: 6379)"
+                    "  1. Redis is running on the correct port (default: 6379)",
                 );
                 logger.error("  2. REDIS_URL in .env is correct");
                 process.exit(1);
@@ -489,7 +500,9 @@ async function checkPasswordReset() {
         where: { id: adminUser.id },
         data: { passwordHash: hashedPassword },
     });
-    logger.warn("[Password Reset] Admin password has been reset via ADMIN_RESET_PASSWORD env var. Remove this env var and restart.");
+    logger.warn(
+        "[Password Reset] Admin password has been reset via ADMIN_RESET_PASSWORD env var. Remove this env var and restart.",
+    );
 }
 
 const httpServer = createServer(app);
@@ -517,7 +530,7 @@ httpServer.listen(config.port, "0.0.0.0", async () => {
     await checkPasswordReset();
 
     logger.info(
-        `[Startup] BACKEND_PROCESS_ROLE=${backendProcessRole} (api=${runApiRole}, worker=${runWorkerRole})`
+        `[Startup] BACKEND_PROCESS_ROLE=${backendProcessRole} (api=${runApiRole}, worker=${runWorkerRole})`,
     );
 
     if (runApiRole) {
@@ -526,14 +539,13 @@ httpServer.listen(config.port, "0.0.0.0", async () => {
     }
 
     logger.debug(
-        `${BRAND_NAME} API running on port ${config.port} (accessible on all network interfaces)`
+        `${BRAND_NAME} API running on port ${config.port} (accessible on all network interfaces)`,
     );
 
     // Enable slow query monitoring in development
     if (config.nodeEnv === "development") {
-        const { enableSlowQueryMonitoring } = await import(
-            "./utils/queryMonitor"
-        );
+        const { enableSlowQueryMonitoring } =
+            await import("./utils/queryMonitor");
         enableSlowQueryMonitoring();
     }
 
@@ -554,10 +566,10 @@ httpServer.listen(config.port, "0.0.0.0", async () => {
         // - Background enrichment: Genres, MBIDs, similar artists for owned albums/artists
         // - On-demand fetching: Artist images, bios when browsing (cached in Redis 7 days)
         logger.debug(
-            "Background enrichment enabled for owned content (genres, MBIDs, etc.)"
+            "Background enrichment enabled for owned content (genres, MBIDs, etc.)",
         );
         logger.debug(
-            "Startup maintenance jobs are queue-claimed (cache warmup, podcast cleanup, audiobook sync, download reconciliation, backfills)"
+            "Startup maintenance jobs are queue-claimed (cache warmup, podcast cleanup, audiobook sync, download reconciliation, backfills)",
         );
     }
 
@@ -566,9 +578,8 @@ httpServer.listen(config.port, "0.0.0.0", async () => {
         const { createBullBoard } = await import("@bull-board/api");
         const { BullAdapter } = await import("@bull-board/api/bullAdapter");
         const { ExpressAdapter } = await import("@bull-board/express");
-        const { scanQueue, discoverQueue, imageQueue } = await import(
-            "./workers/queues"
-        );
+        const { scanQueue, discoverQueue, imageQueue } =
+            await import("./workers/queues");
 
         const serverAdapter = new ExpressAdapter();
         serverAdapter.setBasePath("/api/admin/queues");
@@ -586,10 +597,10 @@ httpServer.listen(config.port, "0.0.0.0", async () => {
             "/api/admin/queues",
             requireAuth,
             requireAdmin,
-            serverAdapter.getRouter()
+            serverAdapter.getRouter(),
         );
         logger.debug(
-            "Bull Board dashboard available at /api/admin/queues (admin-only)"
+            "Bull Board dashboard available at /api/admin/queues (admin-only)",
         );
     }
 
@@ -615,7 +626,7 @@ async function closeHttpServerWithTimeout(timeoutMs: number): Promise<void> {
             const openConnections = activeHttpConnections.size;
             if (openConnections > 0) {
                 logger.warn(
-                    `[Shutdown] HTTP server close timed out after ${timeoutMs}ms; forcing ${openConnections} active connection(s) closed`
+                    `[Shutdown] HTTP server close timed out after ${timeoutMs}ms; forcing ${openConnections} active connection(s) closed`,
                 );
             }
 
@@ -755,7 +766,7 @@ healthCheckInterval = setInterval(async () => {
                 } catch (reconnectError) {
                     logger.error(
                         "Failed to recover database connection:",
-                        reconnectError
+                        reconnectError,
                     );
                 }
             }

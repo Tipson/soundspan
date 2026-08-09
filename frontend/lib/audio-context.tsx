@@ -12,7 +12,13 @@
  */
 
 // Re-export types
-export type { PlayerMode, Track, Audiobook, Podcast, AudioFeatures } from "./audio-state-context";
+export type {
+    PlayerMode,
+    Track,
+    Audiobook,
+    Podcast,
+    AudioFeatures,
+} from "./audio-state-context";
 
 // Re-export providers
 export { AudioStateProvider } from "./audio-state-context";

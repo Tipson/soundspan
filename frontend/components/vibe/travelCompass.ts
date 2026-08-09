@@ -67,14 +67,17 @@ export interface CompassCandidate extends VibeTrackRef {
 /** The origin node the compass measures deltas against (a `MapTrack` satisfies this). */
 export type CompassOrigin = Pick<MapTrack, "energy" | "valence" | "moods">;
 
-function delta(current: number | null, candidate: number | null): number | null {
+function delta(
+    current: number | null,
+    candidate: number | null,
+): number | null {
     if (current == null || candidate == null) return null;
     return candidate - current;
 }
 
 function moodHappyDelta(
     current: CompassOrigin,
-    candidate: CompassCandidate
+    candidate: CompassCandidate,
 ): number | null {
     const c = current.moods?.moodHappy;
     const n = candidate.moods?.moodHappy;
@@ -94,7 +97,7 @@ function moodHappyDelta(
 export function matchesDirection(
     current: CompassOrigin,
     candidate: CompassCandidate,
-    direction: CompassDirection
+    direction: CompassDirection,
 ): boolean {
     if (direction === "any") return true;
 
@@ -131,7 +134,7 @@ export function matchesDirection(
  */
 export function enrichFromMap(
     candidates: readonly CompassCandidate[],
-    mapIndex: ReadonlyMap<string, MapTrack>
+    mapIndex: ReadonlyMap<string, MapTrack>,
 ): CompassCandidate[] {
     return candidates.map((c) => {
         const m = mapIndex.get(c.id);
@@ -153,7 +156,7 @@ export function compassNeighbors(
     current: CompassOrigin,
     candidates: readonly CompassCandidate[],
     direction: CompassDirection,
-    topN: number = DEFAULT_COMPASS_COUNT
+    topN: number = DEFAULT_COMPASS_COUNT,
 ): CompassCandidate[] {
     return candidates
         .filter((c) => matchesDirection(current, c, direction))

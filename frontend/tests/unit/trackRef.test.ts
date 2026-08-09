@@ -152,7 +152,7 @@ test("toAddToPlaylistRef rejects non-integer tidal ids", () => {
         toAddToPlaylistRef({
             streamSource: "tidal",
             tidalTrackId: "777.5",
-        })
+        }),
     );
 });
 
@@ -206,7 +206,7 @@ test("toAddToPlaylistRef rejects remote refs missing required metadata", () => {
             title: "Missing Artist",
             album: { title: "Album" },
             duration: 210,
-        })
+        }),
     );
 
     // Missing duration defaults to 0 instead of throwing
@@ -240,7 +240,13 @@ test("isRemoteTrack detects local and remote tracks across input shapes", () => 
     assert.equal(isRemoteTrack({ youtubeVideoId: "video-abc" }), true);
     assert.equal(isRemoteTrack({ tidalTrackId: 42 }), true);
     assert.equal(isRemoteTrack({ id: "yt:video-abc" }), true);
-    assert.equal(isRemoteTrack({ streamSource: "tidal", tidalTrackId: 42 }), true);
-    assert.equal(isRemoteTrack({ id: "yt:video-abc", streamSource: "local" }), false);
+    assert.equal(
+        isRemoteTrack({ streamSource: "tidal", tidalTrackId: 42 }),
+        true,
+    );
+    assert.equal(
+        isRemoteTrack({ id: "yt:video-abc", streamSource: "local" }),
+        false,
+    );
     assert.equal(isRemoteTrack({ id: "tidal:abc" }), true);
 });

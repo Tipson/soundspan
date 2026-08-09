@@ -40,7 +40,7 @@ export function EpisodeList({
                 <button
                     onClick={() =>
                         onSortOrderChange(
-                            sortOrder === "newest" ? "oldest" : "newest"
+                            sortOrder === "newest" ? "oldest" : "newest",
                         )
                     }
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-sm text-white/70 hover:text-white transition-all"
@@ -63,20 +63,23 @@ export function EpisodeList({
                             key={episode.id}
                             className={cn(
                                 "group relative rounded-md transition-all",
-                                isCurrentEpisode ? "bg-white/10" : "hover:bg-white/5"
+                                isCurrentEpisode
+                                    ? "bg-white/10"
+                                    : "hover:bg-white/5",
                             )}
                         >
                             {/* Progress bar at the bottom */}
-                            {episode.progress && episode.progress.progress > 0 && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/5 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-brand/60 transition-all"
-                                        style={{
-                                            width: `${episode.progress.progress}%`,
-                                        }}
-                                    />
-                                </div>
-                            )}
+                            {episode.progress &&
+                                episode.progress.progress > 0 && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-brand/60 transition-all"
+                                            style={{
+                                                width: `${episode.progress.progress}%`,
+                                            }}
+                                        />
+                                    </div>
+                                )}
 
                             <div
                                 onClick={() => {
@@ -95,12 +98,13 @@ export function EpisodeList({
                                             <span
                                                 className={cn(
                                                     "text-sm",
-                                                    isCurrentEpisode && isPlaying
+                                                    isCurrentEpisode &&
+                                                        isPlaying
                                                         ? "hidden"
                                                         : "group-hover:hidden",
                                                     isCurrentEpisode
                                                         ? "text-brand font-bold"
-                                                        : "text-white/40"
+                                                        : "text-white/40",
                                                 )}
                                             >
                                                 {index + 1}
@@ -119,7 +123,7 @@ export function EpisodeList({
                                                         "w-4 h-4 cursor-pointer",
                                                         isCurrentEpisode
                                                             ? "text-brand"
-                                                            : "text-white hidden group-hover:block"
+                                                            : "text-white hidden group-hover:block",
                                                     )}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -138,13 +142,15 @@ export function EpisodeList({
                                             "font-medium truncate text-sm",
                                             isCurrentEpisode
                                                 ? "text-brand"
-                                                : "text-white"
+                                                : "text-white",
                                         )}
                                     >
                                         {episode.title}
                                     </h3>
                                     <div className="flex items-center gap-2 text-xs text-white/50 mt-0.5">
-                                        <span>{formatDate(episode.publishedAt)}</span>
+                                        <span>
+                                            {formatDate(episode.publishedAt)}
+                                        </span>
                                         {episode.season && (
                                             <>
                                                 <span>•</span>
@@ -154,20 +160,28 @@ export function EpisodeList({
                                         {episode.episodeNumber && (
                                             <>
                                                 <span>•</span>
-                                                <span>E{episode.episodeNumber}</span>
+                                                <span>
+                                                    E{episode.episodeNumber}
+                                                </span>
                                             </>
                                         )}
                                         {episode.progress?.isFinished && (
                                             <>
                                                 <span>•</span>
-                                                <span className="text-green-400">Finished</span>
+                                                <span className="text-green-400">
+                                                    Finished
+                                                </span>
                                             </>
                                         )}
                                         {isInProgress && episode.progress && (
                                             <>
                                                 <span>•</span>
                                                 <span className="text-brand">
-                                                    {Math.floor(episode.progress.progress)}%
+                                                    {Math.floor(
+                                                        episode.progress
+                                                            .progress,
+                                                    )}
+                                                    %
                                                 </span>
                                             </>
                                         )}
@@ -192,18 +206,22 @@ export function EpisodeList({
                                 </div>
 
                                 {/* Complete Button - visible on hover for incomplete episodes */}
-                                {onMarkComplete && !episode.progress?.isFinished && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onMarkComplete(episode.id, episode.duration);
-                                        }}
-                                        className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-1.5 rounded-full hover:bg-white/10"
-                                        title="Mark as complete"
-                                    >
-                                        <CheckCircle className="w-4 h-4 text-white/60 hover:text-green-400" />
-                                    </button>
-                                )}
+                                {onMarkComplete &&
+                                    !episode.progress?.isFinished && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onMarkComplete(
+                                                    episode.id,
+                                                    episode.duration,
+                                                );
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-1.5 rounded-full hover:bg-white/10"
+                                            title="Mark as complete"
+                                        >
+                                            <CheckCircle className="w-4 h-4 text-white/60 hover:text-green-400" />
+                                        </button>
+                                    )}
                             </div>
                         </div>
                     );

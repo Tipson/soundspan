@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
         "http://localhost",
         "localhost",
     ],
-    
+
     // Local file: dependencies resolve via symlinks outside /frontend.
     // Point Turbopack at monorepo root so package resolution succeeds in CI.
     turbopack: {

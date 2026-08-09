@@ -46,7 +46,10 @@ export function UniversalPlayer() {
                                 initial={{ opacity: 0, y: 18, scale: 0.995 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 52, scale: 0.992 }}
-                                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                transition={{
+                                    duration: 0.2,
+                                    ease: [0.22, 1, 0.36, 1],
+                                }}
                             >
                                 <OverlayPlayer />
                             </motion.div>
@@ -57,7 +60,10 @@ export function UniversalPlayer() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 20 }}
-                                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                transition={{
+                                    duration: 0.2,
+                                    ease: [0.22, 1, 0.36, 1],
+                                }}
                             >
                                 <MiniPlayer />
                             </motion.div>
@@ -75,7 +81,10 @@ export function UniversalPlayer() {
                                 initial={{ opacity: 0, y: 18, scale: 0.995 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 22, scale: 0.998 }}
-                                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                                transition={{
+                                    duration: 0.18,
+                                    ease: [0.22, 1, 0.36, 1],
+                                }}
                             >
                                 <OverlayPlayer />
                             </motion.div>

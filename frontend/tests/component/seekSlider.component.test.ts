@@ -4,13 +4,15 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 mock.module("@/utils/formatTime", {
     namedExports: {
         formatTime: (seconds: number) => {
-            const safeSeconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : 0;
+            const safeSeconds =
+                Number.isFinite(seconds) && seconds >= 0 ? seconds : 0;
             const minutes = Math.floor(safeSeconds / 60);
             const remainder = Math.floor(safeSeconds % 60);
             return `${minutes}:${remainder.toString().padStart(2, "0")}`;
@@ -73,13 +75,17 @@ test("slider keyboard commands seek relative to the current time", async () => {
     const mounted = await mountSeekSlider({
         onSeek: (time: number) => seekCalls.push(time),
     });
-    const slider = mounted.container.querySelector('[role="slider"]') as HTMLElement | null;
+    const slider = mounted.container.querySelector(
+        '[role="slider"]',
+    ) as HTMLElement | null;
     assert.ok(slider, "expected an element with slider semantics");
 
     slider.focus();
     for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
         await React.act(async () => {
-            slider.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+            slider.dispatchEvent(
+                new KeyboardEvent("keydown", { key, bubbles: true }),
+            );
         });
     }
 
@@ -93,7 +99,9 @@ test("disabled slider is removed from tab order and ignores seek keys", async ()
         canSeek: false,
         onSeek: (time: number) => seekCalls.push(time),
     });
-    const slider = mounted.container.querySelector('[role="slider"]') as HTMLElement | null;
+    const slider = mounted.container.querySelector(
+        '[role="slider"]',
+    ) as HTMLElement | null;
     assert.ok(slider, "expected an element with slider semantics");
     assert.equal(slider.tabIndex, -1);
 

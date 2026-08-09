@@ -49,7 +49,7 @@ router.get("/genres", async (req, res) => {
         }
 
         logger.debug(
-            `[HOMEPAGE] ✗ Cache MISS for genres, fetching from database...`
+            `[HOMEPAGE] ✗ Cache MISS for genres, fetching from database...`,
         );
 
         // Get all albums with genres (excluding discovery albums)
@@ -100,7 +100,11 @@ router.get("/genres", async (req, res) => {
             const genreAlbums = albums
                 .filter((a) => {
                     const genres = a.genres as string[];
-                    return genres && Array.isArray(genres) && genres.includes(genre);
+                    return (
+                        genres &&
+                        Array.isArray(genres) &&
+                        genres.includes(genre)
+                    );
                 })
                 .slice(0, 10)
                 .map((a) => ({
@@ -126,7 +130,7 @@ router.get("/genres", async (req, res) => {
             await redisClient.setEx(
                 cacheKey,
                 24 * 60 * 60,
-                JSON.stringify(genresWithAlbums)
+                JSON.stringify(genresWithAlbums),
             );
             logger.debug(`[HOMEPAGE] Cached genres for 24 hours`);
         } catch (cacheError) {
@@ -180,7 +184,7 @@ router.get("/top-podcasts", async (req, res) => {
         }
 
         logger.debug(
-            `[HOMEPAGE] ✗ Cache MISS for top podcasts, fetching from database...`
+            `[HOMEPAGE] ✗ Cache MISS for top podcasts, fetching from database...`,
         );
 
         // Get podcasts with episode counts
@@ -213,7 +217,7 @@ router.get("/top-podcasts", async (req, res) => {
             await redisClient.setEx(
                 cacheKey,
                 24 * 60 * 60,
-                JSON.stringify(result)
+                JSON.stringify(result),
             );
             logger.debug(`[HOMEPAGE] Cached top podcasts for 24 hours`);
         } catch (cacheError) {

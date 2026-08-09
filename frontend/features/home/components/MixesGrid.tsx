@@ -3,7 +3,10 @@
 import { MixCard } from "@/components/MixCard";
 import { Mix } from "../types";
 import { memo } from "react";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 
 interface MixesGridProps {
     mixes: Mix[];

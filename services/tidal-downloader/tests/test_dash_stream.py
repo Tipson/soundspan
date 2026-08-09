@@ -13,7 +13,6 @@ from base64 import b64encode
 
 import pytest
 
-
 # ── Minimal DASH MPD fixtures ──────────────────────────────────────
 
 
@@ -129,7 +128,7 @@ class TestExtractDashInitUrl:
         assert result is None
 
     def test_returns_none_on_oversized_manifest(self):
-        from app import _extract_dash_init_url, _MAX_MANIFEST_BYTES
+        from app import _MAX_MANIFEST_BYTES, _extract_dash_init_url
 
         # Manifest that exceeds the size cap when decoded
         big_xml = "<MPD>" + "x" * (_MAX_MANIFEST_BYTES + 1) + "</MPD>"
@@ -181,7 +180,7 @@ class TestResolveDashCodec:
         assert result is None
 
     def test_returns_none_on_oversized_manifest(self):
-        from app import _resolve_dash_codec, _MAX_MANIFEST_BYTES
+        from app import _MAX_MANIFEST_BYTES, _resolve_dash_codec
 
         big_xml = "<MPD>" + "x" * (_MAX_MANIFEST_BYTES + 1) + "</MPD>"
         result = _resolve_dash_codec(_encode_manifest(big_xml))
@@ -214,7 +213,7 @@ class TestParseDashMpd:
         assert result is None
 
     def test_returns_none_for_oversized_manifest(self):
-        from app import _parse_dash_mpd, _MAX_MANIFEST_BYTES
+        from app import _MAX_MANIFEST_BYTES, _parse_dash_mpd
 
         big_xml = "<MPD>" + "x" * (_MAX_MANIFEST_BYTES + 1) + "</MPD>"
         result = _parse_dash_mpd(_encode_manifest(big_xml))
@@ -259,7 +258,7 @@ async def test_dash_proxy_returns_502_when_first_segment_is_rejected(client, mon
 
     cleared_cache_calls = {"count": 0}
 
-    async def _fake_run_user_api_call(user_id, callback, operation):  # noqa: ARG001
+    async def _fake_run_user_api_call(user_id, callback, operation):
         return {
             "is_dash": True,
             "urls": ["https://segment.example/seg-1.m4s"],
@@ -297,7 +296,7 @@ async def test_dash_proxy_refreshes_url_once_after_403_then_streams(client, monk
 
     call_count = {"count": 0}
 
-    async def _fake_run_user_api_call(user_id, callback, operation):  # noqa: ARG001
+    async def _fake_run_user_api_call(user_id, callback, operation):
         call_count["count"] += 1
         if call_count["count"] == 1:
             return {
@@ -343,7 +342,7 @@ async def test_dash_proxy_refreshes_url_once_after_401_then_streams(client, monk
     call_count = {"count": 0}
     cleared_cache_calls = {"count": 0}
 
-    async def _fake_run_user_api_call(user_id, callback, operation):  # noqa: ARG001
+    async def _fake_run_user_api_call(user_id, callback, operation):
         call_count["count"] += 1
         if call_count["count"] == 1:
             return {

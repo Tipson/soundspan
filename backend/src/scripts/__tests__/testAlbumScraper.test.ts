@@ -99,7 +99,7 @@ describe("testAlbumScraper script", () => {
 
         expect(getPlaylist).toHaveBeenCalledWith("37i9dQZF1DXcBWIGoYBM5M");
         expect(loggedText(logSpy)).toContain(
-            "SUCCESS: All tracks have album data resolved"
+            "SUCCESS: All tracks have album data resolved",
         );
         expect(exitSpy).not.toHaveBeenCalled();
     });
@@ -121,7 +121,9 @@ describe("testAlbumScraper script", () => {
         await importScriptEntrypoint();
 
         expect(getPlaylist).toHaveBeenCalledWith("missing-playlist");
-        expect(errorSpy).toHaveBeenCalledWith("FAILED: Could not fetch playlist");
+        expect(errorSpy).toHaveBeenCalledWith(
+            "FAILED: Could not fetch playlist",
+        );
         expect(exitSpy).toHaveBeenNthCalledWith(1, 1);
         expect(exitSpy).toHaveBeenNthCalledWith(2, 1);
         expect(loggedText(errorSpy)).toContain("Test script error:");
@@ -173,7 +175,7 @@ describe("testAlbumScraper script", () => {
 
         const output = loggedText(logSpy);
         expect(output).toContain(
-            "PARTIAL SUCCESS: 1 tracks (5.0%) still have unknown albums"
+            "PARTIAL SUCCESS: 1 tracks (5.0%) still have unknown albums",
         );
         expect(output).toContain('1. "Unknown Song" by Artist U');
         expect(exitSpy).not.toHaveBeenCalled();
@@ -210,9 +212,11 @@ describe("testAlbumScraper script", () => {
         const output = loggedText(logSpy);
         expect(output).toContain("... and 1 more");
         expect(output).toContain(
-            "WARNING: 11 tracks (91.7%) have unknown albums - scraper may need updating"
+            "WARNING: 11 tracks (91.7%) have unknown albums - scraper may need updating",
         );
-        expect(output).toContain("--- Sample Tracks with Known Albums (first 5) ---");
+        expect(output).toContain(
+            "--- Sample Tracks with Known Albums (first 5) ---",
+        );
         expect(exitSpy).not.toHaveBeenCalled();
     });
 });

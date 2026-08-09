@@ -164,11 +164,12 @@ const mockPlayGroupBy = prisma.play.groupBy as jest.Mock;
 const mockLastFmGetArtistTopTracks =
     lastFmService.getArtistTopTracks as jest.Mock;
 const mockDeezerGetAlbumCover = deezerService.getAlbumCover as jest.Mock;
-const mockDataCacheGetArtistImage = dataCacheService.getArtistImage as jest.Mock;
+const mockDataCacheGetArtistImage =
+    dataCacheService.getArtistImage as jest.Mock;
 
 function getGetHandler(path: string, stackIndex = 0) {
     const layer = (router as any).stack.find(
-        (entry: any) => entry.route?.path === path && entry.route?.methods?.get
+        (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
@@ -269,7 +270,7 @@ describe("library artist lookup compatibility", () => {
                             { mbid: routeParam },
                         ]),
                     },
-                })
+                }),
             );
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual(
@@ -279,9 +280,9 @@ describe("library artist lookup compatibility", () => {
                     topTracks: [],
                     similarArtists: [],
                     discographyComplete: true,
-                })
+                }),
             );
-        }
+        },
     );
 
     it("returns 404 when artist does not exist", async () => {
@@ -326,7 +327,7 @@ describe("library artist lookup compatibility", () => {
                 topTracks: [],
                 similarArtists: [],
                 discographyComplete: true,
-            })
+            }),
         );
     });
 
@@ -351,7 +352,7 @@ describe("library artist lookup compatibility", () => {
             },
         ]);
         mockDeezerGetAlbumCover.mockResolvedValueOnce(
-            "https://cdn.deezer.com/rare-ep.jpg"
+            "https://cdn.deezer.com/rare-ep.jpg",
         );
 
         const req = {
@@ -371,10 +372,13 @@ describe("library artist lookup compatibility", () => {
         expect(mockLastFmGetArtistTopTracks).toHaveBeenCalledWith(
             "mbid-artist-1",
             "AC/DC",
-            10
+            10,
         );
         expect(mockDeezerGetAlbumCover).toHaveBeenCalledTimes(1);
-        expect(mockDeezerGetAlbumCover).toHaveBeenCalledWith("AC/DC", "Rare EP");
+        expect(mockDeezerGetAlbumCover).toHaveBeenCalledWith(
+            "AC/DC",
+            "Rare EP",
+        );
         expect(res.body.topTracks).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
@@ -391,7 +395,7 @@ describe("library artist lookup compatibility", () => {
                         coverArt: null,
                     }),
                 }),
-            ])
+            ]),
         );
     });
 
@@ -407,7 +411,9 @@ describe("library artist lookup compatibility", () => {
                 album: { "#text": "Broken Cover Album" },
             },
         ]);
-        mockDeezerGetAlbumCover.mockRejectedValueOnce(new Error("deezer timeout"));
+        mockDeezerGetAlbumCover.mockRejectedValueOnce(
+            new Error("deezer timeout"),
+        );
 
         const req = {
             params: { id: "artist-local-id-123" },

@@ -25,7 +25,7 @@ export function useDocumentVisible(): boolean {
     return useSyncExternalStore(
         subscribeToVisibility,
         getVisibilitySnapshot,
-        getVisibilityServerSnapshot
+        getVisibilityServerSnapshot,
     );
 }
 
@@ -35,7 +35,7 @@ export function useDocumentVisible(): boolean {
  */
 export function useRefetchOnVisible(
     enabled: boolean,
-    refetch: () => Promise<unknown>
+    refetch: () => Promise<unknown>,
 ): void {
     const isDocumentVisible = useDocumentVisible();
     const wasHiddenRef = useRef(false);

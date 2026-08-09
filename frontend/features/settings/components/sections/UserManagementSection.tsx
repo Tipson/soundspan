@@ -62,10 +62,8 @@ export function UserManagementSection() {
     const [editStatus, setEditStatus] = useState<StatusType>("idle");
     const [editMessage, setEditMessage] = useState("");
     const [savingEdit, setSavingEdit] = useState(false);
-    const {
-        users: connectedUsers,
-        isLoading: connectedLoading,
-    } = useAdminConnectedUsers(Boolean(isAdmin));
+    const { users: connectedUsers, isLoading: connectedLoading } =
+        useAdminConnectedUsers(Boolean(isAdmin));
 
     const loadInviteCodes = useCallback(async () => {
         try {
@@ -259,15 +257,17 @@ export function UserManagementSection() {
 
     return (
         <>
-            <SettingsSection 
-                id="users" 
+            <SettingsSection
+                id="users"
                 title="User Management"
                 description="Manage users who can access this instance"
                 showSeparator={false}
             >
                 {/* Create User Form */}
                 <div className="py-4 px-4 bg-surface-hover rounded-lg mb-4">
-                    <h3 className="text-sm font-medium text-white mb-3">Create New User</h3>
+                    <h3 className="text-sm font-medium text-white mb-3">
+                        Create New User
+                    </h3>
                     <div className="space-y-3">
                         <div className="flex gap-3">
                             <SettingsInput
@@ -287,7 +287,9 @@ export function UserManagementSection() {
                         <div className="inline-flex gap-3 items-center">
                             <SettingsSelect
                                 value={newRole}
-                                onChange={(v) => setNewRole(v as "user" | "admin")}
+                                onChange={(v) =>
+                                    setNewRole(v as "user" | "admin")
+                                }
                                 options={[
                                     { value: "user", label: "User" },
                                     { value: "admin", label: "Admin" },
@@ -295,14 +297,18 @@ export function UserManagementSection() {
                             />
                             <button
                                 onClick={handleCreate}
-                                disabled={creating || !newUsername.trim() || newPassword.length < 6}
+                                disabled={
+                                    creating ||
+                                    !newUsername.trim() ||
+                                    newPassword.length < 6
+                                }
                                 className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
                                 {creating ? "Creating..." : "Create"}
                             </button>
-                            <InlineStatus 
-                                status={createStatus} 
+                            <InlineStatus
+                                status={createStatus}
                                 message={createMessage}
                                 onClear={() => setCreateStatus("idle")}
                             />
@@ -312,7 +318,9 @@ export function UserManagementSection() {
 
                 {/* Invite Codes */}
                 <div className="py-4 px-4 bg-surface-hover rounded-lg mb-4">
-                    <h3 className="text-sm font-medium text-white mb-3">Invite Codes</h3>
+                    <h3 className="text-sm font-medium text-white mb-3">
+                        Invite Codes
+                    </h3>
                     <div className="space-y-3">
                         <div className="flex gap-3 items-center flex-wrap">
                             <SettingsSelect
@@ -340,7 +348,9 @@ export function UserManagementSection() {
                                 className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
-                                {generatingInvite ? "Generating..." : "Generate Invite"}
+                                {generatingInvite
+                                    ? "Generating..."
+                                    : "Generate Invite"}
                             </button>
                             <InlineStatus
                                 status={inviteStatus}
@@ -366,7 +376,8 @@ export function UserManagementSection() {
                                                 {code.status}
                                             </span>
                                             <span className="text-xs text-white/40">
-                                                {code.useCount}/{code.maxUses} uses
+                                                {code.useCount}/{code.maxUses}{" "}
+                                                uses
                                             </span>
                                             <span className="text-xs text-white/40">
                                                 {formatExpiry(code.expiresAt)}
@@ -379,13 +390,14 @@ export function UserManagementSection() {
                                                         onClick={() =>
                                                             handleCopyInviteLink(
                                                                 code.code,
-                                                                code.id
+                                                                code.id,
                                                             )
                                                         }
                                                         className="p-1.5 text-gray-400 hover:text-white transition-colors"
                                                         title="Copy invite link"
                                                     >
-                                                        {copiedCodeId === code.id ? (
+                                                        {copiedCodeId ===
+                                                        code.id ? (
                                                             <Check className="w-3.5 h-3.5 text-green-400" />
                                                         ) : (
                                                             <Copy className="w-3.5 h-3.5" />
@@ -393,7 +405,9 @@ export function UserManagementSection() {
                                                     </button>
                                                     <button
                                                         onClick={() =>
-                                                            handleRevokeInvite(code.id)
+                                                            handleRevokeInvite(
+                                                                code.id,
+                                                            )
                                                         }
                                                         className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
                                                         title="Revoke invite code"
@@ -440,7 +454,8 @@ export function UserManagementSection() {
                                     <div className="min-w-0">
                                         <p className="text-sm text-white truncate">
                                             {connectedUser.displayName}
-                                            {currentUser?.id === connectedUser.id && (
+                                            {currentUser?.id ===
+                                                connectedUser.id && (
                                                 <span className="text-xs text-gray-400 ml-2">
                                                     (you)
                                                 </span>
@@ -462,9 +477,13 @@ export function UserManagementSection() {
                 {/* Users List */}
                 <div className="space-y-1">
                     {loading ? (
-                        <div className="py-4 text-sm text-gray-400">Loading users...</div>
+                        <div className="py-4 text-sm text-gray-400">
+                            Loading users...
+                        </div>
                     ) : users.length === 0 ? (
-                        <div className="py-4 text-sm text-gray-400">No users found</div>
+                        <div className="py-4 text-sm text-gray-400">
+                            No users found
+                        </div>
                     ) : (
                         users.map((user) => (
                             <div
@@ -480,13 +499,19 @@ export function UserManagementSection() {
                                         <div className="text-sm text-white">
                                             {user.username}
                                             {currentUser?.id === user.id && (
-                                                <span className="text-xs text-gray-400 ml-2">(you)</span>
+                                                <span className="text-xs text-gray-400 ml-2">
+                                                    (you)
+                                                </span>
                                             )}
                                         </div>
                                         <div className="text-xs text-gray-400">
-                                            {user.role === "admin" ? "Admin" : "User"}
+                                            {user.role === "admin"
+                                                ? "Admin"
+                                                : "User"}
                                             {user.email && (
-                                                <span className="ml-2">{user.email}</span>
+                                                <span className="ml-2">
+                                                    {user.email}
+                                                </span>
                                             )}
                                         </div>
                                     </div>
@@ -580,11 +605,12 @@ export function UserManagementSection() {
             >
                 <div className="space-y-4">
                     <p className="text-sm text-gray-300">
-                        Are you sure you want to delete this user? This action cannot be undone.
+                        Are you sure you want to delete this user? This action
+                        cannot be undone.
                     </p>
                     <div className="flex gap-2 justify-end items-center">
-                        <InlineStatus 
-                            status={deleteStatus} 
+                        <InlineStatus
+                            status={deleteStatus}
                             message={deleteMessage}
                             onClear={() => setDeleteStatus("idle")}
                         />
@@ -595,7 +621,9 @@ export function UserManagementSection() {
                             Cancel
                         </button>
                         <button
-                            onClick={() => confirmDelete && handleDelete(confirmDelete)}
+                            onClick={() =>
+                                confirmDelete && handleDelete(confirmDelete)
+                            }
                             className="px-4 py-2 text-sm bg-red-500 text-white rounded-full hover:bg-red-600"
                         >
                             Delete

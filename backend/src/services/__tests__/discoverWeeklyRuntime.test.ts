@@ -235,14 +235,14 @@ describe("discover weekly runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "failed",
                 }),
-            })
+            }),
         );
         expect(prisma.downloadJob.updateMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({
                     discoveryBatchId: "batch-1",
                 }),
-            })
+            }),
         );
     });
 
@@ -266,13 +266,15 @@ describe("discover weekly runtime behavior", () => {
             .spyOn(discoverWeeklyService, "checkBatchCompletion")
             .mockResolvedValue(undefined);
 
-        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(1);
+        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(
+            1,
+        );
         expect(prisma.downloadJob.updateMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({
                     discoveryBatchId: "batch-timeout",
                 }),
-            })
+            }),
         );
         expect(completionSpy).toHaveBeenCalledWith("batch-timeout");
     });
@@ -285,7 +287,12 @@ describe("discover weekly runtime behavior", () => {
             status: "downloading",
             weekStart: new Date("2026-02-16T00:00:00.000Z"),
             jobs: [
-                { id: "job-1", status: "pending", metadata: {}, targetMbid: null },
+                {
+                    id: "job-1",
+                    status: "pending",
+                    metadata: {},
+                    targetMbid: null,
+                },
             ],
         });
 
@@ -309,7 +316,11 @@ describe("discover weekly runtime behavior", () => {
                 {
                     id: "job-failed",
                     status: "failed",
-                    metadata: { artistName: "A", albumTitle: "B", similarity: 0.4 },
+                    metadata: {
+                        artistName: "A",
+                        albumTitle: "B",
+                        similarity: 0.4,
+                    },
                     targetMbid: "mbid-1",
                 },
             ],
@@ -333,11 +344,11 @@ describe("discover weekly runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "failed",
                 }),
-            })
+            }),
         );
         expect(discoveryBatchLogger.error).toHaveBeenCalledWith(
             "batch-failed",
-            "All downloads failed"
+            "All downloads failed",
         );
         expect(cleanupSpy).toHaveBeenCalledWith("batch-failed");
     });
@@ -360,7 +371,11 @@ describe("discover weekly runtime behavior", () => {
                 {
                     id: "job-failed",
                     status: "failed",
-                    metadata: { artistName: "Failed", albumTitle: "Album", similarity: 0.5 },
+                    metadata: {
+                        artistName: "Failed",
+                        albumTitle: "Album",
+                        similarity: 0.5,
+                    },
                     targetMbid: "mbid-fail",
                 },
             ],
@@ -382,7 +397,7 @@ describe("discover weekly runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "scanning",
                 }),
-            })
+            }),
         );
         expect(scanQueue.add).toHaveBeenCalledWith("scan", {
             type: "full",
@@ -393,25 +408,29 @@ describe("discover weekly runtime behavior", () => {
 
     it("fails playlist generation when discovery weekly is disabled for the user", async () => {
         const { prisma, discoveryLogger } = setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValue(null);
+        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValue(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
 
-        await expect(discoverWeeklyService.generatePlaylist("user-1")).rejects.toThrow(
-            "Discovery Weekly not enabled"
-        );
+        await expect(
+            discoverWeeklyService.generatePlaylist("user-1"),
+        ).rejects.toThrow("Discovery Weekly not enabled");
         expect(discoveryLogger.end).toHaveBeenCalledWith(false, "Not enabled");
     });
 
     it("returns early when buildFinalPlaylist receives a missing batch id", async () => {
         const { prisma } = setupDiscoverWeeklyMocks();
-        (prisma.discoveryBatch.findUnique as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryBatch.findUnique as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("missing-batch")
+            discoverWeeklyService.buildFinalPlaylist("missing-batch"),
         ).resolves.toBeUndefined();
 
         expect(prisma.downloadJob.findMany).not.toHaveBeenCalled();
@@ -451,11 +470,11 @@ describe("discover weekly runtime behavior", () => {
                     status: "failed",
                     errorMessage: "No tracks found after scan",
                 }),
-            })
+            }),
         );
         expect(discoveryBatchLogger.error).toHaveBeenCalledWith(
             "batch-no-tracks",
-            "No tracks found after scan"
+            "No tracks found after scan",
         );
     });
 
@@ -481,9 +500,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual(
-            { batchesChecked: 0, tracksAdded: 0 }
-        );
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({ batchesChecked: 0, tracksAdded: 0 });
     });
 
     it("checks completed batches but skips ones without completed download jobs", async () => {
@@ -499,9 +518,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual(
-            { batchesChecked: 1, tracksAdded: 0 }
-        );
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({ batchesChecked: 1, tracksAdded: 0 });
     });
 
     it("generates a discovery batch and updates acquired jobs on successful generation", async () => {
@@ -512,7 +531,9 @@ describe("discover weekly runtime behavior", () => {
             acquisitionService,
             discoveryLogger,
         } = setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-1",
             enabled: true,
             downloadRatio: 1.3,
@@ -550,12 +571,13 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "prefetchSimilarArtists").mockResolvedValue(
-            new Map([["seed-1", []]])
-        );
         jest.spyOn(
             discoverWeeklyService as any,
-            "findRecommendedAlbumsMultiStrategy"
+            "prefetchSimilarArtists",
+        ).mockResolvedValue(new Map([["seed-1", []]]));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findRecommendedAlbumsMultiStrategy",
         ).mockResolvedValue([
             {
                 artistName: "Artist 1",
@@ -586,18 +608,18 @@ describe("discover weekly runtime behavior", () => {
         expect(prisma.downloadJob.update).toHaveBeenCalledTimes(2);
         expect(discoveryBatchLogger.info).toHaveBeenCalledWith(
             expect.any(String),
-            expect.stringContaining("downloads started")
+            expect.stringContaining("downloads started"),
         );
         expect(result).toEqual(
             expect.objectContaining({
                 success: true,
                 songCount: 0,
                 batchId: expect.any(String),
-            })
+            }),
         );
         expect(discoveryLogger.end).toHaveBeenCalledWith(
             true,
-            expect.stringContaining("downloads queued")
+            expect.stringContaining("downloads queued"),
         );
     });
 
@@ -630,7 +652,7 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-            "batch-clean"
+            "batch-clean",
         );
 
         expect(axiosMock.delete).toHaveBeenCalledWith(
@@ -640,7 +662,7 @@ describe("discover weekly runtime behavior", () => {
                     removeFromClient: true,
                     blocklist: true,
                 }),
-            })
+            }),
         );
     });
 
@@ -689,22 +711,22 @@ describe("discover weekly runtime behavior", () => {
                     return { id: "liked-1" };
                 }
                 return null;
-            }
+            },
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await (discoverWeeklyService as any).cleanupFailedArtists(
-            "batch-artists"
+            "batch-artists",
         );
 
         expect(lidarrService.removeDiscoveryTagByMbid).toHaveBeenCalledWith(
-            "artist-liked"
+            "artist-liked",
         );
         expect(lidarrService.deleteArtistById).toHaveBeenCalledWith(3, true);
         expect(discoveryBatchLogger.info).toHaveBeenCalledWith(
             "batch-artists",
-            expect.stringContaining("failed artists removed")
+            expect.stringContaining("failed artists removed"),
         );
     });
 
@@ -725,14 +747,14 @@ describe("discover weekly runtime behavior", () => {
         await expect(
             (discoverWeeklyService as any).isArtistInLibrary(
                 "Artist MBID",
-                "mbid-artist-1"
-            )
+                "mbid-artist-1",
+            ),
         ).resolves.toBe(true);
         await expect(
             (discoverWeeklyService as any).isArtistInLibrary(
                 "Artist Name",
-                undefined
-            )
+                undefined,
+            ),
         ).resolves.toBe(true);
     });
 
@@ -749,9 +771,7 @@ describe("discover weekly runtime behavior", () => {
         const discoveryModule = require("../discovery");
         (
             discoveryModule.discoverySeeding.getSeedArtists as jest.Mock
-        ).mockResolvedValueOnce([
-            { name: "Seed Artist", mbid: "seed-1" },
-        ]);
+        ).mockResolvedValueOnce([{ name: "Seed Artist", mbid: "seed-1" }]);
         (
             discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock
         ).mockResolvedValue(false);
@@ -767,15 +787,25 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(false);
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockResolvedValue(false);
 
         const replacement = await discoverWeeklyService.findReplacementAlbum(
             {
                 id: "failed-job",
-                metadata: { artistName: "Old", albumTitle: "Old Album", artistMbid: "artist-failed" },
+                metadata: {
+                    artistName: "Old",
+                    albumTitle: "Old Album",
+                    artistMbid: "artist-failed",
+                },
             },
-            { id: "batch-r1", userId: "user-1" }
+            { id: "batch-r1", userId: "user-1" },
         );
 
         expect(replacement).toEqual(
@@ -783,7 +813,7 @@ describe("discover weekly runtime behavior", () => {
                 artistName: "New Similar",
                 albumTitle: "New Album",
                 albumMbid: "rg-new",
-            })
+            }),
         );
     });
 
@@ -799,19 +829,23 @@ describe("discover weekly runtime behavior", () => {
         const discoveryModule = require("../discovery");
         (
             discoveryModule.discoverySeeding.getSeedArtists as jest.Mock
-        ).mockResolvedValueOnce([
-            { name: "Seed Artist", mbid: "seed-1" },
-        ]);
-        (lastFmService.getSimilarArtists as jest.Mock).mockResolvedValueOnce([]);
+        ).mockResolvedValueOnce([{ name: "Seed Artist", mbid: "seed-1" }]);
+        (lastFmService.getSimilarArtists as jest.Mock).mockResolvedValueOnce(
+            [],
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         const replacement = await discoverWeeklyService.findReplacementAlbum(
             {
                 id: "failed-job",
-                metadata: { artistName: "Old", albumTitle: "Old Album", artistMbid: "artist-failed" },
+                metadata: {
+                    artistName: "Old",
+                    albumTitle: "Old Album",
+                    artistMbid: "artist-failed",
+                },
             },
-            { id: "batch-r2", userId: "user-1" }
+            { id: "batch-r2", userId: "user-1" },
         );
 
         expect(replacement).toEqual(
@@ -821,7 +855,7 @@ describe("discover weekly runtime behavior", () => {
                 albumMbid: "rg-anchor",
                 similarity: 1,
                 isLibraryAnchor: true,
-            })
+            }),
         );
     });
 
@@ -830,7 +864,7 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("@prisma/client");
         const retryable = new Prisma.PrismaClientKnownRequestError(
-            "temporary connection loss"
+            "temporary connection loss",
         );
         (prisma.discoveryBatch.findMany as jest.Mock)
             .mockRejectedValueOnce(retryable)
@@ -838,7 +872,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(0);
+        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(
+            0,
+        );
 
         expect(prisma.discoveryBatch.findMany).toHaveBeenCalledTimes(2);
         expect(prisma.$connect).toHaveBeenCalledTimes(1);
@@ -849,14 +885,16 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("@prisma/client");
         const retryable = new Prisma.PrismaClientKnownRequestError(
-            "persistent db failure"
+            "persistent db failure",
         );
-        (prisma.discoveryBatch.findMany as jest.Mock).mockRejectedValue(retryable);
+        (prisma.discoveryBatch.findMany as jest.Mock).mockRejectedValue(
+            retryable,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(discoverWeeklyService.checkStuckBatches()).rejects.toThrow(
-            "persistent db failure"
+            "persistent db failure",
         );
         expect(prisma.discoveryBatch.findMany).toHaveBeenCalledTimes(3);
         expect(prisma.$connect).toHaveBeenCalledTimes(2);
@@ -867,18 +905,20 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Prisma } = require("@prisma/client");
         const retryable = new Prisma.PrismaClientKnownRequestError(
-            "temporary disconnect"
+            "temporary disconnect",
         );
         (prisma.discoveryBatch.findMany as jest.Mock)
             .mockRejectedValueOnce(retryable)
             .mockResolvedValueOnce([]);
         (prisma.$connect as jest.Mock).mockRejectedValueOnce(
-            new Error("reconnect failed")
+            new Error("reconnect failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(0);
+        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(
+            0,
+        );
         expect(prisma.discoveryBatch.findMany).toHaveBeenCalledTimes(2);
         expect(prisma.$connect).toHaveBeenCalledTimes(1);
     });
@@ -886,7 +926,9 @@ describe("discover weekly runtime behavior", () => {
     it("marks failed acquisitions and triggers completion check during playlist generation", async () => {
         const { prisma, tx, acquisitionService, discoveryBatchLogger } =
             setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-2",
             enabled: true,
             downloadRatio: 1.3,
@@ -909,12 +951,13 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "prefetchSimilarArtists").mockResolvedValue(
-            new Map([["seed-1", []]])
-        );
         jest.spyOn(
             discoverWeeklyService as any,
-            "findRecommendedAlbumsMultiStrategy"
+            "prefetchSimilarArtists",
+        ).mockResolvedValue(new Map([["seed-1", []]]));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findRecommendedAlbumsMultiStrategy",
         ).mockResolvedValue([
             {
                 artistName: "Artist X",
@@ -933,9 +976,9 @@ describe("discover weekly runtime behavior", () => {
             .spyOn(discoverWeeklyService, "checkBatchCompletion")
             .mockResolvedValue(undefined);
 
-        await expect(discoverWeeklyService.generatePlaylist("user-2")).resolves.toEqual(
-            expect.objectContaining({ success: true })
-        );
+        await expect(
+            discoverWeeklyService.generatePlaylist("user-2"),
+        ).resolves.toEqual(expect.objectContaining({ success: true }));
 
         expect(prisma.downloadJob.update).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -944,11 +987,12 @@ describe("discover weekly runtime behavior", () => {
                     status: "failed",
                     error: "no sources available",
                 }),
-            })
+            }),
         );
         expect(discoveryBatchLogger.error).toHaveBeenCalledWith(
-            tx.discoveryBatch.create.mock.results[0]?.value?.id || expect.any(String),
-            expect.stringContaining("Failed to acquire Album X")
+            tx.discoveryBatch.create.mock.results[0]?.value?.id ||
+                expect.any(String),
+            expect.stringContaining("Failed to acquire Album X"),
         );
         expect(completionSpy).toHaveBeenCalled();
     });
@@ -995,8 +1039,14 @@ describe("discover weekly runtime behavior", () => {
         (
             discoveryModule.discoverySeeding.getSeedArtists as jest.Mock
         ).mockResolvedValueOnce([{ name: "Seed One", mbid: "seed-1" }]);
-        jest.spyOn(require("../discoverWeekly").discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(undefined);
-        jest.spyOn(require("../discoverWeekly").discoverWeeklyService as any, "cleanupOrphanedLidarrQueue").mockResolvedValue(undefined);
+        jest.spyOn(
+            require("../discoverWeekly").discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            require("../discoverWeekly").discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
@@ -1008,7 +1058,7 @@ describe("discover weekly runtime behavior", () => {
             .mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-final")
+            discoverWeeklyService.buildFinalPlaylist("batch-final"),
         ).resolves.toBeUndefined();
 
         expect(prisma.track.findMany).toHaveBeenCalledTimes(3);
@@ -1021,7 +1071,7 @@ describe("discover weekly runtime behavior", () => {
                     status: "completed",
                     finalSongCount: 1,
                 }),
-            })
+            }),
         );
         expect(cleanupFailedSpy).toHaveBeenCalledWith("batch-final");
         expect(cleanupQueueSpy).toHaveBeenCalledWith("batch-final");
@@ -1053,7 +1103,9 @@ describe("discover weekly runtime behavior", () => {
                 },
             },
         ]);
-        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         (prisma.track.findMany as jest.Mock)
             .mockResolvedValueOnce([]) // mbid miss
             .mockResolvedValueOnce([
@@ -1072,7 +1124,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual({
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({
             batchesChecked: 1,
             tracksAdded: 1,
         });
@@ -1110,8 +1164,8 @@ describe("discover weekly runtime behavior", () => {
                         },
                     },
                 ],
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toBeUndefined();
 
         expect(prisma.downloadJob.update).toHaveBeenCalledWith(
@@ -1120,11 +1174,11 @@ describe("discover weekly runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "cancelled",
                 }),
-            })
+            }),
         );
         expect(lidarrService.deleteArtist).toHaveBeenCalledWith(
             "artist-extra",
-            true
+            true,
         );
     });
 
@@ -1143,16 +1197,18 @@ describe("discover weekly runtime behavior", () => {
         await expect(
             (discoverWeeklyService as any).isAlbumOwnedByName(
                 "The Artist",
-                "The Album Name (Remaster)"
-            )
+                "The Album Name (Remaster)",
+            ),
         ).resolves.toBe(true);
     });
 
     it("checks exclusion lookup and aggregates user top genres from canonical plus user tags", async () => {
         const { prisma } = setupDiscoverWeeklyMocks();
-        (prisma.discoverExclusion.findFirst as jest.Mock).mockResolvedValueOnce({
-            id: "ex-1",
-        });
+        (prisma.discoverExclusion.findFirst as jest.Mock).mockResolvedValueOnce(
+            {
+                id: "ex-1",
+            },
+        );
         (prisma.play.findMany as jest.Mock).mockResolvedValueOnce([
             {
                 track: {
@@ -1179,12 +1235,12 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            (discoverWeeklyService as any).isAlbumExcluded("rg-1", "user-1")
+            (discoverWeeklyService as any).isAlbumExcluded("rg-1", "user-1"),
         ).resolves.toBe(true);
         await expect(
-            (discoverWeeklyService as any).getUserTopGenres("user-1")
+            (discoverWeeklyService as any).getUserTopGenres("user-1"),
         ).resolves.toEqual(
-            expect.arrayContaining(["indie", "post-rock", "rock"])
+            expect.arrayContaining(["indie", "post-rock", "rock"]),
         );
     });
 
@@ -1195,14 +1251,16 @@ describe("discover weekly runtime behavior", () => {
         (prisma.discoveryBatch.findMany as jest.Mock)
             .mockRejectedValueOnce(
                 new Prisma.PrismaClientUnknownRequestError(
-                    "Response from the Engine was empty"
-                )
+                    "Response from the Engine was empty",
+                ),
             )
             .mockResolvedValueOnce([]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(0);
+        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(
+            0,
+        );
 
         expect(prisma.discoveryBatch.findMany).toHaveBeenCalledTimes(2);
         expect(prisma.$connect).toHaveBeenCalledTimes(1);
@@ -1213,18 +1271,21 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        const recommendations = await (discoverWeeklyService as any).findRecommendedAlbums(
+        const recommendations = await (
+            discoverWeeklyService as any
+        ).findRecommendedAlbums(
             [{ name: "Seed Artist", mbid: "seed-1" }],
             new Map([["seed-1", []]]),
             3,
-            "user-1"
+            "user-1",
         );
 
         expect(recommendations).toEqual([]);
     });
 
     it("evaluates album candidates for an artist across duplicate/owned/excluded and valid branches", async () => {
-        const { lastFmService, musicBrainzService } = setupDiscoverWeeklyMocks();
+        const { lastFmService, musicBrainzService } =
+            setupDiscoverWeeklyMocks();
         (lastFmService.getArtistTopAlbums as jest.Mock).mockResolvedValueOnce([
             { name: "Live at Venue" },
             { name: "Duplicate Album" },
@@ -1241,23 +1302,29 @@ describe("discover weekly runtime behavior", () => {
             .mockResolvedValueOnce({ id: "rg-valid" });
 
         const discoveryModule = require("../discovery");
-        (discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock).mockImplementation(
-            async (rgMbid: string) => rgMbid === "rg-owned"
-        );
+        (
+            discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock
+        ).mockImplementation(async (rgMbid: string) => rgMbid === "rg-owned");
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isAlbumOwnedByName").mockResolvedValue(
-            false
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockImplementation(
-            async (rgMbid: unknown) => rgMbid === "rg-excluded"
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumOwnedByName",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockImplementation(
+            async (rgMbid: unknown) => rgMbid === "rg-excluded",
         );
 
-        const result = await (discoverWeeklyService as any).findValidAlbumForArtist(
+        const result = await (
+            discoverWeeklyService as any
+        ).findValidAlbumForArtist(
             { name: "Candidate Artist", mbid: "artist-mbid", match: 0.63 },
             "user-1",
-            new Set<string>(["rg-dup"])
+            new Set<string>(["rg-dup"]),
         );
 
         expect(result.recommendation).toEqual(
@@ -1265,7 +1332,7 @@ describe("discover weekly runtime behavior", () => {
                 artistName: "Candidate Artist",
                 albumTitle: "Valid Album",
                 albumMbid: "rg-valid",
-            })
+            }),
         );
         expect(result.skippedDuplicate).toBeGreaterThan(0);
         expect(result.skippedNoMbid).toBeGreaterThan(0);
@@ -1274,7 +1341,8 @@ describe("discover weekly runtime behavior", () => {
     });
 
     it("uses fallback genres in tag exploration and returns wildcard recommendations", async () => {
-        const { lastFmService, musicBrainzService } = setupDiscoverWeeklyMocks();
+        const { lastFmService, musicBrainzService } =
+            setupDiscoverWeeklyMocks();
         (lastFmService.getTopAlbumsByTag as jest.Mock).mockResolvedValue([
             { name: "Live Session", artist: { name: "Skip Artist" } },
             { name: "Studio Cut", artist: { name: "Keep Artist" } },
@@ -1284,30 +1352,32 @@ describe("discover weekly runtime behavior", () => {
         });
 
         const discoveryModule = require("../discovery");
-        (discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock).mockResolvedValue(
-            false
-        );
+        (
+            discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock
+        ).mockResolvedValue(false);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "getUserTopGenres").mockResolvedValue(
-            []
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumOwnedByName").mockResolvedValue(
-            false
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockResolvedValue(
-            false
-        );
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "getUserTopGenres",
+        ).mockResolvedValue([]);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumOwnedByName",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
 
-        const wildcardResults = await (discoverWeeklyService as any).tagExplorationStrategy(
-            "user-1",
-            1,
-            new Set<string>()
-        );
+        const wildcardResults = await (
+            discoverWeeklyService as any
+        ).tagExplorationStrategy("user-1", 1, new Set<string>());
 
         expect(wildcardResults).toHaveLength(1);
         expect(wildcardResults[0]).toEqual(
@@ -1316,7 +1386,7 @@ describe("discover weekly runtime behavior", () => {
                 albumTitle: "Studio Cut",
                 albumMbid: "rg-studio",
                 tier: "wildcard",
-            })
+            }),
         );
     });
 
@@ -1325,36 +1395,39 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            true
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => ({
-                recommendation: {
-                    artistName: artist.name,
-                    artistMbid: artist.mbid,
-                    albumTitle: `${artist.name} Album`,
-                    albumMbid: `rg-${artist.name.toLowerCase().replace(/\s+/g, "-")}`,
-                    similarity: artist.match || 0.5,
-                },
-                albumsChecked: 1,
-                skippedNoMbid: 0,
-                skippedOwned: 0,
-                skippedExcluded: 0,
-                skippedDuplicate: 0,
-            }));
-        jest
-            .spyOn(discoverWeeklyService as any, "tagExplorationStrategy")
-            .mockResolvedValue([
-                {
-                    artistName: "Wildcard Artist",
-                    albumTitle: "Wildcard Album",
-                    albumMbid: "rg-wildcard",
-                    similarity: 0.7,
-                    tier: "wildcard",
-                },
-            ]);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(true);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => ({
+            recommendation: {
+                artistName: artist.name,
+                artistMbid: artist.mbid,
+                albumTitle: `${artist.name} Album`,
+                albumMbid: `rg-${artist.name.toLowerCase().replace(/\s+/g, "-")}`,
+                similarity: artist.match || 0.5,
+            },
+            albumsChecked: 1,
+            skippedNoMbid: 0,
+            skippedOwned: 0,
+            skippedExcluded: 0,
+            skippedDuplicate: 0,
+        }));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "tagExplorationStrategy",
+        ).mockResolvedValue([
+            {
+                artistName: "Wildcard Artist",
+                albumTitle: "Wildcard Album",
+                albumMbid: "rg-wildcard",
+                similarity: 0.7,
+                tier: "wildcard",
+            },
+        ]);
 
         const recommendations =
             await discoverWeeklyService.findRecommendedAlbumsMultiStrategy(
@@ -1363,21 +1436,33 @@ describe("discover weekly runtime behavior", () => {
                     [
                         "seed-1",
                         [
-                            { name: "High Artist", mbid: "artist-high", match: 0.92 },
-                            { name: "Medium Artist", mbid: "artist-medium", match: 0.6 },
-                            { name: "Explore Artist", mbid: "artist-explore", match: 0.41 },
+                            {
+                                name: "High Artist",
+                                mbid: "artist-high",
+                                match: 0.92,
+                            },
+                            {
+                                name: "Medium Artist",
+                                mbid: "artist-medium",
+                                match: 0.6,
+                            },
+                            {
+                                name: "Explore Artist",
+                                mbid: "artist-explore",
+                                match: 0.41,
+                            },
                         ],
                     ],
                 ]),
                 4,
-                "user-1"
+                "user-1",
             );
 
         expect(recommendations).toHaveLength(4);
         expect(
             recommendations.some(
-                (recommendation: any) => recommendation.tier === "wildcard"
-            )
+                (recommendation: any) => recommendation.tier === "wildcard",
+            ),
         ).toBe(true);
     });
 
@@ -1386,78 +1471,90 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockImplementation(async (artistName: unknown) => {
-                return artistName === "Existing Artist";
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "Fresh Artist") {
-                    return {
-                        recommendation: {
-                            artistName: "Fresh Artist",
-                            artistMbid: "artist-fresh",
-                            albumTitle: "Fresh Album",
-                            albumMbid: "rg-fresh",
-                            similarity: 0.74,
-                        },
-                        albumsChecked: 2,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-
-                if (artist.name === "Existing Artist") {
-                    return {
-                        recommendation: {
-                            artistName: "Existing Artist",
-                            artistMbid: "artist-existing",
-                            albumTitle: "Existing Album",
-                            albumMbid: "rg-existing",
-                            similarity: 0.62,
-                        },
-                        albumsChecked: 3,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockImplementation(async (artistName: unknown) => {
+            return artistName === "Existing Artist";
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "Fresh Artist") {
                 return {
-                    recommendation: null,
-                    albumsChecked: 0,
+                    recommendation: {
+                        artistName: "Fresh Artist",
+                        artistMbid: "artist-fresh",
+                        albumTitle: "Fresh Album",
+                        albumMbid: "rg-fresh",
+                        similarity: 0.74,
+                    },
+                    albumsChecked: 2,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
+            }
 
-        const recommendations = await (discoverWeeklyService as any).findRecommendedAlbums(
+            if (artist.name === "Existing Artist") {
+                return {
+                    recommendation: {
+                        artistName: "Existing Artist",
+                        artistMbid: "artist-existing",
+                        albumTitle: "Existing Album",
+                        albumMbid: "rg-existing",
+                        similarity: 0.62,
+                    },
+                    albumsChecked: 3,
+                    skippedNoMbid: 0,
+                    skippedOwned: 0,
+                    skippedExcluded: 0,
+                    skippedDuplicate: 0,
+                };
+            }
+
+            return {
+                recommendation: null,
+                albumsChecked: 0,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
+
+        const recommendations = await (
+            discoverWeeklyService as any
+        ).findRecommendedAlbums(
             [{ name: "Seed One", mbid: "seed-1" }],
             new Map([
                 [
                     "seed-1",
                     [
-                        { name: "Fresh Artist", mbid: "artist-fresh", match: 0.74 },
-                        { name: "Existing Artist", mbid: "artist-existing", match: 0.62 },
+                        {
+                            name: "Fresh Artist",
+                            mbid: "artist-fresh",
+                            match: 0.74,
+                        },
+                        {
+                            name: "Existing Artist",
+                            mbid: "artist-existing",
+                            match: 0.62,
+                        },
                     ],
                 ],
             ]),
             2,
-            "user-1"
+            "user-1",
         );
 
         expect(recommendations).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ albumMbid: "rg-fresh" }),
                 expect.objectContaining({ albumMbid: "rg-existing" }),
-            ])
+            ]),
         );
     });
 
@@ -1466,28 +1563,31 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => ({
-                recommendation: {
-                    artistName: artist.name,
-                    artistMbid: artist.mbid,
-                    albumTitle: `${artist.name} Album`,
-                    albumMbid: `rg-${artist.mbid}`,
-                    similarity: artist.match || 0.5,
-                },
-                albumsChecked: 1,
-                skippedNoMbid: 0,
-                skippedOwned: 0,
-                skippedExcluded: 0,
-                skippedDuplicate: 0,
-            }));
-        jest
-            .spyOn(discoverWeeklyService as any, "tagExplorationStrategy")
-            .mockResolvedValue([]);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => ({
+            recommendation: {
+                artistName: artist.name,
+                artistMbid: artist.mbid,
+                albumTitle: `${artist.name} Album`,
+                albumMbid: `rg-${artist.mbid}`,
+                similarity: artist.match || 0.5,
+            },
+            albumsChecked: 1,
+            skippedNoMbid: 0,
+            skippedOwned: 0,
+            skippedExcluded: 0,
+            skippedDuplicate: 0,
+        }));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "tagExplorationStrategy",
+        ).mockResolvedValue([]);
 
         const recommendations =
             await discoverWeeklyService.findRecommendedAlbumsMultiStrategy(
@@ -1498,12 +1598,16 @@ describe("discover weekly runtime behavior", () => {
                         [
                             { name: "High One", mbid: "high-1", match: 0.91 },
                             { name: "High Two", mbid: "high-2", match: 0.82 },
-                            { name: "Medium One", mbid: "medium-1", match: 0.6 },
+                            {
+                                name: "Medium One",
+                                mbid: "medium-1",
+                                match: 0.6,
+                            },
                         ],
                     ],
                 ]),
                 4,
-                "user-1"
+                "user-1",
             );
 
         expect(recommendations).toEqual(
@@ -1511,7 +1615,7 @@ describe("discover weekly runtime behavior", () => {
                 expect.objectContaining({ albumMbid: "rg-high-1" }),
                 expect.objectContaining({ albumMbid: "rg-high-2" }),
                 expect.objectContaining({ albumMbid: "rg-medium-1" }),
-            ])
+            ]),
         );
     });
 
@@ -1521,14 +1625,16 @@ describe("discover weekly runtime behavior", () => {
         const { Prisma } = require("@prisma/client");
         (prisma.discoveryBatch.findMany as jest.Mock)
             .mockRejectedValueOnce(
-                new Prisma.PrismaClientRustPanicError("panic in query engine")
+                new Prisma.PrismaClientRustPanicError("panic in query engine"),
             )
             .mockRejectedValueOnce("Can't reach database server")
             .mockResolvedValueOnce([]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(0);
+        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(
+            0,
+        );
 
         expect(prisma.discoveryBatch.findMany).toHaveBeenCalledTimes(3);
         expect(prisma.$connect).toHaveBeenCalledTimes(2);
@@ -1536,7 +1642,9 @@ describe("discover weekly runtime behavior", () => {
 
     it("fails generation when no seed artists are available", async () => {
         const { prisma, discoveryLogger } = setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-no-seeds",
             enabled: true,
             downloadRatio: 1.3,
@@ -1550,14 +1658,19 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            discoverWeeklyService.generatePlaylist("user-no-seeds")
+            discoverWeeklyService.generatePlaylist("user-no-seeds"),
         ).rejects.toThrow("No seed artists found - need listening history");
-        expect(discoveryLogger.end).toHaveBeenCalledWith(false, "No seed artists");
+        expect(discoveryLogger.end).toHaveBeenCalledWith(
+            false,
+            "No seed artists",
+        );
     });
 
     it("fails generation when recommendation strategies return no albums", async () => {
         const { prisma, discoveryLogger } = setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-no-recs",
             enabled: true,
             downloadRatio: 1.3,
@@ -1570,26 +1683,33 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "prefetchSimilarArtists").mockResolvedValue(
-            new Map([["seed-1", [{ name: "Sim Artist", mbid: "sim-1", match: 0.7 }]]])
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "prefetchSimilarArtists",
+        ).mockResolvedValue(
+            new Map([
+                ["seed-1", [{ name: "Sim Artist", mbid: "sim-1", match: 0.7 }]],
+            ]),
         );
         jest.spyOn(
             discoverWeeklyService as any,
-            "findRecommendedAlbumsMultiStrategy"
+            "findRecommendedAlbumsMultiStrategy",
         ).mockResolvedValue([]);
 
-        await expect(discoverWeeklyService.generatePlaylist("user-no-recs")).rejects.toThrow(
-            "No recommendations found"
-        );
+        await expect(
+            discoverWeeklyService.generatePlaylist("user-no-recs"),
+        ).rejects.toThrow("No recommendations found");
         expect(discoveryLogger.end).toHaveBeenCalledWith(
             false,
-            "No recommendations found"
+            "No recommendations found",
         );
     });
 
     it("warns on low recommendation threshold and skips duplicate queued download jobs", async () => {
         const { prisma, tx, discoveryBatchLogger } = setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-threshold",
             enabled: true,
             downloadRatio: 1.1,
@@ -1609,12 +1729,20 @@ describe("discover weekly runtime behavior", () => {
         const completionSpy = jest
             .spyOn(discoverWeeklyService, "checkBatchCompletion")
             .mockResolvedValue(undefined);
-        jest.spyOn(discoverWeeklyService as any, "prefetchSimilarArtists").mockResolvedValue(
-            new Map([["seed-1", [{ name: "Sim Artist", mbid: "sim-1", match: 0.55 }]]])
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "prefetchSimilarArtists",
+        ).mockResolvedValue(
+            new Map([
+                [
+                    "seed-1",
+                    [{ name: "Sim Artist", mbid: "sim-1", match: 0.55 }],
+                ],
+            ]),
         );
         jest.spyOn(
             discoverWeeklyService as any,
-            "findRecommendedAlbumsMultiStrategy"
+            "findRecommendedAlbumsMultiStrategy",
         ).mockResolvedValue([
             {
                 artistName: "Artist Duplicate",
@@ -1627,16 +1755,16 @@ describe("discover weekly runtime behavior", () => {
         ]);
 
         await expect(
-            discoverWeeklyService.generatePlaylist("user-threshold")
+            discoverWeeklyService.generatePlaylist("user-threshold"),
         ).resolves.toEqual(
             expect.objectContaining({
                 success: true,
-            })
+            }),
         );
 
         expect(discoveryBatchLogger.warn).toHaveBeenCalledWith(
             "threshold-check",
-            expect.stringContaining("Low recommendations")
+            expect.stringContaining("Low recommendations"),
         );
         expect(tx.downloadJob.create).not.toHaveBeenCalled();
         expect(completionSpy).toHaveBeenCalledWith("batch-created");
@@ -1645,7 +1773,9 @@ describe("discover weekly runtime behavior", () => {
     it("counts all-settled acquisition promise rejections as failed downloads", async () => {
         const { prisma, acquisitionService, discoveryBatchLogger } =
             setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-settled-failure",
             enabled: true,
             downloadRatio: 1.3,
@@ -1686,12 +1816,13 @@ describe("discover weekly runtime behavior", () => {
         const completionSpy = jest
             .spyOn(discoverWeeklyService, "checkBatchCompletion")
             .mockResolvedValue(undefined);
-        jest.spyOn(discoverWeeklyService as any, "prefetchSimilarArtists").mockResolvedValue(
-            new Map([["seed-1", []]])
-        );
         jest.spyOn(
             discoverWeeklyService as any,
-            "findRecommendedAlbumsMultiStrategy"
+            "prefetchSimilarArtists",
+        ).mockResolvedValue(new Map([["seed-1", []]]));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findRecommendedAlbumsMultiStrategy",
         ).mockResolvedValue([
             {
                 artistName: "Reject Artist",
@@ -1715,7 +1846,7 @@ describe("discover weekly runtime behavior", () => {
 
         expect(discoveryBatchLogger.info).toHaveBeenCalledWith(
             "batch-created",
-            expect.stringContaining("downloads started")
+            expect.stringContaining("downloads started"),
         );
         expect(completionSpy).toHaveBeenCalledWith("batch-created");
     });
@@ -1728,14 +1859,24 @@ describe("discover weekly runtime behavior", () => {
                 response: { status: 429 },
                 message: "rate limited",
             })
-            .mockResolvedValueOnce([{ name: "Retry Artist", mbid: "retry-1", match: 0.7 }])
-            .mockResolvedValueOnce([{ name: "Artist 2", mbid: "a2", match: 0.6 }])
-            .mockResolvedValueOnce([{ name: "Artist 3", mbid: "a3", match: 0.5 }])
-            .mockResolvedValueOnce([{ name: "Artist 4", mbid: "a4", match: 0.4 }]);
+            .mockResolvedValueOnce([
+                { name: "Retry Artist", mbid: "retry-1", match: 0.7 },
+            ])
+            .mockResolvedValueOnce([
+                { name: "Artist 2", mbid: "a2", match: 0.6 },
+            ])
+            .mockResolvedValueOnce([
+                { name: "Artist 3", mbid: "a3", match: 0.5 },
+            ])
+            .mockResolvedValueOnce([
+                { name: "Artist 4", mbid: "a4", match: 0.4 },
+            ]);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        const prefetchPromise = (discoverWeeklyService as any).prefetchSimilarArtists([
+        const prefetchPromise = (
+            discoverWeeklyService as any
+        ).prefetchSimilarArtists([
             { name: "Seed 1", mbid: "seed-1" },
             { name: "Seed 2", mbid: "seed-2" },
             { name: "Seed 3", mbid: "seed-3" },
@@ -1749,7 +1890,9 @@ describe("discover weekly runtime behavior", () => {
         expect(lastFmService.getSimilarArtists).toHaveBeenCalledTimes(5);
         expect(cache.size).toBe(4);
         expect(Array.from(cache.values()).flat()).toEqual(
-            expect.arrayContaining([expect.objectContaining({ name: "Retry Artist" })])
+            expect.arrayContaining([
+                expect.objectContaining({ name: "Retry Artist" }),
+            ]),
         );
     });
 
@@ -1803,15 +1946,17 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-normalized")
+            discoverWeeklyService.buildFinalPlaylist("batch-normalized"),
         ).resolves.toBeUndefined();
 
         expect(prisma.album.findMany).toHaveBeenCalledTimes(1);
@@ -1821,7 +1966,7 @@ describe("discover weekly runtime behavior", () => {
             expect.objectContaining({
                 where: { id: "batch-normalized" },
                 data: expect.objectContaining({ status: "completed" }),
-            })
+            }),
         );
     });
 
@@ -1830,7 +1975,9 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { __discoverWeeklyTestables } = require("../discoverWeekly");
         const rootMethod = jest.fn(async (value: string) => `root:${value}`);
-        const nestedMethod = jest.fn(async (value: string) => `nested:${value}`);
+        const nestedMethod = jest.fn(
+            async (value: string) => `nested:${value}`,
+        );
 
         const proxied = __discoverWeeklyTestables.createPrismaRetryProxy(
             {
@@ -1841,28 +1988,30 @@ describe("discover weekly runtime behavior", () => {
                 },
                 version: "1.0.0",
             } as any,
-            "discoverProxy"
+            "discoverProxy",
         );
 
         await expect(proxied.ping("ok")).resolves.toBe("root:ok");
         await expect(proxied.discoveryBatch.findMany("query")).resolves.toBe(
-            "nested:query"
+            "nested:query",
         );
         expect(proxied.version).toBe("1.0.0");
         expect(proxied.discoveryBatch.modelName).toBe("DiscoveryBatch");
         expect(__discoverWeeklyTestables.getTierFromSimilarity(0.1)).toBe(
-            "wildcard"
+            "wildcard",
         );
     });
 
     it("returns early when batch completion check is invoked for a missing batch id", async () => {
         const { prisma } = setupDiscoverWeeklyMocks();
-        (prisma.discoveryBatch.findUnique as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryBatch.findUnique as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            discoverWeeklyService.checkBatchCompletion("batch-missing")
+            discoverWeeklyService.checkBatchCompletion("batch-missing"),
         ).resolves.toBeUndefined();
     });
 
@@ -1875,9 +2024,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        const cache = await (discoverWeeklyService as any).prefetchSimilarArtists([
-            { name: "Seed One", mbid: "seed-1" },
-        ]);
+        const cache = await (
+            discoverWeeklyService as any
+        ).prefetchSimilarArtists([{ name: "Seed One", mbid: "seed-1" }]);
 
         expect(lastFmService.getSimilarArtists).toHaveBeenCalledTimes(1);
         expect(cache.get("seed-1")).toEqual([]);
@@ -1914,7 +2063,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-discovery",
                         title: "Discovery Album",
                         rgMbid: "rg-discovery",
-                        artist: { name: "Discovery Artist", mbid: "artist-discovery" },
+                        artist: {
+                            name: "Discovery Artist",
+                            mbid: "artist-discovery",
+                        },
                     },
                 },
             ])
@@ -1926,7 +2078,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-seed-anchor",
                         title: "Seed Anchor Album",
                         rgMbid: "rg-seed-anchor",
-                        artist: { name: "Seed Anchor Artist", mbid: "artist-seed-anchor" },
+                        artist: {
+                            name: "Seed Anchor Artist",
+                            mbid: "artist-seed-anchor",
+                        },
                         location: "LIBRARY",
                     },
                 },
@@ -1939,7 +2094,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-pop-anchor",
                         title: "Popular Anchor Album",
                         rgMbid: "rg-pop-anchor",
-                        artist: { name: "Popular Anchor Artist", mbid: "artist-pop-anchor" },
+                        artist: {
+                            name: "Popular Anchor Artist",
+                            mbid: "artist-pop-anchor",
+                        },
                         location: "LIBRARY",
                     },
                 },
@@ -1951,15 +2109,17 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-anchor-fill")
+            discoverWeeklyService.buildFinalPlaylist("batch-anchor-fill"),
         ).resolves.toBeUndefined();
 
         expect(prisma.track.findMany).toHaveBeenCalledTimes(2);
@@ -1988,45 +2148,46 @@ describe("discover weekly runtime behavior", () => {
                 },
             },
         ]);
-        (prisma.track.findMany as jest.Mock)
-            .mockResolvedValueOnce([
-                {
-                    id: "track-tx-fail",
-                    filePath: "/music/tx-fail.flac",
-                    album: {
-                        id: "album-tx-fail",
-                        title: "Album Fail",
-                        rgMbid: "rg-tx-fail",
-                        artist: { name: "Artist Fail", mbid: "artist-fail" },
-                    },
+        (prisma.track.findMany as jest.Mock).mockResolvedValueOnce([
+            {
+                id: "track-tx-fail",
+                filePath: "/music/tx-fail.flac",
+                album: {
+                    id: "album-tx-fail",
+                    title: "Album Fail",
+                    rgMbid: "rg-tx-fail",
+                    artist: { name: "Artist Fail", mbid: "artist-fail" },
                 },
-            ]);
+            },
+        ]);
         const discoveryModule = require("../discovery");
         (
             discoveryModule.discoverySeeding.getSeedArtists as jest.Mock
         ).mockResolvedValue([]);
         (prisma.$transaction as jest.Mock).mockRejectedValueOnce(
-            new Error("transaction exploded")
+            new Error("transaction exploded"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await discoverWeeklyService.buildFinalPlaylist("batch-tx-fail");
 
         expect(discoveryBatchLogger.error).toHaveBeenCalledWith(
             "batch-tx-fail",
-            expect.stringContaining("Transaction failed")
+            expect.stringContaining("Transaction failed"),
         );
         expect(discoveryBatchLogger.error).toHaveBeenCalledWith(
             "batch-tx-fail",
-            "Transaction failed - no records created"
+            "Transaction failed - no records created",
         );
     });
 
@@ -2046,7 +2207,10 @@ describe("discover weekly runtime behavior", () => {
                 id: "job-no-mbid",
                 status: "completed",
                 targetMbid: null,
-                metadata: { artistName: "No MBID", albumTitle: "No MBID Album" },
+                metadata: {
+                    artistName: "No MBID",
+                    albumTitle: "No MBID Album",
+                },
             },
             {
                 id: "job-existing-discovery",
@@ -2102,7 +2266,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual({
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({
             batchesChecked: 1,
             tracksAdded: 1,
         });
@@ -2120,29 +2286,34 @@ describe("discover weekly runtime behavior", () => {
         await expect(
             (discoverWeeklyService as any).isAlbumOwnedByName(
                 "Direct Artist",
-                "Direct Album"
-            )
+                "Direct Album",
+            ),
         ).resolves.toBe(true);
         await expect(
             (discoverWeeklyService as any).isAlbumOwnedByName(
                 "Missing Artist",
-                "Missing Album"
-            )
+                "Missing Album",
+            ),
         ).resolves.toBe(false);
     });
 
     it("covers findValidAlbumForArtist early return and catch branches for ownership/exclusion checks", async () => {
-        const { lastFmService, musicBrainzService } = setupDiscoverWeeklyMocks();
+        const { lastFmService, musicBrainzService } =
+            setupDiscoverWeeklyMocks();
         const discoveryModule = require("../discovery");
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        const ownedSpy = discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock;
+        const ownedSpy = discoveryModule.discoverySeeding
+            .isAlbumOwned as jest.Mock;
         const ownedByNameSpy = jest.spyOn(
             discoverWeeklyService as any,
-            "isAlbumOwnedByName"
+            "isAlbumOwnedByName",
         );
-        const excludedSpy = jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded");
+        const excludedSpy = jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        );
 
         (lastFmService.getArtistTopAlbums as jest.Mock)
             .mockResolvedValueOnce([])
@@ -2168,67 +2339,74 @@ describe("discover weekly runtime behavior", () => {
             (discoverWeeklyService as any).findValidAlbumForArtist(
                 { name: "No Albums Artist", mbid: "artist-empty" },
                 "user-1",
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 recommendation: null,
                 albumsChecked: 0,
-            })
+            }),
         );
         await expect(
             (discoverWeeklyService as any).findValidAlbumForArtist(
                 { name: "Owned Throw Artist", mbid: "artist-owned-throw" },
                 "user-1",
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual(expect.objectContaining({ recommendation: null }));
         await expect(
             (discoverWeeklyService as any).findValidAlbumForArtist(
-                { name: "Owned Name Throw Artist", mbid: "artist-owned-name-throw" },
+                {
+                    name: "Owned Name Throw Artist",
+                    mbid: "artist-owned-name-throw",
+                },
                 "user-1",
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual(expect.objectContaining({ recommendation: null }));
         await expect(
             (discoverWeeklyService as any).findValidAlbumForArtist(
-                { name: "Excluded Throw Artist", mbid: "artist-excluded-throw" },
+                {
+                    name: "Excluded Throw Artist",
+                    mbid: "artist-excluded-throw",
+                },
                 "user-1",
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual(expect.objectContaining({ recommendation: null }));
         await expect(
             (discoverWeeklyService as any).findValidAlbumForArtist(
                 { name: "TopAlbums Throw Artist", mbid: "artist-lastfm-throw" },
                 "user-1",
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual(expect.objectContaining({ recommendation: null }));
     });
 
     it("returns empty genres when play-history lookup throws and swallows tag-exploration fetch errors", async () => {
         const { prisma, lastFmService } = setupDiscoverWeeklyMocks();
         (prisma.play.findMany as jest.Mock).mockRejectedValueOnce(
-            new Error("play query failed")
+            new Error("play query failed"),
         );
         (lastFmService.getTopAlbumsByTag as jest.Mock).mockRejectedValueOnce(
-            new Error("tag lookup failed")
+            new Error("tag lookup failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            (discoverWeeklyService as any).getUserTopGenres("user-1")
+            (discoverWeeklyService as any).getUserTopGenres("user-1"),
         ).resolves.toEqual([]);
-        jest.spyOn(discoverWeeklyService as any, "getUserTopGenres").mockResolvedValue([
-            "ambient",
-        ]);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "getUserTopGenres",
+        ).mockResolvedValue(["ambient"]);
         await expect(
             (discoverWeeklyService as any).tagExplorationStrategy(
                 "user-1",
                 1,
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual([]);
     });
 
@@ -2264,7 +2442,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-name-fallback",
                         title: "Name Album",
                         rgMbid: "rg-name-fallback",
-                        artist: { name: "Name Artist", mbid: "artist-name-fallback" },
+                        artist: {
+                            name: "Name Artist",
+                            mbid: "artist-name-fallback",
+                        },
                     },
                 },
             ])
@@ -2276,15 +2457,17 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-name-fallback")
+            discoverWeeklyService.buildFinalPlaylist("batch-name-fallback"),
         ).resolves.toBeUndefined();
 
         expect(tx.discoveryTrack.create).toHaveBeenCalledTimes(1);
@@ -2310,66 +2493,74 @@ describe("discover weekly runtime behavior", () => {
                     similarity: 0.8,
                     tier: "high",
                 },
-            }))
+            })),
         );
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.where?.album?.rgMbid) {
-                const rgMbid = query.where.album.rgMbid;
-                return [
-                    {
-                        id: `track-${rgMbid}`,
-                        filePath: `/music/${rgMbid}.flac`,
-                        album: {
-                            id: `album-${rgMbid}`,
-                            title: `Album ${rgMbid}`,
-                            rgMbid,
-                            artist: {
-                                name: `Artist ${rgMbid}`,
-                                mbid: `artist-${rgMbid}`,
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.where?.album?.rgMbid) {
+                    const rgMbid = query.where.album.rgMbid;
+                    return [
+                        {
+                            id: `track-${rgMbid}`,
+                            filePath: `/music/${rgMbid}.flac`,
+                            album: {
+                                id: `album-${rgMbid}`,
+                                title: `Album ${rgMbid}`,
+                                rgMbid,
+                                artist: {
+                                    name: `Artist ${rgMbid}`,
+                                    mbid: `artist-${rgMbid}`,
+                                },
                             },
                         },
-                    },
-                ];
-            }
+                    ];
+                }
 
-            if (query?.where?.album?.location === "LIBRARY" && !query?.orderBy) {
-                return [
-                    {
-                        id: "track-seed-anchor-only",
-                        filePath: "/music/seed-anchor-only.flac",
-                        album: {
-                            id: "album-seed-anchor-only",
-                            title: "Seed Anchor Only",
-                            rgMbid: "rg-seed-anchor-only",
-                            artist: {
-                                name: "Seed Anchor Artist",
-                                mbid: "artist-seed-anchor-only",
+                if (
+                    query?.where?.album?.location === "LIBRARY" &&
+                    !query?.orderBy
+                ) {
+                    return [
+                        {
+                            id: "track-seed-anchor-only",
+                            filePath: "/music/seed-anchor-only.flac",
+                            album: {
+                                id: "album-seed-anchor-only",
+                                title: "Seed Anchor Only",
+                                rgMbid: "rg-seed-anchor-only",
+                                artist: {
+                                    name: "Seed Anchor Artist",
+                                    mbid: "artist-seed-anchor-only",
+                                },
                             },
                         },
-                    },
-                ];
-            }
+                    ];
+                }
 
-            if (query?.where?.album?.location === "LIBRARY" && query?.orderBy) {
-                return [
-                    {
-                        id: "track-popular-anchor-only",
-                        filePath: "/music/popular-anchor-only.flac",
-                        album: {
-                            id: "album-popular-anchor-only",
-                            title: "Popular Anchor Only",
-                            rgMbid: "rg-popular-anchor-only",
-                            artist: {
-                                name: "Popular Anchor Artist",
-                                mbid: "artist-popular-anchor-only",
+                if (
+                    query?.where?.album?.location === "LIBRARY" &&
+                    query?.orderBy
+                ) {
+                    return [
+                        {
+                            id: "track-popular-anchor-only",
+                            filePath: "/music/popular-anchor-only.flac",
+                            album: {
+                                id: "album-popular-anchor-only",
+                                title: "Popular Anchor Only",
+                                rgMbid: "rg-popular-anchor-only",
+                                artist: {
+                                    name: "Popular Anchor Artist",
+                                    mbid: "artist-popular-anchor-only",
+                                },
                             },
                         },
-                    },
-                ];
-            }
+                    ];
+                }
 
-            return [];
-        });
+                return [];
+            },
+        );
         const discoveryModule = require("../discovery");
         (
             discoveryModule.discoverySeeding.getSeedArtists as jest.Mock
@@ -2377,15 +2568,17 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-popular-anchor")
+            discoverWeeklyService.buildFinalPlaylist("batch-popular-anchor"),
         ).resolves.toBeUndefined();
 
         expect(tx.discoveryTrack.create).toHaveBeenCalled();
@@ -2395,7 +2588,7 @@ describe("discover weekly runtime behavior", () => {
                     album: expect.objectContaining({ location: "LIBRARY" }),
                 }),
                 orderBy: expect.any(Object),
-            })
+            }),
         );
     });
 
@@ -2415,20 +2608,22 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-no-tracks")
+            discoverWeeklyService.buildFinalPlaylist("batch-no-tracks"),
         ).resolves.toBeUndefined();
 
         expect(discoveryBatchLogger.error).toHaveBeenCalledWith(
             "batch-no-tracks",
-            "No tracks found after scan"
+            "No tracks found after scan",
         );
     });
 
@@ -2447,8 +2642,8 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-settings-missing"
-            )
+                "batch-settings-missing",
+            ),
         ).resolves.toBeUndefined();
 
         expect(axiosMock.get).not.toHaveBeenCalled();
@@ -2471,8 +2666,8 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-no-lidarr-refs"
-            )
+                "batch-no-lidarr-refs",
+            ),
         ).resolves.toBeUndefined();
 
         expect(axiosMock.get).not.toHaveBeenCalled();
@@ -2521,13 +2716,13 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-queue-safe"
-            )
+                "batch-queue-safe",
+            ),
         ).resolves.toBeUndefined();
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-queue-error"
-            )
+                "batch-queue-error",
+            ),
         ).resolves.toBeUndefined();
 
         expect(axiosMock.delete).not.toHaveBeenCalled();
@@ -2569,24 +2764,24 @@ describe("discover weekly runtime behavior", () => {
                     return { id: "active-other" };
                 }
                 return null;
-            }
+            },
         );
         (lidarrService.deleteArtistById as jest.Mock).mockRejectedValueOnce(
-            new Error("delete failed")
+            new Error("delete failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupFailedArtists(
-                "batch-cleanup-edges"
-            )
+                "batch-cleanup-edges",
+            ),
         ).resolves.toBeUndefined();
 
         expect(lidarrService.deleteArtistById).toHaveBeenCalledWith(22, true);
         expect(discoveryBatchLogger.info).toHaveBeenCalledWith(
             "batch-cleanup-edges",
-            expect.stringContaining("failed artists removed")
+            expect.stringContaining("failed artists removed"),
         );
     });
 
@@ -2634,16 +2829,16 @@ describe("discover weekly runtime behavior", () => {
                         },
                     },
                 ],
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toBeUndefined();
 
         expect(prisma.downloadJob.update).toHaveBeenCalledTimes(2);
         expect(prisma.downloadJob.update).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: "job-skip" } })
+            expect.objectContaining({ where: { id: "job-skip" } }),
         );
         expect(prisma.downloadJob.update).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: "job-no-lidarr-id" } })
+            expect.objectContaining({ where: { id: "job-no-lidarr-id" } }),
         );
     });
 
@@ -2672,7 +2867,9 @@ describe("discover weekly runtime behavior", () => {
                 },
             },
         ]);
-        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         (prisma.track.findMany as jest.Mock).mockResolvedValueOnce([
             {
                 id: "track-reconcile-error",
@@ -2686,12 +2883,14 @@ describe("discover weekly runtime behavior", () => {
             },
         ]);
         (prisma.$transaction as jest.Mock).mockRejectedValueOnce(
-            new Error("transaction create failed")
+            new Error("transaction create failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual({
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({
             batchesChecked: 1,
             tracksAdded: 0,
         });
@@ -2723,7 +2922,7 @@ describe("discover weekly runtime behavior", () => {
                 },
             ]);
         (prisma.album.findFirst as jest.Mock).mockRejectedValueOnce(
-            new Error("anchor lookup failed")
+            new Error("anchor lookup failed"),
         );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2738,8 +2937,8 @@ describe("discover weekly runtime behavior", () => {
                         artistMbid: "artist-failed",
                     },
                 },
-                { id: "batch-replace-dup", userId: "user-1" }
-            )
+                { id: "batch-replace-dup", userId: "user-1" },
+            ),
         ).resolves.toBeNull();
     });
 
@@ -2769,12 +2968,14 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            true
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockResolvedValue(
-            false
-        );
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(true);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockResolvedValue(false);
 
         await expect(
             discoverWeeklyService.findReplacementAlbum(
@@ -2786,15 +2987,15 @@ describe("discover weekly runtime behavior", () => {
                         artistMbid: "artist-failed",
                     },
                 },
-                { id: "batch-replace-library", userId: "user-1" }
-            )
+                { id: "batch-replace-library", userId: "user-1" },
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 artistName: "Anchor Artist",
                 albumTitle: "Anchor Album",
                 albumMbid: "rg-anchor",
                 isLibraryAnchor: true,
-            })
+            }),
         );
     });
 
@@ -2816,21 +3017,21 @@ describe("discover weekly runtime behavior", () => {
         (musicBrainzService.searchAlbum as jest.Mock)
             .mockResolvedValueOnce({ id: "rg-error-1" })
             .mockResolvedValueOnce({ id: "rg-error-2" });
-        (
-            discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock
-        )
+        (discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock)
             .mockRejectedValueOnce(new Error("owned check failed"))
             .mockResolvedValueOnce(false);
         (prisma.album.findFirst as jest.Mock).mockResolvedValueOnce(null);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockRejectedValue(
-            new Error("library check failed")
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockRejectedValueOnce(
-            new Error("excluded check failed")
-        );
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockRejectedValue(new Error("library check failed"));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockRejectedValueOnce(new Error("excluded check failed"));
 
         await expect(
             discoverWeeklyService.findReplacementAlbum(
@@ -2842,8 +3043,8 @@ describe("discover weekly runtime behavior", () => {
                         artistMbid: "artist-failed",
                     },
                 },
-                { id: "batch-replace-error", userId: "user-1" }
-            )
+                { id: "batch-replace-error", userId: "user-1" },
+            ),
         ).resolves.toBeNull();
     });
 
@@ -2852,42 +3053,52 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockRejectedValue(
-            new Error("library lookup failed")
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockResolvedValue({
-                recommendation: {
-                    artistName: "Recovered Artist",
-                    artistMbid: "artist-recovered",
-                    albumTitle: "Recovered Album",
-                    albumMbid: "rg-recovered",
-                    similarity: 0.7,
-                },
-                albumsChecked: 1,
-                skippedNoMbid: 0,
-                skippedOwned: 0,
-                skippedExcluded: 0,
-                skippedDuplicate: 0,
-            });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockRejectedValue(new Error("library lookup failed"));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockResolvedValue({
+            recommendation: {
+                artistName: "Recovered Artist",
+                artistMbid: "artist-recovered",
+                albumTitle: "Recovered Album",
+                albumMbid: "rg-recovered",
+                similarity: 0.7,
+            },
+            albumsChecked: 1,
+            skippedNoMbid: 0,
+            skippedOwned: 0,
+            skippedExcluded: 0,
+            skippedDuplicate: 0,
+        });
 
-        const recommendations = await (discoverWeeklyService as any).findRecommendedAlbums(
+        const recommendations = await (
+            discoverWeeklyService as any
+        ).findRecommendedAlbums(
             [{ name: "Seed One", mbid: "seed-1" }],
             new Map([
                 [
                     "seed-1",
-                    [{ name: "Recovered Artist", mbid: "artist-recovered", match: 0.7 }],
+                    [
+                        {
+                            name: "Recovered Artist",
+                            mbid: "artist-recovered",
+                            match: 0.7,
+                        },
+                    ],
                 ],
             ]),
             1,
-            "user-1"
+            "user-1",
         );
 
         expect(recommendations).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ albumMbid: "rg-recovered" }),
-            ])
+            ]),
         );
     });
 
@@ -2898,19 +3109,21 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockResolvedValue({
-                recommendation: null,
-                albumsChecked: 0,
-                skippedNoMbid: 0,
-                skippedOwned: 0,
-                skippedExcluded: 0,
-                skippedDuplicate: 0,
-            });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockResolvedValue({
+            recommendation: null,
+            albumsChecked: 0,
+            skippedNoMbid: 0,
+            skippedOwned: 0,
+            skippedExcluded: 0,
+            skippedDuplicate: 0,
+        });
 
         await expect(
             (discoverWeeklyService as any).findRecommendedAlbums(
@@ -2918,16 +3131,22 @@ describe("discover weekly runtime behavior", () => {
                 new Map([
                     [
                         "seed-1",
-                        [{ name: "No Albums Artist", mbid: "artist-no-albums", match: 0.6 }],
+                        [
+                            {
+                                name: "No Albums Artist",
+                                mbid: "artist-no-albums",
+                                match: 0.6,
+                            },
+                        ],
                     ],
                 ]),
                 1,
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toEqual([]);
 
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("No albums returned from Last.fm")
+            expect.stringContaining("No albums returned from Last.fm"),
         );
     });
 
@@ -2938,19 +3157,21 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockResolvedValue({
-                recommendation: null,
-                albumsChecked: 2,
-                skippedNoMbid: 2,
-                skippedOwned: 0,
-                skippedExcluded: 0,
-                skippedDuplicate: 0,
-            });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockResolvedValue({
+            recommendation: null,
+            albumsChecked: 2,
+            skippedNoMbid: 2,
+            skippedOwned: 0,
+            skippedExcluded: 0,
+            skippedDuplicate: 0,
+        });
 
         await expect(
             (discoverWeeklyService as any).findRecommendedAlbums(
@@ -2958,16 +3179,22 @@ describe("discover weekly runtime behavior", () => {
                 new Map([
                     [
                         "seed-1",
-                        [{ name: "No MBID Artist", mbid: "artist-no-mbid", match: 0.6 }],
+                        [
+                            {
+                                name: "No MBID Artist",
+                                mbid: "artist-no-mbid",
+                                match: 0.6,
+                            },
+                        ],
                     ],
                 ]),
                 1,
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toEqual([]);
 
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("All albums failed MusicBrainz lookup")
+            expect.stringContaining("All albums failed MusicBrainz lookup"),
         );
     });
 
@@ -2978,19 +3205,21 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockResolvedValue({
-                recommendation: null,
-                albumsChecked: 2,
-                skippedNoMbid: 0,
-                skippedOwned: 2,
-                skippedExcluded: 0,
-                skippedDuplicate: 0,
-            });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockResolvedValue({
+            recommendation: null,
+            albumsChecked: 2,
+            skippedNoMbid: 0,
+            skippedOwned: 2,
+            skippedExcluded: 0,
+            skippedDuplicate: 0,
+        });
 
         await expect(
             (discoverWeeklyService as any).findRecommendedAlbums(
@@ -2998,21 +3227,28 @@ describe("discover weekly runtime behavior", () => {
                 new Map([
                     [
                         "seed-1",
-                        [{ name: "Owned Artist", mbid: "artist-owned", match: 0.6 }],
+                        [
+                            {
+                                name: "Owned Artist",
+                                mbid: "artist-owned",
+                                match: 0.6,
+                            },
+                        ],
                     ],
                 ]),
                 1,
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toEqual([]);
 
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("All albums already owned")
+            expect.stringContaining("All albums already owned"),
         );
     });
 
     it("counts owned-by-name matches as owned skips in findValidAlbumForArtist", async () => {
-        const { lastFmService, musicBrainzService } = setupDiscoverWeeklyMocks();
+        const { lastFmService, musicBrainzService } =
+            setupDiscoverWeeklyMocks();
         (lastFmService.getArtistTopAlbums as jest.Mock).mockResolvedValueOnce([
             { name: "Owned By Name Album" },
         ]);
@@ -3026,24 +3262,26 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isAlbumOwnedByName").mockResolvedValue(
-            true
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockResolvedValue(
-            false
-        );
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumOwnedByName",
+        ).mockResolvedValue(true);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockResolvedValue(false);
 
         await expect(
             (discoverWeeklyService as any).findValidAlbumForArtist(
                 { name: "Owned By Name Artist", mbid: "artist-owned-by-name" },
                 "user-1",
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 recommendation: null,
                 skippedOwned: 1,
-            })
+            }),
         );
     });
 
@@ -3057,25 +3295,27 @@ describe("discover weekly runtime behavior", () => {
         expect(
             __discoverWeeklyTestables.isRetryableDiscoverWeeklyPrismaError(
                 new Prisma.PrismaClientUnknownRequestError(
-                    "Engine has already exited"
-                )
-            )
+                    "Engine has already exited",
+                ),
+            ),
         ).toBe(true);
         expect(
             __discoverWeeklyTestables.isRetryableDiscoverWeeklyPrismaError(
-                new Prisma.PrismaClientUnknownRequestError("")
-            )
+                new Prisma.PrismaClientUnknownRequestError(""),
+            ),
         ).toBe(false);
         expect(
             __discoverWeeklyTestables.isRetryableDiscoverWeeklyPrismaError(
-                undefined
-            )
+                undefined,
+            ),
         ).toBe(false);
     });
 
     it("uses default generation fallbacks for ratios, missing seed mbids, NaN similarities, and non-soulseek acquisitions", async () => {
         const { prisma, acquisitionService } = setupDiscoverWeeklyMocks();
-        (prisma.userDiscoverConfig.findUnique as jest.Mock).mockResolvedValueOnce({
+        (
+            prisma.userDiscoverConfig.findUnique as jest.Mock
+        ).mockResolvedValueOnce({
             userId: "user-fallbacks",
             enabled: true,
             playlistSize: 1,
@@ -3103,12 +3343,13 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "prefetchSimilarArtists").mockResolvedValue(
-            new Map([["external-key", []]])
-        );
         jest.spyOn(
             discoverWeeklyService as any,
-            "findRecommendedAlbumsMultiStrategy"
+            "prefetchSimilarArtists",
+        ).mockResolvedValue(new Map([["external-key", []]]));
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findRecommendedAlbumsMultiStrategy",
         ).mockResolvedValue([
             {
                 artistName: "Fallback Artist",
@@ -3120,7 +3361,7 @@ describe("discover weekly runtime behavior", () => {
         ]);
 
         await expect(
-            discoverWeeklyService.generatePlaylist("user-fallbacks")
+            discoverWeeklyService.generatePlaylist("user-fallbacks"),
         ).resolves.toEqual(expect.objectContaining({ success: true }));
 
         expect(prisma.downloadJob.update).toHaveBeenCalledWith(
@@ -3131,24 +3372,26 @@ describe("discover weekly runtime behavior", () => {
                     lidarrRef: null,
                     completedAt: null,
                 }),
-            })
+            }),
         );
     });
 
     it("uses empty-string mbid fallback for similar-artist prefetch cache keys", async () => {
         const { lastFmService } = setupDiscoverWeeklyMocks();
-        (lastFmService.getSimilarArtists as jest.Mock).mockResolvedValueOnce([]);
+        (lastFmService.getSimilarArtists as jest.Mock).mockResolvedValueOnce(
+            [],
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        const cache = await (discoverWeeklyService as any).prefetchSimilarArtists([
-            { name: "Seed Name Only" },
-        ]);
+        const cache = await (
+            discoverWeeklyService as any
+        ).prefetchSimilarArtists([{ name: "Seed Name Only" }]);
 
         expect(lastFmService.getSimilarArtists).toHaveBeenCalledWith(
             "",
             "Seed Name Only",
-            20
+            20,
         );
         expect(cache.has("Seed Name Only")).toBe(true);
     });
@@ -3170,7 +3413,9 @@ describe("discover weekly runtime behavior", () => {
             .spyOn(discoverWeeklyService, "checkBatchCompletion")
             .mockResolvedValue(undefined);
 
-        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(1);
+        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(
+            1,
+        );
         expect(completionSpy).toHaveBeenCalledWith("batch-no-completions");
     });
 
@@ -3208,7 +3453,7 @@ describe("discover weekly runtime behavior", () => {
                     similarity: 0.5,
                     tier: "medium",
                 }),
-            })
+            }),
         );
     });
 
@@ -3246,7 +3491,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-name-only",
                         title: "Name Album",
                         rgMbid: "rg-name-only",
-                        artist: { name: "Name Artist", mbid: "artist-name-only" },
+                        artist: {
+                            name: "Name Artist",
+                            mbid: "artist-name-only",
+                        },
                     },
                 },
             ])
@@ -3258,15 +3506,17 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-name-only")
+            discoverWeeklyService.buildFinalPlaylist("batch-name-only"),
         ).resolves.toBeUndefined();
 
         expect(tx.discoveryTrack.create).toHaveBeenCalledWith(
@@ -3274,7 +3524,7 @@ describe("discover weekly runtime behavior", () => {
                 data: expect.objectContaining({
                     fileName: "",
                 }),
-            })
+            }),
         );
     });
 
@@ -3298,13 +3548,13 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-missing"
-            )
+                "batch-missing",
+            ),
         ).resolves.toBeUndefined();
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-empty-queue"
-            )
+                "batch-empty-queue",
+            ),
         ).resolves.toBeUndefined();
 
         expect(axiosMock.delete).not.toHaveBeenCalled();
@@ -3330,12 +3580,14 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            (discoverWeeklyService as any).cleanupFailedArtists("batch-missing")
+            (discoverWeeklyService as any).cleanupFailedArtists(
+                "batch-missing",
+            ),
         ).resolves.toBeUndefined();
         await expect(
             (discoverWeeklyService as any).cleanupFailedArtists(
-                "batch-no-mbid-artists"
-            )
+                "batch-no-mbid-artists",
+            ),
         ).resolves.toBeUndefined();
 
         expect(lidarrService.deleteArtistById).not.toHaveBeenCalled();
@@ -3349,8 +3601,8 @@ describe("discover weekly runtime behavior", () => {
         await expect(
             (discoverWeeklyService as any).cleanupExtraAlbums(
                 [{ id: "job-unknown-meta", targetMbid: "rg-unknown" }],
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toBeUndefined();
 
         expect(prisma.downloadJob.update).toHaveBeenCalledWith(
@@ -3359,7 +3611,7 @@ describe("discover weekly runtime behavior", () => {
                 data: expect.objectContaining({
                     status: "cancelled",
                 }),
-            })
+            }),
         );
     });
 
@@ -3378,8 +3630,8 @@ describe("discover weekly runtime behavior", () => {
         await expect(
             (discoverWeeklyService as any).isAlbumOwnedByName(
                 "Artist",
-                "Short Title Deluxe Edition"
-            )
+                "Short Title Deluxe Edition",
+            ),
         ).resolves.toBe(true);
     });
 
@@ -3396,7 +3648,11 @@ describe("discover weekly runtime behavior", () => {
         ]);
         (lastFmService.getSimilarArtists as jest.Mock).mockResolvedValueOnce([
             { name: "No MBID Candidate", mbid: null, match: 0.8 },
-            { name: "Failed Artist Duplicate", mbid: "artist-failed", match: 0.8 },
+            {
+                name: "Failed Artist Duplicate",
+                mbid: "artist-failed",
+                match: 0.8,
+            },
             { name: "Candidate Artist", mbid: "artist-candidate" },
         ]);
         (lastFmService.getArtistTopAlbums as jest.Mock).mockResolvedValueOnce([
@@ -3410,14 +3666,20 @@ describe("discover weekly runtime behavior", () => {
             .mockResolvedValueOnce({ id: "rg-valid-candidate" });
         (
             discoveryModule.discoverySeeding.isAlbumOwned as jest.Mock
-        ).mockImplementation(async (rgMbid: string) => rgMbid === "rg-owned-candidate");
+        ).mockImplementation(
+            async (rgMbid: string) => rgMbid === "rg-owned-candidate",
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockImplementation(async (...args: unknown[]) => {
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockImplementation(async (...args: unknown[]) => {
             const rgMbid = args[0] as string;
             return rgMbid === "rg-excluded-candidate";
         });
@@ -3432,15 +3694,15 @@ describe("discover weekly runtime behavior", () => {
                         artistMbid: "artist-failed",
                     },
                 },
-                { id: "batch-replacement", userId: "user-1" }
-            )
+                { id: "batch-replacement", userId: "user-1" },
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 artistName: "Candidate Artist",
                 albumTitle: "Valid Candidate Album",
                 albumMbid: "rg-valid-candidate",
                 similarity: 0.5,
-            })
+            }),
         );
     });
 
@@ -3449,78 +3711,90 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "Artist One") {
-                    return {
-                        recommendation: {
-                            artistName: "Artist One",
-                            artistMbid: "artist-one",
-                            albumTitle: "Artist One Album",
-                            albumMbid: "rg-artist-one",
-                            similarity: 0.75,
-                        },
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-
-                if (artist.name === "Artist Two") {
-                    return {
-                        recommendation: {
-                            artistName: "Artist Two",
-                            artistMbid: "artist-two",
-                            albumTitle: "Artist Two Album",
-                            albumMbid: "rg-artist-two",
-                            similarity: 0.7,
-                        },
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "Artist One") {
                 return {
-                    recommendation: null,
-                    albumsChecked: 0,
+                    recommendation: {
+                        artistName: "Artist One",
+                        artistMbid: "artist-one",
+                        albumTitle: "Artist One Album",
+                        albumMbid: "rg-artist-one",
+                        similarity: 0.75,
+                    },
+                    albumsChecked: 1,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
+            }
 
-        const recommendations = await (discoverWeeklyService as any).findRecommendedAlbums(
+            if (artist.name === "Artist Two") {
+                return {
+                    recommendation: {
+                        artistName: "Artist Two",
+                        artistMbid: "artist-two",
+                        albumTitle: "Artist Two Album",
+                        albumMbid: "rg-artist-two",
+                        similarity: 0.7,
+                    },
+                    albumsChecked: 1,
+                    skippedNoMbid: 0,
+                    skippedOwned: 0,
+                    skippedExcluded: 0,
+                    skippedDuplicate: 0,
+                };
+            }
+
+            return {
+                recommendation: null,
+                albumsChecked: 0,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
+
+        const recommendations = await (
+            discoverWeeklyService as any
+        ).findRecommendedAlbums(
             [{ name: "Seed Name Only" }, { name: "Seed Missing" }],
             new Map([
                 [
                     "Seed Name Only",
                     [
                         { name: "Artist One", mbid: "artist-one", match: 0.8 },
-                        { name: "Artist One", mbid: "artist-one-dup", match: 0.8 },
+                        {
+                            name: "Artist One",
+                            mbid: "artist-one-dup",
+                            match: 0.8,
+                        },
                         { name: "Artist Two", mbid: "artist-two", match: 0.75 },
-                        { name: "Artist Three", mbid: "artist-three", match: 0.74 },
+                        {
+                            name: "Artist Three",
+                            mbid: "artist-three",
+                            match: 0.74,
+                        },
                     ],
                 ],
             ]),
             2,
-            "user-1"
+            "user-1",
         );
 
         expect(recommendations).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ albumMbid: "rg-artist-one" }),
                 expect.objectContaining({ albumMbid: "rg-artist-two" }),
-            ])
+            ]),
         );
     });
 
@@ -3529,61 +3803,74 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockResolvedValue(true);
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "Existing One") {
-                    return {
-                        recommendation: {
-                            artistName: "Existing One",
-                            artistMbid: "existing-one",
-                            albumTitle: "Existing One Album",
-                            albumMbid: "rg-existing-one",
-                            similarity: 0.65,
-                        },
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(true);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "Existing One") {
                 return {
-                    recommendation: null,
-                    albumsChecked: 0,
+                    recommendation: {
+                        artistName: "Existing One",
+                        artistMbid: "existing-one",
+                        albumTitle: "Existing One Album",
+                        albumMbid: "rg-existing-one",
+                        similarity: 0.65,
+                    },
+                    albumsChecked: 1,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
+            }
+            return {
+                recommendation: null,
+                albumsChecked: 0,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
 
-        const recommendations = await (discoverWeeklyService as any).findRecommendedAlbums(
+        const recommendations = await (
+            discoverWeeklyService as any
+        ).findRecommendedAlbums(
             [{ name: "Seed One", mbid: "seed-1" }],
             new Map([
                 [
                     "seed-1",
                     [
-                        { name: "Existing One", mbid: "existing-one", match: 0.7 },
-                        { name: "Existing Two", mbid: "existing-two", match: 0.68 },
+                        {
+                            name: "Existing One",
+                            mbid: "existing-one",
+                            match: 0.7,
+                        },
+                        {
+                            name: "Existing Two",
+                            mbid: "existing-two",
+                            match: 0.68,
+                        },
                     ],
                 ],
             ]),
             1,
-            "user-1"
+            "user-1",
         );
 
         expect(recommendations).toHaveLength(1);
         expect(recommendations[0]).toEqual(
-            expect.objectContaining({ albumMbid: "rg-existing-one" })
+            expect.objectContaining({ albumMbid: "rg-existing-one" }),
         );
     });
 
     it("uses blank artist mbids and default recommendation similarity in valid-album discovery", async () => {
-        const { lastFmService, musicBrainzService } = setupDiscoverWeeklyMocks();
+        const { lastFmService, musicBrainzService } =
+            setupDiscoverWeeklyMocks();
         (lastFmService.getArtistTopAlbums as jest.Mock).mockResolvedValueOnce([
             { name: "Fresh Album" },
         ]);
@@ -3597,31 +3884,33 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isAlbumOwnedByName").mockResolvedValue(
-            false
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockResolvedValue(
-            false
-        );
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumOwnedByName",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockResolvedValue(false);
 
         await expect(
             (discoverWeeklyService as any).findValidAlbumForArtist(
                 { name: "No MBID Artist" },
                 "user-1",
-                new Set<string>()
-            )
+                new Set<string>(),
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 recommendation: expect.objectContaining({
                     albumMbid: "rg-fresh-album",
                     similarity: 0.5,
                 }),
-            })
+            }),
         );
         expect(lastFmService.getArtistTopAlbums).toHaveBeenCalledWith(
             "",
             "No MBID Artist",
-            10
+            10,
         );
     });
 
@@ -3656,17 +3945,21 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            (discoverWeeklyService as any).getUserTopGenres("user-1")
+            (discoverWeeklyService as any).getUserTopGenres("user-1"),
         ).resolves.toEqual(expect.arrayContaining(["rock"]));
     });
 
     it("skips invalid tag-exploration candidates before returning the first eligible wildcard", async () => {
-        const { lastFmService, musicBrainzService } = setupDiscoverWeeklyMocks();
+        const { lastFmService, musicBrainzService } =
+            setupDiscoverWeeklyMocks();
         (lastFmService.getTopAlbumsByTag as jest.Mock).mockResolvedValueOnce([
             { name: "Seen Album", artist: "String Artist" },
             { name: null, artist: { name: "Missing Name Artist" } },
             { name: "Owned Album", artist: { name: "Owned Artist" } },
-            { name: "Owned By Name Album", artist: { name: "Owned Name Artist" } },
+            {
+                name: "Owned By Name Album",
+                artist: { name: "Owned Name Artist" },
+            },
             { name: "Excluded Album", artist: { name: "Excluded Artist" } },
             { name: "Library Album", artist: { name: "Library Artist" } },
             { name: "Keep Album", artist: { name: "Keep Artist" } },
@@ -3686,27 +3979,35 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "getUserTopGenres").mockResolvedValue(
-            ["rock"]
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumOwnedByName").mockImplementation(async (...args: unknown[]) => {
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "getUserTopGenres",
+        ).mockResolvedValue(["rock"]);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumOwnedByName",
+        ).mockImplementation(async (...args: unknown[]) => {
             const album = args[1] as string;
             return album === "Owned By Name Album";
         });
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockImplementation(async (...args: unknown[]) => {
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockImplementation(async (...args: unknown[]) => {
             const rgMbid = args[0] as string;
             return rgMbid === "rg-excluded";
         });
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockImplementation(async (...args: unknown[]) => {
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockImplementation(async (...args: unknown[]) => {
             const artistName = args[0] as string;
             return artistName === "Library Artist";
         });
 
-        const recommendations = await (discoverWeeklyService as any).tagExplorationStrategy(
-            "user-1",
-            1,
-            new Set<string>(["rg-seen"])
-        );
+        const recommendations = await (
+            discoverWeeklyService as any
+        ).tagExplorationStrategy("user-1", 1, new Set<string>(["rg-seen"]));
 
         expect(recommendations).toEqual([
             expect.objectContaining({
@@ -3748,7 +4049,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-direct",
                         title: "Direct Album",
                         rgMbid: "rg-mbid-direct",
-                        artist: { name: "Direct Artist", mbid: "artist-direct" },
+                        artist: {
+                            name: "Direct Artist",
+                            mbid: "artist-direct",
+                        },
                     },
                 },
                 {
@@ -3758,7 +4062,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-direct",
                         title: "Direct Album",
                         rgMbid: "rg-mbid-direct",
-                        artist: { name: "Direct Artist", mbid: "artist-direct" },
+                        artist: {
+                            name: "Direct Artist",
+                            mbid: "artist-direct",
+                        },
                     },
                 },
             ])
@@ -3771,15 +4078,17 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-mbid-direct")
+            discoverWeeklyService.buildFinalPlaylist("batch-mbid-direct"),
         ).resolves.toBeUndefined();
 
         expect(prisma.album.findMany).not.toHaveBeenCalled();
@@ -3807,7 +4116,9 @@ describe("discover weekly runtime behavior", () => {
                 },
             },
         ]);
-        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         (prisma.track.findMany as jest.Mock).mockResolvedValueOnce([
             {
                 id: "track-name-only",
@@ -3816,7 +4127,10 @@ describe("discover weekly runtime behavior", () => {
                     id: "album-name-only",
                     title: "Name Only Album",
                     rgMbid: "rg-name-only",
-                    artist: { name: "Name Only Artist", mbid: "artist-name-only" },
+                    artist: {
+                        name: "Name Only Artist",
+                        mbid: "artist-name-only",
+                    },
                 },
             },
         ]);
@@ -3824,7 +4138,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual({
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({
             batchesChecked: 1,
             tracksAdded: 0,
         });
@@ -3853,7 +4169,9 @@ describe("discover weekly runtime behavior", () => {
                 },
             },
         ]);
-        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         (prisma.track.findMany as jest.Mock).mockResolvedValueOnce([
             {
                 id: "track-existing-link",
@@ -3875,7 +4193,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual({
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({
             batchesChecked: 1,
             tracksAdded: 0,
         });
@@ -3912,8 +4232,8 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-non-stuck"
-            )
+                "batch-non-stuck",
+            ),
         ).resolves.toBeUndefined();
 
         expect(axiosMock.delete).not.toHaveBeenCalled();
@@ -3953,8 +4273,8 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupFailedArtists(
-                "batch-artist-branches"
-            )
+                "batch-artist-branches",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -3993,8 +4313,8 @@ describe("discover weekly runtime behavior", () => {
                         },
                     },
                 ],
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -4013,8 +4333,8 @@ describe("discover weekly runtime behavior", () => {
         await expect(
             (discoverWeeklyService as any).isAlbumOwnedByName(
                 "Artist",
-                "Wanted Album"
-            )
+                "Wanted Album",
+            ),
         ).resolves.toBe(false);
     });
 
@@ -4032,13 +4352,20 @@ describe("discover weekly runtime behavior", () => {
         (
             discoveryModule.discoverySeeding.getSeedArtists as jest.Mock
         ).mockResolvedValueOnce([{ name: "Anchor Seed Without MBID" }]);
-        (lastFmService.getSimilarArtists as jest.Mock).mockResolvedValueOnce([]);
-        (musicBrainzService.searchAlbum as jest.Mock).mockResolvedValueOnce(null);
+        (lastFmService.getSimilarArtists as jest.Mock).mockResolvedValueOnce(
+            [],
+        );
+        (musicBrainzService.searchAlbum as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         (prisma.album.findFirst as jest.Mock).mockResolvedValueOnce({
             id: "anchor-no-mbid",
             title: "Anchor No MBID Album",
             rgMbid: "rg-anchor-no-mbid",
-            artist: { name: "Anchor No MBID Artist", mbid: "artist-anchor-no-mbid" },
+            artist: {
+                name: "Anchor No MBID Artist",
+                mbid: "artist-anchor-no-mbid",
+            },
         });
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -4053,15 +4380,15 @@ describe("discover weekly runtime behavior", () => {
                         artistMbid: "artist-failed",
                     },
                 },
-                { id: "batch-replacement-no-mbid", userId: "user-1" }
-            )
+                { id: "batch-replacement-no-mbid", userId: "user-1" },
+            ),
         ).resolves.toEqual(
             expect.objectContaining({
                 artistName: "Anchor No MBID Artist",
                 albumTitle: "Anchor No MBID Album",
                 albumMbid: "rg-anchor-no-mbid",
                 isLibraryAnchor: true,
-            })
+            }),
         );
     });
 
@@ -4070,70 +4397,78 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockImplementation(async (artistName: unknown) => {
-                return artistName === "Fallback Existing Artist";
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "PassOne Null Artist") {
-                    return {
-                        recommendation: null,
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-
-                if (artist.name === "Fallback Existing Artist") {
-                    return {
-                        recommendation: null,
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-
-                if (artist.name === "Fallback Existing Artist 2") {
-                    return {
-                        recommendation: {
-                            artistName: "Fallback Existing Artist 2",
-                            artistMbid: "fallback-existing-2",
-                            albumTitle: "Fallback Existing Album 2",
-                            albumMbid: "rg-fallback-existing-2",
-                            similarity: 0.66,
-                        },
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockImplementation(async (artistName: unknown) => {
+            return artistName === "Fallback Existing Artist";
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "PassOne Null Artist") {
                 return {
                     recommendation: null,
-                    albumsChecked: 0,
+                    albumsChecked: 1,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
+            }
 
-        const recommendations = await (discoverWeeklyService as any).findRecommendedAlbums(
+            if (artist.name === "Fallback Existing Artist") {
+                return {
+                    recommendation: null,
+                    albumsChecked: 1,
+                    skippedNoMbid: 0,
+                    skippedOwned: 0,
+                    skippedExcluded: 0,
+                    skippedDuplicate: 0,
+                };
+            }
+
+            if (artist.name === "Fallback Existing Artist 2") {
+                return {
+                    recommendation: {
+                        artistName: "Fallback Existing Artist 2",
+                        artistMbid: "fallback-existing-2",
+                        albumTitle: "Fallback Existing Album 2",
+                        albumMbid: "rg-fallback-existing-2",
+                        similarity: 0.66,
+                    },
+                    albumsChecked: 1,
+                    skippedNoMbid: 0,
+                    skippedOwned: 0,
+                    skippedExcluded: 0,
+                    skippedDuplicate: 0,
+                };
+            }
+
+            return {
+                recommendation: null,
+                albumsChecked: 0,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
+
+        const recommendations = await (
+            discoverWeeklyService as any
+        ).findRecommendedAlbums(
             [{ name: "Seed One", mbid: "seed-1" }],
             new Map([
                 [
                     "seed-1",
                     [
-                        { name: "PassOne Null Artist", mbid: "pass-one-null", match: 0.7 },
+                        {
+                            name: "PassOne Null Artist",
+                            mbid: "pass-one-null",
+                            match: 0.7,
+                        },
                         {
                             name: "Fallback Existing Artist",
                             mbid: "fallback-existing",
@@ -4148,7 +4483,7 @@ describe("discover weekly runtime behavior", () => {
                 ],
             ]),
             1,
-            "user-1"
+            "user-1",
         );
 
         expect(recommendations).toHaveLength(1);
@@ -4159,22 +4494,25 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockResolvedValue({
-                recommendation: null,
-                albumsChecked: 0,
-                skippedNoMbid: 0,
-                skippedOwned: 0,
-                skippedExcluded: 0,
-                skippedDuplicate: 0,
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "tagExplorationStrategy")
-            .mockResolvedValue([]);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockResolvedValue({
+            recommendation: null,
+            albumsChecked: 0,
+            skippedNoMbid: 0,
+            skippedOwned: 0,
+            skippedExcluded: 0,
+            skippedDuplicate: 0,
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "tagExplorationStrategy",
+        ).mockResolvedValue([]);
 
         const recommendations =
             await discoverWeeklyService.findRecommendedAlbumsMultiStrategy(
@@ -4183,13 +4521,20 @@ describe("discover weekly runtime behavior", () => {
                     [
                         "Seed Without MBID",
                         [
-                            { name: "Low Match Artist", mbid: "low-match", match: 0 },
-                            { name: "Missing Match Artist", mbid: "missing-match" },
+                            {
+                                name: "Low Match Artist",
+                                mbid: "low-match",
+                                match: 0,
+                            },
+                            {
+                                name: "Missing Match Artist",
+                                mbid: "missing-match",
+                            },
                         ],
                     ],
                 ]),
                 2,
-                "user-1"
+                "user-1",
             );
 
         expect(recommendations).toEqual([]);
@@ -4208,7 +4553,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(0);
+        await expect(discoverWeeklyService.checkStuckBatches()).resolves.toBe(
+            0,
+        );
         expect(prisma.downloadJob.updateMany).not.toHaveBeenCalled();
     });
 
@@ -4244,14 +4591,20 @@ describe("discover weekly runtime behavior", () => {
                 id: "album-normalized-empty-1",
                 title: "Normalized Album Deluxe Edition",
                 rgMbid: "rg-normalized-branches",
-                artist: { name: "Artist Normalized", mbid: "artist-normalized" },
+                artist: {
+                    name: "Artist Normalized",
+                    mbid: "artist-normalized",
+                },
                 tracks: [],
             },
             {
                 id: "album-normalized-empty-2",
                 title: "Normalized Album",
                 rgMbid: "rg-normalized-branches-2",
-                artist: { name: "Artist Normalized", mbid: "artist-normalized" },
+                artist: {
+                    name: "Artist Normalized",
+                    mbid: "artist-normalized",
+                },
                 tracks: [],
             },
         ]);
@@ -4262,15 +4615,19 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-normalized-branches")
+            discoverWeeklyService.buildFinalPlaylist(
+                "batch-normalized-branches",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -4304,8 +4661,8 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupOrphanedLidarrQueue(
-                "batch-ignore-unrelated-queue"
-            )
+                "batch-ignore-unrelated-queue",
+            ),
         ).resolves.toBeUndefined();
 
         expect(axiosMock.delete).not.toHaveBeenCalled();
@@ -4353,8 +4710,8 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupFailedArtists(
-                "batch-cleanup-continued"
-            )
+                "batch-cleanup-continued",
+            ),
         ).resolves.toBeUndefined();
 
         await expect(
@@ -4370,8 +4727,8 @@ describe("discover weekly runtime behavior", () => {
                         },
                     },
                 ],
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -4389,17 +4746,21 @@ describe("discover weekly runtime behavior", () => {
         (lastFmService.getArtistTopAlbums as jest.Mock).mockResolvedValueOnce([
             { name: "No MB Album" },
         ]);
-        (musicBrainzService.searchAlbum as jest.Mock).mockResolvedValueOnce(null);
+        (musicBrainzService.searchAlbum as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         (prisma.album.findFirst as jest.Mock).mockResolvedValueOnce(null);
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "isArtistInLibrary").mockResolvedValue(
-            false
-        );
-        jest.spyOn(discoverWeeklyService as any, "isAlbumExcluded").mockResolvedValue(
-            false
-        );
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isAlbumExcluded",
+        ).mockResolvedValue(false);
 
         await expect(
             discoverWeeklyService.findReplacementAlbum(
@@ -4411,8 +4772,8 @@ describe("discover weekly runtime behavior", () => {
                         artistMbid: "artist-failed",
                     },
                 },
-                { id: "batch-replacement-no-mb", userId: "user-1" }
-            )
+                { id: "batch-replacement-no-mb", userId: "user-1" },
+            ),
         ).resolves.toBeNull();
     });
 
@@ -4421,58 +4782,75 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockResolvedValue(false);
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "Primary Null Artist") {
-                    return null;
-                }
-                if (artist.name === "Fallback Null Artist") {
-                    return {
-                        recommendation: null,
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "Primary Null Artist") {
+                return null;
+            }
+            if (artist.name === "Fallback Null Artist") {
                 return {
-                    recommendation: {
-                        artistName: artist.name,
-                        artistMbid: artist.mbid,
-                        albumTitle: `${artist.name} Album`,
-                        albumMbid: `rg-${artist.mbid}`,
-                        similarity: artist.match || 0.5,
-                    },
+                    recommendation: null,
                     albumsChecked: 1,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "tagExplorationStrategy")
-            .mockResolvedValue([]);
+            }
+            return {
+                recommendation: {
+                    artistName: artist.name,
+                    artistMbid: artist.mbid,
+                    albumTitle: `${artist.name} Album`,
+                    albumMbid: `rg-${artist.mbid}`,
+                    similarity: artist.match || 0.5,
+                },
+                albumsChecked: 1,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "tagExplorationStrategy",
+        ).mockResolvedValue([]);
 
-        const passRecommendations = await (discoverWeeklyService as any).findRecommendedAlbums(
+        const passRecommendations = await (
+            discoverWeeklyService as any
+        ).findRecommendedAlbums(
             [{ name: "Seed One", mbid: "seed-1" }],
             new Map([
                 [
                     "seed-1",
                     [
-                        { name: "Primary Null Artist", mbid: "primary-null", match: 0.8 },
-                        { name: "Fallback Null Artist", mbid: "fallback-null", match: 0.79 },
-                        { name: "Recovered Artist", mbid: "recovered", match: 0.78 },
+                        {
+                            name: "Primary Null Artist",
+                            mbid: "primary-null",
+                            match: 0.8,
+                        },
+                        {
+                            name: "Fallback Null Artist",
+                            mbid: "fallback-null",
+                            match: 0.79,
+                        },
+                        {
+                            name: "Recovered Artist",
+                            mbid: "recovered",
+                            match: 0.78,
+                        },
                     ],
                 ],
             ]),
             1,
-            "user-1"
+            "user-1",
         );
         expect(passRecommendations).toHaveLength(1);
 
@@ -4485,13 +4863,21 @@ describe("discover weekly runtime behavior", () => {
                         [
                             { name: "Dup Artist", mbid: "dup-1", match: 0.81 },
                             { name: "Dup Artist", mbid: "dup-2", match: 0.8 },
-                            { name: "Fill Null Artist", mbid: "fill-null", match: 0.6 },
-                            { name: "Existing Null Artist", mbid: "existing-null", match: 0.59 },
+                            {
+                                name: "Fill Null Artist",
+                                mbid: "fill-null",
+                                match: 0.6,
+                            },
+                            {
+                                name: "Existing Null Artist",
+                                mbid: "existing-null",
+                                match: 0.59,
+                            },
                         ],
                     ],
                 ]),
                 4,
-                "user-1"
+                "user-1",
             );
 
         expect(Array.isArray(multiRecommendations)).toBe(true);
@@ -4520,7 +4906,9 @@ describe("discover weekly runtime behavior", () => {
                 },
             },
         ]);
-        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(null);
+        (prisma.discoveryAlbum.findFirst as jest.Mock).mockResolvedValueOnce(
+            null,
+        );
         (prisma.track.findMany as jest.Mock).mockResolvedValueOnce([
             {
                 id: "track-reconcile-empty-file",
@@ -4529,7 +4917,10 @@ describe("discover weekly runtime behavior", () => {
                     id: "album-reconcile-empty-file",
                     title: "Reconcile Album",
                     rgMbid: "rg-empty-file",
-                    artist: { name: "Reconcile Artist", mbid: "artist-reconcile" },
+                    artist: {
+                        name: "Reconcile Artist",
+                        mbid: "artist-reconcile",
+                    },
                 },
             },
         ]);
@@ -4537,7 +4928,9 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        await expect(discoverWeeklyService.reconcileDiscoveryTracks()).resolves.toEqual({
+        await expect(
+            discoverWeeklyService.reconcileDiscoveryTracks(),
+        ).resolves.toEqual({
             batchesChecked: 1,
             tracksAdded: 1,
         });
@@ -4546,7 +4939,7 @@ describe("discover weekly runtime behavior", () => {
                 data: expect.objectContaining({
                     fileName: "",
                 }),
-            })
+            }),
         );
     });
 
@@ -4577,8 +4970,8 @@ describe("discover weekly runtime behavior", () => {
                         },
                     },
                 ],
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -4610,8 +5003,10 @@ describe("discover weekly runtime behavior", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
-            (discoverWeeklyService as any).getUserTopGenres("user-1")
-        ).resolves.toEqual(expect.arrayContaining(["rock", "indie", "ambient", "drone"]));
+            (discoverWeeklyService as any).getUserTopGenres("user-1"),
+        ).resolves.toEqual(
+            expect.arrayContaining(["rock", "indie", "ambient", "drone"]),
+        );
     });
 
     it("covers selectFromTier and fill-loop duplicate/empty recommendation branches in multi-strategy discovery", async () => {
@@ -4619,43 +5014,20 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockResolvedValue(false);
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "DupMed") {
-                    return {
-                        recommendation: {
-                            artistName: "DupMed",
-                            artistMbid: artist.mbid,
-                            albumTitle: "DupMed Album",
-                            albumMbid: `rg-${artist.mbid}`,
-                            similarity: artist.match,
-                        },
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-                if (artist.name === "MedNull" || artist.name === "FillNull") {
-                    return {
-                        recommendation: null,
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(false);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "DupMed") {
                 return {
                     recommendation: {
-                        artistName: artist.name,
+                        artistName: "DupMed",
                         artistMbid: artist.mbid,
-                        albumTitle: `${artist.name} Album`,
+                        albumTitle: "DupMed Album",
                         albumMbid: `rg-${artist.mbid}`,
                         similarity: artist.match,
                     },
@@ -4665,10 +5037,36 @@ describe("discover weekly runtime behavior", () => {
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "tagExplorationStrategy")
-            .mockResolvedValue([]);
+            }
+            if (artist.name === "MedNull" || artist.name === "FillNull") {
+                return {
+                    recommendation: null,
+                    albumsChecked: 1,
+                    skippedNoMbid: 0,
+                    skippedOwned: 0,
+                    skippedExcluded: 0,
+                    skippedDuplicate: 0,
+                };
+            }
+            return {
+                recommendation: {
+                    artistName: artist.name,
+                    artistMbid: artist.mbid,
+                    albumTitle: `${artist.name} Album`,
+                    albumMbid: `rg-${artist.mbid}`,
+                    similarity: artist.match,
+                },
+                albumsChecked: 1,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "tagExplorationStrategy",
+        ).mockResolvedValue([]);
 
         await expect(
             discoverWeeklyService.findRecommendedAlbumsMultiStrategy(
@@ -4680,18 +5078,38 @@ describe("discover weekly runtime behavior", () => {
                             { name: "DupMed", mbid: "dup-med-1", match: 0.61 },
                             { name: "DupMed", mbid: "dup-med-2", match: 0.62 },
                             { name: "MedNull", mbid: "med-null", match: 0.63 },
-                            { name: "MedOther", mbid: "med-other", match: 0.64 },
+                            {
+                                name: "MedOther",
+                                mbid: "med-other",
+                                match: 0.64,
+                            },
                             { name: "FillDup", mbid: "fill-dup-1", match: 0.4 },
-                            { name: "FillDup", mbid: "fill-dup-2", match: 0.41 },
-                            { name: "FillNull", mbid: "fill-null", match: 0.42 },
-                            { name: "FillFinal", mbid: "fill-final", match: 0.43 },
-                            { name: "FillExtra", mbid: "fill-extra", match: 0.44 },
+                            {
+                                name: "FillDup",
+                                mbid: "fill-dup-2",
+                                match: 0.41,
+                            },
+                            {
+                                name: "FillNull",
+                                mbid: "fill-null",
+                                match: 0.42,
+                            },
+                            {
+                                name: "FillFinal",
+                                mbid: "fill-final",
+                                match: 0.43,
+                            },
+                            {
+                                name: "FillExtra",
+                                mbid: "fill-extra",
+                                match: 0.44,
+                            },
                         ],
                     ],
                 ]),
                 5,
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toEqual(expect.any(Array));
     });
 
@@ -4700,60 +5118,92 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockResolvedValue(true);
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "ExistingNull") {
-                    return {
-                        recommendation: null,
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockResolvedValue(true);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "ExistingNull") {
                 return {
-                    recommendation: {
-                        artistName: artist.name,
-                        artistMbid: artist.mbid,
-                        albumTitle: `${artist.name} Album`,
-                        albumMbid: `rg-${artist.mbid}`,
-                        similarity: artist.match,
-                    },
+                    recommendation: null,
                     albumsChecked: 1,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "tagExplorationStrategy")
-            .mockResolvedValue([]);
+            }
+            return {
+                recommendation: {
+                    artistName: artist.name,
+                    artistMbid: artist.mbid,
+                    albumTitle: `${artist.name} Album`,
+                    albumMbid: `rg-${artist.mbid}`,
+                    similarity: artist.match,
+                },
+                albumsChecked: 1,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "tagExplorationStrategy",
+        ).mockResolvedValue([]);
 
         await expect(
             discoverWeeklyService.findRecommendedAlbumsMultiStrategy(
-                [{ name: "Seed Existing Branches", mbid: "seed-existing-branches" }],
+                [
+                    {
+                        name: "Seed Existing Branches",
+                        mbid: "seed-existing-branches",
+                    },
+                ],
                 new Map([
                     [
                         "seed-existing-branches",
                         [
-                            { name: "ExistingDup", mbid: "existing-dup-1", match: 0.61 },
-                            { name: "ExistingDup", mbid: "existing-dup-2", match: 0.62 },
-                            { name: "ExistingNull", mbid: "existing-null", match: 0.63 },
-                            { name: "ExistingFinal", mbid: "existing-final", match: 0.64 },
-                            { name: "ExistingAfter", mbid: "existing-after", match: 0.65 },
-                            { name: "ExistingPost", mbid: "existing-post", match: 0.66 },
+                            {
+                                name: "ExistingDup",
+                                mbid: "existing-dup-1",
+                                match: 0.61,
+                            },
+                            {
+                                name: "ExistingDup",
+                                mbid: "existing-dup-2",
+                                match: 0.62,
+                            },
+                            {
+                                name: "ExistingNull",
+                                mbid: "existing-null",
+                                match: 0.63,
+                            },
+                            {
+                                name: "ExistingFinal",
+                                mbid: "existing-final",
+                                match: 0.64,
+                            },
+                            {
+                                name: "ExistingAfter",
+                                mbid: "existing-after",
+                                match: 0.65,
+                            },
+                            {
+                                name: "ExistingPost",
+                                mbid: "existing-post",
+                                match: 0.66,
+                            },
                         ],
                     ],
                 ]),
                 4,
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toEqual(expect.any(Array));
     });
 
@@ -4789,7 +5239,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-name-hit",
                         title: "Name Hit Album",
                         rgMbid: "rg-name-hit-before-normalized",
-                        artist: { name: "Name Hit Artist", mbid: "artist-name-hit" },
+                        artist: {
+                            name: "Name Hit Artist",
+                            mbid: "artist-name-hit",
+                        },
                     },
                 },
             ])
@@ -4802,15 +5255,19 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-name-hit-before-normalized")
+            discoverWeeklyService.buildFinalPlaylist(
+                "batch-name-hit-before-normalized",
+            ),
         ).resolves.toBeUndefined();
         expect(prisma.album.findMany).not.toHaveBeenCalled();
     });
@@ -4846,7 +5303,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-discovery-anchor-false",
                         title: "Discovery Album",
                         rgMbid: "rg-anchor-guard-false",
-                        artist: { name: "Discovery Artist", mbid: "artist-discovery" },
+                        artist: {
+                            name: "Discovery Artist",
+                            mbid: "artist-discovery",
+                        },
                     },
                 },
             ])
@@ -4858,7 +5318,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-seed-shared",
                         title: "Seed Shared Album",
                         rgMbid: "rg-seed-shared",
-                        artist: { name: "Seed Shared Artist", mbid: "artist-seed-shared" },
+                        artist: {
+                            name: "Seed Shared Artist",
+                            mbid: "artist-seed-shared",
+                        },
                         location: "LIBRARY",
                     },
                 },
@@ -4869,7 +5332,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-seed-shared",
                         title: "Seed Shared Album",
                         rgMbid: "rg-seed-shared",
-                        artist: { name: "Seed Shared Artist", mbid: "artist-seed-shared" },
+                        artist: {
+                            name: "Seed Shared Artist",
+                            mbid: "artist-seed-shared",
+                        },
                         location: "LIBRARY",
                     },
                 },
@@ -4882,7 +5348,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-pop-shared",
                         title: "Popular Shared Album",
                         rgMbid: "rg-pop-shared",
-                        artist: { name: "Popular Shared Artist", mbid: "artist-pop-shared" },
+                        artist: {
+                            name: "Popular Shared Artist",
+                            mbid: "artist-pop-shared",
+                        },
                         location: "LIBRARY",
                     },
                 },
@@ -4893,7 +5362,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-pop-shared",
                         title: "Popular Shared Album",
                         rgMbid: "rg-pop-shared",
-                        artist: { name: "Popular Shared Artist", mbid: "artist-pop-shared" },
+                        artist: {
+                            name: "Popular Shared Artist",
+                            mbid: "artist-pop-shared",
+                        },
                         location: "LIBRARY",
                     },
                 },
@@ -4905,15 +5377,19 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-anchor-guard-false")
+            discoverWeeklyService.buildFinalPlaylist(
+                "batch-anchor-guard-false",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -4948,7 +5424,10 @@ describe("discover weekly runtime behavior", () => {
                         id: "album-duplicate-source",
                         title: "Duplicate Album",
                         rgMbid: "rg-duplicate-selected",
-                        artist: { name: "Duplicate Artist", mbid: "artist-duplicate" },
+                        artist: {
+                            name: "Duplicate Artist",
+                            mbid: "artist-duplicate",
+                        },
                     },
                 },
             ])
@@ -4965,7 +5444,7 @@ describe("discover weekly runtime behavior", () => {
                     return [arr[0], arr[0]];
                 }
                 return arr;
-            }
+            },
         );
         const discoveryModule = require("../discovery");
         (
@@ -4974,15 +5453,19 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-duplicate-selected")
+            discoverWeeklyService.buildFinalPlaylist(
+                "batch-duplicate-selected",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -4991,42 +5474,44 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockImplementation(async (artistName: unknown) => {
-                return artistName === "Existing Pass Artist";
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "Existing Pass Artist") {
-                    return null;
-                }
-                if (artist.name === "Existing Null Recommendation") {
-                    return {
-                        recommendation: null,
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockImplementation(async (artistName: unknown) => {
+            return artistName === "Existing Pass Artist";
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "Existing Pass Artist") {
+                return null;
+            }
+            if (artist.name === "Existing Null Recommendation") {
                 return {
-                    recommendation: {
-                        artistName: artist.name,
-                        artistMbid: artist.mbid,
-                        albumTitle: `${artist.name} Album`,
-                        albumMbid: `rg-${artist.mbid}`,
-                        similarity: artist.match || 0.5,
-                    },
+                    recommendation: null,
                     albumsChecked: 1,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
+            }
+            return {
+                recommendation: {
+                    artistName: artist.name,
+                    artistMbid: artist.mbid,
+                    albumTitle: `${artist.name} Album`,
+                    albumMbid: `rg-${artist.mbid}`,
+                    similarity: artist.match || 0.5,
+                },
+                albumsChecked: 1,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
 
         await expect(
             (discoverWeeklyService as any).findRecommendedAlbums(
@@ -5035,25 +5520,33 @@ describe("discover weekly runtime behavior", () => {
                     [
                         "seed-existing",
                         [
-                            { name: "Existing Pass Artist", mbid: "existing-pass", match: 0.7 },
+                            {
+                                name: "Existing Pass Artist",
+                                mbid: "existing-pass",
+                                match: 0.7,
+                            },
                             {
                                 name: "Existing Null Recommendation",
                                 mbid: "existing-null-recommendation",
                                 match: 0.69,
                             },
-                            { name: "Existing Recovery", mbid: "existing-recovery", match: 0.68 },
+                            {
+                                name: "Existing Recovery",
+                                mbid: "existing-recovery",
+                                match: 0.68,
+                            },
                         ],
                     ],
                 ]),
                 1,
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
                     albumMbid: "rg-existing-recovery",
                 }),
-            ])
+            ]),
         );
     });
 
@@ -5091,8 +5584,8 @@ describe("discover weekly runtime behavior", () => {
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupFailedArtists(
-                "batch-success-set-guard"
-            )
+                "batch-success-set-guard",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -5109,14 +5602,16 @@ describe("discover weekly runtime behavior", () => {
                 },
             ],
         });
-        (lidarrService.getDiscoveryArtists as jest.Mock).mockResolvedValueOnce([]);
+        (lidarrService.getDiscoveryArtists as jest.Mock).mockResolvedValueOnce(
+            [],
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
         await expect(
             (discoverWeeklyService as any).cleanupFailedArtists(
-                "batch-success-no-artist-mbid"
-            )
+                "batch-success-no-artist-mbid",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -5152,7 +5647,10 @@ describe("discover weekly runtime behavior", () => {
                 id: "album-non-match",
                 title: "Completely Different Album",
                 rgMbid: "rg-other",
-                artist: { name: "Normalized Artist", mbid: "artist-normalized" },
+                artist: {
+                    name: "Normalized Artist",
+                    mbid: "artist-normalized",
+                },
                 tracks: [],
             },
         ]);
@@ -5163,15 +5661,19 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-normalized-nonmatch")
+            discoverWeeklyService.buildFinalPlaylist(
+                "batch-normalized-nonmatch",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -5195,56 +5697,73 @@ describe("discover weekly runtime behavior", () => {
                     similarity: 0.7,
                     tier: "medium",
                 },
-            }))
+            })),
         );
-        (prisma.track.findMany as jest.Mock).mockImplementation(async (query: any) => {
-            if (query?.where?.album?.rgMbid) {
-                const rgMbid = query.where.album.rgMbid;
-                return [
-                    {
-                        id: `track-${rgMbid}`,
-                        filePath: `/music/${rgMbid}.flac`,
-                        album: {
-                            id: `album-${rgMbid}`,
-                            title: `Album ${rgMbid}`,
-                            rgMbid,
-                            artist: { name: `Artist ${rgMbid}`, mbid: `artist-${rgMbid}` },
+        (prisma.track.findMany as jest.Mock).mockImplementation(
+            async (query: any) => {
+                if (query?.where?.album?.rgMbid) {
+                    const rgMbid = query.where.album.rgMbid;
+                    return [
+                        {
+                            id: `track-${rgMbid}`,
+                            filePath: `/music/${rgMbid}.flac`,
+                            album: {
+                                id: `album-${rgMbid}`,
+                                title: `Album ${rgMbid}`,
+                                rgMbid,
+                                artist: {
+                                    name: `Artist ${rgMbid}`,
+                                    mbid: `artist-${rgMbid}`,
+                                },
+                            },
                         },
-                    },
-                ];
-            }
+                    ];
+                }
 
-            if (query?.where?.album?.location === "LIBRARY" && !query?.orderBy) {
+                if (
+                    query?.where?.album?.location === "LIBRARY" &&
+                    !query?.orderBy
+                ) {
+                    return [];
+                }
+
+                if (
+                    query?.where?.album?.location === "LIBRARY" &&
+                    query?.orderBy
+                ) {
+                    return [
+                        {
+                            id: "track-pop-dup-1",
+                            filePath: "/music/pop-dup-1.flac",
+                            album: {
+                                id: "album-pop-dup",
+                                title: "Popular Duplicate Album",
+                                rgMbid: "rg-pop-dup",
+                                artist: {
+                                    name: "Popular Artist",
+                                    mbid: "artist-pop-dup",
+                                },
+                            },
+                        },
+                        {
+                            id: "track-pop-dup-2",
+                            filePath: "/music/pop-dup-2.flac",
+                            album: {
+                                id: "album-pop-dup",
+                                title: "Popular Duplicate Album",
+                                rgMbid: "rg-pop-dup",
+                                artist: {
+                                    name: "Popular Artist",
+                                    mbid: "artist-pop-dup",
+                                },
+                            },
+                        },
+                    ];
+                }
+
                 return [];
-            }
-
-            if (query?.where?.album?.location === "LIBRARY" && query?.orderBy) {
-                return [
-                    {
-                        id: "track-pop-dup-1",
-                        filePath: "/music/pop-dup-1.flac",
-                        album: {
-                            id: "album-pop-dup",
-                            title: "Popular Duplicate Album",
-                            rgMbid: "rg-pop-dup",
-                            artist: { name: "Popular Artist", mbid: "artist-pop-dup" },
-                        },
-                    },
-                    {
-                        id: "track-pop-dup-2",
-                        filePath: "/music/pop-dup-2.flac",
-                        album: {
-                            id: "album-pop-dup",
-                            title: "Popular Duplicate Album",
-                            rgMbid: "rg-pop-dup",
-                            artist: { name: "Popular Artist", mbid: "artist-pop-dup" },
-                        },
-                    },
-                ];
-            }
-
-            return [];
-        });
+            },
+        );
         const discoveryModule = require("../discovery");
         (
             discoveryModule.discoverySeeding.getSeedArtists as jest.Mock
@@ -5252,15 +5771,19 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-popular-duplicates")
+            discoverWeeklyService.buildFinalPlaylist(
+                "batch-popular-duplicates",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -5308,15 +5831,17 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-job-match")
+            discoverWeeklyService.buildFinalPlaylist("batch-job-match"),
         ).resolves.toBeUndefined();
     });
 
@@ -5370,15 +5895,19 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest.spyOn(discoverWeeklyService as any, "cleanupFailedArtists").mockResolvedValue(
-            undefined
-        );
-        jest
-            .spyOn(discoverWeeklyService as any, "cleanupOrphanedLidarrQueue")
-            .mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupFailedArtists",
+        ).mockResolvedValue(undefined);
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "cleanupOrphanedLidarrQueue",
+        ).mockResolvedValue(undefined);
 
         await expect(
-            discoverWeeklyService.buildFinalPlaylist("batch-zero-exclusion-months")
+            discoverWeeklyService.buildFinalPlaylist(
+                "batch-zero-exclusion-months",
+            ),
         ).resolves.toBeUndefined();
         expect(tx.discoverExclusion.upsert).not.toHaveBeenCalled();
     });
@@ -5388,52 +5917,58 @@ describe("discover weekly runtime behavior", () => {
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { discoverWeeklyService } = require("../discoverWeekly");
-        jest
-            .spyOn(discoverWeeklyService as any, "isArtistInLibrary")
-            .mockImplementation(async (artistName: unknown) => {
-                return artistName === "PassTwo Null Album" || artistName === "PassTwo Null Recommendation" || artistName === "PassTwo Recovery";
-            });
-        jest
-            .spyOn(discoverWeeklyService as any, "findValidAlbumForArtist")
-            .mockImplementation(async (artist: any) => {
-                if (artist.name === "PassTwo Null Album") {
-                    return null;
-                }
-                if (artist.name === "PassTwo Null Recommendation") {
-                    return {
-                        recommendation: null,
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
-                if (artist.name === "PassTwo Recovery") {
-                    return {
-                        recommendation: {
-                            artistName: "PassTwo Recovery",
-                            artistMbid: "pass-two-recovery",
-                            albumTitle: "PassTwo Recovery Album",
-                            albumMbid: "rg-pass-two-recovery",
-                            similarity: 0.65,
-                        },
-                        albumsChecked: 1,
-                        skippedNoMbid: 0,
-                        skippedOwned: 0,
-                        skippedExcluded: 0,
-                        skippedDuplicate: 0,
-                    };
-                }
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "isArtistInLibrary",
+        ).mockImplementation(async (artistName: unknown) => {
+            return (
+                artistName === "PassTwo Null Album" ||
+                artistName === "PassTwo Null Recommendation" ||
+                artistName === "PassTwo Recovery"
+            );
+        });
+        jest.spyOn(
+            discoverWeeklyService as any,
+            "findValidAlbumForArtist",
+        ).mockImplementation(async (artist: any) => {
+            if (artist.name === "PassTwo Null Album") {
+                return null;
+            }
+            if (artist.name === "PassTwo Null Recommendation") {
                 return {
                     recommendation: null,
-                    albumsChecked: 0,
+                    albumsChecked: 1,
                     skippedNoMbid: 0,
                     skippedOwned: 0,
                     skippedExcluded: 0,
                     skippedDuplicate: 0,
                 };
-            });
+            }
+            if (artist.name === "PassTwo Recovery") {
+                return {
+                    recommendation: {
+                        artistName: "PassTwo Recovery",
+                        artistMbid: "pass-two-recovery",
+                        albumTitle: "PassTwo Recovery Album",
+                        albumMbid: "rg-pass-two-recovery",
+                        similarity: 0.65,
+                    },
+                    albumsChecked: 1,
+                    skippedNoMbid: 0,
+                    skippedOwned: 0,
+                    skippedExcluded: 0,
+                    skippedDuplicate: 0,
+                };
+            }
+            return {
+                recommendation: null,
+                albumsChecked: 0,
+                skippedNoMbid: 0,
+                skippedOwned: 0,
+                skippedExcluded: 0,
+                skippedDuplicate: 0,
+            };
+        });
 
         await expect(
             (discoverWeeklyService as any).findRecommendedAlbums(
@@ -5442,25 +5977,33 @@ describe("discover weekly runtime behavior", () => {
                     [
                         "seed-pass-two",
                         [
-                            { name: "PassTwo Null Album", mbid: "pass-two-null-album", match: 0.7 },
+                            {
+                                name: "PassTwo Null Album",
+                                mbid: "pass-two-null-album",
+                                match: 0.7,
+                            },
                             {
                                 name: "PassTwo Null Recommendation",
                                 mbid: "pass-two-null-recommendation",
                                 match: 0.69,
                             },
-                            { name: "PassTwo Recovery", mbid: "pass-two-recovery", match: 0.68 },
+                            {
+                                name: "PassTwo Recovery",
+                                mbid: "pass-two-recovery",
+                                match: 0.68,
+                            },
                         ],
                     ],
                 ]),
                 1,
-                "user-1"
-            )
+                "user-1",
+            ),
         ).resolves.toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
                     albumMbid: "rg-pass-two-recovery",
                 }),
-            ])
+            ]),
         );
     });
 
@@ -5473,8 +6016,8 @@ describe("discover weekly runtime behavior", () => {
         await expect(
             (discoverWeeklyService as any).isArtistInLibrary(
                 "Missing Artist",
-                "missing-mbid"
-            )
+                "missing-mbid",
+            ),
         ).resolves.toBe(false);
     });
 });

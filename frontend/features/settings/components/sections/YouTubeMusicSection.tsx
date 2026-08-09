@@ -1,13 +1,28 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { DeviceAuthLinkPanel, SettingsSection, SettingsRow, SettingsToggle, SettingsSelect, SettingsInput, IntegrationCard } from "../ui";
+import {
+    DeviceAuthLinkPanel,
+    SettingsSection,
+    SettingsRow,
+    SettingsToggle,
+    SettingsSelect,
+    SettingsInput,
+    IntegrationCard,
+} from "../ui";
 import { UserSettings, SystemSettings } from "../../types";
 import { api } from "@/lib/api";
 import { createFrontendLogger } from "@/lib/logger";
 import { useDeviceAuthPolling } from "@/hooks/useDeviceAuthPolling";
 // lucide-react 1.x removed brand icons (Youtube included); SquarePlay is the closest generic stand-in.
-import { CheckCircle, XCircle, AlertTriangle, SquarePlay, ChevronDown, ChevronRight } from "lucide-react";
+import {
+    CheckCircle,
+    XCircle,
+    AlertTriangle,
+    SquarePlay,
+    ChevronDown,
+    ChevronRight,
+} from "lucide-react";
 
 const logger = createFrontendLogger("Settings.YouTubeMusicSection");
 
@@ -21,9 +36,12 @@ interface YouTubeMusicAdminSectionProps {
 /**
  * Renders the YouTubeMusicAdminSection component.
  */
-export function YouTubeMusicAdminSection({ settings, onUpdate }: YouTubeMusicAdminSectionProps) {
+export function YouTubeMusicAdminSection({
+    settings,
+    onUpdate,
+}: YouTubeMusicAdminSectionProps) {
     const [oauthExpanded, setOauthExpanded] = useState(
-        !!(settings.ytMusicClientId || settings.ytMusicClientSecret)
+        !!(settings.ytMusicClientId || settings.ytMusicClientSecret),
     );
 
     return (
@@ -35,9 +53,11 @@ export function YouTubeMusicAdminSection({ settings, onUpdate }: YouTubeMusicAdm
             <div className="mx-4 mt-3 mb-1 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-200/80">
-                    This integration uses unofficial libraries and is not affiliated with or endorsed by Google or YouTube.
-                    A YouTube Music Premium subscription is required. Users are responsible for ensuring their use complies
-                    with YouTube&apos;s Terms of Service.
+                    This integration uses unofficial libraries and is not
+                    affiliated with or endorsed by Google or YouTube. A YouTube
+                    Music Premium subscription is required. Users are
+                    responsible for ensuring their use complies with
+                    YouTube&apos;s Terms of Service.
                 </p>
             </div>
             <SettingsRow
@@ -56,15 +76,17 @@ export function YouTubeMusicAdminSection({ settings, onUpdate }: YouTubeMusicAdm
                         onClick={() => setOauthExpanded(!oauthExpanded)}
                         className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200 transition-colors py-2"
                     >
-                        {oauthExpanded
-                            ? <ChevronDown className="w-4 h-4" />
-                            : <ChevronRight className="w-4 h-4" />
-                        }
+                        {oauthExpanded ? (
+                            <ChevronDown className="w-4 h-4" />
+                        ) : (
+                            <ChevronRight className="w-4 h-4" />
+                        )}
                         <span>Account Linking (Optional)</span>
                     </button>
                     <p className="text-xs text-gray-400 ml-6 mb-2">
-                        Configure Google OAuth credentials to allow users to link their personal YouTube Music
-                        accounts for library access. Not required for search, browse, or streaming.
+                        Configure Google OAuth credentials to allow users to
+                        link their personal YouTube Music accounts for library
+                        access. Not required for search, browse, or streaming.
                     </p>
                     {oauthExpanded && (
                         <>
@@ -80,14 +102,17 @@ export function YouTubeMusicAdminSection({ settings, onUpdate }: YouTubeMusicAdm
                                             className="text-blue-400 hover:underline"
                                         >
                                             create one here
-                                        </a>
-                                        {" "}— select &quot;TVs and Limited Input devices&quot;)
+                                        </a>{" "}
+                                        — select &quot;TVs and Limited Input
+                                        devices&quot;)
                                     </>
                                 }
                             >
                                 <SettingsInput
                                     value={settings.ytMusicClientId || ""}
-                                    onChange={(v) => onUpdate({ ytMusicClientId: v })}
+                                    onChange={(v) =>
+                                        onUpdate({ ytMusicClientId: v })
+                                    }
                                     placeholder="Enter Client ID"
                                     className="w-64"
                                 />
@@ -100,7 +125,9 @@ export function YouTubeMusicAdminSection({ settings, onUpdate }: YouTubeMusicAdm
                                 <SettingsInput
                                     type="password"
                                     value={settings.ytMusicClientSecret || ""}
-                                    onChange={(v) => onUpdate({ ytMusicClientSecret: v })}
+                                    onChange={(v) =>
+                                        onUpdate({ ytMusicClientSecret: v })
+                                    }
                                     placeholder="Enter Client Secret"
                                     className="w-64"
                                 />
@@ -123,7 +150,10 @@ interface YouTubeMusicCardProps {
 /**
  * Renders the YouTubeMusicCard component.
  */
-export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) {
+export function YouTubeMusicCard({
+    settings,
+    onUpdate,
+}: YouTubeMusicCardProps) {
     const [status, setStatus] = useState<{
         enabled: boolean;
         available: boolean;
@@ -142,8 +172,13 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
         try {
             const res = await api.getYtMusicStatus();
             setStatus(res);
-        } catch (err) {
-            setStatus({ enabled: false, available: false, authenticated: false, credentialsConfigured: false });
+        } catch {
+            setStatus({
+                enabled: false,
+                available: false,
+                authenticated: false,
+                credentialsConfigured: false,
+            });
         } finally {
             setStatusLoading(false);
         }
@@ -177,19 +212,23 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
         return { status: "pending" } as const;
     }, []);
 
-    const handleSessionStarted = useCallback(async (session: {
-        userCode?: string;
-        verificationUri: string;
-    }) => {
-        try {
-            await navigator.clipboard.writeText(session.userCode || "");
-            setCopied(true);
-            setTimeout(() => setCopied(false), 3000);
-        } catch {
-            // Clipboard is optional.
-        }
-        window.open(session.verificationUri, "_blank", "noopener,noreferrer");
-    }, []);
+    const handleSessionStarted = useCallback(
+        async (session: { userCode?: string; verificationUri: string }) => {
+            try {
+                await navigator.clipboard.writeText(session.userCode || "");
+                setCopied(true);
+                setTimeout(() => setCopied(false), 3000);
+            } catch {
+                // Clipboard is optional.
+            }
+            window.open(
+                session.verificationUri,
+                "_blank",
+                "noopener,noreferrer",
+            );
+        },
+        [],
+    );
 
     const handleAuthSuccess = useCallback(() => {
         setSuccess("YouTube Music account connected successfully!");
@@ -211,7 +250,8 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
         onSessionStarted: handleSessionStarted,
         onSuccess: handleAuthSuccess,
         expiredMessage: "The sign-in code has expired. Please try again.",
-        startErrorMessage: "Failed to start authentication. Check admin credentials.",
+        startErrorMessage:
+            "Failed to start authentication. Check admin credentials.",
     });
     const userCode = authSession?.userCode || "";
     const verificationUrl = authSession?.verificationUri || "";
@@ -231,7 +271,9 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
     const handleClearAuth = async () => {
         try {
             await api.clearYtMusicAuth();
-            setStatus(prev => prev ? { ...prev, authenticated: false } : prev);
+            setStatus((prev) =>
+                prev ? { ...prev, authenticated: false } : prev,
+            );
             setSuccess(null);
             setError(null);
             window.dispatchEvent(new Event("ytmusic-auth-changed"));
@@ -269,13 +311,16 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
     // Derived card state
     const isConnected = !!status?.authenticated;
     const isActive = !!status?.enabled && !!status?.available;
-    const canLinkAccount = !!(status?.oauthConfigured ?? status?.credentialsConfigured);
+    const canLinkAccount = !!(
+        status?.oauthConfigured ?? status?.credentialsConfigured
+    );
     const isDisabled = !!status && (!status.enabled || !status.available);
-    const disabledReason = status && !status.enabled
-        ? "Not enabled. Ask your administrator to enable it."
-        : status && !status.available
-          ? "YouTube Music service is not running"
-          : undefined;
+    const disabledReason =
+        status && !status.enabled
+            ? "Not enabled. Ask your administrator to enable it."
+            : status && !status.available
+              ? "YouTube Music service is not running"
+              : undefined;
     // Always expanded so the Explore toggle remains accessible after disconnect
     const isExpanded = true;
 
@@ -299,8 +344,9 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Not affiliated with or endorsed by Google. Requires a YouTube Music Premium subscription.
-                You are responsible for complying with YouTube&apos;s Terms of Service.
+                Not affiliated with or endorsed by Google. Requires a YouTube
+                Music Premium subscription. You are responsible for complying
+                with YouTube&apos;s Terms of Service.
             </p>
         </div>
     );
@@ -321,11 +367,18 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
             warning={warningBanner}
         >
             {/* Account linking hint when OAuth is available but not linked */}
-            {!isConnected && canLinkAccount && status?.available && !polling && !authError && !error && !success && (
-                <p className="text-sm text-gray-400">
-                    Link your Google account for personal library access (optional).
-                </p>
-            )}
+            {!isConnected &&
+                canLinkAccount &&
+                status?.available &&
+                !polling &&
+                !authError &&
+                !error &&
+                !success && (
+                    <p className="text-sm text-gray-400">
+                        Link your Google account for personal library access
+                        (optional).
+                    </p>
+                )}
 
             {/* Device Code Auth Flow (not authenticated) */}
             {!isConnected && status?.available && canLinkAccount && (
@@ -341,7 +394,14 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
                             onCancel={handleCancelLink}
                             introText="A Google sign-in page should have opened. If it didn't, click the link below."
                             pasteInstruction="Paste this code on the Google page"
-                            signInInstruction={<>Sign in with your Google account and click <strong className="text-white">Allow</strong></>}
+                            signInInstruction={
+                                <>
+                                    Sign in with your Google account and click{" "}
+                                    <strong className="text-white">
+                                        Allow
+                                    </strong>
+                                </>
+                            }
                             openLinkLabel="Open Google Sign-In Page"
                         />
                     )}
@@ -391,7 +451,8 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
                         value={settings.ytMusicQuality}
                         onChange={(v) =>
                             onUpdate({
-                                ytMusicQuality: v as UserSettings["ytMusicQuality"],
+                                ytMusicQuality:
+                                    v as UserSettings["ytMusicQuality"],
                             })
                         }
                         options={qualityOptions}

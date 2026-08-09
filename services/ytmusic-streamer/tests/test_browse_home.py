@@ -67,8 +67,14 @@ class TestHomeShelfFiltering:
     async def test_filtering_is_case_insensitive(self, client):
         """Shelves with varying case should still be filtered."""
         shelves = [
-            {"title": "QUICK PICKS", "contents": [{"title": "X", "videoId": "v1", "thumbnails": [], "artists": []}]},
-            {"title": "Trending", "contents": [{"title": "Y", "browseId": "b1", "thumbnails": [], "artists": []}]},
+            {
+                "title": "QUICK PICKS",
+                "contents": [{"title": "X", "videoId": "v1", "thumbnails": [], "artists": []}],
+            },
+            {
+                "title": "Trending",
+                "contents": [{"title": "Y", "browseId": "b1", "thumbnails": [], "artists": []}],
+            },
         ]
         mock_yt = MagicMock()
         mock_yt.get_home.return_value = shelves

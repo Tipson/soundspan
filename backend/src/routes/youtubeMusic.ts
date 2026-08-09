@@ -29,7 +29,8 @@ import {
 
 const router = Router();
 const OAUTH_CACHE_TTL_MS = process.env.NODE_ENV === "test" ? 0 : 60_000;
-const OAUTH_NEGATIVE_CACHE_TTL_MS = process.env.NODE_ENV === "test" ? 0 : 15_000;
+const OAUTH_NEGATIVE_CACHE_TTL_MS =
+    process.env.NODE_ENV === "test" ? 0 : 15_000;
 const DEFAULT_YTMUSIC_STREAM_QUALITY = "high";
 const ytOauthSessionCache = new Map<
     string,
@@ -40,7 +41,7 @@ const ytOauthRestoreInFlight = new Map<string, Promise<boolean>>();
 const setYtOAuthCache = (
     userId: string,
     authenticated: boolean,
-    ttlMs = OAUTH_CACHE_TTL_MS
+    ttlMs = OAUTH_CACHE_TTL_MS,
 ) => {
     if (ttlMs <= 0) {
         ytOauthSessionCache.delete(userId);
@@ -82,7 +83,7 @@ const invalidateYtOAuthCache = (userId: string) => {
 async function requireYtMusicEnabled(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
 ) {
     try {
         const settings = await getSystemSettings();
@@ -147,13 +148,18 @@ async function ensureUserOAuth(userId: string): Promise<boolean> {
                 userId,
                 oauthJson,
                 systemSettings?.ytMusicClientId || undefined,
-                systemSettings?.ytMusicClientSecret || undefined
+                systemSettings?.ytMusicClientSecret || undefined,
             );
-            logger.info(`[YTMusic] Restored OAuth credentials for user ${userId}`);
+            logger.info(
+                `[YTMusic] Restored OAuth credentials for user ${userId}`,
+            );
             setYtOAuthCache(userId, true);
             return true;
         } catch (err) {
-            logger.debug(`[YTMusic] OAuth restore failed for user ${userId}:`, err);
+            logger.debug(
+                `[YTMusic] OAuth restore failed for user ${userId}:`,
+                err,
+            );
             setYtOAuthCache(userId, false);
             return false;
         }
@@ -167,7 +173,7 @@ async function ensureUserOAuth(userId: string): Promise<boolean> {
 
 async function requireUserOAuth(
     userId: string,
-    res: Response
+    res: Response,
 ): Promise<boolean> {
     const ok = await ensureUserOAuth(userId);
     if (!ok) {
@@ -194,7 +200,7 @@ async function getUserIdOrPublic(userId: string): Promise<string> {
 function handleYtMusicAuthError(
     res: Response,
     err: any,
-    userId?: string
+    userId?: string,
 ): boolean {
     if (err?.response?.status !== 401) return false;
     if (userId) {
@@ -219,7 +225,7 @@ const getRequestedStreamQuality = (rawQuality: unknown): string | undefined => {
 
 async function resolveYtMusicStreamQuality(
     userId: string,
-    rawRequestedQuality: unknown
+    rawRequestedQuality: unknown,
 ): Promise<string> {
     const requestedQuality = getRequestedStreamQuality(rawRequestedQuality);
     if (requestedQuality) {
@@ -238,7 +244,7 @@ async function resolveYtMusicStreamQuality(
     } catch (error) {
         logger.warn(
             `[YTMusic] Failed to read user quality preference for user ${userId}; falling back to ${DEFAULT_YTMUSIC_STREAM_QUALITY}`,
-            error
+            error,
         );
         return DEFAULT_YTMUSIC_STREAM_QUALITY;
     }
@@ -260,44 +266,42 @@ async function resolveYtMusicStreamQuality(
  *       401:
  *         description: Not authenticated
  */
-router.get(
-    "/status",
-    requireAuth,
-    async (req: Request, res: Response) => {
-        try {
-            const userId = req.user!.id;
-            const settings = await getSystemSettings();
-            const available = await ytMusicService.isAvailable();
+router.get("/status", requireAuth, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const settings = await getSystemSettings();
+        const available = await ytMusicService.isAvailable();
 
-            const oauthConfigured = !!(settings?.ytMusicClientId && settings?.ytMusicClientSecret);
+        const oauthConfigured = !!(
+            settings?.ytMusicClientId && settings?.ytMusicClientSecret
+        );
 
-            if (!available) {
-                return res.json({
-                    enabled: settings.ytMusicEnabled,
-                    available: false,
-                    authenticated: false,
-                    credentialsConfigured: oauthConfigured,
-                    oauthConfigured,
-                });
-            }
-
-            // Try to restore OAuth if needed, then check status
-            await ensureUserOAuth(userId);
-            const authStatus = await ytMusicService.getAuthStatus(userId);
-
+        if (!available) {
             return res.json({
                 enabled: settings.ytMusicEnabled,
-                available: true,
+                available: false,
+                authenticated: false,
                 credentialsConfigured: oauthConfigured,
                 oauthConfigured,
-                ...authStatus,
             });
-        } catch (err) {
-            logger.error("[YTMusic Route] Status check failed:", err);
-            res.status(500).json({ error: "Failed to check YouTube Music status" });
         }
+
+        // Try to restore OAuth if needed, then check status
+        await ensureUserOAuth(userId);
+        const authStatus = await ytMusicService.getAuthStatus(userId);
+
+        return res.json({
+            enabled: settings.ytMusicEnabled,
+            available: true,
+            credentialsConfigured: oauthConfigured,
+            oauthConfigured,
+            ...authStatus,
+        });
+    } catch (err) {
+        logger.error("[YTMusic Route] Status check failed:", err);
+        res.status(500).json({ error: "Failed to check YouTube Music status" });
     }
-);
+});
 
 // ── OAuth Device Code Flow (per-user) ──────────────────────────────
 
@@ -334,17 +338,19 @@ router.post(
 
             const result = await ytMusicService.initiateDeviceAuth(
                 settings.ytMusicClientId,
-                settings.ytMusicClientSecret
+                settings.ytMusicClientSecret,
             );
 
             res.json(result);
         } catch (err: any) {
             logger.error("[YTMusic Route] Device code initiation failed:", err);
             res.status(500).json({
-                error: err.response?.data?.detail || "Failed to initiate device code flow",
+                error:
+                    err.response?.data?.detail ||
+                    "Failed to initiate device code flow",
             });
         }
-    }
+    },
 );
 
 /**
@@ -385,7 +391,9 @@ router.post(
             const { deviceCode } = req.body;
 
             if (!deviceCode) {
-                return res.status(400).json({ error: "deviceCode is required" });
+                return res
+                    .status(400)
+                    .json({ error: "deviceCode is required" });
             }
 
             const settings = await getSystemSettings();
@@ -399,7 +407,7 @@ router.post(
                 userId,
                 settings.ytMusicClientId,
                 settings.ytMusicClientSecret,
-                deviceCode
+                deviceCode,
             );
 
             // If we got a successful token, save it encrypted in the DB
@@ -415,7 +423,9 @@ router.post(
                     },
                 });
                 setYtOAuthCache(userId, true);
-                logger.info(`[YTMusic] Device code auth completed for user ${userId}`);
+                logger.info(
+                    `[YTMusic] Device code auth completed for user ${userId}`,
+                );
             }
 
             // Don't send raw oauth_json to the frontend
@@ -426,10 +436,11 @@ router.post(
         } catch (err: any) {
             logger.error("[YTMusic Route] Device code poll failed:", err);
             res.status(500).json({
-                error: err.response?.data?.detail || "Failed to poll device code",
+                error:
+                    err.response?.data?.detail || "Failed to poll device code",
             });
         }
-    }
+    },
 );
 
 /**
@@ -478,7 +489,9 @@ router.post(
             try {
                 JSON.parse(oauthJson);
             } catch {
-                return res.status(400).json({ error: "Invalid JSON in oauthJson" });
+                return res
+                    .status(400)
+                    .json({ error: "Invalid JSON in oauthJson" });
             }
 
             // Encrypt and save to UserSettings
@@ -499,7 +512,7 @@ router.post(
                 userId,
                 oauthJson,
                 settings?.ytMusicClientId || undefined,
-                settings?.ytMusicClientSecret || undefined
+                settings?.ytMusicClientSecret || undefined,
             );
             setYtOAuthCache(userId, true);
 
@@ -508,10 +521,11 @@ router.post(
         } catch (err: any) {
             logger.error("[YTMusic Route] Save OAuth token failed:", err);
             res.status(500).json({
-                error: err.response?.data?.detail || "Failed to save OAuth token",
+                error:
+                    err.response?.data?.detail || "Failed to save OAuth token",
             });
         }
-    }
+    },
 );
 
 /**
@@ -550,7 +564,9 @@ router.post(
             invalidateYtOAuthCache(userId);
             setYtOAuthCache(userId, false);
 
-            logger.info(`[YTMusic] OAuth credentials cleared for user ${userId}`);
+            logger.info(
+                `[YTMusic] OAuth credentials cleared for user ${userId}`,
+            );
             res.json({ success: true });
         } catch (err: any) {
             logger.error("[YTMusic Route] Clear auth failed:", err);
@@ -558,7 +574,7 @@ router.post(
                 error: err.response?.data?.detail || "Failed to clear auth",
             });
         }
-    }
+    },
 );
 
 // ── Search ─────────────────────────────────────────────────────────
@@ -612,7 +628,7 @@ router.post(
             const result = await ytMusicService.searchCanonical(
                 userId,
                 query,
-                filter
+                filter,
             );
             res.json(result);
         } catch (err: any) {
@@ -622,7 +638,7 @@ router.post(
                 error: err.response?.data?.detail || "Search failed",
             });
         }
-    }
+    },
 );
 
 // ── Browse ─────────────────────────────────────────────────────────
@@ -656,7 +672,10 @@ router.get(
     async (req: Request<{ browseId: string }>, res: Response) => {
         try {
             const effectiveUserId = await getUserIdOrPublic(req.user!.id);
-            const album = await ytMusicService.getAlbum(effectiveUserId, req.params.browseId);
+            const album = await ytMusicService.getAlbum(
+                effectiveUserId,
+                req.params.browseId,
+            );
             res.json(album);
         } catch (err: any) {
             if (handleYtMusicAuthError(res, err)) return;
@@ -665,7 +684,7 @@ router.get(
                 error: err.response?.data?.detail || "Failed to get album",
             });
         }
-    }
+    },
 );
 
 /**
@@ -697,7 +716,10 @@ router.get(
     async (req: Request<{ channelId: string }>, res: Response) => {
         try {
             const effectiveUserId = await getUserIdOrPublic(req.user!.id);
-            const artist = await ytMusicService.getArtist(effectiveUserId, req.params.channelId);
+            const artist = await ytMusicService.getArtist(
+                effectiveUserId,
+                req.params.channelId,
+            );
             res.json(artist);
         } catch (err: any) {
             if (handleYtMusicAuthError(res, err)) return;
@@ -706,7 +728,7 @@ router.get(
                 error: err.response?.data?.detail || "Failed to get artist",
             });
         }
-    }
+    },
 );
 
 /**
@@ -738,7 +760,10 @@ router.get(
     async (req: Request<{ videoId: string }>, res: Response) => {
         try {
             const effectiveUserId = await getUserIdOrPublic(req.user!.id);
-            const song = await ytMusicService.getSong(effectiveUserId, req.params.videoId);
+            const song = await ytMusicService.getSong(
+                effectiveUserId,
+                req.params.videoId,
+            );
             res.json(song);
         } catch (err: any) {
             if (handleYtMusicAuthError(res, err)) return;
@@ -747,7 +772,7 @@ router.get(
                 error: err.response?.data?.detail || "Failed to get song",
             });
         }
-    }
+    },
 );
 
 // ── Stream Info ────────────────────────────────────────────────────
@@ -800,13 +825,13 @@ router.get(
             const { videoId } = req.params;
             const quality = await resolveYtMusicStreamQuality(
                 userId,
-                req.query.quality
+                req.query.quality,
             );
 
             const info = await ytMusicService.getStreamInfo(
                 effectiveUserId,
                 videoId,
-                quality
+                quality,
             );
 
             res.json({
@@ -823,7 +848,8 @@ router.get(
             if (err.response?.status === 451) {
                 return res.status(451).json({
                     error: "age_restricted",
-                    message: "This content requires age verification and cannot be streamed via YouTube Music.",
+                    message:
+                        "This content requires age verification and cannot be streamed via YouTube Music.",
                 });
             }
             if (handleYtMusicAuthError(res, err)) return;
@@ -832,7 +858,7 @@ router.get(
                 error: "Failed to get stream info",
             });
         }
-    }
+    },
 );
 
 // ── Stream Proxy ───────────────────────────────────────────────────
@@ -892,7 +918,7 @@ router.get(
             const { videoId } = req.params;
             const quality = await resolveYtMusicStreamQuality(
                 userId,
-                req.query.quality
+                req.query.quality,
             );
             const rangeHeader = req.headers.range;
 
@@ -900,7 +926,7 @@ router.get(
                 effectiveUserId,
                 videoId,
                 quality,
-                rangeHeader
+                rangeHeader,
             );
 
             // Forward status code and relevant headers
@@ -922,7 +948,7 @@ router.get(
             // connection mid-stream the browser will retry with a new Range.
             proxyRes.data.on("error", (streamErr: Error) => {
                 logger.warn(
-                    `[YTMusic Route] Upstream stream error for ${videoId}: ${streamErr.message}`
+                    `[YTMusic Route] Upstream stream error for ${videoId}: ${streamErr.message}`,
                 );
                 if (!res.headersSent) {
                     res.status(502).json({ error: "Upstream stream failed" });
@@ -938,7 +964,8 @@ router.get(
             if (err.response?.status === 451) {
                 return res.status(451).json({
                     error: "age_restricted",
-                    message: "This content requires age verification and cannot be streamed via YouTube Music.",
+                    message:
+                        "This content requires age verification and cannot be streamed via YouTube Music.",
                 });
             }
             if (handleYtMusicAuthError(res, err)) return;
@@ -947,7 +974,7 @@ router.get(
                 error: "Failed to stream audio",
             });
         }
-    }
+    },
 );
 
 // ── Library ────────────────────────────────────────────────────────
@@ -990,10 +1017,11 @@ router.get(
             if (handleYtMusicAuthError(res, err)) return;
             logger.error("[YTMusic Route] Library songs failed:", err);
             res.status(500).json({
-                error: err.response?.data?.detail || "Failed to get library songs",
+                error:
+                    err.response?.data?.detail || "Failed to get library songs",
             });
         }
-    }
+    },
 );
 
 /**
@@ -1034,10 +1062,12 @@ router.get(
             if (handleYtMusicAuthError(res, err)) return;
             logger.error("[YTMusic Route] Library albums failed:", err);
             res.status(500).json({
-                error: err.response?.data?.detail || "Failed to get library albums",
+                error:
+                    err.response?.data?.detail ||
+                    "Failed to get library albums",
             });
         }
-    }
+    },
 );
 
 // ── Gap-Fill Match ─────────────────────────────────────────────────
@@ -1106,7 +1136,7 @@ router.post(
                 parsed.data.title,
                 parsed.data.albumTitle,
                 parsed.data.duration,
-                parsed.data.isrc
+                parsed.data.isrc,
             );
             res.json({ match });
         } catch (err: any) {
@@ -1116,7 +1146,7 @@ router.post(
                 error: "Failed to find matching track",
             });
         }
-    }
+    },
 );
 
 // ── Batch Gap-Fill Match ───────────────────────────────────────────
@@ -1182,7 +1212,7 @@ router.post(
                             albumTitle: z.string().optional(),
                             duration: z.number().positive().optional(),
                             isrc: z.string().trim().min(6).max(20).optional(),
-                        })
+                        }),
                     )
                     .min(1)
                     .max(50),
@@ -1196,7 +1226,7 @@ router.post(
 
             const matches = await ytMusicService.findMatchesForAlbum(
                 userId,
-                parsed.data.tracks
+                parsed.data.tracks,
             );
 
             // Fire-and-forget: persist matched tracks as TrackYtMusic rows
@@ -1217,7 +1247,10 @@ router.post(
                         });
                     }
                 } catch (err) {
-                    logger.warn("[YTMusic Route] Failed to persist gap-fill TrackYtMusic rows:", err);
+                    logger.warn(
+                        "[YTMusic Route] Failed to persist gap-fill TrackYtMusic rows:",
+                        err,
+                    );
                 }
             });
 
@@ -1230,7 +1263,7 @@ router.post(
                 error: "Failed to batch-match tracks",
             });
         }
-    }
+    },
 );
 
 // ── Public Stream Routes (no user OAuth required) ─────────────────
@@ -1271,13 +1304,13 @@ router.get(
         try {
             const { videoId } = req.params;
             const quality = normalizeYtMusicStreamQuality(
-                (req.query.quality as string) || "HIGH"
+                (req.query.quality as string) || "HIGH",
             );
 
             const info = await ytMusicService.getStreamInfo(
                 "__public__",
                 videoId,
-                quality
+                quality,
             );
 
             res.json({
@@ -1294,7 +1327,8 @@ router.get(
             if (err.response?.status === 451) {
                 return res.status(451).json({
                     error: "age_restricted",
-                    message: "This content requires age verification and cannot be streamed via YouTube Music.",
+                    message:
+                        "This content requires age verification and cannot be streamed via YouTube Music.",
                 });
             }
             logger.error("[YTMusic Route] Public stream info failed:", err);
@@ -1302,7 +1336,7 @@ router.get(
                 error: "Failed to get stream info",
             });
         }
-    }
+    },
 );
 
 /**
@@ -1343,7 +1377,7 @@ router.get(
         try {
             const { videoId } = req.params;
             const quality = normalizeYtMusicStreamQuality(
-                (req.query.quality as string) || "HIGH"
+                (req.query.quality as string) || "HIGH",
             );
             const rangeHeader = req.headers.range;
 
@@ -1351,7 +1385,7 @@ router.get(
                 "__public__",
                 videoId,
                 quality,
-                rangeHeader
+                rangeHeader,
             );
 
             res.status(proxyRes.status);
@@ -1369,7 +1403,7 @@ router.get(
 
             proxyRes.data.on("error", (streamErr: Error) => {
                 logger.warn(
-                    `[YTMusic Route] Public upstream stream error for ${videoId}: ${streamErr.message}`
+                    `[YTMusic Route] Public upstream stream error for ${videoId}: ${streamErr.message}`,
                 );
                 if (!res.headersSent) {
                     res.status(502).json({ error: "Upstream stream failed" });
@@ -1385,7 +1419,8 @@ router.get(
             if (err.response?.status === 451) {
                 return res.status(451).json({
                     error: "age_restricted",
-                    message: "This content requires age verification and cannot be streamed via YouTube Music.",
+                    message:
+                        "This content requires age verification and cannot be streamed via YouTube Music.",
                 });
             }
             logger.error("[YTMusic Route] Public stream proxy failed:", err);
@@ -1393,7 +1428,7 @@ router.get(
                 error: "Failed to stream audio",
             });
         }
-    }
+    },
 );
 
 export default router;

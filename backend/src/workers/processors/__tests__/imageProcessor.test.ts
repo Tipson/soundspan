@@ -33,10 +33,10 @@ describe("imageProcessor", () => {
         expect(job.progress).toHaveBeenNthCalledWith(2, 50);
         expect(job.progress).toHaveBeenNthCalledWith(3, 100);
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ImageJob image-1] Processing thumbnail for cover cover-1"
+            "[ImageJob image-1] Processing thumbnail for cover cover-1",
         );
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "[ImageJob image-1] Image optimization complete"
+            "[ImageJob image-1] Image optimization complete",
         );
         expect(result).toEqual({ success: true, paths: [] });
     });
@@ -59,7 +59,7 @@ describe("imageProcessor", () => {
 
         expect(mockLoggerError).toHaveBeenCalledWith(
             "[ImageJob image-2] Optimization failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(result).toEqual({
             success: false,

@@ -1,5 +1,9 @@
 import express from "express";
-import { requireAuth, requireAuthOrToken, requireAdmin } from "../middleware/auth";
+import {
+    requireAuth,
+    requireAuthOrToken,
+    requireAdmin,
+} from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { redisClient } from "../utils/redis";
 import { logger } from "../utils/logger";
@@ -39,25 +43,31 @@ const router = express.Router();
  */
 // Profile picture serving — must be before router-level requireAuth
 // because <img> tags can't send Authorization headers; uses query token instead
-router.get<{ userId: string }>("/profile-picture/:userId", requireAuthOrToken, async (req, res) => {
-    try {
-        const user = await prisma.user.findUnique({
-            where: { id: req.params.userId },
-            select: { profilePicture: true },
-        });
+router.get<{ userId: string }>(
+    "/profile-picture/:userId",
+    requireAuthOrToken,
+    async (req, res) => {
+        try {
+            const user = await prisma.user.findUnique({
+                where: { id: req.params.userId },
+                select: { profilePicture: true },
+            });
 
-        if (!user?.profilePicture) {
-            return res.status(404).json({ error: "No profile picture" });
+            if (!user?.profilePicture) {
+                return res.status(404).json({ error: "No profile picture" });
+            }
+
+            res.set("Content-Type", "image/jpeg");
+            res.set("Cache-Control", "public, max-age=300");
+            return res.send(Buffer.from(user.profilePicture));
+        } catch (error) {
+            logger.error("[Social] Failed to serve profile picture:", error);
+            return res
+                .status(500)
+                .json({ error: "Failed to get profile picture" });
         }
-
-        res.set("Content-Type", "image/jpeg");
-        res.set("Cache-Control", "public, max-age=300");
-        return res.send(Buffer.from(user.profilePicture));
-    } catch (error) {
-        logger.error("[Social] Failed to serve profile picture:", error);
-        return res.status(500).json({ error: "Failed to get profile picture" });
-    }
-});
+    },
+);
 
 router.use(requireAuth);
 
@@ -98,7 +108,7 @@ function getElapsedMs(value: unknown): number | null {
 
 function extractQueueTrack(
     queueRaw: unknown,
-    currentIndex: number
+    currentIndex: number,
 ): QueueTrackProjection | null {
     if (!Array.isArray(queueRaw)) return null;
     const candidate = queueRaw[currentIndex];
@@ -134,19 +144,21 @@ function extractQueueTrack(
         artistId: asNonEmptyString(artist.id),
         albumTitle: album.title,
         albumId: asNonEmptyString(album.id),
-        coverArt:
-            typeof album.coverArt === "string" ? album.coverArt : null,
+        coverArt: typeof album.coverArt === "string" ? album.coverArt : null,
     };
 }
 
 function resolveListeningStatus(
     shareListening: boolean,
-    latestPlaybackState: {
-        playbackType: string;
-        isPlaying: boolean;
-        updatedAt: Date;
-    } | null | undefined,
-    listeningTrack: QueueTrackProjection | null
+    latestPlaybackState:
+        | {
+              playbackType: string;
+              isPlaying: boolean;
+              updatedAt: Date;
+          }
+        | null
+        | undefined,
+    listeningTrack: QueueTrackProjection | null,
 ): ListeningStatus {
     if (!shareListening) return "idle";
     if (!latestPlaybackState || latestPlaybackState.playbackType !== "track") {
@@ -236,7 +248,7 @@ router.post("/presence/heartbeat", async (req, res) => {
         await redisClient.set(
             `${PRESENCE_KEY_PREFIX}${userId}`,
             timestampMs.toString(),
-            { expiration: { type: "EX", value: PRESENCE_TTL_SECONDS } }
+            { expiration: { type: "EX", value: PRESENCE_TTL_SECONDS } },
         );
         publishSocialPresenceUpdate({
             userId,
@@ -355,10 +367,10 @@ router.get("/online", async (_req, res) => {
         });
 
         const inListenTogether = new Set(
-            activeMemberships.map((entry) => entry.userId)
+            activeMemberships.map((entry) => entry.userId),
         );
         const hasProfilePictureSet = new Set(
-            usersWithPictures.map((u) => u.id)
+            usersWithPictures.map((u) => u.id),
         );
 
         const socialUsers = users
@@ -372,13 +384,13 @@ router.get("/online", async (_req, res) => {
                     latestPlaybackState?.playbackType === "track"
                         ? extractQueueTrack(
                               latestPlaybackState.queue,
-                              latestPlaybackState.currentIndex
+                              latestPlaybackState.currentIndex,
                           )
                         : null;
                 const listeningStatus = resolveListeningStatus(
                     shareListening,
                     latestPlaybackState,
-                    listeningTrack
+                    listeningTrack,
                 );
                 const lastHeartbeatMs = onlinePresenceByUserId.get(user.id);
 
@@ -487,7 +499,7 @@ router.get("/connected", requireAdmin, async (req, res) => {
         });
 
         const hasProfilePictureSet = new Set(
-            usersWithPicturesConnected.map((u) => u.id)
+            usersWithPicturesConnected.map((u) => u.id),
         );
 
         const connectedUsers = users

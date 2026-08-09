@@ -11,9 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 type CapturedQueryOptions = {
     enabled?: boolean;
-    refetchInterval?: (query: {
-        state: { data: unknown };
-    }) => number | false;
+    refetchInterval?: (query: { state: { data: unknown } }) => number | false;
 };
 
 const state = {
@@ -44,9 +42,9 @@ mock.module("@tanstack/react-query", { namedExports: reactQueryExports });
 mock.module(
     new URL(
         "../../node_modules/@tanstack/react-query/build/modern/index.cjs",
-        import.meta.url
+        import.meta.url,
     ).href,
-    { namedExports: reactQueryExports }
+    { namedExports: reactQueryExports },
 );
 
 mock.module("@/lib/api", {
@@ -82,9 +80,8 @@ beforeEach(() => {
 });
 
 async function renderHook(options?: { enabled?: boolean }) {
-    const { useActiveYouTubeDownloads } = await import(
-        "../../hooks/useActiveYouTubeDownloads"
-    );
+    const { useActiveYouTubeDownloads } =
+        await import("../../hooks/useActiveYouTubeDownloads");
     const Probe = () => {
         useActiveYouTubeDownloads(options);
         return null;

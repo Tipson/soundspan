@@ -16,12 +16,10 @@ import {
 describe("imageProxy", () => {
     const originalFetch = global.fetch;
     const makeImmediateSetTimeout = () =>
-        jest
-            .spyOn(global, "setTimeout")
-            .mockImplementation((cb) => {
-                cb();
-                return 0 as any;
-            });
+        jest.spyOn(global, "setTimeout").mockImplementation((cb) => {
+            cb();
+            return 0 as any;
+        });
 
     afterEach(() => {
         global.fetch = originalFetch;
@@ -31,14 +29,20 @@ describe("imageProxy", () => {
     describe("normalizeExternalImageUrl", () => {
         it("allows public https urls", () => {
             expect(
-                normalizeExternalImageUrl("https://example.com/covers/a.jpg")
+                normalizeExternalImageUrl("https://example.com/covers/a.jpg"),
             ).toBe("https://example.com/covers/a.jpg");
         });
 
         it("blocks private/local destinations", () => {
-            expect(normalizeExternalImageUrl("http://127.0.0.1:3000/a.jpg")).toBeNull();
-            expect(normalizeExternalImageUrl("http://192.168.1.10/a.jpg")).toBeNull();
-            expect(normalizeExternalImageUrl("http://localhost/a.jpg")).toBeNull();
+            expect(
+                normalizeExternalImageUrl("http://127.0.0.1:3000/a.jpg"),
+            ).toBeNull();
+            expect(
+                normalizeExternalImageUrl("http://192.168.1.10/a.jpg"),
+            ).toBeNull();
+            expect(
+                normalizeExternalImageUrl("http://localhost/a.jpg"),
+            ).toBeNull();
         });
 
         it("blocks non-http protocols", () => {
@@ -69,7 +73,7 @@ describe("imageProxy", () => {
                 new Response(null, {
                     status: 302,
                     headers: { location: "http://127.0.0.1/internal.jpg" },
-                })
+                }),
             ) as any;
 
             const result = await fetchExternalImage({
@@ -84,9 +88,9 @@ describe("imageProxy", () => {
         });
 
         it("returns not_found for 404 responses", async () => {
-            global.fetch = jest.fn().mockResolvedValue(
-                new Response(null, { status: 404 })
-            ) as any;
+            global.fetch = jest
+                .fn()
+                .mockResolvedValue(new Response(null, { status: 404 })) as any;
 
             const result = await fetchExternalImage({
                 url: "https://example.com/missing.jpg",
@@ -105,7 +109,7 @@ describe("imageProxy", () => {
                 new Response("image-bytes", {
                     status: 200,
                     headers: { "content-type": "image/jpeg" },
-                })
+                }),
             ) as any;
 
             const result = await fetchExternalImage({
@@ -127,7 +131,7 @@ describe("imageProxy", () => {
                 new Response(null, {
                     status: 302,
                     headers: { location: "https://example.com/redirect" },
-                })
+                }),
             ) as any;
 
             const result = await fetchExternalImage({
@@ -150,7 +154,7 @@ describe("imageProxy", () => {
                 new Response("bad", {
                     status: 400,
                     statusText: "Bad Request",
-                })
+                }),
             ) as any;
 
             const result = await fetchExternalImage({
@@ -168,18 +172,19 @@ describe("imageProxy", () => {
 
         it("retries on transient 5xx failures and eventually succeeds", async () => {
             makeImmediateSetTimeout();
-            global.fetch = jest.fn()
+            global.fetch = jest
+                .fn()
                 .mockResolvedValueOnce(
                     new Response("down", {
                         status: 502,
                         statusText: "Bad Gateway",
-                    })
+                    }),
                 )
                 .mockResolvedValueOnce(
                     new Response("image-bytes", {
                         status: 200,
                         headers: { "content-type": "image/jpeg" },
-                    })
+                    }),
                 ) as any;
 
             const result = await fetchExternalImage({
@@ -197,13 +202,14 @@ describe("imageProxy", () => {
 
         it("retries when fetch throws and succeeds on retry", async () => {
             makeImmediateSetTimeout();
-            global.fetch = jest.fn()
+            global.fetch = jest
+                .fn()
                 .mockRejectedValueOnce(new Error("connection reset"))
                 .mockResolvedValueOnce(
                     new Response("image-bytes", {
                         status: 200,
                         headers: { "content-type": "image/png" },
-                    })
+                    }),
                 ) as any;
 
             const result = await fetchExternalImage({
@@ -221,7 +227,9 @@ describe("imageProxy", () => {
 
         it("returns final fetch error message from Error after retries", async () => {
             makeImmediateSetTimeout();
-            global.fetch = jest.fn().mockRejectedValue(new Error("network down")) as any;
+            global.fetch = jest
+                .fn()
+                .mockRejectedValue(new Error("network down")) as any;
 
             const result = await fetchExternalImage({
                 url: "https://example.com/final-error.jpg",
@@ -249,7 +257,7 @@ describe("imageProxy", () => {
                         "content-type": "image/jpeg",
                         "content-length": "2048",
                     },
-                })
+                }),
             ) as any;
 
             const result = await fetchExternalImage({
@@ -281,7 +289,7 @@ describe("imageProxy", () => {
                 new Response(body, {
                     status: 200,
                     headers: { "content-type": "image/jpeg" },
-                })
+                }),
             ) as any;
 
             const result = await fetchExternalImage({
@@ -304,7 +312,7 @@ describe("imageProxy", () => {
                 new Response("image-bytes", {
                     status: 200,
                     headers: { "content-type": "image/jpeg" },
-                })
+                }),
             ) as any;
 
             const result = await fetchExternalImage({

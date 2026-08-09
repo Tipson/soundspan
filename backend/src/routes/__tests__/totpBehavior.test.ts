@@ -7,8 +7,12 @@ jest.mock("../../utils/logger", () => ({
     },
 }));
 
-const mockRequireAuth = jest.fn((_req: any, _res: any, next: () => void) => next());
-const mockRequireAdmin = jest.fn((_req: any, _res: any, next: () => void) => next());
+const mockRequireAuth = jest.fn((_req: any, _res: any, next: () => void) =>
+    next(),
+);
+const mockRequireAdmin = jest.fn((_req: any, _res: any, next: () => void) =>
+    next(),
+);
 const mockGenerateToken = jest.fn();
 const mockGenerateRefreshToken = jest.fn();
 const mockVerifyAuthToken = jest.fn();
@@ -79,13 +83,10 @@ import router from "../auth";
 const FIXED_EPOCH_MS = 1754700000000;
 const SECRET_B32 = "HEYHKYLRO4TCQKL2JZIEA4BUIBITUJTBLVOXWOTEORWFI3SBKQ4Q";
 
-function getHandler(
-    path: string,
-    method: "get" | "post" | "put" | "delete"
-) {
+function getHandler(path: string, method: "get" | "post" | "put" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -142,14 +143,12 @@ describe("auth TOTP behavior", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body.recoveryCodes).toHaveLength(10);
         expect(res.body.recoveryCodes).toEqual(
-            expect.arrayContaining([
-                expect.stringMatching(/^[A-F0-9]{8}$/),
-            ])
+            expect.arrayContaining([expect.stringMatching(/^[A-F0-9]{8}$/)]),
         );
         expect(res.body.recoveryCodes).toEqual(
             res.body.recoveryCodes.filter((code: string) =>
-                /^[A-F0-9]{8}$/.test(code)
-            )
+                /^[A-F0-9]{8}$/.test(code),
+            ),
         );
         expect(prisma.user.update).toHaveBeenCalledWith({
             where: { id: "u1" },
@@ -269,8 +268,8 @@ describe("auth TOTP behavior", () => {
         expect(res.body.secret.length).toBeGreaterThanOrEqual(16);
         expect(mockQrCodeToDataUrl).toHaveBeenCalledWith(
             expect.stringMatching(
-                new RegExp(`^otpauth://totp/.*secret=${res.body.secret}`)
-            )
+                new RegExp(`^otpauth://totp/.*secret=${res.body.secret}`),
+            ),
         );
         expect(res.body.qrCode).toBe("data:image/png;base64,x");
     });

@@ -64,7 +64,7 @@ describe("browseImageCache", () => {
         const url = "https://images.example/cover.jpg";
 
         expect(browseImageCacheKey(url)).toBe(
-            crypto.createHash("sha256").update(url).digest("hex")
+            crypto.createHash("sha256").update(url).digest("hex"),
         );
         expect(browseImageCacheKey(url)).toHaveLength(64);
     });
@@ -95,7 +95,9 @@ describe("browseImageCache", () => {
         getBrowseImageFromCache("two");
 
         expect(mockMkdirSync).toHaveBeenCalledTimes(1);
-        expect(mockMkdirSync).toHaveBeenCalledWith(CACHE_DIR, { recursive: true });
+        expect(mockMkdirSync).toHaveBeenCalledWith(CACHE_DIR, {
+            recursive: true,
+        });
     });
 
     it("getBrowseImageFromCache returns cached entry with metadata content type", async () => {
@@ -160,7 +162,7 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/bad.jpg")
+            fetchAndCacheBrowseImage("https://images.example/bad.jpg"),
         ).resolves.toBeNull();
         expect(logger.warn).toHaveBeenCalledTimes(1);
     });
@@ -178,7 +180,7 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/not-image")
+            fetchAndCacheBrowseImage("https://images.example/not-image"),
         ).resolves.toBeNull();
         expect(logger.warn).toHaveBeenCalledTimes(1);
         expect(fs.writeFileSync).not.toHaveBeenCalled();
@@ -197,7 +199,7 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/tiny.jpg")
+            fetchAndCacheBrowseImage("https://images.example/tiny.jpg"),
         ).resolves.toBeNull();
         expect(logger.warn).toHaveBeenCalledTimes(1);
         expect(fs.writeFileSync).not.toHaveBeenCalled();
@@ -216,7 +218,7 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/huge.jpg")
+            fetchAndCacheBrowseImage("https://images.example/huge.jpg"),
         ).resolves.toBeNull();
         expect(logger.warn).toHaveBeenCalledTimes(1);
         expect(fs.writeFileSync).not.toHaveBeenCalled();
@@ -241,14 +243,14 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/cover.png")
+            fetchAndCacheBrowseImage("https://images.example/cover.png"),
         ).resolves.toEqual({
             filePath: path.join(
                 CACHE_DIR,
                 `${crypto
                     .createHash("sha256")
                     .update("https://images.example/cover.png")
-                    .digest("hex")}.img`
+                    .digest("hex")}.img`,
             ),
             contentType: "image/png",
         });
@@ -257,7 +259,7 @@ describe("browseImageCache", () => {
         expect(mockWriteFileSync).toHaveBeenNthCalledWith(
             2,
             expect.stringMatching(/\.meta$/),
-            "image/png"
+            "image/png",
         );
     });
 
@@ -277,21 +279,21 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/no-type")
+            fetchAndCacheBrowseImage("https://images.example/no-type"),
         ).resolves.toEqual({
             filePath: path.join(
                 CACHE_DIR,
                 `${crypto
                     .createHash("sha256")
                     .update("https://images.example/no-type")
-                    .digest("hex")}.img`
+                    .digest("hex")}.img`,
             ),
             contentType: "image/jpeg",
         });
         expect(mockWriteFileSync).toHaveBeenNthCalledWith(
             2,
             expect.stringMatching(/\.meta$/),
-            "image/jpeg"
+            "image/jpeg",
         );
     });
 
@@ -317,12 +319,12 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/write-fail")
+            fetchAndCacheBrowseImage("https://images.example/write-fail"),
         ).resolves.toBeNull();
         expect(logger.error).toHaveBeenCalledTimes(1);
         expect(mockUnlinkSync).toHaveBeenCalledTimes(1);
         expect(mockUnlinkSync).toHaveBeenCalledWith(
-            expect.stringMatching(/\.tmp$/)
+            expect.stringMatching(/\.tmp$/),
         );
     });
 
@@ -351,7 +353,7 @@ describe("browseImageCache", () => {
         });
 
         await expect(
-            fetchAndCacheBrowseImage("https://images.example/cleanup-fail")
+            fetchAndCacheBrowseImage("https://images.example/cleanup-fail"),
         ).resolves.toBeNull();
         expect(logger.error).toHaveBeenCalledTimes(1);
         expect(mockUnlinkSync).toHaveBeenCalledTimes(1);

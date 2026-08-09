@@ -27,10 +27,7 @@ jest.mock("../../utils/logger", () => ({
     },
 }));
 
-import {
-    ytMusicService,
-    normalizeYtMusicStreamQuality,
-} from "../youtubeMusic";
+import { ytMusicService, normalizeYtMusicStreamQuality } from "../youtubeMusic";
 import { logger } from "../../utils/logger";
 
 describe("youtubeMusic service", () => {
@@ -51,7 +48,7 @@ describe("youtubeMusic service", () => {
                     headers: expect.objectContaining({
                         "x-internal-secret": "sek-123",
                     }),
-                })
+                }),
             );
         });
 
@@ -68,7 +65,9 @@ describe("youtubeMusic service", () => {
     it("checks sidecar availability and handles auth/oath method payloads", async () => {
         mockClient.get.mockResolvedValueOnce({ status: 200 });
         await expect(ytMusicService.isAvailable()).resolves.toBe(true);
-        expect(mockClient.get).toHaveBeenCalledWith("/health", { timeout: 5000 });
+        expect(mockClient.get).toHaveBeenCalledWith("/health", {
+            timeout: 5000,
+        });
 
         // Reset availability memoization so the next check exercises the failure path.
         (ytMusicService as any).availabilityCache = null;
@@ -87,19 +86,17 @@ describe("youtubeMusic service", () => {
             params: { user_id: "u1" },
         });
 
-        await ytMusicService.restoreOAuth("u1", "{\"access\":\"a\"}");
+        await ytMusicService.restoreOAuth("u1", '{"access":"a"}');
         expect(mockClient.post).toHaveBeenLastCalledWith(
             "/auth/restore",
-            { oauth_json: "{\"access\":\"a\"}" },
-            { params: { user_id: "u1" } }
+            { oauth_json: '{"access":"a"}' },
+            { params: { user_id: "u1" } },
         );
 
         await ytMusicService.clearAuth("u1");
-        expect(mockClient.post).toHaveBeenLastCalledWith(
-            "/auth/clear",
-            null,
-            { params: { user_id: "u1" } }
-        );
+        expect(mockClient.post).toHaveBeenLastCalledWith("/auth/clear", null, {
+            params: { user_id: "u1" },
+        });
 
         mockClient.post.mockResolvedValueOnce({
             data: {
@@ -111,19 +108,24 @@ describe("youtubeMusic service", () => {
             },
         });
         await expect(
-            ytMusicService.initiateDeviceAuth("client-id", "client-secret")
+            ytMusicService.initiateDeviceAuth("client-id", "client-secret"),
         ).resolves.toEqual(
             expect.objectContaining({
                 device_code: "dc",
                 user_code: "uc",
-            })
+            }),
         );
 
         mockClient.post.mockResolvedValueOnce({
             data: { status: "pending", error: undefined },
         });
         await expect(
-            ytMusicService.pollDeviceAuth("u1", "client-id", "client-secret", "dc")
+            ytMusicService.pollDeviceAuth(
+                "u1",
+                "client-id",
+                "client-secret",
+                "dc",
+            ),
         ).resolves.toEqual({ status: "pending", error: undefined });
         expect(mockClient.post).toHaveBeenLastCalledWith(
             "/auth/device-code/poll",
@@ -132,30 +134,30 @@ describe("youtubeMusic service", () => {
                 client_secret: "client-secret",
                 device_code: "dc",
             },
-            { params: { user_id: "u1" } }
+            { params: { user_id: "u1" } },
         );
 
         await ytMusicService.restoreOAuthWithCredentials(
             "u1",
-            "{\"token\":\"x\"}",
+            '{"token":"x"}',
             "client-id",
-            "client-secret"
+            "client-secret",
         );
         expect(mockClient.post).toHaveBeenLastCalledWith(
             "/auth/restore",
             {
-                oauth_json: "{\"token\":\"x\"}",
+                oauth_json: '{"token":"x"}',
                 client_id: "client-id",
                 client_secret: "client-secret",
             },
-            { params: { user_id: "u1" } }
+            { params: { user_id: "u1" } },
         );
 
-        await ytMusicService.restoreOAuthWithCredentials("u2", "{\"token\":\"y\"}");
+        await ytMusicService.restoreOAuthWithCredentials("u2", '{"token":"y"}');
         expect(mockClient.post).toHaveBeenLastCalledWith(
             "/auth/restore",
-            { oauth_json: "{\"token\":\"y\"}" },
-            { params: { user_id: "u2" } }
+            { oauth_json: '{"token":"y"}' },
+            { params: { user_id: "u2" } },
         );
     });
 
@@ -179,7 +181,11 @@ describe("youtubeMusic service", () => {
                 data: { results: [{ videoId: "v1" }], total: 1 },
             });
 
-        const searchPromise = ytMusicService.search("u1", "test query", "songs");
+        const searchPromise = ytMusicService.search(
+            "u1",
+            "test query",
+            "songs",
+        );
         await jest.advanceTimersByTimeAsync(1000);
         await expect(searchPromise).resolves.toEqual({
             results: [{ videoId: "v1" }],
@@ -190,7 +196,7 @@ describe("youtubeMusic service", () => {
 
         mockClient.post.mockRejectedValueOnce({ response: { status: 400 } });
         await expect(
-            ytMusicService.search("u1", "bad query", "songs")
+            ytMusicService.search("u1", "bad query", "songs"),
         ).rejects.toEqual({ response: { status: 400 } });
     });
 
@@ -216,7 +222,7 @@ describe("youtubeMusic service", () => {
         });
 
         await expect(
-            ytMusicService.searchCanonical("u1", "artist one", "songs")
+            ytMusicService.searchCanonical("u1", "artist one", "songs"),
         ).resolves.toEqual({
             query: "artist one",
             filter: "songs",
@@ -246,10 +252,14 @@ describe("youtubeMusic service", () => {
             .mockResolvedValueOnce({ data: { channelId: "artist-1" } })
             .mockResolvedValueOnce({ data: { videoId: "song-1" } });
 
-        await expect(ytMusicService.getAlbum("u1", "album-1")).resolves.toEqual({
-            browseId: "album-1",
-        });
-        await expect(ytMusicService.getArtist("u1", "artist-1")).resolves.toEqual({
+        await expect(ytMusicService.getAlbum("u1", "album-1")).resolves.toEqual(
+            {
+                browseId: "album-1",
+            },
+        );
+        await expect(
+            ytMusicService.getArtist("u1", "artist-1"),
+        ).resolves.toEqual({
             channelId: "artist-1",
         });
         await expect(ytMusicService.getSong("u1", "song-1")).resolves.toEqual({
@@ -275,18 +285,23 @@ describe("youtubeMusic service", () => {
         const streamInfoPromise = ytMusicService.getStreamInfo(
             "u1",
             "vid-1",
-            "high"
+            "high",
         );
         await jest.advanceTimersByTimeAsync(1000);
         await expect(streamInfoPromise).resolves.toEqual(
-            expect.objectContaining({ videoId: "vid-1", abr: 160 })
+            expect.objectContaining({ videoId: "vid-1", abr: 160 }),
         );
         expect(mockClient.get).toHaveBeenLastCalledWith("/stream/vid-1", {
             params: { user_id: "u1", quality: "high" },
         });
 
         mockClient.get.mockResolvedValueOnce({ data: { pipe: jest.fn() } });
-        await ytMusicService.getStreamProxy("u1", "vid-2", "low", "bytes=0-512");
+        await ytMusicService.getStreamProxy(
+            "u1",
+            "vid-2",
+            "low",
+            "bytes=0-512",
+        );
         expect(mockClient.get).toHaveBeenLastCalledWith("/proxy/vid-2", {
             params: { user_id: "u1", quality: "low" },
             headers: { Range: "bytes=0-512" },
@@ -297,12 +312,12 @@ describe("youtubeMusic service", () => {
         mockClient.get
             .mockResolvedValueOnce({ data: { songs: [{ id: "s1" }] } })
             .mockResolvedValueOnce({ data: { albums: [{ id: "a1" }] } });
-        await expect(ytMusicService.getLibrarySongs("u1", 30)).resolves.toEqual([
-            { id: "s1" },
-        ]);
-        await expect(ytMusicService.getLibraryAlbums("u1", 30)).resolves.toEqual([
-            { id: "a1" },
-        ]);
+        await expect(ytMusicService.getLibrarySongs("u1", 30)).resolves.toEqual(
+            [{ id: "s1" }],
+        );
+        await expect(
+            ytMusicService.getLibraryAlbums("u1", 30),
+        ).resolves.toEqual([{ id: "a1" }]);
     });
 
     it("runs batch search and album matching with second-pass fallback", async () => {
@@ -379,7 +394,7 @@ describe("youtubeMusic service", () => {
 
     it("falls back to individual matching when batch search fails", async () => {
         jest.spyOn(ytMusicService, "searchBatch").mockRejectedValueOnce(
-            new Error("batch failed")
+            new Error("batch failed"),
         );
         const findMatchSpy = jest
             .spyOn(ytMusicService, "findMatchForTrack")
@@ -430,8 +445,8 @@ describe("youtubeMusic service", () => {
                 "Exact Artist",
                 "Song Title",
                 "Album X",
-                200
-            )
+                200,
+            ),
         ).resolves.toEqual({
             videoId: "good",
             title: "Song Title",
@@ -441,7 +456,9 @@ describe("youtubeMusic service", () => {
         searchSpy
             .mockRejectedValueOnce(new Error("filtered failed"))
             .mockResolvedValueOnce({
-                results: [{ videoId: "wrong", title: "Not It", artist: "Other" }],
+                results: [
+                    { videoId: "wrong", title: "Not It", artist: "Other" },
+                ],
                 total: 1,
             })
             .mockResolvedValueOnce({
@@ -464,8 +481,8 @@ describe("youtubeMusic service", () => {
                 "Right Artist",
                 "Final Song",
                 "Final Album",
-                225
-            )
+                225,
+            ),
         ).resolves.toEqual({
             videoId: "third-try",
             title: "Final Song",
@@ -506,7 +523,13 @@ describe("youtubeMusic service", () => {
             });
 
         await expect(
-            ytMusicService.findMatchForTrack("u1", "Artist", "Love Song", undefined, 200)
+            ytMusicService.findMatchForTrack(
+                "u1",
+                "Artist",
+                "Love Song",
+                undefined,
+                200,
+            ),
         ).resolves.toBeNull();
     });
 
@@ -531,8 +554,8 @@ describe("youtubeMusic service", () => {
                 "Exact Artist",
                 "Exact Track",
                 undefined,
-                210
-            )
+                210,
+            ),
         ).resolves.toEqual({
             videoId: "dur-num",
             title: "Exact Track",
@@ -559,7 +582,7 @@ describe("youtubeMusic service", () => {
         expect(mockClient.post).toHaveBeenCalledTimes(2);
         expect(logger.warn).toHaveBeenCalled();
         expect(logger.warn).toHaveBeenLastCalledWith(
-            "[YTMusic] search(timeoutless) failed (status=500, attempt=1/3), retrying in 750ms"
+            "[YTMusic] search(timeoutless) failed (status=500, attempt=1/3), retrying in 750ms",
         );
         randomSpy.mockRestore();
     });
@@ -621,7 +644,7 @@ describe("youtubeMusic service", () => {
         expect(searchBatchSpy).toHaveBeenCalledTimes(2);
         expect(logger.warn).toHaveBeenCalledWith(
             "[YTMusic] Batch fallback search failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -637,9 +660,17 @@ describe("youtubeMusic service", () => {
                 title: "Ambiguous Title",
             },
             [
-                { videoId: "first", title: "Ambiguous Title", artist: "Artist" },
-                { videoId: "second", title: "Ambiguous Title", artist: "Artist" },
-            ]
+                {
+                    videoId: "first",
+                    title: "Ambiguous Title",
+                    artist: "Artist",
+                },
+                {
+                    videoId: "second",
+                    title: "Ambiguous Title",
+                    artist: "Artist",
+                },
+            ],
         );
 
         expect(winner).toBeNull();
@@ -654,16 +685,11 @@ describe("youtubeMusic service", () => {
             .mockRejectedValueOnce(new Error("all failed"));
 
         await expect(
-            ytMusicService.findMatchForTrack(
-                "u1",
-                "Artist",
-                "Song",
-                "Album"
-            )
+            ytMusicService.findMatchForTrack("u1", "Artist", "Song", "Album"),
         ).resolves.toBeNull();
         expect(logger.warn).toHaveBeenCalledWith(
-            "[YTMusic] All search attempts failed for \"Artist - Song\":",
-            expect.any(Error)
+            '[YTMusic] All search attempts failed for "Artist - Song":',
+            expect.any(Error),
         );
     });
 });

@@ -52,14 +52,17 @@ test("queuesMatchByTrackId ignores null/blank IDs and trims identifier text", ()
 test("queuesMatchByTrackId returns false when normalized queue lengths differ", () => {
     assert.equal(
         queuesMatchByTrackId(queue(["track-1", "track-2"]), queue(["track-1"])),
-        false
+        false,
     );
 });
 
 test("queuesMatchByTrackId returns false when normalized order differs", () => {
     assert.equal(
-        queuesMatchByTrackId(queue(["track-1", "track-2"]), queue(["track-2", "track-1"])),
-        false
+        queuesMatchByTrackId(
+            queue(["track-1", "track-2"]),
+            queue(["track-2", "track-1"]),
+        ),
+        false,
     );
 });
 
@@ -67,16 +70,16 @@ test("isServerQueueTruncatedPrefix detects stale/truncated server queue snapshot
     assert.equal(
         isServerQueueTruncatedPrefix(
             queue(["track-1", "track-2", "track-3"]),
-            queue(["track-1", "track-2"])
+            queue(["track-1", "track-2"]),
         ),
-        true
+        true,
     );
     assert.equal(
         isServerQueueTruncatedPrefix(
             queue(["track-1", "track-2", "track-3"]),
-            queue(["track-1", "track-4"])
+            queue(["track-1", "track-4"]),
         ),
-        false
+        false,
     );
 });
 
@@ -84,8 +87,11 @@ test("isServerQueueTruncatedPrefix returns false for empty or non-truncated queu
     assert.equal(isServerQueueTruncatedPrefix(queue(["track-1"]), []), false);
     assert.equal(isServerQueueTruncatedPrefix([], queue(["track-1"])), false);
     assert.equal(
-        isServerQueueTruncatedPrefix(queue(["track-1", "track-2"]), queue(["track-1", "track-2"])),
-        false
+        isServerQueueTruncatedPrefix(
+            queue(["track-1", "track-2"]),
+            queue(["track-1", "track-2"]),
+        ),
+        false,
     );
 });
 
@@ -267,7 +273,7 @@ test("findRemoteQueueTrackForRestore materializes a pasted youtube-direct track 
 
     const restored = findRemoteQueueTrackForRestore(
         "yt-dQw4w9WgXcQ",
-        serverQueue
+        serverQueue,
     );
 
     assert.equal(restored, serverQueue[1]);
@@ -280,7 +286,7 @@ test("findRemoteQueueTrackForRestore materializes yt:-prefixed YouTube Music que
 
     const restored = findRemoteQueueTrackForRestore(
         "yt:abcdefghijk",
-        serverQueue
+        serverQueue,
     );
 
     assert.equal(restored, serverQueue[0]);
@@ -297,7 +303,7 @@ test("findRemoteQueueTrackForRestore matches remote queue items by stream source
 
     const restored = findRemoteQueueTrackForRestore(
         "direct-no-prefix",
-        serverQueue
+        serverQueue,
     );
 
     assert.equal(restored, serverQueue[0]);
@@ -308,16 +314,14 @@ test("findRemoteQueueTrackForRestore leaves library tracks to the library lookup
 
     assert.equal(
         findRemoteQueueTrackForRestore("clx0abc123def", serverQueue),
-        null
+        null,
     );
 });
 
 test("findRemoteQueueTrackForRestore returns null when the track is not in the queue", () => {
     assert.equal(
-        findRemoteQueueTrackForRestore("yt-dQw4w9WgXcQ", [
-            { id: "track-1" },
-        ]),
-        null
+        findRemoteQueueTrackForRestore("yt-dQw4w9WgXcQ", [{ id: "track-1" }]),
+        null,
     );
     assert.equal(findRemoteQueueTrackForRestore("yt-dQw4w9WgXcQ", null), null);
     assert.equal(findRemoteQueueTrackForRestore(null, [{ id: "x" }]), null);

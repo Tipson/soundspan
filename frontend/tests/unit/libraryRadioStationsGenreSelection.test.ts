@@ -15,7 +15,7 @@ test("keeps soundtrack genres visible when they meet radio minimums", () => {
 
     assert.ok(
         featured.some((genre) => genre.genre === "soundtracks"),
-        "Expected qualifying soundtrack genre to stay visible"
+        "Expected qualifying soundtrack genre to stay visible",
     );
     assert.equal(featured.length, 6);
 });
@@ -29,6 +29,6 @@ test("does not include soundtrack genres below the minimum track threshold", () 
 
     assert.ok(
         !featured.some((genre) => genre.genre === "soundtracks"),
-        "Expected below-threshold soundtrack genre to stay hidden"
+        "Expected below-threshold soundtrack genre to stay hidden",
     );
 });

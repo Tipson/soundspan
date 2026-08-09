@@ -21,7 +21,7 @@ const mockRequireAuth = jest.fn(
         };
 
         return next();
-    }
+    },
 );
 
 const mockLoggerError = jest.fn();
@@ -160,24 +160,32 @@ describe("share links routes integration", () => {
             toString: jest.fn(() => TOKEN),
         });
 
-        mockShareLinkCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-            id: "share-created",
-            revoked: false,
-            playCount: 0,
-            createdAt: CREATED_AT,
-            ...data,
-        }));
+        mockShareLinkCreate.mockImplementation(
+            async ({ data }: { data: Record<string, unknown> }) => ({
+                id: "share-created",
+                revoked: false,
+                playCount: 0,
+                createdAt: CREATED_AT,
+                ...data,
+            }),
+        );
         mockShareLinkFindMany.mockResolvedValue([]);
         mockShareLinkFindFirst.mockResolvedValue({ id: "share-1" });
         mockShareLinkFindUnique.mockResolvedValue(makeShareLink());
         mockShareLinkUpdate.mockResolvedValue({ id: "share-1", revoked: true });
         mockShareLinkUpdateMany.mockResolvedValue({ count: 1 });
 
-        mockPlaylistFindUnique.mockResolvedValue({ id: "playlist-1", userId: "user-1" });
+        mockPlaylistFindUnique.mockResolvedValue({
+            id: "playlist-1",
+            userId: "user-1",
+        });
         mockAlbumFindUnique.mockResolvedValue({ id: "album-1" });
         mockTrackFindUnique.mockResolvedValue(makeStreamableTrack());
         mockTrackFindFirst.mockResolvedValue(makeStreamableTrack());
-        mockPlaylistItemFindFirst.mockResolvedValue({ id: "playlist-item-1", trackId: "track-1" });
+        mockPlaylistItemFindFirst.mockResolvedValue({
+            id: "playlist-item-1",
+            trackId: "track-1",
+        });
 
         mockGetStreamFilePath.mockResolvedValue({
             filePath: "/test-music/Artist/Album/track.flac",
@@ -187,7 +195,7 @@ describe("share links routes integration", () => {
             async (_req: Request, res: Response) => {
                 res.status(200);
                 res.end();
-            }
+            },
         );
         mockDestroy.mockReturnValue(undefined);
 
@@ -203,17 +211,23 @@ describe("share links routes integration", () => {
         {
             resourceType: "playlist",
             resourceId: "playlist-1",
-            prime: () => mockPlaylistFindUnique.mockResolvedValueOnce({ id: "playlist-1", userId: "user-1" }),
+            prime: () =>
+                mockPlaylistFindUnique.mockResolvedValueOnce({
+                    id: "playlist-1",
+                    userId: "user-1",
+                }),
         },
         {
             resourceType: "album",
             resourceId: "album-1",
-            prime: () => mockAlbumFindUnique.mockResolvedValueOnce({ id: "album-1" }),
+            prime: () =>
+                mockAlbumFindUnique.mockResolvedValueOnce({ id: "album-1" }),
         },
         {
             resourceType: "track",
             resourceId: "track-1",
-            prime: () => mockTrackFindUnique.mockResolvedValueOnce({ id: "track-1" }),
+            prime: () =>
+                mockTrackFindUnique.mockResolvedValueOnce({ id: "track-1" }),
         },
     ])(
         "POST /api/share-links creates a tokenized share link for $resourceType",
@@ -244,9 +258,9 @@ describe("share links routes integration", () => {
                     resourceType,
                     resourceId,
                     accessPath: `/api/share-links/access/${TOKEN}`,
-                })
+                }),
             );
-        }
+        },
     );
 
     it("POST /api/share-links returns 404 when the resource does not exist", async () => {
@@ -273,21 +287,27 @@ describe("share links routes integration", () => {
             resourceId: "missing-track",
             prime: () => mockTrackFindUnique.mockResolvedValueOnce(null),
         },
-    ])("POST /api/share-links returns 404 for missing $resourceType resources", async ({ resourceType, resourceId, prime }) => {
-        prime();
+    ])(
+        "POST /api/share-links returns 404 for missing $resourceType resources",
+        async ({ resourceType, resourceId, prime }) => {
+            prime();
 
-        const res = await request(app)
-            .post("/api/share-links")
-            .set(AUTH_HEADER, AUTH_VALUE)
-            .send({ resourceType, resourceId });
+            const res = await request(app)
+                .post("/api/share-links")
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ resourceType, resourceId });
 
-        expect(res.status).toBe(404);
-        expect(res.body).toEqual({ error: "Resource not found" });
-        expect(mockShareLinkCreate).not.toHaveBeenCalled();
-    });
+            expect(res.status).toBe(404);
+            expect(res.body).toEqual({ error: "Resource not found" });
+            expect(mockShareLinkCreate).not.toHaveBeenCalled();
+        },
+    );
 
     it("POST /api/share-links rejects playlists the current user does not own", async () => {
-        mockPlaylistFindUnique.mockResolvedValueOnce({ id: "playlist-1", userId: "user-2" });
+        mockPlaylistFindUnique.mockResolvedValueOnce({
+            id: "playlist-1",
+            userId: "user-2",
+        });
 
         const res = await request(app)
             .post("/api/share-links")
@@ -303,22 +323,34 @@ describe("share links routes integration", () => {
         const res = await request(app)
             .post("/api/share-links")
             .set(AUTH_HEADER, AUTH_VALUE)
-            .send({ resourceType: "track", resourceId: "track-1", maxPlays: 0 });
+            .send({
+                resourceType: "track",
+                resourceId: "track-1",
+                maxPlays: 0,
+            });
 
         expect(res.status).toBe(400);
         expect(res.body).toEqual(
             expect.objectContaining({
                 error: "Invalid request",
                 details: expect.any(Array),
-            })
+            }),
         );
         expect(mockTrackFindUnique).not.toHaveBeenCalled();
     });
 
     it("GET /api/share-links returns non-revoked links for the current user", async () => {
         mockShareLinkFindMany.mockResolvedValueOnce([
-            makeShareLink({ id: "share-2", resourceType: "playlist", resourceId: "playlist-1" }),
-            makeShareLink({ id: "share-3", resourceType: "album", resourceId: "album-1" }),
+            makeShareLink({
+                id: "share-2",
+                resourceType: "playlist",
+                resourceId: "playlist-1",
+            }),
+            makeShareLink({
+                id: "share-3",
+                resourceType: "album",
+                resourceId: "album-1",
+            }),
         ]);
 
         const res = await request(app)
@@ -355,13 +387,19 @@ describe("share links routes integration", () => {
 
         expect(res.status).toBe(500);
         expect(res.body).toEqual({ error: "Failed to list share links" });
-        expect(mockLoggerError).toHaveBeenCalledWith("List share links error:", error);
+        expect(mockLoggerError).toHaveBeenCalledWith(
+            "List share links error:",
+            error,
+        );
     });
 
     it.each([
         {
             label: "POST /api/share-links",
-            run: () => request(app).post("/api/share-links").send({ resourceType: "track", resourceId: "track-1" }),
+            run: () =>
+                request(app)
+                    .post("/api/share-links")
+                    .send({ resourceType: "track", resourceId: "track-1" }),
         },
         {
             label: "GET /api/share-links",
@@ -413,7 +451,10 @@ describe("share links routes integration", () => {
     it.each([
         {
             resourceType: "playlist",
-            shareLink: makeShareLink({ resourceType: "playlist", resourceId: "playlist-1" }),
+            shareLink: makeShareLink({
+                resourceType: "playlist",
+                resourceId: "playlist-1",
+            }),
             resource: {
                 id: "playlist-1",
                 name: "Shared Playlist",
@@ -421,43 +462,60 @@ describe("share links routes integration", () => {
                 items: [],
                 pendingTracks: [],
             },
-            prime: () => mockPlaylistFindUnique.mockResolvedValueOnce({
-                id: "playlist-1",
-                name: "Shared Playlist",
-                user: { username: "owner" },
-                items: [],
-                pendingTracks: [],
-            }),
+            prime: () =>
+                mockPlaylistFindUnique.mockResolvedValueOnce({
+                    id: "playlist-1",
+                    name: "Shared Playlist",
+                    user: { username: "owner" },
+                    items: [],
+                    pendingTracks: [],
+                }),
         },
         {
             resourceType: "album",
-            shareLink: makeShareLink({ resourceType: "album", resourceId: "album-1" }),
+            shareLink: makeShareLink({
+                resourceType: "album",
+                resourceId: "album-1",
+            }),
             resource: {
                 id: "album-1",
                 title: "Album One",
                 artist: { id: "artist-1", name: "Artist One", mbid: null },
                 tracks: [],
             },
-            prime: () => mockAlbumFindUnique.mockResolvedValueOnce({
-                id: "album-1",
-                title: "Album One",
-                artist: { id: "artist-1", name: "Artist One", mbid: null },
-                tracks: [],
-            }),
+            prime: () =>
+                mockAlbumFindUnique.mockResolvedValueOnce({
+                    id: "album-1",
+                    title: "Album One",
+                    artist: { id: "artist-1", name: "Artist One", mbid: null },
+                    tracks: [],
+                }),
         },
         {
             resourceType: "track",
-            shareLink: makeShareLink({ resourceType: "track", resourceId: "track-1", maxPlays: 2, playCount: 1 }),
+            shareLink: makeShareLink({
+                resourceType: "track",
+                resourceId: "track-1",
+                maxPlays: 2,
+                playCount: 1,
+            }),
             resource: {
                 id: "track-1",
                 title: "Track One",
-                album: { id: "album-1", artist: { id: "artist-1", name: "Artist One" } },
+                album: {
+                    id: "album-1",
+                    artist: { id: "artist-1", name: "Artist One" },
+                },
             },
-            prime: () => mockTrackFindUnique.mockResolvedValueOnce({
-                id: "track-1",
-                title: "Track One",
-                album: { id: "album-1", artist: { id: "artist-1", name: "Artist One" } },
-            }),
+            prime: () =>
+                mockTrackFindUnique.mockResolvedValueOnce({
+                    id: "track-1",
+                    title: "Track One",
+                    album: {
+                        id: "album-1",
+                        artist: { id: "artist-1", name: "Artist One" },
+                    },
+                }),
         },
     ])(
         "GET /api/share-links/access/:token returns the shared $resourceType resource without auth",
@@ -465,11 +523,13 @@ describe("share links routes integration", () => {
             mockShareLinkFindUnique.mockResolvedValueOnce(shareLink);
             prime();
 
-            const res = await request(app).get(`/api/share-links/access/${TOKEN}`);
+            const res = await request(app).get(
+                `/api/share-links/access/${TOKEN}`,
+            );
 
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ resourceType, resource });
-        }
+        },
     );
 
     describe("GET /api/share-links/access/:token — play count", () => {
@@ -479,15 +539,20 @@ describe("share links routes integration", () => {
                     resourceType: "track",
                     resourceId: "track-1",
                     lastStreamedAt: null,
-                })
+                }),
             );
             mockTrackFindUnique.mockResolvedValueOnce({
                 id: "track-1",
                 title: "Track One",
-                album: { id: "album-1", artist: { id: "artist-1", name: "Artist One" } },
+                album: {
+                    id: "album-1",
+                    artist: { id: "artist-1", name: "Artist One" },
+                },
             });
 
-            const res = await request(app).get(`/api/share-links/access/${TOKEN}`);
+            const res = await request(app).get(
+                `/api/share-links/access/${TOKEN}`,
+            );
 
             expect(res.status).toBe(200);
             expect(mockShareLinkUpdateMany).toHaveBeenCalledWith(
@@ -496,7 +561,7 @@ describe("share links routes integration", () => {
                         playCount: { increment: 1 },
                         lastStreamedAt: expect.any(Date),
                     }),
-                })
+                }),
             );
             expect(mockShareLinkUpdate).not.toHaveBeenCalled();
         });
@@ -508,15 +573,20 @@ describe("share links routes integration", () => {
                     resourceType: "track",
                     resourceId: "track-1",
                     lastStreamedAt: recentStream,
-                })
+                }),
             );
             mockTrackFindUnique.mockResolvedValueOnce({
                 id: "track-1",
                 title: "Track One",
-                album: { id: "album-1", artist: { id: "artist-1", name: "Artist One" } },
+                album: {
+                    id: "album-1",
+                    artist: { id: "artist-1", name: "Artist One" },
+                },
             });
 
-            const res = await request(app).get(`/api/share-links/access/${TOKEN}`);
+            const res = await request(app).get(
+                `/api/share-links/access/${TOKEN}`,
+            );
 
             expect(res.status).toBe(200);
             expect(mockShareLinkUpdateMany).not.toHaveBeenCalled();
@@ -533,10 +603,12 @@ describe("share links routes integration", () => {
                     resourceId: "track-1",
                     maxPlays: 3,
                     playCount: 3,
-                })
+                }),
             );
 
-            const res = await request(app).get(`/api/share-links/access/${TOKEN}`);
+            const res = await request(app).get(
+                `/api/share-links/access/${TOKEN}`,
+            );
 
             expect(res.status).toBe(404);
             expect(res.body).toEqual({ error: "Share link not found" });
@@ -551,7 +623,7 @@ describe("share links routes integration", () => {
                 resourceType: "album",
                 resourceId: "album-missing",
                 lastStreamedAt: new Date(Date.now() - 5 * 60 * 1000),
-            })
+            }),
         );
         mockAlbumFindUnique.mockResolvedValueOnce(null);
 
@@ -571,47 +643,75 @@ describe("share links routes integration", () => {
         async (shareLink) => {
             mockShareLinkFindUnique.mockResolvedValueOnce(shareLink);
 
-            const res = await request(app).get(`/api/share-links/access/${TOKEN}`);
+            const res = await request(app).get(
+                `/api/share-links/access/${TOKEN}`,
+            );
 
             expect(res.status).toBe(404);
             expect(res.body).toEqual({ error: "Share link not found" });
             expect(mockShareLinkUpdateMany).not.toHaveBeenCalled();
-        }
+        },
     );
 
     it.each([
         {
             label: "track share links",
-            shareLink: makeShareLink({ resourceType: "track", resourceId: "track-1" }),
+            shareLink: makeShareLink({
+                resourceType: "track",
+                resourceId: "track-1",
+            }),
             prime: () => {
-                mockTrackFindUnique.mockResolvedValueOnce(makeStreamableTrack());
+                mockTrackFindUnique.mockResolvedValueOnce(
+                    makeStreamableTrack(),
+                );
             },
             assertOwnership: () => {
                 expect(mockTrackFindUnique).toHaveBeenCalledWith({
                     where: { id: "track-1" },
-                    select: { id: true, title: true, filePath: true, fileModified: true },
+                    select: {
+                        id: true,
+                        title: true,
+                        filePath: true,
+                        fileModified: true,
+                    },
                 });
             },
         },
         {
             label: "album share links",
-            shareLink: makeShareLink({ resourceType: "album", resourceId: "album-1" }),
+            shareLink: makeShareLink({
+                resourceType: "album",
+                resourceId: "album-1",
+            }),
             prime: () => {
                 mockTrackFindFirst.mockResolvedValueOnce(makeStreamableTrack());
             },
             assertOwnership: () => {
                 expect(mockTrackFindFirst).toHaveBeenCalledWith({
                     where: { id: "track-1", albumId: "album-1" },
-                    select: { id: true, title: true, filePath: true, fileModified: true },
+                    select: {
+                        id: true,
+                        title: true,
+                        filePath: true,
+                        fileModified: true,
+                    },
                 });
             },
         },
         {
             label: "playlist share links",
-            shareLink: makeShareLink({ resourceType: "playlist", resourceId: "playlist-1" }),
+            shareLink: makeShareLink({
+                resourceType: "playlist",
+                resourceId: "playlist-1",
+            }),
             prime: () => {
-                mockPlaylistItemFindFirst.mockResolvedValueOnce({ id: "playlist-item-1", trackId: "track-1" });
-                mockTrackFindUnique.mockResolvedValueOnce(makeStreamableTrack());
+                mockPlaylistItemFindFirst.mockResolvedValueOnce({
+                    id: "playlist-item-1",
+                    trackId: "track-1",
+                });
+                mockTrackFindUnique.mockResolvedValueOnce(
+                    makeStreamableTrack(),
+                );
             },
             assertOwnership: () => {
                 expect(mockPlaylistItemFindFirst).toHaveBeenCalledWith({
@@ -633,33 +733,39 @@ describe("share links routes integration", () => {
             expect(mockAudioStreamingService).toHaveBeenCalledWith(
                 "/test-music",
                 "/test-cache",
-                5
+                5,
             );
             expect(mockGetStreamFilePath).toHaveBeenCalledWith(
                 "track-1",
                 "original",
                 FILE_MODIFIED,
-                "/test-music/Artist/Album/track.flac"
+                "/test-music/Artist/Album/track.flac",
             );
             expect(mockStreamFileWithRangeSupport).toHaveBeenCalledWith(
                 expect.objectContaining({ params: expect.any(Object) }),
                 expect.any(Object),
                 "/test-music/Artist/Album/track.flac",
-                "audio/flac"
+                "audio/flac",
             );
             expect(mockDestroy).toHaveBeenCalledTimes(1);
             expect(res.headers["content-disposition"]).toContain("attachment;");
             assertOwnership();
-        }
+        },
     );
 
     it("GET /api/share-links/access/:token/stream/:trackId on a new session only updates lastStreamedAt", async () => {
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "track", resourceId: "track-1", lastStreamedAt: null })
+            makeShareLink({
+                resourceType: "track",
+                resourceId: "track-1",
+                lastStreamedAt: null,
+            }),
         );
         mockTrackFindUnique.mockResolvedValueOnce(makeStreamableTrack());
 
-        await request(app).get(`/api/share-links/access/${TOKEN}/stream/track-1`);
+        await request(app).get(
+            `/api/share-links/access/${TOKEN}/stream/track-1`,
+        );
 
         expect(mockShareLinkUpdateMany).not.toHaveBeenCalled();
         expect(mockShareLinkUpdate).toHaveBeenCalledWith({
@@ -671,29 +777,39 @@ describe("share links routes integration", () => {
     it("GET /api/share-links/access/:token/stream/:trackId on an existing session only updates lastStreamedAt", async () => {
         const recentStream = new Date(Date.now() - 5 * 60 * 1000);
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "track", resourceId: "track-1", lastStreamedAt: recentStream })
+            makeShareLink({
+                resourceType: "track",
+                resourceId: "track-1",
+                lastStreamedAt: recentStream,
+            }),
         );
         mockTrackFindUnique.mockResolvedValueOnce(makeStreamableTrack());
 
-        await request(app).get(`/api/share-links/access/${TOKEN}/stream/track-1`);
+        await request(app).get(
+            `/api/share-links/access/${TOKEN}/stream/track-1`,
+        );
 
         expect(mockShareLinkUpdateMany).not.toHaveBeenCalled();
-        expect(mockShareLinkUpdate).toHaveBeenCalledWith(
-            {
-                where: { id: "share-1" },
-                data: { lastStreamedAt: expect.any(Date) },
-            }
-        );
+        expect(mockShareLinkUpdate).toHaveBeenCalledWith({
+            where: { id: "share-1" },
+            data: { lastStreamedAt: expect.any(Date) },
+        });
     });
 
     it("GET /api/share-links/access/:token/stream/:trackId after the session window still only updates lastStreamedAt", async () => {
         const oldStream = new Date(Date.now() - 2 * 60 * 60 * 1000);
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "track", resourceId: "track-1", lastStreamedAt: oldStream })
+            makeShareLink({
+                resourceType: "track",
+                resourceId: "track-1",
+                lastStreamedAt: oldStream,
+            }),
         );
         mockTrackFindUnique.mockResolvedValueOnce(makeStreamableTrack());
 
-        await request(app).get(`/api/share-links/access/${TOKEN}/stream/track-1`);
+        await request(app).get(
+            `/api/share-links/access/${TOKEN}/stream/track-1`,
+        );
 
         expect(mockShareLinkUpdateMany).not.toHaveBeenCalled();
         expect(mockShareLinkUpdate).toHaveBeenCalledWith({
@@ -704,10 +820,17 @@ describe("share links routes integration", () => {
 
     it("GET /api/share-links/access/:token/stream/:trackId rejects when maxPlays is reached", async () => {
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "track", resourceId: "track-1", maxPlays: 3, playCount: 3 })
+            makeShareLink({
+                resourceType: "track",
+                resourceId: "track-1",
+                maxPlays: 3,
+                playCount: 3,
+            }),
         );
 
-        const res = await request(app).get(`/api/share-links/access/${TOKEN}/stream/track-1`);
+        const res = await request(app).get(
+            `/api/share-links/access/${TOKEN}/stream/track-1`,
+        );
 
         expect(res.status).toBe(404);
         expect(mockShareLinkUpdateMany).not.toHaveBeenCalled();
@@ -716,7 +839,10 @@ describe("share links routes integration", () => {
 
     it("GET /api/share-links/access/:token returns playlist items without trackTidal or trackYtMusic fields", async () => {
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "playlist", resourceId: "playlist-1" })
+            makeShareLink({
+                resourceType: "playlist",
+                resourceId: "playlist-1",
+            }),
         );
         mockPlaylistFindUnique.mockResolvedValueOnce({
             id: "playlist-1",
@@ -758,7 +884,7 @@ describe("share links routes integration", () => {
         "GET /api/share-links/access/:token/cover rejects path traversal attempt: %s",
         async (maliciousUrl) => {
             mockShareLinkFindUnique.mockResolvedValueOnce(
-                makeShareLink({ resourceType: "album", resourceId: "album-1" })
+                makeShareLink({ resourceType: "album", resourceId: "album-1" }),
             );
 
             const res = await request(app)
@@ -768,12 +894,12 @@ describe("share links routes integration", () => {
             expect(res.status).toBe(404);
             expect(res.body).toEqual({ error: "Cover image not found" });
             expect(mockFetchExternalImage).not.toHaveBeenCalled();
-        }
+        },
     );
 
     it("GET /api/share-links/access/:token/cover proxies external cover art without auth", async () => {
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "album", resourceId: "album-1" })
+            makeShareLink({ resourceType: "album", resourceId: "album-1" }),
         );
 
         const res = await request(app)
@@ -792,10 +918,12 @@ describe("share links routes integration", () => {
 
     it("GET /api/share-links/access/:token/cover validates the url parameter", async () => {
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "album", resourceId: "album-1" })
+            makeShareLink({ resourceType: "album", resourceId: "album-1" }),
         );
 
-        const res = await request(app).get(`/api/share-links/access/${TOKEN}/cover`);
+        const res = await request(app).get(
+            `/api/share-links/access/${TOKEN}/cover`,
+        );
 
         expect(res.status).toBe(400);
         expect(res.body).toEqual({ error: "Missing url parameter" });
@@ -804,7 +932,7 @@ describe("share links routes integration", () => {
 
     it("GET /api/share-links/access/:token/cover returns 404 when the proxied image is unavailable", async () => {
         mockShareLinkFindUnique.mockResolvedValueOnce(
-            makeShareLink({ resourceType: "album", resourceId: "album-1" })
+            makeShareLink({ resourceType: "album", resourceId: "album-1" }),
         );
         mockFetchExternalImage.mockResolvedValueOnce({ ok: false });
 

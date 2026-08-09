@@ -20,7 +20,7 @@ function isPlaybackActive(): boolean {
 function maybeActivateWaitingWorker(
     registration: BrowserServiceWorkerRegistration,
     context: string,
-    deferredLogRef: { value: boolean }
+    deferredLogRef: { value: boolean },
 ) {
     const waitingWorker = registration.waiting;
     if (!waitingWorker) {
@@ -31,10 +31,9 @@ function maybeActivateWaitingWorker(
     if (isPlaybackActive()) {
         if (!deferredLogRef.value) {
             deferredLogRef.value = true;
-            logger.info(
-                "Update ready but deferred while playback is active",
-                { context }
-            );
+            logger.info("Update ready but deferred while playback is active", {
+                context,
+            });
         }
         return;
     }
@@ -67,13 +66,13 @@ export function ServiceWorkerRegistration() {
             maybeActivateWaitingWorker(
                 registrationRef,
                 "visibilitychange",
-                deferredLogRef
+                deferredLogRef,
             );
         };
 
         navigator.serviceWorker.addEventListener(
             "controllerchange",
-            handleControllerChange
+            handleControllerChange,
         );
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -92,7 +91,7 @@ export function ServiceWorkerRegistration() {
 
                         installingWorker.removeEventListener(
                             "statechange",
-                            handleInstallingStateChange
+                            handleInstallingStateChange,
                         );
 
                         if (!navigator.serviceWorker.controller) return;
@@ -100,17 +99,20 @@ export function ServiceWorkerRegistration() {
                         maybeActivateWaitingWorker(
                             registration,
                             "updatefound",
-                            deferredLogRef
+                            deferredLogRef,
                         );
                     };
 
                     installingWorker.addEventListener(
                         "statechange",
-                        handleInstallingStateChange
+                        handleInstallingStateChange,
                     );
                 };
 
-                registration.addEventListener("updatefound", updateFoundHandler);
+                registration.addEventListener(
+                    "updatefound",
+                    updateFoundHandler,
+                );
 
                 logger.info("Service worker registered", {
                     scope: registration.scope,
@@ -118,7 +120,7 @@ export function ServiceWorkerRegistration() {
                 maybeActivateWaitingWorker(
                     registration,
                     "register",
-                    deferredLogRef
+                    deferredLogRef,
                 );
 
                 waitingWorkerIntervalId = window.setInterval(() => {
@@ -126,7 +128,7 @@ export function ServiceWorkerRegistration() {
                     maybeActivateWaitingWorker(
                         registrationRef,
                         "poll",
-                        deferredLogRef
+                        deferredLogRef,
                     );
                 }, WAITING_WORKER_CHECK_INTERVAL_MS);
             })
@@ -144,17 +146,17 @@ export function ServiceWorkerRegistration() {
 
             document.removeEventListener(
                 "visibilitychange",
-                handleVisibilityChange
+                handleVisibilityChange,
             );
             navigator.serviceWorker.removeEventListener(
                 "controllerchange",
-                handleControllerChange
+                handleControllerChange,
             );
 
             if (registrationRef && updateFoundHandler) {
                 registrationRef.removeEventListener(
                     "updatefound",
-                    updateFoundHandler
+                    updateFoundHandler,
                 );
             }
         };

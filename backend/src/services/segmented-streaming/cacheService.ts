@@ -2,10 +2,7 @@ import { promises as fsPromises } from "fs";
 import path from "path";
 import { config } from "../../config";
 import { logger } from "../../utils/logger";
-import {
-    buildCachePath,
-    buildSha256CacheKey,
-} from "../cacheHelpers";
+import { buildCachePath, buildSha256CacheKey } from "../cacheHelpers";
 
 const MANIFEST_FILE_NAME = "manifest.mpd";
 const DASH_SEGMENT_FILE_REGEX = /\.(m4s|webm)$/i;
@@ -13,8 +10,7 @@ const SEGMENTED_CACHE_BASE_PATH_ENV = "SEGMENTED_STREAMING_CACHE_PATH";
 const SEGMENTED_CACHE_MAX_GB_ENV = "SEGMENTED_STREAMING_CACHE_MAX_GB";
 const SEGMENTED_CACHE_PRUNE_INTERVAL_MS_ENV =
     "SEGMENTED_STREAMING_CACHE_PRUNE_INTERVAL_MS";
-const SEGMENTED_CACHE_MIN_AGE_MS_ENV =
-    "SEGMENTED_STREAMING_CACHE_MIN_AGE_MS";
+const SEGMENTED_CACHE_MIN_AGE_MS_ENV = "SEGMENTED_STREAMING_CACHE_MIN_AGE_MS";
 const SEGMENTED_CACHE_PRUNE_TARGET_RATIO_ENV =
     "SEGMENTED_STREAMING_CACHE_PRUNE_TARGET_RATIO";
 const SEGMENTED_CACHE_SCHEMA_VERSION_ENV =
@@ -91,7 +87,9 @@ class SegmentedStreamingCacheService {
         };
     }
 
-    async ensureDashAssetDirectory(cacheKey: string): Promise<LocalDashAssetPaths> {
+    async ensureDashAssetDirectory(
+        cacheKey: string,
+    ): Promise<LocalDashAssetPaths> {
         const paths = this.getDashAssetPaths(cacheKey);
         await fsPromises.mkdir(paths.outputDir, { recursive: true });
         return paths;
@@ -185,7 +183,10 @@ class SegmentedStreamingCacheService {
         const now = Date.now();
 
         const entries = await this.collectDashCacheDirectoryStats();
-        let totalBytes = entries.reduce((sum, entry) => sum + entry.sizeBytes, 0);
+        let totalBytes = entries.reduce(
+            (sum, entry) => sum + entry.sizeBytes,
+            0,
+        );
         const totalBytesBefore = totalBytes;
         let removedEntries = 0;
         let skippedActiveEntries = 0;
@@ -263,7 +264,9 @@ class SegmentedStreamingCacheService {
         };
     }
 
-    private async collectDashCacheDirectoryStats(): Promise<DashCacheDirectoryStat[]> {
+    private async collectDashCacheDirectoryStats(): Promise<
+        DashCacheDirectoryStat[]
+    > {
         let rootEntries: Array<{ name: string; isDirectory: () => boolean }>;
         try {
             rootEntries = await fsPromises.readdir(this.dashCacheRoot, {
@@ -392,10 +395,11 @@ const resolveSegmentedCacheSchemaVersion = (): string => {
 
 const resolveSegmentedCacheMaxBytes = (): number => {
     const explicitMaxGb = parsePositiveNumberEnv(SEGMENTED_CACHE_MAX_GB_ENV);
-    const fallbackMaxGb = Number.isFinite(config.music.transcodeCacheMaxGb) &&
+    const fallbackMaxGb =
+        Number.isFinite(config.music.transcodeCacheMaxGb) &&
         config.music.transcodeCacheMaxGb > 0
-        ? config.music.transcodeCacheMaxGb
-        : DEFAULT_SEGMENTED_CACHE_MAX_GB;
+            ? config.music.transcodeCacheMaxGb
+            : DEFAULT_SEGMENTED_CACHE_MAX_GB;
 
     const maxGb = explicitMaxGb ?? fallbackMaxGb;
     return Math.floor(maxGb * BYTES_PER_GB);
@@ -424,4 +428,5 @@ const resolveSegmentedCachePruneTargetRatio = (): number => {
     return Math.min(Math.max(configuredRatio, 0.1), 0.99);
 };
 
-export const segmentedStreamingCacheService = new SegmentedStreamingCacheService();
+export const segmentedStreamingCacheService =
+    new SegmentedStreamingCacheService();

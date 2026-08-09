@@ -99,7 +99,10 @@ import { createRouteTestApp } from "./helpers/createRouteTestApp";
 const app = createRouteTestApp("/api/browse", router);
 
 function makeTempImagePath(): string {
-    const filePath = path.join(os.tmpdir(), `browse-branch-${Date.now()}-${Math.random()}.img`);
+    const filePath = path.join(
+        os.tmpdir(),
+        `browse-branch-${Date.now()}-${Math.random()}.img`,
+    );
     fs.writeFileSync(filePath, Buffer.from([0xff, 0xd8, 0xff]));
     return filePath;
 }
@@ -118,7 +121,10 @@ describe("browse branch coverage", () => {
         ytMusicService.getMoodCategories.mockResolvedValue([]);
         ytMusicService.getHome.mockResolvedValue([]);
         ytMusicService.getMoodPlaylists.mockResolvedValue([]);
-        ytMusicService.getBrowsePlaylist.mockResolvedValue({ id: "pl-1", tracks: [] });
+        ytMusicService.getBrowsePlaylist.mockResolvedValue({
+            id: "pl-1",
+            tracks: [],
+        });
         ytMusicService.getBrowseAlbum.mockResolvedValue({
             title: "album",
             artist: "artist",
@@ -131,11 +137,16 @@ describe("browse branch coverage", () => {
 
         tidalStreamingService.isEnabled.mockResolvedValue(true);
         tidalStreamingService.isAvailable.mockResolvedValue(true);
-        tidalStreamingService.getAuthStatus.mockResolvedValue({ authenticated: true });
+        tidalStreamingService.getAuthStatus.mockResolvedValue({
+            authenticated: true,
+        });
         tidalStreamingService.getUserPreferredQuality.mockResolvedValue("HIGH");
         tidalStreamingService.getHomeShelves.mockResolvedValue([]);
         tidalStreamingService.getGenrePlaylists.mockResolvedValue([]);
-        tidalStreamingService.getBrowsePlaylist.mockResolvedValue({ id: "tidal-pl", tracks: [] });
+        tidalStreamingService.getBrowsePlaylist.mockResolvedValue({
+            id: "tidal-pl",
+            tracks: [],
+        });
 
         getBrowseImageFromCache.mockReturnValue(null);
         fetchAndCacheBrowseImage.mockResolvedValue(null);
@@ -143,7 +154,10 @@ describe("browse branch coverage", () => {
 
     describe("POST /api/browse/playlists/parse", () => {
         it("parses deezer URL without scheme via candidate normalization", async () => {
-            deezerService.parseUrl.mockReturnValueOnce({ type: "playlist", id: "dz-no-scheme" });
+            deezerService.parseUrl.mockReturnValueOnce({
+                type: "playlist",
+                id: "dz-no-scheme",
+            });
 
             const res = await request(app)
                 .post("/api/browse/playlists/parse")
@@ -160,7 +174,10 @@ describe("browse branch coverage", () => {
         });
 
         it("supports play.spotify.com host and ignores non-playlist parse results", async () => {
-            spotifyService.parseUrl.mockReturnValueOnce({ type: "album", id: "album-1" });
+            spotifyService.parseUrl.mockReturnValueOnce({
+                type: "album",
+                id: "album-1",
+            });
 
             const res = await request(app)
                 .post("/api/browse/playlists/parse")
@@ -185,7 +202,9 @@ describe("browse branch coverage", () => {
             const res = await request(app)
                 .post("/api/browse/playlists/parse")
                 .set(AUTH_HEADER, AUTH_VALUE)
-                .send({ url: "https://music.youtube.com/playlist?list=BAD!ID" });
+                .send({
+                    url: "https://music.youtube.com/playlist?list=BAD!ID",
+                });
 
             expect(res.status).toBe(400);
             expect(res.body.error).toMatch(/unsupported/i);
@@ -208,7 +227,9 @@ describe("browse branch coverage", () => {
                 .get("/api/browse/ytmusic/image")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(missing.status).toBe(400);
-            expect(missing.body).toEqual({ error: "url query parameter is required" });
+            expect(missing.body).toEqual({
+                error: "url query parameter is required",
+            });
 
             const invalid = await request(app)
                 .get("/api/browse/ytmusic/image?url=this-is-not-a-url")
@@ -217,7 +238,9 @@ describe("browse branch coverage", () => {
             expect(invalid.body).toEqual({ error: "Invalid URL" });
 
             const disallowed = await request(app)
-                .get("/api/browse/ytmusic/image?url=https://example.com/nope.jpg")
+                .get(
+                    "/api/browse/ytmusic/image?url=https://example.com/nope.jpg",
+                )
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(disallowed.status).toBe(400);
             expect(disallowed.body).toEqual({ error: "URL host not allowed" });
@@ -232,7 +255,9 @@ describe("browse branch coverage", () => {
 
             try {
                 const res = await request(app)
-                    .get("/api/browse/ytmusic/image?url=https://i.ytimg.com/vi/xyz/default.jpg")
+                    .get(
+                        "/api/browse/ytmusic/image?url=https://i.ytimg.com/vi/xyz/default.jpg",
+                    )
                     .set(AUTH_HEADER, AUTH_VALUE);
 
                 expect(res.status).toBe(200);
@@ -250,7 +275,9 @@ describe("browse branch coverage", () => {
 
             try {
                 const res = await request(app)
-                    .get("/api/browse/ytmusic/image?url=https://i.ytimg.com/vi/abc/default.jpg")
+                    .get(
+                        "/api/browse/ytmusic/image?url=https://i.ytimg.com/vi/abc/default.jpg",
+                    )
                     .set(AUTH_HEADER, AUTH_VALUE);
 
                 expect(res.status).toBe(200);
@@ -262,7 +289,9 @@ describe("browse branch coverage", () => {
 
         it("returns 404 when ytmusic image fetch misses", async () => {
             const res = await request(app)
-                .get("/api/browse/ytmusic/image?url=https://lh3.googleusercontent.com/x")
+                .get(
+                    "/api/browse/ytmusic/image?url=https://lh3.googleusercontent.com/x",
+                )
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(404);
@@ -280,7 +309,9 @@ describe("browse branch coverage", () => {
 
         it("returns 404 when tidal image fetch misses", async () => {
             const res = await request(app)
-                .get("/api/browse/tidal/image?url=https://resources.tidal.com/images/missing.jpg")
+                .get(
+                    "/api/browse/tidal/image?url=https://resources.tidal.com/images/missing.jpg",
+                )
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(404);
@@ -296,7 +327,9 @@ describe("browse branch coverage", () => {
 
             try {
                 const res = await request(app)
-                    .get("/api/browse/tidal/image?url=https://resources.tidal.com/images/cached.jpg")
+                    .get(
+                        "/api/browse/tidal/image?url=https://resources.tidal.com/images/cached.jpg",
+                    )
                     .set(AUTH_HEADER, AUTH_VALUE);
 
                 expect(res.status).toBe(200);
@@ -309,7 +342,9 @@ describe("browse branch coverage", () => {
 
     describe("ytmusic availability and error branches", () => {
         it("returns 403 when ytmusic integration is disabled", async () => {
-            mockGetSystemSettings.mockResolvedValueOnce({ ytMusicEnabled: false });
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
 
             const res = await request(app)
                 .get("/api/browse/ytmusic/charts")
@@ -329,11 +364,15 @@ describe("browse branch coverage", () => {
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(429);
-            expect(res.body).toEqual({ error: "Invalid request for home content" });
+            expect(res.body).toEqual({
+                error: "Invalid request for home content",
+            });
         });
 
         it("returns 500 for ytmusic charts failures", async () => {
-            ytMusicService.getCharts.mockRejectedValueOnce(new Error("charts down"));
+            ytMusicService.getCharts.mockRejectedValueOnce(
+                new Error("charts down"),
+            );
 
             const res = await request(app)
                 .get("/api/browse/ytmusic/charts")
@@ -359,13 +398,17 @@ describe("browse branch coverage", () => {
         });
 
         it("covers ytmusic categories disabled, cached, and 500 branches", async () => {
-            mockGetSystemSettings.mockResolvedValueOnce({ ytMusicEnabled: false });
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
             const disabled = await request(app)
                 .get("/api/browse/ytmusic/categories")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(disabled.status).toBe(403);
 
-            ytMusicService.getMoodCategories.mockResolvedValue([{ title: "Focus", params: "f" }]);
+            ytMusicService.getMoodCategories.mockResolvedValue([
+                { title: "Focus", params: "f" },
+            ]);
             const first = await request(app)
                 .get("/api/browse/ytmusic/categories")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -377,22 +420,30 @@ describe("browse branch coverage", () => {
             expect(ytMusicService.getMoodCategories).toHaveBeenCalledTimes(1);
 
             _resetYtBrowseCache();
-            ytMusicService.getMoodCategories.mockRejectedValueOnce(new Error("categories down"));
+            ytMusicService.getMoodCategories.mockRejectedValueOnce(
+                new Error("categories down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/ytmusic/categories")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({ error: "Failed to fetch categories" });
+            expect(failing.body).toEqual({
+                error: "Failed to fetch categories",
+            });
         });
 
         it("covers ytmusic home disabled, cached, and generic 500 branches", async () => {
-            mockGetSystemSettings.mockResolvedValueOnce({ ytMusicEnabled: false });
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
             const disabled = await request(app)
                 .get("/api/browse/ytmusic/home")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(disabled.status).toBe(403);
 
-            ytMusicService.getHome.mockResolvedValue([{ title: "For You", contents: [] }]);
+            ytMusicService.getHome.mockResolvedValue([
+                { title: "For You", contents: [] },
+            ]);
             const first = await request(app)
                 .get("/api/browse/ytmusic/home?limit=6")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -404,12 +455,16 @@ describe("browse branch coverage", () => {
             expect(ytMusicService.getHome).toHaveBeenCalledTimes(1);
 
             _resetYtBrowseCache();
-            ytMusicService.getHome.mockRejectedValueOnce(new Error("home down"));
+            ytMusicService.getHome.mockRejectedValueOnce(
+                new Error("home down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/ytmusic/home")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({ error: "Failed to fetch home content" });
+            expect(failing.body).toEqual({
+                error: "Failed to fetch home content",
+            });
         });
 
         it("rejects overly long ytmusic mood params", async () => {
@@ -420,7 +475,9 @@ describe("browse branch coverage", () => {
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(400);
-            expect(res.body.error).toMatch(/required and must be a non-empty string/i);
+            expect(res.body.error).toMatch(
+                /required and must be a non-empty string/i,
+            );
         });
 
         it("maps ytmusic mood-playlists 4xx without detail to fallback message", async () => {
@@ -433,17 +490,23 @@ describe("browse branch coverage", () => {
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(400);
-            expect(res.body).toEqual({ error: "Invalid request for mood playlists" });
+            expect(res.body).toEqual({
+                error: "Invalid request for mood playlists",
+            });
         });
 
         it("covers ytmusic mood-playlists disabled, cached, and generic 500 branches", async () => {
-            mockGetSystemSettings.mockResolvedValueOnce({ ytMusicEnabled: false });
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
             const disabled = await request(app)
                 .get("/api/browse/ytmusic/mood-playlists?params=focus")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(disabled.status).toBe(403);
 
-            ytMusicService.getMoodPlaylists.mockResolvedValue([{ playlistId: "1" }]);
+            ytMusicService.getMoodPlaylists.mockResolvedValue([
+                { playlistId: "1" },
+            ]);
             const first = await request(app)
                 .get("/api/browse/ytmusic/mood-playlists?params=focus")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -455,16 +518,22 @@ describe("browse branch coverage", () => {
             expect(ytMusicService.getMoodPlaylists).toHaveBeenCalledTimes(1);
 
             _resetYtBrowseCache();
-            ytMusicService.getMoodPlaylists.mockRejectedValueOnce(new Error("mood down"));
+            ytMusicService.getMoodPlaylists.mockRejectedValueOnce(
+                new Error("mood down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/ytmusic/mood-playlists?params=focus")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({ error: "Failed to fetch mood playlists" });
+            expect(failing.body).toEqual({
+                error: "Failed to fetch mood playlists",
+            });
         });
 
         it("covers ytmusic album disabled, cached, and generic 500 branches", async () => {
-            mockGetSystemSettings.mockResolvedValueOnce({ ytMusicEnabled: false });
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
             const disabled = await request(app)
                 .get("/api/browse/ytmusic/album/ALBUM-1")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -476,7 +545,15 @@ describe("browse branch coverage", () => {
                 year: "2024",
                 trackCount: 1,
                 coverUrl: "http://img",
-                tracks: [{ videoId: "v1", title: "T1", artist: "Artist", artists: ["Artist"], duration_seconds: 100 }],
+                tracks: [
+                    {
+                        videoId: "v1",
+                        title: "T1",
+                        artist: "Artist",
+                        artists: ["Artist"],
+                        duration_seconds: 100,
+                    },
+                ],
             });
             const first = await request(app)
                 .get("/api/browse/ytmusic/album/ALBUM-1")
@@ -489,7 +566,9 @@ describe("browse branch coverage", () => {
             expect(ytMusicService.getBrowseAlbum).toHaveBeenCalledTimes(1);
 
             _resetYtBrowseCache();
-            ytMusicService.getBrowseAlbum.mockRejectedValueOnce(new Error("album down"));
+            ytMusicService.getBrowseAlbum.mockRejectedValueOnce(
+                new Error("album down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/ytmusic/album/ALBUM-2")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -498,13 +577,19 @@ describe("browse branch coverage", () => {
         });
 
         it("covers ytmusic playlist disabled, cached, and generic 500 branches", async () => {
-            mockGetSystemSettings.mockResolvedValueOnce({ ytMusicEnabled: false });
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
             const disabled = await request(app)
                 .get("/api/browse/ytmusic/playlist/PL-1")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(disabled.status).toBe(403);
 
-            ytMusicService.getBrowsePlaylist.mockResolvedValue({ id: "PL-1", title: "P", tracks: [] });
+            ytMusicService.getBrowsePlaylist.mockResolvedValue({
+                id: "PL-1",
+                title: "P",
+                tracks: [],
+            });
             const first = await request(app)
                 .get("/api/browse/ytmusic/playlist/PL-1")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -516,7 +601,9 @@ describe("browse branch coverage", () => {
             expect(ytMusicService.getBrowsePlaylist).toHaveBeenCalledTimes(1);
 
             _resetYtBrowseCache();
-            ytMusicService.getBrowsePlaylist.mockRejectedValueOnce(new Error("playlist down"));
+            ytMusicService.getBrowsePlaylist.mockRejectedValueOnce(
+                new Error("playlist down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/ytmusic/playlist/PL-2")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -538,24 +625,32 @@ describe("browse branch coverage", () => {
         });
 
         it("returns 500 for ytmusic mixes non-http failures", async () => {
-            ytMusicService.getLibraryPlaylists.mockRejectedValueOnce(new Error("boom"));
+            ytMusicService.getLibraryPlaylists.mockRejectedValueOnce(
+                new Error("boom"),
+            );
 
             const res = await request(app)
                 .get("/api/browse/ytmusic/mixes")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(500);
-            expect(res.body).toEqual({ error: "Failed to fetch YT Music mixes" });
+            expect(res.body).toEqual({
+                error: "Failed to fetch YT Music mixes",
+            });
         });
 
         it("covers ytmusic mixes disabled and cached branches", async () => {
-            mockGetSystemSettings.mockResolvedValueOnce({ ytMusicEnabled: false });
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
             const disabled = await request(app)
                 .get("/api/browse/ytmusic/mixes")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(disabled.status).toBe(403);
 
-            ytMusicService.getLibraryPlaylists.mockResolvedValue([{ playlistId: "mix-1" }]);
+            ytMusicService.getLibraryPlaylists.mockResolvedValue([
+                { playlistId: "mix-1" },
+            ]);
             const first = await request(app)
                 .get("/api/browse/ytmusic/mixes")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -582,30 +677,43 @@ describe("browse branch coverage", () => {
         });
 
         it("returns 403 when user tidal credentials are not authenticated", async () => {
-            tidalStreamingService.getAuthStatus.mockResolvedValueOnce({ authenticated: false });
+            tidalStreamingService.getAuthStatus.mockResolvedValueOnce({
+                authenticated: false,
+            });
 
             const res = await request(app)
                 .get("/api/browse/tidal/home")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(403);
-            expect(res.body).toEqual({ error: "TIDAL credentials not authenticated" });
+            expect(res.body).toEqual({
+                error: "TIDAL credentials not authenticated",
+            });
         });
 
         it("allows request through when tidal auth status lookup throws", async () => {
-            tidalStreamingService.getAuthStatus.mockRejectedValueOnce(new Error("status failed"));
-            tidalStreamingService.getHomeShelves.mockResolvedValueOnce([{ title: "shelf", contents: [] }]);
+            tidalStreamingService.getAuthStatus.mockRejectedValueOnce(
+                new Error("status failed"),
+            );
+            tidalStreamingService.getHomeShelves.mockResolvedValueOnce([
+                { title: "shelf", contents: [] },
+            ]);
 
             const res = await request(app)
                 .get("/api/browse/tidal/home")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             expect(res.status).toBe(200);
-            expect(res.body).toEqual({ shelves: [{ title: "shelf", contents: [] }], source: "tidal" });
+            expect(res.body).toEqual({
+                shelves: [{ title: "shelf", contents: [] }],
+                source: "tidal",
+            });
         });
 
         it("covers tidal explore cached and 500 branches", async () => {
-            tidalStreamingService.getExploreShelves.mockResolvedValue([{ title: "explore", contents: [] }]);
+            tidalStreamingService.getExploreShelves.mockResolvedValue([
+                { title: "explore", contents: [] },
+            ]);
 
             const first = await request(app)
                 .get("/api/browse/tidal/explore")
@@ -616,19 +724,27 @@ describe("browse branch coverage", () => {
 
             expect(first.status).toBe(200);
             expect(cached.status).toBe(200);
-            expect(tidalStreamingService.getExploreShelves).toHaveBeenCalledTimes(1);
+            expect(
+                tidalStreamingService.getExploreShelves,
+            ).toHaveBeenCalledTimes(1);
 
             _resetTidalBrowseCache();
-            tidalStreamingService.getExploreShelves.mockRejectedValueOnce(new Error("explore down"));
+            tidalStreamingService.getExploreShelves.mockRejectedValueOnce(
+                new Error("explore down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/tidal/explore")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({ error: "Failed to fetch TIDAL explore content" });
+            expect(failing.body).toEqual({
+                error: "Failed to fetch TIDAL explore content",
+            });
         });
 
         it("covers tidal genres 500 branch", async () => {
-            tidalStreamingService.getGenres.mockRejectedValueOnce(new Error("genres down"));
+            tidalStreamingService.getGenres.mockRejectedValueOnce(
+                new Error("genres down"),
+            );
 
             const res = await request(app)
                 .get("/api/browse/tidal/genres")
@@ -651,12 +767,16 @@ describe("browse branch coverage", () => {
             expect(tidalStreamingService.getMoods).toHaveBeenCalledTimes(1);
 
             _resetTidalBrowseCache();
-            tidalStreamingService.getMoods.mockRejectedValueOnce(new Error("moods down"));
+            tidalStreamingService.getMoods.mockRejectedValueOnce(
+                new Error("moods down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/tidal/moods")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({ error: "Failed to fetch TIDAL moods" });
+            expect(failing.body).toEqual({
+                error: "Failed to fetch TIDAL moods",
+            });
         });
 
         it("covers tidal mixes cached and 500 branches", async () => {
@@ -672,12 +792,16 @@ describe("browse branch coverage", () => {
             expect(tidalStreamingService.getMixes).toHaveBeenCalledTimes(1);
 
             _resetTidalBrowseCache();
-            tidalStreamingService.getMixes.mockRejectedValueOnce(new Error("mixes down"));
+            tidalStreamingService.getMixes.mockRejectedValueOnce(
+                new Error("mixes down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/tidal/mixes")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({ error: "Failed to fetch TIDAL mixes" });
+            expect(failing.body).toEqual({
+                error: "Failed to fetch TIDAL mixes",
+            });
         });
 
         it("returns 400 when tidal genre-playlists path is too long", async () => {
@@ -692,7 +816,9 @@ describe("browse branch coverage", () => {
         });
 
         it("covers tidal genre-playlists cached and 500 branches", async () => {
-            tidalStreamingService.getGenrePlaylists.mockResolvedValue([{ playlistId: "g1" }]);
+            tidalStreamingService.getGenrePlaylists.mockResolvedValue([
+                { playlistId: "g1" },
+            ]);
             const first = await request(app)
                 .get("/api/browse/tidal/genre-playlists?path=Pop")
                 .set(AUTH_HEADER, AUTH_VALUE);
@@ -701,15 +827,21 @@ describe("browse branch coverage", () => {
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(first.status).toBe(200);
             expect(cached.status).toBe(200);
-            expect(tidalStreamingService.getGenrePlaylists).toHaveBeenCalledTimes(1);
+            expect(
+                tidalStreamingService.getGenrePlaylists,
+            ).toHaveBeenCalledTimes(1);
 
             _resetTidalBrowseCache();
-            tidalStreamingService.getGenrePlaylists.mockRejectedValueOnce(new Error("genre playlists down"));
+            tidalStreamingService.getGenrePlaylists.mockRejectedValueOnce(
+                new Error("genre playlists down"),
+            );
             const failing = await request(app)
                 .get("/api/browse/tidal/genre-playlists?path=Pop")
                 .set(AUTH_HEADER, AUTH_VALUE);
             expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({ error: "Failed to fetch TIDAL genre playlists" });
+            expect(failing.body).toEqual({
+                error: "Failed to fetch TIDAL genre playlists",
+            });
         });
 
         it("clamps tidal playlist limit to 500", async () => {
@@ -717,12 +849,9 @@ describe("browse branch coverage", () => {
                 .get("/api/browse/tidal/playlist/pl-1?limit=999")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
-            expect(tidalStreamingService.getBrowsePlaylist).toHaveBeenCalledWith(
-                "user-1",
-                "pl-1",
-                "HIGH",
-                500
-            );
+            expect(
+                tidalStreamingService.getBrowsePlaylist,
+            ).toHaveBeenCalledWith("user-1", "pl-1", "HIGH", 500);
         });
 
         it("drops invalid tidal playlist limit values", async () => {
@@ -730,16 +859,15 @@ describe("browse branch coverage", () => {
                 .get("/api/browse/tidal/playlist/pl-1?limit=0")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
-            expect(tidalStreamingService.getBrowsePlaylist).toHaveBeenCalledWith(
-                "user-1",
-                "pl-1",
-                "HIGH",
-                undefined
-            );
+            expect(
+                tidalStreamingService.getBrowsePlaylist,
+            ).toHaveBeenCalledWith("user-1", "pl-1", "HIGH", undefined);
         });
 
         it("covers tidal mix route 500 branch", async () => {
-            tidalStreamingService.getBrowseMix.mockRejectedValueOnce(new Error("mix detail down"));
+            tidalStreamingService.getBrowseMix.mockRejectedValueOnce(
+                new Error("mix detail down"),
+            );
 
             const res = await request(app)
                 .get("/api/browse/tidal/mix/mix-1")

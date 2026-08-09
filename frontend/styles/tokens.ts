@@ -53,9 +53,7 @@ function parseHex(hex: string): Rgb {
 
 function linearizeSrgb(channel: number): number {
     const srgb = channel / 255;
-    return srgb <= 0.04045
-        ? srgb / 12.92
-        : ((srgb + 0.055) / 1.055) ** 2.4;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
 }
 
 /** Calculates WCAG relative luminance for a six-digit sRGB hex color. */
@@ -85,16 +83,18 @@ function channelToHex(channel: number): string {
 export function compositeOver(
     fgHex: string,
     bgHex: string,
-    alpha: number
+    alpha: number,
 ): string {
     const foreground = parseHex(fgHex);
     const background = parseHex(bgHex);
     if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) {
-        throw new RangeError(`Expected alpha between 0 and 1, received: ${alpha}`);
+        throw new RangeError(
+            `Expected alpha between 0 and 1, received: ${alpha}`,
+        );
     }
 
     const channels = foreground.map(
-        (channel, index) => channel * alpha + background[index] * (1 - alpha)
+        (channel, index) => channel * alpha + background[index] * (1 - alpha),
     );
     return `#${channels.map(channelToHex).join("")}`;
 }

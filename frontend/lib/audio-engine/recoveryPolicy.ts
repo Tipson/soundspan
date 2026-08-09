@@ -1,17 +1,17 @@
 export interface LocalRecoverySnapshot {
-  positionSec: number;
-  shouldPlay: boolean;
+    positionSec: number;
+    shouldPlay: boolean;
 }
 
 export interface ServerRecoverySnapshot {
-  resumeAtSec?: number;
-  shouldPlay?: boolean;
+    resumeAtSec?: number;
+    shouldPlay?: boolean;
 }
 
 export interface LocalAuthoritativeRecoveryDecision {
-  resumeAtSec: number;
-  shouldPlay: boolean;
-  authority: "local" | "server";
+    resumeAtSec: number;
+    shouldPlay: boolean;
+    authority: "local" | "server";
 }
 
 /**
@@ -20,25 +20,29 @@ export interface LocalAuthoritativeRecoveryDecision {
  * resume point, prefer server resume to avoid restart-at-zero regressions.
  */
 export const resolveLocalAuthoritativeRecovery = (
-  local: LocalRecoverySnapshot,
-  server?: ServerRecoverySnapshot,
+    local: LocalRecoverySnapshot,
+    server?: ServerRecoverySnapshot,
 ): LocalAuthoritativeRecoveryDecision => {
-  const localResumeAtSec = Math.max(0, local.positionSec);
-  const serverResumeAtSec = Number.isFinite(server?.resumeAtSec)
-    ? Math.max(0, server?.resumeAtSec ?? 0)
-    : null;
+    const localResumeAtSec = Math.max(0, local.positionSec);
+    const serverResumeAtSec = Number.isFinite(server?.resumeAtSec)
+        ? Math.max(0, server?.resumeAtSec ?? 0)
+        : null;
 
-  if (localResumeAtSec <= 0 && serverResumeAtSec !== null && serverResumeAtSec > 0) {
+    if (
+        localResumeAtSec <= 0 &&
+        serverResumeAtSec !== null &&
+        serverResumeAtSec > 0
+    ) {
+        return {
+            resumeAtSec: serverResumeAtSec,
+            shouldPlay: local.shouldPlay,
+            authority: "server",
+        };
+    }
+
     return {
-      resumeAtSec: serverResumeAtSec,
-      shouldPlay: local.shouldPlay,
-      authority: "server",
+        resumeAtSec: localResumeAtSec,
+        shouldPlay: local.shouldPlay,
+        authority: "local",
     };
-  }
-
-  return {
-    resumeAtSec: localResumeAtSec,
-    shouldPlay: local.shouldPlay,
-    authority: "local",
-  };
 };

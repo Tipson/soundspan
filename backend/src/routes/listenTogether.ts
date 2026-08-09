@@ -44,12 +44,12 @@ const queueTrackInputSchema = z
     .refine(
         (value) =>
             [value.trackId, value.tidalTrackId, value.youtubeVideoId].filter(
-                (entry) => entry !== undefined
+                (entry) => entry !== undefined,
             ).length === 1,
         {
             message:
                 "Each queue track requires exactly one of trackId, tidalTrackId, or youtubeVideoId",
-        }
+        },
     );
 
 const createGroupSchema = z.object({
@@ -72,7 +72,9 @@ const joinGroupSchema = z.object({
 
 function handleError(label: string, error: unknown, res: Response) {
     if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid request", details: error.issues });
+        return res
+            .status(400)
+            .json({ error: "Invalid request", details: error.issues });
     }
     if (error instanceof GroupError) {
         const statusMap: Record<string, number> = {
@@ -138,7 +140,11 @@ router.post("/join", async (req, res) => {
     try {
         const user = req.user!;
         const payload = joinGroupSchema.parse(req.body ?? {});
-        const snapshot = await joinGroup(user.id, user.username, payload.joinCode);
+        const snapshot = await joinGroup(
+            user.id,
+            user.username,
+            payload.joinCode,
+        );
         return res.json(snapshot);
     } catch (error) {
         return handleError("join", error, res);

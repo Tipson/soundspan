@@ -91,7 +91,7 @@ describe("tidalService", () => {
                     headers: expect.objectContaining({
                         "x-internal-secret": "sek-123",
                     }),
-                })
+                }),
             );
         });
 
@@ -103,7 +103,7 @@ describe("tidalService", () => {
             expect(mockAxiosCreate).toHaveBeenCalledWith(
                 expect.objectContaining({
                     headers: { "Content-Type": "application/json" },
-                })
+                }),
             );
         });
     });
@@ -113,14 +113,18 @@ describe("tidalService", () => {
             mockClient.get.mockResolvedValueOnce({ data: { status: "ok" } });
 
             await expect(tidalService.isSidecarHealthy()).resolves.toBe(true);
-            expect(mockClient.get).toHaveBeenCalledWith("/health", { timeout: 5000 });
+            expect(mockClient.get).toHaveBeenCalledWith("/health", {
+                timeout: 5000,
+            });
         });
 
         it("returns false when sidecar health endpoint is non-ok or throws", async () => {
             mockClient.get.mockResolvedValueOnce({ data: { status: "down" } });
             await expect(tidalService.isSidecarHealthy()).resolves.toBe(false);
 
-            mockClient.get.mockRejectedValueOnce(new Error("connection refused"));
+            mockClient.get.mockRejectedValueOnce(
+                new Error("connection refused"),
+            );
             await expect(tidalService.isSidecarHealthy()).resolves.toBe(false);
         });
     });
@@ -141,7 +145,9 @@ describe("tidalService", () => {
             });
             await expect(tidalService.isEnabled()).resolves.toBe(false);
 
-            mockGetSystemSettings.mockRejectedValueOnce(new Error("db unavailable"));
+            mockGetSystemSettings.mockRejectedValueOnce(
+                new Error("db unavailable"),
+            );
             await expect(tidalService.isEnabled()).resolves.toBe(false);
         });
 
@@ -185,11 +191,9 @@ describe("tidalService", () => {
                 tidalQuality: null,
                 tidalFileTemplate: null,
             });
-            mockDecrypt
-                .mockReturnValueOnce("")
-                .mockImplementationOnce(() => {
-                    throw new Error("bad decrypt");
-                });
+            mockDecrypt.mockReturnValueOnce("").mockImplementationOnce(() => {
+                throw new Error("bad decrypt");
+            });
 
             const creds = await (tidalService as any).getCredentials();
 
@@ -248,11 +252,15 @@ describe("tidalService", () => {
                     tidalCountryCode: "CA",
                 },
             });
-            expect(mockLogger.debug).toHaveBeenCalledWith("[TIDAL] Tokens saved");
+            expect(mockLogger.debug).toHaveBeenCalledWith(
+                "[TIDAL] Tokens saved",
+            );
         });
 
         it("refreshAccessToken calls sidecar and persists refreshed access token", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             const saveTokensSpy = jest
                 .spyOn(tidalService, "saveTokens")
                 .mockResolvedValue(undefined);
@@ -277,16 +285,20 @@ describe("tidalService", () => {
         });
 
         it("refreshAccessToken returns false and logs sidecar error details", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             mockClient.post.mockRejectedValueOnce({
                 response: { data: { error: "invalid_refresh_token" } },
                 message: "refresh failed",
             });
 
-            await expect(tidalService.refreshAccessToken()).resolves.toBe(false);
+            await expect(tidalService.refreshAccessToken()).resolves.toBe(
+                false,
+            );
             expect(mockLogger.error).toHaveBeenCalledWith(
                 "[TIDAL] Token refresh failed:",
-                { error: "invalid_refresh_token" }
+                { error: "invalid_refresh_token" },
             );
         });
     });
@@ -304,22 +316,28 @@ describe("tidalService", () => {
             };
             mockClient.post.mockResolvedValueOnce({ data: tokenPayload });
 
-            await expect(tidalService.pollDeviceAuth("device-code")).resolves.toEqual(
-                tokenPayload
-            );
+            await expect(
+                tidalService.pollDeviceAuth("device-code"),
+            ).resolves.toEqual(tokenPayload);
             expect(mockClient.post).toHaveBeenCalledWith("/auth/token", {
                 device_code: "device-code",
             });
         });
 
         it("pollDeviceAuth returns null while authorization is pending (HTTP 428)", async () => {
-            mockClient.post.mockRejectedValueOnce({ response: { status: 428 } });
+            mockClient.post.mockRejectedValueOnce({
+                response: { status: 428 },
+            });
 
-            await expect(tidalService.pollDeviceAuth("device-code")).resolves.toBeNull();
+            await expect(
+                tidalService.pollDeviceAuth("device-code"),
+            ).resolves.toBeNull();
         });
 
         it("verifySession returns valid=true for a valid session", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             mockClient.post.mockResolvedValueOnce({
                 data: { user_id: "tidal-user", country_code: "SE" },
             });
@@ -368,10 +386,14 @@ describe("tidalService", () => {
                 userId: "user/one",
             };
             const searchData = { tracks: [{ id: 1 }], albums: [], artists: [] };
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(creds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                creds,
+            );
             mockClient.post.mockResolvedValueOnce({ data: searchData });
 
-            await expect(tidalService.search("nujabes")).resolves.toEqual(searchData);
+            await expect(tidalService.search("nujabes")).resolves.toEqual(
+                searchData,
+            );
             expect(mockClient.post).toHaveBeenCalledWith(
                 "/search",
                 { query: "nujabes" },
@@ -381,15 +403,17 @@ describe("tidalService", () => {
                         "x-tidal-user-id": creds.userId,
                         "x-tidal-country-code": creds.countryCode,
                     },
-                }
+                },
             );
             expect(String(mockClient.post.mock.calls[0][0])).not.toContain(
-                "access_token"
+                "access_token",
             );
         });
 
         it("search refreshes token and retries after 401", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             const refreshSpy = jest
                 .spyOn(tidalService, "refreshAccessToken")
                 .mockResolvedValue(true);
@@ -409,10 +433,12 @@ describe("tidalService", () => {
         });
 
         it("search throws unauthenticated error when credentials are missing", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(null);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                null,
+            );
 
             await expect(tidalService.search("anything")).rejects.toThrow(
-                "TIDAL not authenticated"
+                "TIDAL not authenticated",
             );
             expect(mockClient.post).not.toHaveBeenCalled();
         });
@@ -448,7 +474,10 @@ describe("tidalService", () => {
             });
 
             await expect(
-                tidalService.findAlbum("Artist Name", "Great Album - Deluxe Edition")
+                tidalService.findAlbum(
+                    "Artist Name",
+                    "Great Album - Deluxe Edition",
+                ),
             ).resolves.toEqual({
                 albumId: 22,
                 title: "Great Album (Deluxe Edition)",
@@ -486,7 +515,7 @@ describe("tidalService", () => {
             });
 
             await expect(
-                tidalService.findAlbum("Different Artist", "Nonexistent Title")
+                tidalService.findAlbum("Different Artist", "Nonexistent Title"),
             ).resolves.toEqual({
                 albumId: 101,
                 title: "Unexpected Pick",
@@ -496,19 +525,23 @@ describe("tidalService", () => {
         });
 
         it("returns null and logs when album search throws", async () => {
-            jest.spyOn(tidalService, "search").mockRejectedValue(new Error("search down"));
+            jest.spyOn(tidalService, "search").mockRejectedValue(
+                new Error("search down"),
+            );
 
             await expect(tidalService.findAlbum("A", "B")).resolves.toBeNull();
             expect(mockLogger.error).toHaveBeenCalledWith(
                 "[TIDAL] Album search failed:",
-                "search down"
+                "search down",
             );
         });
     });
 
     describe("downloadTrack", () => {
         it("downloads a track with header credentials, quality, and output template", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             const downloadResult = {
                 track_id: 9001,
                 title: "Track",
@@ -521,7 +554,9 @@ describe("tidalService", () => {
             };
             mockClient.post.mockResolvedValueOnce({ data: downloadResult });
 
-            await expect(tidalService.downloadTrack(9001)).resolves.toEqual(downloadResult);
+            await expect(tidalService.downloadTrack(9001)).resolves.toEqual(
+                downloadResult,
+            );
             expect(mockClient.post).toHaveBeenCalledWith(
                 "/download/track",
                 {
@@ -535,15 +570,17 @@ describe("tidalService", () => {
                         "x-tidal-user-id": baseCreds.userId,
                         "x-tidal-country-code": baseCreds.countryCode,
                     },
-                }
+                },
             );
             expect(String(mockClient.post.mock.calls[0][0])).not.toContain(
-                "access_token"
+                "access_token",
             );
         });
 
         it("refreshes token and retries downloadTrack once after 401", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             const refreshSpy = jest
                 .spyOn(tidalService, "refreshAccessToken")
                 .mockResolvedValue(true);
@@ -561,16 +598,20 @@ describe("tidalService", () => {
                 .mockRejectedValueOnce({ response: { status: 401 } })
                 .mockResolvedValueOnce({ data: retriedPayload });
 
-            await expect(tidalService.downloadTrack(22)).resolves.toEqual(retriedPayload);
+            await expect(tidalService.downloadTrack(22)).resolves.toEqual(
+                retriedPayload,
+            );
             expect(refreshSpy).toHaveBeenCalledTimes(1);
             expect(mockClient.post).toHaveBeenCalledTimes(2);
         });
 
         it("throws unauthenticated error when downloadTrack has no credentials", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(null);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                null,
+            );
 
             await expect(tidalService.downloadTrack(5)).rejects.toThrow(
-                "TIDAL not authenticated"
+                "TIDAL not authenticated",
             );
             expect(mockClient.post).not.toHaveBeenCalled();
         });
@@ -578,7 +619,9 @@ describe("tidalService", () => {
 
     describe("downloadAlbum", () => {
         it("downloads an album with header credentials, quality, and output template", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             const albumPayload = {
                 album_id: 77,
                 album_title: "Album",
@@ -591,7 +634,9 @@ describe("tidalService", () => {
             };
             mockClient.post.mockResolvedValueOnce({ data: albumPayload });
 
-            await expect(tidalService.downloadAlbum(77)).resolves.toEqual(albumPayload);
+            await expect(tidalService.downloadAlbum(77)).resolves.toEqual(
+                albumPayload,
+            );
             expect(mockClient.post).toHaveBeenCalledWith(
                 "/download/album",
                 {
@@ -605,15 +650,17 @@ describe("tidalService", () => {
                         "x-tidal-user-id": baseCreds.userId,
                         "x-tidal-country-code": baseCreds.countryCode,
                     },
-                }
+                },
             );
             expect(String(mockClient.post.mock.calls[0][0])).not.toContain(
-                "access_token"
+                "access_token",
             );
         });
 
         it("refreshes token and retries downloadAlbum once after 401", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(baseCreds);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                baseCreds,
+            );
             const refreshSpy = jest
                 .spyOn(tidalService, "refreshAccessToken")
                 .mockResolvedValue(true);
@@ -632,17 +679,19 @@ describe("tidalService", () => {
                 .mockResolvedValueOnce({ data: retriedAlbumPayload });
 
             await expect(tidalService.downloadAlbum(88)).resolves.toEqual(
-                retriedAlbumPayload
+                retriedAlbumPayload,
             );
             expect(refreshSpy).toHaveBeenCalledTimes(1);
             expect(mockClient.post).toHaveBeenCalledTimes(2);
         });
 
         it("throws unauthenticated error when downloadAlbum has no credentials", async () => {
-            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(null);
+            jest.spyOn(tidalService as any, "getCredentials").mockResolvedValue(
+                null,
+            );
 
             await expect(tidalService.downloadAlbum(9)).rejects.toThrow(
-                "TIDAL not authenticated"
+                "TIDAL not authenticated",
             );
             expect(mockClient.post).not.toHaveBeenCalled();
         });

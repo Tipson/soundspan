@@ -9,7 +9,10 @@ const state = {
     currentTrack: null as { id: string } | null,
     isPlaying: false,
     playlist: null as Record<string, unknown> | null,
-    updatePlaylistCalls: [] as Array<{ id: string; data: Record<string, unknown> }>,
+    updatePlaylistCalls: [] as Array<{
+        id: string;
+        data: Record<string, unknown>;
+    }>,
 };
 
 const Icon = (props: Record<string, unknown> = {}) =>
@@ -56,7 +59,10 @@ mock.module("next/navigation", {
 
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 mock.module("@/components/ui/ConfirmDialog", {
@@ -81,7 +87,11 @@ mock.module("@/components/player/TrackPreferenceButtons", {
 mock.module("@/components/ui/TrackOverflowMenu", {
     namedExports: {
         TrackOverflowMenu: () =>
-            React.createElement("button", { type: "button", "aria-label": "Track actions" }, "actions"),
+            React.createElement(
+                "button",
+                { type: "button", "aria-label": "Track actions" },
+                "actions",
+            ),
         TrackMenuButton: ({ label }: { label: string }) =>
             React.createElement("span", null, label),
     },
@@ -197,10 +207,15 @@ mock.module("@/lib/api", {
             deletePlaylist: async () => undefined,
             hidePlaylist: async () => undefined,
             unhidePlaylist: async () => undefined,
-            getFreshPreviewUrl: async () => ({ previewUrl: "https://preview.local" }),
+            getFreshPreviewUrl: async () => ({
+                previewUrl: "https://preview.local",
+            }),
             retryPendingTrack: async () => ({ success: true }),
             removePendingTrack: async () => undefined,
-            updatePlaylist: async (id: string, data: Record<string, unknown>) => {
+            updatePlaylist: async (
+                id: string,
+                data: Record<string, unknown>,
+            ) => {
                 state.updatePlaylistCalls.push({ id, data });
             },
         },
@@ -216,7 +231,7 @@ mock.module("@/utils/cn", {
 
 mock.module("@/utils/shuffle", {
     namedExports: {
-        shuffleArray: <T,>(arr: T[]) => arr,
+        shuffleArray: <T>(arr: T[]) => arr,
     },
 });
 
@@ -308,8 +323,8 @@ function renderPage() {
             React.createElement(
                 QueryClientProvider,
                 { client: queryClient },
-                React.createElement(PlaylistDetailPage)
-            )
+                React.createElement(PlaylistDetailPage),
+            ),
         );
     });
 }
@@ -319,8 +334,11 @@ function renderPage() {
 test("owner playlist shows rename button with correct aria-label", async () => {
     state.playlist = makePlaylist({ isOwner: true });
     const html = await renderPage();
-    assert.match(html, /aria-label="Rename playlist"/,
-        "Expected a rename button with aria-label for owner playlists");
+    assert.match(
+        html,
+        /aria-label="Rename playlist"/,
+        "Expected a rename button with aria-label for owner playlists",
+    );
 });
 
 // --- Non-owner does NOT see rename button ---
@@ -328,8 +346,11 @@ test("owner playlist shows rename button with correct aria-label", async () => {
 test("non-owner playlist does not show rename button", async () => {
     state.playlist = makePlaylist({ isOwner: false });
     const html = await renderPage();
-    assert.doesNotMatch(html, /aria-label="Rename playlist"/,
-        "Non-owner should not see a rename button");
+    assert.doesNotMatch(
+        html,
+        /aria-label="Rename playlist"/,
+        "Non-owner should not see a rename button",
+    );
 });
 
 // --- Rename input has aria-label and maxLength ---
@@ -341,8 +362,11 @@ test("rename input has aria-label attribute in SSR markup", async () => {
     state.playlist = makePlaylist({ isOwner: true });
     const html = await renderPage();
     // The rename button should be a real <button> element
-    assert.match(html, /<button[^>]*aria-label="Rename playlist"[^>]*>/,
-        "Rename trigger should be a <button> with aria-label");
+    assert.match(
+        html,
+        /<button[^>]*aria-label="Rename playlist"[^>]*>/,
+        "Rename trigger should be a <button> with aria-label",
+    );
 });
 
 // --- Playlist name is rendered ---
@@ -350,7 +374,11 @@ test("rename input has aria-label attribute in SSR markup", async () => {
 test("playlist name is displayed in the title", async () => {
     state.playlist = makePlaylist({ name: "Cool Tunes" });
     const html = await renderPage();
-    assert.match(html, /Cool Tunes/, "Playlist name should appear in rendered output");
+    assert.match(
+        html,
+        /Cool Tunes/,
+        "Playlist name should appear in rendered output",
+    );
 });
 
 // --- isOwner undefined does not show rename ---
@@ -358,8 +386,11 @@ test("playlist name is displayed in the title", async () => {
 test("playlist with undefined isOwner does not show rename button", async () => {
     state.playlist = makePlaylist({ isOwner: undefined });
     const html = await renderPage();
-    assert.doesNotMatch(html, /aria-label="Rename playlist"/,
-        "Undefined isOwner should not enable rename");
+    assert.doesNotMatch(
+        html,
+        /aria-label="Rename playlist"/,
+        "Undefined isOwner should not enable rename",
+    );
 });
 
 // --- Pencil icon is rendered inside rename button for owners ---
@@ -370,8 +401,12 @@ test("pencil icon is rendered inside rename button for owner", async () => {
     // The mock Icon renders an <svg> element. The rename button contains the Pencil icon.
     // Check that a button with aria-label contains an svg child.
     const btnMatch = html.match(
-        /<button[^>]*aria-label="Rename playlist"[^>]*>[\s\S]*?<\/button>/
+        /<button[^>]*aria-label="Rename playlist"[^>]*>[\s\S]*?<\/button>/,
     );
     assert.ok(btnMatch, "Should find rename button");
-    assert.match(btnMatch![0], /<svg/, "Rename button should contain an SVG icon (Pencil)");
+    assert.match(
+        btnMatch![0],
+        /<svg/,
+        "Rename button should contain an SVG icon (Pencil)",
+    );
 });

@@ -25,7 +25,7 @@ interface PlaybackQueueTrack {
  * Executes mapDiscoverTrackToPlaybackTrack.
  */
 export function mapDiscoverTrackToPlaybackTrack(
-    track: DiscoverPlaylist["tracks"][number]
+    track: DiscoverPlaylist["tracks"][number],
 ): PlaybackQueueTrack {
     return {
         id: track.id,
@@ -57,13 +57,16 @@ export function useDiscoverActions(
     playlist: DiscoverPlaylist | null,
     isGenerating?: boolean,
     refreshBatchStatus?: () => Promise<unknown>,
-    setPendingGeneration?: (pending: boolean) => void
+    setPendingGeneration?: (pending: boolean) => void,
 ) {
-    const { playTracks, playNow, addTracksToQueue, isPlaying, pause, resume } = useAudio();
+    const { playTracks, playNow, addTracksToQueue, isPlaying, pause, resume } =
+        useAudio();
 
     const handleGenerate = useCallback(async () => {
         if (isGenerating) {
-            sharedFrontendLogger.warn("Generation already in progress, ignoring request");
+            sharedFrontendLogger.warn(
+                "Generation already in progress, ignoring request",
+            );
             toast.warning("Generation already in progress...");
             return;
         }
@@ -74,12 +77,12 @@ export function useDiscoverActions(
         try {
             toast.info("Generating your Discover Weekly playlist...");
             await api.generateDiscoverWeekly();
-            
+
             // Immediately refresh batch status to start polling
             if (refreshBatchStatus) {
                 await refreshBatchStatus();
             }
-            
+
             toast.success("Generation started! Refreshing recommendations...");
         } catch (error: unknown) {
             sharedFrontendLogger.error("Generation failed:", error);
@@ -102,7 +105,7 @@ export function useDiscoverActions(
         if (!playlist || playlist.tracks.length === 0) return;
 
         const formattedTracks = playlist.tracks.map(
-            mapDiscoverTrackToPlaybackTrack
+            mapDiscoverTrackToPlaybackTrack,
         );
 
         playTracks(formattedTracks, 0);
@@ -112,7 +115,7 @@ export function useDiscoverActions(
         if (!playlist || playlist.tracks.length === 0) return;
 
         const formattedTracks = playlist.tracks.map(
-            mapDiscoverTrackToPlaybackTrack
+            mapDiscoverTrackToPlaybackTrack,
         );
 
         playTracks(shuffleArray(formattedTracks), 0);
@@ -124,17 +127,19 @@ export function useDiscoverActions(
             if (index < 0 || index >= playlist.tracks.length) return;
 
             const formattedTrack = mapDiscoverTrackToPlaybackTrack(
-                playlist.tracks[index]
+                playlist.tracks[index],
             );
 
             playNow(formattedTrack);
         },
-        [playlist, playNow]
+        [playlist, playNow],
     );
 
     const handleAddAllToQueue = useCallback(() => {
         if (!playlist || playlist.tracks.length === 0) return;
-        const formattedTracks = playlist.tracks.map(mapDiscoverTrackToPlaybackTrack);
+        const formattedTracks = playlist.tracks.map(
+            mapDiscoverTrackToPlaybackTrack,
+        );
         addTracksToQueue(formattedTracks);
         toast.success(`Added ${formattedTracks.length} tracks to queue`);
     }, [playlist, addTracksToQueue]);

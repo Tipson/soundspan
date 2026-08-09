@@ -5,7 +5,10 @@ import Image from "next/image";
 import { Music } from "lucide-react";
 import { api } from "@/lib/api";
 import { memo } from "react";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { getArtistHref } from "@/utils/artistRoute";
 
 interface Artist {
@@ -77,8 +80,11 @@ const ArtistCard = memo(
         );
     },
     (prevProps, nextProps) => {
-        return prevProps.artist.id === nextProps.artist.id && prevProps.index === nextProps.index;
-    }
+        return (
+            prevProps.artist.id === nextProps.artist.id &&
+            prevProps.index === nextProps.index
+        );
+    },
 );
 
 const ArtistsGrid = memo(function ArtistsGrid({ artists }: ArtistsGridProps) {

@@ -34,21 +34,21 @@ describe("asyncHandler", () => {
             "/boom",
             asyncHandler(async () => {
                 throw new Error("kaboom");
-            })
+            }),
         );
 
         app.get(
             "/rejects",
             asyncHandler(async () => {
                 await Promise.reject(new Error("async rejection"));
-            })
+            }),
         );
 
         app.get(
             "/ok",
             asyncHandler(async (_req, res) => {
                 res.status(200).json({ ok: true });
-            })
+            }),
         );
 
         app.use(errorHandler);
@@ -122,13 +122,13 @@ function typeOnlyUsageNeverCalled() {
     return asyncHandler<ParamsShape, unknown, BodyShape, QueryShape>(
         async (
             req: Request<ParamsShape, unknown, BodyShape, QueryShape>,
-            res: Response
+            res: Response,
         ) => {
             const id: string = req.params.id;
             const limit: string | undefined = req.query.limit;
             const name: string = req.body.name;
             res.status(200).json({ id, limit, name });
-        }
+        },
     );
 }
 void typeOnlyUsageNeverCalled;

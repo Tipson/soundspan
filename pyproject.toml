@@ -1,0 +1,103 @@
+# Tool configuration only: this npm-orchestrated monorepo is not a Python package.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+include = ["services/**/*.py"]
+
+[tool.ruff.lint]
+select = [
+  "ASYNC",
+  "B",
+  "C4",
+  "E",
+  "F",
+  "G",
+  "I",
+  "LOG",
+  "PIE",
+  "RET",
+  "RUF",
+  "S",
+  "SIM",
+  "T20",
+  "UP",
+  "W",
+]
+ignore = [
+  "E501", # Existing long lines need a separate, formatter-aware cleanup.
+  "G004", # Rewriting nearly 200 established f-string log calls is outside this baseline.
+  "ISC001", # This conflicts with Ruff's formatter and the rollout is lint-only for now.
+]
+
+[tool.ruff.lint.per-file-ignores]
+"services/audio-analyzer/analyzer.py" = [
+  "E402", # Environment and multiprocessing setup must run before heavy optional imports.
+]
+"services/audio-analyzer-clap/analyzer.py" = [
+  "E402", # Path, thread, and device setup must run before shared and ML imports.
+]
+"services/**/tests/**/*.py" = [
+  "S101", # Pytest assertions are the test framework's expected assertion mechanism.
+  "S105", # Test fixtures intentionally use token-like placeholder strings.
+  "S106", # Test calls intentionally pass token-like placeholder strings.
+]
+"services/*/app.py" = [
+  "B008", # FastAPI Depends and Query objects are intentionally constructed as defaults.
+]
+"services/tidal-downloader/app.py" = [
+  "B008", # FastAPI Depends and Query objects are intentionally constructed as defaults.
+  "B904", # Endpoint handlers intentionally translate provider failures into stable HTTP errors.
+  "E402", # The shared-service path bootstrap must run before local imports.
+]
+"services/ytmusic-streamer/app.py" = [
+  "ASYNC240", # Small local credential-path operations are bounded and predate async file support.
+  "B008", # FastAPI Depends and Query objects are intentionally constructed as defaults.
+  "B904", # Endpoint handlers intentionally translate provider failures into stable HTTP errors.
+  "E402", # The shared-service path bootstrap must run before local imports.
+]
+
+[tool.mypy]
+# Pragmatic initial gate; stricter checks should be enabled incrementally in follow-up ratchets.
+python_version = "3.12"
+files = ["services"]
+mypy_path = ["services"]
+exclude = [
+  "^services/.*/tests/", # Dynamic pytest doubles are covered by Ruff and runtime tests, not this initial type gate.
+  "^services/audio-analyzer-clap/analyzer\\.py$", # Avoid collision with the other top-level analyzer module during discovery.
+  "^services/tidal-downloader/app\\.py$", # Covered by a standalone mypy invocation to avoid the top-level app module collision.
+]
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+# Both import spellings are required by the sidecars' runtime path bootstraps. The
+# same shared modules are checked as `common.*`; avoid following their namespace-
+# package alias a second time as `services.common.*`.
+module = ["services.common.*"]
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = [
+  "essentia",
+  "essentia.*",
+  "laion_clap",
+  "laion_clap.*",
+  "librosa",
+  "librosa.*",
+  "pgvector",
+  "pgvector.*",
+  "psycopg2",
+  "psycopg2.*",
+  "redis",
+  "redis.*",
+  "tiddl",
+  "tiddl.*",
+  "torch",
+  "torch.*",
+  "yt_dlp",
+  "yt_dlp.*",
+]
+ignore_missing_imports = true

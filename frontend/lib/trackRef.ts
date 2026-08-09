@@ -8,21 +8,21 @@ export type TrackRef =
 export type AddToPlaylistRef =
     | { trackId: string }
     | {
-        tidalTrackId: number;
-        title: string;
-        artist: string;
-        album: string;
-        duration: number;
-        isrc?: string;
-    }
+          tidalTrackId: number;
+          title: string;
+          artist: string;
+          album: string;
+          duration: number;
+          isrc?: string;
+      }
     | {
-        youtubeVideoId: string;
-        title: string;
-        artist: string;
-        album: string;
-        duration: number;
-        thumbnailUrl?: string;
-    };
+          youtubeVideoId: string;
+          title: string;
+          artist: string;
+          album: string;
+          duration: number;
+          thumbnailUrl?: string;
+      };
 
 type ProviderSource = CanonicalMediaSource;
 
@@ -33,13 +33,19 @@ type TrackRefInput = {
     duration?: number | string | null;
     isrc?: string | null;
     thumbnailUrl?: string | null;
-    artist?: {
-        name?: string | null;
-    } | string | null;
-    album?: {
-        title?: string | null;
-        coverArt?: string | null;
-    } | string | null;
+    artist?:
+        | {
+              name?: string | null;
+          }
+        | string
+        | null;
+    album?:
+        | {
+              title?: string | null;
+              coverArt?: string | null;
+          }
+        | string
+        | null;
     streamSource?: ProviderSource | null;
     tidalTrackId?: number | string | null;
     youtubeVideoId?: string | null;
@@ -50,7 +56,9 @@ type TrackRefInput = {
     } | null;
 };
 
-function normalizeTidalTrackId(value: number | string | null | undefined): number | null {
+function normalizeTidalTrackId(
+    value: number | string | null | undefined,
+): number | null {
     if (typeof value === "number" && Number.isInteger(value) && value > 0) {
         return value;
     }
@@ -68,13 +76,17 @@ function normalizeTidalTrackId(value: number | string | null | undefined): numbe
     return null;
 }
 
-function normalizeNonEmptyString(value: string | null | undefined): string | null {
+function normalizeNonEmptyString(
+    value: string | null | undefined,
+): string | null {
     if (typeof value !== "string") return null;
     const trimmed = value.trim();
     return trimmed ? trimmed : null;
 }
 
-function normalizeDuration(value: number | string | null | undefined): number | null {
+function normalizeDuration(
+    value: number | string | null | undefined,
+): number | null {
     if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
         return value;
     }
@@ -95,7 +107,7 @@ function hasRemotePrefix(trackId: string | null | undefined): boolean {
 }
 
 function prefixedTrackIdRef(
-    trackId: string | null | undefined
+    trackId: string | null | undefined,
 ): TrackRef | null {
     if (!trackId) return null;
 
@@ -126,7 +138,7 @@ function resolveStreamSource(input: TrackRefInput): ProviderSource | null {
 
 function resolveYouTubeVideoId(input: TrackRefInput): string | null {
     const explicit = normalizeNonEmptyString(
-        input.youtubeVideoId ?? input.provider?.youtubeVideoId
+        input.youtubeVideoId ?? input.provider?.youtubeVideoId,
     );
     if (explicit !== null) {
         return explicit;
@@ -142,7 +154,7 @@ function resolveYouTubeVideoId(input: TrackRefInput): string | null {
 
 function resolveTidalTrackId(input: TrackRefInput): number | null {
     const explicit = normalizeTidalTrackId(
-        input.tidalTrackId ?? input.provider?.tidalTrackId
+        input.tidalTrackId ?? input.provider?.tidalTrackId,
     );
     if (explicit !== null) {
         return explicit;
@@ -169,11 +181,17 @@ export function isRemoteTrack(input: TrackRefInput | TrackRef): boolean {
         return false;
     }
 
-    if ("youtubeVideoId" in input && normalizeNonEmptyString(input.youtubeVideoId) !== null) {
+    if (
+        "youtubeVideoId" in input &&
+        normalizeNonEmptyString(input.youtubeVideoId) !== null
+    ) {
         return true;
     }
 
-    if ("tidalTrackId" in input && normalizeTidalTrackId(input.tidalTrackId) !== null) {
+    if (
+        "tidalTrackId" in input &&
+        normalizeTidalTrackId(input.tidalTrackId) !== null
+    ) {
         return true;
     }
 
@@ -260,7 +278,9 @@ export function toTrackRef(input: TrackRefInput): TrackRef {
         };
     }
 
-    throw new Error("Track reference requires a local id or remote provider identifier");
+    throw new Error(
+        "Track reference requires a local id or remote provider identifier",
+    );
 }
 
 function resolveRemoteMetadata(input: TrackRefInput): {

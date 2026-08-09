@@ -6,7 +6,9 @@ import { logger } from "../utils/logger";
 class ImportJobCancelledError extends Error {}
 
 function isTerminalStatus(status: string): boolean {
-    return status === "completed" || status === "failed" || status === "cancelled";
+    return (
+        status === "completed" || status === "failed" || status === "cancelled"
+    );
 }
 
 /**
@@ -47,7 +49,7 @@ export class GenericImportJobRunner {
 
             const preview = await playlistImportService.previewImport(
                 runnableJob.userId,
-                runnableJob.sourceUrl
+                runnableJob.sourceUrl,
             );
 
             await this.ensureRunnable(jobId);
@@ -55,28 +57,29 @@ export class GenericImportJobRunner {
                 status: "creating_playlist",
                 progress: 70,
                 summary: preview.summary,
-                resolvedTracks: preview.resolved as unknown as Prisma.InputJsonValue,
+                resolvedTracks:
+                    preview.resolved as unknown as Prisma.InputJsonValue,
             });
 
             const execution = await playlistImportService.importPlaylist(
                 runnableJob.userId,
                 preview,
-                runnableJob.requestedPlaylistName ?? undefined
+                runnableJob.requestedPlaylistName ?? undefined,
             );
 
             const latestJob = await importJobStore.getJob(jobId);
             const cancelledDuringImport =
-                latestJob?.status === "cancelled" || latestJob?.status === "cancelling";
+                latestJob?.status === "cancelled" ||
+                latestJob?.status === "cancelling";
 
             await importJobStore.updateJob(jobId, {
                 status: "completed",
                 progress: 100,
                 summary: execution.summary,
                 createdPlaylistId: execution.playlistId,
-                error:
-                    cancelledDuringImport ?
-                        "Cancellation requested after playlist creation completed"
-                    :   null,
+                error: cancelledDuringImport
+                    ? "Cancellation requested after playlist creation completed"
+                    : null,
             });
         } catch (error) {
             if (error instanceof ImportJobCancelledError) {
@@ -92,7 +95,9 @@ export class GenericImportJobRunner {
             }
 
             const message =
-                error instanceof Error ? error.message : "Generic import job failed";
+                error instanceof Error
+                    ? error.message
+                    : "Generic import job failed";
             const latestJob = await importJobStore.getJob(jobId);
             if (latestJob && !isTerminalStatus(latestJob.status)) {
                 await importJobStore.updateJob(jobId, {

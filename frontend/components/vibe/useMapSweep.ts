@@ -2,13 +2,24 @@
 
 /** Sweep-to-queue stroke state and result actions for the vibe map. */
 
-import { useCallback, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+    useCallback,
+    useMemo,
+    useRef,
+    useState,
+    type Dispatch,
+    type SetStateAction,
+} from "react";
 import { toast } from "sonner";
 import type { MapTrack } from "./types";
 import type { Viewport } from "./mapViewport";
 import { collectHits, sampleSegment, type SweepPoint } from "./sweepCollect";
 import { mapTrackToTrack } from "./journeyTracks";
-import { describeSaveResult, formatPlaylistDate, saveTracksAsPlaylist } from "./savePlaylist";
+import {
+    describeSaveResult,
+    formatPlaylistDate,
+    saveTracksAsPlaylist,
+} from "./savePlaylist";
 import type { VibeControls } from "./useVibeMode";
 
 interface SweepScratch {
@@ -18,9 +29,14 @@ interface SweepScratch {
     last: SweepPoint;
 }
 
-export interface SweepLive { stroke: SweepPoint[]; ids: string[] }
+export interface SweepLive {
+    stroke: SweepPoint[];
+    ids: string[];
+}
 /** Frozen collection displayed by the post-sweep action chip. */
-export interface SweepResult { ids: string[] }
+export interface SweepResult {
+    ids: string[];
+}
 
 export interface UseMapSweep {
     brushArmed: boolean;
@@ -51,11 +67,22 @@ export interface UseMapSweepArgs {
     controls: Pick<VibeControls, "playTracks" | "addToQueue">;
 }
 
-function collectAt(args: UseMapSweepArgs, scratch: SweepScratch, cursor: SweepPoint): void {
+function collectAt(
+    args: UseMapSweepArgs,
+    scratch: SweepScratch,
+    cursor: SweepPoint,
+): void {
     const viewport = args.viewportRef.current;
     if (!viewport) return;
-    collectHits({ cursor, ids: args.tracks, positions: args.positions,
-        mask: args.mask, viewport, seen: scratch.seen, out: scratch.ids });
+    collectHits({
+        cursor,
+        ids: args.tracks,
+        positions: args.positions,
+        mask: args.mask,
+        viewport,
+        seen: scratch.seen,
+        out: scratch.ids,
+    });
 }
 
 interface StrokeState {
@@ -79,26 +106,38 @@ function useSweepStroke(args: UseMapSweepArgs): StrokeState {
     const [result, setResult] = useState<SweepResult | null>(null);
     const scratchRef = useRef<SweepScratch | null>(null);
     const toggleBrush = useCallback(() => setBrushArmed((armed) => !armed), []);
-    const eligible = useCallback((mods: { shiftKey: boolean }) =>
-        brushArmed || mods.shiftKey, [brushArmed]);
+    const eligible = useCallback(
+        (mods: { shiftKey: boolean }) => brushArmed || mods.shiftKey,
+        [brushArmed],
+    );
     const active = useCallback(() => scratchRef.current !== null, []);
-    const begin = useCallback((cursor: SweepPoint) => {
-        const scratch: SweepScratch = {
-            seen: new Set(), ids: [], stroke: [cursor], last: cursor,
-        };
-        collectAt(args, scratch, cursor);
-        scratchRef.current = scratch;
-        setLive({ stroke: [...scratch.stroke], ids: [...scratch.ids] });
-        setResult(null);
-    }, [args]);
-    const extend = useCallback((cursor: SweepPoint) => {
-        const scratch = scratchRef.current;
-        if (!scratch) return;
-        for (const point of sampleSegment(scratch.last, cursor)) collectAt(args, scratch, point);
-        scratch.last = cursor;
-        scratch.stroke.push(cursor);
-        setLive({ stroke: [...scratch.stroke], ids: [...scratch.ids] });
-    }, [args]);
+    const begin = useCallback(
+        (cursor: SweepPoint) => {
+            const scratch: SweepScratch = {
+                seen: new Set(),
+                ids: [],
+                stroke: [cursor],
+                last: cursor,
+            };
+            collectAt(args, scratch, cursor);
+            scratchRef.current = scratch;
+            setLive({ stroke: [...scratch.stroke], ids: [...scratch.ids] });
+            setResult(null);
+        },
+        [args],
+    );
+    const extend = useCallback(
+        (cursor: SweepPoint) => {
+            const scratch = scratchRef.current;
+            if (!scratch) return;
+            for (const point of sampleSegment(scratch.last, cursor))
+                collectAt(args, scratch, point);
+            scratch.last = cursor;
+            scratch.stroke.push(cursor);
+            setLive({ stroke: [...scratch.stroke], ids: [...scratch.ids] });
+        },
+        [args],
+    );
     const finish = useCallback((wasClick: boolean) => {
         const scratch = scratchRef.current;
         if (!scratch) return false;
@@ -113,11 +152,26 @@ function useSweepStroke(args: UseMapSweepArgs): StrokeState {
         setLive(null);
     }, []);
     const dismissResult = useCallback(() => setResult(null), []);
-    return { brushArmed, live, result, setResult, toggleBrush, eligible, active,
-        begin, extend, finish, discard, dismissResult };
+    return {
+        brushArmed,
+        live,
+        result,
+        setResult,
+        toggleBrush,
+        eligible,
+        active,
+        begin,
+        extend,
+        finish,
+        discard,
+        dismissResult,
+    };
 }
 
-function sweptTracks(ids: readonly string[], tracks: ReadonlyMap<string, MapTrack>): MapTrack[] {
+function sweptTracks(
+    ids: readonly string[],
+    tracks: ReadonlyMap<string, MapTrack>,
+): MapTrack[] {
     return ids.flatMap((id) => {
         const track = tracks.get(id);
         return track ? [track] : [];
@@ -127,11 +181,13 @@ function sweptTracks(ids: readonly string[], tracks: ReadonlyMap<string, MapTrac
 function useSweepPlayback(
     result: SweepResult | null,
     setResult: StrokeState["setResult"],
-    args: UseMapSweepArgs
+    args: UseMapSweepArgs,
 ) {
     const play = useCallback(() => {
         if (!result) return;
-        const tracks = sweptTracks(result.ids, args.trackById).map(mapTrackToTrack);
+        const tracks = sweptTracks(result.ids, args.trackById).map(
+            mapTrackToTrack,
+        );
         if (tracks.length > 0) args.controls.playTracks(tracks, 0, true);
         setResult(null);
     }, [result, args, setResult]);
@@ -141,14 +197,19 @@ function useSweepPlayback(
         for (const track of tracks) {
             args.controls.addToQueue(mapTrackToTrack(track), { silent: true });
         }
-        if (tracks.length > 0) toast.success(
-            `Queued ${tracks.length} swept track${tracks.length === 1 ? "" : "s"}`);
+        if (tracks.length > 0)
+            toast.success(
+                `Queued ${tracks.length} swept track${tracks.length === 1 ? "" : "s"}`,
+            );
         setResult(null);
     }, [result, args, setResult]);
     return { play, queue };
 }
 
-function useSweepSave(result: SweepResult | null, setResult: StrokeState["setResult"]) {
+function useSweepSave(
+    result: SweepResult | null,
+    setResult: StrokeState["setResult"],
+) {
     const [saving, setSaving] = useState(false);
     const save = useCallback(async () => {
         if (!result) return;
@@ -159,15 +220,17 @@ function useSweepSave(result: SweepResult | null, setResult: StrokeState["setRes
         setSaving(true);
         try {
             const name = `Vibe sweep — ${formatPlaylistDate()}`;
-            const outcome = describeSaveResult(name,
-                await saveTracksAsPlaylist(name, result.ids));
+            const outcome = describeSaveResult(
+                name,
+                await saveTracksAsPlaylist(name, result.ids),
+            );
             if (outcome.tone === "success") toast.success(outcome.message);
             else toast.warning(outcome.message);
         } catch {
             toast.error("Couldn't save that playlist");
         } finally {
             setSaving(false);
-            setResult((current) => current === result ? null : current);
+            setResult((current) => (current === result ? null : current));
         }
     }, [result, setResult]);
     return { saving, save };
@@ -179,11 +242,24 @@ export function useMapSweep(args: UseMapSweepArgs): UseMapSweep {
     const playback = useSweepPlayback(stroke.result, stroke.setResult, args);
     const save = useSweepSave(stroke.result, stroke.setResult);
     const ids = stroke.live?.ids ?? stroke.result?.ids ?? null;
-    const highlight = useMemo(() => ids?.length ? new Set(ids) : null, [ids]);
-    return { brushArmed: stroke.brushArmed, toggleBrush: stroke.toggleBrush,
-        live: stroke.live, result: stroke.result, chipOpen: stroke.result !== null,
-        eligible: stroke.eligible, active: stroke.active, begin: stroke.begin,
-        extend: stroke.extend, finish: stroke.finish, discard: stroke.discard,
-        dismissResult: stroke.dismissResult, highlight,
-        play: playback.play, queue: playback.queue, save: save.save, saving: save.saving };
+    const highlight = useMemo(() => (ids?.length ? new Set(ids) : null), [ids]);
+    return {
+        brushArmed: stroke.brushArmed,
+        toggleBrush: stroke.toggleBrush,
+        live: stroke.live,
+        result: stroke.result,
+        chipOpen: stroke.result !== null,
+        eligible: stroke.eligible,
+        active: stroke.active,
+        begin: stroke.begin,
+        extend: stroke.extend,
+        finish: stroke.finish,
+        discard: stroke.discard,
+        dismissResult: stroke.dismissResult,
+        highlight,
+        play: playback.play,
+        queue: playback.queue,
+        save: save.save,
+        saving: save.saving,
+    };
 }

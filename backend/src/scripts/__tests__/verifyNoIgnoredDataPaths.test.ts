@@ -48,10 +48,15 @@ describe("verifyNoIgnoredDataPaths", () => {
         fileContents?: Record<string, string>;
         sourceRootIsDirectory?: boolean;
     } = {}) {
-        const readFileSync = jest.fn((filePath: string) => fileContents[filePath] ?? "");
-        const readdirSync = jest.fn((dirPath: string) => directoryEntries[dirPath] ?? []);
+        const readFileSync = jest.fn(
+            (filePath: string) => fileContents[filePath] ?? "",
+        );
+        const readdirSync = jest.fn(
+            (dirPath: string) => directoryEntries[dirPath] ?? [],
+        );
         const statSync = jest.fn((targetPath: string) => ({
-            isDirectory: () => targetPath === sourceRoot && sourceRootIsDirectory,
+            isDirectory: () =>
+                targetPath === sourceRoot && sourceRootIsDirectory,
         }));
 
         jest.doMock("fs", () => ({
@@ -61,8 +66,12 @@ describe("verifyNoIgnoredDataPaths", () => {
         }));
 
         const cwdSpy = jest.spyOn(process, "cwd").mockReturnValue(backendRoot);
-        const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
-        const errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+        const logSpy = jest
+            .spyOn(console, "log")
+            .mockImplementation(() => undefined);
+        const errorSpy = jest
+            .spyOn(console, "error")
+            .mockImplementation(() => undefined);
         const exitSpy = jest
             .spyOn(process, "exit")
             .mockImplementation(((code?: number) => code as never) as never);
@@ -70,7 +79,8 @@ describe("verifyNoIgnoredDataPaths", () => {
         let scriptModule!: VerifyNoIgnoredDataPathsModule;
         jest.isolateModules(() => {
             // eslint-disable-next-line @typescript-eslint/no-var-requires
-            scriptModule = require("../verifyNoIgnoredDataPaths") as VerifyNoIgnoredDataPathsModule;
+            scriptModule =
+                require("../verifyNoIgnoredDataPaths") as VerifyNoIgnoredDataPathsModule;
         });
 
         logSpy.mockClear();
@@ -141,9 +151,15 @@ describe("verifyNoIgnoredDataPaths", () => {
         const content = "first line\nsecond line\r\nthird line\nfourth line";
 
         expect(scriptModule.findLine(content, 0)).toBe(1);
-        expect(scriptModule.findLine(content, content.indexOf("second"))).toBe(2);
-        expect(scriptModule.findLine(content, content.indexOf("third"))).toBe(3);
-        expect(scriptModule.findLine(content, content.indexOf("fourth"))).toBe(4);
+        expect(scriptModule.findLine(content, content.indexOf("second"))).toBe(
+            2,
+        );
+        expect(scriptModule.findLine(content, content.indexOf("third"))).toBe(
+            3,
+        );
+        expect(scriptModule.findLine(content, content.indexOf("fourth"))).toBe(
+            4,
+        );
     });
 
     it("scanFile detects disallowed import patterns", () => {
@@ -265,14 +281,14 @@ describe("verifyNoIgnoredDataPaths", () => {
             },
             fileContents: {
                 [safeTs]: 'import { logger } from "../utils/logger";\n',
-                [safeTsx]: 'export const Example = () => <div>safe</div>;\n',
+                [safeTsx]: "export const Example = () => <div>safe</div>;\n",
             },
         });
 
         scriptModule.main();
 
         expect(logSpy).toHaveBeenCalledWith(
-            "verifyNoIgnoredDataPaths: no disallowed /data/ source references found."
+            "verifyNoIgnoredDataPaths: no disallowed /data/ source references found.",
         );
         expect(errorSpy).not.toHaveBeenCalled();
         expect(exitSpy).not.toHaveBeenCalled();
@@ -299,13 +315,13 @@ describe("verifyNoIgnoredDataPaths", () => {
         expect(() => scriptModule.main()).toThrow("process.exit:1");
         expect(errorSpy).toHaveBeenNthCalledWith(
             1,
-            "verifyNoIgnoredDataPaths: disallowed ignored-path references found:"
+            "verifyNoIgnoredDataPaths: disallowed ignored-path references found:",
         );
         expect(loggedText(errorSpy)).toContain(
-            `- src/bad.ts:1 -> from "${ignoredPrivateBase}/helper"`
+            `- src/bad.ts:1 -> from "${ignoredPrivateBase}/helper"`,
         );
         expect(loggedText(errorSpy)).toContain(
-            `- src/bad.ts:2 -> require("${ignoredPrivateBase}/cache")`
+            `- src/bad.ts:2 -> require("${ignoredPrivateBase}/cache")`,
         );
     });
 
@@ -317,7 +333,7 @@ describe("verifyNoIgnoredDataPaths", () => {
         });
 
         expect(() => scriptModule.main()).toThrow(
-            `Source root not found: ${sourceRoot}`
+            `Source root not found: ${sourceRoot}`,
         );
     });
 });

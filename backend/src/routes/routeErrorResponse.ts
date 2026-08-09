@@ -6,7 +6,7 @@ export const sendRouteError = (
     res: Response,
     statusCode: number,
     message: string,
-    extras?: RouteErrorExtras
+    extras?: RouteErrorExtras,
 ): Response => {
     if (extras && Object.keys(extras).length > 0) {
         return res.status(statusCode).json({
@@ -21,5 +21,5 @@ export const sendRouteError = (
 export const sendInternalRouteError = (
     res: Response,
     message: string,
-    extras?: RouteErrorExtras
+    extras?: RouteErrorExtras,
 ): Response => sendRouteError(res, 500, message, extras);

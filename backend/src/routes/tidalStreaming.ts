@@ -21,10 +21,7 @@
 
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import {
-    requireAuth,
-    requireAuthOrToken,
-} from "../middleware/auth";
+import { requireAuth, requireAuthOrToken } from "../middleware/auth";
 import { tidalStreamingService } from "../services/tidalStreaming";
 import { prisma } from "../utils/db";
 import { encrypt, decrypt } from "../utils/encryption";
@@ -41,7 +38,7 @@ const tidalOauthRestoreInFlight = new Map<string, Promise<boolean>>();
 const setTidalOAuthCache = (
     userId: string,
     authenticated: boolean,
-    ttlMs = OAUTH_CACHE_TTL_MS
+    ttlMs = OAUTH_CACHE_TTL_MS,
 ) => {
     if (!authenticated || ttlMs <= 0) {
         tidalOauthSessionCache.delete(userId);
@@ -77,7 +74,7 @@ const invalidateTidalUserCaches = (userId: string) => {
 async function requireTidalStreamingEnabled(
     req: Request,
     res: Response,
-    next: Function
+    next: Function,
 ) {
     const enabled = await tidalStreamingService.isEnabled();
     if (!enabled) {
@@ -144,7 +141,10 @@ async function ensureUserOAuth(userId: string): Promise<boolean> {
             oauthJson = userSettings.tidalOAuthJson;
         }
 
-        const restored = await tidalStreamingService.restoreOAuth(userId, oauthJson);
+        const restored = await tidalStreamingService.restoreOAuth(
+            userId,
+            oauthJson,
+        );
         setTidalOAuthCache(userId, restored);
         return restored;
     })().finally(() => {
@@ -274,7 +274,7 @@ router.post(
             logger.error("[TIDAL-STREAM] Device auth failed:", err.message);
             res.status(500).json({ error: "Failed to initiate TIDAL auth" });
         }
-    }
+    },
 );
 
 /**
@@ -328,7 +328,7 @@ router.post(
 
         try {
             const tokens = await tidalStreamingService.pollDeviceAuth(
-                parsed.data.deviceCode
+                parsed.data.deviceCode,
             );
 
             if (!tokens) {
@@ -369,7 +369,7 @@ router.post(
                 error: err.message,
             });
         }
-    }
+    },
 );
 
 /**
@@ -434,7 +434,7 @@ router.post(
             // Restore to sidecar
             await tidalStreamingService.restoreOAuth(
                 userId,
-                parsed.data.oauthJson
+                parsed.data.oauthJson,
             );
             setTidalOAuthCache(userId, true);
 
@@ -443,7 +443,7 @@ router.post(
             logger.error("[TIDAL-STREAM] Save token failed:", err.message);
             res.status(500).json({ error: "Failed to save TIDAL token" });
         }
-    }
+    },
 );
 
 /**
@@ -550,14 +550,14 @@ router.post(
 
             const results = await tidalStreamingService.search(
                 userId,
-                parsed.data.query
+                parsed.data.query,
             );
             res.json(results);
         } catch (err: any) {
             logger.error("[TIDAL-STREAM] Search failed:", err.message);
             res.status(500).json({ error: "TIDAL search failed" });
         }
-    }
+    },
 );
 
 /**
@@ -639,14 +639,14 @@ router.post(
                 parsed.data.title,
                 parsed.data.albumTitle,
                 parsed.data.duration,
-                parsed.data.isrc
+                parsed.data.isrc,
             );
             res.json({ match });
         } catch (err: any) {
             logger.error("[TIDAL-STREAM] Match failed:", err.message);
             res.status(500).json({ error: "TIDAL match failed" });
         }
-    }
+    },
 );
 
 /**
@@ -717,7 +717,7 @@ router.post(
                         albumTitle: z.string().optional(),
                         duration: z.number().positive().optional(),
                         isrc: z.string().trim().min(6).max(20).optional(),
-                    })
+                    }),
                 )
                 .max(50),
         });
@@ -736,7 +736,7 @@ router.post(
 
             const matches = await tidalStreamingService.findMatchesForAlbum(
                 userId,
-                parsed.data.tracks
+                parsed.data.tracks,
             );
 
             // Fire-and-forget: persist matched tracks as TrackTidal rows
@@ -756,7 +756,10 @@ router.post(
                         });
                     }
                 } catch (err) {
-                    logger.warn("[TIDAL-STREAM] Failed to persist gap-fill TrackTidal rows:", err);
+                    logger.warn(
+                        "[TIDAL-STREAM] Failed to persist gap-fill TrackTidal rows:",
+                        err,
+                    );
                 }
             });
 
@@ -765,7 +768,7 @@ router.post(
             logger.error("[TIDAL-STREAM] Batch match failed:", err.message);
             res.status(500).json({ error: "TIDAL batch match failed" });
         }
-    }
+    },
 );
 
 /**
@@ -827,13 +830,14 @@ router.get(
             }
 
             if (!quality) {
-                quality = await tidalStreamingService.getUserPreferredQuality(userId);
+                quality =
+                    await tidalStreamingService.getUserPreferredQuality(userId);
             }
 
             const info = await tidalStreamingService.getStreamInfo(
                 userId,
                 trackId,
-                quality
+                quality,
             );
             res.json(info);
         } catch (err: any) {
@@ -843,7 +847,7 @@ router.get(
             logger.error("[TIDAL-STREAM] Stream info failed:", err.message);
             res.status(500).json({ error: "Failed to get stream info" });
         }
-    }
+    },
 );
 
 /**
@@ -900,7 +904,8 @@ router.get(
         // Get user's preferred quality
         let quality = req.query.quality as string | undefined;
         if (!quality) {
-            quality = await tidalStreamingService.getUserPreferredQuality(userId);
+            quality =
+                await tidalStreamingService.getUserPreferredQuality(userId);
         }
 
         try {
@@ -917,7 +922,7 @@ router.get(
                 userId,
                 trackId,
                 quality,
-                rangeHeader
+                rangeHeader,
             );
 
             // Forward response headers
@@ -927,10 +932,12 @@ router.get(
             };
 
             if (stream.headers["content-type"]) {
-                responseHeaders["Content-Type"] = stream.headers["content-type"];
+                responseHeaders["Content-Type"] =
+                    stream.headers["content-type"];
             }
             if (stream.headers["content-range"]) {
-                responseHeaders["Content-Range"] = stream.headers["content-range"];
+                responseHeaders["Content-Range"] =
+                    stream.headers["content-range"];
             }
 
             res.status(stream.status);
@@ -945,13 +952,13 @@ router.get(
             }
             logger.error(
                 `[TIDAL-STREAM] Stream proxy failed for track ${trackId}:`,
-                err.message
+                err.message,
             );
             if (!res.headersSent) {
                 res.status(500).json({ error: "Stream failed" });
             }
         }
-    }
+    },
 );
 
 export default router;

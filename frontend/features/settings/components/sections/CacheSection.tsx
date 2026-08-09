@@ -121,8 +121,8 @@ function EnrichmentStage({
                             isComplete
                                 ? "bg-green-500"
                                 : isBackground
-                                ? "bg-ai"
-                                : "bg-brand"
+                                  ? "bg-ai"
+                                  : "bg-brand"
                         }
                     />
                 </div>
@@ -148,7 +148,11 @@ function EnrichmentStage({
  * Renders the CacheSection component.
  */
 export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
-    const { musicCNN, vibeEmbeddings, loading: featuresLoading } = useFeatures();
+    const {
+        musicCNN,
+        vibeEmbeddings,
+        loading: featuresLoading,
+    } = useFeatures();
     const [syncing, setSyncing] = useState(false);
     const [clearingCaches, setClearingCaches] = useState(false);
     const [reEnriching, setReEnriching] = useState(false);
@@ -159,15 +163,19 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
     const [resettingVibe, setResettingVibe] = useState(false);
     const [forceVibeRebuildOnFullEnrich, setForceVibeRebuildOnFullEnrich] =
         useState(false);
-    const [forceMoodBucketBackfillOnFullEnrich, setForceMoodBucketBackfillOnFullEnrich] =
-        useState(true);
+    const [
+        forceMoodBucketBackfillOnFullEnrich,
+        setForceMoodBucketBackfillOnFullEnrich,
+    ] = useState(true);
     const [backfillingMoodBuckets, setBackfillingMoodBuckets] = useState(false);
     const [moodBucketBackfillResult, setMoodBucketBackfillResult] = useState<{
         processed: number;
         assigned: number;
     } | null>(null);
     const [retryingFailed, setRetryingFailed] = useState(false);
-    const [retryResult, setRetryResult] = useState<{ reset: number } | null>(null);
+    const [retryResult, setRetryResult] = useState<{ reset: number } | null>(
+        null,
+    );
     const [cleanupResult, setCleanupResult] = useState<{
         totalCleaned: number;
         cleaned: {
@@ -265,7 +273,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             // Rollback on error
             queryClient.setQueryData(
                 ["enrichment-concurrency"],
-                context?.previousConcurrency
+                context?.previousConcurrency,
             );
         },
         // Removed onSettled invalidation - optimistic update handles UI,
@@ -299,30 +307,28 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         onError: (err, newWorkers, context) => {
             queryClient.setQueryData(
                 ["analysis-workers"],
-                context?.previousWorkers
+                context?.previousWorkers,
             );
         },
     });
 
     // Fetch CLAP analyzer workers config
-    const { data: clapWorkersConfig, isLoading: isClapWorkersLoading } = useQuery({
-        queryKey: ["clap-workers"],
-        queryFn: () => enrichmentApi.getClapWorkers(),
-        staleTime: 0,
-    });
+    const { data: clapWorkersConfig, isLoading: isClapWorkersLoading } =
+        useQuery({
+            queryKey: ["clap-workers"],
+            queryFn: () => enrichmentApi.getClapWorkers(),
+            staleTime: 0,
+        });
 
     // Update CLAP analyzer workers mutation with optimistic updates
     const setClapWorkersMutation = useMutation({
-        mutationFn: (workers: number) =>
-            enrichmentApi.setClapWorkers(workers),
+        mutationFn: (workers: number) => enrichmentApi.setClapWorkers(workers),
         onMutate: async (newWorkers) => {
             await queryClient.cancelQueries({
                 queryKey: ["clap-workers"],
             });
 
-            const previousWorkers = queryClient.getQueryData([
-                "clap-workers",
-            ]);
+            const previousWorkers = queryClient.getQueryData(["clap-workers"]);
 
             queryClient.setQueryData(["clap-workers"], {
                 workers: newWorkers,
@@ -338,7 +344,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         onError: (err, newWorkers, context) => {
             queryClient.setQueryData(
                 ["clap-workers"],
-                context?.previousWorkers
+                context?.previousWorkers,
             );
         },
     });
@@ -599,11 +605,15 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 {isProgressPending ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin text-white/40" />
-                        <span className="text-sm text-white/40">Loading enrichment status...</span>
+                        <span className="text-sm text-white/40">
+                            Loading enrichment status...
+                        </span>
                     </div>
                 ) : isProgressError && !enrichmentProgress ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-red-500/20 flex items-center justify-between">
-                        <span className="text-sm text-red-400">Failed to load enrichment status</span>
+                        <span className="text-sm text-red-400">
+                            Failed to load enrichment status
+                        </span>
                         <button
                             onClick={() => refetchProgress()}
                             className="px-3 py-1 text-xs bg-white/10 text-white/70 rounded-full hover:bg-white/15 transition-colors"
@@ -640,19 +650,32 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         icon={User}
                                         label="Artist Metadata"
                                         description="Bios, images, and similar artists from Last.fm"
-                                        completed={enrichmentProgress.artists.completed}
+                                        completed={
+                                            enrichmentProgress.artists.completed
+                                        }
                                         total={enrichmentProgress.artists.total}
-                                        progress={enrichmentProgress.artists.progress}
-                                        failed={enrichmentProgress.artists.failed}
+                                        progress={
+                                            enrichmentProgress.artists.progress
+                                        }
+                                        failed={
+                                            enrichmentProgress.artists.failed
+                                        }
                                     />
                                 </div>
                                 <button
                                     onClick={handleResetArtists}
-                                    disabled={resettingArtists || syncing || reEnriching || isEnrichmentActive}
+                                    disabled={
+                                        resettingArtists ||
+                                        syncing ||
+                                        reEnriching ||
+                                        isEnrichmentActive
+                                    }
                                     className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
                                         hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                 >
-                                    {resettingArtists ? "Resetting..." : "Re-run"}
+                                    {resettingArtists
+                                        ? "Resetting..."
+                                        : "Re-run"}
                                 </button>
                             </div>
 
@@ -664,19 +687,32 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         label="Mood Tags"
                                         description="Vibes and mood data from Last.fm"
                                         completed={
-                                            enrichmentProgress.trackTags.enriched
+                                            enrichmentProgress.trackTags
+                                                .enriched
                                         }
-                                        total={enrichmentProgress.trackTags.total}
-                                        progress={enrichmentProgress.trackTags.progress}
+                                        total={
+                                            enrichmentProgress.trackTags.total
+                                        }
+                                        progress={
+                                            enrichmentProgress.trackTags
+                                                .progress
+                                        }
                                     />
                                 </div>
                                 <button
                                     onClick={handleResetMoodTags}
-                                    disabled={resettingMoodTags || syncing || reEnriching || isEnrichmentActive}
+                                    disabled={
+                                        resettingMoodTags ||
+                                        syncing ||
+                                        reEnriching ||
+                                        isEnrichmentActive
+                                    }
                                     className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
                                         hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                 >
-                                    {resettingMoodTags ? "Resetting..." : "Re-run"}
+                                    {resettingMoodTags
+                                        ? "Resetting..."
+                                        : "Re-run"}
                                 </button>
                             </div>
 
@@ -689,34 +725,56 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             label="Audio Analysis"
                                             description="BPM, key, energy, and danceability from audio files"
                                             completed={
-                                                enrichmentProgress.audioAnalysis.completed
+                                                enrichmentProgress.audioAnalysis
+                                                    .completed
                                             }
-                                            total={enrichmentProgress.audioAnalysis.total}
+                                            total={
+                                                enrichmentProgress.audioAnalysis
+                                                    .total
+                                            }
                                             progress={
-                                                enrichmentProgress.audioAnalysis.progress
+                                                enrichmentProgress.audioAnalysis
+                                                    .progress
                                             }
                                             processing={
-                                                enrichmentProgress.audioAnalysis.processing
+                                                enrichmentProgress.audioAnalysis
+                                                    .processing
                                             }
-                                            failed={enrichmentProgress.audioAnalysis.failed}
+                                            failed={
+                                                enrichmentProgress.audioAnalysis
+                                                    .failed
+                                            }
                                             isBackground={true}
                                         />
                                     </div>
                                     <button
                                         onClick={handleResetAudioAnalysis}
-                                        disabled={resettingAudio || syncing || reEnriching || isEnrichmentActive}
+                                        disabled={
+                                            resettingAudio ||
+                                            syncing ||
+                                            reEnriching ||
+                                            isEnrichmentActive
+                                        }
                                         className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
                                             hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                     >
-                                        {resettingAudio ? "Resetting..." : "Re-run"}
+                                        {resettingAudio
+                                            ? "Resetting..."
+                                            : "Re-run"}
                                     </button>
                                 </div>
                             ) : !featuresLoading ? (
                                 <div className="opacity-50 py-2">
-                                    <h4 className="text-sm font-medium text-gray-300">Audio Analysis</h4>
-                                    <p className="text-sm text-gray-400">Analyzer not detected right now</p>
+                                    <h4 className="text-sm font-medium text-gray-300">
+                                        Audio Analysis
+                                    </h4>
+                                    <p className="text-sm text-gray-400">
+                                        Analyzer not detected right now
+                                    </p>
                                     <p className="text-xs text-gray-400 mt-1">
-                                        If services just started, wait about 60 seconds and refresh. In lite mode, this is expected.
+                                        If services just started, wait about 60
+                                        seconds and refresh. In lite mode, this
+                                        is expected.
                                     </p>
                                 </div>
                             ) : null}
@@ -730,30 +788,60 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 icon={Waves}
                                                 label="Vibe Embeddings"
                                                 description="CLAP audio embeddings for similarity search"
-                                                completed={enrichmentProgress.clapEmbeddings.completed}
-                                                total={enrichmentProgress.clapEmbeddings.total}
-                                                progress={enrichmentProgress.clapEmbeddings.progress}
-                                                processing={enrichmentProgress.clapEmbeddings.processing}
-                                                failed={enrichmentProgress.clapEmbeddings.failed}
+                                                completed={
+                                                    enrichmentProgress
+                                                        .clapEmbeddings
+                                                        .completed
+                                                }
+                                                total={
+                                                    enrichmentProgress
+                                                        .clapEmbeddings.total
+                                                }
+                                                progress={
+                                                    enrichmentProgress
+                                                        .clapEmbeddings.progress
+                                                }
+                                                processing={
+                                                    enrichmentProgress
+                                                        .clapEmbeddings
+                                                        .processing
+                                                }
+                                                failed={
+                                                    enrichmentProgress
+                                                        .clapEmbeddings.failed
+                                                }
                                                 isBackground={true}
                                             />
                                         </div>
                                         <button
                                             onClick={handleResetVibeEmbeddings}
-                                            disabled={resettingVibe || syncing || reEnriching || isEnrichmentActive}
+                                            disabled={
+                                                resettingVibe ||
+                                                syncing ||
+                                                reEnriching ||
+                                                isEnrichmentActive
+                                            }
                                             className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
                                                 hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                         >
-                                            {resettingVibe ? "Resetting..." : "Re-run"}
+                                            {resettingVibe
+                                                ? "Resetting..."
+                                                : "Re-run"}
                                         </button>
                                     </div>
                                 )
                             ) : !featuresLoading ? (
                                 <div className="opacity-50 py-2">
-                                    <h4 className="text-sm font-medium text-gray-300">Vibe Similarity</h4>
-                                    <p className="text-sm text-gray-400">Analyzer not detected right now</p>
+                                    <h4 className="text-sm font-medium text-gray-300">
+                                        Vibe Similarity
+                                    </h4>
+                                    <p className="text-sm text-gray-400">
+                                        Analyzer not detected right now
+                                    </p>
                                     <p className="text-xs text-gray-400 mt-1">
-                                        If services just started, wait about 60 seconds and refresh. In lite mode, this is expected.
+                                        If services just started, wait about 60
+                                        seconds and refresh. In lite mode, this
+                                        is expected.
                                     </p>
                                 </div>
                             ) : null}
@@ -766,7 +854,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 <button
                                     onClick={handleSyncAndEnrich}
                                     disabled={
-                                        syncing || reEnriching || isEnrichmentActive
+                                        syncing ||
+                                        reEnriching ||
+                                        isEnrichmentActive
                                     }
                                     className="px-3 py-1.5 text-xs bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
@@ -776,18 +866,23 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 <button
                                     onClick={handleFullEnrichment}
                                     disabled={
-                                        syncing || reEnriching || isEnrichmentActive
+                                        syncing ||
+                                        reEnriching ||
+                                        isEnrichmentActive
                                     }
                                     className="px-3 py-1.5 text-xs bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                                 >
-                                    {reEnriching ? "Starting..." : "Re-enrich All"}
+                                    {reEnriching
+                                        ? "Starting..."
+                                        : "Re-enrich All"}
                                 </button>
 
                                 {/* Control Actions */}
                                 {isEnrichmentActive && (
                                     <>
-                                        {enrichmentState?.status === "running" ? (
+                                        {enrichmentState?.status ===
+                                        "running" ? (
                                             <button
                                                 onClick={handlePause}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-yellow-600 text-white rounded-full
@@ -820,7 +915,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 {/* Failures Button */}
                                 {totalFailures > 0 && (
                                     <button
-                                        onClick={() => setShowFailuresModal(true)}
+                                        onClick={() =>
+                                            setShowFailuresModal(true)
+                                        }
                                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-full
                                         hover:bg-red-500/30 transition-colors ml-auto"
                                     >
@@ -834,10 +931,12 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-white/70 bg-white/5 rounded-full border border-white/10">
                                     <input
                                         type="checkbox"
-                                        checked={forceMoodBucketBackfillOnFullEnrich}
+                                        checked={
+                                            forceMoodBucketBackfillOnFullEnrich
+                                        }
                                         onChange={(e) =>
                                             setForceMoodBucketBackfillOnFullEnrich(
-                                                e.target.checked
+                                                e.target.checked,
                                             )
                                         }
                                         disabled={
@@ -853,10 +952,12 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-white/70 bg-white/5 rounded-full border border-white/10">
                                         <input
                                             type="checkbox"
-                                            checked={forceVibeRebuildOnFullEnrich}
+                                            checked={
+                                                forceVibeRebuildOnFullEnrich
+                                            }
                                             onChange={(e) =>
                                                 setForceVibeRebuildOnFullEnrich(
-                                                    e.target.checked
+                                                    e.target.checked,
                                                 )
                                             }
                                             disabled={
@@ -970,7 +1071,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             onChange={(e) =>
                                 onUpdate({
                                     transcodeCacheMaxGb: parseInt(
-                                        e.target.value
+                                        e.target.value,
                                     ),
                                 })
                             }
@@ -1044,12 +1145,12 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             {enrichmentSpeed === 1
                                                 ? "Conservative"
                                                 : enrichmentSpeed === 2
-                                                ? "Moderate"
-                                                : enrichmentSpeed === 3
-                                                ? "Balanced"
-                                                : enrichmentSpeed === 4
-                                                ? "Fast"
-                                                : "Maximum"}
+                                                  ? "Moderate"
+                                                  : enrichmentSpeed === 3
+                                                    ? "Balanced"
+                                                    : enrichmentSpeed === 4
+                                                      ? "Fast"
+                                                      : "Maximum"}
                                         </span>
                                         {concurrencyConfig && (
                                             <span className="text-xs text-white/50 w-24 text-right">
@@ -1068,98 +1169,109 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 )}
 
                 {/* Audio Analyzer Workers Control */}
-                {settings.autoEnrichMetadata && !featuresLoading && musicCNN && (
-                    <SettingsRow
-                        label="Audio Analysis Workers"
-                        description="CPU workers for Essentia ML analysis (BPM, key, mood, energy). Lower values reduce CPU usage on older systems."
-                    >
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="range"
-                                min={1}
-                                max={8}
-                                value={workersConfig?.workers ?? 2}
-                                disabled={isWorkersLoading}
-                                onChange={(e) => {
-                                    const newWorkers = parseInt(e.target.value);
-                                    setAnalysisWorkersMutation.mutate(
-                                        newWorkers
-                                    );
-                                }}
-                                className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
+                {settings.autoEnrichMetadata &&
+                    !featuresLoading &&
+                    musicCNN && (
+                        <SettingsRow
+                            label="Audio Analysis Workers"
+                            description="CPU workers for Essentia ML analysis (BPM, key, mood, energy). Lower values reduce CPU usage on older systems."
+                        >
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={8}
+                                    value={workersConfig?.workers ?? 2}
+                                    disabled={isWorkersLoading}
+                                    onChange={(e) => {
+                                        const newWorkers = parseInt(
+                                            e.target.value,
+                                        );
+                                        setAnalysisWorkersMutation.mutate(
+                                            newWorkers,
+                                        );
+                                    }}
+                                    className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
                                 disabled:opacity-50 disabled:cursor-not-allowed
                                 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
                                 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
-                            />
-                            <div className="flex flex-col items-end gap-0.5">
-                                {isWorkersLoading ? (
-                                    <span className="text-sm text-white/50 w-24 text-right">
-                                        Loading...
-                                    </span>
-                                ) : (
-                                    <>
-                                        <span className="text-sm text-white w-24 text-right">
-                                            {workersConfig?.workers ?? 2}{" "}
-                                            workers
+                                />
+                                <div className="flex flex-col items-end gap-0.5">
+                                    {isWorkersLoading ? (
+                                        <span className="text-sm text-white/50 w-24 text-right">
+                                            Loading...
                                         </span>
-                                        {workersConfig && (
-                                            <span className="text-xs text-white/50 w-24 text-right">
-                                                {workersConfig.cpuCores} cores
-                                                available
+                                    ) : (
+                                        <>
+                                            <span className="text-sm text-white w-24 text-right">
+                                                {workersConfig?.workers ?? 2}{" "}
+                                                workers
                                             </span>
-                                        )}
-                                    </>
-                                )}
+                                            {workersConfig && (
+                                                <span className="text-xs text-white/50 w-24 text-right">
+                                                    {workersConfig.cpuCores}{" "}
+                                                    cores available
+                                                </span>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    </SettingsRow>
-                )}
+                        </SettingsRow>
+                    )}
 
                 {/* CLAP Analyzer Workers Control */}
-                {settings.autoEnrichMetadata && !featuresLoading && vibeEmbeddings && (
-                    <SettingsRow
-                        label="Vibe Embedding Workers"
-                        description="CPU workers for CLAP embeddings (vibe similarity). More memory intensive - reduce on systems with less RAM."
-                    >
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="range"
-                                min={1}
-                                max={8}
-                                value={clapWorkersConfig?.workers ?? 2}
-                                disabled={isClapWorkersLoading}
-                                onChange={(e) => {
-                                    const newWorkers = parseInt(e.target.value);
-                                    setClapWorkersMutation.mutate(newWorkers);
-                                }}
-                                className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
+                {settings.autoEnrichMetadata &&
+                    !featuresLoading &&
+                    vibeEmbeddings && (
+                        <SettingsRow
+                            label="Vibe Embedding Workers"
+                            description="CPU workers for CLAP embeddings (vibe similarity). More memory intensive - reduce on systems with less RAM."
+                        >
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={8}
+                                    value={clapWorkersConfig?.workers ?? 2}
+                                    disabled={isClapWorkersLoading}
+                                    onChange={(e) => {
+                                        const newWorkers = parseInt(
+                                            e.target.value,
+                                        );
+                                        setClapWorkersMutation.mutate(
+                                            newWorkers,
+                                        );
+                                    }}
+                                    className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
                                 disabled:opacity-50 disabled:cursor-not-allowed
                                 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
                                 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
-                            />
-                            <div className="flex flex-col items-end gap-0.5">
-                                {isClapWorkersLoading ? (
-                                    <span className="text-sm text-white/50 w-24 text-right">
-                                        Loading...
-                                    </span>
-                                ) : (
-                                    <>
-                                        <span className="text-sm text-white w-24 text-right">
-                                            {clapWorkersConfig?.workers ?? 2}{" "}
-                                            workers
+                                />
+                                <div className="flex flex-col items-end gap-0.5">
+                                    {isClapWorkersLoading ? (
+                                        <span className="text-sm text-white/50 w-24 text-right">
+                                            Loading...
                                         </span>
-                                        {clapWorkersConfig && (
-                                            <span className="text-xs text-white/50 w-24 text-right">
-                                                {clapWorkersConfig.cpuCores} cores
-                                                available
+                                    ) : (
+                                        <>
+                                            <span className="text-sm text-white w-24 text-right">
+                                                {clapWorkersConfig?.workers ??
+                                                    2}{" "}
+                                                workers
                                             </span>
-                                        )}
-                                    </>
-                                )}
+                                            {clapWorkersConfig && (
+                                                <span className="text-xs text-white/50 w-24 text-right">
+                                                    {clapWorkersConfig.cpuCores}{" "}
+                                                    cores available
+                                                </span>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    </SettingsRow>
-                )}
+                        </SettingsRow>
+                    )}
                 {/* Cache Actions */}
                 <div className="flex flex-col gap-3 pt-4">
                     <button

@@ -104,10 +104,14 @@ describe("allocateTracksWithArtistWeighting", () => {
             targetCount: 10,
             rng: makeRng(42),
         });
-        const second = allocateTracksWithArtistWeighting(catalog, getArtistKey, {
-            targetCount: 10,
-            rng: makeRng(42),
-        });
+        const second = allocateTracksWithArtistWeighting(
+            catalog,
+            getArtistKey,
+            {
+                targetCount: 10,
+                rng: makeRng(42),
+            },
+        );
         expect(first.map((t) => t.id)).toEqual(second.map((t) => t.id));
     });
 

@@ -64,7 +64,7 @@
 
     /* Actions */
     --color-primary: #3b82f6; /* PRIMARY CTA ONLY - Blue */
-    --color-ai: #2323FF; /* AI features - Electric Blue */
+    --color-ai: #2323ff; /* AI features - Electric Blue */
     --color-ai-dark: #1a1acc; /* AI selected */
 
     /* Status */
@@ -81,8 +81,16 @@
 body {
     background: var(--bg-primary);
     color: var(--text-body);
-    font-family: var(--font-montserrat), -apple-system, BlinkMacSystemFont,
-        "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family:
+        var(--font-montserrat),
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        sans-serif;
     min-height: 100vh;
 }
 
@@ -324,7 +332,9 @@ body.tv-mode * {
     color: #777;
     text-decoration: none;
     border-radius: 4px;
-    transition: color 0.15s, background 0.15s;
+    transition:
+        color 0.15s,
+        background 0.15s;
 }
 
 .tv-nav-link.active {
@@ -416,7 +426,9 @@ body.tv-mode * {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: transform 0.15s, background 0.15s;
+    transition:
+        transform 0.15s,
+        background 0.15s;
 }
 
 .tv-np-btn svg {
@@ -441,7 +453,9 @@ body.tv-mode * {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: color 0.15s, background 0.15s;
+    transition:
+        color 0.15s,
+        background 0.15s;
     position: relative;
 }
 
@@ -473,9 +487,13 @@ body.tv-mode * {
 /* Card focus styling - visible ring around focused cards */
 body.tv-mode [data-tv-card]:focus {
     outline: none;
-    box-shadow: 0 0 0 3px #3b82f6, 0 0 20px rgba(59, 130, 246, 0.4);
+    box-shadow:
+        0 0 0 3px #3b82f6,
+        0 0 20px rgba(59, 130, 246, 0.4);
     transform: scale(1.02);
-    transition: box-shadow 0.15s ease, transform 0.15s ease;
+    transition:
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
     z-index: 10;
     position: relative;
 }
@@ -494,7 +512,9 @@ body.tv-mode a:focus {
 /* Remove default focus outlines for cards since we use box-shadow */
 body.tv-mode [data-tv-card] {
     outline: none;
-    transition: box-shadow 0.15s ease, transform 0.15s ease;
+    transition:
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
 }
 
 /* Filter buttons / tabs focus */

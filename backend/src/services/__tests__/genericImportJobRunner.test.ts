@@ -29,7 +29,8 @@ describe("generic import job runner", () => {
     const mockGetJob = importJobStore.getJob as jest.Mock;
     const mockUpdateJob = importJobStore.updateJob as jest.Mock;
     const mockPreviewImport = playlistImportService.previewImport as jest.Mock;
-    const mockImportPlaylist = playlistImportService.importPlaylist as jest.Mock;
+    const mockImportPlaylist =
+        playlistImportService.importPlaylist as jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -82,7 +83,7 @@ describe("generic import job runner", () => {
         });
         expect(mockPreviewImport).toHaveBeenCalledWith(
             "user-1",
-            "https://open.spotify.com/playlist/abc"
+            "https://open.spotify.com/playlist/abc",
         );
         expect(mockUpdateJob).toHaveBeenNthCalledWith(2, "job-1", {
             status: "creating_playlist",
@@ -127,7 +128,7 @@ describe("generic import job runner", () => {
                     unresolved: 0,
                 },
             },
-            "Roadtrip"
+            "Roadtrip",
         );
         expect(mockUpdateJob).toHaveBeenNthCalledWith(3, "job-1", {
             status: "completed",

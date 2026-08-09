@@ -28,22 +28,23 @@ describe("errorHandler middleware", () => {
         return res;
     }
 
-    function createRequest(overrides: Partial<{ method: string; path: string }> = {}) {
+    function createRequest(
+        overrides: Partial<{ method: string; path: string }> = {},
+    ) {
         return { method: "GET", path: "/api/example", ...overrides } as any;
     }
 
     it("maps AppError categories to status codes and includes details in development", async () => {
         const { errorHandler } = await loadHandler("development");
-        const { AppError, ErrorCategory, ErrorCode } = await import(
-            "../../utils/errors"
-        );
+        const { AppError, ErrorCategory, ErrorCode } =
+            await import("../../utils/errors");
 
         const resRecoverable = createResponse();
         const recoverable = new AppError(
             ErrorCode.INVALID_CONFIG,
             ErrorCategory.RECOVERABLE,
             "recoverable issue",
-            { hint: "fix input" }
+            { hint: "fix input" },
         );
 
         errorHandler(recoverable, createRequest(), resRecoverable, jest.fn());
@@ -57,14 +58,14 @@ describe("errorHandler middleware", () => {
         });
         expect(mockLoggerError).toHaveBeenCalledWith(
             `[AppError] ${ErrorCode.INVALID_CONFIG}: recoverable issue`,
-            { hint: "fix input" }
+            { hint: "fix input" },
         );
 
         const resTransient = createResponse();
         const transient = new AppError(
             ErrorCode.TRANSCODE_FAILED,
             ErrorCategory.TRANSIENT,
-            "retry later"
+            "retry later",
         );
         errorHandler(transient, createRequest(), resTransient, jest.fn());
         expect(resTransient.status).toHaveBeenCalledWith(503);
@@ -73,7 +74,7 @@ describe("errorHandler middleware", () => {
         const fatal = new AppError(
             ErrorCode.MUSIC_PATH_NOT_ACCESSIBLE,
             ErrorCategory.FATAL,
-            "fatal error"
+            "fatal error",
         );
         errorHandler(fatal, createRequest(), resFatal, jest.fn());
         expect(resFatal.status).toHaveBeenCalledWith(500);
@@ -81,9 +82,8 @@ describe("errorHandler middleware", () => {
 
     it("omits AppError details in production responses", async () => {
         const { errorHandler } = await loadHandler("production");
-        const { AppError, ErrorCategory, ErrorCode } = await import(
-            "../../utils/errors"
-        );
+        const { AppError, ErrorCategory, ErrorCode } =
+            await import("../../utils/errors");
         const res = createResponse();
 
         errorHandler(
@@ -91,11 +91,11 @@ describe("errorHandler middleware", () => {
                 ErrorCode.INVALID_CONFIG,
                 ErrorCategory.RECOVERABLE,
                 "prod-safe",
-                { secret: "hide-me" }
+                { secret: "hide-me" },
             ),
             createRequest(),
             res,
-            jest.fn()
+            jest.fn(),
         );
 
         expect(res.status).toHaveBeenCalledWith(400);
@@ -111,7 +111,10 @@ describe("errorHandler middleware", () => {
         const prodRes = createResponse();
         const prodErr = new Error("db exploded");
         prodErr.stack = "stack-trace";
-        const req = createRequest({ method: "POST", path: "/api/downloads/123" });
+        const req = createRequest({
+            method: "POST",
+            path: "/api/downloads/123",
+        });
 
         prod.errorHandler(prodErr, req, prodRes, jest.fn());
 
@@ -121,7 +124,7 @@ describe("errorHandler middleware", () => {
         expect(mockLoggerError).toHaveBeenCalledWith(
             "Unhandled error:",
             "POST /api/downloads/123",
-            "stack-trace"
+            "stack-trace",
         );
         expect(prodRes.status).toHaveBeenCalledWith(500);
         expect(prodRes.json).toHaveBeenCalledWith({
@@ -161,9 +164,8 @@ describe("errorHandler middleware", () => {
 
     it("uses AppError.httpStatus when present, overriding the category-based mapping", async () => {
         const { errorHandler } = await loadHandler("development");
-        const { AppError, ErrorCategory, ErrorCode } = await import(
-            "../../utils/errors"
-        );
+        const { AppError, ErrorCategory, ErrorCode } =
+            await import("../../utils/errors");
 
         const resUnauthorized = createResponse();
         const unauthorized = new AppError(
@@ -171,7 +173,7 @@ describe("errorHandler middleware", () => {
             ErrorCategory.RECOVERABLE,
             "not authorized",
             undefined,
-            401
+            401,
         );
         errorHandler(unauthorized, createRequest(), resUnauthorized, jest.fn());
         expect(resUnauthorized.status).toHaveBeenCalledWith(401);
@@ -190,7 +192,7 @@ describe("errorHandler middleware", () => {
             ErrorCategory.FATAL,
             "resource missing",
             undefined,
-            404
+            404,
         );
         errorHandler(notFound, createRequest(), resNotFound, jest.fn());
         expect(resNotFound.status).toHaveBeenCalledWith(404);
@@ -203,9 +205,8 @@ describe("errorHandler middleware", () => {
 
     it("keeps AppError explicit-status responses shaped the same in production (message included, details dev-gated)", async () => {
         const { errorHandler } = await loadHandler("production");
-        const { AppError, ErrorCategory, ErrorCode } = await import(
-            "../../utils/errors"
-        );
+        const { AppError, ErrorCategory, ErrorCode } =
+            await import("../../utils/errors");
         const res = createResponse();
 
         errorHandler(
@@ -214,11 +215,11 @@ describe("errorHandler middleware", () => {
                 ErrorCategory.RECOVERABLE,
                 "not found",
                 { secret: "hide-me" },
-                404
+                404,
             ),
             createRequest(),
             res,
-            jest.fn()
+            jest.fn(),
         );
 
         expect(res.status).toHaveBeenCalledWith(404);

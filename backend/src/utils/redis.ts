@@ -3,7 +3,7 @@ import { logger } from "./logger";
 import { config } from "../config";
 
 const MAX_RETRY_DELAY_MS = 30_000; // Cap at 30 seconds
-const BASE_RETRY_DELAY_MS = 250;   // Start at 250ms
+const BASE_RETRY_DELAY_MS = 250; // Start at 250ms
 
 const redisClient = createClient({
     url: config.redisUrl,

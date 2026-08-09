@@ -6,7 +6,10 @@
 
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { TidalBadge } from "@/components/ui/TidalBadge";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { api } from "@/lib/api";
 import type { TidalMixPreview } from "@/hooks/useQueries";
 import { BrowseCard } from "./BrowseCard";
@@ -29,7 +32,13 @@ export function TidalMixesSection({ mixes }: TidalMixesSectionProps) {
                     <CarouselItem key={mix.mixId}>
                         <BrowseCard
                             href={`/explore/tidal-mix/${encodeURIComponent(mix.mixId)}`}
-                            imageUrl={mix.thumbnailUrl ? api.getTidalBrowseImageUrl(mix.thumbnailUrl) : null}
+                            imageUrl={
+                                mix.thumbnailUrl
+                                    ? api.getTidalBrowseImageUrl(
+                                          mix.thumbnailUrl,
+                                      )
+                                    : null
+                            }
                             title={mix.title}
                             subtitle={mix.subTitle}
                         />

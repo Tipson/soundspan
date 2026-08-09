@@ -38,20 +38,20 @@ router.get(
             logger.debug(
                 `[Notifications] Fetching notifications for user ${
                     req.user!.id
-                }`
+                }`,
             );
             const notifications = await notificationService.getForUser(
-                req.user!.id
+                req.user!.id,
             );
             logger.debug(
-                `[Notifications] Found ${notifications.length} notifications`
+                `[Notifications] Found ${notifications.length} notifications`,
             );
             res.json(notifications);
         } catch (error: any) {
             logger.error("Error fetching notifications:", error);
             sendInternalRouteError(res, "Failed to fetch notifications");
         }
-    })
+    }),
 );
 
 /**
@@ -83,14 +83,14 @@ router.get(
     asyncHandler(async (req: Request, res: Response) => {
         try {
             const count = await notificationService.getUnreadCount(
-                req.user!.id
+                req.user!.id,
             );
             res.json({ count });
         } catch (error: any) {
             logger.error("Error fetching unread count:", error);
             sendInternalRouteError(res, "Failed to fetch unread count");
         }
-    })
+    }),
 );
 
 /**
@@ -131,12 +131,9 @@ router.post(
             res.json({ success: true });
         } catch (error: any) {
             logger.error("Error marking notification as read:", error);
-            sendInternalRouteError(
-                res,
-                "Failed to mark notification as read"
-            );
+            sendInternalRouteError(res, "Failed to mark notification as read");
         }
-    })
+    }),
 );
 
 /**
@@ -172,10 +169,10 @@ router.post(
             logger.error("Error marking all notifications as read:", error);
             sendInternalRouteError(
                 res,
-                "Failed to mark all notifications as read"
+                "Failed to mark all notifications as read",
             );
         }
-    })
+    }),
 );
 
 /**
@@ -219,7 +216,7 @@ router.post(
             logger.error("Error clearing notification:", error);
             sendInternalRouteError(res, "Failed to clear notification");
         }
-    })
+    }),
 );
 
 /**
@@ -256,7 +253,7 @@ router.post(
             logger.error("Error clearing all notifications:", error);
             sendInternalRouteError(res, "Failed to clear all notifications");
         }
-    })
+    }),
 );
 
 /**
@@ -312,7 +309,7 @@ router.get(
             logger.error("Error fetching download history:", error);
             sendInternalRouteError(res, "Failed to fetch download history");
         }
-    })
+    }),
 );
 
 /**
@@ -354,7 +351,7 @@ router.get(
             logger.error("Error fetching active downloads:", error);
             sendInternalRouteError(res, "Failed to fetch active downloads");
         }
-    })
+    }),
 );
 
 /**
@@ -404,7 +401,7 @@ router.post(
             logger.error("Error clearing download:", error);
             sendInternalRouteError(res, "Failed to clear download");
         }
-    })
+    }),
 );
 
 /**
@@ -448,7 +445,7 @@ router.post(
             logger.error("Error clearing all downloads:", error);
             sendInternalRouteError(res, "Failed to clear all downloads");
         }
-    })
+    }),
 );
 
 /**
@@ -509,7 +506,7 @@ router.post(
                 return sendRouteError(
                     res,
                     404,
-                    "Download not found or not failed"
+                    "Download not found or not failed",
                 );
             }
 
@@ -528,7 +525,7 @@ router.post(
                     return sendRouteError(
                         res,
                         400,
-                        "Cannot retry: missing playlistId or pendingTrackId"
+                        "Cannot retry: missing playlistId or pendingTrackId",
                     );
                 }
 
@@ -582,12 +579,10 @@ router.post(
                     },
                 });
 
-                const { soulseekService } = await import(
-                    "../services/soulseek"
-                );
-                const { getSystemSettings } = await import(
-                    "../utils/systemSettings"
-                );
+                const { soulseekService } =
+                    await import("../services/soulseek");
+                const { getSystemSettings } =
+                    await import("../utils/systemSettings");
 
                 const settings = await getSystemSettings();
                 if (!settings?.musicPath) {
@@ -632,7 +627,7 @@ router.post(
 
                 const searchResult = await soulseekService.searchTrack(
                     pendingTrack.spotifyArtist,
-                    pendingTrack.spotifyTitle
+                    pendingTrack.spotifyTitle,
                 );
 
                 if (
@@ -661,7 +656,7 @@ router.post(
                         pendingTrack.spotifyTitle,
                         albumName,
                         searchResult.allMatches,
-                        settings.musicPath
+                        settings.musicPath,
                     )
                     .then(async (result) => {
                         if (result.success) {
@@ -678,9 +673,8 @@ router.post(
                             });
 
                             try {
-                                const { scanQueue } = await import(
-                                    "../workers/queues"
-                                );
+                                const { scanQueue } =
+                                    await import("../workers/queues");
                                 await scanQueue.add(
                                     "scan",
                                     {
@@ -695,7 +689,7 @@ router.post(
                                     {
                                         priority: 1,
                                         removeOnComplete: true,
-                                    }
+                                    },
                                 );
                             } catch {
                                 // Best-effort; job status already reflects download
@@ -734,7 +728,7 @@ router.post(
                     return sendRouteError(
                         res,
                         400,
-                        "Cannot retry: missing artist/album info"
+                        "Cannot retry: missing artist/album info",
                     );
                 }
 
@@ -764,12 +758,10 @@ router.post(
                 });
 
                 // Try Soulseek first (async)
-                const { soulseekService } = await import(
-                    "../services/soulseek"
-                );
-                const { getSystemSettings } = await import(
-                    "../utils/systemSettings"
-                );
+                const { soulseekService } =
+                    await import("../services/soulseek");
+                const { getSystemSettings } =
+                    await import("../utils/systemSettings");
 
                 const settings = await getSystemSettings();
                 const musicPath = settings?.musicPath;
@@ -800,12 +792,16 @@ router.post(
                 ];
 
                 logger.debug(
-                    `[Retry] Trying Soulseek for ${artistName} - ${albumTitle}`
+                    `[Retry] Trying Soulseek for ${artistName} - ${albumTitle}`,
                 );
 
                 // Run Soulseek search async
                 soulseekService
-                    .searchAndDownloadBatch(tracks, musicPath, settings?.soulseekConcurrentDownloads || 4)
+                    .searchAndDownloadBatch(
+                        tracks,
+                        musicPath,
+                        settings?.soulseekConcurrentDownloads || 4,
+                    )
                     .then(async (result) => {
                         if (result.successful > 0) {
                             await prisma.downloadJob.update({
@@ -823,13 +819,12 @@ router.post(
                                 },
                             });
                             logger.debug(
-                                `[Retry] ✓ Soulseek downloaded ${result.successful} tracks for ${artistName} - ${albumTitle}`
+                                `[Retry] ✓ Soulseek downloaded ${result.successful} tracks for ${artistName} - ${albumTitle}`,
                             );
 
                             // Trigger library scan
-                            const { scanQueue } = await import(
-                                "../workers/queues"
-                            );
+                            const { scanQueue } =
+                                await import("../workers/queues");
                             await scanQueue.add("scan", {
                                 paths: [],
                                 fullScan: false,
@@ -839,16 +834,15 @@ router.post(
                         } else {
                             // Soulseek failed, try Lidarr if we have an MBID
                             logger.debug(
-                                `[Retry] Soulseek failed, trying Lidarr for ${artistName} - ${albumTitle}`
+                                `[Retry] Soulseek failed, trying Lidarr for ${artistName} - ${albumTitle}`,
                             );
 
                             if (
                                 failedJob.targetMbid &&
                                 !failedJob.targetMbid.startsWith("retry_")
                             ) {
-                                const { simpleDownloadManager } = await import(
-                                    "../services/simpleDownloadManager"
-                                );
+                                const { simpleDownloadManager } =
+                                    await import("../services/simpleDownloadManager");
                                 const lidarrResult =
                                     await simpleDownloadManager.startDownload(
                                         newJobRecord.id,
@@ -856,7 +850,7 @@ router.post(
                                         albumTitle,
                                         failedJob.targetMbid,
                                         req.user!.id,
-                                        false
+                                        false,
                                     );
 
                                 if (!lidarrResult.success) {
@@ -903,7 +897,7 @@ router.post(
                 return sendRouteError(
                     res,
                     400,
-                    "Cannot retry: missing album MBID"
+                    "Cannot retry: missing album MBID",
                 );
             }
 
@@ -936,9 +930,8 @@ router.post(
             });
 
             // Import the download manager dynamically to avoid circular deps
-            const { simpleDownloadManager } = await import(
-                "../services/simpleDownloadManager"
-            );
+            const { simpleDownloadManager } =
+                await import("../services/simpleDownloadManager");
 
             // Start download with the correct positional arguments
             // startDownload(jobId, artistName, albumTitle, albumMbid, userId, isDiscovery)
@@ -948,7 +941,7 @@ router.post(
                 albumTitle,
                 failedJob.targetMbid,
                 req.user!.id,
-                false // isDiscovery
+                false, // isDiscovery
             );
 
             res.json({
@@ -960,7 +953,7 @@ router.post(
             logger.error("Error retrying download:", error);
             sendInternalRouteError(res, "Failed to retry download");
         }
-    })
+    }),
 );
 
 export default router;

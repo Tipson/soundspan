@@ -138,9 +138,12 @@ export function DownloadNotifications() {
                     api
                         .deleteDownload(id)
                         .catch((error) =>
-                            sharedFrontendLogger.error(`Failed to delete job ${id}`, error)
-                        )
-                )
+                            sharedFrontendLogger.error(
+                                `Failed to delete job ${id}`,
+                                error,
+                            ),
+                        ),
+                ),
             );
             setIsClearing(false);
             setDismissed(true);
@@ -159,7 +162,7 @@ export function DownloadNotifications() {
         .sort(
             (a, b) =>
                 new Date(b.createdAt).getTime() -
-                new Date(a.createdAt).getTime()
+                new Date(a.createdAt).getTime(),
         );
 
     // Mobile: Compact floating pill at top
@@ -206,7 +209,7 @@ export function DownloadNotifications() {
                                         job={job}
                                         onDelete={(id) =>
                                             setDeletedIds((prev) =>
-                                                new Set(prev).add(id)
+                                                new Set(prev).add(id),
                                             )
                                         }
                                     />
@@ -231,7 +234,7 @@ export function DownloadNotifications() {
                                     "w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded transition-all",
                                     isClearing
                                         ? "text-white/30 cursor-not-allowed"
-                                        : "text-white/60 hover:text-white hover:bg-white/5"
+                                        : "text-white/60 hover:text-white hover:bg-white/5",
                                 )}
                             >
                                 <Trash2 className="w-3 h-3" />
@@ -260,7 +263,7 @@ export function DownloadNotifications() {
                     className={cn(
                         "flex items-center justify-between px-4 py-3 border-b border-white/10 bg-black/40",
                         "cursor-move select-none",
-                        isDragging && "cursor-grabbing"
+                        isDragging && "cursor-grabbing",
                     )}
                     onMouseDown={handleMouseDown}
                 >
@@ -301,7 +304,7 @@ export function DownloadNotifications() {
                                     job={job}
                                     onDelete={(id) =>
                                         setDeletedIds((prev) =>
-                                            new Set(prev).add(id)
+                                            new Set(prev).add(id),
                                         )
                                     }
                                 />
@@ -321,7 +324,7 @@ export function DownloadNotifications() {
                                 "w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded transition-all",
                                 isClearing
                                     ? "text-white/30 cursor-not-allowed"
-                                    : "text-white/60 hover:text-white hover:bg-white/5"
+                                    : "text-white/60 hover:text-white hover:bg-white/5",
                             )}
                         >
                             <Trash2 className="w-3 h-3" />
@@ -428,7 +431,7 @@ function DownloadJobItem({
                         <span
                             className={cn(
                                 "text-xs font-medium capitalize",
-                                getStatusColor()
+                                getStatusColor(),
                             )}
                         >
                             {job.status}
@@ -439,7 +442,7 @@ function DownloadJobItem({
                                 <span
                                     className={cn(
                                         "text-xs font-medium",
-                                        getSourceColor()
+                                        getSourceColor(),
                                     )}
                                 >
                                     {getStatusText()}
@@ -463,7 +466,7 @@ function DownloadJobItem({
                         disabled={isDeleting}
                         className={cn(
                             "opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded",
-                            isDeleting && "opacity-50 cursor-not-allowed"
+                            isDeleting && "opacity-50 cursor-not-allowed",
                         )}
                         title="Delete"
                     >
@@ -532,7 +535,7 @@ function DownloadJobItemCompact({
                     <p
                         className={cn(
                             "text-[10px] font-medium",
-                            getSourceColor()
+                            getSourceColor(),
                         )}
                     >
                         {getStatusText()}

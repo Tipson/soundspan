@@ -21,7 +21,7 @@ test("sidebar navigation includes Library, Listen Together, Audiobooks, Podcasts
     assert.ok(names.includes("Library"), "should include Library");
     assert.ok(
         names.includes("Listen Together"),
-        "should include Listen Together"
+        "should include Listen Together",
     );
     assert.ok(names.includes("Audiobooks"), "should include Audiobooks");
     assert.ok(names.includes("Podcasts"), "should include Podcasts");
@@ -46,6 +46,6 @@ test("mobile quick links include Listen Together", () => {
     const names = MOBILE_QUICK_LINKS.map((item) => item.name);
     assert.ok(
         names.includes("Listen Together"),
-        "should include Listen Together"
+        "should include Listen Together",
     );
 });

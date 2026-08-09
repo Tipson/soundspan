@@ -126,7 +126,7 @@ export const enrichmentApi = {
 
         const queryString = query.toString();
         return api.get(
-            `/enrichment/failures${queryString ? `?${queryString}` : ""}`
+            `/enrichment/failures${queryString ? `?${queryString}` : ""}`,
         );
     },
 
@@ -141,7 +141,7 @@ export const enrichmentApi = {
      * Retry specific failures
      */
     retryFailures: async (
-        ids: string[]
+        ids: string[],
     ): Promise<{ message: string; queued: number }> => {
         return api.post("/enrichment/retry", { ids });
     },
@@ -150,7 +150,7 @@ export const enrichmentApi = {
      * Skip failures permanently
      */
     skipFailures: async (
-        ids: string[]
+        ids: string[],
     ): Promise<{ message: string; count: number }> => {
         return api.post("/enrichment/skip", { ids });
     },
@@ -159,7 +159,7 @@ export const enrichmentApi = {
      * Delete a failure record
      */
     deleteFailure: async (
-        id: string
+        id: string,
     ): Promise<{ message: string; count: number }> => {
         return api.delete(`/enrichment/failures/${id}`);
     },
@@ -168,7 +168,7 @@ export const enrichmentApi = {
      * Clear all failure records (optionally filtered by type)
      */
     clearAllFailures: async (
-        entityType?: "artist" | "track" | "audio" | "vibe"
+        entityType?: "artist" | "track" | "audio" | "vibe",
     ): Promise<{ message: string; count: number }> => {
         const query = entityType ? `?entityType=${entityType}` : "";
         return api.delete(`/enrichment/failures${query}`);
@@ -201,7 +201,9 @@ export const enrichmentApi = {
     /**
      * Set audio analyzer worker count (1-8)
      */
-    setAnalysisWorkers: async (workers: number): Promise<AnalysisWorkersConfig> => {
+    setAnalysisWorkers: async (
+        workers: number,
+    ): Promise<AnalysisWorkersConfig> => {
         return api.request("/analysis/workers", {
             method: "PUT",
             body: JSON.stringify({ workers }),
@@ -228,14 +230,20 @@ export const enrichmentApi = {
     /**
      * Retry failed vibe embeddings
      */
-    retryVibeEmbeddings: async (): Promise<{ message: string; queued: number }> => {
+    retryVibeEmbeddings: async (): Promise<{
+        message: string;
+        queued: number;
+    }> => {
         return api.post("/analysis/vibe/retry", {});
     },
 
     /**
      * Reset all vibe embeddings (queue all tracks for re-embedding)
      */
-    resetVibeEmbeddings: async (): Promise<{ message: string; queued: number }> => {
+    resetVibeEmbeddings: async (): Promise<{
+        message: string;
+        queued: number;
+    }> => {
         return api.post("/analysis/vibe/start", { force: true });
     },
 };

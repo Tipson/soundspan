@@ -8,9 +8,7 @@ from types import SimpleNamespace
 def _album_items(count: int, start: int = 0) -> list[SimpleNamespace]:
     """Build album items containing downloadable tracks."""
     return [
-        SimpleNamespace(
-            item=SimpleNamespace(isrc=f"US{number:010d}", id=number, title="t")
-        )
+        SimpleNamespace(item=SimpleNamespace(isrc=f"US{number:010d}", id=number, title="t"))
         for number in range(start, start + count)
     ]
 

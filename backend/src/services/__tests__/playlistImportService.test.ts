@@ -1,6 +1,5 @@
 process.env.SETTINGS_ENCRYPTION_KEY =
-    process.env.SETTINGS_ENCRYPTION_KEY ||
-    "12345678901234567890123456789012";
+    process.env.SETTINGS_ENCRYPTION_KEY || "12345678901234567890123456789012";
 
 const mockPrisma = {
     $transaction: jest.fn(),
@@ -91,14 +90,16 @@ describe("PlaylistImportService", () => {
         mockLogger.child.mockReturnValue(mockLogger);
         // Default: empty local library, no tidal auth
         mockPrisma.$transaction.mockImplementation(async (callback: any) =>
-            callback(mockPrisma)
+            callback(mockPrisma),
         );
         // track.findMany serves two roles:
         // 1. Local library candidates (select includes filePath/album) → returns []
         // 2. ID validation (where.id.in pattern) → returns matching stubs
         mockPrisma.track.findMany.mockImplementation(async (args: any) => {
             if (args?.where?.id?.in) {
-                return (args.where.id.in as string[]).map((id: string) => ({ id }));
+                return (args.where.id.in as string[]).map((id: string) => ({
+                    id,
+                }));
             }
             return []; // local library candidates: empty by default
         });
@@ -116,10 +117,12 @@ describe("PlaylistImportService", () => {
         // Default: ID validation returns all referenced IDs as existing
         // track.findMany is also used for local library candidates (returns [])
         // so only return stubs when the where.id.in pattern is used
-        mockPrisma.trackYtMusic.findMany.mockImplementation(async (args: any) => {
-            const ids = args?.where?.id?.in || [];
-            return ids.map((id: string) => ({ id }));
-        });
+        mockPrisma.trackYtMusic.findMany.mockImplementation(
+            async (args: any) => {
+                const ids = args?.where?.id?.in || [];
+                return ids.map((id: string) => ({ id }));
+            },
+        );
         mockPrisma.trackTidal.findMany.mockImplementation(async (args: any) => {
             const ids = args?.where?.id?.in || [];
             return ids.map((id: string) => ({ id }));
@@ -134,7 +137,7 @@ describe("PlaylistImportService", () => {
             });
 
             const result = playlistImportService.parseSourceUrl(
-                "https://open.spotify.com/playlist/abc123"
+                "https://open.spotify.com/playlist/abc123",
             );
 
             expect(result).toEqual({ source: "spotify", id: "abc123" });
@@ -147,7 +150,7 @@ describe("PlaylistImportService", () => {
             });
 
             const result = playlistImportService.parseSourceUrl(
-                "spotify:playlist:abc123"
+                "spotify:playlist:abc123",
             );
 
             expect(result).toEqual({ source: "spotify", id: "abc123" });
@@ -160,7 +163,7 @@ describe("PlaylistImportService", () => {
             });
 
             const result = playlistImportService.parseSourceUrl(
-                "open.spotify.com/playlist/abc123"
+                "open.spotify.com/playlist/abc123",
             );
 
             expect(result).toEqual({ source: "spotify", id: "abc123" });
@@ -170,7 +173,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://www.deezer.com/en/playlist/12345"
+                "https://www.deezer.com/en/playlist/12345",
             );
 
             expect(result).toEqual({ source: "deezer", id: "12345" });
@@ -180,7 +183,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://music.youtube.com/playlist?list=PLtest123"
+                "https://music.youtube.com/playlist?list=PLtest123",
             );
 
             expect(result).toEqual({ source: "youtube", id: "PLtest123" });
@@ -190,7 +193,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://www.youtube.com/playlist?list=PLtest456"
+                "https://www.youtube.com/playlist?list=PLtest456",
             );
 
             expect(result).toEqual({ source: "youtube", id: "PLtest456" });
@@ -200,7 +203,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://m.youtube.com/playlist?list=PLmobile456"
+                "https://m.youtube.com/playlist?list=PLmobile456",
             );
 
             expect(result).toEqual({ source: "youtube", id: "PLmobile456" });
@@ -210,7 +213,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://tidal.com/playlist/abc-123-def"
+                "https://tidal.com/playlist/abc-123-def",
             );
 
             expect(result).toEqual({ source: "tidal", id: "abc-123-def" });
@@ -220,7 +223,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://listen.tidal.com/browse/playlist/abc-123-def"
+                "https://listen.tidal.com/browse/playlist/abc-123-def",
             );
 
             expect(result).toEqual({ source: "tidal", id: "abc-123-def" });
@@ -230,7 +233,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://www.youtube.com/playlist?si=abc123&list=PLparamOrder"
+                "https://www.youtube.com/playlist?si=abc123&list=PLparamOrder",
             );
 
             expect(result).toEqual({ source: "youtube", id: "PLparamOrder" });
@@ -240,7 +243,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://music.youtube.com/playlist?list=PLtrailing"
+                "https://music.youtube.com/playlist?list=PLtrailing",
             );
 
             expect(result).toEqual({ source: "youtube", id: "PLtrailing" });
@@ -250,7 +253,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://youtube.com/playlist?list=PLextra&feature=share"
+                "https://youtube.com/playlist?list=PLextra&feature=share",
             );
 
             expect(result).toEqual({ source: "youtube", id: "PLextra" });
@@ -260,7 +263,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://example.com/not-a-playlist"
+                "https://example.com/not-a-playlist",
             );
 
             expect(result).toBeNull();
@@ -270,7 +273,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://evil.example/?u=https://listen.tidal.com/playlist/abc-123-def"
+                "https://evil.example/?u=https://listen.tidal.com/playlist/abc-123-def",
             );
 
             expect(result).toBeNull();
@@ -280,7 +283,7 @@ describe("PlaylistImportService", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce(null);
 
             const result = playlistImportService.parseSourceUrl(
-                "https://evil.example/?next=https://www.deezer.com/playlist/12345"
+                "https://evil.example/?next=https://www.deezer.com/playlist/12345",
             );
 
             expect(result).toBeNull();
@@ -288,7 +291,7 @@ describe("PlaylistImportService", () => {
 
         it("rejects Spotify playlist URLs embedded in unrelated query strings", () => {
             const result = playlistImportService.parseSourceUrl(
-                "https://evil.example/?next=https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk"
+                "https://evil.example/?next=https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk",
             );
 
             expect(result).toBeNull();
@@ -326,10 +329,9 @@ describe("PlaylistImportService", () => {
                 ],
             });
 
-            const result = await (playlistImportService as any).fetchSourceTracks(
-                "youtube",
-                "PLtest123"
-            );
+            const result = await (
+                playlistImportService as any
+            ).fetchSourceTracks("youtube", "PLtest123");
 
             expect(result.name).toBe("YT Playlist");
             expect(result.tracks).toHaveLength(2);
@@ -361,25 +363,23 @@ describe("PlaylistImportService", () => {
                 ],
             });
 
-            const result = await (playlistImportService as any).fetchSourceTracks(
-                "youtube",
-                "PLowned123",
-                "user_1"
-            );
+            const result = await (
+                playlistImportService as any
+            ).fetchSourceTracks("youtube", "PLowned123", "user_1");
 
             expect(result.name).toBe("Owned YT Playlist");
             expect(
-                mockYtMusicService.restoreOAuthWithCredentials
+                mockYtMusicService.restoreOAuthWithCredentials,
             ).toHaveBeenCalledWith(
                 "user_1",
                 "yt-oauth-json",
                 undefined,
-                undefined
+                undefined,
             );
             expect(mockYtMusicService.getBrowsePlaylist).toHaveBeenCalledWith(
                 "PLowned123",
                 100,
-                "user_1"
+                "user_1",
             );
         });
 
@@ -403,20 +403,18 @@ describe("PlaylistImportService", () => {
                 ],
             });
 
-            const result = await (playlistImportService as any).fetchSourceTracks(
-                "youtube",
-                "PLpublicFallback",
-                "user_1"
-            );
+            const result = await (
+                playlistImportService as any
+            ).fetchSourceTracks("youtube", "PLpublicFallback", "user_1");
 
             expect(result.name).toBe("Public Fallback Playlist");
             expect(
-                mockYtMusicService.restoreOAuthWithCredentials
+                mockYtMusicService.restoreOAuthWithCredentials,
             ).not.toHaveBeenCalled();
             expect(mockYtMusicService.getBrowsePlaylist).toHaveBeenCalledWith(
                 "PLpublicFallback",
                 100,
-                "__public__"
+                "__public__",
             );
         });
 
@@ -443,10 +441,12 @@ describe("PlaylistImportService", () => {
                 ],
             });
 
-            const result = await (playlistImportService as any).fetchSourceTracks(
+            const result = await (
+                playlistImportService as any
+            ).fetchSourceTracks(
                 "tidal",
                 "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "user_1"
+                "user_1",
             );
 
             expect(result.name).toBe("Tidal Playlist");
@@ -456,74 +456,82 @@ describe("PlaylistImportService", () => {
         });
 
         it("uses public Tidal browse when no userId is provided", async () => {
-            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce({
-                id: "a1b2c3d4-e5f6-0000-0000-000000000099",
-                title: "Tidal Public Playlist",
-                trackCount: 1,
-                thumbnailUrl: null,
-                tracks: [
-                    {
-                        trackId: 12345,
-                        title: "Tidal Song",
-                        artist: "Tidal Artist",
-                        artists: ["Tidal Artist"],
-                        album: "Tidal Album",
-                        duration: 300,
-                        isrc: "USRC17607839",
-                        thumbnailUrl: null,
-                    },
-                ],
-            });
+            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce(
+                {
+                    id: "a1b2c3d4-e5f6-0000-0000-000000000099",
+                    title: "Tidal Public Playlist",
+                    trackCount: 1,
+                    thumbnailUrl: null,
+                    tracks: [
+                        {
+                            trackId: 12345,
+                            title: "Tidal Song",
+                            artist: "Tidal Artist",
+                            artists: ["Tidal Artist"],
+                            album: "Tidal Album",
+                            duration: 300,
+                            isrc: "USRC17607839",
+                            thumbnailUrl: null,
+                        },
+                    ],
+                },
+            );
 
-            const result = await (playlistImportService as any).fetchSourceTracks(
+            const result = await (
+                playlistImportService as any
+            ).fetchSourceTracks(
                 "tidal",
-                "a1b2c3d4-e5f6-0000-0000-000000000099"
+                "a1b2c3d4-e5f6-0000-0000-000000000099",
             );
 
             expect(result.name).toBe("Tidal Public Playlist");
             expect(
-                mockTidalStreamingService.getPublicBrowsePlaylist
+                mockTidalStreamingService.getPublicBrowsePlaylist,
             ).toHaveBeenCalledWith(
                 "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "HIGH"
+                "HIGH",
             );
         });
 
         it("uses public Tidal browse when userId exists but Tidal auth is unavailable", async () => {
-            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce({
-                id: "a1b2c3d4-e5f6-0000-0000-000000000099",
-                title: "Tidal Public Playlist",
-                trackCount: 1,
-                thumbnailUrl: null,
-                tracks: [
-                    {
-                        trackId: 12345,
-                        title: "Tidal Song",
-                        artist: "Tidal Artist",
-                        artists: ["Tidal Artist"],
-                        album: "Tidal Album",
-                        duration: 300,
-                        isrc: "USRC17607839",
-                        thumbnailUrl: null,
-                    },
-                ],
-            });
+            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce(
+                {
+                    id: "a1b2c3d4-e5f6-0000-0000-000000000099",
+                    title: "Tidal Public Playlist",
+                    trackCount: 1,
+                    thumbnailUrl: null,
+                    tracks: [
+                        {
+                            trackId: 12345,
+                            title: "Tidal Song",
+                            artist: "Tidal Artist",
+                            artists: ["Tidal Artist"],
+                            album: "Tidal Album",
+                            duration: 300,
+                            isrc: "USRC17607839",
+                            thumbnailUrl: null,
+                        },
+                    ],
+                },
+            );
 
-            const result = await (playlistImportService as any).fetchSourceTracks(
+            const result = await (
+                playlistImportService as any
+            ).fetchSourceTracks(
                 "tidal",
                 "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "user_1"
+                "user_1",
             );
 
             expect(result.name).toBe("Tidal Public Playlist");
             expect(
-                mockTidalStreamingService.getBrowsePlaylist
+                mockTidalStreamingService.getBrowsePlaylist,
             ).not.toHaveBeenCalled();
             expect(
-                mockTidalStreamingService.getPublicBrowsePlaylist
+                mockTidalStreamingService.getPublicBrowsePlaylist,
             ).toHaveBeenCalledWith(
                 "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "HIGH"
+                "HIGH",
             );
         });
 
@@ -532,61 +540,69 @@ describe("PlaylistImportService", () => {
                 tidalOAuthJson: "encrypted",
             });
             mockTidalStreamingService.restoreOAuth.mockResolvedValueOnce(true);
-            const unauthorizedError = new Error("Request failed with status code 401") as Error & {
+            const unauthorizedError = new Error(
+                "Request failed with status code 401",
+            ) as Error & {
                 response?: { status?: number };
             };
             unauthorizedError.response = { status: 401 };
             mockTidalStreamingService.getBrowsePlaylist.mockRejectedValueOnce(
-                unauthorizedError
+                unauthorizedError,
             );
-            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce({
-                id: "a1b2c3d4-e5f6-0000-0000-000000000099",
-                title: "Tidal Public Playlist",
-                trackCount: 1,
-                thumbnailUrl: null,
-                tracks: [
-                    {
-                        trackId: 12345,
-                        title: "Tidal Song",
-                        artist: "Tidal Artist",
-                        artists: ["Tidal Artist"],
-                        album: "Tidal Album",
-                        duration: 300,
-                        isrc: "USRC17607839",
-                        thumbnailUrl: null,
-                    },
-                ],
-            });
+            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce(
+                {
+                    id: "a1b2c3d4-e5f6-0000-0000-000000000099",
+                    title: "Tidal Public Playlist",
+                    trackCount: 1,
+                    thumbnailUrl: null,
+                    tracks: [
+                        {
+                            trackId: 12345,
+                            title: "Tidal Song",
+                            artist: "Tidal Artist",
+                            artists: ["Tidal Artist"],
+                            album: "Tidal Album",
+                            duration: 300,
+                            isrc: "USRC17607839",
+                            thumbnailUrl: null,
+                        },
+                    ],
+                },
+            );
 
-            const result = await (playlistImportService as any).fetchSourceTracks(
+            const result = await (
+                playlistImportService as any
+            ).fetchSourceTracks(
                 "tidal",
                 "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "user_1"
+                "user_1",
             );
 
             expect(result.name).toBe("Tidal Public Playlist");
             expect(
-                mockTidalStreamingService.getPublicBrowsePlaylist
+                mockTidalStreamingService.getPublicBrowsePlaylist,
             ).toHaveBeenCalledWith(
                 "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "HIGH"
+                "HIGH",
             );
         });
 
         it("maps public Tidal browse 404 responses to not-found errors", async () => {
-            const notFoundError = new Error("Request failed with status code 404") as Error & {
+            const notFoundError = new Error(
+                "Request failed with status code 404",
+            ) as Error & {
                 response?: { status?: number };
             };
             notFoundError.response = { status: 404 };
             mockTidalStreamingService.getPublicBrowsePlaylist.mockRejectedValueOnce(
-                notFoundError
+                notFoundError,
             );
 
             await expect(
                 (playlistImportService as any).fetchSourceTracks(
                     "tidal",
                     "a1b2c3d4-e5f6-0000-0000-000000000099",
-                )
+                ),
             ).rejects.toThrow("Tidal playlist not found");
         });
     });
@@ -613,7 +629,7 @@ describe("PlaylistImportService", () => {
                 },
                 localCandidates,
                 "user_1",
-                false
+                false,
             );
 
             expect(result.source).toBe("local");
@@ -637,7 +653,7 @@ describe("PlaylistImportService", () => {
                 },
                 localCandidates,
                 "user_1",
-                false
+                false,
             );
 
             expect(result.source).toBe("youtube");
@@ -657,7 +673,7 @@ describe("PlaylistImportService", () => {
                 },
                 [],
                 "user_1",
-                false
+                false,
             );
 
             expect(result.source).toBe("unresolved");
@@ -677,7 +693,7 @@ describe("PlaylistImportService", () => {
                         duration: 300,
                         isrc: "USRC17607839",
                     },
-                ]
+                ],
             );
             mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
                 id: "ct_1",
@@ -690,7 +706,7 @@ describe("PlaylistImportService", () => {
                 },
                 [],
                 "user_1",
-                true // has Tidal auth
+                true, // has Tidal auth
             );
 
             expect(result.source).toBe("tidal");
@@ -707,7 +723,7 @@ describe("PlaylistImportService", () => {
                         duration: 210,
                         isrc: "DUALMATCH1",
                     },
-                ]
+                ],
             );
             mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
                 id: "ct_dual",
@@ -721,12 +737,14 @@ describe("PlaylistImportService", () => {
                 },
                 [],
                 "user_1",
-                true
+                true,
             );
 
             expect(result.source).toBe("tidal");
             expect(result.trackTidalId).toBe("ct_dual");
-            expect(mockYtMusicService.findMatchesForAlbum).not.toHaveBeenCalled();
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
         });
 
         it("upsert reuses existing TrackYtMusic", async () => {
@@ -741,14 +759,14 @@ describe("PlaylistImportService", () => {
                 { artist: "A", title: "Existing" },
                 [],
                 "user_1",
-                false
+                false,
             );
 
             expect(result.trackYtMusicId).toBe("cy_existing");
             expect(
-                mockTrackMappingService.upsertTrackYtMusic
+                mockTrackMappingService.upsertTrackYtMusic,
             ).toHaveBeenCalledWith(
-                expect.objectContaining({ videoId: "yt_existing" })
+                expect.objectContaining({ videoId: "yt_existing" }),
             );
         });
     });
@@ -782,14 +800,16 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://music.youtube.com/playlist?list=PLnative1"
+                "https://music.youtube.com/playlist?list=PLnative1",
             );
 
             expect(result.resolved[0].source).toBe("youtube");
             expect(result.resolved[0].trackYtMusicId).toBe("cy_native1");
             expect(result.resolved[0].confidence).toBe(100);
             // Should NOT call findMatchesForAlbum for native tracks
-            expect(mockYtMusicService.findMatchesForAlbum).not.toHaveBeenCalled();
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
         });
 
         it("YouTube playlist: local match takes priority over direct videoId", async () => {
@@ -830,7 +850,7 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://music.youtube.com/playlist?list=PLpriority"
+                "https://music.youtube.com/playlist?list=PLpriority",
             );
 
             expect(result.resolved[0].source).toBe("local");
@@ -869,14 +889,14 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000001"
+                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000001",
             );
 
             expect(result.resolved[0].source).toBe("tidal");
             expect(result.resolved[0].trackTidalId).toBe("ct_native1");
             expect(result.resolved[0].confidence).toBe(100);
             expect(
-                mockTidalStreamingService.findMatchesForAlbum
+                mockTidalStreamingService.findMatchesForAlbum,
             ).not.toHaveBeenCalled();
         });
 
@@ -921,7 +941,7 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000002"
+                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000002",
             );
 
             expect(result.resolved[0].source).toBe("local");
@@ -971,7 +991,7 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://music.youtube.com/playlist?list=PLmixed"
+                "https://music.youtube.com/playlist?list=PLmixed",
             );
 
             expect(result.summary.youtube).toBe(2);
@@ -1022,7 +1042,11 @@ describe("PlaylistImportService", () => {
 
             // YT search fallback for second track
             mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
-                { videoId: "yt_fallback", title: "Fallback Song", duration: 190 },
+                {
+                    videoId: "yt_fallback",
+                    title: "Fallback Song",
+                    duration: 190,
+                },
             ]);
             mockTrackMappingService.upsertTrackYtMusic.mockResolvedValueOnce({
                 id: "cy_fallback",
@@ -1030,7 +1054,7 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000003"
+                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000003",
             );
 
             expect(result.summary.tidal).toBe(1);
@@ -1089,7 +1113,7 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://open.spotify.com/playlist/sp_123"
+                "https://open.spotify.com/playlist/sp_123",
             );
 
             expect(result.playlistName).toBe("My Playlist");
@@ -1140,12 +1164,12 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://open.spotify.com/playlist/sp_batch"
+                "https://open.spotify.com/playlist/sp_batch",
             );
 
-            expect(mockYtMusicService.findMatchesForAlbum).toHaveBeenCalledTimes(
-                1
-            );
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).toHaveBeenCalledTimes(1);
             expect(mockYtMusicService.findMatchesForAlbum).toHaveBeenCalledWith(
                 "__public__",
                 [
@@ -1167,7 +1191,7 @@ describe("PlaylistImportService", () => {
                         albumTitle: "Album C",
                         duration: 230,
                     }),
-                ]
+                ],
             );
             expect(result.summary.youtube).toBe(2);
             expect(result.summary.unresolved).toBe(1);
@@ -1214,7 +1238,7 @@ describe("PlaylistImportService", () => {
                         isrc: "ISRC123",
                     },
                     null,
-                ]
+                ],
             );
             mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
                 id: "ct_123",
@@ -1222,30 +1246,29 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://open.spotify.com/playlist/sp_tidal"
+                "https://open.spotify.com/playlist/sp_tidal",
             );
 
-            expect(mockYtMusicService.findMatchesForAlbum).toHaveBeenCalledTimes(
-                1
-            );
             expect(
-                mockTidalStreamingService.findMatchesForAlbum
+                mockYtMusicService.findMatchesForAlbum,
             ).toHaveBeenCalledTimes(1);
-            expect(mockTidalStreamingService.findMatchesForAlbum).toHaveBeenCalledWith(
-                "user_1",
-                [
-                    expect.objectContaining({
-                        artist: "Tidal Artist 1",
-                        title: "Tidal 1",
-                        albumTitle: "Tidal Album 1",
-                    }),
-                    expect.objectContaining({
-                        artist: "Tidal Artist 2",
-                        title: "Tidal 2",
-                        albumTitle: "Tidal Album 2",
-                    }),
-                ]
-            );
+            expect(
+                mockTidalStreamingService.findMatchesForAlbum,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockTidalStreamingService.findMatchesForAlbum,
+            ).toHaveBeenCalledWith("user_1", [
+                expect.objectContaining({
+                    artist: "Tidal Artist 1",
+                    title: "Tidal 1",
+                    albumTitle: "Tidal Album 1",
+                }),
+                expect.objectContaining({
+                    artist: "Tidal Artist 2",
+                    title: "Tidal 2",
+                    albumTitle: "Tidal Album 2",
+                }),
+            ]);
             expect(result.summary.tidal).toBe(1);
             expect(result.summary.unresolved).toBe(1);
         });
@@ -1272,7 +1295,11 @@ describe("PlaylistImportService", () => {
             });
             mockTidalStreamingService.restoreOAuth.mockResolvedValueOnce(false);
             mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
-                { videoId: "yt_fallback_only", title: "Fallback Only", duration: 190 },
+                {
+                    videoId: "yt_fallback_only",
+                    title: "Fallback Only",
+                    duration: 190,
+                },
             ]);
             mockTrackMappingService.upsertTrackYtMusic.mockResolvedValueOnce({
                 id: "cy_restore_fail",
@@ -1280,15 +1307,15 @@ describe("PlaylistImportService", () => {
 
             const result = await playlistImportService.previewImport(
                 "user_1",
-                "https://open.spotify.com/playlist/sp_tidal_restore_fail"
+                "https://open.spotify.com/playlist/sp_tidal_restore_fail",
             );
 
             expect(mockTidalStreamingService.restoreOAuth).toHaveBeenCalledWith(
                 "user_1",
-                "encrypted"
+                "encrypted",
             );
             expect(
-                mockTidalStreamingService.findMatchesForAlbum
+                mockTidalStreamingService.findMatchesForAlbum,
             ).not.toHaveBeenCalled();
             expect(result.summary.tidal).toBe(0);
             expect(result.summary.youtube).toBe(1);
@@ -1351,7 +1378,7 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
 #EXTINF:180,The Echoes - Neon Lights
 /playlists/fuzzy-match.m3u8
 #EXTINF:200,Missing Artist - Missing Song
-/playlists/missing-song.m3u8`
+/playlists/missing-song.m3u8`,
             );
 
             expect(result.playlistName).toBe("Imported Playlist");
@@ -1393,16 +1420,20 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
                 tidal: 0,
                 unresolved: 1,
             });
-            expect(mockYtMusicService.findMatchesForAlbum).not.toHaveBeenCalled();
-            expect(mockTidalStreamingService.findMatchesForAlbum).not.toHaveBeenCalled();
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockTidalStreamingService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
         });
 
         it("rejects malformed M3U content safely", async () => {
             await expect(
                 playlistImportService.previewM3UImport(
                     "Broken Playlist",
-                    "/music/track\x00.mp3"
-                )
+                    "/music/track\x00.mp3",
+                ),
             ).rejects.toThrow("null bytes");
         });
     });
@@ -1446,10 +1477,7 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
         };
 
         it("creates playlist from provided preview data without re-fetching", async () => {
-            await playlistImportService.importPlaylist(
-                "user_1",
-                previewData
-            );
+            await playlistImportService.importPlaylist("user_1", previewData);
 
             expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
             expect(mockPrisma.playlistItem.createMany).toHaveBeenCalledWith({
@@ -1472,7 +1500,7 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
                 skipDuplicates: true,
             });
             expect(mockTrackMappingService.createMapping).toHaveBeenCalledTimes(
-                2
+                2,
             );
         });
 
@@ -1480,7 +1508,7 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
             await playlistImportService.importPlaylist(
                 "user_1",
                 previewData,
-                "Custom Name"
+                "Custom Name",
             );
 
             expect(mockPrisma.playlist.create).toHaveBeenCalledWith(
@@ -1488,7 +1516,7 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
                     data: expect.objectContaining({
                         name: "Custom Name",
                     }),
-                })
+                }),
             );
         });
 
@@ -1508,11 +1536,17 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
                         trackId: "nonexistent_track_id",
                     },
                 ],
-                summary: { total: 1, local: 1, youtube: 0, tidal: 0, unresolved: 0 },
+                summary: {
+                    total: 1,
+                    local: 1,
+                    youtube: 0,
+                    tidal: 0,
+                    unresolved: 0,
+                },
             };
 
             await expect(
-                playlistImportService.importPlaylist("user_1", badPreviewData)
+                playlistImportService.importPlaylist("user_1", badPreviewData),
             ).rejects.toThrow(/invalid track reference/i);
 
             expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -1534,11 +1568,17 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
                         trackYtMusicId: "nonexistent_yt_id",
                     },
                 ],
-                summary: { total: 1, local: 0, youtube: 1, tidal: 0, unresolved: 0 },
+                summary: {
+                    total: 1,
+                    local: 0,
+                    youtube: 1,
+                    tidal: 0,
+                    unresolved: 0,
+                },
             };
 
             await expect(
-                playlistImportService.importPlaylist("user_1", badPreviewData)
+                playlistImportService.importPlaylist("user_1", badPreviewData),
             ).rejects.toThrow(/invalid track reference/i);
 
             expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -1546,18 +1586,17 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
 
         it("fails without partial writes when transactional item creation errors", async () => {
             mockPrisma.playlistItem.createMany.mockRejectedValueOnce(
-                new Error("createMany failed")
+                new Error("createMany failed"),
             );
 
             await expect(
-                playlistImportService.importPlaylist(
-                    "user_1",
-                    previewData
-                )
+                playlistImportService.importPlaylist("user_1", previewData),
             ).rejects.toThrow("createMany failed");
 
             expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
-            expect(mockTrackMappingService.createMapping).not.toHaveBeenCalled();
+            expect(
+                mockTrackMappingService.createMapping,
+            ).not.toHaveBeenCalled();
         });
     });
 });

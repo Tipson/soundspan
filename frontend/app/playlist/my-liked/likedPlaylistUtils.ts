@@ -43,6 +43,6 @@ export function toAudioTrack(track: LikedPlaylistTrack): AudioTrack {
         tidalTrackId:
             track.tidalTrackId != null
                 ? Number(track.tidalTrackId)
-                : providerTidalId ?? undefined,
+                : (providerTidalId ?? undefined),
     };
 }

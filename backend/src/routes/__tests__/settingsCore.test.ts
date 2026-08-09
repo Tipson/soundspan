@@ -19,7 +19,7 @@ const mockRequireAuth = jest.fn(
         };
 
         return next();
-    }
+    },
 );
 
 const mockRequireAdmin = jest.fn(
@@ -28,7 +28,7 @@ const mockRequireAdmin = jest.fn(
             return res.status(403).json({ error: "Forbidden" });
         }
         return next();
-    }
+    },
 );
 
 jest.mock("../../middleware/auth", () => ({
@@ -98,7 +98,9 @@ const mockMulterSingle = jest.fn(
             const uploadError = req.header("x-test-upload-error");
 
             if (uploadError === "LIMIT_FILE_SIZE") {
-                return cb(new MockMulterError("LIMIT_FILE_SIZE", "File too large"));
+                return cb(
+                    new MockMulterError("LIMIT_FILE_SIZE", "File too large"),
+                );
             }
 
             if (uploadError === "GENERIC") {
@@ -112,7 +114,7 @@ const mockMulterSingle = jest.fn(
             const mutableReq = req as unknown as RequestWithTestFile;
 
             const fileBuffer = Buffer.from(
-                req.header("x-test-file-body") ?? "source-image"
+                req.header("x-test-file-body") ?? "source-image",
             );
 
             mutableReq.file = {
@@ -123,13 +125,16 @@ const mockMulterSingle = jest.fn(
             };
 
             return cb();
-        }
+        },
 );
 
-const mockMulter = Object.assign(jest.fn(() => ({ single: mockMulterSingle })), {
-    memoryStorage: mockMulterMemoryStorage,
-    MulterError: MockMulterError,
-});
+const mockMulter = Object.assign(
+    jest.fn(() => ({ single: mockMulterSingle })),
+    {
+        memoryStorage: mockMulterMemoryStorage,
+        MulterError: MockMulterError,
+    },
+);
 
 jest.mock("multer", () => ({
     __esModule: true,
@@ -161,12 +166,14 @@ jest.mock("sharp", () => ({
 }));
 
 const { prisma } = require("../../utils/db") as typeof import("../../utils/db");
-const { staleJobCleanupService } = require("../../services/staleJobCleanup") as typeof import("../../services/staleJobCleanup");
-const { tidalStreamingService } = require("../../services/tidalStreaming") as typeof import("../../services/tidalStreaming");
-const router = require("../settings").default as typeof import("../settings").default;
-const {
-    createRouteTestApp,
-} = require("./helpers/createRouteTestApp") as typeof import("./helpers/createRouteTestApp");
+const { staleJobCleanupService } =
+    require("../../services/staleJobCleanup") as typeof import("../../services/staleJobCleanup");
+const { tidalStreamingService } =
+    require("../../services/tidalStreaming") as typeof import("../../services/tidalStreaming");
+const router = require("../settings")
+    .default as typeof import("../settings").default;
+const { createRouteTestApp } =
+    require("./helpers/createRouteTestApp") as typeof import("./helpers/createRouteTestApp");
 
 const app = createRouteTestApp("/api/settings", router);
 
@@ -205,12 +212,14 @@ describe("settings routes integration", () => {
             id: "settings-created",
             ...data,
         }));
-        mockUserSettingsUpsert.mockImplementation(async ({ where, create, update }) => ({
-            id: "settings-upserted",
-            ...(create ?? {}),
-            ...(update ?? {}),
-            userId: where.userId,
-        }));
+        mockUserSettingsUpsert.mockImplementation(
+            async ({ where, create, update }) => ({
+                id: "settings-upserted",
+                ...(create ?? {}),
+                ...(update ?? {}),
+                userId: where.userId,
+            }),
+        );
         mockUserFindUnique.mockResolvedValue({ displayName: "Jane Doe" });
         mockUserUpdate.mockResolvedValue({ id: "user-1" });
         mockUserCount.mockResolvedValue(0);
@@ -272,7 +281,7 @@ describe("settings routes integration", () => {
                 playbackQuality: "medium",
                 displayName: null,
                 hasProfilePicture: false,
-            })
+            }),
         );
     });
 
@@ -315,7 +324,7 @@ describe("settings routes integration", () => {
                 wifiOnly: false,
                 showTidalExplore: true,
                 displayName: "Mary Jane",
-            })
+            }),
         );
     });
 
@@ -415,18 +424,22 @@ describe("settings routes integration", () => {
         { method: "post", path: "/api/settings/cleanup-stale-jobs" },
         { method: "post", path: "/api/settings/profile-picture" },
         { method: "delete", path: "/api/settings/profile-picture" },
-    ])("requires authentication for $method $path", async ({ method, path, body }) => {
-        let testRequest = request(app)[method as "get" | "post" | "delete"](path);
+    ])(
+        "requires authentication for $method $path",
+        async ({ method, path, body }) => {
+            let testRequest =
+                request(app)[method as "get" | "post" | "delete"](path);
 
-        if (body) {
-            testRequest = testRequest.send(body);
-        }
+            if (body) {
+                testRequest = testRequest.send(body);
+            }
 
-        const res = await testRequest;
+            const res = await testRequest;
 
-        expect(res.status).toBe(401);
-        expect(res.body).toEqual({ error: "Not authenticated" });
-    });
+            expect(res.status).toBe(401);
+            expect(res.body).toEqual({ error: "Not authenticated" });
+        },
+    );
 
     it.each([
         {
@@ -448,7 +461,7 @@ describe("settings routes integration", () => {
             expect.objectContaining({
                 error: "Invalid settings",
                 details: expect.any(Array),
-            })
+            }),
         );
         expect(mockUserSettingsUpsert).not.toHaveBeenCalled();
     });

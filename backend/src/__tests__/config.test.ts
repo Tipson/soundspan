@@ -14,7 +14,8 @@ jest.mock("dotenv", () => ({
 }));
 
 jest.mock("../utils/configValidator", () => ({
-    validateMusicConfig: (...args: unknown[]) => mockValidateMusicConfig(...args),
+    validateMusicConfig: (...args: unknown[]) =>
+        mockValidateMusicConfig(...args),
 }));
 
 jest.mock("../utils/logger", () => ({
@@ -38,7 +39,7 @@ describe("config module", () => {
     }
 
     async function loadConfigModule(
-        overrides: Record<string, string | undefined> = {}
+        overrides: Record<string, string | undefined> = {},
     ) {
         jest.resetModules();
         jest.clearAllMocks();
@@ -47,8 +48,8 @@ describe("config module", () => {
             ...requiredEnv(),
             ...Object.fromEntries(
                 Object.entries(overrides).filter(
-                    ([, value]) => value !== undefined
-                ) as Array<[string, string]>
+                    ([, value]) => value !== undefined,
+                ) as Array<[string, string]>,
             ),
         };
 
@@ -87,7 +88,7 @@ describe("config module", () => {
         expect(mockDotenvConfig).toHaveBeenCalledTimes(1);
         expect(mockDotenvConfig).toHaveBeenCalledWith({ quiet: true });
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Environment variables validated"
+            "Environment variables validated",
         );
 
         expect(config.port).toBe(4010);
@@ -240,7 +241,9 @@ describe("config module", () => {
     });
 
     it("exposes the optional one-shot admin reset password", async () => {
-        const absent = await loadConfigModule({ ADMIN_RESET_PASSWORD: undefined });
+        const absent = await loadConfigModule({
+            ADMIN_RESET_PASSWORD: undefined,
+        });
         expect(absent.config.adminResetPassword).toBeUndefined();
 
         const configured = await loadConfigModule({
@@ -401,7 +404,7 @@ describe("config module", () => {
                 SEGMENTED_STREAMING_TRACE_LOGS: undefined,
             });
             expect(config.segmentedStreaming.traceEnabled).toBe(true);
-        }
+        },
     );
 
     it("rejects non-positive segmented streaming numeric overrides", async () => {
@@ -415,11 +418,17 @@ describe("config module", () => {
         });
 
         expect(config.segmentedStreaming.dashBuildLockTtlMsOverride).toBeNull();
-        expect(config.segmentedStreaming.localSegmentDurationSecOverride).toBeNull();
+        expect(
+            config.segmentedStreaming.localSegmentDurationSecOverride,
+        ).toBeNull();
         expect(config.segmentedStreaming.cache.maxGbOverride).toBeNull();
-        expect(config.segmentedStreaming.cache.pruneIntervalMsOverride).toBeNull();
+        expect(
+            config.segmentedStreaming.cache.pruneIntervalMsOverride,
+        ).toBeNull();
         expect(config.segmentedStreaming.cache.minAgeMsOverride).toBeNull();
-        expect(config.segmentedStreaming.cache.pruneTargetRatioOverride).toBeNull();
+        expect(
+            config.segmentedStreaming.cache.pruneTargetRatioOverride,
+        ).toBeNull();
     });
 
     it("requires both Audiobookshelf URL and API key", async () => {
@@ -437,30 +446,30 @@ describe("config module", () => {
     });
 
     it("logs validation errors and exits for invalid environment variables", async () => {
-        const exitSpy = jest
-            .spyOn(process, "exit")
-            .mockImplementation(((code?: number) => {
-                throw new Error(`process.exit:${code}`);
-            }) as never);
+        const exitSpy = jest.spyOn(process, "exit").mockImplementation(((
+            code?: number,
+        ) => {
+            throw new Error(`process.exit:${code}`);
+        }) as never);
 
         await expect(
             loadConfigModule({
                 DATABASE_URL: undefined,
-            })
+            }),
         ).rejects.toThrow("process.exit:1");
 
         expect(mockLoggerError).toHaveBeenCalledWith(
-            " Environment validation failed:"
+            " Environment validation failed:",
         );
         expect(
             mockLoggerError.mock.calls.some(
                 (call) =>
                     typeof call[0] === "string" &&
-                    call[0].includes("DATABASE_URL")
-            )
+                    call[0].includes("DATABASE_URL"),
+            ),
         ).toBe(true);
         expect(mockLoggerError).toHaveBeenCalledWith(
-            "\n Please check your .env file and ensure all required variables are set."
+            "\n Please check your .env file and ensure all required variables are set.",
         );
 
         exitSpy.mockRestore();
@@ -492,7 +501,7 @@ describe("config module", () => {
             transcodeCacheMaxGb: 20,
         });
         expect(mockLoggerDebug).toHaveBeenCalledWith(
-            "Music configuration initialized"
+            "Music configuration initialized",
         );
     });
 
@@ -520,10 +529,10 @@ describe("config module", () => {
         });
         expect(mockLoggerError).toHaveBeenCalledWith(
             " Configuration validation failed:",
-            "bad config"
+            "bad config",
         );
         expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "   Using default/environment configuration"
+            "   Using default/environment configuration",
         );
     });
 });

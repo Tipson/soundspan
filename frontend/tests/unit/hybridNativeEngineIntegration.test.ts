@@ -190,7 +190,10 @@ test("double-play through the hybrid: rapid load/play spam keeps one element, on
         native.elements.filter((element) => !element.paused).length <= 1,
         true,
     );
-    assert.equal(native.elements[0].src, "https://stream.example/track-19.flac");
+    assert.equal(
+        native.elements[0].src,
+        "https://stream.example/track-19.flac",
+    );
 });
 
 test("getActiveEngineDescriptor reports the engine actually in use, not just the flag", () => {

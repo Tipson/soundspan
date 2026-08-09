@@ -13,7 +13,7 @@ jest.mock("dns/promises", () => ({
 jest.mock("rss-parser", () =>
     jest.fn().mockImplementation(() => ({
         parseString: mockParseString,
-    }))
+    })),
 );
 
 jest.mock("axios", () => ({
@@ -39,7 +39,7 @@ import { rssParserService, RSSFeedNotModifiedError } from "../rss-parser";
 
 function mockFeedResponse(
     feed: Record<string, unknown>,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
 ) {
     mockAxiosGet.mockResolvedValueOnce({
         status: 200,
@@ -61,75 +61,75 @@ describe("rssParserService", () => {
     it("parses feed metadata and episode fields for success cases", async () => {
         mockFeedResponse(
             {
-            title: "Tech Talks",
-            author: "Feed Author",
-            description: "Weekly tech interviews",
-            language: "en-US",
-            link: "https://podcasts.apple.com/us/podcast/tech-talks/id123456789",
-            itunesAuthor: "iTunes Author",
-            itunesImage: "https://img.example.com/podcast.jpg",
-            itunesExplicit: "yes",
-            items: [
-                {
-                    guid: "ep-1",
-                    title: "Episode 1",
-                    content: "Long form notes",
-                    enclosure: {
-                        url: "https://cdn.example.com/ep1.mp3",
-                        type: "audio/mpeg",
-                        length: "2048",
+                title: "Tech Talks",
+                author: "Feed Author",
+                description: "Weekly tech interviews",
+                language: "en-US",
+                link: "https://podcasts.apple.com/us/podcast/tech-talks/id123456789",
+                itunesAuthor: "iTunes Author",
+                itunesImage: "https://img.example.com/podcast.jpg",
+                itunesExplicit: "yes",
+                items: [
+                    {
+                        guid: "ep-1",
+                        title: "Episode 1",
+                        content: "Long form notes",
+                        enclosure: {
+                            url: "https://cdn.example.com/ep1.mp3",
+                            type: "audio/mpeg",
+                            length: "2048",
+                        },
+                        itunesDuration: "01:02:03",
+                        itunesEpisode: "8",
+                        itunesSeason: "2",
+                        itunesImage: {
+                            href: "https://img.example.com/ep1.jpg",
+                        },
+                        pubDate: "2025-01-01T10:00:00.000Z",
                     },
-                    itunesDuration: "01:02:03",
-                    itunesEpisode: "8",
-                    itunesSeason: "2",
-                    itunesImage: {
-                        href: "https://img.example.com/ep1.jpg",
+                    {
+                        link: "https://example.com/e2",
+                        title: "Episode 2",
+                        contentSnippet: "Short snippet",
+                        enclosure: {
+                            url: "https://cdn.example.com/ep2.m4a",
+                            type: "audio/x-m4a",
+                        },
+                        itunesDuration: "3600",
                     },
-                    pubDate: "2025-01-01T10:00:00.000Z",
-                },
-                {
-                    link: "https://example.com/e2",
-                    title: "Episode 2",
-                    contentSnippet: "Short snippet",
-                    enclosure: {
-                        url: "https://cdn.example.com/ep2.m4a",
-                        type: "audio/x-m4a",
+                    {
+                        title: "Episode 3",
+                        enclosure: {
+                            url: "https://cdn.example.com/ep3.mp3",
+                            type: "audio/mpeg",
+                        },
+                        itunesDuration: "12:34",
                     },
-                    itunesDuration: "3600",
-                },
-                {
-                    title: "Episode 3",
-                    enclosure: {
-                        url: "https://cdn.example.com/ep3.mp3",
-                        type: "audio/mpeg",
+                    {
+                        title: "Episode 4",
+                        enclosure: {
+                            url: "https://cdn.example.com/ep4.mp3",
+                            type: "audio/mpeg",
+                        },
+                        itunesDuration: "090",
                     },
-                    itunesDuration: "12:34",
-                },
-                {
-                    title: "Episode 4",
-                    enclosure: {
-                        url: "https://cdn.example.com/ep4.mp3",
-                        type: "audio/mpeg",
+                    {
+                        title: "Episode 5",
+                        enclosure: {
+                            url: "https://cdn.example.com/ep5.mp3",
+                            type: "audio/mpeg",
+                        },
                     },
-                    itunesDuration: "090",
-                },
-                {
-                    title: "Episode 5",
-                    enclosure: {
-                        url: "https://cdn.example.com/ep5.mp3",
-                        type: "audio/mpeg",
-                    },
-                },
-            ],
+                ],
             },
             {
                 etag: "etag-tech-talks",
                 "last-modified": "Sat, 01 Mar 2025 10:00:00 GMT",
-            }
+            },
         );
 
         const result = await rssParserService.parseFeed(
-            "https://example.com/feed.xml"
+            "https://example.com/feed.xml",
         );
 
         expect(mockAxiosGet).toHaveBeenCalledWith(
@@ -140,7 +140,7 @@ describe("rssParserService", () => {
                     Accept: "application/rss+xml",
                     "User-Agent": "rss-parser",
                 }),
-            })
+            }),
         );
         expect(mockParseString).toHaveBeenCalledWith("<rss />");
         expect(result.podcast).toEqual({
@@ -173,7 +173,7 @@ describe("rssParserService", () => {
                 imageUrl: "https://img.example.com/ep1.jpg",
                 fileSize: 2048,
                 mimeType: "audio/mpeg",
-            })
+            }),
         );
         expect(ep1.publishedAt.toISOString()).toBe("2025-01-01T10:00:00.000Z");
 
@@ -185,7 +185,7 @@ describe("rssParserService", () => {
                 imageUrl: "https://img.example.com/podcast.jpg",
                 fileSize: undefined,
                 mimeType: "audio/x-m4a",
-            })
+            }),
         );
         expect(ep2.publishedAt).toBeInstanceOf(Date);
         expect(ep3.duration).toBe(754);
@@ -258,7 +258,7 @@ describe("rssParserService", () => {
         });
 
         const result = await rssParserService.parseFeed(
-            "https://example.com/mixed-enclosures.xml"
+            "https://example.com/mixed-enclosures.xml",
         );
 
         expect(result.podcast.explicit).toBe(false);
@@ -344,11 +344,11 @@ describe("rssParserService", () => {
         });
 
         const result = await rssParserService.parseFeed(
-            "https://example.com/image-variants.xml"
+            "https://example.com/image-variants.xml",
         );
 
         expect(result.podcast.imageUrl).toBe(
-            "https://img.example.com/feed-from-dollar.jpg"
+            "https://img.example.com/feed-from-dollar.jpg",
         );
         expect(result.podcast.explicit).toBe(true);
         expect(result.episodes.map((episode) => episode.imageUrl)).toEqual([
@@ -363,57 +363,57 @@ describe("rssParserService", () => {
 
     it("supports feed image variants for itunes href objects and plain image strings", async () => {
         mockFeedResponse({
-                title: "Feed iTunes href",
-                itunesImage: {
-                    href: "https://img.example.com/feed-from-href.jpg",
+            title: "Feed iTunes href",
+            itunesImage: {
+                href: "https://img.example.com/feed-from-href.jpg",
+            },
+            itunesExplicit: "true",
+            items: [
+                {
+                    title: "Episode A",
+                    enclosure: {
+                        url: "https://cdn.example.com/a.mp3",
+                        type: "audio/mpeg",
+                    },
                 },
-                itunesExplicit: "true",
-                items: [
-                    {
-                        title: "Episode A",
-                        enclosure: {
-                            url: "https://cdn.example.com/a.mp3",
-                            type: "audio/mpeg",
-                        },
-                        },
-                    ],
-            });
+            ],
+        });
         mockFeedResponse({
-                title: "Feed image string",
-                image: "https://img.example.com/feed-from-string.jpg",
-                items: [
-                    {
-                        title: "Episode B",
-                        enclosure: {
-                            url: "https://cdn.example.com/b.mp3",
-                            type: "audio/mpeg",
-                        },
-                        },
-                    ],
-            });
+            title: "Feed image string",
+            image: "https://img.example.com/feed-from-string.jpg",
+            items: [
+                {
+                    title: "Episode B",
+                    enclosure: {
+                        url: "https://cdn.example.com/b.mp3",
+                        type: "audio/mpeg",
+                    },
+                },
+            ],
+        });
 
         const hrefImageFeed = await rssParserService.parseFeed(
-            "https://example.com/feed-itunes-href.xml"
+            "https://example.com/feed-itunes-href.xml",
         );
         const plainImageFeed = await rssParserService.parseFeed(
-            "https://example.com/feed-image-string.xml"
+            "https://example.com/feed-image-string.xml",
         );
 
         expect(hrefImageFeed.podcast.imageUrl).toBe(
-            "https://img.example.com/feed-from-href.jpg"
+            "https://img.example.com/feed-from-href.jpg",
         );
         expect(hrefImageFeed.podcast.explicit).toBe(true);
         expect(hrefImageFeed.episodes[0].imageUrl).toBe(
-            "https://img.example.com/feed-from-href.jpg"
+            "https://img.example.com/feed-from-href.jpg",
         );
         expect(hrefImageFeed.podcast.itunesId).toBeUndefined();
 
         expect(plainImageFeed.podcast.imageUrl).toBe(
-            "https://img.example.com/feed-from-string.jpg"
+            "https://img.example.com/feed-from-string.jpg",
         );
         expect(plainImageFeed.podcast.explicit).toBe(false);
         expect(plainImageFeed.episodes[0].imageUrl).toBe(
-            "https://img.example.com/feed-from-string.jpg"
+            "https://img.example.com/feed-from-string.jpg",
         );
         expect(plainImageFeed.podcast.itunesId).toBeUndefined();
     });
@@ -448,14 +448,14 @@ describe("rssParserService", () => {
         });
 
         const result = await rssParserService.parseFeed(
-            "https://example.com/partial-failures.xml"
+            "https://example.com/partial-failures.xml",
         );
 
         expect(result.episodes).toHaveLength(1);
         expect(result.episodes[0].title).toBe("Good item");
         expect(mockLogger.error).toHaveBeenCalledWith(
             '    Error parsing episode "Broken item":',
-            "bad image metadata"
+            "bad image metadata",
         );
     });
 
@@ -476,7 +476,7 @@ describe("rssParserService", () => {
             {
                 etag: "etag-conditional",
                 "last-modified": "Mon, 02 Mar 2026 00:00:00 GMT",
-            }
+            },
         );
 
         const result = await rssParserService.parseFeed(
@@ -486,7 +486,7 @@ describe("rssParserService", () => {
                     "If-None-Match": "etag-old",
                     "If-Modified-Since": "Sun, 01 Mar 2026 00:00:00 GMT",
                 },
-            }
+            },
         );
 
         expect(mockAxiosGet).toHaveBeenCalledWith(
@@ -496,7 +496,7 @@ describe("rssParserService", () => {
                     "If-None-Match": "etag-old",
                     "If-Modified-Since": "Sun, 01 Mar 2026 00:00:00 GMT",
                 }),
-            })
+            }),
         );
         expect(result.feedMetadata).toEqual({
             etag: "etag-conditional",
@@ -519,13 +519,13 @@ describe("rssParserService", () => {
                 headers: {
                     "If-None-Match": "etag-304",
                 },
-            })
+            }),
         ).rejects.toEqual(
             expect.objectContaining({
                 name: "RSSFeedNotModifiedError",
                 etag: "etag-304",
                 lastModified: "Tue, 03 Mar 2026 00:00:00 GMT",
-            })
+            }),
         );
         expect(mockParseString).not.toHaveBeenCalled();
     });
@@ -534,19 +534,21 @@ describe("rssParserService", () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("request timed out"));
 
         await expect(
-            rssParserService.parseFeed("https://example.com/unreachable.xml")
+            rssParserService.parseFeed("https://example.com/unreachable.xml"),
         ).rejects.toThrow("Failed to parse podcast feed: request timed out");
 
         expect(mockLogger.error).toHaveBeenCalledWith(
             expect.stringContaining("[RSS PARSER] Failed to parse feed:"),
-            "request timed out"
+            "request timed out",
         );
     });
 
     it("rejects unsafe feed urls before parseURL is called", async () => {
         await expect(
-            rssParserService.parseFeed("http://127.0.0.1/private-feed.xml")
-        ).rejects.toThrow("Failed to parse podcast feed: Invalid or private feed URL");
+            rssParserService.parseFeed("http://127.0.0.1/private-feed.xml"),
+        ).rejects.toThrow(
+            "Failed to parse podcast feed: Invalid or private feed URL",
+        );
 
         expect(mockAxiosGet).not.toHaveBeenCalled();
     });
@@ -571,7 +573,7 @@ describe("rssParserService", () => {
         });
 
         const result = await rssParserService.parseFeed(
-            "https://example.com/feed.xml"
+            "https://example.com/feed.xml",
         );
 
         expect(result.podcast.title).toBe("Moved Feed");
@@ -580,7 +582,7 @@ describe("rssParserService", () => {
             "https://example.com/moved.xml",
             // Redirects must be followed manually (per-hop SSRF check), never
             // delegated to axios.
-            expect.objectContaining({ maxRedirects: 0 })
+            expect.objectContaining({ maxRedirects: 0 }),
         );
     });
 
@@ -592,9 +594,9 @@ describe("rssParserService", () => {
         });
 
         await expect(
-            rssParserService.parseFeed("https://example.com/feed.xml")
+            rssParserService.parseFeed("https://example.com/feed.xml"),
         ).rejects.toThrow(
-            "Failed to parse podcast feed: Invalid or private feed redirect target"
+            "Failed to parse podcast feed: Invalid or private feed redirect target",
         );
         // The private hop is never fetched.
         expect(mockAxiosGet).toHaveBeenCalledTimes(1);
@@ -611,7 +613,7 @@ describe("rssParserService", () => {
         }
 
         await expect(
-            rssParserService.parseFeed("https://example.com/feed.xml")
+            rssParserService.parseFeed("https://example.com/feed.xml"),
         ).rejects.toThrow("Failed to parse podcast feed: Too many redirects");
         expect(mockParseString).not.toHaveBeenCalled();
     });
@@ -624,9 +626,9 @@ describe("rssParserService", () => {
         });
 
         await expect(
-            rssParserService.parseFeed("https://example.com/feed.xml")
+            rssParserService.parseFeed("https://example.com/feed.xml"),
         ).rejects.toThrow(
-            "Failed to parse podcast feed: Redirect without a Location header"
+            "Failed to parse podcast feed: Redirect without a Location header",
         );
     });
 });

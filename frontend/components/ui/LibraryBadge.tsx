@@ -16,7 +16,10 @@ export function LibraryBadge({ className }: LibraryBadgeProps = {}) {
             className={`shrink-0 inline-flex items-center justify-center bg-emerald-500/20 rounded p-1 ${className || ""}`.trim()}
             title="Your Library"
         >
-            <Library className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+            <Library
+                className="w-3.5 h-3.5 text-emerald-400"
+                aria-hidden="true"
+            />
         </span>
     );
 }

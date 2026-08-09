@@ -28,7 +28,12 @@ export function deriveTidalExploreEnabled(status: {
     userSettingEnabled?: boolean;
 }): boolean {
     if (!status.isFetched) return false;
-    return status.enabled && status.available && status.authenticated && status.userSettingEnabled !== false;
+    return (
+        status.enabled &&
+        status.available &&
+        status.authenticated &&
+        status.userSettingEnabled !== false
+    );
 }
 
 /**
@@ -46,7 +51,8 @@ export function useTidalExploreEnabled(): TidalExploreState {
         staleTime: 5 * 60 * 1000,
     });
 
-    const { showTidalExplore: userSettingEnabled } = useUserSettingsExplorePrefs();
+    const { showTidalExplore: userSettingEnabled } =
+        useUserSettingsExplorePrefs();
 
     return {
         showTidalExplore: deriveTidalExploreEnabled({

@@ -4,7 +4,10 @@ import { createClient } from "redis";
 import { randomUUID } from "crypto";
 import { writeFileSync } from "fs";
 import { join } from "path";
-import { VOCAB_DEFINITIONS, VOCABULARY_TERMS } from "../src/config/featureProfiles";
+import {
+    VOCAB_DEFINITIONS,
+    VOCABULARY_TERMS,
+} from "../src/config/featureProfiles";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 
@@ -18,7 +21,7 @@ interface VocabTerm {
 
 async function getClapTextEmbedding(
     redisClient: ReturnType<typeof createClient>,
-    text: string
+    text: string,
 ): Promise<number[]> {
     const requestId = randomUUID();
     const responseChannel = `audio:text:embed:response:${requestId}`;
@@ -49,7 +52,7 @@ async function getClapTextEmbedding(
 
             redisClient.publish(
                 requestChannel,
-                JSON.stringify({ requestId, text })
+                JSON.stringify({ requestId, text }),
             );
         });
     } finally {
@@ -63,7 +66,9 @@ async function main() {
     const redisClient = createClient({ url: REDIS_URL });
     await redisClient.connect();
 
-    console.log(`Generating embeddings for ${VOCABULARY_TERMS.length} terms...`);
+    console.log(
+        `Generating embeddings for ${VOCABULARY_TERMS.length} terms...`,
+    );
 
     const terms: Record<string, VocabTerm> = {};
     let success = 0;
@@ -81,7 +86,7 @@ async function main() {
                 type: definition.type,
                 embedding,
                 featureProfile: definition.featureProfile,
-                related: definition.related
+                related: definition.related,
             };
 
             console.log(`OK (${embedding.length} dims)`);
@@ -92,13 +97,13 @@ async function main() {
         }
 
         // Small delay to not overwhelm the CLAP service
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 100));
     }
 
     const vocabulary = {
         version: "1.0.0",
         generatedAt: new Date().toISOString(),
-        terms
+        terms,
     };
 
     const outputPath = join(__dirname, "../src/config/vibe-vocabulary.json");

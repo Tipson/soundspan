@@ -55,8 +55,12 @@ export const StaticPlaylistCard = memo(function StaticPlaylistCard({
                         </div>
                     )}
                 </div>
-                <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
-                <p className="text-xs text-gray-400 line-clamp-2 mt-0.5">{subtitle}</p>
+                <h3 className="text-sm font-semibold text-white truncate">
+                    {title}
+                </h3>
+                <p className="text-xs text-gray-400 line-clamp-2 mt-0.5">
+                    {subtitle}
+                </p>
             </div>
         </Link>
     );

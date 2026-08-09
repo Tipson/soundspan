@@ -17,8 +17,15 @@ import { AudiobookActionBar } from "@/features/audiobook/components/AudiobookAct
  */
 export default function AudiobookDetailPage() {
     // Data hook
-    const { audiobookId, audiobook, isLoading, refetch, heroImage, colorExtractionImage, metadata } =
-        useAudiobookData();
+    const {
+        audiobookId,
+        audiobook,
+        isLoading,
+        refetch,
+        heroImage,
+        colorExtractionImage,
+        metadata,
+    } = useAudiobookData();
 
     // Extract colors from the hero image (uses token for CORS canvas access)
     const { colors } = useImageColor(colorExtractionImage);

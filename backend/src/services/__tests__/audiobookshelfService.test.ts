@@ -99,7 +99,9 @@ describe("audiobookshelf service behavior", () => {
         const client = createClient();
         client.get.mockRejectedValueOnce(new Error("network down"));
         mockAxiosCreate.mockReturnValue(client);
-        mockGetSystemSettings.mockRejectedValueOnce(new Error("db unavailable"));
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("db unavailable"),
+        );
         process.env.AUDIOBOOKSHELF_URL = "http://env-abs/";
         process.env.AUDIOBOOKSHELF_API_KEY = "env-key";
 
@@ -113,7 +115,7 @@ describe("audiobookshelf service behavior", () => {
         });
         expect(logger.error).toHaveBeenCalledWith(
             "Audiobookshelf connection failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -123,7 +125,7 @@ describe("audiobookshelf service behavior", () => {
         });
 
         await expect(audiobookshelfService.getLibraries()).rejects.toThrow(
-            "Audiobookshelf is disabled in settings"
+            "Audiobookshelf is disabled in settings",
         );
     });
 
@@ -171,7 +173,9 @@ describe("audiobookshelf service behavior", () => {
             { id: "book-lib", mediaType: "book" },
             { id: "pod-lib", mediaType: "podcast" },
         ]);
-        await expect(audiobookshelfService.getLibraryItems("book-lib")).resolves.toEqual([
+        await expect(
+            audiobookshelfService.getLibraryItems("book-lib"),
+        ).resolves.toEqual([
             {
                 id: "book-1",
                 media: {
@@ -182,17 +186,19 @@ describe("audiobookshelf service behavior", () => {
                 },
             },
         ]);
-        await expect(audiobookshelfService.getAllAudiobooks()).resolves.toEqual([
-            {
-                id: "book-1",
-                media: {
-                    metadata: {
-                        title: "Book 1",
-                        seriesName: "Series One",
+        await expect(audiobookshelfService.getAllAudiobooks()).resolves.toEqual(
+            [
+                {
+                    id: "book-1",
+                    media: {
+                        metadata: {
+                            title: "Book 1",
+                            seriesName: "Series One",
+                        },
                     },
                 },
-            },
-        ]);
+            ],
+        );
     });
 
     it("caches podcast responses and tolerates failed podcast libraries", async () => {
@@ -230,7 +236,7 @@ describe("audiobookshelf service behavior", () => {
         expect(first).toEqual([{ id: "pod-1" }]);
         expect(logger.error).toHaveBeenCalledWith(
             "Audiobookshelf: failed to load podcast library pod-lib-b",
-            expect.any(Error)
+            expect.any(Error),
         );
 
         const second = await audiobookshelfService.getAllPodcasts();
@@ -255,24 +261,30 @@ describe("audiobookshelf service behavior", () => {
             .mockResolvedValueOnce({ data: { book: [{ id: "search-1" }] } });
         client.patch.mockResolvedValueOnce({ data: { ok: true } });
 
-        await expect(audiobookshelfService.getAudiobook("book-1")).resolves.toEqual({
+        await expect(
+            audiobookshelfService.getAudiobook("book-1"),
+        ).resolves.toEqual({
             id: "book-1",
         });
-        await expect(audiobookshelfService.getPodcast("book-1")).resolves.toEqual({
+        await expect(
+            audiobookshelfService.getPodcast("book-1"),
+        ).resolves.toEqual({
             id: "book-1",
         });
-        await expect(audiobookshelfService.getProgress("book-1")).resolves.toEqual({
+        await expect(
+            audiobookshelfService.getProgress("book-1"),
+        ).resolves.toEqual({
             currentTime: 120,
         });
         await expect(
-            audiobookshelfService.updateProgress("book-1", 120, 3600, true)
+            audiobookshelfService.updateProgress("book-1", 120, 3600, true),
         ).resolves.toEqual({ ok: true });
-        await expect(audiobookshelfService.searchAudiobooks("rock & roll")).resolves.toEqual([
-            { id: "search-1" },
-        ]);
-        await expect(audiobookshelfService.getStreamUrl("book-1")).resolves.toBe(
-            "http://abs.local/api/items/book-1/play"
-        );
+        await expect(
+            audiobookshelfService.searchAudiobooks("rock & roll"),
+        ).resolves.toEqual([{ id: "search-1" }]);
+        await expect(
+            audiobookshelfService.getStreamUrl("book-1"),
+        ).resolves.toBe("http://abs.local/api/items/book-1/play");
 
         expect(client.patch).toHaveBeenCalledWith("/api/me/progress/book-1", {
             currentTime: 120,
@@ -280,7 +292,7 @@ describe("audiobookshelf service behavior", () => {
             isFinished: true,
         });
         expect(client.get).toHaveBeenLastCalledWith(
-            "/api/search/books?q=rock%20%26%20roll"
+            "/api/search/books?q=rock%20%26%20roll",
         );
     });
 
@@ -291,7 +303,10 @@ describe("audiobookshelf service behavior", () => {
         svc.baseUrl = "http://abs.local";
         svc.initialized = true;
 
-        const getAudiobookSpy = jest.spyOn(audiobookshelfService, "getAudiobook");
+        const getAudiobookSpy = jest.spyOn(
+            audiobookshelfService,
+            "getAudiobook",
+        );
         getAudiobookSpy.mockResolvedValueOnce({
             media: {
                 tracks: [
@@ -309,7 +324,7 @@ describe("audiobookshelf service behavior", () => {
 
         const streamed = await audiobookshelfService.streamAudiobook(
             "book-1",
-            "bytes=0-99"
+            "bytes=0-99",
         );
         expect(streamed.status).toBe(206);
         expect(client.get).toHaveBeenCalledWith("/api/items/book-1/file/123", {
@@ -322,9 +337,9 @@ describe("audiobookshelf service behavior", () => {
         });
 
         getAudiobookSpy.mockResolvedValueOnce({ media: { tracks: [] } } as any);
-        await expect(audiobookshelfService.streamAudiobook("book-2")).rejects.toThrow(
-            "No audio track found for this audiobook"
-        );
+        await expect(
+            audiobookshelfService.streamAudiobook("book-2"),
+        ).rejects.toThrow("No audio track found for this audiobook");
     });
 
     it("streams podcast episodes and handles missing episodes/files", async () => {
@@ -351,7 +366,7 @@ describe("audiobookshelf service behavior", () => {
         });
 
         await expect(
-            audiobookshelfService.streamPodcastEpisode("pod-1", "ep-1")
+            audiobookshelfService.streamPodcastEpisode("pod-1", "ep-1"),
         ).resolves.toEqual({
             stream: expect.any(Object),
             headers: { "content-type": "audio/mpeg" },
@@ -361,7 +376,7 @@ describe("audiobookshelf service behavior", () => {
             media: { episodes: [] },
         } as any);
         await expect(
-            audiobookshelfService.streamPodcastEpisode("pod-1", "missing")
+            audiobookshelfService.streamPodcastEpisode("pod-1", "missing"),
         ).rejects.toThrow("Episode not found");
 
         getPodcastSpy.mockResolvedValueOnce({
@@ -370,7 +385,7 @@ describe("audiobookshelf service behavior", () => {
             },
         } as any);
         await expect(
-            audiobookshelfService.streamPodcastEpisode("pod-1", "ep-2")
+            audiobookshelfService.streamPodcastEpisode("pod-1", "ep-2"),
         ).rejects.toThrow("No audio file found for this episode");
     });
 
@@ -380,7 +395,10 @@ describe("audiobookshelf service behavior", () => {
         svc.baseUrl = "http://abs.local";
         svc.initialized = true;
 
-        jest.spyOn(audiobookshelfService, "getAllAudiobooks").mockResolvedValueOnce([
+        jest.spyOn(
+            audiobookshelfService,
+            "getAllAudiobooks",
+        ).mockResolvedValueOnce([
             {
                 id: "book-1",
                 libraryId: "lib-1",
@@ -433,7 +451,7 @@ describe("audiobookshelf service behavior", () => {
                     coverUrl: "http://abs.local/cover/book-1.jpg",
                     audioUrl: "http://abs.local/api/items/book-1/play",
                 }),
-            })
+            }),
         );
     });
 
@@ -443,16 +461,17 @@ describe("audiobookshelf service behavior", () => {
         svc.baseUrl = "http://abs.local";
         svc.initialized = true;
 
-        jest.spyOn(audiobookshelfService, "getAllAudiobooks").mockRejectedValueOnce(
-            new Error("fetch failed")
-        );
+        jest.spyOn(
+            audiobookshelfService,
+            "getAllAudiobooks",
+        ).mockRejectedValueOnce(new Error("fetch failed"));
 
-        await expect(audiobookshelfService.syncAudiobooksToCache()).rejects.toThrow(
-            "fetch failed"
-        );
+        await expect(
+            audiobookshelfService.syncAudiobooksToCache(),
+        ).rejects.toThrow("fetch failed");
         expect(logger.error).toHaveBeenCalledWith(
             "[AUDIOBOOKSHELF] Audiobook sync failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 });

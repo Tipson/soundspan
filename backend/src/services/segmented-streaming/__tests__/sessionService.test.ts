@@ -36,7 +36,8 @@ const resolveSessionService = async () => {
     jest.doMock("../../../utils/db", () => ({
         prisma: {
             track: {
-                findUnique: (...args: unknown[]) => mockTrackFindUnique(...args),
+                findUnique: (...args: unknown[]) =>
+                    mockTrackFindUnique(...args),
             },
             userSettings: {
                 findUnique: (...args: unknown[]) =>
@@ -109,7 +110,8 @@ const resolveSessionService = async () => {
     const module = await import("../sessionService");
 
     return {
-        segmentedStreamingSessionService: module.segmentedStreamingSessionService,
+        segmentedStreamingSessionService:
+            module.segmentedStreamingSessionService,
         mocks: {
             mockTrackFindUnique,
             mockUserSettingsFindUnique,
@@ -165,11 +167,12 @@ describe("segmentedStreamingSessionService local quality handling", () => {
         });
         mocks.mockHasInFlightBuild.mockReturnValue(false);
 
-        const session = await segmentedStreamingSessionService.createLocalSession({
-            userId: "user-1",
-            trackId: "track-1",
-            desiredQuality: "original",
-        });
+        const session =
+            await segmentedStreamingSessionService.createLocalSession({
+                userId: "user-1",
+                trackId: "track-1",
+                desiredQuality: "original",
+            });
 
         expect(session.playbackProfile).toMatchObject({
             protocol: "dash",
@@ -177,7 +180,9 @@ describe("segmentedStreamingSessionService local quality handling", () => {
             codec: "flac",
             bitrateKbps: null,
         });
-        expect(mocks.mockManifestGetOrCreateLocalDashAsset).toHaveBeenCalledWith(
+        expect(
+            mocks.mockManifestGetOrCreateLocalDashAsset,
+        ).toHaveBeenCalledWith(
             expect.objectContaining({
                 trackId: "track-1",
                 quality: "original",
@@ -208,11 +213,12 @@ describe("segmentedStreamingSessionService local quality handling", () => {
         });
         mocks.mockHasInFlightBuild.mockReturnValue(false);
 
-        const session = await segmentedStreamingSessionService.createLocalSession({
-            userId: "user-1",
-            trackId: "track-lossy-original",
-            desiredQuality: "original",
-        });
+        const session =
+            await segmentedStreamingSessionService.createLocalSession({
+                userId: "user-1",
+                trackId: "track-lossy-original",
+                desiredQuality: "original",
+            });
 
         expect(session.playbackProfile).toMatchObject({
             protocol: "dash",
@@ -243,11 +249,12 @@ describe("segmentedStreamingSessionService local quality handling", () => {
         });
         mocks.mockHasInFlightBuild.mockReturnValue(true);
 
-        const session = await segmentedStreamingSessionService.createLocalSession({
-            userId: "user-1",
-            trackId: "track-2",
-            desiredQuality: "original",
-        });
+        const session =
+            await segmentedStreamingSessionService.createLocalSession({
+                userId: "user-1",
+                trackId: "track-2",
+                desiredQuality: "original",
+            });
 
         expect(session.engineHints).toMatchObject({
             protocol: "dash",
@@ -283,11 +290,12 @@ describe("segmentedStreamingSessionService local quality handling", () => {
             inFlight: true,
         });
 
-        const session = await segmentedStreamingSessionService.createLocalSession({
-            userId: "user-1",
-            trackId: "track-2-cross-pod",
-            desiredQuality: "original",
-        });
+        const session =
+            await segmentedStreamingSessionService.createLocalSession({
+                userId: "user-1",
+                trackId: "track-2-cross-pod",
+                desiredQuality: "original",
+            });
 
         expect(session.engineHints).toMatchObject({
             protocol: "dash",
@@ -340,11 +348,12 @@ describe("segmentedStreamingSessionService token validation", () => {
         });
         mocks.mockHasInFlightBuild.mockReturnValue(false);
 
-        const session = await segmentedStreamingSessionService.createLocalSession({
-            userId: "user-1",
-            trackId: "track-1",
-            desiredQuality: "medium",
-        });
+        const session =
+            await segmentedStreamingSessionService.createLocalSession({
+                userId: "user-1",
+                trackId: "track-1",
+                desiredQuality: "medium",
+            });
         const initialToken = session.sessionToken;
 
         const initialRecord =
@@ -355,10 +364,13 @@ describe("segmentedStreamingSessionService token validation", () => {
         expect(initialRecord).not.toBeNull();
 
         jest.setSystemTime(new Date(baseNow.getTime() + 4 * 60 * 1000));
-        await segmentedStreamingSessionService.heartbeatSession(initialRecord!, {
-            positionSec: 32,
-            isPlaying: true,
-        });
+        await segmentedStreamingSessionService.heartbeatSession(
+            initialRecord!,
+            {
+                positionSec: 32,
+                isPlaying: true,
+            },
+        );
 
         const refreshedRecord =
             await segmentedStreamingSessionService.getAuthorizedSession(
@@ -398,11 +410,12 @@ describe("segmentedStreamingSessionService token validation", () => {
         });
         mocks.mockHasInFlightBuild.mockReturnValue(false);
 
-        const session = await segmentedStreamingSessionService.createLocalSession({
-            userId: "user-1",
-            trackId: "track-2",
-            desiredQuality: "medium",
-        });
+        const session =
+            await segmentedStreamingSessionService.createLocalSession({
+                userId: "user-1",
+                trackId: "track-2",
+                desiredQuality: "medium",
+            });
         const sessionRecord =
             await segmentedStreamingSessionService.getAuthorizedSession(
                 session.sessionId,
@@ -540,7 +553,8 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("skips scheduling playback repair for missing session ids and non-local source types", async () => {
-        const { segmentedStreamingSessionService } = await resolveSessionService();
+        const { segmentedStreamingSessionService } =
+            await resolveSessionService();
         const repairSpy = jest
             .spyOn(
                 segmentedStreamingSessionService as any,
@@ -563,7 +577,8 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("queues one follow-up repair when a repair is already in-flight for the same session", async () => {
-        const { segmentedStreamingSessionService } = await resolveSessionService();
+        const { segmentedStreamingSessionService } =
+            await resolveSessionService();
         let releaseRepair: (() => void) | undefined;
         const repairGate = new Promise<void>((resolve) => {
             releaseRepair = resolve;
@@ -618,7 +633,8 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("allows a new repair after both active and queued repairs complete", async () => {
-        const { segmentedStreamingSessionService } = await resolveSessionService();
+        const { segmentedStreamingSessionService } =
+            await resolveSessionService();
         let releaseRepair: (() => void) | undefined;
         let repairGate = new Promise<void>((resolve) => {
             releaseRepair = resolve;
@@ -676,7 +692,8 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("does not clear a newer in-flight repair entry when an older repair promise finishes", async () => {
-        const { segmentedStreamingSessionService } = await resolveSessionService();
+        const { segmentedStreamingSessionService } =
+            await resolveSessionService();
         let releaseRepair: (() => void) | undefined;
         const repairGate = new Promise<void>((resolve) => {
             releaseRepair = resolve;
@@ -696,7 +713,9 @@ describe("segmentedStreamingSessionService playback error repair", () => {
         });
         expect(repairSpy).toHaveBeenCalledTimes(1);
 
-        (segmentedStreamingSessionService as any).playbackErrorRepairInFlight.set(
+        (
+            segmentedStreamingSessionService as any
+        ).playbackErrorRepairInFlight.set(
             "session-repair-replaced",
             replacementPromise,
         );
@@ -706,20 +725,24 @@ describe("segmentedStreamingSessionService playback error repair", () => {
         await Promise.resolve();
 
         expect(
-            (segmentedStreamingSessionService as any).playbackErrorRepairInFlight.get(
-                "session-repair-replaced",
-            ),
+            (
+                segmentedStreamingSessionService as any
+            ).playbackErrorRepairInFlight.get("session-repair-replaced"),
         ).toBe(replacementPromise);
     });
 
     it("skips playback repair when the authorized session no longer exists", async () => {
-        const { segmentedStreamingSessionService, mocks } = await resolveSessionService();
-        jest.spyOn(segmentedStreamingSessionService, "getAuthorizedSession").mockResolvedValue(
-            null,
-        );
+        const { segmentedStreamingSessionService, mocks } =
+            await resolveSessionService();
+        jest.spyOn(
+            segmentedStreamingSessionService,
+            "getAuthorizedSession",
+        ).mockResolvedValue(null);
 
         await expect(
-            (segmentedStreamingSessionService as any).repairPlaybackErrorSessionCache({
+            (
+                segmentedStreamingSessionService as any
+            ).repairPlaybackErrorSessionCache({
                 userId: "user-1",
                 sessionId: "missing-session",
             }),
@@ -730,25 +753,29 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("skips playback repair when the requested track id does not match the active session track", async () => {
-        const { segmentedStreamingSessionService, mocks } = await resolveSessionService();
-        jest.spyOn(segmentedStreamingSessionService, "getAuthorizedSession").mockResolvedValue(
-            {
-                sessionId: "session-track-mismatch",
-                userId: "user-1",
-                trackId: "track-active",
-                cacheKey: "cache-active",
-                quality: "medium",
-                sourceType: "local",
-                manifestProfile: "startup_single",
-                manifestPath: "/tmp/assets/manifest.mpd",
-                assetDir: "/tmp/assets",
-                createdAt: "2026-02-20T00:00:00.000Z",
-                expiresAt: "2099-01-01T00:00:00.000Z",
-            },
-        );
+        const { segmentedStreamingSessionService, mocks } =
+            await resolveSessionService();
+        jest.spyOn(
+            segmentedStreamingSessionService,
+            "getAuthorizedSession",
+        ).mockResolvedValue({
+            sessionId: "session-track-mismatch",
+            userId: "user-1",
+            trackId: "track-active",
+            cacheKey: "cache-active",
+            quality: "medium",
+            sourceType: "local",
+            manifestProfile: "startup_single",
+            manifestPath: "/tmp/assets/manifest.mpd",
+            assetDir: "/tmp/assets",
+            createdAt: "2026-02-20T00:00:00.000Z",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+        });
 
         await expect(
-            (segmentedStreamingSessionService as any).repairPlaybackErrorSessionCache({
+            (
+                segmentedStreamingSessionService as any
+            ).repairPlaybackErrorSessionCache({
                 userId: "user-1",
                 sessionId: "session-track-mismatch",
                 trackId: "track-other",
@@ -760,22 +787,24 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("skips playback repair when track source metadata is unavailable", async () => {
-        const { segmentedStreamingSessionService, mocks } = await resolveSessionService();
-        jest.spyOn(segmentedStreamingSessionService, "getAuthorizedSession").mockResolvedValue(
-            {
-                sessionId: "session-track-metadata-missing",
-                userId: "user-1",
-                trackId: "track-metadata-missing",
-                cacheKey: "cache-track-metadata-missing",
-                quality: "medium",
-                sourceType: "local",
-                manifestProfile: "startup_single",
-                manifestPath: "/tmp/assets/manifest.mpd",
-                assetDir: "/tmp/assets",
-                createdAt: "2026-02-20T00:00:00.000Z",
-                expiresAt: "2099-01-01T00:00:00.000Z",
-            },
-        );
+        const { segmentedStreamingSessionService, mocks } =
+            await resolveSessionService();
+        jest.spyOn(
+            segmentedStreamingSessionService,
+            "getAuthorizedSession",
+        ).mockResolvedValue({
+            sessionId: "session-track-metadata-missing",
+            userId: "user-1",
+            trackId: "track-metadata-missing",
+            cacheKey: "cache-track-metadata-missing",
+            quality: "medium",
+            sourceType: "local",
+            manifestProfile: "startup_single",
+            manifestPath: "/tmp/assets/manifest.mpd",
+            assetDir: "/tmp/assets",
+            createdAt: "2026-02-20T00:00:00.000Z",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+        });
         mocks.mockTrackFindUnique.mockResolvedValue({
             id: "track-metadata-missing",
             filePath: null,
@@ -783,7 +812,9 @@ describe("segmentedStreamingSessionService playback error repair", () => {
         });
 
         await expect(
-            (segmentedStreamingSessionService as any).repairPlaybackErrorSessionCache({
+            (
+                segmentedStreamingSessionService as any
+            ).repairPlaybackErrorSessionCache({
                 userId: "user-1",
                 sessionId: "session-track-metadata-missing",
             }),
@@ -793,23 +824,25 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("queues playback repair regeneration when session and track source are valid", async () => {
-        const { segmentedStreamingSessionService, mocks } = await resolveSessionService();
+        const { segmentedStreamingSessionService, mocks } =
+            await resolveSessionService();
         const sourceModified = new Date("2026-02-20T00:00:00.000Z");
-        jest.spyOn(segmentedStreamingSessionService, "getAuthorizedSession").mockResolvedValue(
-            {
-                sessionId: "session-repair-success",
-                userId: "user-1",
-                trackId: "track-repair-success",
-                cacheKey: "cache-repair-success",
-                quality: "medium",
-                sourceType: "local",
-                manifestProfile: "startup_single",
-                manifestPath: "/tmp/assets/manifest.mpd",
-                assetDir: "/tmp/assets",
-                createdAt: "2026-02-20T00:00:00.000Z",
-                expiresAt: "2099-01-01T00:00:00.000Z",
-            },
-        );
+        jest.spyOn(
+            segmentedStreamingSessionService,
+            "getAuthorizedSession",
+        ).mockResolvedValue({
+            sessionId: "session-repair-success",
+            userId: "user-1",
+            trackId: "track-repair-success",
+            cacheKey: "cache-repair-success",
+            quality: "medium",
+            sourceType: "local",
+            manifestProfile: "startup_single",
+            manifestPath: "/tmp/assets/manifest.mpd",
+            assetDir: "/tmp/assets",
+            createdAt: "2026-02-20T00:00:00.000Z",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+        });
         mocks.mockTrackFindUnique.mockResolvedValue({
             id: "track-repair-success",
             filePath: "albums/track-repair-success.flac",
@@ -819,7 +852,9 @@ describe("segmentedStreamingSessionService playback error repair", () => {
         mocks.mockForceRegenerateDashSegments.mockResolvedValue(undefined);
 
         await expect(
-            (segmentedStreamingSessionService as any).repairPlaybackErrorSessionCache({
+            (
+                segmentedStreamingSessionService as any
+            ).repairPlaybackErrorSessionCache({
                 userId: "user-1",
                 sessionId: "session-repair-success",
                 trackId: "track-repair-success",
@@ -836,22 +871,24 @@ describe("segmentedStreamingSessionService playback error repair", () => {
     });
 
     it("swallows playback repair regeneration errors", async () => {
-        const { segmentedStreamingSessionService, mocks } = await resolveSessionService();
-        jest.spyOn(segmentedStreamingSessionService, "getAuthorizedSession").mockResolvedValue(
-            {
-                sessionId: "session-repair-error",
-                userId: "user-1",
-                trackId: "track-repair-error",
-                cacheKey: "cache-repair-error",
-                quality: "medium",
-                sourceType: "local",
-                manifestProfile: "startup_single",
-                manifestPath: "/tmp/assets/manifest.mpd",
-                assetDir: "/tmp/assets",
-                createdAt: "2026-02-20T00:00:00.000Z",
-                expiresAt: "2099-01-01T00:00:00.000Z",
-            },
-        );
+        const { segmentedStreamingSessionService, mocks } =
+            await resolveSessionService();
+        jest.spyOn(
+            segmentedStreamingSessionService,
+            "getAuthorizedSession",
+        ).mockResolvedValue({
+            sessionId: "session-repair-error",
+            userId: "user-1",
+            trackId: "track-repair-error",
+            cacheKey: "cache-repair-error",
+            quality: "medium",
+            sourceType: "local",
+            manifestProfile: "startup_single",
+            manifestPath: "/tmp/assets/manifest.mpd",
+            assetDir: "/tmp/assets",
+            createdAt: "2026-02-20T00:00:00.000Z",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+        });
         mocks.mockTrackFindUnique.mockResolvedValue({
             id: "track-repair-error",
             filePath: "albums/track-repair-error.flac",
@@ -863,7 +900,9 @@ describe("segmentedStreamingSessionService playback error repair", () => {
         );
 
         await expect(
-            (segmentedStreamingSessionService as any).repairPlaybackErrorSessionCache({
+            (
+                segmentedStreamingSessionService as any
+            ).repairPlaybackErrorSessionCache({
                 userId: "user-1",
                 sessionId: "session-repair-error",
                 trackId: "track-repair-error",
@@ -886,7 +925,8 @@ describe("segmentedStreamingSessionService segment path validation", () => {
     });
 
     it("accepts both m4s and legacy webm segment names", async () => {
-        const { segmentedStreamingSessionService } = await resolveSessionService();
+        const { segmentedStreamingSessionService } =
+            await resolveSessionService();
         const session = {
             sessionId: "session-1",
             userId: "user-1",
@@ -963,19 +1003,20 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockGetBuildFailure.mockReturnValue(null);
         mocks.mockHasInFlightBuild.mockReturnValue(true);
 
-        const waitPromise = segmentedStreamingSessionService.waitForManifestReady({
-            sessionId: "session-1",
-            userId: "user-1",
-            trackId: "track-1",
-            cacheKey: "cache-1",
-            quality: "medium",
-            sourceType: "local",
-            manifestProfile: "startup_single",
-            manifestPath: "/tmp/assets/manifest.mpd",
-            assetDir: "/tmp/assets",
-            createdAt: "2026-02-20T00:00:00.000Z",
-            expiresAt: "2099-01-01T00:00:00.000Z",
-        });
+        const waitPromise =
+            segmentedStreamingSessionService.waitForManifestReady({
+                sessionId: "session-1",
+                userId: "user-1",
+                trackId: "track-1",
+                cacheKey: "cache-1",
+                quality: "medium",
+                sourceType: "local",
+                manifestProfile: "startup_single",
+                manifestPath: "/tmp/assets/manifest.mpd",
+                assetDir: "/tmp/assets",
+                createdAt: "2026-02-20T00:00:00.000Z",
+                expiresAt: "2099-01-01T00:00:00.000Z",
+            });
 
         setTimeout(() => {
             availablePaths.add("/tmp/assets/init-0.m4s");
@@ -1038,19 +1079,20 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockGetBuildFailure.mockReturnValue(null);
         mocks.mockHasInFlightBuild.mockReturnValue(true);
 
-        const waitPromise = segmentedStreamingSessionService.waitForManifestReady({
-            sessionId: "session-2-representation-ready",
-            userId: "user-1",
-            trackId: "track-1",
-            cacheKey: "cache-1",
-            quality: "medium",
-            sourceType: "local",
-            manifestProfile: "startup_single",
-            manifestPath: "/tmp/assets/manifest.mpd",
-            assetDir: "/tmp/assets",
-            createdAt: "2026-02-20T00:00:00.000Z",
-            expiresAt: "2099-01-01T00:00:00.000Z",
-        });
+        const waitPromise =
+            segmentedStreamingSessionService.waitForManifestReady({
+                sessionId: "session-2-representation-ready",
+                userId: "user-1",
+                trackId: "track-1",
+                cacheKey: "cache-1",
+                quality: "medium",
+                sourceType: "local",
+                manifestProfile: "startup_single",
+                manifestPath: "/tmp/assets/manifest.mpd",
+                assetDir: "/tmp/assets",
+                createdAt: "2026-02-20T00:00:00.000Z",
+                expiresAt: "2099-01-01T00:00:00.000Z",
+            });
 
         await expect(waitPromise).resolves.toBeUndefined();
     });
@@ -1088,21 +1130,24 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockGetBuildFailure.mockReturnValue(null);
         mocks.mockHasInFlightBuild.mockReturnValue(true);
 
-        const waitPromise = segmentedStreamingSessionService.waitForManifestReady({
-            sessionId: "session-2",
-            userId: "user-1",
-            trackId: "track-1",
-            cacheKey: "cache-1",
-            quality: "medium",
-            sourceType: "local",
-            manifestProfile: "startup_single",
-            manifestPath: "/tmp/assets/manifest.mpd",
-            assetDir: "/tmp/assets",
-            createdAt: "2026-02-20T00:00:00.000Z",
-            expiresAt: "2099-01-01T00:00:00.000Z",
-        });
+        const waitPromise =
+            segmentedStreamingSessionService.waitForManifestReady({
+                sessionId: "session-2",
+                userId: "user-1",
+                trackId: "track-1",
+                cacheKey: "cache-1",
+                quality: "medium",
+                sourceType: "local",
+                manifestProfile: "startup_single",
+                manifestPath: "/tmp/assets/manifest.mpd",
+                assetDir: "/tmp/assets",
+                createdAt: "2026-02-20T00:00:00.000Z",
+                expiresAt: "2099-01-01T00:00:00.000Z",
+            });
 
-        const startupWindowAssertion = expect(waitPromise).rejects.toMatchObject({
+        const startupWindowAssertion = expect(
+            waitPromise,
+        ).rejects.toMatchObject({
             code: "STREAMING_ASSET_NOT_READY",
             statusCode: 503,
         });
@@ -1141,19 +1186,20 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockGetBuildFailure.mockReturnValue(null);
         mocks.mockHasInFlightBuild.mockReturnValue(true);
 
-        const waitPromise = segmentedStreamingSessionService.waitForManifestReady({
-            sessionId: "session-shared-deadline",
-            userId: "user-1",
-            trackId: "track-1",
-            cacheKey: "cache-1",
-            quality: "medium",
-            sourceType: "local",
-            manifestProfile: "startup_single",
-            manifestPath: "/tmp/assets/manifest.mpd",
-            assetDir: "/tmp/assets",
-            createdAt: "2026-02-20T00:00:00.000Z",
-            expiresAt: "2099-01-01T00:00:00.000Z",
-        });
+        const waitPromise =
+            segmentedStreamingSessionService.waitForManifestReady({
+                sessionId: "session-shared-deadline",
+                userId: "user-1",
+                trackId: "track-1",
+                cacheKey: "cache-1",
+                quality: "medium",
+                sourceType: "local",
+                manifestProfile: "startup_single",
+                manifestPath: "/tmp/assets/manifest.mpd",
+                assetDir: "/tmp/assets",
+                createdAt: "2026-02-20T00:00:00.000Z",
+                expiresAt: "2099-01-01T00:00:00.000Z",
+            });
 
         // Manifest appears near the end of the deadline budget.
         setTimeout(() => {
@@ -1202,21 +1248,24 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockGetBuildFailure.mockReturnValue(null);
         mocks.mockHasInFlightBuild.mockReturnValue(false);
 
-        const waitPromise = segmentedStreamingSessionService.waitForManifestReady({
-            sessionId: "session-2",
-            userId: "user-1",
-            trackId: "track-1",
-            cacheKey: "cache-1",
-            quality: "medium",
-            sourceType: "local",
-            manifestProfile: "startup_single",
-            manifestPath: "/tmp/assets/manifest.mpd",
-            assetDir: "/tmp/assets",
-            createdAt: "2026-02-20T00:00:00.000Z",
-            expiresAt: "2099-01-01T00:00:00.000Z",
-        });
+        const waitPromise =
+            segmentedStreamingSessionService.waitForManifestReady({
+                sessionId: "session-2",
+                userId: "user-1",
+                trackId: "track-1",
+                cacheKey: "cache-1",
+                quality: "medium",
+                sourceType: "local",
+                manifestProfile: "startup_single",
+                manifestPath: "/tmp/assets/manifest.mpd",
+                assetDir: "/tmp/assets",
+                createdAt: "2026-02-20T00:00:00.000Z",
+                expiresAt: "2099-01-01T00:00:00.000Z",
+            });
 
-        const startupWindowAssertion = expect(waitPromise).rejects.toMatchObject({
+        const startupWindowAssertion = expect(
+            waitPromise,
+        ).rejects.toMatchObject({
             code: "STREAMING_ASSET_NOT_READY",
             statusCode: 503,
         });
@@ -1265,19 +1314,20 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockGetBuildFailure.mockReturnValue(null);
         mocks.mockHasInFlightBuild.mockReturnValue(true);
 
-        const waitPromise = segmentedStreamingSessionService.waitForManifestReady({
-            sessionId: "session-multi-timeline-startup-prereq",
-            userId: "user-1",
-            trackId: "track-1",
-            cacheKey: "cache-1",
-            quality: "medium",
-            sourceType: "local",
-            manifestProfile: "startup_single",
-            manifestPath: "/tmp/assets/manifest.mpd",
-            assetDir: "/tmp/assets",
-            createdAt: "2026-02-20T00:00:00.000Z",
-            expiresAt: "2099-01-01T00:00:00.000Z",
-        });
+        const waitPromise =
+            segmentedStreamingSessionService.waitForManifestReady({
+                sessionId: "session-multi-timeline-startup-prereq",
+                userId: "user-1",
+                trackId: "track-1",
+                cacheKey: "cache-1",
+                quality: "medium",
+                sourceType: "local",
+                manifestProfile: "startup_single",
+                manifestPath: "/tmp/assets/manifest.mpd",
+                assetDir: "/tmp/assets",
+                createdAt: "2026-02-20T00:00:00.000Z",
+                expiresAt: "2099-01-01T00:00:00.000Z",
+            });
 
         await expect(waitPromise).resolves.toBeUndefined();
     });
@@ -1510,10 +1560,11 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         availablePaths.delete("/tmp/assets/chunk-0-00002.m4s");
         mocks.mockHasInFlightBuild.mockReturnValue(false);
 
-        const waitPromise = segmentedStreamingSessionService.waitForManifestReady(
-            session,
-        );
-        const startupWindowAssertion = expect(waitPromise).rejects.toMatchObject({
+        const waitPromise =
+            segmentedStreamingSessionService.waitForManifestReady(session);
+        const startupWindowAssertion = expect(
+            waitPromise,
+        ).rejects.toMatchObject({
             code: "STREAMING_ASSET_NOT_READY",
             statusCode: 503,
         });
@@ -1543,7 +1594,10 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         } as const;
 
         mocks.mockFsAccess.mockImplementation(async (candidatePath: string) => {
-            if (candidatePath === sourcePath || availablePaths.has(candidatePath)) {
+            if (
+                candidatePath === sourcePath ||
+                availablePaths.has(candidatePath)
+            ) {
                 return;
             }
             throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
@@ -1555,17 +1609,21 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
             filePath: "albums/track-manifest-self-heal.flac",
             fileModified: new Date("2026-02-20T00:00:00.000Z"),
         });
-        mocks.mockManifestGetOrCreateLocalDashAsset.mockImplementation(async () => {
-            availablePaths.add(session.manifestPath);
-            return {
-                cacheKey: session.cacheKey,
-                outputDir: session.assetDir,
-                manifestPath: session.manifestPath,
-                quality: "medium",
-            };
-        });
+        mocks.mockManifestGetOrCreateLocalDashAsset.mockImplementation(
+            async () => {
+                availablePaths.add(session.manifestPath);
+                return {
+                    cacheKey: session.cacheKey,
+                    outputDir: session.assetDir,
+                    manifestPath: session.manifestPath,
+                    quality: "medium",
+                };
+            },
+        );
 
-        const waitPromise = (segmentedStreamingSessionService as any).waitForAssetFile(
+        const waitPromise = (
+            segmentedStreamingSessionService as any
+        ).waitForAssetFile(
             session,
             session.manifestPath,
             "manifest",
@@ -1575,7 +1633,9 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         await expect(waitPromise).resolves.toBeUndefined();
 
         expect(mocks.mockTrackFindUnique).toHaveBeenCalledTimes(1);
-        expect(mocks.mockManifestGetOrCreateLocalDashAsset).toHaveBeenCalledTimes(1);
+        expect(
+            mocks.mockManifestGetOrCreateLocalDashAsset,
+        ).toHaveBeenCalledTimes(1);
     });
 
     it("waits through cross-pod grace polling when no in-flight build exists yet", async () => {
@@ -1607,7 +1667,9 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockHasInFlightBuild.mockReturnValue(false);
         mocks.mockTrackFindUnique.mockResolvedValue(null);
 
-        const waitPromise = (segmentedStreamingSessionService as any).waitForAssetFile(
+        const waitPromise = (
+            segmentedStreamingSessionService as any
+        ).waitForAssetFile(
             session,
             session.manifestPath,
             "manifest",
@@ -1656,7 +1718,9 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         });
         mocks.mockTrackFindUnique.mockResolvedValue(null);
 
-        const waitPromise = (segmentedStreamingSessionService as any).waitForAssetFile(
+        const waitPromise = (
+            segmentedStreamingSessionService as any
+        ).waitForAssetFile(
             session,
             session.manifestPath,
             "manifest",
@@ -1720,10 +1784,9 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         });
         mocks.mockTrackFindUnique.mockResolvedValue(null);
 
-        const waitPromise = (segmentedStreamingSessionService as any).waitForStartupWindowReady(
-            session,
-            Date.now() + 1_000,
-        );
+        const waitPromise = (
+            segmentedStreamingSessionService as any
+        ).waitForStartupWindowReady(session, Date.now() + 1_000);
         setTimeout(() => {
             availablePaths.add(`${session.assetDir}/init-0.m4s`);
             availablePaths.add(`${session.assetDir}/chunk-0-00001.m4s`);
@@ -1770,7 +1833,10 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
 </MPD>`;
 
         mocks.mockFsAccess.mockImplementation(async (candidatePath: string) => {
-            if (candidatePath === sourcePath || availablePaths.has(candidatePath)) {
+            if (
+                candidatePath === sourcePath ||
+                availablePaths.has(candidatePath)
+            ) {
                 return;
             }
             throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
@@ -1783,12 +1849,19 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
             filePath: "albums/track-startup-self-heal.flac",
             fileModified: new Date("2026-02-20T00:00:00.000Z"),
         });
-        mocks.mockManifestGetOrCreateLocalDashAsset.mockImplementation(async () => {
-            availablePaths.add("/tmp/assets/startup-self-heal/init-0.m4s");
-            availablePaths.add("/tmp/assets/startup-self-heal/chunk-0-00001.m4s");
-            availablePaths.add("/tmp/assets/startup-self-heal/chunk-0-00002.m4s");
-            availablePaths.add("/tmp/assets/startup-self-heal/chunk-0-00003.m4s");
-            manifestContents = `<?xml version="1.0"?>
+        mocks.mockManifestGetOrCreateLocalDashAsset.mockImplementation(
+            async () => {
+                availablePaths.add("/tmp/assets/startup-self-heal/init-0.m4s");
+                availablePaths.add(
+                    "/tmp/assets/startup-self-heal/chunk-0-00001.m4s",
+                );
+                availablePaths.add(
+                    "/tmp/assets/startup-self-heal/chunk-0-00002.m4s",
+                );
+                availablePaths.add(
+                    "/tmp/assets/startup-self-heal/chunk-0-00003.m4s",
+                );
+                manifestContents = `<?xml version="1.0"?>
 <MPD>
   <Period>
     <AdaptationSet>
@@ -1800,22 +1873,24 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
     </AdaptationSet>
   </Period>
 </MPD>`;
-            return {
-                cacheKey: session.cacheKey,
-                outputDir: session.assetDir,
-                manifestPath: session.manifestPath,
-                quality: "medium",
-            };
-        });
-
-        const waitPromise = (segmentedStreamingSessionService as any).waitForStartupWindowReady(
-            session,
-            Date.now() + 1_000,
+                return {
+                    cacheKey: session.cacheKey,
+                    outputDir: session.assetDir,
+                    manifestPath: session.manifestPath,
+                    quality: "medium",
+                };
+            },
         );
+
+        const waitPromise = (
+            segmentedStreamingSessionService as any
+        ).waitForStartupWindowReady(session, Date.now() + 1_000);
         await jest.advanceTimersByTimeAsync(400);
 
         await expect(waitPromise).resolves.toBeUndefined();
-        expect(mocks.mockManifestGetOrCreateLocalDashAsset).toHaveBeenCalledTimes(1);
+        expect(
+            mocks.mockManifestGetOrCreateLocalDashAsset,
+        ).toHaveBeenCalledTimes(1);
     });
 
     it("short-circuits polling wait when deadline has elapsed mid-loop", async () => {
@@ -1889,7 +1964,9 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockGetBuildFailure.mockReturnValue(null);
         mocks.mockHasInFlightBuild.mockReturnValue(true);
 
-        const waitPromise = (segmentedStreamingSessionService as any).waitForAssetFile(
+        const waitPromise = (
+            segmentedStreamingSessionService as any
+        ).waitForAssetFile(
             session,
             session.manifestPath,
             "manifest",
@@ -1925,7 +2002,9 @@ describe("segmentedStreamingSessionService manifest startup readiness", () => {
         mocks.mockHasInFlightBuild.mockReturnValue(true);
         mocks.mockIsCacheMarkedInvalid.mockReturnValue(true);
 
-        const waitPromise = (segmentedStreamingSessionService as any).waitForAssetFile(
+        const waitPromise = (
+            segmentedStreamingSessionService as any
+        ).waitForAssetFile(
             session,
             session.manifestPath,
             "manifest",
@@ -1981,10 +2060,11 @@ describe("segmentedStreamingSessionService segment readiness coalescing", () => 
             expiresAt: "2099-01-01T00:00:00.000Z",
         } as const;
 
-        const firstWaitPromise = segmentedStreamingSessionService.waitForSegmentReady(
-            session,
-            "chunk-0-00001.m4s",
-        );
+        const firstWaitPromise =
+            segmentedStreamingSessionService.waitForSegmentReady(
+                session,
+                "chunk-0-00001.m4s",
+            );
         const secondWaitPromise =
             segmentedStreamingSessionService.waitForSegmentReady(
                 session,
@@ -2070,16 +2150,19 @@ describe("segmentedStreamingSessionService segment readiness coalescing", () => 
         } as const;
         const segmentReadinessKey = `${session.sessionId}:${segmentName}`;
 
-        const waitPromise = segmentedStreamingSessionService.waitForSegmentReady(
-            session,
-            segmentName,
-        );
+        const waitPromise =
+            segmentedStreamingSessionService.waitForSegmentReady(
+                session,
+                segmentName,
+            );
         (segmentedStreamingSessionService as any).markReadinessMicrocacheHit(
             (segmentedStreamingSessionService as any).segmentReadyMicrocache,
             segmentReadinessKey,
         );
 
-        await expect(waitPromise).resolves.toBe("/tmp/assets/chunk-0-00001.m4s");
+        await expect(waitPromise).resolves.toBe(
+            "/tmp/assets/chunk-0-00001.m4s",
+        );
         expect(mocks.mockFsAccess).not.toHaveBeenCalled();
     });
 
@@ -2114,10 +2197,11 @@ describe("segmentedStreamingSessionService segment readiness coalescing", () => 
             expiresAt: "2099-01-01T00:00:00.000Z",
         } as const;
 
-        const firstWaitPromise = segmentedStreamingSessionService.waitForSegmentReady(
-            session,
-            "chunk-0-00001.m4s",
-        );
+        const firstWaitPromise =
+            segmentedStreamingSessionService.waitForSegmentReady(
+                session,
+                "chunk-0-00001.m4s",
+            );
         const secondWaitPromise =
             segmentedStreamingSessionService.waitForSegmentReady(
                 session,
@@ -2146,7 +2230,8 @@ describe("segmentedStreamingSessionService segment readiness coalescing", () => 
     });
 
     it("retains replaced in-flight entries when coalesced finally cleanup sees a new promise", async () => {
-        const { segmentedStreamingSessionService } = await resolveSessionService();
+        const { segmentedStreamingSessionService } =
+            await resolveSessionService();
 
         const inFlight = new Map<string, Promise<void>>();
         const key = "manual-coalesce-key";
@@ -2156,14 +2241,12 @@ describe("segmentedStreamingSessionService segment readiness coalescing", () => 
         });
         const replacementPromise = Promise.resolve();
 
-        const coalescedPromise = (segmentedStreamingSessionService as any).coalesceInFlightByKey(
-            inFlight,
-            key,
-            async () => {
-                inFlight.set(key, replacementPromise);
-                await waitGate;
-            },
-        );
+        const coalescedPromise = (
+            segmentedStreamingSessionService as any
+        ).coalesceInFlightByKey(inFlight, key, async () => {
+            inFlight.set(key, replacementPromise);
+            await waitGate;
+        });
 
         expect(inFlight.has(key)).toBe(true);
         if (releaseWait) {

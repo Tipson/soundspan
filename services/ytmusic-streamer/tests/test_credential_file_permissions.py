@@ -20,7 +20,7 @@ async def test_auth_restore_writes_0600(client, data_path):
     response = await client.post(
         "/auth/restore?user_id=userx",
         json={
-            "oauth_json": "{\"tok\": 1}",
+            "oauth_json": '{"tok": 1}',
             "client_id": "cid",
             "client_secret": "sec",
         },
@@ -38,17 +38,13 @@ async def test_auth_restore_tightens_existing_file(client, data_path):
     oauth_path.write_text("{}")
     oauth_path.chmod(0o644)
 
-    response = await client.post(
-        "/auth/restore?user_id=usery", json={"oauth_json": "{}"}
-    )
+    response = await client.post("/auth/restore?user_id=usery", json={"oauth_json": "{}"})
     assert response.status_code == 200
     assert oauth_path.stat().st_mode & 0o777 == 0o600
 
 
 @pytest.mark.anyio
-async def test_device_code_poll_success_writes_0600(
-    client, data_path, monkeypatch
-):
+async def test_device_code_poll_success_writes_0600(client, data_path, monkeypatch):
     """Successful device polling writes both credential files as mode 0600."""
     import app
 

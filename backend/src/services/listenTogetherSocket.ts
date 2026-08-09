@@ -91,7 +91,7 @@ const DEFAULT_LISTEN_TOGETHER_RECONNECT_SLO_MS = 5_000;
 const parsedReconnectSloMs = Number.parseInt(
     process.env.LISTEN_TOGETHER_RECONNECT_SLO_MS ||
         `${DEFAULT_LISTEN_TOGETHER_RECONNECT_SLO_MS}`,
-    10
+    10,
 );
 const LISTEN_TOGETHER_RECONNECT_SLO_MS =
     Number.isFinite(parsedReconnectSloMs) && parsedReconnectSloMs > 0
@@ -109,7 +109,7 @@ const DEFAULT_LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS = 3_000;
 const parsedMutationLockTtlMs = Number.parseInt(
     process.env.LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS ||
         `${DEFAULT_LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS}`,
-    10
+    10,
 );
 const LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS =
     Number.isFinite(parsedMutationLockTtlMs) && parsedMutationLockTtlMs > 0
@@ -120,7 +120,7 @@ const LISTEN_TOGETHER_MUTATION_LOCK_PREFIX =
     "listen-together:mutation-lock";
 const LISTEN_TOGETHER_CONFLICT_RETRY_AFTER_MS = Math.min(
     500,
-    Math.max(75, Math.floor(LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS / 10))
+    Math.max(75, Math.floor(LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS / 10)),
 );
 const LISTEN_TOGETHER_OBSERVABILITY_LOG_EVERY = 25;
 const pendingDisconnectCleanupTimers = new Map<
@@ -140,16 +140,19 @@ const listenTogetherObservabilityCounters = {
 let redisAdapterPubClient: any = null;
 let redisAdapterSubClient: any = null;
 const mutationLockNodeId = randomUUID();
-let mutationLockRedisClient: ReturnType<typeof createIORedisClient> | null = null;
+let mutationLockRedisClient: ReturnType<typeof createIORedisClient> | null =
+    null;
 let unsubscribeSocialPresenceUpdates: (() => void) | null = null;
 
 if (LISTEN_TOGETHER_MUTATION_LOCK_ENABLED) {
-    mutationLockRedisClient = createIORedisClient("listen-together-mutation-locks");
+    mutationLockRedisClient = createIORedisClient(
+        "listen-together-mutation-locks",
+    );
 }
 
 function logListenTogetherObservability(reason: string): void {
     logger.info(
-        `[ListenTogether/Observability] reason=${reason} reconnectSamples=${listenTogetherObservabilityCounters.reconnectSamples} reconnectBreaches=${listenTogetherObservabilityCounters.reconnectBreaches} conflictErrors=${listenTogetherObservabilityCounters.conflictErrors} mutationLockAcquireFailures=${listenTogetherObservabilityCounters.mutationLockAcquireFailures} disconnectCleanupScheduled=${listenTogetherObservabilityCounters.disconnectCleanupScheduled} disconnectCleanupExecuted=${listenTogetherObservabilityCounters.disconnectCleanupExecuted}`
+        `[ListenTogether/Observability] reason=${reason} reconnectSamples=${listenTogetherObservabilityCounters.reconnectSamples} reconnectBreaches=${listenTogetherObservabilityCounters.reconnectBreaches} conflictErrors=${listenTogetherObservabilityCounters.conflictErrors} mutationLockAcquireFailures=${listenTogetherObservabilityCounters.mutationLockAcquireFailures} disconnectCleanupScheduled=${listenTogetherObservabilityCounters.disconnectCleanupScheduled} disconnectCleanupExecuted=${listenTogetherObservabilityCounters.disconnectCleanupExecuted}`,
     );
 }
 
@@ -171,16 +174,18 @@ function recordGroupConflict(
     groupId: string | null,
     userId: string,
     operation: string,
-    message: string
+    message: string,
 ): void {
     listenTogetherObservabilityCounters.conflictErrors += 1;
     logger.warn(
-        `[ListenTogether/Conflict] operation=${operation} groupId=${groupId ?? "none"} userId=${userId} message=${message}`
+        `[ListenTogether/Conflict] operation=${operation} groupId=${groupId ?? "none"} userId=${userId} message=${message}`,
     );
     maybeLogListenTogetherObservability("conflict");
 }
 
-function buildTransientConflictAck(message: string): TransientConflictAckPayload {
+function buildTransientConflictAck(
+    message: string,
+): TransientConflictAckPayload {
     return {
         error: message,
         code: "CONFLICT",
@@ -192,12 +197,16 @@ function buildTransientConflictAck(message: string): TransientConflictAckPayload
 
 function enqueueGroupSnapshotWrite(
     groupId: string,
-    write: () => Promise<void>
+    write: () => Promise<void>,
 ): Promise<void> {
-    const previous = pendingGroupSnapshotWrites.get(groupId) ?? Promise.resolve();
+    const previous =
+        pendingGroupSnapshotWrites.get(groupId) ?? Promise.resolve();
     let queued: Promise<void>;
     queued = previous
-        .then(() => undefined, () => undefined)
+        .then(
+            () => undefined,
+            () => undefined,
+        )
         .then(write)
         .catch(() => undefined)
         .finally(() => {
@@ -217,7 +226,7 @@ async function flushGroupSnapshotWrites(groupId: string): Promise<void> {
 
 function queuePersistAndPublishSnapshot(
     groupId: string,
-    snapshot?: GroupSnapshot
+    snapshot?: GroupSnapshot,
 ): Promise<void> {
     const resolvedSnapshot = snapshot ?? groupManager.snapshotById(groupId);
     if (!resolvedSnapshot) {
@@ -226,7 +235,10 @@ function queuePersistAndPublishSnapshot(
 
     return enqueueGroupSnapshotWrite(groupId, async () => {
         await listenTogetherStateStore.setSnapshot(groupId, resolvedSnapshot);
-        await listenTogetherClusterSync.publishSnapshot(groupId, resolvedSnapshot);
+        await listenTogetherClusterSync.publishSnapshot(
+            groupId,
+            resolvedSnapshot,
+        );
     });
 }
 
@@ -243,7 +255,7 @@ function queueEndedSnapshotSync(groupId: string): Promise<void> {
 async function emitAvailabilityForGroup(
     ns: Namespace,
     groupId: string,
-    snapshot?: GroupSnapshot
+    snapshot?: GroupSnapshot,
 ): Promise<void> {
     const activeSnapshot = snapshot ?? groupManager.snapshotById(groupId);
     if (!activeSnapshot) return;
@@ -253,13 +265,15 @@ async function emitAvailabilityForGroup(
         sockets.map(async (rawSocket) => {
             const socket = rawSocket as unknown as AuthenticatedSocket;
             const userId =
-                typeof socket.data?.userId === "string" ? socket.data.userId : null;
+                typeof socket.data?.userId === "string"
+                    ? socket.data.userId
+                    : null;
             if (!userId) return;
 
             try {
                 const availabilityByIndex = await resolveQueueForUser(
                     activeSnapshot.playback.queue,
-                    userId
+                    userId,
                 );
                 const unavailableIndices: number[] = [];
                 const availability = [...availabilityByIndex.entries()].map(
@@ -282,7 +296,9 @@ async function emitAvailabilityForGroup(
                         return {
                             queueIndex,
                             available: resolved.available,
-                            source: resolved.available ? resolved.source : undefined,
+                            source: resolved.available
+                                ? resolved.source
+                                : undefined,
                             localTrackId,
                             tidalTrackId,
                             youtubeVideoId,
@@ -290,13 +306,13 @@ async function emitAvailabilityForGroup(
                                 ? resolved.reason
                                 : undefined,
                         };
-                    }
+                    },
                 );
 
                 groupManager.setUnavailableIndices(
                     groupId,
                     userId,
-                    unavailableIndices
+                    unavailableIndices,
                 );
                 socket.emit("group:availability", {
                     availability,
@@ -305,17 +321,17 @@ async function emitAvailabilityForGroup(
             } catch (error) {
                 logger.warn(
                     `[ListenTogether/WS] Failed to resolve per-user availability for ${userId} in ${groupId}`,
-                    error
+                    error,
                 );
             }
-        })
+        }),
     );
 }
 
 async function withGroupMutationLock<T>(
     groupId: string,
     operationName: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
 ): Promise<T> {
     if (!LISTEN_TOGETHER_MUTATION_LOCK_ENABLED || !mutationLockRedisClient) {
         try {
@@ -329,7 +345,7 @@ async function withGroupMutationLock<T>(
     const lockToken = `${mutationLockNodeId}:${Date.now()}:${Math.random()}`;
     const ttlSeconds = Math.max(
         1,
-        Math.ceil(LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS / 1000)
+        Math.ceil(LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS / 1000),
     );
 
     try {
@@ -338,13 +354,13 @@ async function withGroupMutationLock<T>(
             lockToken,
             "EX",
             ttlSeconds,
-            "NX"
+            "NX",
         );
 
         if (acquired !== "OK") {
             throw new GroupError(
                 "CONFLICT",
-                "Another group update is in progress. Please retry."
+                "Another group update is in progress. Please retry.",
             );
         }
     } catch (err) {
@@ -354,13 +370,13 @@ async function withGroupMutationLock<T>(
 
         logger.error(
             `[ListenTogether/MutationLock] Failed to acquire lock for ${operationName} (${groupId})`,
-            err
+            err,
         );
         listenTogetherObservabilityCounters.mutationLockAcquireFailures += 1;
         maybeLogListenTogetherObservability("mutation-lock-acquire-failure");
         throw new GroupError(
             "CONFLICT",
-            "Group coordination temporarily unavailable. Please retry."
+            "Group coordination temporarily unavailable. Please retry.",
         );
     }
 
@@ -379,12 +395,12 @@ async function withGroupMutationLock<T>(
                 "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
                 1,
                 lockKey,
-                lockToken
+                lockToken,
             );
         } catch (err) {
             logger.warn(
                 `[ListenTogether/MutationLock] Failed to release lock for ${operationName} (${groupId})`,
-                err
+                err,
             );
         }
     }
@@ -402,7 +418,11 @@ function clearDisconnectCleanup(groupId: string, userId: string): void {
     pendingDisconnectCleanupTimers.delete(key);
 }
 
-function recordReconnectSlo(groupId: string, userId: string, username: string): void {
+function recordReconnectSlo(
+    groupId: string,
+    userId: string,
+    username: string,
+): void {
     const key = disconnectCleanupKey(groupId, userId);
     const disconnectedAtMs = recentDisconnectAtMs.get(key);
     if (!disconnectedAtMs) {
@@ -414,13 +434,13 @@ function recordReconnectSlo(groupId: string, userId: string, username: string): 
     listenTogetherObservabilityCounters.reconnectSamples += 1;
 
     logger.info(
-        `[ListenTogether/SLO] Reconnect latency ${reconnectMs}ms for ${username} (${groupId})`
+        `[ListenTogether/SLO] Reconnect latency ${reconnectMs}ms for ${username} (${groupId})`,
     );
 
     if (reconnectMs > LISTEN_TOGETHER_RECONNECT_SLO_MS) {
         listenTogetherObservabilityCounters.reconnectBreaches += 1;
         logger.warn(
-            `[ListenTogether/SLO] Reconnect latency ${reconnectMs}ms exceeded target ${LISTEN_TOGETHER_RECONNECT_SLO_MS}ms for ${username} (${groupId})`
+            `[ListenTogether/SLO] Reconnect latency ${reconnectMs}ms exceeded target ${LISTEN_TOGETHER_RECONNECT_SLO_MS}ms for ${username} (${groupId})`,
         );
         logListenTogetherObservability("reconnect-slo-breach");
         return;
@@ -508,7 +528,11 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
             origin: (origin, cb) =>
                 cb(
                     null,
-                    isOriginAllowed(origin, config.allowedOrigins, config.nodeEnv)
+                    isOriginAllowed(
+                        origin,
+                        config.allowedOrigins,
+                        config.nodeEnv,
+                    ),
                 ),
             credentials: true,
         },
@@ -525,7 +549,7 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
         unsubscribeSocialPresenceUpdates = subscribeSocialPresenceUpdates(
             (event: SocialPresenceUpdatedEvent) => {
                 ns.emit("social:presence-updated", event);
-            }
+            },
         );
     }
 
@@ -535,40 +559,43 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
             // package is missing. In that case we log and continue in local mode.
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { createAdapter } = require("@socket.io/redis-adapter") as {
-                createAdapter: (pubClient: unknown, subClient: unknown) => unknown;
+                createAdapter: (
+                    pubClient: unknown,
+                    subClient: unknown,
+                ) => unknown;
             };
 
             redisAdapterPubClient = createIORedisClient(
-                "listen-together-socket-adapter-pub"
+                "listen-together-socket-adapter-pub",
             );
             redisAdapterSubClient = redisAdapterPubClient.duplicate();
 
             // Attach adapter at the Server level; Namespace does not expose adapter(...)
             // as a callable function in this runtime.
             (io as any).adapter(
-                createAdapter(redisAdapterPubClient, redisAdapterSubClient)
+                createAdapter(redisAdapterPubClient, redisAdapterSubClient),
             );
             logger.info(
-                "[ListenTogether/WS] Redis adapter enabled for cross-pod Socket.IO fanout"
+                "[ListenTogether/WS] Redis adapter enabled for cross-pod Socket.IO fanout",
             );
             if (listenTogetherStateStore.isEnabled()) {
                 logger.info(
-                    "[ListenTogether/WS] Cross-pod authoritative session snapshots are enabled via Redis state store"
+                    "[ListenTogether/WS] Cross-pod authoritative session snapshots are enabled via Redis state store",
                 );
             } else {
                 logger.warn(
-                    "[ListenTogether/WS] Cross-pod fanout is enabled, but authoritative session snapshots are disabled (LISTEN_TOGETHER_STATE_STORE_ENABLED=false); GroupManager state remains pod-local in-memory between mutations."
+                    "[ListenTogether/WS] Cross-pod fanout is enabled, but authoritative session snapshots are disabled (LISTEN_TOGETHER_STATE_STORE_ENABLED=false); GroupManager state remains pod-local in-memory between mutations.",
                 );
             }
         } catch (err) {
             logger.error(
                 "[ListenTogether/WS] Failed to initialize Redis adapter; continuing in single-pod fanout mode",
-                err
+                err,
             );
         }
     } else {
         logger.info(
-            "[ListenTogether/WS] Redis adapter disabled via LISTEN_TOGETHER_REDIS_ADAPTER_ENABLED=false"
+            "[ListenTogether/WS] Redis adapter disabled via LISTEN_TOGETHER_REDIS_ADAPTER_ENABLED=false",
         );
     }
 
@@ -580,22 +607,22 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
             .catch((err) => {
                 logger.error(
                     "[ListenTogether/StateSync] Failed to start cluster sync; proceeding with pod-local state",
-                    err
+                    err,
                 );
             });
     } else {
         logger.info(
-            "[ListenTogether/StateSync] Disabled via LISTEN_TOGETHER_STATE_SYNC_ENABLED=false"
+            "[ListenTogether/StateSync] Disabled via LISTEN_TOGETHER_STATE_SYNC_ENABLED=false",
         );
     }
 
     if (LISTEN_TOGETHER_MUTATION_LOCK_ENABLED) {
         logger.info(
-            `[ListenTogether/MutationLock] Enabled (ttlMs=${LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS}, prefix=${LISTEN_TOGETHER_MUTATION_LOCK_PREFIX})`
+            `[ListenTogether/MutationLock] Enabled (ttlMs=${LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS}, prefix=${LISTEN_TOGETHER_MUTATION_LOCK_PREFIX})`,
         );
     } else {
         logger.info(
-            "[ListenTogether/MutationLock] Disabled via LISTEN_TOGETHER_MUTATION_LOCK_ENABLED=false"
+            "[ListenTogether/MutationLock] Disabled via LISTEN_TOGETHER_MUTATION_LOCK_ENABLED=false",
         );
     }
 
@@ -603,18 +630,18 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
         logger.info("[ListenTogether/StateStore] Enabled");
     } else {
         logger.info(
-            "[ListenTogether/StateStore] Disabled via LISTEN_TOGETHER_STATE_STORE_ENABLED=false"
+            "[ListenTogether/StateStore] Disabled via LISTEN_TOGETHER_STATE_STORE_ENABLED=false",
         );
     }
     logger.info(
-        `[ListenTogether/SLO] Reconnect target set to ${LISTEN_TOGETHER_RECONNECT_SLO_MS}ms`
+        `[ListenTogether/SLO] Reconnect target set to ${LISTEN_TOGETHER_RECONNECT_SLO_MS}ms`,
     );
     logger.info(
         `[ListenTogether/WS] Transport policy: ${
             LISTEN_TOGETHER_ALLOW_POLLING
                 ? "websocket + polling fallback"
                 : "websocket-only"
-        }`
+        }`,
     );
 
     // JWT auth middleware
@@ -633,14 +660,22 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
             // Verify user exists and tokenVersion matches
             const user = await prisma.user.findUnique({
                 where: { id: decoded.userId },
-                select: { id: true, username: true, role: true, tokenVersion: true },
+                select: {
+                    id: true,
+                    username: true,
+                    role: true,
+                    tokenVersion: true,
+                },
             });
 
             if (!user) {
                 return next(new Error("User not found"));
             }
 
-            if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+            if (
+                decoded.tokenVersion !== undefined &&
+                decoded.tokenVersion !== user.tokenVersion
+            ) {
                 return next(new Error("Token expired"));
             }
 
@@ -701,53 +736,70 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
         const socket = rawSocket as AuthenticatedSocket;
         const { userId, username } = socket.data;
 
-        logger.debug(`[ListenTogether/WS] Connected: ${username} (${socket.id})`);
+        logger.debug(
+            `[ListenTogether/WS] Connected: ${username} (${socket.id})`,
+        );
 
         // ----- join-group -----
-        socket.on("join-group", async (data: { groupId: string }, ack?: (res: unknown) => void) => {
-            try {
-                const { groupId } = data;
-                if (!groupId || typeof groupId !== "string") {
-                    sendAck(ack, { error: "groupId is required" });
-                    return;
+        socket.on(
+            "join-group",
+            async (data: { groupId: string }, ack?: (res: unknown) => void) => {
+                try {
+                    const { groupId } = data;
+                    if (!groupId || typeof groupId !== "string") {
+                        sendAck(ack, { error: "groupId is required" });
+                        return;
+                    }
+
+                    // Leave previous room if any
+                    if (
+                        socket.data.groupId &&
+                        socket.data.groupId !== groupId
+                    ) {
+                        await handleLeaveRoom(socket);
+                    }
+
+                    // Join via service (validates DB membership, hydrates if needed)
+                    const snapshot = await joinGroupById(
+                        userId,
+                        username,
+                        groupId,
+                    );
+
+                    // Track socket in manager
+                    recordReconnectSlo(groupId, userId, username);
+                    clearDisconnectCleanup(groupId, userId);
+                    groupManager.addSocket(groupId, userId, socket.id);
+                    socket.data.groupId = groupId;
+
+                    // Join Socket.IO room
+                    await socket.join(groupId);
+
+                    // Send current state to the new member only
+                    socket.emit("group:state", snapshot);
+                    void emitAvailabilityForGroup(ns, groupId, snapshot);
+
+                    sendAck(ack, { ok: true });
+                    logger.debug(
+                        `[ListenTogether/WS] ${username} joined room ${groupId}`,
+                    );
+                } catch (err) {
+                    const message =
+                        err instanceof GroupError
+                            ? err.message
+                            : "Failed to join group";
+                    sendAck(ack, { error: message });
+                    logger.error(`[ListenTogether/WS] join-group error:`, err);
                 }
-
-                // Leave previous room if any
-                if (socket.data.groupId && socket.data.groupId !== groupId) {
-                    await handleLeaveRoom(socket);
-                }
-
-                // Join via service (validates DB membership, hydrates if needed)
-                const snapshot = await joinGroupById(userId, username, groupId);
-
-                // Track socket in manager
-                recordReconnectSlo(groupId, userId, username);
-                clearDisconnectCleanup(groupId, userId);
-                groupManager.addSocket(groupId, userId, socket.id);
-                socket.data.groupId = groupId;
-
-                // Join Socket.IO room
-                await socket.join(groupId);
-
-                // Send current state to the new member only
-                socket.emit("group:state", snapshot);
-                void emitAvailabilityForGroup(ns, groupId, snapshot);
-
-                sendAck(ack, { ok: true });
-                logger.debug(`[ListenTogether/WS] ${username} joined room ${groupId}`);
-            } catch (err) {
-                const message = err instanceof GroupError ? err.message : "Failed to join group";
-                sendAck(ack, { error: message });
-                logger.error(`[ListenTogether/WS] join-group error:`, err);
-            }
-        });
+            },
+        );
 
         // ----- playback commands -----
         socket.on(
             "playback",
             async (
                 data: { action: string; positionMs?: number; index?: number },
-                ack?: (res: unknown) => void
+                ack?: (res: unknown) => void,
             ) => {
                 try {
                     const groupId = socket.data.groupId;
@@ -771,10 +823,14 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
                                     if (typeof data.positionMs !== "number") {
                                         throw new GroupError(
                                             "INVALID",
-                                            "positionMs required for seek"
+                                            "positionMs required for seek",
                                         );
                                     }
-                                    groupManager.seek(groupId, userId, data.positionMs);
+                                    groupManager.seek(
+                                        groupId,
+                                        userId,
+                                        data.positionMs,
+                                    );
                                     return;
                                 case "next":
                                     groupManager.next(groupId, userId);
@@ -786,294 +842,340 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
                                     if (typeof data.index !== "number") {
                                         throw new GroupError(
                                             "INVALID",
-                                            "index required for set-track"
+                                            "index required for set-track",
                                         );
                                     }
-                                    groupManager.setTrack(groupId, userId, data.index);
+                                    groupManager.setTrack(
+                                        groupId,
+                                        userId,
+                                        data.index,
+                                    );
                                     return;
                                 default:
                                     throw new GroupError(
                                         "INVALID",
-                                        `Unknown action: ${data.action}`
+                                        `Unknown action: ${data.action}`,
                                     );
                             }
-                        }
+                        },
                     );
 
                     sendAck(ack, { ok: true });
                 } catch (err) {
                     const message =
-                        err instanceof GroupError ? err.message : "Playback error";
+                        err instanceof GroupError
+                            ? err.message
+                            : "Playback error";
                     if (err instanceof GroupError && err.code === "CONFLICT") {
                         recordGroupConflict(
                             socket.data.groupId,
                             userId,
                             `playback:${data.action}`,
-                            message
+                            message,
                         );
                         sendAck(ack, buildTransientConflictAck(message));
                         return;
                     }
                     sendAck(ack, { error: message });
                 }
-            }
+            },
         );
 
         // ----- queue commands -----
-        socket.on("queue", async (data: {
-            action: string;
-            trackIds?: string[];
-            tracks?: QueueTrackInput[];
-            index?: number;
-            fromIndex?: number;
-            toIndex?: number;
-        }, ack?: (res: unknown) => void) => {
-            try {
-                const groupId = socket.data.groupId;
-                if (!groupId) {
-                    sendAck(ack, { error: "Not in a group" });
-                    return;
-                }
-
-                let ackPayload: Record<string, unknown> = { ok: true };
-
-                switch (data.action) {
-                    case "add": {
-                        const queueTrackInputs =
-                            Array.isArray(data.tracks) && data.tracks.length > 0
-                                ? data.tracks
-                                : Array.isArray(data.trackIds) && data.trackIds.length > 0
-                                ? data.trackIds.map((trackId) => ({ trackId }))
-                                : [];
-                        if (queueTrackInputs.length === 0) {
-                            sendAck(ack, { error: "trackIds required" });
-                            return;
-                        }
-
-                        const queueLength =
-                            groupManager.snapshotById(groupId)?.playback.queue.length ?? 0;
-                        const allowedInputs = queueTrackInputs.slice(
-                            0,
-                            Math.max(0, MAX_QUEUE_SIZE - queueLength)
-                        );
-                        if (allowedInputs.length === 0) {
-                            ackPayload = {
-                                ok: true,
-                                acceptedCount: 0,
-                                skippedCount: queueTrackInputs.length,
-                                truncated: queueTrackInputs.length > 0,
-                            };
-                            break;
-                        }
-
-                        const items = await validateQueueTracks(allowedInputs);
-                        if (items.length === 0) {
-                            sendAck(ack, { error: "No valid tracks found" });
-                            return;
-                        }
-
-                        let acceptedCount = 0;
-                        let truncated = allowedInputs.length < queueTrackInputs.length;
-                        await withGroupMutationLock(
-                            groupId,
-                            "queue:add",
-                            async () => {
-                                const beforeQueueLength =
-                                    groupManager.snapshotById(groupId)?.playback.queue.length ??
-                                    0;
-                                const delta = groupManager.modifyQueue(groupId, userId, {
-                                    action: "add",
-                                    items,
-                                });
-                                acceptedCount = Math.max(
-                                    0,
-                                    delta.queue.length - beforeQueueLength
-                                );
-                                if (acceptedCount < items.length) {
-                                    truncated = true;
-                                }
-                            }
-                        );
-                        ackPayload = {
-                            ok: true,
-                            acceptedCount,
-                            skippedCount: Math.max(
-                                0,
-                                queueTrackInputs.length - acceptedCount
-                            ),
-                            truncated,
-                        };
-                        break;
-                    }
-                    case "insert-next": {
-                        const queueTrackInputs =
-                            Array.isArray(data.tracks) && data.tracks.length > 0
-                                ? data.tracks
-                                : Array.isArray(data.trackIds) && data.trackIds.length > 0
-                                ? data.trackIds.map((trackId) => ({ trackId }))
-                                : [];
-                        if (queueTrackInputs.length === 0) {
-                            sendAck(ack, { error: "trackIds required" });
-                            return;
-                        }
-
-                        const queueLength =
-                            groupManager.snapshotById(groupId)?.playback.queue.length ?? 0;
-                        const allowedInputs = queueTrackInputs.slice(
-                            0,
-                            Math.max(0, MAX_QUEUE_SIZE - queueLength)
-                        );
-                        if (allowedInputs.length === 0) {
-                            ackPayload = {
-                                ok: true,
-                                acceptedCount: 0,
-                                skippedCount: queueTrackInputs.length,
-                                truncated: queueTrackInputs.length > 0,
-                            };
-                            break;
-                        }
-
-                        const insertItems = await validateQueueTracks(allowedInputs);
-                        if (insertItems.length === 0) {
-                            sendAck(ack, { error: "No valid tracks found" });
-                            return;
-                        }
-
-                        let acceptedCount = 0;
-                        let truncated = allowedInputs.length < queueTrackInputs.length;
-                        await withGroupMutationLock(
-                            groupId,
-                            "queue:insert-next",
-                            async () => {
-                                const beforeQueueLength =
-                                    groupManager.snapshotById(groupId)?.playback.queue.length ??
-                                    0;
-                                const delta = groupManager.modifyQueue(groupId, userId, {
-                                    action: "insert-next",
-                                    items: insertItems,
-                                });
-                                acceptedCount = Math.max(
-                                    0,
-                                    delta.queue.length - beforeQueueLength
-                                );
-                                if (acceptedCount < insertItems.length) {
-                                    truncated = true;
-                                }
-                            }
-                        );
-                        ackPayload = {
-                            ok: true,
-                            acceptedCount,
-                            skippedCount: Math.max(
-                                0,
-                                queueTrackInputs.length - acceptedCount
-                            ),
-                            truncated,
-                        };
-                        break;
-                    }
-                    case "remove": {
-                        if (typeof data.index !== "number") {
-                            sendAck(ack, { error: "index required" });
-                            return;
-                        }
-                        const removeIndex = data.index;
-                        await withGroupMutationLock(
-                            groupId,
-                            "queue:remove",
-                            async () => {
-                                groupManager.modifyQueue(groupId, userId, {
-                                    action: "remove",
-                                    index: removeIndex,
-                                });
-                            }
-                        );
-                        break;
-                    }
-                    case "reorder": {
-                        if (typeof data.fromIndex !== "number" || typeof data.toIndex !== "number") {
-                            sendAck(ack, { error: "fromIndex and toIndex required" });
-                            return;
-                        }
-                        const fromIndex = data.fromIndex;
-                        const toIndex = data.toIndex;
-                        await withGroupMutationLock(
-                            groupId,
-                            "queue:reorder",
-                            async () => {
-                                groupManager.modifyQueue(groupId, userId, {
-                                    action: "reorder",
-                                    fromIndex,
-                                    toIndex,
-                                });
-                            }
-                        );
-                        break;
-                    }
-                    case "clear":
-                        await withGroupMutationLock(
-                            groupId,
-                            "queue:clear",
-                            async () => {
-                                groupManager.modifyQueue(groupId, userId, {
-                                    action: "clear",
-                                });
-                            }
-                        );
-                        break;
-                    default:
-                        sendAck(ack, { error: `Unknown action: ${data.action}` });
+        socket.on(
+            "queue",
+            async (
+                data: {
+                    action: string;
+                    trackIds?: string[];
+                    tracks?: QueueTrackInput[];
+                    index?: number;
+                    fromIndex?: number;
+                    toIndex?: number;
+                },
+                ack?: (res: unknown) => void,
+            ) => {
+                try {
+                    const groupId = socket.data.groupId;
+                    if (!groupId) {
+                        sendAck(ack, { error: "Not in a group" });
                         return;
+                    }
+
+                    let ackPayload: Record<string, unknown> = { ok: true };
+
+                    switch (data.action) {
+                        case "add": {
+                            const queueTrackInputs =
+                                Array.isArray(data.tracks) &&
+                                data.tracks.length > 0
+                                    ? data.tracks
+                                    : Array.isArray(data.trackIds) &&
+                                        data.trackIds.length > 0
+                                      ? data.trackIds.map((trackId) => ({
+                                            trackId,
+                                        }))
+                                      : [];
+                            if (queueTrackInputs.length === 0) {
+                                sendAck(ack, { error: "trackIds required" });
+                                return;
+                            }
+
+                            const queueLength =
+                                groupManager.snapshotById(groupId)?.playback
+                                    .queue.length ?? 0;
+                            const allowedInputs = queueTrackInputs.slice(
+                                0,
+                                Math.max(0, MAX_QUEUE_SIZE - queueLength),
+                            );
+                            if (allowedInputs.length === 0) {
+                                ackPayload = {
+                                    ok: true,
+                                    acceptedCount: 0,
+                                    skippedCount: queueTrackInputs.length,
+                                    truncated: queueTrackInputs.length > 0,
+                                };
+                                break;
+                            }
+
+                            const items =
+                                await validateQueueTracks(allowedInputs);
+                            if (items.length === 0) {
+                                sendAck(ack, {
+                                    error: "No valid tracks found",
+                                });
+                                return;
+                            }
+
+                            let acceptedCount = 0;
+                            let truncated =
+                                allowedInputs.length < queueTrackInputs.length;
+                            await withGroupMutationLock(
+                                groupId,
+                                "queue:add",
+                                async () => {
+                                    const beforeQueueLength =
+                                        groupManager.snapshotById(groupId)
+                                            ?.playback.queue.length ?? 0;
+                                    const delta = groupManager.modifyQueue(
+                                        groupId,
+                                        userId,
+                                        {
+                                            action: "add",
+                                            items,
+                                        },
+                                    );
+                                    acceptedCount = Math.max(
+                                        0,
+                                        delta.queue.length - beforeQueueLength,
+                                    );
+                                    if (acceptedCount < items.length) {
+                                        truncated = true;
+                                    }
+                                },
+                            );
+                            ackPayload = {
+                                ok: true,
+                                acceptedCount,
+                                skippedCount: Math.max(
+                                    0,
+                                    queueTrackInputs.length - acceptedCount,
+                                ),
+                                truncated,
+                            };
+                            break;
+                        }
+                        case "insert-next": {
+                            const queueTrackInputs =
+                                Array.isArray(data.tracks) &&
+                                data.tracks.length > 0
+                                    ? data.tracks
+                                    : Array.isArray(data.trackIds) &&
+                                        data.trackIds.length > 0
+                                      ? data.trackIds.map((trackId) => ({
+                                            trackId,
+                                        }))
+                                      : [];
+                            if (queueTrackInputs.length === 0) {
+                                sendAck(ack, { error: "trackIds required" });
+                                return;
+                            }
+
+                            const queueLength =
+                                groupManager.snapshotById(groupId)?.playback
+                                    .queue.length ?? 0;
+                            const allowedInputs = queueTrackInputs.slice(
+                                0,
+                                Math.max(0, MAX_QUEUE_SIZE - queueLength),
+                            );
+                            if (allowedInputs.length === 0) {
+                                ackPayload = {
+                                    ok: true,
+                                    acceptedCount: 0,
+                                    skippedCount: queueTrackInputs.length,
+                                    truncated: queueTrackInputs.length > 0,
+                                };
+                                break;
+                            }
+
+                            const insertItems =
+                                await validateQueueTracks(allowedInputs);
+                            if (insertItems.length === 0) {
+                                sendAck(ack, {
+                                    error: "No valid tracks found",
+                                });
+                                return;
+                            }
+
+                            let acceptedCount = 0;
+                            let truncated =
+                                allowedInputs.length < queueTrackInputs.length;
+                            await withGroupMutationLock(
+                                groupId,
+                                "queue:insert-next",
+                                async () => {
+                                    const beforeQueueLength =
+                                        groupManager.snapshotById(groupId)
+                                            ?.playback.queue.length ?? 0;
+                                    const delta = groupManager.modifyQueue(
+                                        groupId,
+                                        userId,
+                                        {
+                                            action: "insert-next",
+                                            items: insertItems,
+                                        },
+                                    );
+                                    acceptedCount = Math.max(
+                                        0,
+                                        delta.queue.length - beforeQueueLength,
+                                    );
+                                    if (acceptedCount < insertItems.length) {
+                                        truncated = true;
+                                    }
+                                },
+                            );
+                            ackPayload = {
+                                ok: true,
+                                acceptedCount,
+                                skippedCount: Math.max(
+                                    0,
+                                    queueTrackInputs.length - acceptedCount,
+                                ),
+                                truncated,
+                            };
+                            break;
+                        }
+                        case "remove": {
+                            if (typeof data.index !== "number") {
+                                sendAck(ack, { error: "index required" });
+                                return;
+                            }
+                            const removeIndex = data.index;
+                            await withGroupMutationLock(
+                                groupId,
+                                "queue:remove",
+                                async () => {
+                                    groupManager.modifyQueue(groupId, userId, {
+                                        action: "remove",
+                                        index: removeIndex,
+                                    });
+                                },
+                            );
+                            break;
+                        }
+                        case "reorder": {
+                            if (
+                                typeof data.fromIndex !== "number" ||
+                                typeof data.toIndex !== "number"
+                            ) {
+                                sendAck(ack, {
+                                    error: "fromIndex and toIndex required",
+                                });
+                                return;
+                            }
+                            const fromIndex = data.fromIndex;
+                            const toIndex = data.toIndex;
+                            await withGroupMutationLock(
+                                groupId,
+                                "queue:reorder",
+                                async () => {
+                                    groupManager.modifyQueue(groupId, userId, {
+                                        action: "reorder",
+                                        fromIndex,
+                                        toIndex,
+                                    });
+                                },
+                            );
+                            break;
+                        }
+                        case "clear":
+                            await withGroupMutationLock(
+                                groupId,
+                                "queue:clear",
+                                async () => {
+                                    groupManager.modifyQueue(groupId, userId, {
+                                        action: "clear",
+                                    });
+                                },
+                            );
+                            break;
+                        default:
+                            sendAck(ack, {
+                                error: `Unknown action: ${data.action}`,
+                            });
+                            return;
+                    }
+                    sendAck(ack, ackPayload);
+                } catch (err) {
+                    const message =
+                        err instanceof GroupError ? err.message : "Queue error";
+                    if (err instanceof GroupError && err.code === "CONFLICT") {
+                        recordGroupConflict(
+                            socket.data.groupId,
+                            userId,
+                            `queue:${data.action}`,
+                            message,
+                        );
+                    }
+                    sendAck(ack, { error: message });
                 }
-                sendAck(ack, ackPayload);
-            } catch (err) {
-                const message = err instanceof GroupError ? err.message : "Queue error";
-                if (err instanceof GroupError && err.code === "CONFLICT") {
-                    recordGroupConflict(
-                        socket.data.groupId,
-                        userId,
-                        `queue:${data.action}`,
-                        message
-                    );
-                }
-                sendAck(ack, { error: message });
-            }
-        });
+            },
+        );
 
         // ----- ready gate -----
-        socket.on("ready", async (payloadOrAck?: unknown, maybeAck?: unknown) => {
-            const ack = resolveAck(payloadOrAck, maybeAck);
-            try {
-                const groupId = socket.data.groupId;
-                if (!groupId) {
-                    sendAck(ack, { error: "Not in a group" });
-                    return;
+        socket.on(
+            "ready",
+            async (payloadOrAck?: unknown, maybeAck?: unknown) => {
+                const ack = resolveAck(payloadOrAck, maybeAck);
+                try {
+                    const groupId = socket.data.groupId;
+                    if (!groupId) {
+                        sendAck(ack, { error: "Not in a group" });
+                        return;
+                    }
+                    await withGroupMutationLock(groupId, "ready", async () => {
+                        groupManager.reportReady(groupId, userId);
+                    });
+                    sendAck(ack, { ok: true });
+                } catch (err) {
+                    if (err instanceof GroupError && err.code === "CONFLICT") {
+                        recordGroupConflict(
+                            socket.data.groupId,
+                            userId,
+                            "ready",
+                            err.message,
+                        );
+                        sendAck(ack, buildTransientConflictAck(err.message));
+                        return;
+                    }
+                    sendAck(ack, { error: "Ready report failed" });
                 }
-                await withGroupMutationLock(groupId, "ready", async () => {
-                    groupManager.reportReady(groupId, userId);
-                });
-                sendAck(ack, { ok: true });
-            } catch (err) {
-                if (err instanceof GroupError && err.code === "CONFLICT") {
-                    recordGroupConflict(
-                        socket.data.groupId,
-                        userId,
-                        "ready",
-                        err.message
-                    );
-                    sendAck(ack, buildTransientConflictAck(err.message));
-                    return;
-                }
-                sendAck(ack, { error: "Ready report failed" });
-            }
-        });
+            },
+        );
 
         socket.on(
             "track:playback-failed",
-            async (
-                payloadOrAck?: unknown,
-                maybeAck?: unknown
-            ) => {
+            async (payloadOrAck?: unknown, maybeAck?: unknown) => {
                 const ack = resolveAck(payloadOrAck, maybeAck);
                 const payload =
                     payloadOrAck &&
@@ -1104,14 +1206,15 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
                         async () => {
                             const snapshot = groupManager.snapshotById(groupId);
                             if (!snapshot) return;
-                            const failedItem = snapshot.playback.queue[queueIndex];
+                            const failedItem =
+                                snapshot.playback.queue[queueIndex];
                             if (!failedItem?.trackMappingId) return;
 
                             await trackMappingService.markStale(
-                                failedItem.trackMappingId
+                                failedItem.trackMappingId,
                             );
                             await emitAvailabilityForGroup(ns, groupId);
-                        }
+                        },
                     );
 
                     sendAck(ack, { ok: true });
@@ -1125,14 +1228,14 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
                             socket.data.groupId,
                             userId,
                             "track:playback-failed",
-                            message
+                            message,
                         );
                         sendAck(ack, buildTransientConflictAck(message));
                         return;
                     }
                     sendAck(ack, { error: message });
                 }
-            }
+            },
         );
 
         // ----- ping (latency measurement) -----
@@ -1142,19 +1245,24 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
         });
 
         // ----- leave group -----
-        socket.on("leave-group", async (payloadOrAck?: unknown, maybeAck?: unknown) => {
-            const ack = resolveAck(payloadOrAck, maybeAck);
-            try {
-                await handleLeaveRoom(socket);
-                sendAck(ack, { ok: true });
-            } catch (err) {
-                sendAck(ack, { error: "Failed to leave group" });
-            }
-        });
+        socket.on(
+            "leave-group",
+            async (payloadOrAck?: unknown, maybeAck?: unknown) => {
+                const ack = resolveAck(payloadOrAck, maybeAck);
+                try {
+                    await handleLeaveRoom(socket);
+                    sendAck(ack, { ok: true });
+                } catch (err) {
+                    sendAck(ack, { error: "Failed to leave group" });
+                }
+            },
+        );
 
         // ----- disconnect -----
         socket.on("disconnect", async (reason) => {
-            logger.debug(`[ListenTogether/WS] Disconnected: ${username} (${reason})`);
+            logger.debug(
+                `[ListenTogether/WS] Disconnected: ${username} (${reason})`,
+            );
             await handleLeaveRoom(socket, true);
         });
     });
@@ -1167,7 +1275,10 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
  * On disconnect, we only remove the socket (not the member) so they can reconnect.
  * On explicit leave-group, we remove the member entirely.
  */
-async function handleLeaveRoom(socket: AuthenticatedSocket, isDisconnect: boolean = false): Promise<void> {
+async function handleLeaveRoom(
+    socket: AuthenticatedSocket,
+    isDisconnect: boolean = false,
+): Promise<void> {
     const { userId, groupId } = socket.data;
     if (!groupId) return;
 

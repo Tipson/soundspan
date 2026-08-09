@@ -106,7 +106,7 @@ async function sampleRealTriples(count: number): Promise<Triple[]> {
 
     if (results.length < count) {
         throw new Error(
-            `Only sampled ${results.length}/${count} real triples -- corpus too small or offsets kept colliding`
+            `Only sampled ${results.length}/${count} real triples -- corpus too small or offsets kept colliding`,
         );
     }
     return results.slice(0, count);
@@ -144,16 +144,16 @@ function buildPerturbedAbsent(seedTriples: Triple[], count: number): Triple[] {
 async function buildFixture(): Promise<SpotifyTrack[]> {
     if (fs.existsSync(FIXTURE_PATH)) {
         const cached: SpotifyTrack[] = JSON.parse(
-            fs.readFileSync(FIXTURE_PATH, "utf8")
+            fs.readFileSync(FIXTURE_PATH, "utf8"),
         );
         console.log(
-            `[fixture] reusing cached ${cached.length}-track fixture from ${FIXTURE_PATH}`
+            `[fixture] reusing cached ${cached.length}-track fixture from ${FIXTURE_PATH}`,
         );
         return cached;
     }
 
     console.log(
-        `[fixture] sampling ${REAL_SAMPLE_COUNT} real triples from the DB...`
+        `[fixture] sampling ${REAL_SAMPLE_COUNT} real triples from the DB...`,
     );
     const real = await sampleRealTriples(REAL_SAMPLE_COUNT);
     const perturbedAbsent = buildPerturbedAbsent(real, PERTURBED_ABSENT_COUNT);
@@ -176,7 +176,7 @@ async function buildFixture(): Promise<SpotifyTrack[]> {
     fs.writeFileSync(FIXTURE_PATH, JSON.stringify(tracklist, null, 2));
     console.log(
         `[fixture] wrote ${tracklist.length}-track fixture to ${FIXTURE_PATH} ` +
-            `(${REAL_SAMPLE_COUNT} real + ${PERTURBED_ABSENT_COUNT} perturbed/absent)`
+            `(${REAL_SAMPLE_COUNT} real + ${PERTURBED_ABSENT_COUNT} perturbed/absent)`,
     );
     return tracklist;
 }
@@ -190,7 +190,7 @@ function stubMusicBrainz(): void {
 }
 
 async function timedRun(
-    tracklist: SpotifyTrack[]
+    tracklist: SpotifyTrack[],
 ): Promise<{ ms: number; inLibrary: number; downloadable: number }> {
     // Private-access hatch: buildPreviewFromTracklist is private, but it's the
     // narrowest real (unmocked, un-reimplemented) entry point that contains
@@ -209,7 +209,7 @@ async function timedRun(
     const preview = await service.buildPreviewFromTracklist(
         tracklist,
         meta,
-        "Spotify"
+        "Spotify",
     );
     const ms = performance.now() - started;
 
@@ -228,7 +228,7 @@ async function main(): Promise<void> {
     if (tracklist.length !== TOTAL_TRACKS) {
         console.warn(
             `[warn] fixture has ${tracklist.length} tracks, expected ${TOTAL_TRACKS} ` +
-                `(cache file may be stale -- delete ${FIXTURE_PATH} to resample)`
+                `(cache file may be stale -- delete ${FIXTURE_PATH} to resample)`,
         );
     }
 
@@ -241,7 +241,7 @@ async function main(): Promise<void> {
 
     console.log(
         `BENCH_RESULT tree=${tree} tracks=${tracklist.length} ms=${result.ms.toFixed(2)} ` +
-            `inLibrary=${result.inLibrary} downloadable=${result.downloadable}`
+            `inLibrary=${result.inLibrary} downloadable=${result.downloadable}`,
     );
 }
 

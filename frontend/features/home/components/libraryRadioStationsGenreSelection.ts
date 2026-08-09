@@ -9,12 +9,12 @@ export interface GenreCount {
 export const selectFeaturedRadioGenres = (
     genres: GenreCount[],
     maxGenres = 6,
-    minTracks = 15
+    minTracks = 15,
 ): GenreCount[] => {
     const eligibleGenres = genres.filter((genre) => genre.count >= minTracks);
     const featuredGenres = eligibleGenres.slice(0, maxGenres);
     const soundtrackGenre = eligibleGenres.find((genre) =>
-        genre.genre.toLowerCase().includes("soundtrack")
+        genre.genre.toLowerCase().includes("soundtrack"),
     );
 
     if (!soundtrackGenre) {
@@ -23,7 +23,9 @@ export const selectFeaturedRadioGenres = (
 
     if (
         featuredGenres.some(
-            (genre) => genre.genre.toLowerCase() === soundtrackGenre.genre.toLowerCase()
+            (genre) =>
+                genre.genre.toLowerCase() ===
+                soundtrackGenre.genre.toLowerCase(),
         )
     ) {
         return featuredGenres;

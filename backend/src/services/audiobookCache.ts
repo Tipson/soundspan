@@ -33,7 +33,7 @@ export class AudiobookCacheService {
         this.coverCacheDir = buildCachePath(
             config.music.musicPath,
             "cover-cache",
-            "audiobooks"
+            "audiobooks",
         );
     }
 
@@ -47,8 +47,12 @@ export class AudiobookCacheService {
             this.coverCacheAvailable = true;
             return true;
         } catch (error: any) {
-            logger.warn(`[AUDIOBOOK] Cover cache directory unavailable: ${error.message}`);
-            logger.warn("[AUDIOBOOK] Covers will be served directly from Audiobookshelf");
+            logger.warn(
+                `[AUDIOBOOK] Cover cache directory unavailable: ${error.message}`,
+            );
+            logger.warn(
+                "[AUDIOBOOK] Covers will be served directly from Audiobookshelf",
+            );
             this.coverCacheAvailable = false;
             return false;
         }
@@ -75,7 +79,7 @@ export class AudiobookCacheService {
             const audiobooks = await audiobookshelfService.getAllAudiobooks();
 
             logger.debug(
-                `[AUDIOBOOK] Found ${audiobooks.length} audiobooks in Audiobookshelf`
+                `[AUDIOBOOK] Found ${audiobooks.length} audiobooks in Audiobookshelf`,
             );
 
             for (const book of audiobooks) {
@@ -203,7 +207,7 @@ export class AudiobookCacheService {
             logger.debug(
                 `    [Series] "${title}" -> "${series}" #${
                     seriesSequence || "?"
-                }`
+                }`,
             );
         }
 
@@ -213,7 +217,7 @@ export class AudiobookCacheService {
             if (fullCoverUrl) {
                 localCoverPath = await this.downloadCover(
                     book.id,
-                    fullCoverUrl
+                    fullCoverUrl,
                 );
             }
         }
@@ -277,12 +281,11 @@ export class AudiobookCacheService {
      * Get full Audiobookshelf cover URL by prepending base URL
      */
     private async getFullCoverUrl(
-        relativePath: string
+        relativePath: string,
     ): Promise<string | null> {
         try {
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (settings?.audiobookshelfUrl) {
@@ -294,7 +297,7 @@ export class AudiobookCacheService {
         } catch (error: any) {
             logger.error(
                 "Failed to get Audiobookshelf base URL:",
-                error.message
+                error.message,
             );
             return null;
         }
@@ -306,7 +309,7 @@ export class AudiobookCacheService {
      */
     private async downloadCover(
         audiobookId: string,
-        coverUrl: string
+        coverUrl: string,
     ): Promise<string | null> {
         // Skip cover download if cache directory is not available
         if (!this.coverCacheAvailable) {
@@ -315,9 +318,8 @@ export class AudiobookCacheService {
 
         try {
             // Get API key for authentication
-            const { getSystemSettings } = await import(
-                "../utils/systemSettings"
-            );
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
             const settings = await getSystemSettings();
 
             if (!settings?.audiobookshelfApiKey) {
@@ -333,7 +335,7 @@ export class AudiobookCacheService {
 
             if (!response.ok) {
                 throw new Error(
-                    `HTTP ${response.status}: ${response.statusText}`
+                    `HTTP ${response.status}: ${response.statusText}`,
                 );
             }
 
@@ -347,7 +349,7 @@ export class AudiobookCacheService {
         } catch (error: any) {
             logger.error(
                 `Failed to download cover for ${audiobookId}:`,
-                error.message
+                error.message,
             );
             return null;
         }
@@ -367,16 +369,15 @@ export class AudiobookCacheService {
             !audiobook ||
             isPastStaleWindow(
                 audiobook.lastSyncedAt,
-                AUDIOBOOK_CACHE_STALE_WINDOW_MS
+                AUDIOBOOK_CACHE_STALE_WINDOW_MS,
             )
         ) {
             logger.debug(
-                `[AUDIOBOOK] Audiobook ${audiobookId} not cached or stale, syncing...`
+                `[AUDIOBOOK] Audiobook ${audiobookId} not cached or stale, syncing...`,
             );
             try {
-                const book = await audiobookshelfService.getAudiobook(
-                    audiobookId
-                );
+                const book =
+                    await audiobookshelfService.getAudiobook(audiobookId);
                 await this.syncAudiobook(book);
                 audiobook = await prisma.audiobook.findUnique({
                     where: { id: audiobookId },
@@ -384,17 +385,17 @@ export class AudiobookCacheService {
             } catch (syncError: any) {
                 logger.warn(
                     `  Failed to sync audiobook ${audiobookId} from Audiobookshelf:`,
-                    syncError.message
+                    syncError.message,
                 );
                 // If we have stale cached data, return it anyway
                 if (audiobook) {
                     logger.debug(
-                        `   Using stale cached data for ${audiobookId}`
+                        `   Using stale cached data for ${audiobookId}`,
                     );
                 } else {
                     // No cached data and sync failed - throw error
                     throw new Error(
-                        `Audiobook not found in cache and sync failed: ${syncError.message}`
+                        `Audiobook not found in cache and sync failed: ${syncError.message}`,
                     );
                 }
             }
@@ -410,7 +411,9 @@ export class AudiobookCacheService {
         // Ensure cache directory is available
         const available = await this.ensureCoverCacheDir();
         if (!available) {
-            logger.warn("[AUDIOBOOK] Cannot cleanup covers - cache directory unavailable");
+            logger.warn(
+                "[AUDIOBOOK] Cannot cleanup covers - cache directory unavailable",
+            );
             return 0;
         }
 
@@ -421,7 +424,7 @@ export class AudiobookCacheService {
         const validCoverPaths = new Set(
             audiobooks
                 .filter((a) => a.localCoverPath)
-                .map((a) => path.basename(a.localCoverPath!))
+                .map((a) => path.basename(a.localCoverPath!)),
         );
 
         let deleted = 0;
@@ -436,7 +439,9 @@ export class AudiobookCacheService {
                 }
             }
         } catch (error: any) {
-            logger.warn(`[AUDIOBOOK] Failed to read cover cache directory: ${error.message}`);
+            logger.warn(
+                `[AUDIOBOOK] Failed to read cover cache directory: ${error.message}`,
+            );
         }
 
         return deleted;

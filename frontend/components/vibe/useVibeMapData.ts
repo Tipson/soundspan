@@ -21,14 +21,20 @@ function useMapTracks() {
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
         let cancelled = false;
-        void api.getVibeMap().then((data) => {
-            if (!cancelled) setTracks(data.tracks);
-        }).catch(() => {
-            if (!cancelled) setError("Failed to load vibe map data");
-        }).finally(() => {
-            if (!cancelled) setLoading(false);
-        });
-        return () => { cancelled = true; };
+        void api
+            .getVibeMap()
+            .then((data) => {
+                if (!cancelled) setTracks(data.tracks);
+            })
+            .catch(() => {
+                if (!cancelled) setError("Failed to load vibe map data");
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
     return { tracks, loading, error };
 }
@@ -37,10 +43,16 @@ function useCalibration(): readonly number[] | null {
     const [quantiles, setQuantiles] = useState<readonly number[] | null>(null);
     useEffect(() => {
         let cancelled = false;
-        void api.getVibeCalibration().then((data) => {
-            if (!cancelled) setQuantiles(data.sampleSize > 0 ? data.quantiles : null);
-        }).catch(() => undefined);
-        return () => { cancelled = true; };
+        void api
+            .getVibeCalibration()
+            .then((data) => {
+                if (!cancelled)
+                    setQuantiles(data.sampleSize > 0 ? data.quantiles : null);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
     }, []);
     return quantiles;
 }
@@ -51,7 +63,9 @@ export function useVibeMapData(): VibeMapData {
 }
 
 /** Measure a map container with ResizeObserver. */
-export function useMapDimensions(containerRef: RefObject<HTMLElement | null>): MapDims {
+export function useMapDimensions(
+    containerRef: RefObject<HTMLElement | null>,
+): MapDims {
     const [dims, setDims] = useState<MapDims>({ width: 0, height: 0 });
     useEffect(() => {
         const container = containerRef.current;

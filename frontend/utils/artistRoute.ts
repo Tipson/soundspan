@@ -22,7 +22,7 @@ export const isUsableArtistMbid = (mbid?: string | null): mbid is string => {
 
 export const getArtistRouteParam = (
     artist: ArtistRouteInput,
-    options: ArtistRouteOptions = {}
+    options: ArtistRouteOptions = {},
 ): string | null => {
     const id = normalizeRouteValue(artist.id);
     const mbid = normalizeRouteValue(artist.mbid);
@@ -51,7 +51,7 @@ export const getArtistRouteParam = (
 
 export const getArtistHref = (
     artist: ArtistRouteInput,
-    options?: ArtistRouteOptions
+    options?: ArtistRouteOptions,
 ): string | null => {
     const routeParam = getArtistRouteParam(artist, options);
     return routeParam ? `/artist/${routeParam}` : null;

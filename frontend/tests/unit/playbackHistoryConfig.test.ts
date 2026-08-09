@@ -18,7 +18,7 @@ test("history constants expose route and clear-range options", () => {
     assert.equal(MY_HISTORY_ROUTE, "/my-history");
     assert.deepEqual(
         HISTORY_RANGE_OPTIONS.map((option) => option.value),
-        ["7d", "30d", "365d", "all"]
+        ["7d", "30d", "365d", "all"],
     );
 });
 
@@ -50,9 +50,9 @@ test("getImpactedHistoryCount preserves zero-valued ranges", () => {
                 last30Days: 0,
                 last365Days: 0,
             },
-            "all"
+            "all",
         ),
-        0
+        0,
     );
 });
 
@@ -65,8 +65,8 @@ test("getImpactedHistoryCount preserves zero-valued weekly ranges", () => {
                 last30Days: 5,
                 last365Days: 8,
             },
-            "7d"
+            "7d",
         ),
-        0
+        0,
     );
 });

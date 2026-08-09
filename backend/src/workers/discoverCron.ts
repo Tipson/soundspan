@@ -39,13 +39,13 @@ export async function processDiscoverCronTick(): Promise<void> {
     });
 
     logger.debug(
-        `   Found ${configs.length} users with Discover Weekly enabled`
+        `   Found ${configs.length} users with Discover Weekly enabled`,
     );
 
     for (const userConfig of configs) {
         const jobId = getDiscoverCronJobId(userConfig.userId);
         logger.debug(
-            `   Queueing recommendation job for user ${userConfig.userId} (jobId=${jobId})...`
+            `   Queueing recommendation job for user ${userConfig.userId} (jobId=${jobId})...`,
         );
 
         await discoverQueue.add(
@@ -56,7 +56,7 @@ export async function processDiscoverCronTick(): Promise<void> {
             {
                 // Deduplicate cron-triggered work across multiple worker replicas.
                 jobId,
-            }
+            },
         );
     }
 
@@ -68,7 +68,7 @@ export async function processDiscoverCronTick(): Promise<void> {
  */
 export function startDiscoverWeeklyCron() {
     logger.debug(
-        `Scheduling Discover Weekly via repeatable queue: ${DISCOVER_WEEKLY_CRON} (Sundays at 8 PM, mode=${config.discover.mode})`
+        `Scheduling Discover Weekly via repeatable queue: ${DISCOVER_WEEKLY_CRON} (Sundays at 8 PM, mode=${config.discover.mode})`,
     );
 
     void discoverQueue
@@ -82,7 +82,7 @@ export function startDiscoverWeeklyCron() {
                 },
                 removeOnComplete: true,
                 removeOnFail: 10,
-            }
+            },
         )
         .then(() => {
             logger.debug("Discover Weekly repeatable scheduler registered");
@@ -90,7 +90,7 @@ export function startDiscoverWeeklyCron() {
         .catch((error: any) => {
             logger.error(
                 `Discover Weekly repeatable scheduler registration failed:`,
-                error.message || error
+                error.message || error,
             );
         });
 }
@@ -112,8 +112,7 @@ export function stopDiscoverWeeklyCron() {
         .catch((error: any) => {
             logger.warn(
                 `Discover Weekly repeatable scheduler remove failed:`,
-                error.message || error
+                error.message || error,
             );
         });
 }
-

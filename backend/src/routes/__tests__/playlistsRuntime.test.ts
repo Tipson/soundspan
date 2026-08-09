@@ -128,13 +128,10 @@ jest.mock("../../utils/playlistLogger", () => ({
 import { z } from "zod";
 import router from "../playlists";
 
-function getHandler(
-    path: string,
-    method: "get" | "post" | "put" | "delete"
-) {
+function getHandler(path: string, method: "get" | "post" | "put" | "delete") {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
     if (!layer) {
         throw new Error(`${method.toUpperCase()} route not found: ${path}`);
@@ -310,7 +307,9 @@ describe("playlists route runtime", () => {
     });
 
     it("lists owned and shared playlists with visibility metadata", async () => {
-        prisma.hiddenPlaylist.findMany.mockResolvedValue([{ playlistId: "pl-2" }]);
+        prisma.hiddenPlaylist.findMany.mockResolvedValue([
+            { playlistId: "pl-2" },
+        ]);
         prisma.playlist.findMany.mockResolvedValue([
             {
                 id: "pl-1",
@@ -351,7 +350,7 @@ describe("playlists route runtime", () => {
 
     it("returns 500 when playlist listing throws", async () => {
         prisma.hiddenPlaylist.findMany.mockRejectedValueOnce(
-            new Error("hidden lookup failed")
+            new Error("hidden lookup failed"),
         );
 
         const req = { user: { id: "u1" } } as any;
@@ -390,7 +389,9 @@ describe("playlists route runtime", () => {
         expect(unauthRes.statusCode).toBe(401);
         expect(unauthRes.body).toEqual({ error: "Unauthorized" });
 
-        prisma.playlist.create.mockRejectedValueOnce(new Error("create failed"));
+        prisma.playlist.create.mockRejectedValueOnce(
+            new Error("create failed"),
+        );
         const errReq = {
             user: { id: "u1" },
             body: { name: "Road Trip", isPublic: true },
@@ -403,7 +404,10 @@ describe("playlists route runtime", () => {
 
     it("handles GET /:id not-found and access-denied", async () => {
         prisma.playlist.findUnique.mockResolvedValueOnce(null);
-        const missingReq = { user: { id: "u1" }, params: { id: "missing" } } as any;
+        const missingReq = {
+            user: { id: "u1" },
+            params: { id: "missing" },
+        } as any;
         const missingRes = createRes();
         await getPlaylist(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(404);
@@ -417,7 +421,10 @@ describe("playlists route runtime", () => {
             pendingTracks: [],
             user: { username: "owner2" },
         });
-        const deniedReq = { user: { id: "u1" }, params: { id: "pl-private" } } as any;
+        const deniedReq = {
+            user: { id: "u1" },
+            params: { id: "pl-private" },
+        } as any;
         const deniedRes = createRes();
         await getPlaylist(deniedReq, deniedRes);
         expect(deniedRes.statusCode).toBe(403);
@@ -430,7 +437,9 @@ describe("playlists route runtime", () => {
         expect(unauthRes.statusCode).toBe(401);
         expect(unauthRes.body).toEqual({ error: "Unauthorized" });
 
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("lookup failed"));
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("lookup failed"),
+        );
         const errReq = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
         const errRes = createRes();
         await getPlaylist(errReq, errRes);
@@ -474,7 +483,11 @@ describe("playlists route runtime", () => {
                         album: {
                             title: "Album",
                             coverUrl: "native:albums/a1.jpg",
-                            artist: { id: "a-1", name: "Artist", mbid: "mbid-a1" },
+                            artist: {
+                                id: "a-1",
+                                name: "Artist",
+                                mbid: "mbid-a1",
+                            },
                         },
                     },
                     trackTidal: null,
@@ -550,12 +563,14 @@ describe("playlists route runtime", () => {
         expect(res.body.pendingCount).toBe(1);
         expect(res.body.isOwner).toBe(true);
         expect(res.body.isHidden).toBe(true);
-        expect(res.body.items[0].track.album.coverArt).toBe("native:albums/a1.jpg");
+        expect(res.body.items[0].track.album.coverArt).toBe(
+            "native:albums/a1.jpg",
+        );
         expect(res.body.items[0].provider.source).toBe("local");
         expect(res.body.items[0].playback.isPlayable).toBe(true);
 
         const tidalItem = res.body.items.find(
-            (entry: any) => entry.provider?.source === "tidal"
+            (entry: any) => entry.provider?.source === "tidal",
         );
         expect(tidalItem).toBeDefined();
         expect(tidalItem.playback.isPlayable).toBe(true);
@@ -563,7 +578,7 @@ describe("playlists route runtime", () => {
         expect(tidalItem.track.tidalTrackId).toBe(991);
 
         const ytItem = res.body.items.find(
-            (entry: any) => entry.provider?.source === "youtube"
+            (entry: any) => entry.provider?.source === "youtube",
         );
         expect(ytItem).toBeDefined();
         expect(ytItem.playback.isPlayable).toBe(true);
@@ -571,12 +586,12 @@ describe("playlists route runtime", () => {
         expect(ytItem.track.youtubeVideoId).toBe("yt-video-7");
 
         const unknownItem = res.body.items.find(
-            (entry: any) => entry.provider?.source === "unknown"
+            (entry: any) => entry.provider?.source === "unknown",
         );
         expect(unknownItem).toBeDefined();
         expect(unknownItem.playback.isPlayable).toBe(false);
         expect(unknownItem.playback.message).toContain(
-            "no longer has an attached track source"
+            "no longer has an attached track source",
         );
 
         expect(res.body.pendingTracks[0].playback.isPlayable).toBe(false);
@@ -681,7 +696,7 @@ describe("playlists route runtime", () => {
         expect(res.body.items[0].playback.isPlayable).toBe(true);
         expect(res.body.items[0].track.source).toBe("local");
         expect(res.body.items[0].track.filePath).toBe(
-            "/music/mapped-song.flac"
+            "/music/mapped-song.flac",
         );
     });
 
@@ -929,7 +944,11 @@ describe("playlists route runtime", () => {
     });
 
     it("validates and updates playlists with ownership checks", async () => {
-        const invalidReq = { user: { id: "u1" }, body: { name: "" }, params: { id: "pl-1" } } as any;
+        const invalidReq = {
+            user: { id: "u1" },
+            body: { name: "" },
+            params: { id: "pl-1" },
+        } as any;
         const invalidRes = createRes();
         await updatePlaylist(invalidReq, invalidRes);
         expect(invalidRes.statusCode).toBe(400);
@@ -983,7 +1002,9 @@ describe("playlists route runtime", () => {
         expect(unauthRes.statusCode).toBe(401);
         expect(unauthRes.body).toEqual({ error: "Unauthorized" });
 
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("update failed"));
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("update failed"),
+        );
         const errReq = {
             user: { id: "u1" },
             body: { name: "New Name", isPublic: true },
@@ -997,7 +1018,10 @@ describe("playlists route runtime", () => {
 
     it("hides and unhides playlists", async () => {
         prisma.playlist.findUnique.mockResolvedValueOnce(null);
-        const missingReq = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
+        const missingReq = {
+            user: { id: "u1" },
+            params: { id: "pl-1" },
+        } as any;
         const missingRes = createRes();
         await hidePlaylist(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(404);
@@ -1039,8 +1063,13 @@ describe("playlists route runtime", () => {
         expect(hideUnauthRes.statusCode).toBe(401);
         expect(hideUnauthRes.body).toEqual({ error: "Unauthorized" });
 
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("hide failed"));
-        const hideErrReq = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("hide failed"),
+        );
+        const hideErrReq = {
+            user: { id: "u1" },
+            params: { id: "pl-1" },
+        } as any;
         const hideErrRes = createRes();
         await hidePlaylist(hideErrReq, hideErrRes);
         expect(hideErrRes.statusCode).toBe(500);
@@ -1053,18 +1082,26 @@ describe("playlists route runtime", () => {
         expect(unhideUnauthRes.body).toEqual({ error: "Unauthorized" });
 
         prisma.hiddenPlaylist.deleteMany.mockRejectedValueOnce(
-            new Error("unhide failed")
+            new Error("unhide failed"),
         );
-        const unhideErrReq = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
+        const unhideErrReq = {
+            user: { id: "u1" },
+            params: { id: "pl-1" },
+        } as any;
         const unhideErrRes = createRes();
         await unhidePlaylist(unhideErrReq, unhideErrRes);
         expect(unhideErrRes.statusCode).toBe(500);
-        expect(unhideErrRes.body).toEqual({ error: "Failed to unhide playlist" });
+        expect(unhideErrRes.body).toEqual({
+            error: "Failed to unhide playlist",
+        });
     });
 
     it("deletes playlists with ownership checks", async () => {
         prisma.playlist.findUnique.mockResolvedValueOnce(null);
-        const missingReq = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
+        const missingReq = {
+            user: { id: "u1" },
+            params: { id: "pl-1" },
+        } as any;
         const missingRes = createRes();
         await deletePlaylist(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(404);
@@ -1098,7 +1135,9 @@ describe("playlists route runtime", () => {
         expect(unauthRes.statusCode).toBe(401);
         expect(unauthRes.body).toEqual({ error: "Unauthorized" });
 
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("delete failed"));
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("delete failed"),
+        );
         const errReq = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
         const errRes = createRes();
         await deletePlaylist(errReq, errRes);
@@ -1243,12 +1282,12 @@ describe("playlists route runtime", () => {
                     trackId: "t-1",
                     sort: 6,
                 }),
-            })
+            }),
         );
         expect(createResValue.body.provider.source).toBe("local");
         expect(createResValue.body.playback.isPlayable).toBe(true);
         expect(createResValue.body.track.album.coverArt).toBe(
-            "native:albums/a1.jpg"
+            "native:albums/a1.jpg",
         );
     });
 
@@ -1264,7 +1303,9 @@ describe("playlists route runtime", () => {
         expect(zodRes.statusCode).toBe(400);
         expect(zodRes.body.error).toBe("Invalid request");
 
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("add failed"));
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("add failed"),
+        );
         const errReq = {
             user: { id: "u1" },
             params: { id: "pl-1" },
@@ -1273,7 +1314,9 @@ describe("playlists route runtime", () => {
         const errRes = createRes();
         await addItem(errReq, errRes);
         expect(errRes.statusCode).toBe(500);
-        expect(errRes.body).toEqual({ error: "Failed to add track to playlist" });
+        expect(errRes.body).toEqual({
+            error: "Failed to add track to playlist",
+        });
     });
 
     it("requires exactly one item reference key in add-item payloads", async () => {
@@ -1417,7 +1460,7 @@ describe("playlists route runtime", () => {
                     trackYtMusicId: null,
                     sort: 6,
                 }),
-            })
+            }),
         );
     });
 
@@ -1495,7 +1538,7 @@ describe("playlists route runtime", () => {
                     trackYtMusicId: "yt-row-1",
                     sort: 3,
                 }),
-            })
+            }),
         );
     });
 
@@ -1706,7 +1749,9 @@ describe("playlists route runtime", () => {
             userId: "u1",
             isPublic: false,
         });
-        prisma.playlistItem.findMany.mockResolvedValueOnce([{ trackId: "t-1" }]);
+        prisma.playlistItem.findMany.mockResolvedValueOnce([
+            { trackId: "t-1" },
+        ]);
 
         const req = {
             user: { id: "u1" },
@@ -1734,7 +1779,9 @@ describe("playlists route runtime", () => {
     });
 
     it("handles remove and reorder server-error/missing/denied branches", async () => {
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("remove failed"));
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("remove failed"),
+        );
         const removeErrReq = {
             user: { id: "u1" },
             params: { id: "pl-1", trackId: "t-1" },
@@ -1790,12 +1837,17 @@ describe("playlists route runtime", () => {
         const reorderErrRes = createRes();
         await reorderItems(reorderErrReq, reorderErrRes);
         expect(reorderErrRes.statusCode).toBe(500);
-        expect(reorderErrRes.body).toEqual({ error: "Failed to reorder playlist" });
+        expect(reorderErrRes.body).toEqual({
+            error: "Failed to reorder playlist",
+        });
     });
 
     it("reads pending tracks with ownership checks and mapped payload", async () => {
         prisma.playlist.findUnique.mockResolvedValueOnce(null);
-        const missingReq = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
+        const missingReq = {
+            user: { id: "u1" },
+            params: { id: "pl-1" },
+        } as any;
         const missingRes = createRes();
         await getPending(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(404);
@@ -1848,7 +1900,9 @@ describe("playlists route runtime", () => {
     });
 
     it("handles pending-track listing server errors", async () => {
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("pending failed"));
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("pending failed"),
+        );
         const req = { user: { id: "u1" }, params: { id: "pl-1" } } as any;
         const res = createRes();
         await getPending(req, res);
@@ -1922,7 +1976,7 @@ describe("playlists route runtime", () => {
             isPublic: false,
         });
         prisma.playlistPendingTrack.delete.mockRejectedValueOnce(
-            new Error("delete failed")
+            new Error("delete failed"),
         );
         const errReq = {
             user: { id: "u1" },
@@ -1931,7 +1985,9 @@ describe("playlists route runtime", () => {
         const errRes = createRes();
         await deletePending(errReq, errRes);
         expect(errRes.statusCode).toBe(500);
-        expect(errRes.body).toEqual({ error: "Failed to delete pending track" });
+        expect(errRes.body).toEqual({
+            error: "Failed to delete pending track",
+        });
     });
 
     it("refreshes pending preview URLs with no-preview and success branches", async () => {
@@ -1959,7 +2015,7 @@ describe("playlists route runtime", () => {
             spotifyTitle: "T",
         });
         deezerService.getTrackPreview.mockResolvedValueOnce(
-            "https://preview/new.mp3"
+            "https://preview/new.mp3",
         );
         const okReq = { params: { id: "pl-1", trackId: "pt-1" } } as any;
         const okRes = createRes();
@@ -1974,7 +2030,7 @@ describe("playlists route runtime", () => {
 
     it("handles pending preview server errors", async () => {
         prisma.playlistPendingTrack.findUnique.mockRejectedValueOnce(
-            new Error("preview failed")
+            new Error("preview failed"),
         );
         const req = { params: { id: "pl-1", trackId: "pt-1" } } as any;
         const res = createRes();
@@ -2023,7 +2079,7 @@ describe("playlists route runtime", () => {
         await retryPending(noCredsReq, noCredsRes);
         expect(noCredsRes.statusCode).toBe(400);
         expect(noCredsRes.body.error).toBe(
-            "Soulseek credentials not configured"
+            "Soulseek credentials not configured",
         );
 
         getSystemSettings.mockResolvedValueOnce({
@@ -2058,7 +2114,9 @@ describe("playlists route runtime", () => {
         const missingPlaylistRes = createRes();
         await retryPending(missingPlaylistReq, missingPlaylistRes);
         expect(missingPlaylistRes.statusCode).toBe(404);
-        expect(missingPlaylistRes.body).toEqual({ error: "Playlist not found" });
+        expect(missingPlaylistRes.body).toEqual({
+            error: "Playlist not found",
+        });
 
         prisma.playlist.findUnique.mockResolvedValueOnce({
             id: "pl-1",
@@ -2087,7 +2145,9 @@ describe("playlists route runtime", () => {
         const missingPendingRes = createRes();
         await retryPending(missingPendingReq, missingPendingRes);
         expect(missingPendingRes.statusCode).toBe(404);
-        expect(missingPendingRes.body).toEqual({ error: "Pending track not found" });
+        expect(missingPendingRes.body).toEqual({
+            error: "Pending track not found",
+        });
     });
 
     it("reconciles pending tracks for playlist owners", async () => {
@@ -2371,7 +2431,9 @@ describe("playlists route runtime", () => {
         soulseekService.downloadBestMatch.mockRejectedValueOnce(
             new Error("socket closed"),
         );
-        prisma.downloadJob.update.mockRejectedValueOnce(new Error("write failed"));
+        prisma.downloadJob.update.mockRejectedValueOnce(
+            new Error("write failed"),
+        );
 
         const req = {
             user: { id: "u1" },
@@ -2391,7 +2453,9 @@ describe("playlists route runtime", () => {
     });
 
     it("returns 500 when retry handler throws unexpectedly", async () => {
-        prisma.playlist.findUnique.mockRejectedValueOnce(new Error("db exploded"));
+        prisma.playlist.findUnique.mockRejectedValueOnce(
+            new Error("db exploded"),
+        );
 
         const req = {
             user: { id: "u1" },
@@ -2408,7 +2472,10 @@ describe("playlists route runtime", () => {
 
     it("handles reconcile preconditions and unexpected reconcile errors", async () => {
         prisma.playlist.findUnique.mockResolvedValueOnce(null);
-        const missingReq = { user: { id: "u1" }, params: { id: "missing" } } as any;
+        const missingReq = {
+            user: { id: "u1" },
+            params: { id: "missing" },
+        } as any;
         const missingRes = createRes();
         await reconcilePending(missingReq, missingRes);
         expect(missingRes.statusCode).toBe(404);

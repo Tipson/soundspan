@@ -3,7 +3,11 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { logger } from "../utils/logger";
-import { VOCAB_DEFINITIONS, FeatureProfile, TermType } from "../config/featureProfiles";
+import {
+    VOCAB_DEFINITIONS,
+    FeatureProfile,
+    TermType,
+} from "../config/featureProfiles";
 
 export interface VocabTerm {
     name: string;
@@ -38,10 +42,12 @@ export function loadVocabulary(): Vocabulary | null {
         join(__dirname, "../../src/config/vibe-vocabulary.json"),
     ];
 
-    const vocabPath = possiblePaths.find(p => existsSync(p));
+    const vocabPath = possiblePaths.find((p) => existsSync(p));
 
     if (!vocabPath) {
-        logger.warn("[VIBE-VOCAB] Vocabulary file not found. Run generateVibeVocabulary script.");
+        logger.warn(
+            "[VIBE-VOCAB] Vocabulary file not found. Run generateVibeVocabulary script.",
+        );
         logger.warn("[VIBE-VOCAB] Searched paths:", possiblePaths);
         return null;
     }
@@ -49,7 +55,9 @@ export function loadVocabulary(): Vocabulary | null {
     try {
         const data = JSON.parse(readFileSync(vocabPath, "utf-8"));
         vocabulary = data as Vocabulary;
-        logger.info(`[VIBE-VOCAB] Loaded ${Object.keys(vocabulary.terms).length} vocabulary terms`);
+        logger.info(
+            `[VIBE-VOCAB] Loaded ${Object.keys(vocabulary.terms).length} vocabulary terms`,
+        );
         return vocabulary;
     } catch (error) {
         logger.error("[VIBE-VOCAB] Failed to load vocabulary:", error);
@@ -91,7 +99,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
  * Calculate weighted average of multiple embeddings
  */
 export function blendEmbeddings(
-    items: Array<{ embedding: number[]; weight: number }>
+    items: Array<{ embedding: number[]; weight: number }>,
 ): number[] {
     if (items.length === 0) return [];
 
@@ -122,7 +130,7 @@ export function findSimilarTerms(
     queryEmbedding: number[],
     vocab: Vocabulary,
     minSimilarity: number = 0.55,
-    maxTerms: number = 5
+    maxTerms: number = 5,
 ): Array<{ term: VocabTerm; similarity: number }> {
     const matches: Array<{ term: VocabTerm; similarity: number }> = [];
 
@@ -144,7 +152,7 @@ export function findSimilarTerms(
 export function expandQueryWithVocabulary(
     queryEmbedding: number[],
     originalQuery: string,
-    vocab: Vocabulary
+    vocab: Vocabulary,
 ): QueryExpansionResult {
     // Find similar vocabulary terms
     const matches = findSimilarTerms(queryEmbedding, vocab, 0.55, 5);
@@ -155,24 +163,25 @@ export function expandQueryWithVocabulary(
             embedding: queryEmbedding,
             genreConfidence: 0,
             matchedTerms: [],
-            originalQuery
+            originalQuery,
         };
     }
 
     // Calculate genre confidence (highest similarity to a genre term)
-    const genreMatches = matches.filter(m => m.term.type === "genre");
-    const genreConfidence = genreMatches.length > 0 ? genreMatches[0].similarity : 0;
+    const genreMatches = matches.filter((m) => m.term.type === "genre");
+    const genreConfidence =
+        genreMatches.length > 0 ? genreMatches[0].similarity : 0;
 
     // Blend embeddings: 60% original query, 40% distributed among matches
     const embeddingItems: Array<{ embedding: number[]; weight: number }> = [
-        { embedding: queryEmbedding, weight: 0.6 }
+        { embedding: queryEmbedding, weight: 0.6 },
     ];
 
     const matchWeight = 0.4 / matches.length;
     for (const match of matches) {
         embeddingItems.push({
             embedding: match.term.embedding,
-            weight: matchWeight * match.similarity
+            weight: matchWeight * match.similarity,
         });
     }
 
@@ -181,8 +190,8 @@ export function expandQueryWithVocabulary(
     return {
         embedding: blendedEmbedding,
         genreConfidence,
-        matchedTerms: matches.map(m => m.term),
-        originalQuery
+        matchedTerms: matches.map((m) => m.term),
+        originalQuery,
     };
 }
 
@@ -192,14 +201,21 @@ export function expandQueryWithVocabulary(
 export function blendFeatureProfiles(terms: VocabTerm[]): FeatureProfile {
     if (terms.length === 0) return {};
 
-    const features = ["energy", "valence", "danceability", "acousticness",
-                      "instrumentalness", "arousal", "speechiness"] as const;
+    const features = [
+        "energy",
+        "valence",
+        "danceability",
+        "acousticness",
+        "instrumentalness",
+        "arousal",
+        "speechiness",
+    ] as const;
 
     const result: FeatureProfile = {};
 
     for (const feature of features) {
         const values = terms
-            .map(t => t.featureProfile[feature])
+            .map((t) => t.featureProfile[feature])
             .filter((v): v is number => v !== undefined);
 
         if (values.length > 0) {
@@ -215,7 +231,7 @@ export function blendFeatureProfiles(terms: VocabTerm[]): FeatureProfile {
  */
 export function calculateFeatureMatch(
     trackFeatures: Record<string, number | null>,
-    targetProfile: FeatureProfile
+    targetProfile: FeatureProfile,
 ): number {
     let score = 0;
     let count = 0;
@@ -224,7 +240,8 @@ export function calculateFeatureMatch(
         if (typeof targetValue !== "number") continue;
 
         const rawTrackValue = trackFeatures[feature];
-        const trackValue = typeof rawTrackValue === "number" ? rawTrackValue : 0.5;
+        const trackValue =
+            typeof rawTrackValue === "number" ? rawTrackValue : 0.5;
         const match = 1 - Math.abs(trackValue - targetValue);
         score += match;
         count++;
@@ -236,20 +253,22 @@ export function calculateFeatureMatch(
 /**
  * Re-rank CLAP candidates using audio features
  */
-export function rerankWithFeatures<T extends {
-    id: string;
-    distance: number;
-    energy?: number | null;
-    valence?: number | null;
-    danceability?: number | null;
-    acousticness?: number | null;
-    instrumentalness?: number | null;
-    arousal?: number | null;
-    speechiness?: number | null;
-}>(
+export function rerankWithFeatures<
+    T extends {
+        id: string;
+        distance: number;
+        energy?: number | null;
+        valence?: number | null;
+        danceability?: number | null;
+        acousticness?: number | null;
+        instrumentalness?: number | null;
+        arousal?: number | null;
+        speechiness?: number | null;
+    },
+>(
     candidates: T[],
     matchedTerms: VocabTerm[],
-    genreConfidence: number
+    genreConfidence: number,
 ): Array<T & { finalScore: number; clapScore: number; featureScore: number }> {
     // Build composite feature profile from matched terms
     const targetProfile = blendFeatureProfiles(matchedTerms);
@@ -257,40 +276,45 @@ export function rerankWithFeatures<T extends {
     // Calculate dynamic weights based on genre confidence
     // High confidence (0.8+) → 40% CLAP, 60% features
     // Low confidence (0.3)  → 80% CLAP, 20% features
-    const featureWeight = 0.2 + (genreConfidence * 0.5);
+    const featureWeight = 0.2 + genreConfidence * 0.5;
     const clapWeight = 1 - featureWeight;
 
-    logger.debug(`[VIBE-RERANK] Genre confidence: ${(genreConfidence * 100).toFixed(0)}%, ` +
-                 `Weights: CLAP ${(clapWeight * 100).toFixed(0)}% / Features ${(featureWeight * 100).toFixed(0)}%`);
+    logger.debug(
+        `[VIBE-RERANK] Genre confidence: ${(genreConfidence * 100).toFixed(0)}%, ` +
+            `Weights: CLAP ${(clapWeight * 100).toFixed(0)}% / Features ${(featureWeight * 100).toFixed(0)}%`,
+    );
 
-    return candidates.map(track => {
-        // CLAP score: convert distance to 0-1 similarity
-        const clapScore = Math.max(0, 1 - (track.distance / 2));
+    return candidates
+        .map((track) => {
+            // CLAP score: convert distance to 0-1 similarity
+            const clapScore = Math.max(0, 1 - track.distance / 2);
 
-        // Feature score
-        const trackFeatures: Record<string, number | null> = {
-            energy: track.energy ?? null,
-            valence: track.valence ?? null,
-            danceability: track.danceability ?? null,
-            acousticness: track.acousticness ?? null,
-            instrumentalness: track.instrumentalness ?? null,
-            arousal: track.arousal ?? null,
-            speechiness: track.speechiness ?? null
-        };
+            // Feature score
+            const trackFeatures: Record<string, number | null> = {
+                energy: track.energy ?? null,
+                valence: track.valence ?? null,
+                danceability: track.danceability ?? null,
+                acousticness: track.acousticness ?? null,
+                instrumentalness: track.instrumentalness ?? null,
+                arousal: track.arousal ?? null,
+                speechiness: track.speechiness ?? null,
+            };
 
-        const featureScore = Object.keys(targetProfile).length > 0
-            ? calculateFeatureMatch(trackFeatures, targetProfile)
-            : 0.5;
+            const featureScore =
+                Object.keys(targetProfile).length > 0
+                    ? calculateFeatureMatch(trackFeatures, targetProfile)
+                    : 0.5;
 
-        // Blend scores
-        const finalScore = (clapWeight * clapScore) + (featureWeight * featureScore);
+            // Blend scores
+            const finalScore =
+                clapWeight * clapScore + featureWeight * featureScore;
 
-        return {
-            ...track,
-            finalScore,
-            clapScore,
-            featureScore
-        };
-    })
-    .sort((a, b) => b.finalScore - a.finalScore);
+            return {
+                ...track,
+                finalScore,
+                clapScore,
+                featureScore,
+            };
+        })
+        .sort((a, b) => b.finalScore - a.finalScore);
 }

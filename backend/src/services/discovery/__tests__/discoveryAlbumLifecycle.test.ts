@@ -1,9 +1,13 @@
-import { DiscoveryAlbumLifecycle, DiscoveryAlbumInfo, LidarrSettings } from '../discoveryAlbumLifecycle';
-import { prisma } from '../../../utils/db';
-import axios from 'axios';
-import { updateArtistCounts } from '../../artistCountsService';
+import {
+    DiscoveryAlbumLifecycle,
+    DiscoveryAlbumInfo,
+    LidarrSettings,
+} from "../discoveryAlbumLifecycle";
+import { prisma } from "../../../utils/db";
+import axios from "axios";
+import { updateArtistCounts } from "../../artistCountsService";
 
-jest.mock('../../../utils/db', () => ({
+jest.mock("../../../utils/db", () => ({
     prisma: {
         album: {
             findFirst: jest.fn(),
@@ -29,13 +33,13 @@ jest.mock('../../../utils/db', () => ({
     },
 }));
 
-jest.mock('../../../config', () => ({
+jest.mock("../../../config", () => ({
     config: { lidarr: undefined },
 }));
-jest.mock('../../../utils/systemSettings', () => ({
+jest.mock("../../../utils/systemSettings", () => ({
     getSystemSettings: jest.fn(),
 }));
-jest.mock('axios', () => {
+jest.mock("axios", () => {
     const request = jest.fn();
     const create = jest.fn(() => ({ request }));
     return {
@@ -44,7 +48,7 @@ jest.mock('axios', () => {
         create,
     };
 });
-jest.mock('../../artistCountsService', () => ({
+jest.mock("../../artistCountsService", () => ({
     updateArtistCounts: jest.fn(),
 }));
 
@@ -53,7 +57,7 @@ const mockRequest = mockAxios.request;
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockUpdateArtistCounts = updateArtistCounts as jest.Mock;
 
-describe('DiscoveryAlbumLifecycle', () => {
+describe("DiscoveryAlbumLifecycle", () => {
     let lifecycle: DiscoveryAlbumLifecycle;
 
     beforeEach(() => {
@@ -61,47 +65,55 @@ describe('DiscoveryAlbumLifecycle', () => {
         lifecycle = new DiscoveryAlbumLifecycle();
     });
 
-    describe('moveLikedAlbumToLibrary', () => {
+    describe("moveLikedAlbumToLibrary", () => {
         const mockAlbum: DiscoveryAlbumInfo = {
-            id: 'discovery-album-1',
-            rgMbid: 'rg-mbid-123',
-            artistName: 'Test Artist',
-            albumTitle: 'Test Album',
+            id: "discovery-album-1",
+            rgMbid: "rg-mbid-123",
+            artistName: "Test Artist",
+            albumTitle: "Test Album",
             lidarrAlbumId: 456,
         };
 
-        it('should update album location to LIBRARY', async () => {
+        it("should update album location to LIBRARY", async () => {
             const dbAlbum = {
-                id: 'album-db-1',
-                artistId: 'artist-1',
-                rgMbid: 'rg-mbid-123',
+                id: "album-db-1",
+                artistId: "artist-1",
+                rgMbid: "rg-mbid-123",
             };
 
-            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(dbAlbum);
+            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(
+                dbAlbum,
+            );
             (mockPrisma.album.update as jest.Mock).mockResolvedValue({});
             (mockPrisma.ownedAlbum.upsert as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
             mockUpdateArtistCounts.mockResolvedValue(undefined);
 
             await lifecycle.moveLikedAlbumToLibrary(mockAlbum);
 
             expect(mockPrisma.album.update).toHaveBeenCalledWith({
-                where: { id: 'album-db-1' },
-                data: { location: 'LIBRARY' },
+                where: { id: "album-db-1" },
+                data: { location: "LIBRARY" },
             });
         });
 
-        it('should create OwnedAlbum record', async () => {
+        it("should create OwnedAlbum record", async () => {
             const dbAlbum = {
-                id: 'album-db-1',
-                artistId: 'artist-1',
-                rgMbid: 'rg-mbid-123',
+                id: "album-db-1",
+                artistId: "artist-1",
+                rgMbid: "rg-mbid-123",
             };
 
-            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(dbAlbum);
+            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(
+                dbAlbum,
+            );
             (mockPrisma.album.update as jest.Mock).mockResolvedValue({});
             (mockPrisma.ownedAlbum.upsert as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
             mockUpdateArtistCounts.mockResolvedValue(undefined);
 
             await lifecycle.moveLikedAlbumToLibrary(mockAlbum);
@@ -109,319 +121,426 @@ describe('DiscoveryAlbumLifecycle', () => {
             expect(mockPrisma.ownedAlbum.upsert).toHaveBeenCalledWith({
                 where: {
                     artistId_rgMbid: {
-                        artistId: 'artist-1',
-                        rgMbid: 'rg-mbid-123',
+                        artistId: "artist-1",
+                        rgMbid: "rg-mbid-123",
                     },
                 },
                 create: {
-                    artistId: 'artist-1',
-                    rgMbid: 'rg-mbid-123',
-                    source: 'discover_liked',
+                    artistId: "artist-1",
+                    rgMbid: "rg-mbid-123",
+                    source: "discover_liked",
                 },
                 update: {},
             });
         });
 
-        it('should update artist counts after move', async () => {
+        it("should update artist counts after move", async () => {
             const dbAlbum = {
-                id: 'album-db-1',
-                artistId: 'artist-1',
-                rgMbid: 'rg-mbid-123',
+                id: "album-db-1",
+                artistId: "artist-1",
+                rgMbid: "rg-mbid-123",
             };
 
-            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(dbAlbum);
+            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(
+                dbAlbum,
+            );
             (mockPrisma.album.update as jest.Mock).mockResolvedValue({});
             (mockPrisma.ownedAlbum.upsert as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
             mockUpdateArtistCounts.mockResolvedValue(undefined);
 
             await lifecycle.moveLikedAlbumToLibrary(mockAlbum);
 
-            expect(mockUpdateArtistCounts).toHaveBeenCalledWith('artist-1');
+            expect(mockUpdateArtistCounts).toHaveBeenCalledWith("artist-1");
         });
 
-        it('should mark discovery album as MOVED', async () => {
+        it("should mark discovery album as MOVED", async () => {
             const dbAlbum = {
-                id: 'album-db-1',
-                artistId: 'artist-1',
-                rgMbid: 'rg-mbid-123',
+                id: "album-db-1",
+                artistId: "artist-1",
+                rgMbid: "rg-mbid-123",
             };
 
-            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(dbAlbum);
+            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(
+                dbAlbum,
+            );
             (mockPrisma.album.update as jest.Mock).mockResolvedValue({});
             (mockPrisma.ownedAlbum.upsert as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
             mockUpdateArtistCounts.mockResolvedValue(undefined);
 
             await lifecycle.moveLikedAlbumToLibrary(mockAlbum);
 
             expect(mockPrisma.discoveryAlbum.update).toHaveBeenCalledWith({
-                where: { id: 'discovery-album-1' },
-                data: { status: 'MOVED' },
+                where: { id: "discovery-album-1" },
+                data: { status: "MOVED" },
             });
         });
 
-        it('should still mark as MOVED even if album not found in DB', async () => {
+        it("should still mark as MOVED even if album not found in DB", async () => {
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
             await lifecycle.moveLikedAlbumToLibrary(mockAlbum);
 
             expect(mockPrisma.discoveryAlbum.update).toHaveBeenCalledWith({
-                where: { id: 'discovery-album-1' },
-                data: { status: 'MOVED' },
+                where: { id: "discovery-album-1" },
+                data: { status: "MOVED" },
             });
             expect(mockPrisma.album.update).not.toHaveBeenCalled();
         });
 
-        it('should throw error when operation fails', async () => {
-            (mockPrisma.album.findFirst as jest.Mock).mockRejectedValue(new Error('DB Error'));
+        it("should throw error when operation fails", async () => {
+            (mockPrisma.album.findFirst as jest.Mock).mockRejectedValue(
+                new Error("DB Error"),
+            );
 
-            await expect(lifecycle.moveLikedAlbumToLibrary(mockAlbum)).rejects.toThrow('DB Error');
+            await expect(
+                lifecycle.moveLikedAlbumToLibrary(mockAlbum),
+            ).rejects.toThrow("DB Error");
         });
     });
 
-    describe('deleteRejectedAlbum', () => {
+    describe("deleteRejectedAlbum", () => {
         const mockAlbum: DiscoveryAlbumInfo = {
-            id: 'discovery-album-1',
-            rgMbid: 'rg-mbid-123',
-            artistName: 'Test Artist',
-            albumTitle: 'Test Album',
+            id: "discovery-album-1",
+            rgMbid: "rg-mbid-123",
+            artistName: "Test Artist",
+            albumTitle: "Test Album",
             lidarrAlbumId: 456,
         };
 
         const mockSettings: LidarrSettings = {
             lidarrEnabled: true,
-            lidarrUrl: 'http://lidarr:8686',
-            lidarrApiKey: 'test-api-key',
+            lidarrUrl: "http://lidarr:8686",
+            lidarrApiKey: "test-api-key",
         };
 
-        it('should delete from Lidarr when enabled', async () => {
+        it("should delete from Lidarr when enabled", async () => {
             mockRequest.mockResolvedValue({ data: {}, status: 200 });
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
             await lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings);
 
-            expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
-                method: 'DELETE',
-                url: '/api/v1/album/456',
-                params: { deleteFiles: true },
-            }));
-            expect(mockAxios.create).toHaveBeenCalledWith(expect.objectContaining({
-                baseURL: 'http://lidarr:8686',
-                headers: { 'X-Api-Key': 'test-api-key' },
-            }));
+            expect(mockRequest).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    method: "DELETE",
+                    url: "/api/v1/album/456",
+                    params: { deleteFiles: true },
+                }),
+            );
+            expect(mockAxios.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    baseURL: "http://lidarr:8686",
+                    headers: { "X-Api-Key": "test-api-key" },
+                }),
+            );
         });
 
-        it('should skip Lidarr deletion when disabled', async () => {
+        it("should skip Lidarr deletion when disabled", async () => {
             const disabledSettings: LidarrSettings = { lidarrEnabled: false };
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
             await lifecycle.deleteRejectedAlbum(mockAlbum, disabledSettings);
 
             expect(mockRequest).not.toHaveBeenCalled();
         });
 
-        it('should skip Lidarr deletion when album has no lidarrAlbumId', async () => {
+        it("should skip Lidarr deletion when album has no lidarrAlbumId", async () => {
             const albumWithoutLidarr: DiscoveryAlbumInfo = {
                 ...mockAlbum,
                 lidarrAlbumId: null,
             };
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
-            await lifecycle.deleteRejectedAlbum(albumWithoutLidarr, mockSettings);
+            await lifecycle.deleteRejectedAlbum(
+                albumWithoutLidarr,
+                mockSettings,
+            );
 
             expect(mockRequest).not.toHaveBeenCalled();
         });
 
-        it('should ignore Lidarr 404 errors', async () => {
-            const error = { response: { status: 404 }, message: 'Not Found' };
+        it("should ignore Lidarr 404 errors", async () => {
+            const error = { response: { status: 404 }, message: "Not Found" };
             mockRequest.mockRejectedValue(error);
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
-            await expect(lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings)).resolves.not.toThrow();
+            await expect(
+                lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings),
+            ).resolves.not.toThrow();
         });
 
-        it('should delete tracks and album from database', async () => {
-            const dbAlbum = { id: 'album-db-1' };
+        it("should delete tracks and album from database", async () => {
+            const dbAlbum = { id: "album-db-1" };
             mockRequest.mockResolvedValue({ data: {}, status: 200 });
-            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(dbAlbum);
+            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(
+                dbAlbum,
+            );
             (mockPrisma.track.deleteMany as jest.Mock).mockResolvedValue({});
             (mockPrisma.album.delete as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
             await lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings);
 
             expect(mockPrisma.track.deleteMany).toHaveBeenCalledWith({
-                where: { albumId: 'album-db-1' },
+                where: { albumId: "album-db-1" },
             });
             expect(mockPrisma.album.delete).toHaveBeenCalledWith({
-                where: { id: 'album-db-1' },
+                where: { id: "album-db-1" },
             });
         });
 
-        it('should delete discovery track records', async () => {
+        it("should delete discovery track records", async () => {
             mockRequest.mockResolvedValue({ data: {}, status: 200 });
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
             await lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings);
 
             expect(mockPrisma.discoveryTrack.deleteMany).toHaveBeenCalledWith({
-                where: { discoveryAlbumId: 'discovery-album-1' },
+                where: { discoveryAlbumId: "discovery-album-1" },
             });
         });
 
-        it('should mark discovery album as DELETED', async () => {
+        it("should mark discovery album as DELETED", async () => {
             mockRequest.mockResolvedValue({ data: {}, status: 200 });
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
 
             await lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings);
 
             expect(mockPrisma.discoveryAlbum.update).toHaveBeenCalledWith({
-                where: { id: 'discovery-album-1' },
-                data: { status: 'DELETED' },
+                where: { id: "discovery-album-1" },
+                data: { status: "DELETED" },
             });
         });
 
-        it('should throw error when database operation fails', async () => {
+        it("should throw error when database operation fails", async () => {
             mockRequest.mockResolvedValue({ data: {}, status: 200 });
-            (mockPrisma.album.findFirst as jest.Mock).mockRejectedValue(new Error('DB Error'));
+            (mockPrisma.album.findFirst as jest.Mock).mockRejectedValue(
+                new Error("DB Error"),
+            );
 
-            await expect(lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings)).rejects.toThrow('DB Error');
+            await expect(
+                lifecycle.deleteRejectedAlbum(mockAlbum, mockSettings),
+            ).rejects.toThrow("DB Error");
         });
     });
 
-    describe('processBeforeGeneration', () => {
-        const userId = 'user-123';
+    describe("processBeforeGeneration", () => {
+        const userId = "user-123";
         const mockSettings: LidarrSettings = {
             lidarrEnabled: true,
-            lidarrUrl: 'http://lidarr:8686',
-            lidarrApiKey: 'test-api-key',
+            lidarrUrl: "http://lidarr:8686",
+            lidarrApiKey: "test-api-key",
         };
 
-        it('should return early when no discovery albums exist', async () => {
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
+        it("should return early when no discovery albums exist", async () => {
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                [],
+            );
 
-            const result = await lifecycle.processBeforeGeneration(userId, mockSettings);
+            const result = await lifecycle.processBeforeGeneration(
+                userId,
+                mockSettings,
+            );
 
             expect(result).toEqual({ moved: 0, deleted: 0 });
             expect(mockPrisma.album.findFirst).not.toHaveBeenCalled();
         });
 
-        it('should process liked albums and mark them as moved', async () => {
+        it("should process liked albums and mark them as moved", async () => {
             const discoveryAlbums = [
                 {
-                    id: 'da-1',
-                    rgMbid: 'rg-1',
-                    artistName: 'Artist 1',
-                    albumTitle: 'Album 1',
-                    status: 'LIKED',
+                    id: "da-1",
+                    rgMbid: "rg-1",
+                    artistName: "Artist 1",
+                    albumTitle: "Album 1",
+                    status: "LIKED",
                     lidarrAlbumId: 100,
                 },
             ];
-            const dbAlbum = { id: 'album-1', artistId: 'artist-1', rgMbid: 'rg-1' };
+            const dbAlbum = {
+                id: "album-1",
+                artistId: "artist-1",
+                rgMbid: "rg-1",
+            };
 
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(discoveryAlbums);
-            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(dbAlbum);
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                discoveryAlbums,
+            );
+            (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(
+                dbAlbum,
+            );
             (mockPrisma.album.update as jest.Mock).mockResolvedValue({});
             (mockPrisma.ownedAlbum.upsert as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
-            (mockPrisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
+            (
+                mockPrisma.unavailableAlbum.deleteMany as jest.Mock
+            ).mockResolvedValue({});
             mockUpdateArtistCounts.mockResolvedValue(undefined);
 
-            const result = await lifecycle.processBeforeGeneration(userId, mockSettings);
+            const result = await lifecycle.processBeforeGeneration(
+                userId,
+                mockSettings,
+            );
 
             expect(result.moved).toBe(1);
             expect(mockPrisma.discoveryAlbum.update).toHaveBeenCalledWith({
-                where: { id: 'da-1' },
-                data: { status: 'MOVED' },
+                where: { id: "da-1" },
+                data: { status: "MOVED" },
             });
         });
 
-        it('should process active albums and delete them', async () => {
+        it("should process active albums and delete them", async () => {
             const discoveryAlbums = [
                 {
-                    id: 'da-1',
-                    rgMbid: 'rg-1',
-                    artistName: 'Artist 1',
-                    albumTitle: 'Album 1',
-                    status: 'ACTIVE',
+                    id: "da-1",
+                    rgMbid: "rg-1",
+                    artistName: "Artist 1",
+                    albumTitle: "Album 1",
+                    status: "ACTIVE",
                     lidarrAlbumId: 100,
                 },
             ];
 
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(discoveryAlbums);
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                discoveryAlbums,
+            );
             mockRequest.mockResolvedValue({ data: {}, status: 200 });
             (mockPrisma.album.findFirst as jest.Mock).mockResolvedValue(null);
-            (mockPrisma.discoveryTrack.deleteMany as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
-            (mockPrisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({});
+            (
+                mockPrisma.discoveryTrack.deleteMany as jest.Mock
+            ).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
+            (
+                mockPrisma.unavailableAlbum.deleteMany as jest.Mock
+            ).mockResolvedValue({});
 
-            const result = await lifecycle.processBeforeGeneration(userId, mockSettings);
+            const result = await lifecycle.processBeforeGeneration(
+                userId,
+                mockSettings,
+            );
 
             expect(result.deleted).toBe(1);
             expect(mockPrisma.discoveryAlbum.update).toHaveBeenCalledWith({
-                where: { id: 'da-1' },
-                data: { status: 'DELETED' },
+                where: { id: "da-1" },
+                data: { status: "DELETED" },
             });
         });
 
-        it('should clean up unavailable albums for user', async () => {
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
-            (mockPrisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({});
+        it("should clean up unavailable albums for user", async () => {
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                [],
+            );
+            (
+                mockPrisma.unavailableAlbum.deleteMany as jest.Mock
+            ).mockResolvedValue({});
 
             await lifecycle.processBeforeGeneration(userId, mockSettings);
 
-            expect(mockPrisma.unavailableAlbum.deleteMany).toHaveBeenCalledWith({
-                where: { userId },
-            });
+            expect(mockPrisma.unavailableAlbum.deleteMany).toHaveBeenCalledWith(
+                {
+                    where: { userId },
+                },
+            );
         });
 
-        it('should continue processing even when individual album fails', async () => {
+        it("should continue processing even when individual album fails", async () => {
             const discoveryAlbums = [
                 {
-                    id: 'da-1',
-                    rgMbid: 'rg-1',
-                    artistName: 'Artist 1',
-                    albumTitle: 'Album 1',
-                    status: 'LIKED',
+                    id: "da-1",
+                    rgMbid: "rg-1",
+                    artistName: "Artist 1",
+                    albumTitle: "Album 1",
+                    status: "LIKED",
                     lidarrAlbumId: 100,
                 },
                 {
-                    id: 'da-2',
-                    rgMbid: 'rg-2',
-                    artistName: 'Artist 2',
-                    albumTitle: 'Album 2',
-                    status: 'LIKED',
+                    id: "da-2",
+                    rgMbid: "rg-2",
+                    artistName: "Artist 2",
+                    albumTitle: "Album 2",
+                    status: "LIKED",
                     lidarrAlbumId: 101,
                 },
             ];
-            const dbAlbum = { id: 'album-2', artistId: 'artist-2', rgMbid: 'rg-2' };
+            const dbAlbum = {
+                id: "album-2",
+                artistId: "artist-2",
+                rgMbid: "rg-2",
+            };
 
-            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(discoveryAlbums);
+            (mockPrisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue(
+                discoveryAlbums,
+            );
             (mockPrisma.album.findFirst as jest.Mock)
-                .mockRejectedValueOnce(new Error('DB Error'))
+                .mockRejectedValueOnce(new Error("DB Error"))
                 .mockResolvedValueOnce(dbAlbum);
             (mockPrisma.album.update as jest.Mock).mockResolvedValue({});
             (mockPrisma.ownedAlbum.upsert as jest.Mock).mockResolvedValue({});
-            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue({});
-            (mockPrisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({});
+            (mockPrisma.discoveryAlbum.update as jest.Mock).mockResolvedValue(
+                {},
+            );
+            (
+                mockPrisma.unavailableAlbum.deleteMany as jest.Mock
+            ).mockResolvedValue({});
             mockUpdateArtistCounts.mockResolvedValue(undefined);
 
-            const result = await lifecycle.processBeforeGeneration(userId, mockSettings);
+            const result = await lifecycle.processBeforeGeneration(
+                userId,
+                mockSettings,
+            );
 
             expect(result.moved).toBe(1);
         });

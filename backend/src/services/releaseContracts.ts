@@ -42,7 +42,7 @@ export function formatBytes(bytes: number): string {
     const units = ["B", "KB", "MB", "GB", "TB"];
     const power = Math.min(
         Math.floor(Math.log(bytes) / Math.log(1024)),
-        units.length - 1
+        units.length - 1,
     );
     const value = bytes / 1024 ** power;
     const rounded = value >= 10 ? value.toFixed(1) : value.toFixed(2);
@@ -54,7 +54,7 @@ export function formatBytes(bytes: number): string {
  * Executes mapInteractiveRelease.
  */
 export function mapInteractiveRelease(
-    release: LidarrRelease & { infoUrl?: string | null }
+    release: LidarrRelease & { infoUrl?: string | null },
 ): InteractiveReleaseResponseItem {
     return {
         guid: release.guid,
@@ -80,11 +80,12 @@ export function mapInteractiveRelease(
 export function mapCalendarReleaseToRadarItem(
     release: CalendarRelease,
     now: Date,
-    libraryAlbumMbids: Set<string>
+    libraryAlbumMbids: Set<string>,
 ): ReleaseRadarItem {
     const releaseTime = new Date(release.releaseDate).getTime();
     const isUpcoming = releaseTime > now.getTime();
-    const inLibrary = release.hasFile || libraryAlbumMbids.has(release.albumMbid);
+    const inLibrary =
+        release.hasFile || libraryAlbumMbids.has(release.albumMbid);
 
     return {
         id: release.id,
@@ -102,21 +103,21 @@ export function mapCalendarReleaseToRadarItem(
 }
 
 export function sortByReleaseDateAsc<T extends { releaseDate: string }>(
-    releases: T[]
+    releases: T[],
 ): T[] {
     return [...releases].sort(
         (a, b) =>
             new Date(a.releaseDate).getTime() -
-            new Date(b.releaseDate).getTime()
+            new Date(b.releaseDate).getTime(),
     );
 }
 
 export function sortByReleaseDateDesc<T extends { releaseDate: string }>(
-    releases: T[]
+    releases: T[],
 ): T[] {
     return [...releases].sort(
         (a, b) =>
             new Date(b.releaseDate).getTime() -
-            new Date(a.releaseDate).getTime()
+            new Date(a.releaseDate).getTime(),
     );
 }

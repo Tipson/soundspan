@@ -13,7 +13,7 @@ export const LYRICS_QUERY_GC_TIME = 1000 * 60 * 60 * 24 * 30; // 30 days
  * This avoids long-lived false negatives when upstream lookup paths are transiently slow.
  */
 export function resolveLyricsQueryStaleTime(
-    data?: LyricsCachePolicyInput
+    data?: LyricsCachePolicyInput,
 ): number {
     if (data?.source === "none" && !data.syncedLyrics && !data.plainLyrics) {
         return LYRICS_EMPTY_RESULT_STALE_TIME;

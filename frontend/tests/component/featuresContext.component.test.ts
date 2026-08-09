@@ -4,8 +4,9 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const apiState = {
     featuresCalls: 0,
@@ -78,9 +79,7 @@ async function mountProvider() {
     const root = createRoot(container);
 
     await React.act(async () => {
-        root.render(
-            React.createElement(FeaturesProvider, null, "content")
-        );
+        root.render(React.createElement(FeaturesProvider, null, "content"));
     });
     await flushMicrotasks();
 

@@ -18,11 +18,15 @@ export const buildSha256CacheKey = ({
     length = 24,
 }: BuildSha256CacheKeyInput): string => {
     const payload = suffix ? `${identity}:${suffix}` : identity;
-    return crypto.createHash("sha256").update(payload).digest("hex").slice(0, length);
+    return crypto
+        .createHash("sha256")
+        .update(payload)
+        .digest("hex")
+        .slice(0, length);
 };
 
 export const isPastStaleWindow = (
     timestamp: Date | string | number,
     staleWindowMs: number,
-    nowMs = Date.now()
+    nowMs = Date.now(),
 ): boolean => new Date(timestamp).getTime() < nowMs - staleWindowMs;

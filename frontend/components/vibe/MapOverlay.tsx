@@ -103,7 +103,7 @@ interface FadeSegmentsOptions {
  */
 function buildFadeSegments(
     points: readonly FadeSegmentPoint[],
-    { color, dashArray, opacityAt, keyPrefix }: FadeSegmentsOptions
+    { color, dashArray, opacityAt, keyPrefix }: FadeSegmentsOptions,
 ): ReactNode[] {
     const segments: ReactNode[] = [];
     const denom = Math.max(1, points.length - 1);
@@ -124,7 +124,7 @@ function buildFadeSegments(
                 strokeOpacity={base * ageAlpha}
                 strokeDasharray={dashArray}
                 strokeLinecap="round"
-            />
+            />,
         );
     }
     return segments;
@@ -133,8 +133,10 @@ function buildFadeSegments(
 function Beacon({ point }: { point: Point | null }) {
     if (!point) return null;
     return (
-        <div className="vibe-beacon"
-            style={{ transform: `translate(${point.x}px, ${point.y}px)` }}>
+        <div
+            className="vibe-beacon"
+            style={{ transform: `translate(${point.x}px, ${point.y}px)` }}
+        >
             <span className="vibe-beacon-ring" />
             <span className="vibe-beacon-core" />
         </div>
@@ -169,7 +171,7 @@ export function MapOverlay({
     // future — the visual inverse of the trail's oldest-faint gradient. No
     // alpha field (buildFadeSegments treats a missing alpha as 1 = full).
     const planScreen: FadeSegmentPoint[] = (plan ?? []).map((p) =>
-        worldToScreen(viewport, p)
+        worldToScreen(viewport, p),
     );
     const planSegments = buildFadeSegments(planScreen, {
         color: PLAN_COLOR,

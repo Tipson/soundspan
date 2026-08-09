@@ -76,7 +76,8 @@ const addTrackSchema = z
         }
 
         const needsRemoteMetadata =
-            value.tidalTrackId !== undefined || value.youtubeVideoId !== undefined;
+            value.tidalTrackId !== undefined ||
+            value.youtubeVideoId !== undefined;
         if (!needsRemoteMetadata) return;
 
         if (!value.title) {
@@ -193,7 +194,7 @@ router.get("/", async (req, res) => {
             select: { playlistId: true },
         });
         const hiddenPlaylistIds = new Set(
-            hiddenPlaylists.map((h) => h.playlistId)
+            hiddenPlaylists.map((h) => h.playlistId),
         );
 
         const playlists = await prisma.playlist.findMany({
@@ -252,13 +253,13 @@ router.get("/", async (req, res) => {
         const sharedPlaylists = playlistsWithCounts.filter((p) => !p.isOwner);
         if (sharedPlaylists.length > 0) {
             logger.debug(
-                `[Playlists] Found ${sharedPlaylists.length} shared playlists for user ${userId}:`
+                `[Playlists] Found ${sharedPlaylists.length} shared playlists for user ${userId}:`,
             );
             sharedPlaylists.forEach((p) => {
                 logger.debug(
                     `  - "${p.name}" by ${
                         p.user?.username || "UNKNOWN"
-                    } (owner: ${p.userId})`
+                    } (owner: ${p.userId})`,
                 );
             });
         }
@@ -399,13 +400,13 @@ router.get("/:id", async (req, res) => {
 
         const resolvedItems = await resolvePlaylistItemsForUser(
             playlist.items as UnifiedPlaylistItemRecord[],
-            userId
+            userId,
         );
         const formattedItems = resolvedItems.map((resolvedItem) => {
             const formatted = formatUnifiedTrackItem(resolvedItem.effective);
             if (!resolvedItem.resolution.available) {
                 formatted.playback = unavailablePlaybackForReason(
-                    resolvedItem.resolution.reason
+                    resolvedItem.resolution.reason,
                 );
             }
             return formatted;
@@ -823,19 +824,20 @@ router.post("/:id/items", async (req, res) => {
         } else {
             const remoteProvider =
                 addTrackData.tidalTrackId !== undefined ? "tidal" : "youtube";
-            const ensuredRemoteTrack = await trackMappingService.ensureRemoteTrack({
-                provider: remoteProvider,
-                tidalId: addTrackData.tidalTrackId,
-                videoId: addTrackData.youtubeVideoId,
-                title: addTrackData.title as string,
-                artist: addTrackData.artist as string,
-                album: addTrackData.album as string,
-                duration: addTrackData.duration as number,
-                isrc: addTrackData.isrc,
-                quality: addTrackData.quality,
-                explicit: addTrackData.explicit,
-                thumbnailUrl: addTrackData.thumbnailUrl,
-            });
+            const ensuredRemoteTrack =
+                await trackMappingService.ensureRemoteTrack({
+                    provider: remoteProvider,
+                    tidalId: addTrackData.tidalTrackId,
+                    videoId: addTrackData.youtubeVideoId,
+                    title: addTrackData.title as string,
+                    artist: addTrackData.artist as string,
+                    album: addTrackData.album as string,
+                    duration: addTrackData.duration as number,
+                    isrc: addTrackData.isrc,
+                    quality: addTrackData.quality,
+                    explicit: addTrackData.explicit,
+                    thumbnailUrl: addTrackData.thumbnailUrl,
+                });
 
             if (ensuredRemoteTrack.provider === "tidal") {
                 createTrackTidalId = ensuredRemoteTrack.id;
@@ -1058,8 +1060,8 @@ router.put("/:id/items/reorder", async (req, res) => {
         const reorderIds = Array.isArray(itemIds)
             ? itemIds
             : Array.isArray(trackIds)
-            ? trackIds
-            : null;
+              ? trackIds
+              : null;
         if (!reorderIds) {
             return res
                 .status(400)
@@ -1105,10 +1107,13 @@ router.put("/:id/items/reorder", async (req, res) => {
             const matchedTrackIds = new Set(
                 matchedItems
                     .map((item) => item.trackId)
-                    .filter((trackId): trackId is string => typeof trackId === "string")
+                    .filter(
+                        (trackId): trackId is string =>
+                            typeof trackId === "string",
+                    ),
             );
             const hasMissingTrackIds = requestedTrackIds.some(
-                (trackId) => !matchedTrackIds.has(trackId)
+                (trackId) => !matchedTrackIds.has(trackId),
             );
             if (hasMissingTrackIds) {
                 return res.status(404).json({
@@ -1132,7 +1137,7 @@ router.put("/:id/items/reorder", async (req, res) => {
                           },
                       },
                       data: { sort: index },
-                  })
+                  }),
         );
 
         await prisma.$transaction([
@@ -1349,7 +1354,7 @@ router.get("/:id/pending/:trackId/preview", async (req, res) => {
         const { deezerService } = await import("../services/deezer");
         const previewUrl = await deezerService.getTrackPreview(
             pendingTrack.spotifyArtist,
-            pendingTrack.spotifyTitle
+            pendingTrack.spotifyTitle,
         );
 
         if (!previewUrl) {
@@ -1424,7 +1429,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
 
         sessionLog(
             "PENDING-RETRY",
-            `Request: userId=${userId} playlistId=${playlistId} pendingTrackId=${pendingTrackId}`
+            `Request: userId=${userId} playlistId=${playlistId} pendingTrackId=${pendingTrackId}`,
         );
 
         // Check ownership
@@ -1436,7 +1441,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
             sessionLog(
                 "PENDING-RETRY",
                 `Playlist not found: ${playlistId}`,
-                "WARN"
+                "WARN",
             );
             return res.status(404).json({ error: "Playlist not found" });
         }
@@ -1445,7 +1450,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
             sessionLog(
                 "PENDING-RETRY",
                 `Access denied: playlistId=${playlistId} userId=${userId}`,
-                "WARN"
+                "WARN",
             );
             return res.status(403).json({ error: "Access denied" });
         }
@@ -1459,14 +1464,14 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
             sessionLog(
                 "PENDING-RETRY",
                 `Pending track not found: ${pendingTrackId}`,
-                "WARN"
+                "WARN",
             );
             return res.status(404).json({ error: "Pending track not found" });
         }
 
         sessionLog(
             "PENDING-RETRY",
-            `Pending track: artist="${pendingTrack.spotifyArtist}" title="${pendingTrack.spotifyTitle}" album="${pendingTrack.spotifyAlbum}"`
+            `Pending track: artist="${pendingTrack.spotifyArtist}" title="${pendingTrack.spotifyTitle}" album="${pendingTrack.spotifyAlbum}"`,
         );
 
         // Create a DownloadJob so this retry appears in Activity (active/history)
@@ -1500,7 +1505,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
 
         sessionLog(
             "PENDING-RETRY",
-            `Created download job: downloadJobId=${downloadJob.id} target=${retryTargetId}`
+            `Created download job: downloadJobId=${downloadJob.id} target=${retryTargetId}`,
         );
 
         // Import soulseek service and try to download
@@ -1525,7 +1530,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
             sessionLog(
                 "PENDING-RETRY",
                 `Soulseek credentials not configured`,
-                "WARN"
+                "WARN",
             );
             await prisma.downloadJob.update({
                 where: { id: downloadJob.id },
@@ -1547,18 +1552,18 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
                 : pendingTrack.spotifyArtist; // Use artist as fallback folder name
 
         logger.debug(
-            `[Retry] Starting download for: ${pendingTrack.spotifyArtist} - ${pendingTrack.spotifyTitle}`
+            `[Retry] Starting download for: ${pendingTrack.spotifyArtist} - ${pendingTrack.spotifyTitle}`,
         );
         sessionLog(
             "PENDING-RETRY",
-            `Search: ${pendingTrack.spotifyArtist} - ${pendingTrack.spotifyTitle}`
+            `Search: ${pendingTrack.spotifyArtist} - ${pendingTrack.spotifyTitle}`,
         );
 
         // First do a quick search to see if track is available (15s timeout)
         // This way we can tell the user immediately if it's not found
         const searchResult = await soulseekService.searchTrack(
             pendingTrack.spotifyArtist,
-            pendingTrack.spotifyTitle
+            pendingTrack.spotifyTitle,
         );
 
         if (!searchResult.found || searchResult.allMatches.length === 0) {
@@ -1582,11 +1587,11 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
         }
 
         logger.debug(
-            `[Retry] ✓ Found ${searchResult.allMatches.length} results, starting download in background`
+            `[Retry] ✓ Found ${searchResult.allMatches.length} results, starting download in background`,
         );
         sessionLog(
             "PENDING-RETRY",
-            `Found ${searchResult.allMatches.length} candidate(s); starting background download`
+            `Found ${searchResult.allMatches.length} candidate(s); starting background download`,
         );
 
         // Return immediately - download happens in background
@@ -1604,16 +1609,16 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
                 pendingTrack.spotifyTitle,
                 albumName,
                 searchResult.allMatches,
-                settings.musicPath
+                settings.musicPath,
             )
             .then(async (result) => {
                 if (result.success) {
                     logger.debug(
-                        `[Retry] ✓ Download complete: ${result.filePath}`
+                        `[Retry] ✓ Download complete: ${result.filePath}`,
                     );
                     sessionLog(
                         "PENDING-RETRY",
-                        `Download complete: filePath=${result.filePath}`
+                        `Download complete: filePath=${result.filePath}`,
                     );
 
                     await prisma.downloadJob.update({
@@ -1643,28 +1648,28 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
                             {
                                 priority: 1, // High priority
                                 removeOnComplete: true,
-                            }
+                            },
                         );
                         logger.debug(
-                            `[Retry] Queued library scan to reconcile pending tracks`
+                            `[Retry] Queued library scan to reconcile pending tracks`,
                         );
                         sessionLog(
                             "PENDING-RETRY",
                             `Queued library scan (bullJobId=${
                                 scanJob.id ?? "unknown"
-                            })`
+                            })`,
                         );
                     } catch (scanError) {
                         logger.error(
                             `[Retry] Failed to queue scan:`,
-                            scanError
+                            scanError,
                         );
                         sessionLog(
                             "PENDING-RETRY",
                             `Failed to queue scan: ${
                                 (scanError as any)?.message || scanError
                             }`,
-                            "ERROR"
+                            "ERROR",
                         );
                     }
                 } else {
@@ -1672,7 +1677,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
                     sessionLog(
                         "PENDING-RETRY",
                         `Download failed: ${result.error || "unknown error"}`,
-                        "WARN"
+                        "WARN",
                     );
 
                     await prisma.downloadJob.update({
@@ -1690,7 +1695,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
                 sessionLog(
                     "PENDING-RETRY",
                     `Download exception: ${error?.message || error}`,
-                    "ERROR"
+                    "ERROR",
                 );
 
                 prisma.downloadJob
@@ -1709,7 +1714,7 @@ router.post("/:id/pending/:trackId/retry", async (req, res) => {
         sessionLog(
             "PENDING-RETRY",
             `Handler error: ${error?.message || error}`,
-            "ERROR"
+            "ERROR",
         );
         res.status(500).json({
             error: "Failed to retry download",
@@ -1773,9 +1778,8 @@ router.post("/:id/pending/reconcile", async (req, res) => {
         }
 
         // Import and run reconciliation
-        const { spotifyImportService } = await import(
-            "../services/spotifyImport"
-        );
+        const { spotifyImportService } =
+            await import("../services/spotifyImport");
         const result = await spotifyImportService.reconcilePendingTracks();
 
         res.json({

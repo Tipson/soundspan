@@ -50,7 +50,10 @@ import {
 } from "@/lib/storage-migration";
 import { TrackPreferenceButtons } from "./TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
-import { TrackOverflowMenu, TrackMenuButton } from "@/components/ui/TrackOverflowMenu";
+import {
+    TrackOverflowMenu,
+    TrackMenuButton,
+} from "@/components/ui/TrackOverflowMenu";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { toAddToPlaylistRef } from "@/lib/trackRef";
@@ -187,13 +190,23 @@ export function OverlayPlayer() {
     const [isRadioLoading, setIsRadioLoading] = useState(false);
     const [isPlaylistSelectorOpen, setIsPlaylistSelectorOpen] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<"queue" | "lyrics" | "related">("queue");
-    const [relatedStreamMatches, setRelatedStreamMatches] = useState<Record<string, RelatedStreamMatch>>({});
-    const [matchingRelatedTrackKey, setMatchingRelatedTrackKey] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"queue" | "lyrics" | "related">(
+        "queue",
+    );
+    const [relatedStreamMatches, setRelatedStreamMatches] = useState<
+        Record<string, RelatedStreamMatch>
+    >({});
+    const [matchingRelatedTrackKey, setMatchingRelatedTrackKey] = useState<
+        string | null
+    >(null);
     const { vibeEmbeddings, loading: featuresLoading } = useFeatures();
-    const { title, subtitle, coverUrl, artistLink, mediaLink } = useMediaInfo(768);
+    const { title, subtitle, coverUrl, artistLink, mediaLink } =
+        useMediaInfo(768);
     const currentTrackQualityBadge = useMemo(
-        () => resolvePlaybackQualityBadgeFromStreamSource(currentTrack?.streamSource),
+        () =>
+            resolvePlaybackQualityBadgeFromStreamSource(
+                currentTrack?.streamSource,
+            ),
         [currentTrack?.streamSource],
     );
     // Skip is queue-based: the unified queue can mix tracks and episodes.
@@ -201,7 +214,8 @@ export function OverlayPlayer() {
     const isTrackMode = playbackType === "track";
     const preferenceTrackId = isTrackMode ? currentTrack?.id : undefined;
     const isDesktopOverlayLayout = canSkip && !isMobileOrTablet;
-    const isTabPanelVisible = canSkip && (isDesktopOverlayLayout || isDrawerOpen);
+    const isTabPanelVisible =
+        canSkip && (isDesktopOverlayLayout || isDrawerOpen);
     const lyricsTrackId =
         isTabPanelVisible && activeTab === "lyrics" && playbackType === "track"
             ? currentTrack?.id
@@ -242,7 +256,7 @@ export function OverlayPlayer() {
 
     const displayTime = (() => {
         let time = currentTime;
-        
+
         if (time <= 0) {
             if (
                 playbackType === "audiobook" &&
@@ -256,7 +270,7 @@ export function OverlayPlayer() {
                 time = currentPodcast.progress.currentTime;
             }
         }
-        
+
         // CRITICAL: Clamp to duration to prevent display of invalid times
         return clampTime(time, duration);
     })();
@@ -265,7 +279,11 @@ export function OverlayPlayer() {
         duration > 0
             ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
             : 0;
-    const currentMediaId = currentTrack?.id || currentAudiobook?.id || currentPodcast?.id || "default";
+    const currentMediaId =
+        currentTrack?.id ||
+        currentAudiobook?.id ||
+        currentPodcast?.id ||
+        "default";
     const artworkLayoutId = `mobile-player-artwork-${currentMediaId}`;
     const queueTracks = queue;
     const isQueueTabVisible = isTabPanelVisible && activeTab === "queue";
@@ -302,13 +320,17 @@ export function OverlayPlayer() {
         isLoading: isRelatedArtistsLoading,
         isError: isRelatedArtistsError,
     } = useQuery({
-        queryKey: ["player-related-artists", currentTrack?.artist?.name, currentTrack?.artist?.mbid],
+        queryKey: [
+            "player-related-artists",
+            currentTrack?.artist?.name,
+            currentTrack?.artist?.mbid,
+        ],
         queryFn: async () => {
             if (!currentTrack?.artist?.name) return [];
             const response = await api.discoverSimilarArtists(
                 currentTrack.artist.name,
                 currentTrack.artist.mbid || "",
-                8
+                8,
             );
             return response.similarArtists || [];
         },
@@ -349,21 +371,21 @@ export function OverlayPlayer() {
             Array.isArray(relatedTrackData)
                 ? (relatedTrackData as RelatedTrack[])
                 : [],
-        [relatedTrackData]
+        [relatedTrackData],
     );
     const relatedArtists = useMemo<RelatedArtist[]>(
         () =>
             Array.isArray(relatedArtistsData)
                 ? (relatedArtistsData as RelatedArtist[])
                 : [],
-        [relatedArtistsData]
+        [relatedArtistsData],
     );
     const moreFromArtist = useMemo<RelatedAlbum[]>(
         () =>
             Array.isArray(moreFromArtistData)
                 ? (moreFromArtistData as RelatedAlbum[])
                 : [],
-        [moreFromArtistData]
+        [moreFromArtistData],
     );
     const tabPanelHeightClass = "min-h-0 flex-1";
     const sortedRelatedTracks = useMemo(() => {
@@ -371,16 +393,21 @@ export function OverlayPlayer() {
         return [...relatedTracks].sort((a, b) => {
             const scoreA =
                 (a.inLibrary ? 1000 : 0) +
-                (Number.isFinite(a.matchConfidence) ? a.matchConfidence : 0) * 2 +
+                (Number.isFinite(a.matchConfidence) ? a.matchConfidence : 0) *
+                    2 +
                 (Number.isFinite(a.similarity) ? a.similarity * 100 : 0);
             const scoreB =
                 (b.inLibrary ? 1000 : 0) +
-                (Number.isFinite(b.matchConfidence) ? b.matchConfidence : 0) * 2 +
+                (Number.isFinite(b.matchConfidence) ? b.matchConfidence : 0) *
+                    2 +
                 (Number.isFinite(b.similarity) ? b.similarity * 100 : 0);
             return scoreB - scoreA;
         });
     }, [relatedTracks]);
-    const visibleRelatedTracks = useMemo(() => sortedRelatedTracks.slice(0, 8), [sortedRelatedTracks]);
+    const visibleRelatedTracks = useMemo(
+        () => sortedRelatedTracks.slice(0, 8),
+        [sortedRelatedTracks],
+    );
     const tabTransitionProps = shouldReduceMotion
         ? {
               initial: { opacity: 1, y: 0 },
@@ -396,7 +423,11 @@ export function OverlayPlayer() {
           };
     const getRelatedTrackKey = useCallback((track: RelatedTrack) => {
         if (track.id) return `lib:${track.id}`;
-        const normalizedArtist = (track.artist || track.album?.artist?.name || "unknown")
+        const normalizedArtist = (
+            track.artist ||
+            track.album?.artist?.name ||
+            "unknown"
+        )
             .trim()
             .toLowerCase();
         const normalizedTitle = (track.title || "unknown").trim().toLowerCase();
@@ -427,7 +458,7 @@ export function OverlayPlayer() {
                     ? currentIndex
                     : 0;
             const target = listElement.querySelector<HTMLElement>(
-                `[data-queue-index="${targetIndex}"]`
+                `[data-queue-index="${targetIndex}"]`,
             );
             if (!target) return false;
 
@@ -443,11 +474,14 @@ export function OverlayPlayer() {
 
             return true;
         },
-        [currentIndex, queueTracks.length]
+        [currentIndex, queueTracks.length],
     );
 
     const scheduleQueueCentering = useCallback(
-        (behavior: ScrollBehavior, options?: { waitForQueueLayout?: boolean }) => {
+        (
+            behavior: ScrollBehavior,
+            options?: { waitForQueueLayout?: boolean },
+        ) => {
             const maxAttempts = 8;
             let attempts = 0;
             let frameA = 0;
@@ -480,7 +514,7 @@ export function OverlayPlayer() {
                 if (settleTimeout !== null) window.clearTimeout(settleTimeout);
             };
         },
-        [scrollQueueToCurrentTrack]
+        [scrollQueueToCurrentTrack],
     );
 
     useEffect(() => {
@@ -561,7 +595,13 @@ export function OverlayPlayer() {
         if (!isMobileOrTablet) {
             setIsDrawerOpen(true);
         }
-    }, [canSkip, isMobileOrTablet, currentTrack?.id, currentAudiobook?.id, currentPodcast?.id]);
+    }, [
+        canSkip,
+        isMobileOrTablet,
+        currentTrack?.id,
+        currentAudiobook?.id,
+        currentPodcast?.id,
+    ]);
 
     useEffect(() => {
         if (isDrawerOpen) return;
@@ -603,7 +643,12 @@ export function OverlayPlayer() {
     ]);
 
     useEffect(() => {
-        if (!isTabPanelVisible || activeTab !== "related" || playbackType !== "track") return;
+        if (
+            !isTabPanelVisible ||
+            activeTab !== "related" ||
+            playbackType !== "track"
+        )
+            return;
 
         const missingTracks = visibleRelatedTracks.filter((track) => {
             if (track.inLibrary) return false;
@@ -624,12 +669,18 @@ export function OverlayPlayer() {
             }));
             const foundMatches: Record<string, RelatedStreamMatch> = {};
 
-            let tidalMatches: Array<
-                { id: number; title: string; artist: string; duration: number; isrc?: string } | null
-            > = [];
+            let tidalMatches: Array<{
+                id: number;
+                title: string;
+                artist: string;
+                duration: number;
+                isrc?: string;
+            } | null> = [];
             try {
                 const tidalResponse = await api.matchTidalBatch(payload);
-                tidalMatches = Array.isArray(tidalResponse.matches) ? tidalResponse.matches : [];
+                tidalMatches = Array.isArray(tidalResponse.matches)
+                    ? tidalResponse.matches
+                    : [];
             } catch {
                 tidalMatches = [];
             }
@@ -662,7 +713,9 @@ export function OverlayPlayer() {
             if (ytPayload.length > 0) {
                 try {
                     const ytResponse = await api.matchYtMusicBatch(ytPayload);
-                    const ytMatches = Array.isArray(ytResponse.matches) ? ytResponse.matches : [];
+                    const ytMatches = Array.isArray(ytResponse.matches)
+                        ? ytResponse.matches
+                        : [];
                     ytTrackKeys.forEach((trackKey, index) => {
                         const ytMatch = ytMatches[index];
                         if (!ytMatch?.videoId) return;
@@ -723,7 +776,8 @@ export function OverlayPlayer() {
 
     const playRelatedTrack = useCallback(
         async (track: RelatedTrack) => {
-            const artistName = track.album?.artist?.name || track.artist || "Unknown artist";
+            const artistName =
+                track.album?.artist?.name || track.artist || "Unknown artist";
 
             if (track.inLibrary && track.id) {
                 playTrack({
@@ -737,7 +791,8 @@ export function OverlayPlayer() {
                     album: {
                         id: track.album?.id,
                         title: track.album?.title || "Unknown album",
-                        coverArt: track.album?.coverArt || track.album?.coverUrl,
+                        coverArt:
+                            track.album?.coverArt || track.album?.coverUrl,
                     },
                     duration: track.duration || 0,
                     filePath: track.filePath,
@@ -756,7 +811,11 @@ export function OverlayPlayer() {
                 let resolvedMatch = existingMatch;
 
                 if (!resolvedMatch) {
-                    const searchableArtist = (track.artist || track.album?.artist?.name || "").trim();
+                    const searchableArtist = (
+                        track.artist ||
+                        track.album?.artist?.name ||
+                        ""
+                    ).trim();
                     const searchableTitle = (track.title || "").trim();
 
                     if (searchableArtist && searchableTitle) {
@@ -765,7 +824,7 @@ export function OverlayPlayer() {
                                 searchableArtist,
                                 searchableTitle,
                                 track.album?.title,
-                                track.duration
+                                track.duration,
                             );
                             if (tidalResponse.match?.id) {
                                 resolvedMatch = {
@@ -786,12 +845,13 @@ export function OverlayPlayer() {
                                     searchableArtist,
                                     searchableTitle,
                                     track.album?.title,
-                                    track.duration
+                                    track.duration,
                                 );
                                 if (ytResponse.match?.videoId) {
                                     resolvedMatch = {
                                         streamSource: "youtube",
-                                        youtubeVideoId: ytResponse.match.videoId,
+                                        youtubeVideoId:
+                                            ytResponse.match.videoId,
                                         title: ytResponse.match.title,
                                         duration: ytResponse.match.duration,
                                     };
@@ -804,7 +864,10 @@ export function OverlayPlayer() {
                 }
 
                 if (resolvedMatch) {
-                    setRelatedStreamMatches((prev) => ({ ...prev, [trackKey]: resolvedMatch }));
+                    setRelatedStreamMatches((prev) => ({
+                        ...prev,
+                        [trackKey]: resolvedMatch,
+                    }));
                     playTrack({
                         id:
                             resolvedMatch.streamSource === "tidal"
@@ -814,7 +877,8 @@ export function OverlayPlayer() {
                         artist: { name: artistName },
                         album: {
                             title: track.album?.title || "Related Tracks",
-                            coverArt: track.album?.coverArt || track.album?.coverUrl,
+                            coverArt:
+                                track.album?.coverArt || track.album?.coverUrl,
                         },
                         duration: resolvedMatch.duration || track.duration || 0,
                         streamSource: resolvedMatch.streamSource,
@@ -825,16 +889,22 @@ export function OverlayPlayer() {
                 }
 
                 if (track.lastFmUrl) {
-                    window.open(track.lastFmUrl, "_blank", "noopener,noreferrer");
+                    window.open(
+                        track.lastFmUrl,
+                        "_blank",
+                        "noopener,noreferrer",
+                    );
                     return;
                 }
 
-                toast.error("No playable stream found for this related track yet");
+                toast.error(
+                    "No playable stream found for this related track yet",
+                );
             } finally {
                 setMatchingRelatedTrackKey(null);
             }
         },
-        [getRelatedTrackKey, playTrack, relatedStreamMatches]
+        [getRelatedTrackKey, playTrack, relatedStreamMatches],
     );
 
     // Swipe handlers for track skipping
@@ -873,10 +943,16 @@ export function OverlayPlayer() {
     };
 
     const handleDrawerHandleTouchMove = (e: React.TouchEvent) => {
-        if (drawerTouchStartY.current === null || drawerTouchStartX.current === null) return;
+        if (
+            drawerTouchStartY.current === null ||
+            drawerTouchStartX.current === null
+        )
+            return;
 
         const deltaY = e.touches[0].clientY - drawerTouchStartY.current;
-        const deltaX = Math.abs(e.touches[0].clientX - drawerTouchStartX.current);
+        const deltaX = Math.abs(
+            e.touches[0].clientX - drawerTouchStartX.current,
+        );
 
         if (deltaY > 0 && deltaY > deltaX * 0.9) {
             setDrawerDragOffset(Math.min(240, deltaY));
@@ -888,7 +964,10 @@ export function OverlayPlayer() {
     };
 
     const handleDrawerHandleTouchEnd = (e: React.TouchEvent) => {
-        if (drawerTouchStartY.current === null || drawerTouchStartX.current === null) {
+        if (
+            drawerTouchStartY.current === null ||
+            drawerTouchStartX.current === null
+        ) {
             setDrawerDragOffset(0);
             setIsDrawerDragActive(false);
             return;
@@ -898,7 +977,10 @@ export function OverlayPlayer() {
         const endX = e.changedTouches[0].clientX;
         const deltaY = endY - drawerTouchStartY.current;
         const deltaX = Math.abs(endX - drawerTouchStartX.current);
-        const elapsedMs = Math.max(1, Date.now() - (drawerTouchStartTime.current ?? Date.now()));
+        const elapsedMs = Math.max(
+            1,
+            Date.now() - (drawerTouchStartTime.current ?? Date.now()),
+        );
         const velocityY = deltaY / elapsedMs;
         const isVerticalSwipe = deltaY > 0 && deltaY > deltaX * 1.2;
         const isDistanceClose = deltaY > 44;
@@ -928,9 +1010,15 @@ export function OverlayPlayer() {
     };
 
     const handleOverlayHeaderTouchMove = (e: React.TouchEvent) => {
-        if (overlayCloseTouchStartY.current === null || overlayCloseTouchStartX.current === null) return;
+        if (
+            overlayCloseTouchStartY.current === null ||
+            overlayCloseTouchStartX.current === null
+        )
+            return;
         const deltaY = e.touches[0].clientY - overlayCloseTouchStartY.current;
-        const deltaX = Math.abs(e.touches[0].clientX - overlayCloseTouchStartX.current);
+        const deltaX = Math.abs(
+            e.touches[0].clientX - overlayCloseTouchStartX.current,
+        );
 
         if (deltaY > 0 && deltaY > deltaX * 0.9) {
             setOverlayDragOffset(Math.min(220, deltaY));
@@ -942,7 +1030,10 @@ export function OverlayPlayer() {
     };
 
     const handleOverlayHeaderTouchEnd = (e: React.TouchEvent) => {
-        if (overlayCloseTouchStartY.current === null || overlayCloseTouchStartX.current === null) {
+        if (
+            overlayCloseTouchStartY.current === null ||
+            overlayCloseTouchStartX.current === null
+        ) {
             setOverlayDragOffset(0);
             setIsOverlayDragActive(false);
             return;
@@ -952,7 +1043,10 @@ export function OverlayPlayer() {
         const endX = e.changedTouches[0].clientX;
         const deltaY = endY - overlayCloseTouchStartY.current;
         const deltaX = Math.abs(endX - overlayCloseTouchStartX.current);
-        const elapsedMs = Math.max(1, Date.now() - (overlayCloseTouchStartTime.current ?? Date.now()));
+        const elapsedMs = Math.max(
+            1,
+            Date.now() - (overlayCloseTouchStartTime.current ?? Date.now()),
+        );
         const velocityY = deltaY / elapsedMs;
         const isVerticalSwipe = deltaY > 0 && deltaY > deltaX * 1.2;
         const isDistanceClose = deltaY > 44;
@@ -990,7 +1084,9 @@ export function OverlayPlayer() {
             if (result.success && result.trackCount > 0) {
                 toast.success(`Vibe mode on`, {
                     description: `${result.trackCount} similar tracks queued`,
-                    icon: <AudioWaveform className="w-4 h-4 text-brand-hover" />,
+                    icon: (
+                        <AudioWaveform className="w-4 h-4 text-brand-hover" />
+                    ),
                 });
             } else {
                 toast.error("Couldn't find matching tracks");
@@ -1006,22 +1102,20 @@ export function OverlayPlayer() {
     const handleStartRadio = async () => {
         if (!currentTrack?.artist) return;
         setIsRadioLoading(true);
-            try {
-                let response:
-                    | { tracks: unknown[] }
-                    | null = null;
+        try {
+            let response: { tracks: unknown[] } | null = null;
             const isRemote =
                 currentTrack.streamSource === "tidal" ||
                 currentTrack.streamSource === "youtube";
             if (isRemote && currentTrack.artist.name) {
                 response = await api.getRadioTracks(
                     "artist-name",
-                    currentTrack.artist.name
+                    currentTrack.artist.name,
                 );
             } else if (currentTrack.artist.id) {
                 response = await api.getRadioTracks(
                     "artist",
-                    currentTrack.artist.id
+                    currentTrack.artist.id,
                 );
             }
             if (!response) {
@@ -1031,14 +1125,16 @@ export function OverlayPlayer() {
             if (response.tracks && response.tracks.length > 0) {
                 const filtered = response.tracks.filter(
                     (t): t is Track =>
-                        isPlayableTrack(t) && t.id !== currentTrack.id
+                        isPlayableTrack(t) && t.id !== currentTrack.id,
                 );
                 setUpcoming(filtered);
                 toast.success(
-                    `Playing ${currentTrack.artist.name} Radio (${filtered.length} tracks)`
+                    `Playing ${currentTrack.artist.name} Radio (${filtered.length} tracks)`,
                 );
             } else {
-                toast.error("Not enough similar music in your library for artist radio");
+                toast.error(
+                    "Not enough similar music in your library for artist radio",
+                );
             }
         } catch {
             toast.error("Failed to start artist radio");
@@ -1050,10 +1146,15 @@ export function OverlayPlayer() {
     const handleAddToPlaylist = useCallback(
         async (playlistId: string) => {
             if (!currentTrack?.id) return;
-            await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef(currentTrack));
-            toast.success(`Added "${currentTrack.displayTitle || currentTrack.title}" to playlist`);
+            await api.addTrackToPlaylist(
+                playlistId,
+                toAddToPlaylistRef(currentTrack),
+            );
+            toast.success(
+                `Added "${currentTrack.displayTitle || currentTrack.title}" to playlist`,
+            );
         },
-        [currentTrack]
+        [currentTrack],
     );
 
     const handleDrawerTabToggle = (tab: "queue" | "lyrics" | "related") => {
@@ -1075,16 +1176,26 @@ export function OverlayPlayer() {
         <motion.div
             ref={overlayRef}
             tabIndex={-1}
-            initial={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
-            animate={{ opacity: Math.max(0.55, 1 - overlayDragOffset / 360), y: overlayDragOffset }}
+            initial={
+                shouldReduceMotion
+                    ? { opacity: 1, y: 0 }
+                    : { opacity: 0, y: 24 }
+            }
+            animate={{
+                opacity: Math.max(0.55, 1 - overlayDragOffset / 360),
+                y: overlayDragOffset,
+            }}
             transition={
                 isOverlayDragActive
                     ? { duration: 0 }
-                    : { duration: shouldReduceMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }
+                    : {
+                          duration: shouldReduceMotion ? 0 : 0.22,
+                          ease: [0.22, 1, 0.36, 1],
+                      }
             }
             className={cn(
                 "fixed inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#121218] to-[#000000] z-[9999] flex flex-col overflow-hidden",
-                !isMobileOrTablet && "bottom-24"
+                !isMobileOrTablet && "bottom-24",
             )}
             onTouchStart={isMobileOrTablet ? handleTouchStart : undefined}
             onTouchMove={isMobileOrTablet ? handleTouchMove : undefined}
@@ -1094,9 +1205,15 @@ export function OverlayPlayer() {
             <div
                 className="flex-shrink-0 px-4 pt-3 pb-2"
                 style={{ paddingTop: "calc(12px + env(safe-area-inset-top))" }}
-                onTouchStart={isMobileOrTablet ? handleOverlayHeaderTouchStart : undefined}
-                onTouchMove={isMobileOrTablet ? handleOverlayHeaderTouchMove : undefined}
-                onTouchEnd={isMobileOrTablet ? handleOverlayHeaderTouchEnd : undefined}
+                onTouchStart={
+                    isMobileOrTablet ? handleOverlayHeaderTouchStart : undefined
+                }
+                onTouchMove={
+                    isMobileOrTablet ? handleOverlayHeaderTouchMove : undefined
+                }
+                onTouchEnd={
+                    isMobileOrTablet ? handleOverlayHeaderTouchEnd : undefined
+                }
             >
                 <div className="flex items-center justify-between">
                     {isMobileOrTablet ? (
@@ -1123,7 +1240,9 @@ export function OverlayPlayer() {
                     </div>
                     <div className="w-11" /> {/* Spacer for centering */}
                 </div>
-                {isMobileOrTablet && <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-white/25" />}
+                {isMobileOrTablet && (
+                    <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-white/25" />
+                )}
             </div>
 
             {/* Main Content - Portrait vs Landscape */}
@@ -1132,25 +1251,26 @@ export function OverlayPlayer() {
                     "flex-1 min-h-0 px-4 pt-2",
                     isMobileOrTablet
                         ? "overflow-hidden pb-24"
-                        : "overflow-hidden pb-6 landscape:px-8"
+                        : "overflow-hidden pb-6 landscape:px-8",
                 )}
-                style={
-                    isMobileOrTablet
-                        ? undefined
-                        : { paddingRight: "50%" }
-                }
+                style={isMobileOrTablet ? undefined : { paddingRight: "50%" }}
             >
-                <div
-                    className="mx-auto flex h-full w-full max-w-5xl flex-col items-center justify-center gap-4 landscape:gap-6"
-                >
+                <div className="mx-auto flex h-full w-full max-w-5xl flex-col items-center justify-center gap-4 landscape:gap-6">
                     {/* Left Rail: artwork + transport */}
-                    <div className={cn("w-full", isMobileOrTablet ? "max-w-[560px]" : "max-w-[min(40vw,calc(100vh-20rem))]")}>
+                    <div
+                        className={cn(
+                            "w-full",
+                            isMobileOrTablet
+                                ? "max-w-[560px]"
+                                : "max-w-[min(40vw,calc(100vh-20rem))]",
+                        )}
+                    >
                         <div
                             className={cn(
                                 "mx-auto aspect-square w-full relative",
                                 isMobileOrTablet
                                     ? "max-w-[min(92vw,52vh)]"
-                                    : "max-w-[min(40vw,calc(100vh-20rem))]"
+                                    : "max-w-[min(40vw,calc(100vh-20rem))]",
                             )}
                             style={{
                                 transform: `translateX(${swipeOffset * 0.5}px)`,
@@ -1162,12 +1282,16 @@ export function OverlayPlayer() {
                                     "absolute inset-0 rounded-2xl blur-2xl opacity-50",
                                     vibeMode
                                         ? "bg-gradient-to-br from-brand/30 via-transparent to-ai/30"
-                                        : "bg-gradient-to-br from-brand-hover/20 via-transparent to-ai/20"
+                                        : "bg-gradient-to-br from-brand-hover/20 via-transparent to-ai/20",
                                 )}
                             />
                             <motion.div
                                 layoutId={artworkLayoutId}
-                                transition={{ type: "spring", stiffness: 320, damping: 34 }}
+                                transition={{
+                                    type: "spring",
+                                    stiffness: 320,
+                                    damping: 34,
+                                }}
                                 className="relative h-full w-full overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a2a2a] to-surface-hover shadow-2xl"
                             >
                                 {coverUrl ? (
@@ -1188,20 +1312,24 @@ export function OverlayPlayer() {
                                 )}
                             </motion.div>
 
-                            {canSkip && isMobileOrTablet && Math.abs(swipeOffset) > 20 && (
-                                <div
-                                    className={cn(
-                                        "absolute top-1/2 -translate-y-1/2 text-white/60",
-                                        swipeOffset > 0 ? "-left-8" : "-right-8"
-                                    )}
-                                >
-                                    {swipeOffset > 0 ? (
-                                        <SkipBack className="h-6 w-6" />
-                                    ) : (
-                                        <SkipForward className="h-6 w-6" />
-                                    )}
-                                </div>
-                            )}
+                            {canSkip &&
+                                isMobileOrTablet &&
+                                Math.abs(swipeOffset) > 20 && (
+                                    <div
+                                        className={cn(
+                                            "absolute top-1/2 -translate-y-1/2 text-white/60",
+                                            swipeOffset > 0
+                                                ? "-left-8"
+                                                : "-right-8",
+                                        )}
+                                    >
+                                        {swipeOffset > 0 ? (
+                                            <SkipBack className="h-6 w-6" />
+                                        ) : (
+                                            <SkipForward className="h-6 w-6" />
+                                        )}
+                                    </div>
+                                )}
                         </div>
 
                         <div
@@ -1209,13 +1337,13 @@ export function OverlayPlayer() {
                                 "mx-auto w-full",
                                 isMobileOrTablet
                                     ? "mt-3 p-3"
-                                    : "mt-5 max-w-[420px] p-4 landscape:max-w-none"
+                                    : "mt-5 max-w-[420px] p-4 landscape:max-w-none",
                             )}
                         >
                             <div
                                 className={cn(
                                     "text-center",
-                                    isMobileOrTablet ? "mb-4" : "mb-2"
+                                    isMobileOrTablet ? "mb-4" : "mb-2",
                                 )}
                             >
                                 <div className="flex min-w-0 items-center justify-center gap-2">
@@ -1252,12 +1380,14 @@ export function OverlayPlayer() {
                                         {subtitle}
                                     </p>
                                 )}
-                                {currentTrackQualityBadge?.variant === "tidal" && (
+                                {currentTrackQualityBadge?.variant ===
+                                    "tidal" && (
                                     <div className="mt-1.5 flex justify-center">
                                         <TidalBadge />
                                     </div>
                                 )}
-                                {currentTrackQualityBadge?.variant === "youtube" && (
+                                {currentTrackQualityBadge?.variant ===
+                                    "youtube" && (
                                     <div className="mt-1.5 flex justify-center">
                                         <YouTubeBadge />
                                     </div>
@@ -1265,251 +1395,289 @@ export function OverlayPlayer() {
                             </div>
 
                             {isMobileOrTablet && (
-                            <>
-                            <div className="mb-4">
-                                <SeekSlider
-                                    progress={progress}
-                                    duration={duration}
-                                    currentTime={displayTime}
-                                    onSeek={handleSeek}
-                                    canSeek={canSeek}
-                                    hasMedia={hasMedia}
-                                    downloadProgress={downloadProgress}
-                                    variant="overlay"
-                                    showHandle={false}
-                                    className="mb-2"
-                                />
-                                <div className="flex justify-between text-xs font-medium tabular-nums text-gray-400">
-                                    <span>{formatTime(displayTime)}</span>
-                                    <span>
-                                        {playbackType === "podcast" || playbackType === "audiobook"
-                                            ? formatTimeRemaining(Math.max(0, duration - displayTime))
-                                            : formatTime(duration)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {canSkip ? (
                                 <>
-                                    {isTrackMode && (
-                                    <div className="mb-3 flex items-center justify-center gap-3">
-                                        <TrackPreferenceButtons
-                                            trackId={preferenceTrackId}
-                                            buttonSizeClassName="h-11 w-11"
-                                            iconSizeClassName="h-6 w-6"
-                                            metadata={buildPreferenceMetadata(currentTrack)}
+                                    <div className="mb-4">
+                                        <SeekSlider
+                                            progress={progress}
+                                            duration={duration}
+                                            currentTime={displayTime}
+                                            onSeek={handleSeek}
+                                            canSeek={canSeek}
+                                            hasMedia={hasMedia}
+                                            downloadProgress={downloadProgress}
+                                            variant="overlay"
+                                            showHandle={false}
+                                            className="mb-2"
                                         />
-
-                                        <button
-                                            onClick={() => setIsPlaylistSelectorOpen(true)}
-                                            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                            title="Add to playlist"
-                                            aria-label="Add to playlist"
-                                        >
-                                            <Plus className="h-6 w-6" />
-                                        </button>
-
-                                        {currentTrack?.artist?.id && playbackType === "track" && (
-                                            <button
-                                                onClick={handleStartRadio}
-                                                disabled={isRadioLoading}
-                                                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                                title="Start artist radio"
-                                                aria-label="Start Radio"
-                                            >
-                                                {isRadioLoading ? (
-                                                    <Loader2 className="h-6 w-6 animate-spin" />
-                                                ) : (
-                                                    <Radio className="h-6 w-6" />
-                                                )}
-                                            </button>
-                                        )}
-
-                                        {!featuresLoading && vibeEmbeddings && (
-                                            <button
-                                                onClick={handleVibeToggle}
-                                                disabled={isVibeLoading}
-                                                className={cn(
-                                                    "flex h-11 w-11 items-center justify-center rounded-full transition-colors",
-                                                    vibeMode
-                                                        ? "text-brand-hover bg-white/[0.05]"
-                                                        : "text-gray-400 hover:text-white hover:bg-white/10"
-                                                )}
-                                                title={vibeMode ? "Turn off vibe mode" : "Match this vibe"}
-                                                aria-label="Match Vibe"
-                                            >
-                                                {isVibeLoading ? (
-                                                    <Loader2 className="h-6 w-6 animate-spin" />
-                                                ) : (
-                                                    <AudioWaveform className="h-6 w-6" />
-                                                )}
-                                            </button>
-                                        )}
+                                        <div className="flex justify-between text-xs font-medium tabular-nums text-gray-400">
+                                            <span>
+                                                {formatTime(displayTime)}
+                                            </span>
+                                            <span>
+                                                {playbackType === "podcast" ||
+                                                playbackType === "audiobook"
+                                                    ? formatTimeRemaining(
+                                                          Math.max(
+                                                              0,
+                                                              duration -
+                                                                  displayTime,
+                                                          ),
+                                                      )
+                                                    : formatTime(duration)}
+                                            </span>
+                                        </div>
                                     </div>
-                                    )}
 
-                                    {/* 7 fixed-size buttons (208px of icons) + ancestor padding
+                                    {canSkip ? (
+                                        <>
+                                            {isTrackMode && (
+                                                <div className="mb-3 flex items-center justify-center gap-3">
+                                                    <TrackPreferenceButtons
+                                                        trackId={
+                                                            preferenceTrackId
+                                                        }
+                                                        buttonSizeClassName="h-11 w-11"
+                                                        iconSizeClassName="h-6 w-6"
+                                                        metadata={buildPreferenceMetadata(
+                                                            currentTrack,
+                                                        )}
+                                                    />
+
+                                                    <button
+                                                        onClick={() =>
+                                                            setIsPlaylistSelectorOpen(
+                                                                true,
+                                                            )
+                                                        }
+                                                        className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                                        title="Add to playlist"
+                                                        aria-label="Add to playlist"
+                                                    >
+                                                        <Plus className="h-6 w-6" />
+                                                    </button>
+
+                                                    {currentTrack?.artist?.id &&
+                                                        playbackType ===
+                                                            "track" && (
+                                                            <button
+                                                                onClick={
+                                                                    handleStartRadio
+                                                                }
+                                                                disabled={
+                                                                    isRadioLoading
+                                                                }
+                                                                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                                                title="Start artist radio"
+                                                                aria-label="Start Radio"
+                                                            >
+                                                                {isRadioLoading ? (
+                                                                    <Loader2 className="h-6 w-6 animate-spin" />
+                                                                ) : (
+                                                                    <Radio className="h-6 w-6" />
+                                                                )}
+                                                            </button>
+                                                        )}
+
+                                                    {!featuresLoading &&
+                                                        vibeEmbeddings && (
+                                                            <button
+                                                                onClick={
+                                                                    handleVibeToggle
+                                                                }
+                                                                disabled={
+                                                                    isVibeLoading
+                                                                }
+                                                                className={cn(
+                                                                    "flex h-11 w-11 items-center justify-center rounded-full transition-colors",
+                                                                    vibeMode
+                                                                        ? "text-brand-hover bg-white/[0.05]"
+                                                                        : "text-gray-400 hover:text-white hover:bg-white/10",
+                                                                )}
+                                                                title={
+                                                                    vibeMode
+                                                                        ? "Turn off vibe mode"
+                                                                        : "Match this vibe"
+                                                                }
+                                                                aria-label="Match Vibe"
+                                                            >
+                                                                {isVibeLoading ? (
+                                                                    <Loader2 className="h-6 w-6 animate-spin" />
+                                                                ) : (
+                                                                    <AudioWaveform className="h-6 w-6" />
+                                                                )}
+                                                            </button>
+                                                        )}
+                                                </div>
+                                            )}
+
+                                            {/* 7 fixed-size buttons (208px of icons) + ancestor padding
                                         (px-4 + p-3 = 56px) must fit a 320px-class viewport:
                                         gap-2 (6x8=48px) fits with 8px slack; >=375px restores the
                                         roomier gap-4 (6x16=96px, 360px total <= 375). Base class is
                                         the compact gap, so if the arbitrary variant ever failed to
                                         compile the row still fits everywhere. */}
-                                    <div
-                                        className="mb-3 flex items-center justify-center gap-2 min-[375px]:gap-4"
-                                    >
-                                        <button
-                                            onClick={toggleShuffle}
-                                            className={cn(
-                                                "transition-colors",
-                                                isShuffle
-                                                    ? "text-brand-hover"
-                                                    : "text-gray-400 hover:text-white"
-                                            )}
-                                            title="Shuffle"
-                                            aria-label="Shuffle"
-                                        >
-                                            <Shuffle className="h-5 w-5" />
-                                        </button>
+                                            <div className="mb-3 flex items-center justify-center gap-2 min-[375px]:gap-4">
+                                                <button
+                                                    onClick={toggleShuffle}
+                                                    className={cn(
+                                                        "transition-colors",
+                                                        isShuffle
+                                                            ? "text-brand-hover"
+                                                            : "text-gray-400 hover:text-white",
+                                                    )}
+                                                    title="Shuffle"
+                                                    aria-label="Shuffle"
+                                                >
+                                                    <Shuffle className="h-5 w-5" />
+                                                </button>
 
-                                        {/* Skip back 15s — a seek, so gated on canSeek like the seek slider
+                                                {/* Skip back 15s — a seek, so gated on canSeek like the seek slider
                                             (false while an uncached podcast episode is still caching);
                                             independent of queue length */}
-                                        <button
-                                            onClick={() => skipBackward(15)}
-                                            className="text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                                            disabled={!canSeek}
-                                            title="Skip back 15 seconds"
-                                            aria-label="Skip back 15 seconds"
-                                        >
-                                            <RotateCcw className="h-5 w-5" />
-                                        </button>
+                                                <button
+                                                    onClick={() =>
+                                                        skipBackward(15)
+                                                    }
+                                                    className="text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    disabled={!canSeek}
+                                                    title="Skip back 15 seconds"
+                                                    aria-label="Skip back 15 seconds"
+                                                >
+                                                    <RotateCcw className="h-5 w-5" />
+                                                </button>
 
-                                        <button
-                                            onClick={previous}
-                                            className="text-white/85 transition-colors hover:text-white"
-                                            title="Previous"
-                                            aria-label="Previous"
-                                        >
-                                            <SkipBack className="h-8 w-8" />
-                                        </button>
+                                                <button
+                                                    onClick={previous}
+                                                    className="text-white/85 transition-colors hover:text-white"
+                                                    title="Previous"
+                                                    aria-label="Previous"
+                                                >
+                                                    <SkipBack className="h-8 w-8" />
+                                                </button>
 
-                                        <button
-                                            onClick={handlePlayPause}
-                                            className={cn(
-                                                "flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full shadow-xl transition-all",
-                                                audioError
-                                                    ? "bg-red-500 text-white hover:bg-red-400"
-                                                    : isBuffering
-                                                      ? "bg-white/80 text-black"
-                                                      : "bg-white text-black hover:scale-105"
-                                            )}
-                                            disabled={isBuffering}
-                                            title={
-                                                audioError
-                                                    ? "Retry playback"
-                                                    : isBuffering
-                                                      ? "Buffering..."
-                                                      : isPlaying
-                                                        ? "Pause"
-                                                        : "Play"
-                                            }
-                                            aria-label={
-                                                audioError
-                                                    ? "Retry playback"
-                                                    : isPlaying
-                                                      ? "Pause"
-                                                      : "Play"
-                                            }
-                                        >
-                                            {audioError ? (
-                                                <RefreshCw className="h-7 w-7" />
-                                            ) : isBuffering ? (
-                                                <Loader2 className="h-7 w-7 animate-spin" />
-                                            ) : isPlaying ? (
-                                                <Pause className="h-7 w-7" />
-                                            ) : (
-                                                <Play className="ml-1 h-7 w-7" />
-                                            )}
-                                        </button>
+                                                <button
+                                                    onClick={handlePlayPause}
+                                                    className={cn(
+                                                        "flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full shadow-xl transition-all",
+                                                        audioError
+                                                            ? "bg-red-500 text-white hover:bg-red-400"
+                                                            : isBuffering
+                                                              ? "bg-white/80 text-black"
+                                                              : "bg-white text-black hover:scale-105",
+                                                    )}
+                                                    disabled={isBuffering}
+                                                    title={
+                                                        audioError
+                                                            ? "Retry playback"
+                                                            : isBuffering
+                                                              ? "Buffering..."
+                                                              : isPlaying
+                                                                ? "Pause"
+                                                                : "Play"
+                                                    }
+                                                    aria-label={
+                                                        audioError
+                                                            ? "Retry playback"
+                                                            : isPlaying
+                                                              ? "Pause"
+                                                              : "Play"
+                                                    }
+                                                >
+                                                    {audioError ? (
+                                                        <RefreshCw className="h-7 w-7" />
+                                                    ) : isBuffering ? (
+                                                        <Loader2 className="h-7 w-7 animate-spin" />
+                                                    ) : isPlaying ? (
+                                                        <Pause className="h-7 w-7" />
+                                                    ) : (
+                                                        <Play className="ml-1 h-7 w-7" />
+                                                    )}
+                                                </button>
 
-                                        <button
-                                            onClick={next}
-                                            className="text-white/85 transition-colors hover:text-white"
-                                            title="Next"
-                                            aria-label="Next"
-                                        >
-                                            <SkipForward className="h-8 w-8" />
-                                        </button>
+                                                <button
+                                                    onClick={next}
+                                                    className="text-white/85 transition-colors hover:text-white"
+                                                    title="Next"
+                                                    aria-label="Next"
+                                                >
+                                                    <SkipForward className="h-8 w-8" />
+                                                </button>
 
-                                        {/* Skip forward 15s — a seek, so gated on canSeek like the seek slider
+                                                {/* Skip forward 15s — a seek, so gated on canSeek like the seek slider
                                             (false while an uncached podcast episode is still caching);
                                             independent of queue length */}
-                                        <button
-                                            onClick={() => skipForward(15)}
-                                            className="text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                                            disabled={!canSeek}
-                                            title="Skip forward 15 seconds"
-                                            aria-label="Skip forward 15 seconds"
-                                        >
-                                            <RotateCw className="h-5 w-5" />
-                                        </button>
+                                                <button
+                                                    onClick={() =>
+                                                        skipForward(15)
+                                                    }
+                                                    className="text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    disabled={!canSeek}
+                                                    title="Skip forward 15 seconds"
+                                                    aria-label="Skip forward 15 seconds"
+                                                >
+                                                    <RotateCw className="h-5 w-5" />
+                                                </button>
 
-                                        <button
-                                            onClick={toggleRepeat}
-                                            className={cn(
-                                                "transition-colors",
-                                                repeatMode !== "off"
-                                                    ? "text-brand-hover"
-                                                    : "text-gray-400 hover:text-white"
-                                            )}
-                                            title={
-                                                repeatMode === "one"
-                                                    ? "Repeat One"
-                                                    : repeatMode === "all"
-                                                      ? "Repeat All"
-                                                      : "Repeat Off"
-                                            }
-                                            aria-label="Repeat"
-                                        >
-                                            {repeatMode === "one" ? (
-                                                <Repeat1 className="h-5 w-5" />
-                                            ) : (
-                                                <Repeat className="h-5 w-5" />
-                                            )}
-                                        </button>
-                                    </div>
+                                                <button
+                                                    onClick={toggleRepeat}
+                                                    className={cn(
+                                                        "transition-colors",
+                                                        repeatMode !== "off"
+                                                            ? "text-brand-hover"
+                                                            : "text-gray-400 hover:text-white",
+                                                    )}
+                                                    title={
+                                                        repeatMode === "one"
+                                                            ? "Repeat One"
+                                                            : repeatMode ===
+                                                                "all"
+                                                              ? "Repeat All"
+                                                              : "Repeat Off"
+                                                    }
+                                                    aria-label="Repeat"
+                                                >
+                                                    {repeatMode === "one" ? (
+                                                        <Repeat1 className="h-5 w-5" />
+                                                    ) : (
+                                                        <Repeat className="h-5 w-5" />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="mb-3 flex items-center justify-center">
+                                            <button
+                                                onClick={handlePlayPause}
+                                                className={cn(
+                                                    "flex h-16 w-16 items-center justify-center rounded-full shadow-xl transition-all",
+                                                    audioError
+                                                        ? "bg-red-500 text-white hover:bg-red-400"
+                                                        : isBuffering
+                                                          ? "bg-white/80 text-black"
+                                                          : "bg-white text-black hover:scale-105",
+                                                )}
+                                                disabled={isBuffering}
+                                                title={
+                                                    isPlaying ? "Pause" : "Play"
+                                                }
+                                                aria-label={
+                                                    isPlaying ? "Pause" : "Play"
+                                                }
+                                            >
+                                                {audioError ? (
+                                                    <RefreshCw className="h-7 w-7" />
+                                                ) : isBuffering ? (
+                                                    <Loader2 className="h-7 w-7 animate-spin" />
+                                                ) : isPlaying ? (
+                                                    <Pause className="h-7 w-7" />
+                                                ) : (
+                                                    <Play className="ml-1 h-7 w-7" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
                                 </>
-                            ) : (
-                                <div className="mb-3 flex items-center justify-center">
-                                    <button
-                                        onClick={handlePlayPause}
-                                        className={cn(
-                                            "flex h-16 w-16 items-center justify-center rounded-full shadow-xl transition-all",
-                                            audioError
-                                                ? "bg-red-500 text-white hover:bg-red-400"
-                                                : isBuffering
-                                                  ? "bg-white/80 text-black"
-                                                  : "bg-white text-black hover:scale-105"
-                                        )}
-                                        disabled={isBuffering}
-                                        title={isPlaying ? "Pause" : "Play"}
-                                        aria-label={isPlaying ? "Pause" : "Play"}
-                                    >
-                                        {audioError ? (
-                                            <RefreshCw className="h-7 w-7" />
-                                        ) : isBuffering ? (
-                                            <Loader2 className="h-7 w-7 animate-spin" />
-                                        ) : isPlaying ? (
-                                            <Pause className="h-7 w-7" />
-                                        ) : (
-                                            <Play className="ml-1 h-7 w-7" />
-                                        )}
-                                    </button>
-                                </div>
                             )}
-                            </>
-                            )}
-
                         </div>
                     </div>
                 </div>
@@ -1518,7 +1686,10 @@ export function OverlayPlayer() {
             {canSkip && isMobileOrTablet && !isDrawerOpen && (
                 <div
                     className="absolute inset-x-0 bottom-0 z-20 border-t border-white/[0.12] bg-[#0b0d12]/95 px-4 pt-2 backdrop-blur-xl"
-                    style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
+                    style={{
+                        paddingBottom:
+                            "calc(env(safe-area-inset-bottom) + 10px)",
+                    }}
                 >
                     <div className="mx-auto flex w-full max-w-sm items-center justify-center gap-8 text-sm">
                         <button
@@ -1527,7 +1698,7 @@ export function OverlayPlayer() {
                                 "border-b pb-0.5 font-medium transition-colors",
                                 activeTab === "queue"
                                     ? "border-brand-hover text-brand-hover"
-                                    : "border-transparent text-gray-400 hover:text-white"
+                                    : "border-transparent text-gray-400 hover:text-white",
                             )}
                         >
                             Up Next
@@ -1538,7 +1709,7 @@ export function OverlayPlayer() {
                                 "border-b pb-0.5 font-medium transition-colors",
                                 activeTab === "lyrics"
                                     ? "border-brand-hover text-brand-hover"
-                                    : "border-transparent text-gray-400 hover:text-white"
+                                    : "border-transparent text-gray-400 hover:text-white",
                             )}
                         >
                             Lyrics
@@ -1549,7 +1720,7 @@ export function OverlayPlayer() {
                                 "border-b pb-0.5 font-medium transition-colors",
                                 activeTab === "related"
                                     ? "border-brand-hover text-brand-hover"
-                                    : "border-transparent text-gray-400 hover:text-white"
+                                    : "border-transparent text-gray-400 hover:text-white",
                             )}
                         >
                             Related
@@ -1563,11 +1734,18 @@ export function OverlayPlayer() {
                     {isDrawerOpen && (
                         <motion.div
                             key="overlay-drawer"
-                            initial={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 28 }}
+                            initial={
+                                shouldReduceMotion
+                                    ? { opacity: 1, y: 0 }
+                                    : { opacity: 0, y: 28 }
+                            }
                             animate={
                                 isMobileOrTablet
                                     ? {
-                                          opacity: Math.max(0.62, 1 - drawerDragOffset / 360),
+                                          opacity: Math.max(
+                                              0.62,
+                                              1 - drawerDragOffset / 360,
+                                          ),
                                           y: drawerDragOffset,
                                       }
                                     : { opacity: 1, y: 0 }
@@ -1575,7 +1753,10 @@ export function OverlayPlayer() {
                             exit={
                                 shouldReduceMotion
                                     ? { opacity: 1, y: 0 }
-                                    : { opacity: 0, y: isMobileOrTablet ? 92 : 28 }
+                                    : {
+                                          opacity: 0,
+                                          y: isMobileOrTablet ? 92 : 28,
+                                      }
                             }
                             transition={
                                 isMobileOrTablet && isDrawerDragActive
@@ -1586,27 +1767,37 @@ export function OverlayPlayer() {
                                 "absolute z-20",
                                 isMobileOrTablet
                                     ? "inset-0 border-t border-white/[0.12] bg-[#0b0d12]/95 backdrop-blur-xl"
-                                    : "inset-y-0 right-0 w-[50%] min-w-[340px] py-24 pr-6"
+                                    : "inset-y-0 right-0 w-[50%] min-w-[340px] py-24 pr-6",
                             )}
                         >
                             <div
                                 className={cn(
                                     "flex h-full w-full flex-col",
-                                    isMobileOrTablet ? "mx-auto max-w-none" : ""
+                                    isMobileOrTablet
+                                        ? "mx-auto max-w-none"
+                                        : "",
                                 )}
                             >
                                 {isMobileOrTablet ? (
                                     <div
                                         className="border-b border-white/[0.08] px-3 pb-2"
-                                        style={{ paddingTop: "calc(10px + env(safe-area-inset-top))" }}
+                                        style={{
+                                            paddingTop:
+                                                "calc(10px + env(safe-area-inset-top))",
+                                        }}
                                     >
                                         <div
                                             className="mb-1 flex items-center gap-3 px-1 py-1.5"
                                             role="button"
                                             tabIndex={0}
-                                            onClick={() => setIsDrawerOpen(false)}
+                                            onClick={() =>
+                                                setIsDrawerOpen(false)
+                                            }
                                             onKeyDown={(e) => {
-                                                if (e.key === "Enter" || e.key === " ") {
+                                                if (
+                                                    e.key === "Enter" ||
+                                                    e.key === " "
+                                                ) {
                                                     e.preventDefault();
                                                     setIsDrawerOpen(false);
                                                 }
@@ -1636,10 +1827,12 @@ export function OverlayPlayer() {
                                                     <p className="min-w-0 truncate text-xs text-gray-400">
                                                         {subtitle}
                                                     </p>
-                                                    {currentTrackQualityBadge?.variant === "tidal" && (
+                                                    {currentTrackQualityBadge?.variant ===
+                                                        "tidal" && (
                                                         <TidalBadge />
                                                     )}
-                                                    {currentTrackQualityBadge?.variant === "youtube" && (
+                                                    {currentTrackQualityBadge?.variant ===
+                                                        "youtube" && (
                                                         <YouTubeBadge />
                                                     )}
                                                 </div>
@@ -1654,7 +1847,7 @@ export function OverlayPlayer() {
                                                     "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
                                                     audioError
                                                         ? "bg-red-500 text-white hover:bg-red-400"
-                                                        : "bg-white text-black hover:bg-white/90"
+                                                        : "bg-white text-black hover:bg-white/90",
                                                 )}
                                                 aria-label={
                                                     audioError
@@ -1684,9 +1877,15 @@ export function OverlayPlayer() {
                                         </div>
                                         <div
                                             className="mb-2 flex h-12 w-full items-center justify-center"
-                                            onTouchStart={handleDrawerHandleTouchStart}
-                                            onTouchMove={handleDrawerHandleTouchMove}
-                                            onTouchEnd={handleDrawerHandleTouchEnd}
+                                            onTouchStart={
+                                                handleDrawerHandleTouchStart
+                                            }
+                                            onTouchMove={
+                                                handleDrawerHandleTouchMove
+                                            }
+                                            onTouchEnd={
+                                                handleDrawerHandleTouchEnd
+                                            }
                                             style={{ touchAction: "none" }}
                                             aria-label="Swipe down to close panel"
                                         >
@@ -1694,34 +1893,40 @@ export function OverlayPlayer() {
                                         </div>
                                         <div className="mx-auto flex w-full max-w-xs items-center justify-center gap-6 text-sm">
                                             <button
-                                                onClick={() => setActiveTab("queue")}
+                                                onClick={() =>
+                                                    setActiveTab("queue")
+                                                }
                                                 className={cn(
                                                     "border-b pb-0.5 font-medium transition-colors",
                                                     activeTab === "queue"
                                                         ? "border-brand-hover text-brand-hover"
-                                                        : "border-transparent text-gray-400 hover:text-white"
+                                                        : "border-transparent text-gray-400 hover:text-white",
                                                 )}
                                             >
                                                 Up Next
                                             </button>
                                             <button
-                                                onClick={() => setActiveTab("lyrics")}
+                                                onClick={() =>
+                                                    setActiveTab("lyrics")
+                                                }
                                                 className={cn(
                                                     "border-b pb-0.5 font-medium transition-colors",
                                                     activeTab === "lyrics"
                                                         ? "border-brand-hover text-brand-hover"
-                                                        : "border-transparent text-gray-400 hover:text-white"
+                                                        : "border-transparent text-gray-400 hover:text-white",
                                                 )}
                                             >
                                                 Lyrics
                                             </button>
                                             <button
-                                                onClick={() => setActiveTab("related")}
+                                                onClick={() =>
+                                                    setActiveTab("related")
+                                                }
                                                 className={cn(
                                                     "border-b pb-0.5 font-medium transition-colors",
                                                     activeTab === "related"
                                                         ? "border-brand-hover text-brand-hover"
-                                                        : "border-transparent text-gray-400 hover:text-white"
+                                                        : "border-transparent text-gray-400 hover:text-white",
                                                 )}
                                             >
                                                 Related
@@ -1731,34 +1936,40 @@ export function OverlayPlayer() {
                                 ) : (
                                     <div className="flex items-center gap-6 px-1 pb-3 text-sm">
                                         <button
-                                            onClick={() => setActiveTab("queue")}
+                                            onClick={() =>
+                                                setActiveTab("queue")
+                                            }
                                             className={cn(
                                                 "border-b pb-0.5 transition-colors",
                                                 activeTab === "queue"
                                                     ? "border-brand-hover text-brand-hover"
-                                                    : "border-transparent text-gray-400 hover:text-white"
+                                                    : "border-transparent text-gray-400 hover:text-white",
                                             )}
                                         >
                                             Up Next
                                         </button>
                                         <button
-                                            onClick={() => setActiveTab("lyrics")}
+                                            onClick={() =>
+                                                setActiveTab("lyrics")
+                                            }
                                             className={cn(
                                                 "border-b pb-0.5 transition-colors",
                                                 activeTab === "lyrics"
                                                     ? "border-brand-hover text-brand-hover"
-                                                    : "border-transparent text-gray-400 hover:text-white"
+                                                    : "border-transparent text-gray-400 hover:text-white",
                                             )}
                                         >
                                             Lyrics
                                         </button>
                                         <button
-                                            onClick={() => setActiveTab("related")}
+                                            onClick={() =>
+                                                setActiveTab("related")
+                                            }
                                             className={cn(
                                                 "border-b pb-0.5 transition-colors",
                                                 activeTab === "related"
                                                     ? "border-brand-hover text-brand-hover"
-                                                    : "border-transparent text-gray-400 hover:text-white"
+                                                    : "border-transparent text-gray-400 hover:text-white",
                                             )}
                                         >
                                             Related
@@ -1766,8 +1977,16 @@ export function OverlayPlayer() {
                                     </div>
                                 )}
 
-                                <div className={cn("min-h-0 flex-1 overflow-hidden", tabPanelHeightClass)}>
-                                    <AnimatePresence initial={false} mode="wait">
+                                <div
+                                    className={cn(
+                                        "min-h-0 flex-1 overflow-hidden",
+                                        tabPanelHeightClass,
+                                    )}
+                                >
+                                    <AnimatePresence
+                                        initial={false}
+                                        mode="wait"
+                                    >
                                         {activeTab === "queue" && (
                                             <motion.section
                                                 key="queue"
@@ -1782,10 +2001,13 @@ export function OverlayPlayer() {
                                                         </h2>
                                                     </div>
                                                     <div className="flex items-center gap-3">
-                                                        {queueTracks.length > 0 && (
+                                                        {queueTracks.length >
+                                                            0 && (
                                                             <button
                                                                 type="button"
-                                                                onClick={handleClearQueue}
+                                                                onClick={
+                                                                    handleClearQueue
+                                                                }
                                                                 className="inline-flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-white"
                                                                 title="Clear queue"
                                                                 aria-label="Clear queue"
@@ -1795,7 +2017,8 @@ export function OverlayPlayer() {
                                                             </button>
                                                         )}
                                                         <span className="text-xs text-gray-400">
-                                                            {queueTracks.length} items
+                                                            {queueTracks.length}{" "}
+                                                            items
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1811,21 +2034,172 @@ export function OverlayPlayer() {
                                                         ref={queueListRef}
                                                         className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
                                                     >
-                                                        {queueTracks.map((item, queueIndex) => {
-                                                            const isCurrentTrack = queueIndex === currentIndex;
-                                                            const isPlayedTrack = queueIndex < currentIndex;
-                                                            if (item.itemType === "episode") {
+                                                        {queueTracks.map(
+                                                            (
+                                                                item,
+                                                                queueIndex,
+                                                            ) => {
+                                                                const isCurrentTrack =
+                                                                    queueIndex ===
+                                                                    currentIndex;
+                                                                const isPlayedTrack =
+                                                                    queueIndex <
+                                                                    currentIndex;
+                                                                if (
+                                                                    item.itemType ===
+                                                                    "episode"
+                                                                ) {
+                                                                    return (
+                                                                        <div
+                                                                            key={`${item.id}-${queueIndex}`}
+                                                                            data-queue-index={
+                                                                                queueIndex
+                                                                            }
+                                                                            className={cn(
+                                                                                "mb-1.5 flex items-center gap-2 px-2 py-2 transition-colors",
+                                                                                isCurrentTrack
+                                                                                    ? "rounded-md border border-brand-hover/35 bg-brand-hover/10"
+                                                                                    : isPlayedTrack
+                                                                                      ? "rounded-md bg-white/[0.03] hover:bg-white/[0.06]"
+                                                                                      : "hover:bg-white/[0.06]",
+                                                                            )}
+                                                                        >
+                                                                            <span
+                                                                                className={cn(
+                                                                                    "w-5 flex-shrink-0 text-center text-[11px] tabular-nums",
+                                                                                    isCurrentTrack
+                                                                                        ? "text-brand-hover"
+                                                                                        : "text-gray-400",
+                                                                                )}
+                                                                            >
+                                                                                {queueIndex +
+                                                                                    1}
+                                                                            </span>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (
+                                                                                        !isCurrentTrack
+                                                                                    ) {
+                                                                                        handlePlayFromQueue(
+                                                                                            queueIndex,
+                                                                                        );
+                                                                                    }
+                                                                                }}
+                                                                                className={cn(
+                                                                                    "flex min-w-0 flex-1 items-center gap-3 text-left",
+                                                                                    isCurrentTrack &&
+                                                                                        "cursor-default",
+                                                                                )}
+                                                                                title={
+                                                                                    isCurrentTrack
+                                                                                        ? "Now playing"
+                                                                                        : "Play this episode now"
+                                                                                }
+                                                                            >
+                                                                                <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
+                                                                                    {item.coverUrl ? (
+                                                                                        <Image
+                                                                                            src={
+                                                                                                item.coverUrl
+                                                                                            }
+                                                                                            alt={
+                                                                                                item.podcastTitle
+                                                                                            }
+                                                                                            fill
+                                                                                            sizes="44px"
+                                                                                            className="object-cover"
+                                                                                            unoptimized
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div className="flex h-full w-full items-center justify-center">
+                                                                                            <MusicIcon className="h-4 w-4 text-gray-400" />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="min-w-0">
+                                                                                    <p
+                                                                                        className={cn(
+                                                                                            "min-w-0 truncate text-sm",
+                                                                                            isCurrentTrack
+                                                                                                ? "text-brand-hover"
+                                                                                                : "text-white",
+                                                                                        )}
+                                                                                    >
+                                                                                        {
+                                                                                            item.title
+                                                                                        }
+                                                                                    </p>
+                                                                                    <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                                                                                        <p className="min-w-0 truncate text-xs text-gray-400">
+                                                                                            {item.podcastTitle ||
+                                                                                                "Podcast"}
+                                                                                        </p>
+                                                                                        {isCurrentTrack && (
+                                                                                            <span className="inline-flex shrink-0 items-center rounded-full border border-brand-hover/40 bg-brand-hover/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-hover">
+                                                                                                Playing
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {isPlayedTrack &&
+                                                                                            !isCurrentTrack && (
+                                                                                                <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-400">
+                                                                                                    Played
+                                                                                                </span>
+                                                                                            )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </button>
+                                                                            <span
+                                                                                className={cn(
+                                                                                    "text-[11px] tabular-nums",
+                                                                                    isCurrentTrack
+                                                                                        ? "text-brand-hover"
+                                                                                        : "text-gray-400",
+                                                                                )}
+                                                                            >
+                                                                                {formatTime(
+                                                                                    item.duration ||
+                                                                                        0,
+                                                                                )}
+                                                                            </span>
+                                                                            {!isCurrentTrack && (
+                                                                                <button
+                                                                                    onClick={(
+                                                                                        e,
+                                                                                    ) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleRemoveFromQueue(
+                                                                                            queueIndex,
+                                                                                        );
+                                                                                    }}
+                                                                                    className="ml-1 h-7 w-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+                                                                                    title="Remove from queue"
+                                                                                    aria-label="Remove from queue"
+                                                                                >
+                                                                                    <X className="h-3.5 w-3.5" />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                const track =
+                                                                    item;
+                                                                const queueTrackQualityBadge =
+                                                                    resolvePlaybackQualityBadgeFromStreamSource(
+                                                                        track.streamSource,
+                                                                    );
                                                                 return (
                                                                     <div
-                                                                        key={`${item.id}-${queueIndex}`}
-                                                                        data-queue-index={queueIndex}
+                                                                        key={`${track.id}-${queueIndex}`}
+                                                                        data-queue-index={
+                                                                            queueIndex
+                                                                        }
                                                                         className={cn(
                                                                             "mb-1.5 flex items-center gap-2 px-2 py-2 transition-colors",
                                                                             isCurrentTrack
                                                                                 ? "rounded-md border border-brand-hover/35 bg-brand-hover/10"
                                                                                 : isPlayedTrack
                                                                                   ? "rounded-md bg-white/[0.03] hover:bg-white/[0.06]"
-                                                                                  : "hover:bg-white/[0.06]"
+                                                                                  : "hover:bg-white/[0.06]",
                                                                         )}
                                                                     >
                                                                         <span
@@ -1833,32 +2207,49 @@ export function OverlayPlayer() {
                                                                                 "w-5 flex-shrink-0 text-center text-[11px] tabular-nums",
                                                                                 isCurrentTrack
                                                                                     ? "text-brand-hover"
-                                                                                    : "text-gray-400"
+                                                                                    : "text-gray-400",
                                                                             )}
                                                                         >
-                                                                            {queueIndex + 1}
+                                                                            {queueIndex +
+                                                                                1}
                                                                         </span>
                                                                         <button
                                                                             onClick={() => {
-                                                                                if (!isCurrentTrack) {
-                                                                                    handlePlayFromQueue(queueIndex);
+                                                                                if (
+                                                                                    !isCurrentTrack
+                                                                                ) {
+                                                                                    handlePlayFromQueue(
+                                                                                        queueIndex,
+                                                                                    );
                                                                                 }
                                                                             }}
                                                                             className={cn(
                                                                                 "flex min-w-0 flex-1 items-center gap-3 text-left",
-                                                                                isCurrentTrack && "cursor-default"
+                                                                                isCurrentTrack &&
+                                                                                    "cursor-default",
                                                                             )}
                                                                             title={
                                                                                 isCurrentTrack
                                                                                     ? "Now playing"
-                                                                                    : "Play this episode now"
+                                                                                    : "Play this track now"
                                                                             }
                                                                         >
                                                                             <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
-                                                                                {item.coverUrl ? (
+                                                                                {track
+                                                                                    .album
+                                                                                    ?.coverArt ? (
                                                                                     <Image
-                                                                                        src={item.coverUrl}
-                                                                                        alt={item.podcastTitle}
+                                                                                        src={api.getCoverArtUrl(
+                                                                                            track
+                                                                                                .album
+                                                                                                .coverArt,
+                                                                                            100,
+                                                                                        )}
+                                                                                        alt={
+                                                                                            track
+                                                                                                .album
+                                                                                                .title
+                                                                                        }
                                                                                         fill
                                                                                         sizes="44px"
                                                                                         className="object-cover"
@@ -1871,219 +2262,132 @@ export function OverlayPlayer() {
                                                                                 )}
                                                                             </div>
                                                                             <div className="min-w-0">
-                                                                                <p
-                                                                                    className={cn(
-                                                                                        "min-w-0 truncate text-sm",
-                                                                                        isCurrentTrack
-                                                                                            ? "text-brand-hover"
-                                                                                            : "text-white"
+                                                                                <div className="flex min-w-0 items-center gap-1.5">
+                                                                                    <p
+                                                                                        className={cn(
+                                                                                            "min-w-0 truncate text-sm",
+                                                                                            isCurrentTrack
+                                                                                                ? "text-brand-hover"
+                                                                                                : "text-white",
+                                                                                        )}
+                                                                                    >
+                                                                                        {track.displayTitle ??
+                                                                                            track.title}
+                                                                                    </p>
+                                                                                    {queueTrackQualityBadge?.variant ===
+                                                                                        "tidal" && (
+                                                                                        <TidalBadge />
                                                                                     )}
-                                                                                >
-                                                                                    {item.title}
-                                                                                </p>
+                                                                                    {queueTrackQualityBadge?.variant ===
+                                                                                        "youtube" && (
+                                                                                        <YouTubeBadge />
+                                                                                    )}
+                                                                                </div>
                                                                                 <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
                                                                                     <p className="min-w-0 truncate text-xs text-gray-400">
-                                                                                        {item.podcastTitle || "Podcast"}
+                                                                                        {track
+                                                                                            .artist
+                                                                                            ?.name ||
+                                                                                            "Unknown artist"}
                                                                                     </p>
                                                                                     {isCurrentTrack && (
-                                                                                        <span className="inline-flex shrink-0 items-center rounded-full border border-brand-hover/40 bg-brand-hover/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-hover">
+                                                                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-hover/40 bg-brand-hover/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-hover">
+                                                                                            <span className="inline-flex items-end gap-0.5">
+                                                                                                <span className="h-2 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.2s]" />
+                                                                                                <span className="h-2.5 w-0.5 animate-bounce rounded-full bg-brand-hover" />
+                                                                                                <span className="h-1.5 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.35s]" />
+                                                                                            </span>
                                                                                             Playing
                                                                                         </span>
                                                                                     )}
-                                                                                    {isPlayedTrack && !isCurrentTrack && (
-                                                                                        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-400">
-                                                                                            Played
-                                                                                        </span>
-                                                                                    )}
+                                                                                    {isPlayedTrack &&
+                                                                                        !isCurrentTrack && (
+                                                                                            <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-400">
+                                                                                                Played
+                                                                                            </span>
+                                                                                        )}
                                                                                 </div>
                                                                             </div>
                                                                         </button>
+
                                                                         <span
                                                                             className={cn(
                                                                                 "text-[11px] tabular-nums",
                                                                                 isCurrentTrack
                                                                                     ? "text-brand-hover"
-                                                                                    : "text-gray-400"
+                                                                                    : "text-gray-400",
                                                                             )}
                                                                         >
-                                                                            {formatTime(item.duration || 0)}
+                                                                            {formatTime(
+                                                                                track.duration ||
+                                                                                    0,
+                                                                            )}
                                                                         </span>
-                                                                        {!isCurrentTrack && (
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleRemoveFromQueue(queueIndex);
-                                                                                }}
-                                                                                className="ml-1 h-7 w-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
-                                                                                title="Remove from queue"
-                                                                                aria-label="Remove from queue"
-                                                                            >
-                                                                                <X className="h-3.5 w-3.5" />
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            const track = item;
-                                                            const queueTrackQualityBadge =
-                                                                resolvePlaybackQualityBadgeFromStreamSource(
-                                                                    track.streamSource,
-                                                                );
-                                                            return (
-                                                                <div
-                                                                    key={`${track.id}-${queueIndex}`}
-                                                                    data-queue-index={queueIndex}
-                                                                    className={cn(
-                                                                        "mb-1.5 flex items-center gap-2 px-2 py-2 transition-colors",
-                                                                        isCurrentTrack
-                                                                            ? "rounded-md border border-brand-hover/35 bg-brand-hover/10"
-                                                                            : isPlayedTrack
-                                                                              ? "rounded-md bg-white/[0.03] hover:bg-white/[0.06]"
-                                                                              : "hover:bg-white/[0.06]"
-                                                                    )}
-                                                                >
-                                                                    <span
-                                                                        className={cn(
-                                                                            "w-5 flex-shrink-0 text-center text-[11px] tabular-nums",
-                                                                            isCurrentTrack
-                                                                                ? "text-brand-hover"
-                                                                                : "text-gray-400"
-                                                                        )}
-                                                                    >
-                                                                        {queueIndex + 1}
-                                                                    </span>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            if (!isCurrentTrack) {
-                                                                                handlePlayFromQueue(queueIndex);
-                                                                            }
-                                                                        }}
-                                                                        className={cn(
-                                                                            "flex min-w-0 flex-1 items-center gap-3 text-left",
-                                                                            isCurrentTrack && "cursor-default"
-                                                                        )}
-                                                                        title={
-                                                                            isCurrentTrack
-                                                                                ? "Now playing"
-                                                                                : "Play this track now"
-                                                                        }
-                                                                    >
-                                                                        <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
-                                                                            {track.album?.coverArt ? (
-                                                                                <Image
-                                                                                    src={api.getCoverArtUrl(
-                                                                                        track.album.coverArt,
-                                                                                        100
-                                                                                    )}
-                                                                                    alt={track.album.title}
-                                                                                    fill
-                                                                                    sizes="44px"
-                                                                                    className="object-cover"
-                                                                                    unoptimized
-                                                                                />
-                                                                            ) : (
-                                                                                <div className="flex h-full w-full items-center justify-center">
-                                                                                    <MusicIcon className="h-4 w-4 text-gray-400" />
-                                                                                </div>
+                                                                        <div className="ml-1 flex items-center gap-1">
+                                                                            <TrackPreferenceButtons
+                                                                                trackId={
+                                                                                    track.id
+                                                                                }
+                                                                                mode="up-only"
+                                                                                buttonSizeClassName="h-10 w-10"
+                                                                                iconSizeClassName="h-5 w-5"
+                                                                                metadata={buildPreferenceMetadata(
+                                                                                    track,
+                                                                                )}
+                                                                            />
+                                                                            <TrackOverflowMenu
+                                                                                track={
+                                                                                    track
+                                                                                }
+                                                                                showPlayNext={
+                                                                                    false
+                                                                                }
+                                                                                showAddToQueue={
+                                                                                    false
+                                                                                }
+                                                                                triggerClassName="!opacity-100"
+                                                                                extraItemsAfter={
+                                                                                    !isCurrentTrack ? (
+                                                                                        <TrackMenuButton
+                                                                                            onClick={(
+                                                                                                e,
+                                                                                            ) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleRemoveFromQueue(
+                                                                                                    queueIndex,
+                                                                                                );
+                                                                                            }}
+                                                                                            icon={
+                                                                                                <X className="h-4 w-4" />
+                                                                                            }
+                                                                                            label="Remove from queue"
+                                                                                            className="text-red-400 hover:text-red-300"
+                                                                                        />
+                                                                                    ) : undefined
+                                                                                }
+                                                                            />
+                                                                            {!isCurrentTrack && (
+                                                                                <button
+                                                                                    onClick={(
+                                                                                        e,
+                                                                                    ) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleRemoveFromQueue(
+                                                                                            queueIndex,
+                                                                                        );
+                                                                                    }}
+                                                                                    className="h-7 w-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+                                                                                    title="Remove from queue"
+                                                                                    aria-label="Remove from queue"
+                                                                                >
+                                                                                    <X className="h-3.5 w-3.5" />
+                                                                                </button>
                                                                             )}
                                                                         </div>
-                                                                        <div className="min-w-0">
-                                                                            <div className="flex min-w-0 items-center gap-1.5">
-                                                                                <p
-                                                                                    className={cn(
-                                                                                        "min-w-0 truncate text-sm",
-                                                                                        isCurrentTrack
-                                                                                            ? "text-brand-hover"
-                                                                                            : "text-white"
-                                                                                    )}
-                                                                                >
-                                                                                    {track.displayTitle ?? track.title}
-                                                                                </p>
-                                                                                {queueTrackQualityBadge?.variant === "tidal" && (
-                                                                                    <TidalBadge />
-                                                                                )}
-                                                                                {queueTrackQualityBadge?.variant === "youtube" && (
-                                                                                    <YouTubeBadge />
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                                                                                <p className="min-w-0 truncate text-xs text-gray-400">
-                                                                                    {track.artist?.name ||
-                                                                                        "Unknown artist"}
-                                                                                </p>
-                                                                                {isCurrentTrack && (
-                                                                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-hover/40 bg-brand-hover/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-hover">
-                                                                                        <span className="inline-flex items-end gap-0.5">
-                                                                                            <span className="h-2 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.2s]" />
-                                                                                            <span className="h-2.5 w-0.5 animate-bounce rounded-full bg-brand-hover" />
-                                                                                            <span className="h-1.5 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.35s]" />
-                                                                                        </span>
-                                                                                        Playing
-                                                                                    </span>
-                                                                                )}
-                                                                                {isPlayedTrack && !isCurrentTrack && (
-                                                                                    <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-400">
-                                                                                        Played
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </button>
-
-                                                                    <span
-                                                                        className={cn(
-                                                                            "text-[11px] tabular-nums",
-                                                                            isCurrentTrack
-                                                                                ? "text-brand-hover"
-                                                                                : "text-gray-400"
-                                                                        )}
-                                                                    >
-                                                                        {formatTime(track.duration || 0)}
-                                                                    </span>
-                                                                    <div className="ml-1 flex items-center gap-1">
-                                                                        <TrackPreferenceButtons
-                                                                            trackId={track.id}
-                                                                            mode="up-only"
-                                                                            buttonSizeClassName="h-10 w-10"
-                                                                            iconSizeClassName="h-5 w-5"
-                                                                            metadata={buildPreferenceMetadata(track)}
-                                                                        />
-                                                                        <TrackOverflowMenu
-                                                                            track={track}
-                                                                            showPlayNext={false}
-                                                                            showAddToQueue={false}
-                                                                            triggerClassName="!opacity-100"
-                                                                            extraItemsAfter={
-                                                                                !isCurrentTrack ? (
-                                                                                    <TrackMenuButton
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleRemoveFromQueue(queueIndex);
-                                                                                        }}
-                                                                                        icon={<X className="h-4 w-4" />}
-                                                                                        label="Remove from queue"
-                                                                                        className="text-red-400 hover:text-red-300"
-                                                                                    />
-                                                                                ) : undefined
-                                                                            }
-                                                                        />
-                                                                        {!isCurrentTrack && (
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleRemoveFromQueue(queueIndex);
-                                                                                }}
-                                                                                className="h-7 w-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
-                                                                                title="Remove from queue"
-                                                                                aria-label="Remove from queue"
-                                                                            >
-                                                                                <X className="h-3.5 w-3.5" />
-                                                                            </button>
-                                                                        )}
                                                                     </div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                                );
+                                                            },
+                                                        )}
                                                     </div>
                                                 )}
                                             </motion.section>
@@ -2098,19 +2402,30 @@ export function OverlayPlayer() {
                                                 {isLyricsLoading ? (
                                                     <div className="flex h-full items-center justify-center gap-2 text-gray-400">
                                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                                        <span className="text-sm">Loading lyrics...</span>
+                                                        <span className="text-sm">
+                                                            Loading lyrics...
+                                                        </span>
                                                     </div>
                                                 ) : isLyricsError ? (
                                                     <div className="flex h-full items-center justify-center px-4">
                                                         <p className="text-center text-sm text-gray-400">
-                                                            Failed to load lyrics
+                                                            Failed to load
+                                                            lyrics
                                                         </p>
                                                     </div>
                                                 ) : (
                                                     <SyncedLyrics
-                                                        syncedLyrics={lyricsData?.syncedLyrics ?? null}
-                                                        plainLyrics={lyricsData?.plainLyrics ?? null}
-                                                        currentTime={displayTime}
+                                                        syncedLyrics={
+                                                            lyricsData?.syncedLyrics ??
+                                                            null
+                                                        }
+                                                        plainLyrics={
+                                                            lyricsData?.plainLyrics ??
+                                                            null
+                                                        }
+                                                        currentTime={
+                                                            displayTime
+                                                        }
                                                         isPlaying={isPlaying}
                                                         onSeek={handleSeek}
                                                         className="h-full"
@@ -2132,111 +2447,177 @@ export function OverlayPlayer() {
                                                     {isRelatedTracksLoading ? (
                                                         <div className="flex items-center gap-2 text-gray-400">
                                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                                            <span className="text-sm">Loading...</span>
+                                                            <span className="text-sm">
+                                                                Loading...
+                                                            </span>
                                                         </div>
                                                     ) : isRelatedTracksError ? (
                                                         <div className="flex items-center gap-3">
-                                                            <p className="text-sm text-gray-400">Failed to load similar songs.</p>
+                                                            <p className="text-sm text-gray-400">
+                                                                Failed to load
+                                                                similar songs.
+                                                            </p>
                                                             <button
-                                                                onClick={() => queryClient.invalidateQueries({ queryKey: ["player-related-tracks", currentTrack?.id] })}
+                                                                onClick={() =>
+                                                                    queryClient.invalidateQueries(
+                                                                        {
+                                                                            queryKey:
+                                                                                [
+                                                                                    "player-related-tracks",
+                                                                                    currentTrack?.id,
+                                                                                ],
+                                                                        },
+                                                                    )
+                                                                }
                                                                 className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition-colors"
                                                             >
                                                                 <RefreshCw className="h-3 w-3" />
                                                                 Retry
                                                             </button>
                                                         </div>
-                                                    ) : sortedRelatedTracks.length > 0 ? (
+                                                    ) : sortedRelatedTracks.length >
+                                                      0 ? (
                                                         <div className="space-y-1.5">
-                                                            {visibleRelatedTracks.map((track, idx) => {
-                                                                const trackKey = getRelatedTrackKey(track);
-                                                                const streamMatch = relatedStreamMatches[trackKey];
-                                                                const isMatchingTrack =
-                                                                    matchingRelatedTrackKey === trackKey;
-                                                                const isInLibrary = !!track.inLibrary;
-                                                                return (
-                                                                    <button
-                                                                        key={`${track.id || track.title}-${idx}`}
-                                                                        type="button"
-                                                                        onClick={() => playRelatedTrack(track)}
-                                                                        className="group flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-white/[0.06]"
-                                                                    >
-                                                                    <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
-                                                                        {(track.album?.coverArt ||
-                                                                            track.album?.coverUrl) ? (
-                                                                            <Image
-                                                                                src={api.getCoverArtUrl(
-                                                                                    track.album.coverArt ||
-                                                                                        track.album.coverUrl,
-                                                                                    100
+                                                            {visibleRelatedTracks.map(
+                                                                (
+                                                                    track,
+                                                                    idx,
+                                                                ) => {
+                                                                    const trackKey =
+                                                                        getRelatedTrackKey(
+                                                                            track,
+                                                                        );
+                                                                    const streamMatch =
+                                                                        relatedStreamMatches[
+                                                                            trackKey
+                                                                        ];
+                                                                    const isMatchingTrack =
+                                                                        matchingRelatedTrackKey ===
+                                                                        trackKey;
+                                                                    const isInLibrary =
+                                                                        !!track.inLibrary;
+                                                                    return (
+                                                                        <button
+                                                                            key={`${track.id || track.title}-${idx}`}
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                playRelatedTrack(
+                                                                                    track,
+                                                                                )
+                                                                            }
+                                                                            className="group flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-white/[0.06]"
+                                                                        >
+                                                                            <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
+                                                                                {track
+                                                                                    .album
+                                                                                    ?.coverArt ||
+                                                                                track
+                                                                                    .album
+                                                                                    ?.coverUrl ? (
+                                                                                    <Image
+                                                                                        src={api.getCoverArtUrl(
+                                                                                            track
+                                                                                                .album
+                                                                                                .coverArt ||
+                                                                                                track
+                                                                                                    .album
+                                                                                                    .coverUrl,
+                                                                                            100,
+                                                                                        )}
+                                                                                        alt={
+                                                                                            track
+                                                                                                .album
+                                                                                                ?.title ||
+                                                                                            track.title
+                                                                                        }
+                                                                                        fill
+                                                                                        sizes="40px"
+                                                                                        className="object-cover"
+                                                                                        unoptimized
+                                                                                    />
+                                                                                ) : (
+                                                                                    <div className="flex h-full w-full items-center justify-center">
+                                                                                        <MusicIcon className="h-4 w-4 text-gray-400" />
+                                                                                    </div>
                                                                                 )}
-                                                                                alt={track.album?.title || track.title}
-                                                                                fill
-                                                                                sizes="40px"
-                                                                                className="object-cover"
-                                                                                unoptimized
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="flex h-full w-full items-center justify-center">
-                                                                                <MusicIcon className="h-4 w-4 text-gray-400" />
                                                                             </div>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="min-w-0 flex-1 pr-2">
-                                                                        <p className="truncate text-sm text-gray-200 group-hover:text-white">
-                                                                            {track.title}
-                                                                        </p>
-                                                                        <p className="truncate text-xs text-gray-400">
-                                                                            {isInLibrary
-                                                                                ? track.album?.artist?.name ||
-                                                                                  track.artist ||
-                                                                                  "Unknown artist"
-                                                                                : track.artist ||
-                                                                                  "Unknown artist"}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="flex shrink-0 items-center gap-1">
-                                                                        {isInLibrary ? (
-                                                                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
-                                                                                In Library
-                                                                            </span>
-                                                                        ) : isMatchingTrack ? (
-                                                                            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-300">
-                                                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                                                Matching
-                                                                            </span>
-                                                                        ) : streamMatch?.streamSource === "tidal" ? (
-                                                                            <TidalBadge />
-                                                                        ) : streamMatch?.streamSource === "youtube" ? (
-                                                                            <YouTubeBadge />
-                                                                        ) : track.lastFmUrl ? (
-                                                                            <span className="rounded-full border border-white/20 bg-white/[0.04] px-2 py-0.5 text-[10px] text-gray-300">
-                                                                                Info
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-400">
-                                                                                Search
-                                                                            </span>
-                                                                        )}
-                                                                        {isInLibrary && track.id && (
-                                                                            // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-                                                                            <div onClick={(e) => e.stopPropagation()}>
-                                                                                <TrackPreferenceButtons
-                                                                                    trackId={track.id}
-                                                                                    mode="up-only"
-                                                                                    buttonSizeClassName="h-8 w-8"
-                                                                                    iconSizeClassName="h-4 w-4"
-                                                                                    metadata={buildPreferenceMetadata(track)}
-                                                                                />
+                                                                            <div className="min-w-0 flex-1 pr-2">
+                                                                                <p className="truncate text-sm text-gray-200 group-hover:text-white">
+                                                                                    {
+                                                                                        track.title
+                                                                                    }
+                                                                                </p>
+                                                                                <p className="truncate text-xs text-gray-400">
+                                                                                    {isInLibrary
+                                                                                        ? track
+                                                                                              .album
+                                                                                              ?.artist
+                                                                                              ?.name ||
+                                                                                          track.artist ||
+                                                                                          "Unknown artist"
+                                                                                        : track.artist ||
+                                                                                          "Unknown artist"}
+                                                                                </p>
                                                                             </div>
-                                                                        )}
-                                                                    </div>
-                                                                </button>
-                                                                );
-                                                            })}
+                                                                            <div className="flex shrink-0 items-center gap-1">
+                                                                                {isInLibrary ? (
+                                                                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                                                                                        In
+                                                                                        Library
+                                                                                    </span>
+                                                                                ) : isMatchingTrack ? (
+                                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-300">
+                                                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                                                        Matching
+                                                                                    </span>
+                                                                                ) : streamMatch?.streamSource ===
+                                                                                  "tidal" ? (
+                                                                                    <TidalBadge />
+                                                                                ) : streamMatch?.streamSource ===
+                                                                                  "youtube" ? (
+                                                                                    <YouTubeBadge />
+                                                                                ) : track.lastFmUrl ? (
+                                                                                    <span className="rounded-full border border-white/20 bg-white/[0.04] px-2 py-0.5 text-[10px] text-gray-300">
+                                                                                        Info
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-400">
+                                                                                        Search
+                                                                                    </span>
+                                                                                )}
+                                                                                {isInLibrary &&
+                                                                                    track.id && (
+                                                                                        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+                                                                                        <div
+                                                                                            onClick={(
+                                                                                                e,
+                                                                                            ) =>
+                                                                                                e.stopPropagation()
+                                                                                            }
+                                                                                        >
+                                                                                            <TrackPreferenceButtons
+                                                                                                trackId={
+                                                                                                    track.id
+                                                                                                }
+                                                                                                mode="up-only"
+                                                                                                buttonSizeClassName="h-8 w-8"
+                                                                                                iconSizeClassName="h-4 w-4"
+                                                                                                metadata={buildPreferenceMetadata(
+                                                                                                    track,
+                                                                                                )}
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                },
+                                                            )}
                                                         </div>
                                                     ) : (
                                                         <p className="text-sm text-gray-400">
-                                                            No similar songs found.
+                                                            No similar songs
+                                                            found.
                                                         </p>
                                                     )}
                                                 </section>
@@ -2248,71 +2629,112 @@ export function OverlayPlayer() {
                                                     {isRelatedArtistsLoading ? (
                                                         <div className="flex items-center gap-2 text-gray-400">
                                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                                            <span className="text-sm">Loading...</span>
+                                                            <span className="text-sm">
+                                                                Loading...
+                                                            </span>
                                                         </div>
                                                     ) : isRelatedArtistsError ? (
                                                         <div className="flex items-center gap-3">
-                                                            <p className="text-sm text-gray-400">Failed to load similar artists.</p>
+                                                            <p className="text-sm text-gray-400">
+                                                                Failed to load
+                                                                similar artists.
+                                                            </p>
                                                             <button
-                                                                onClick={() => queryClient.invalidateQueries({ queryKey: ["player-related-artists", currentTrack?.artist?.name, currentTrack?.artist?.mbid] })}
+                                                                onClick={() =>
+                                                                    queryClient.invalidateQueries(
+                                                                        {
+                                                                            queryKey:
+                                                                                [
+                                                                                    "player-related-artists",
+                                                                                    currentTrack
+                                                                                        ?.artist
+                                                                                        ?.name,
+                                                                                    currentTrack
+                                                                                        ?.artist
+                                                                                        ?.mbid,
+                                                                                ],
+                                                                        },
+                                                                    )
+                                                                }
                                                                 className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition-colors"
                                                             >
                                                                 <RefreshCw className="h-3 w-3" />
                                                                 Retry
                                                             </button>
                                                         </div>
-                                                    ) : relatedArtists.length > 0 ? (
+                                                    ) : relatedArtists.length >
+                                                      0 ? (
                                                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                                            {relatedArtists.slice(0, 9).map((artist, idx) => {
-                                                                const artistHref =
-                                                                    getArtistHref(
-                                                                        {
-                                                                            mbid: artist.mbid,
-                                                                            name: artist.name,
-                                                                        },
-                                                                        {
-                                                                            preferLibraryId: false,
-                                                                        }
-                                                                    ) ||
-                                                                    `/artist/${encodeURIComponent(
-                                                                        artist.name
-                                                                    )}`;
-                                                                const artistId =
-                                                                    artist.mbid ||
-                                                                    encodeURIComponent(artist.name);
-                                                                return (
-                                                                    <Link
-                                                                        key={`${artistId}-${idx}`}
-                                                                        href={artistHref}
-                                                                        onClick={returnToPreviousMode}
-                                                                        className="group p-1.5 transition-colors hover:bg-white/[0.06]"
-                                                                    >
-                                                                        <div className="mb-2 relative mx-auto h-12 w-12 overflow-hidden rounded-full bg-surface-hover">
-                                                                            {artist.image ? (
-                                                                                <Image
-                                                                                    src={artist.image}
-                                                                                    alt={artist.name}
-                                                                                    fill
-                                                                                    sizes="48px"
-                                                                                    className="object-cover"
-                                                                                    unoptimized
-                                                                                />
-                                                                            ) : (
-                                                                                <div className="flex h-full w-full items-center justify-center">
-                                                                                    <MusicIcon className="h-4 w-4 text-gray-400" />
+                                                            {relatedArtists
+                                                                .slice(0, 9)
+                                                                .map(
+                                                                    (
+                                                                        artist,
+                                                                        idx,
+                                                                    ) => {
+                                                                        const artistHref =
+                                                                            getArtistHref(
+                                                                                {
+                                                                                    mbid: artist.mbid,
+                                                                                    name: artist.name,
+                                                                                },
+                                                                                {
+                                                                                    preferLibraryId: false,
+                                                                                },
+                                                                            ) ||
+                                                                            `/artist/${encodeURIComponent(
+                                                                                artist.name,
+                                                                            )}`;
+                                                                        const artistId =
+                                                                            artist.mbid ||
+                                                                            encodeURIComponent(
+                                                                                artist.name,
+                                                                            );
+                                                                        return (
+                                                                            <Link
+                                                                                key={`${artistId}-${idx}`}
+                                                                                href={
+                                                                                    artistHref
+                                                                                }
+                                                                                onClick={
+                                                                                    returnToPreviousMode
+                                                                                }
+                                                                                className="group p-1.5 transition-colors hover:bg-white/[0.06]"
+                                                                            >
+                                                                                <div className="mb-2 relative mx-auto h-12 w-12 overflow-hidden rounded-full bg-surface-hover">
+                                                                                    {artist.image ? (
+                                                                                        <Image
+                                                                                            src={
+                                                                                                artist.image
+                                                                                            }
+                                                                                            alt={
+                                                                                                artist.name
+                                                                                            }
+                                                                                            fill
+                                                                                            sizes="48px"
+                                                                                            className="object-cover"
+                                                                                            unoptimized
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div className="flex h-full w-full items-center justify-center">
+                                                                                            <MusicIcon className="h-4 w-4 text-gray-400" />
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
-                                                                            )}
-                                                                        </div>
-                                                                        <p className="truncate text-center text-xs text-gray-200 group-hover:text-white">
-                                                                            {artist.name}
-                                                                        </p>
-                                                                    </Link>
-                                                                );
-                                                            })}
+                                                                                <p className="truncate text-center text-xs text-gray-200 group-hover:text-white">
+                                                                                    {
+                                                                                        artist.name
+                                                                                    }
+                                                                                </p>
+                                                                            </Link>
+                                                                        );
+                                                                    },
+                                                                )}
                                                         </div>
                                                     ) : (
                                                         <p className="text-sm text-gray-400">
-                                                            No similar artists found.
+                                                            No similar artists
+                                                            found.
                                                         </p>
                                                     )}
                                                 </section>
@@ -2324,60 +2746,94 @@ export function OverlayPlayer() {
                                                     {isMoreFromArtistLoading ? (
                                                         <div className="flex items-center gap-2 text-gray-400">
                                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                                            <span className="text-sm">Loading...</span>
+                                                            <span className="text-sm">
+                                                                Loading...
+                                                            </span>
                                                         </div>
                                                     ) : isMoreFromArtistError ? (
                                                         <div className="flex items-center gap-3">
-                                                            <p className="text-sm text-gray-400">Failed to load albums.</p>
+                                                            <p className="text-sm text-gray-400">
+                                                                Failed to load
+                                                                albums.
+                                                            </p>
                                                             <button
-                                                                onClick={() => queryClient.invalidateQueries({ queryKey: ["player-related-albums", currentTrack?.artist?.id] })}
+                                                                onClick={() =>
+                                                                    queryClient.invalidateQueries(
+                                                                        {
+                                                                            queryKey:
+                                                                                [
+                                                                                    "player-related-albums",
+                                                                                    currentTrack
+                                                                                        ?.artist
+                                                                                        ?.id,
+                                                                                ],
+                                                                        },
+                                                                    )
+                                                                }
                                                                 className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition-colors"
                                                             >
                                                                 <RefreshCw className="h-3 w-3" />
                                                                 Retry
                                                             </button>
                                                         </div>
-                                                    ) : moreFromArtist.length > 0 ? (
+                                                    ) : moreFromArtist.length >
+                                                      0 ? (
                                                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                                            {moreFromArtist.slice(0, 6).map((album) => (
-                                                                <Link
-                                                                    key={album.id}
-                                                                    href={`/album/${album.id}`}
-                                                                    onClick={returnToPreviousMode}
-                                                                    className="group p-1.5 transition-colors hover:bg-white/[0.06]"
-                                                                >
-                                                                    <div className="relative mb-2 aspect-square w-full overflow-hidden rounded bg-surface-hover">
-                                                                        {album.coverArt ? (
-                                                                            <Image
-                                                                                src={api.getCoverArtUrl(
-                                                                                    album.coverArt,
-                                                                                    200
+                                                            {moreFromArtist
+                                                                .slice(0, 6)
+                                                                .map(
+                                                                    (album) => (
+                                                                        <Link
+                                                                            key={
+                                                                                album.id
+                                                                            }
+                                                                            href={`/album/${album.id}`}
+                                                                            onClick={
+                                                                                returnToPreviousMode
+                                                                            }
+                                                                            className="group p-1.5 transition-colors hover:bg-white/[0.06]"
+                                                                        >
+                                                                            <div className="relative mb-2 aspect-square w-full overflow-hidden rounded bg-surface-hover">
+                                                                                {album.coverArt ? (
+                                                                                    <Image
+                                                                                        src={api.getCoverArtUrl(
+                                                                                            album.coverArt,
+                                                                                            200,
+                                                                                        )}
+                                                                                        alt={
+                                                                                            album.title
+                                                                                        }
+                                                                                        fill
+                                                                                        sizes="140px"
+                                                                                        className="object-cover"
+                                                                                        unoptimized
+                                                                                    />
+                                                                                ) : (
+                                                                                    <div className="flex h-full w-full items-center justify-center">
+                                                                                        <MusicIcon className="h-5 w-5 text-gray-400" />
+                                                                                    </div>
                                                                                 )}
-                                                                                alt={album.title}
-                                                                                fill
-                                                                                sizes="140px"
-                                                                                className="object-cover"
-                                                                                unoptimized
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="flex h-full w-full items-center justify-center">
-                                                                                <MusicIcon className="h-5 w-5 text-gray-400" />
                                                                             </div>
-                                                                        )}
-                                                                    </div>
-                                                                    <p className="truncate text-xs text-gray-200 group-hover:text-white">
-                                                                        {album.title}
-                                                                    </p>
-                                                                    {album.year && (
-                                                                        <p className="text-[11px] text-gray-400">
-                                                                            {album.year}
-                                                                        </p>
-                                                                    )}
-                                                                </Link>
-                                                            ))}
+                                                                            <p className="truncate text-xs text-gray-200 group-hover:text-white">
+                                                                                {
+                                                                                    album.title
+                                                                                }
+                                                                            </p>
+                                                                            {album.year && (
+                                                                                <p className="text-[11px] text-gray-400">
+                                                                                    {
+                                                                                        album.year
+                                                                                    }
+                                                                                </p>
+                                                                            )}
+                                                                        </Link>
+                                                                    ),
+                                                                )}
                                                         </div>
                                                     ) : (
-                                                        <p className="text-sm text-gray-400">No albums found.</p>
+                                                        <p className="text-sm text-gray-400">
+                                                            No albums found.
+                                                        </p>
                                                     )}
                                                 </section>
                                             </motion.section>

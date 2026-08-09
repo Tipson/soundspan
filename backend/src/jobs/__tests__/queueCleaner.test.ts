@@ -46,7 +46,10 @@ describe("queueCleaner", () => {
             error: jest.fn(),
         };
         const getSystemSettings = jest.fn(async () => null);
-        const cleanStuckDownloads = jest.fn(async () => ({ removed: 0, items: [] }));
+        const cleanStuckDownloads = jest.fn(async () => ({
+            removed: 0,
+            items: [],
+        }));
         const getRecentCompletedDownloads = jest.fn(async () => []);
         const scanQueue = { add: jest.fn(async () => ({ id: "scan-1" })) };
         const simpleDownloadManager = {
@@ -63,7 +66,9 @@ describe("queueCleaner", () => {
 
         jest.doMock("../../utils/db", () => ({ prisma }));
         jest.doMock("../../utils/logger", () => ({ logger }));
-        jest.doMock("../../utils/systemSettings", () => ({ getSystemSettings }));
+        jest.doMock("../../utils/systemSettings", () => ({
+            getSystemSettings,
+        }));
         jest.doMock("../../services/lidarr", () => ({
             cleanStuckDownloads,
             getRecentCompletedDownloads,
@@ -102,16 +107,22 @@ describe("queueCleaner", () => {
         const { queueCleaner, prisma } = loadQueueCleaner();
         prisma.downloadJob.findMany.mockResolvedValueOnce([]);
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 0,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 0,
+            },
+        );
         expect(prisma.downloadJob.findMany).toHaveBeenCalled();
         expect(prisma.downloadJob.updateMany).not.toHaveBeenCalled();
     });
 
     it("reconciles matching jobs and runs discovery batch completion", async () => {
-        const { queueCleaner, prisma, discoverWeeklyService, yieldToEventLoop } =
-            loadQueueCleaner();
+        const {
+            queueCleaner,
+            prisma,
+            discoverWeeklyService,
+            yieldToEventLoop,
+        } = loadQueueCleaner();
 
         prisma.downloadJob.findMany.mockResolvedValueOnce([
             {
@@ -141,9 +152,11 @@ describe("queueCleaner", () => {
         ]);
         prisma.downloadJob.updateMany.mockResolvedValueOnce({ count: 2 });
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 2,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 2,
+            },
+        );
 
         expect(prisma.downloadJob.updateMany).toHaveBeenCalledWith({
             where: { id: { in: ["job-1", "job-2"] } },
@@ -154,7 +167,7 @@ describe("queueCleaner", () => {
             },
         });
         expect(discoverWeeklyService.checkBatchCompletion).toHaveBeenCalledWith(
-            "batch-1"
+            "batch-1",
         );
         expect(yieldToEventLoop).toHaveBeenCalledTimes(1);
     });
@@ -168,7 +181,9 @@ describe("queueCleaner", () => {
         expect(getSystemSettings).toHaveBeenCalled();
         expect(status.isRunning).toBe(false);
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Lidarr not configured, stopping queue cleaner")
+            expect.stringContaining(
+                "Lidarr not configured, stopping queue cleaner",
+            ),
         );
     });
 
@@ -185,7 +200,9 @@ describe("queueCleaner", () => {
 
         await queueCleaner.start();
 
-        expect(logger.debug).toHaveBeenCalledWith(" Queue cleaner already running");
+        expect(logger.debug).toHaveBeenCalledWith(
+            " Queue cleaner already running",
+        );
     });
 
     it("retries transient prisma failures during reconciliation and reconnects", async () => {
@@ -193,7 +210,9 @@ describe("queueCleaner", () => {
         const { queueCleaner, prisma, logger } = loadQueueCleaner();
 
         prisma.downloadJob.findMany
-            .mockRejectedValueOnce(new Error("Response from the Engine was empty"))
+            .mockRejectedValueOnce(
+                new Error("Response from the Engine was empty"),
+            )
             .mockResolvedValueOnce([]);
 
         const resultPromise = queueCleaner.reconcileWithLocalLibrary();
@@ -203,9 +222,9 @@ describe("queueCleaner", () => {
         expect(prisma.$connect).toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "[QueueCleaner/Prisma] reconcileWithLocalLibrary.downloadJob.findMany.processing failed"
+                "[QueueCleaner/Prisma] reconcileWithLocalLibrary.downloadJob.findMany.processing failed",
             ),
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -284,14 +303,22 @@ describe("queueCleaner", () => {
             lidarrUrl: "http://lidarr",
             lidarrApiKey: "key",
         });
-        (simpleDownloadManager.markStaleJobsAsFailed as jest.Mock).mockResolvedValue(1);
-        (simpleDownloadManager.reconcileWithLidarr as jest.Mock).mockResolvedValue({
+        (
+            simpleDownloadManager.markStaleJobsAsFailed as jest.Mock
+        ).mockResolvedValue(1);
+        (
+            simpleDownloadManager.reconcileWithLidarr as jest.Mock
+        ).mockResolvedValue({
             reconciled: 2,
         });
-        (simpleDownloadManager.syncWithLidarrQueue as jest.Mock).mockResolvedValue({
+        (
+            simpleDownloadManager.syncWithLidarrQueue as jest.Mock
+        ).mockResolvedValue({
             cancelled: 3,
         });
-        (discoverWeeklyService.checkStuckBatches as jest.Mock).mockResolvedValue(1);
+        (
+            discoverWeeklyService.checkStuckBatches as jest.Mock
+        ).mockResolvedValue(1);
         (getRecentCompletedDownloads as jest.Mock).mockResolvedValue([
             { downloadId: "d1", album: null, artist: { name: "Artist A" } },
         ]);
@@ -303,19 +330,21 @@ describe("queueCleaner", () => {
         await (queueCleaner as any).runCleanup();
 
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Cleaned up 1 stale download")
+            expect.stringContaining("Cleaned up 1 stale download"),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Reconciled 2 job(s) with Lidarr")
+            expect.stringContaining("Reconciled 2 job(s) with Lidarr"),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Synced 3 job(s) with Lidarr queue")
+            expect.stringContaining("Synced 3 job(s) with Lidarr queue"),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Force-completed 1 stuck discovery batch(es)")
+            expect.stringContaining(
+                "Force-completed 1 stuck discovery batch(es)",
+            ),
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            "   (Skipped 1 incomplete download records)"
+            "   (Skipped 1 incomplete download records)",
         );
 
         queueCleaner.stop();
@@ -342,9 +371,11 @@ describe("queueCleaner", () => {
                 artist: { name: "Artist Two" },
             },
         ]);
-        jest.spyOn(queueCleaner, "reconcileWithLocalLibrary").mockResolvedValue({
-            reconciled: 1,
-        });
+        jest.spyOn(queueCleaner, "reconcileWithLocalLibrary").mockResolvedValue(
+            {
+                reconciled: 1,
+            },
+        );
 
         prisma.downloadJob.findMany.mockResolvedValueOnce([
             { id: "job-2", discoveryBatchId: "batch-2" },
@@ -355,13 +386,15 @@ describe("queueCleaner", () => {
         await (queueCleaner as any).runCleanup();
 
         expect(logger.debug).toHaveBeenCalledWith(
-            "✓ Reconciled 1 job(s) with local library"
+            "✓ Reconciled 1 job(s) with local library",
         );
         expect(discoverWeeklyService.checkBatchCompletion).toHaveBeenCalledWith(
-            "batch-2"
+            "batch-2",
         );
         expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining("Checking Discovery batch completion: batch-2")
+            expect.stringContaining(
+                "Checking Discovery batch completion: batch-2",
+            ),
         );
 
         queueCleaner.stop();
@@ -388,7 +421,9 @@ describe("queueCleaner", () => {
 
         prisma.downloadJob.findMany
             .mockResolvedValueOnce([]) // reconcileWithLocalLibrary processing jobs
-            .mockResolvedValueOnce([{ id: "job-1", metadata: { retryCount: 2 } }]); // matching jobs
+            .mockResolvedValueOnce([
+                { id: "job-1", metadata: { retryCount: 2 } },
+            ]); // matching jobs
         prisma.downloadJob.count.mockResolvedValueOnce(1);
 
         (queueCleaner as any).isRunning = true;
@@ -441,7 +476,7 @@ describe("queueCleaner", () => {
             expect.objectContaining({
                 isRunning: true,
                 nextCheckIn: "30s",
-            })
+            }),
         );
     });
 
@@ -454,7 +489,7 @@ describe("queueCleaner", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             " Queue cleanup error:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect((queueCleaner as any).timeoutId).toBeDefined();
 
@@ -476,7 +511,9 @@ describe("queueCleaner", () => {
         await (queueCleaner as any).runCleanup();
 
         await jest.advanceTimersByTimeAsync(30_000);
-        expect((getSystemSettings as jest.Mock).mock.calls.length).toBeGreaterThan(1);
+        expect(
+            (getSystemSettings as jest.Mock).mock.calls.length,
+        ).toBeGreaterThan(1);
 
         queueCleaner.stop();
     });
@@ -496,7 +533,9 @@ describe("queueCleaner", () => {
         await (queueCleaner as any).runCleanup();
 
         await jest.advanceTimersByTimeAsync(30_000);
-        expect((getSystemSettings as jest.Mock).mock.calls.length).toBeGreaterThan(1);
+        expect(
+            (getSystemSettings as jest.Mock).mock.calls.length,
+        ).toBeGreaterThan(1);
 
         queueCleaner.stop();
     });
@@ -508,7 +547,10 @@ describe("queueCleaner", () => {
             {
                 id: "job-1",
                 status: "processing",
-                metadata: { artistName: "Unknown Artist", albumTitle: "Rare Cut" },
+                metadata: {
+                    artistName: "Unknown Artist",
+                    albumTitle: "Rare Cut",
+                },
                 discoveryBatchId: null,
             },
         ]);
@@ -522,9 +564,11 @@ describe("queueCleaner", () => {
         matchAlbum.mockReturnValueOnce(true);
         prisma.downloadJob.updateMany.mockResolvedValueOnce({ count: 1 });
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 1,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 1,
+            },
+        );
         expect(prisma.downloadJob.updateMany).toHaveBeenCalledWith({
             where: { id: { in: ["job-1"] } },
             data: {
@@ -558,9 +602,11 @@ describe("queueCleaner", () => {
         ]);
         prisma.downloadJob.updateMany.mockResolvedValueOnce({ count: 1 });
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 1,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 1,
+            },
+        );
         expect(matchAlbum).not.toHaveBeenCalled();
     });
 
@@ -587,9 +633,11 @@ describe("queueCleaner", () => {
         ]);
         prisma.downloadJob.updateMany.mockResolvedValueOnce({ count: 1 });
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 1,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 1,
+            },
+        );
         expect(matchAlbum).not.toHaveBeenCalled();
     });
 
@@ -605,9 +653,11 @@ describe("queueCleaner", () => {
             },
         ]);
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 0,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 0,
+            },
+        );
         expect(prisma.album.findMany).not.toHaveBeenCalled();
     });
 
@@ -634,9 +684,11 @@ describe("queueCleaner", () => {
         ]);
         matchAlbum.mockReturnValueOnce(false);
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 0,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 0,
+            },
+        );
         expect(prisma.downloadJob.updateMany).not.toHaveBeenCalled();
     });
 
@@ -670,12 +722,16 @@ describe("queueCleaner", () => {
             .mockResolvedValueOnce({ count: 1 })
             .mockResolvedValueOnce({ count: 1 });
 
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 1,
-        });
-        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual({
-            reconciled: 1,
-        });
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 1,
+            },
+        );
+        await expect(queueCleaner.reconcileWithLocalLibrary()).resolves.toEqual(
+            {
+                reconciled: 1,
+            },
+        );
     });
 
     it("skips stuck-download retry metadata updates when title cannot be parsed", async () => {
@@ -775,7 +831,10 @@ describe("queueCleaner", () => {
 
         prisma.downloadJob.findMany
             .mockRejectedValueOnce(
-                new Prisma.PrismaClientKnownRequestError("db unavailable", "P1001")
+                new Prisma.PrismaClientKnownRequestError(
+                    "db unavailable",
+                    "P1001",
+                ),
             )
             .mockResolvedValueOnce([]);
 
@@ -791,11 +850,13 @@ describe("queueCleaner", () => {
         const { queueCleaner, prisma, Prisma } = loadQueueCleaner();
 
         prisma.downloadJob.findMany
-            .mockRejectedValueOnce(new Prisma.PrismaClientRustPanicError("panic"))
+            .mockRejectedValueOnce(
+                new Prisma.PrismaClientRustPanicError("panic"),
+            )
             .mockRejectedValueOnce(
                 new Prisma.PrismaClientUnknownRequestError(
-                    "Response from the Engine was empty"
-                )
+                    "Response from the Engine was empty",
+                ),
             )
             .mockResolvedValueOnce([]);
 
@@ -809,11 +870,11 @@ describe("queueCleaner", () => {
     it("does not retry non-retryable known-request prisma errors", async () => {
         const { queueCleaner, prisma, Prisma } = loadQueueCleaner();
         prisma.downloadJob.findMany.mockRejectedValueOnce(
-            new Prisma.PrismaClientKnownRequestError("constraint", "P2003")
+            new Prisma.PrismaClientKnownRequestError("constraint", "P2003"),
         );
 
         await expect(queueCleaner.reconcileWithLocalLibrary()).rejects.toThrow(
-            "constraint"
+            "constraint",
         );
         expect(prisma.$connect).not.toHaveBeenCalled();
     });

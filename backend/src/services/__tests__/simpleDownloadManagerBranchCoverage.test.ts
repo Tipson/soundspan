@@ -130,8 +130,9 @@ const mockMusicBrainzService = musicBrainzService as jest.Mocked<
     typeof musicBrainzService
 >;
 const mockGetSystemSettings = getSystemSettings as jest.Mock;
-const mockNotificationPolicyService =
-    notificationPolicyService as jest.Mocked<typeof notificationPolicyService>;
+const mockNotificationPolicyService = notificationPolicyService as jest.Mocked<
+    typeof notificationPolicyService
+>;
 const mockSessionLog = sessionLog as jest.Mock;
 
 function makeTx() {
@@ -159,7 +160,7 @@ describe("simpleDownloadManager branch coverage", () => {
                 tx.downloadJob.updateMany.mockResolvedValue({ count: 0 });
                 tx.downloadJob.create.mockResolvedValue({ id: "created-job" });
                 return operation(tx);
-            }
+            },
         );
 
         mockPrisma.userDiscoverConfig.findUnique.mockResolvedValue({
@@ -210,7 +211,7 @@ describe("simpleDownloadManager branch coverage", () => {
         });
 
         const attempts = await (simpleDownloadManager as any).getMaxAttempts(
-            "user-zero"
+            "user-zero",
         );
 
         expect(attempts).toBe(3);
@@ -221,7 +222,8 @@ describe("simpleDownloadManager branch coverage", () => {
         mockPrisma.$transaction
             .mockRejectedValueOnce(deadlockErr)
             .mockImplementationOnce(
-                async (operation: (tx: any) => Promise<any>) => operation(makeTx())
+                async (operation: (tx: any) => Promise<any>) =>
+                    operation(makeTx()),
             );
 
         const timeoutSpy = jest
@@ -233,7 +235,7 @@ describe("simpleDownloadManager branch coverage", () => {
 
         const result = await (simpleDownloadManager as any).withTransaction(
             async () => "ok",
-            { maxRetries: 2, logPrefix: "[TX-DEADLOCK]" }
+            { maxRetries: 2, logPrefix: "[TX-DEADLOCK]" },
         );
 
         expect(result).toBe("ok");
@@ -243,9 +245,12 @@ describe("simpleDownloadManager branch coverage", () => {
 
     it("throws undefined when transaction retries are configured as zero", async () => {
         await expect(
-            (simpleDownloadManager as any).withTransaction(async () => "never", {
-                maxRetries: 0,
-            })
+            (simpleDownloadManager as any).withTransaction(
+                async () => "never",
+                {
+                    maxRetries: 0,
+                },
+            ),
         ).rejects.toBeUndefined();
     });
 
@@ -259,7 +264,7 @@ describe("simpleDownloadManager branch coverage", () => {
             "Artist",
             "Album",
             "mbid-no-artist",
-            "user-1"
+            "user-1",
         );
 
         expect(result.success).toBe(true);
@@ -269,7 +274,7 @@ describe("simpleDownloadManager branch coverage", () => {
             "Album",
             "/music",
             undefined,
-            false
+            false,
         );
     });
 
@@ -295,13 +300,13 @@ describe("simpleDownloadManager branch coverage", () => {
             "Artist",
             "Album",
             "mbid-null-result",
-            "user-1"
+            "user-1",
         );
 
         expect(result).toEqual({ success: true });
         expect(fallbackSpy).toHaveBeenCalledWith(
             expect.objectContaining({ id: "job-null-result" }),
-            "Album not found in Lidarr"
+            "Album not found in Lidarr",
         );
         fallbackSpy.mockRestore();
     });
@@ -328,7 +333,7 @@ describe("simpleDownloadManager branch coverage", () => {
         tx.downloadJob.updateMany.mockResolvedValueOnce({ count: 0 });
         tx.downloadJob.update.mockResolvedValueOnce({});
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
 
         const result = await simpleDownloadManager.onDownloadComplete(
@@ -336,7 +341,7 @@ describe("simpleDownloadManager branch coverage", () => {
             "actual-lidarr-mbid",
             undefined,
             undefined,
-            undefined
+            undefined,
         );
 
         expect(result.jobId).toBe("job-complete-lidarr-mbid");
@@ -363,14 +368,14 @@ describe("simpleDownloadManager branch coverage", () => {
         tx.downloadJob.updateMany.mockResolvedValueOnce({ count: 0 });
         tx.downloadJob.update.mockResolvedValueOnce({});
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
 
         const result = await simpleDownloadManager.onDownloadComplete(
             "dl-complete-name",
             undefined,
             "Name Artist",
-            "Name Album"
+            "Name Album",
         );
 
         expect(result.jobId).toBe("job-complete-name-meta");
@@ -397,18 +402,20 @@ describe("simpleDownloadManager branch coverage", () => {
         tx.downloadJob.updateMany.mockResolvedValueOnce({ count: 0 });
         tx.downloadJob.update.mockResolvedValueOnce({});
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
-        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce({
-            shouldNotify: false,
-            reason: "cooldown active",
-        } as any);
+        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce(
+            {
+                shouldNotify: false,
+                reason: "cooldown active",
+            } as any,
+        );
 
         const result = await simpleDownloadManager.onDownloadComplete(
             "dl-no-notify",
             "mbid-no-notify",
             "Artist",
-            "Album"
+            "Album",
         );
 
         expect(result.jobId).toBe("job-no-notify");
@@ -433,10 +440,12 @@ describe("simpleDownloadManager branch coverage", () => {
                 },
             },
         ]);
-        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce({
-            shouldNotify: false,
-            reason: "no timeout extension",
-        } as any);
+        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce(
+            {
+                shouldNotify: false,
+                reason: "no timeout extension",
+            } as any,
+        );
         mockPrisma.downloadJob.findFirst.mockResolvedValueOnce(null);
 
         const result = await simpleDownloadManager.markStaleJobsAsFailed({
@@ -446,13 +455,13 @@ describe("simpleDownloadManager branch coverage", () => {
         expect(result).toBe(1);
         expect(mockSessionLog).toHaveBeenCalledWith(
             "CLEANUP",
-            expect.stringContaining("Spotify import")
+            expect.stringContaining("Spotify import"),
         );
         expect(mockPrisma.downloadJob.update).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { id: "spotify_stale_1" },
                 data: expect.objectContaining({ status: "failed" }),
-            })
+            }),
         );
     });
 
@@ -481,10 +490,12 @@ describe("simpleDownloadManager branch coverage", () => {
                 },
             },
         ]);
-        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce({
-            shouldNotify: false,
-            reason: "timeout fail",
-        } as any);
+        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce(
+            {
+                shouldNotify: false,
+                reason: "timeout fail",
+            } as any,
+        );
         mockPrisma.downloadJob.findFirst.mockResolvedValueOnce(null);
 
         await simpleDownloadManager.markStaleJobsAsFailed({
@@ -518,10 +529,12 @@ describe("simpleDownloadManager branch coverage", () => {
                 },
             },
         ]);
-        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce({
-            shouldNotify: false,
-            reason: "no extension",
-        } as any);
+        mockNotificationPolicyService.evaluateNotification.mockResolvedValueOnce(
+            {
+                shouldNotify: false,
+                reason: "no extension",
+            } as any,
+        );
         mockPrisma.downloadJob.findFirst.mockResolvedValueOnce(null);
 
         const count = await simpleDownloadManager.markStaleJobsAsFailed();
@@ -533,7 +546,7 @@ describe("simpleDownloadManager branch coverage", () => {
                     args?.where?.id === "job-stale-fallback-throws" &&
                     args?.data?.status === "failed"
                 );
-            })
+            }),
         ).toBe(true);
         fallbackSpy.mockRestore();
     });
@@ -542,15 +555,23 @@ describe("simpleDownloadManager branch coverage", () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("queue endpoint down"));
 
         await expect(
-            (simpleDownloadManager as any).blocklistAndRetry("dl-queue-error", 77)
+            (simpleDownloadManager as any).blocklistAndRetry(
+                "dl-queue-error",
+                77,
+            ),
         ).resolves.toBeUndefined();
     });
 
     it("blocklistAndRetry handles settings failures", async () => {
-        mockGetSystemSettings.mockRejectedValueOnce(new Error("settings unavailable"));
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("settings unavailable"),
+        );
 
         await expect(
-            (simpleDownloadManager as any).blocklistAndRetry("dl-settings-error", 99)
+            (simpleDownloadManager as any).blocklistAndRetry(
+                "dl-settings-error",
+                99,
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -559,7 +580,9 @@ describe("simpleDownloadManager branch coverage", () => {
             data: { records: [{ id: 1, downloadId: "not-this-one" }] },
         });
 
-        await (simpleDownloadManager as any).removeFromLidarrQueue("missing-dl-id");
+        await (simpleDownloadManager as any).removeFromLidarrQueue(
+            "missing-dl-id",
+        );
 
         expect(mockAxiosDelete).not.toHaveBeenCalled();
     });
@@ -568,7 +591,9 @@ describe("simpleDownloadManager branch coverage", () => {
         mockAxiosGet.mockRejectedValueOnce(new Error("queue fetch failed"));
 
         await expect(
-            (simpleDownloadManager as any).removeFromLidarrQueue("dl-remove-fail")
+            (simpleDownloadManager as any).removeFromLidarrQueue(
+                "dl-remove-fail",
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -619,7 +644,7 @@ describe("simpleDownloadManager branch coverage", () => {
         ]);
         tx.downloadJob.update.mockResolvedValueOnce({});
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
 
         const result = await simpleDownloadManager.onDownloadGrabbed(
@@ -627,14 +652,14 @@ describe("simpleDownloadManager branch coverage", () => {
             "incoming-mbid",
             "Album",
             "Artist",
-            88
+            88,
         );
 
         expect(result).toEqual({ matched: true, jobId: "job-empty-target" });
         expect(tx.downloadJob.update).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({ targetMbid: "incoming-mbid" }),
-            })
+            }),
         );
     });
 
@@ -645,7 +670,7 @@ describe("simpleDownloadManager branch coverage", () => {
             .mockResolvedValueOnce({ id: "existing-mbid-job" });
         tx.downloadJob.findMany.mockResolvedValueOnce([]);
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
 
         const result = await simpleDownloadManager.onDownloadGrabbed(
@@ -653,7 +678,7 @@ describe("simpleDownloadManager branch coverage", () => {
             "dup-mbid",
             "Album",
             "Artist",
-            0
+            0,
         );
 
         expect(result).toEqual({ matched: false });
@@ -664,7 +689,10 @@ describe("simpleDownloadManager branch coverage", () => {
         tx.downloadJob.findFirst
             .mockResolvedValueOnce(null)
             .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce({ id: "recent-artist", userId: "user-non-mbid" });
+            .mockResolvedValueOnce({
+                id: "recent-artist",
+                userId: "user-non-mbid",
+            });
         tx.downloadJob.findMany
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([
@@ -675,7 +703,7 @@ describe("simpleDownloadManager branch coverage", () => {
                 },
             ]);
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
 
         const result = await simpleDownloadManager.onDownloadGrabbed(
@@ -683,7 +711,7 @@ describe("simpleDownloadManager branch coverage", () => {
             "",
             "Album",
             "Artist",
-            0
+            0,
         );
 
         expect(result).toEqual({ matched: false });
@@ -697,10 +725,12 @@ describe("simpleDownloadManager branch coverage", () => {
             metadata: {},
         });
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
 
-        const result = await simpleDownloadManager.onDownloadComplete("dl-complete-no-batch");
+        const result = await simpleDownloadManager.onDownloadComplete(
+            "dl-complete-no-batch",
+        );
 
         expect(result).toEqual({
             jobId: "job-complete-no-batch",
@@ -731,14 +761,14 @@ describe("simpleDownloadManager branch coverage", () => {
         tx.downloadJob.updateMany.mockResolvedValueOnce({ count: 0 });
         tx.downloadJob.update.mockResolvedValueOnce({});
         mockPrisma.$transaction.mockImplementationOnce(
-            async (operation: (tx: any) => Promise<any>) => operation(tx)
+            async (operation: (tx: any) => Promise<any>) => operation(tx),
         );
 
         const result = await simpleDownloadManager.onDownloadComplete(
             "dl-subject-match",
             undefined,
             "Subject Artist",
-            "Subject Album"
+            "Subject Album",
         );
 
         expect(result.jobId).toBe("job-subject-match");
@@ -746,10 +776,15 @@ describe("simpleDownloadManager branch coverage", () => {
 
     it("blocklistAndRetry and removeFromLidarrQueue exit when Lidarr config is incomplete", async () => {
         mockGetSystemSettings.mockResolvedValueOnce({ musicPath: "/music" });
-        await (simpleDownloadManager as any).blocklistAndRetry("dl-no-config", 10);
+        await (simpleDownloadManager as any).blocklistAndRetry(
+            "dl-no-config",
+            10,
+        );
 
         mockGetSystemSettings.mockResolvedValueOnce({ musicPath: "/music" });
-        await (simpleDownloadManager as any).removeFromLidarrQueue("dl-no-config-2");
+        await (simpleDownloadManager as any).removeFromLidarrQueue(
+            "dl-no-config-2",
+        );
 
         expect(mockAxiosGet).not.toHaveBeenCalled();
         expect(mockAxiosDelete).not.toHaveBeenCalled();
@@ -778,7 +813,9 @@ describe("simpleDownloadManager branch coverage", () => {
                 ],
             },
         });
-        mockAxiosDelete.mockRejectedValueOnce("network").mockResolvedValueOnce({});
+        mockAxiosDelete
+            .mockRejectedValueOnce("network")
+            .mockResolvedValueOnce({});
 
         const result = await simpleDownloadManager.clearLidarrQueue();
 

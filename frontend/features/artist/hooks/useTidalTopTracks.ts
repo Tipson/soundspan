@@ -59,10 +59,10 @@ export function useTidalTopTracks(artist: Artist | null | undefined) {
     const [loading, setLoading] = useState(false);
     const matchedArtistIdRef = useRef<string | null>(null);
     const [tidalAvailable, setTidalAvailable] = useState(
-        _tidalStatusCache?.available ?? false
+        _tidalStatusCache?.available ?? false,
     );
     const [isStatusResolved, setIsStatusResolved] = useState(
-        _tidalStatusCache !== null
+        _tidalStatusCache !== null,
     );
 
     // Discovery artists only have mbid, not id — use either as a stable key.
@@ -91,7 +91,7 @@ export function useTidalTopTracks(artist: Artist | null | undefined) {
             (t) =>
                 !t.album?.id ||
                 !t.album?.title ||
-                t.album.title === "Unknown Album"
+                t.album.title === "Unknown Album",
         );
     }, [topTracks, tidalAvailable]);
 
@@ -150,7 +150,10 @@ export function useTidalTopTracks(artist: Artist | null | undefined) {
                 _artistMatchCache.set(artistKey!, newMatches);
                 setMatches(newMatches);
             } catch (err) {
-                sharedFrontendLogger.error("[TIDAL TopTracks] Batch match failed:", err);
+                sharedFrontendLogger.error(
+                    "[TIDAL TopTracks] Batch match failed:",
+                    err,
+                );
                 if (!cancelled) {
                     _artistMatchCache.set(artistKey!, {});
                     setMatches({});

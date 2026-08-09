@@ -10,7 +10,11 @@ import { api } from "@/lib/api";
 import { getArtistHref } from "@/utils/artistRoute";
 import { TrackMenuButton } from "@/components/ui/TrackOverflowMenu";
 import { TrackList, TrackListHeader } from "@/components/track";
-import type { TrackRowItem, OverflowConfig, TrackRowSlots } from "@/components/track";
+import type {
+    TrackRowItem,
+    OverflowConfig,
+    TrackRowSlots,
+} from "@/components/track";
 
 interface TracksListProps {
     tracks: Track[];
@@ -27,7 +31,9 @@ function toRowItem(track: Track): TrackRowItem {
         displayTitle: track.displayTitle,
         artistName: track.album?.artist?.name ?? "",
         duration: track.duration,
-        coverArtUrl: track.album?.coverArt ? api.getCoverArtUrl(track.album.coverArt, 80) : null,
+        coverArtUrl: track.album?.coverArt
+            ? api.getCoverArtUrl(track.album.coverArt, 80)
+            : null,
     };
 }
 
@@ -48,22 +54,29 @@ export function TracksList({
 
     const rowSlots = useCallback(
         (track: Track): TrackRowSlots => ({
-            artistContent: track.album?.artist ? (() => {
-                const href = getArtistHref({ id: track.album!.artist!.id, name: track.album!.artist!.name });
-                return (
-                    <p className="text-xs text-gray-400 truncate">
-                        {href ? (
-                            <Link
-                                href={href}
-                                className="hover:underline hover:text-white"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                {track.album!.artist!.name}
-                            </Link>
-                        ) : track.album!.artist!.name}
-                    </p>
-                );
-            })() : undefined,
+            artistContent: track.album?.artist
+                ? (() => {
+                      const href = getArtistHref({
+                          id: track.album!.artist!.id,
+                          name: track.album!.artist!.name,
+                      });
+                      return (
+                          <p className="text-xs text-gray-400 truncate">
+                              {href ? (
+                                  <Link
+                                      href={href}
+                                      className="hover:underline hover:text-white"
+                                      onClick={(e) => e.stopPropagation()}
+                                  >
+                                      {track.album!.artist!.name}
+                                  </Link>
+                              ) : (
+                                  track.album!.artist!.name
+                              )}
+                          </p>
+                      );
+                  })()
+                : undefined,
             middleColumns: (
                 <div className="hidden md:block min-w-0">
                     <p className="text-sm text-gray-400 truncate">
@@ -80,8 +93,17 @@ export function TracksList({
             track: {
                 id: track.id,
                 title: track.displayTitle ?? track.title,
-                artist: track.album?.artist ? { name: track.album.artist.name, id: track.album.artist.id } : { name: "" },
-                album: { title: track.album?.title ?? "", coverArt: track.album?.coverArt, id: track.album?.id },
+                artist: track.album?.artist
+                    ? {
+                          name: track.album.artist.name,
+                          id: track.album.artist.id,
+                      }
+                    : { name: "" },
+                album: {
+                    title: track.album?.title ?? "",
+                    coverArt: track.album?.coverArt,
+                    id: track.album?.id,
+                },
                 duration: track.duration,
             },
             extraItemsAfter: canDelete ? (

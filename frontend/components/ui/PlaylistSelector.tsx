@@ -27,7 +27,9 @@ export function PlaylistSelector({
     loadingMessage,
     multiSelect = false,
 }: PlaylistSelectorProps) {
-    const [playlists, setPlaylists] = useState<Array<{ id: string; name: string; trackCount?: number }>>([]);
+    const [playlists, setPlaylists] = useState<
+        Array<{ id: string; name: string; trackCount?: number }>
+    >([]);
     const [newPlaylistName, setNewPlaylistName] = useState("");
     const [isPublic, setIsPublic] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -63,14 +65,14 @@ export function PlaylistSelector({
             setIsCreating(true);
             const playlist = await api.createPlaylist(
                 newPlaylistName.trim(),
-                isPublic
+                isPublic,
             );
             await onSelectPlaylist(playlist.id);
             setNewPlaylistName("");
             setIsPublic(false);
 
             window.dispatchEvent(
-                new CustomEvent("playlist-created", { detail: playlist })
+                new CustomEvent("playlist-created", { detail: playlist }),
             );
 
             onClose();
@@ -98,7 +100,7 @@ export function PlaylistSelector({
         try {
             await onSelectPlaylist(playlistId);
             window.dispatchEvent(
-                new CustomEvent("playlist-updated", { detail: { playlistId } })
+                new CustomEvent("playlist-updated", { detail: { playlistId } }),
             );
             await loadPlaylists();
             onClose();
@@ -120,13 +122,13 @@ export function PlaylistSelector({
                 window.dispatchEvent(
                     new CustomEvent("playlist-updated", {
                         detail: { playlistId },
-                    })
+                    }),
                 );
             } catch (error) {
                 failures++;
                 sharedFrontendLogger.error(
                     `Failed to add to playlist ${playlistId}:`,
-                    error
+                    error,
                 );
             }
         }
@@ -135,7 +137,7 @@ export function PlaylistSelector({
 
         if (failures > 0) {
             setConfirmError(
-                `Failed to add to ${failures} playlist${failures > 1 ? "s" : ""}`
+                `Failed to add to ${failures} playlist${failures > 1 ? "s" : ""}`,
             );
         } else {
             await loadPlaylists();
@@ -212,11 +214,13 @@ export function PlaylistSelector({
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1 min-w-0">
-                                            <p className={`font-semibold truncate transition-colors ${
-                                                isSelected
-                                                    ? "text-brand"
-                                                    : "text-white group-hover:text-brand"
-                                            }`}>
+                                            <p
+                                                className={`font-semibold truncate transition-colors ${
+                                                    isSelected
+                                                        ? "text-brand"
+                                                        : "text-white group-hover:text-brand"
+                                                }`}
+                                            >
                                                 {playlist.name}
                                             </p>
                                             <p className="text-xs text-gray-400 mt-1">

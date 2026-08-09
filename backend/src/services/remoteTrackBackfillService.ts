@@ -24,7 +24,11 @@ interface BackfillPhaseConfig {
     label: "TrackTidal" | "TrackYtMusic";
     albumSource: "tidal" | "youtube";
     findBatch: (lastId: string) => Promise<RemoteTrackRow[]>;
-    update: (id: string, artistId: string, albumId: string | null) => Promise<unknown>;
+    update: (
+        id: string,
+        artistId: string,
+        albumId: string | null,
+    ) => Promise<unknown>;
     startingErrors: number;
 }
 
@@ -42,7 +46,9 @@ export function isRemoteBackfillInProgress(): boolean {
     return isRunning;
 }
 
-async function backfillPhase(config: BackfillPhaseConfig): Promise<BackfillPhaseResult> {
+async function backfillPhase(
+    config: BackfillPhaseConfig,
+): Promise<BackfillPhaseResult> {
     let processed = 0;
     let errors = 0;
     let lastId = "";
@@ -59,9 +65,17 @@ async function backfillPhase(config: BackfillPhaseConfig): Promise<BackfillPhase
                     ? { id: row.artistId }
                     : await resolveArtistForRemoteTrack(row.artist);
                 const albumResult = row.album
-                    ? await resolveAlbumForRemoteTrack(row.album, artistResult.id, config.albumSource)
+                    ? await resolveAlbumForRemoteTrack(
+                          row.album,
+                          artistResult.id,
+                          config.albumSource,
+                      )
                     : null;
-                await config.update(row.id, artistResult.id, albumResult?.id ?? null);
+                await config.update(
+                    row.id,
+                    artistResult.id,
+                    albumResult?.id ?? null,
+                );
                 processed++;
                 batchResolved++;
             } catch (err) {
@@ -71,18 +85,22 @@ async function backfillPhase(config: BackfillPhaseConfig): Promise<BackfillPhase
         }
 
         if (batchResolved === 0) {
-            log.warn(`${config.label} backfill: entire batch of ${batch.length} failed, stopping`);
+            log.warn(
+                `${config.label} backfill: entire batch of ${batch.length} failed, stopping`,
+            );
             return { processed, errors };
         }
         if (processed % 200 === 0 && processed > 0) {
             log.info(
-                `${config.label} backfill progress: ${processed} processed, ${config.startingErrors + errors} errors`
+                `${config.label} backfill progress: ${processed} processed, ${config.startingErrors + errors} errors`,
             );
         }
         await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
 
-    log.warn(`${config.label} backfill exceeded ${MAX_BACKFILL_ITERATIONS} iterations, stopping`);
+    log.warn(
+        `${config.label} backfill exceeded ${MAX_BACKFILL_ITERATIONS} iterations, stopping`,
+    );
     return { processed, errors };
 }
 
@@ -125,7 +143,10 @@ async function runRemoteBackfill(): Promise<{
         albumSource: "tidal",
         findBatch: findTidalBatch,
         update: (id, artistId, albumId) =>
-            prisma.trackTidal.update({ where: { id }, data: { artistId, albumId } }),
+            prisma.trackTidal.update({
+                where: { id },
+                data: { artistId, albumId },
+            }),
         startingErrors: 0,
     });
     log.info(`TrackTidal backfill complete: ${tidal.processed} processed`);
@@ -136,7 +157,10 @@ async function runRemoteBackfill(): Promise<{
         albumSource: "youtube",
         findBatch: findYtMusicBatch,
         update: (id, artistId, albumId) =>
-            prisma.trackYtMusic.update({ where: { id }, data: { artistId, albumId } }),
+            prisma.trackYtMusic.update({
+                where: { id },
+                data: { artistId, albumId },
+            }),
         startingErrors: tidal.errors,
     });
     log.info(`TrackYtMusic backfill complete: ${ytMusic.processed} processed`);
@@ -147,9 +171,13 @@ async function runRemoteBackfill(): Promise<{
         await backfillAllArtistCounts();
     }
     log.info(
-        `Remote track backfill complete: tidal=${tidal.processed}, ytMusic=${ytMusic.processed}, errors=${errors}`
+        `Remote track backfill complete: tidal=${tidal.processed}, ytMusic=${ytMusic.processed}, errors=${errors}`,
     );
-    return { tidalProcessed: tidal.processed, ytMusicProcessed: ytMusic.processed, errors };
+    return {
+        tidalProcessed: tidal.processed,
+        ytMusicProcessed: ytMusic.processed,
+        errors,
+    };
 }
 
 /**

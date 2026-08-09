@@ -138,7 +138,7 @@ const mockGetSystemSettings = getSystemSettings as jest.Mock;
 function getHandler(method: "get" | "post", path: string) {
     const layer = (router as any).stack.find(
         (entry: any) =>
-            entry.route?.path === path && entry.route?.methods?.[method]
+            entry.route?.path === path && entry.route?.methods?.[method],
     );
 
     if (!layer) {
@@ -245,16 +245,18 @@ describe("webhooks Grab route -- real simpleDownloadManager P2002 race (F23)", (
         loserTx.downloadJob.create.mockRejectedValueOnce(
             new Prisma.PrismaClientKnownRequestError(
                 "Unique constraint failed on the fields: (`targetMbid`)",
-                { code: "P2002", clientVersion: "test" }
-            )
+                { code: "P2002", clientVersion: "test" },
+            ),
         );
 
         mockPrisma.$transaction
-            .mockImplementationOnce(async (operation: (tx: any) => Promise<any>) =>
-                operation(winnerTx)
+            .mockImplementationOnce(
+                async (operation: (tx: any) => Promise<any>) =>
+                    operation(winnerTx),
             )
-            .mockImplementationOnce(async (operation: (tx: any) => Promise<any>) =>
-                operation(loserTx)
+            .mockImplementationOnce(
+                async (operation: (tx: any) => Promise<any>) =>
+                    operation(loserTx),
             );
         // The loser's post-abort re-find runs against the plain `prisma`
         // singleton mocked above, not either `tx`.

@@ -107,7 +107,10 @@ export interface UseExploreDataReturn {
  * - Moods & Genres: YT Music categories (split into moods vs genres)
  * - Popular Artists: Last.fm
  */
-export function useExploreData(options?: { showYtMusicExplore?: boolean; showTidalExplore?: boolean }): UseExploreDataReturn {
+export function useExploreData(options?: {
+    showYtMusicExplore?: boolean;
+    showTidalExplore?: boolean;
+}): UseExploreDataReturn {
     const showYtMusicExplore = options?.showYtMusicExplore ?? true;
     const showTidalExplore = options?.showTidalExplore ?? false;
     const { isAuthenticated } = useAuth();
@@ -135,21 +138,37 @@ export function useExploreData(options?: { showYtMusicExplore?: boolean; showTid
         useRefreshMixesMutation();
 
     // ── Trending queries ─────────────────────────────────────────────────
-    const { data: shelvesData } = useYtMusicHomeShelvesQuery({ enabled: showYtMusicExplore });
-    const { data: chartsData } = useYtMusicChartsQuery({ enabled: showYtMusicExplore });
+    const { data: shelvesData } = useYtMusicHomeShelvesQuery({
+        enabled: showYtMusicExplore,
+    });
+    const { data: chartsData } = useYtMusicChartsQuery({
+        enabled: showYtMusicExplore,
+    });
     const { data: popularData } = usePopularArtistsQuery(20);
 
     // ── Moods & Genres queries ───────────────────────────────────────────
     const { data: categoriesData, isLoading: isLoadingCategories } =
         useYtMusicCategoriesQuery({ enabled: showYtMusicExplore });
-    const { data: ytMusicMixesData } = useYtMusicMixesQuery({ enabled: showYtMusicExplore });
+    const { data: ytMusicMixesData } = useYtMusicMixesQuery({
+        enabled: showYtMusicExplore,
+    });
 
     // ── TIDAL Browse queries ─────────────────────────────────────────────
-    const { data: tidalHomeData } = useTidalHomeShelvesQuery({ enabled: showTidalExplore });
-    const { data: tidalExploreData } = useTidalExploreShelvesQuery({ enabled: showTidalExplore });
-    const { data: tidalGenresData } = useTidalGenresQuery({ enabled: showTidalExplore });
-    const { data: tidalMoodsData } = useTidalMoodsQuery({ enabled: showTidalExplore });
-    const { data: tidalMixesData } = useTidalMixesQuery({ enabled: showTidalExplore });
+    const { data: tidalHomeData } = useTidalHomeShelvesQuery({
+        enabled: showTidalExplore,
+    });
+    const { data: tidalExploreData } = useTidalExploreShelvesQuery({
+        enabled: showTidalExplore,
+    });
+    const { data: tidalGenresData } = useTidalGenresQuery({
+        enabled: showTidalExplore,
+    });
+    const { data: tidalMoodsData } = useTidalMoodsQuery({
+        enabled: showTidalExplore,
+    });
+    const { data: tidalMixesData } = useTidalMixesQuery({
+        enabled: showTidalExplore,
+    });
 
     // ── Loading states ───────────────────────────────────────────────────
     const hasPrimaryData =

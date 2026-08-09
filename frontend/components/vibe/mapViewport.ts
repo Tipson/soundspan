@@ -85,7 +85,7 @@ export function zoomAt(
     vp: Viewport,
     cursor: Point,
     factor: number,
-    bounds?: MapDims
+    bounds?: MapDims,
 ): Viewport {
     const newScale = clampScale(vp.scale * factor);
     // World point under the cursor before zooming.
@@ -125,10 +125,10 @@ export function flyTo(
     vp: Viewport,
     worldPt: Point,
     targetScale: number,
-    bounds: MapDims
+    bounds: MapDims,
 ): Viewport {
     const newScale = clampScale(
-        Number.isFinite(targetScale) ? targetScale : vp.scale
+        Number.isFinite(targetScale) ? targetScale : vp.scale,
     );
     const next: Viewport = {
         scale: newScale,
@@ -163,7 +163,7 @@ export const FIT_BOUNDS_MAX_ZOOM = 8;
 export function fitBounds(
     b: WorldBounds,
     bounds: MapDims,
-    padding: number = FIT_BOUNDS_PADDING
+    padding: number = FIT_BOUNDS_PADDING,
 ): Viewport {
     const w = Math.max(1e-6, b.maxX - b.minX);
     const h = Math.max(1e-6, b.maxY - b.minY);
@@ -179,7 +179,7 @@ export function fitBounds(
             tx: bounds.width / 2 - cx * scale,
             ty: bounds.height / 2 - cy * scale,
         },
-        bounds
+        bounds,
     );
 }
 
@@ -195,7 +195,7 @@ export function interpolateViewport(
     from: Viewport,
     to: Viewport,
     t: number,
-    bounds: MapDims
+    bounds: MapDims,
 ): Viewport {
     if (t <= 0) return from;
     if (t >= 1) return to;

@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle, XCircle, Trash2, RotateCcw, History, Disc, Music } from "lucide-react";
+import {
+    CheckCircle,
+    XCircle,
+    Trash2,
+    RotateCcw,
+    History,
+    Disc,
+    Music,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useDownloadContext } from "@/lib/download-context";
 import { createFrontendLogger } from "@/lib/logger";
@@ -42,7 +50,7 @@ export function HistoryTab() {
 
     useEffect(() => {
         fetchHistory();
-        
+
         // Refresh on window focus
         const handleFocus = () => fetchHistory();
         window.addEventListener("focus", handleFocus);
@@ -56,7 +64,10 @@ export function HistoryTab() {
             // Notify other components that download status has changed
             window.dispatchEvent(new CustomEvent("download-status-changed"));
         } catch (error) {
-            logger.error("Failed to clear download history item", { id, error });
+            logger.error("Failed to clear download history item", {
+                id,
+                error,
+            });
         }
     };
 
@@ -91,7 +102,9 @@ export function HistoryTab() {
     };
 
     const completed = history.filter((h) => h.status === "completed");
-    const failed = history.filter((h) => h.status === "failed" || h.status === "exhausted");
+    const failed = history.filter(
+        (h) => h.status === "failed" || h.status === "exhausted",
+    );
 
     if (loading) {
         return (
@@ -106,7 +119,9 @@ export function HistoryTab() {
             <div className="flex flex-col items-center justify-center py-12 text-center">
                 <History className="w-8 h-8 text-white/20 mb-3" />
                 <p className="text-sm text-white/40">No download history</p>
-                <p className="text-xs text-white/30 mt-1">Completed downloads will appear here</p>
+                <p className="text-xs text-white/30 mt-1">
+                    Completed downloads will appear here
+                </p>
             </div>
         );
     }
@@ -143,14 +158,18 @@ export function HistoryTab() {
                 {failed.length > 0 && (
                     <div>
                         <div className="px-3 py-1.5 bg-red-500/10 border-b border-red-500/20">
-                            <span className="text-xs font-medium text-red-400">Failed ({failed.length})</span>
+                            <span className="text-xs font-medium text-red-400">
+                                Failed ({failed.length})
+                            </span>
                         </div>
                         {failed.map((item) => (
                             <HistoryItem
                                 key={item.id}
                                 item={item}
                                 onClear={handleClear}
-                                onRetry={downloadsEnabled ? handleRetry : undefined}
+                                onRetry={
+                                    downloadsEnabled ? handleRetry : undefined
+                                }
                                 isRetrying={retrying.has(item.id)}
                             />
                         ))}
@@ -161,7 +180,9 @@ export function HistoryTab() {
                 {completed.length > 0 && (
                     <div>
                         <div className="px-3 py-1.5 bg-green-500/10 border-b border-green-500/20">
-                            <span className="text-xs font-medium text-green-400">Completed ({completed.length})</span>
+                            <span className="text-xs font-medium text-green-400">
+                                Completed ({completed.length})
+                            </span>
                         </div>
                         {completed.map((item) => (
                             <HistoryItem
@@ -216,7 +237,9 @@ function HistoryItem({
                         </span>
                         <span className="text-xs text-white/30">•</span>
                         <span className="text-xs text-white/30">
-                            {formatRelativeTime(item.completedAt || item.createdAt)}
+                            {formatRelativeTime(
+                                item.completedAt || item.createdAt,
+                            )}
                         </span>
                     </div>
                     {item.error && (
@@ -232,14 +255,16 @@ function HistoryItem({
                             disabled={isRetrying}
                             className={cn(
                                 "p-1 hover:bg-white/10 rounded transition-colors",
-                                isRetrying && "opacity-50 cursor-not-allowed"
+                                isRetrying && "opacity-50 cursor-not-allowed",
                             )}
                             title="Retry download"
                         >
-                            <RotateCcw className={cn(
-                                "w-3.5 h-3.5 text-white/40 hover:text-brand",
-                                isRetrying && "animate-spin"
-                            )} />
+                            <RotateCcw
+                                className={cn(
+                                    "w-3.5 h-3.5 text-white/40 hover:text-brand",
+                                    isRetrying && "animate-spin",
+                                )}
+                            />
                         </button>
                     )}
                     <button

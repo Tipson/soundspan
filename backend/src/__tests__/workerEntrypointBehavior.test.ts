@@ -54,7 +54,7 @@ describe("worker entrypoint behavior", () => {
                     postgres: { ok: true },
                     redis: { ok: true },
                     checkedAt: new Date().toISOString(),
-                }))
+                })),
         );
         const dependencyReadiness = {
             probe,
@@ -67,9 +67,8 @@ describe("worker entrypoint behavior", () => {
             })),
         };
 
-        let requestHandler:
-            | ((req: { url?: string }, res: any) => void)
-            | null = null;
+        let requestHandler: ((req: { url?: string }, res: any) => void) | null =
+            null;
         const server = {
             on: jest.fn(),
             listen: jest.fn((_port, _host, cb?: () => void) => cb?.()),
@@ -82,7 +81,9 @@ describe("worker entrypoint behavior", () => {
 
         const prisma = {
             $queryRaw: jest.fn(prismaQueryRawImpl || (async () => 1)),
-            $disconnect: jest.fn(prismaDisconnectImpl || (async () => undefined)),
+            $disconnect: jest.fn(
+                prismaDisconnectImpl || (async () => undefined),
+            ),
             $connect: jest.fn(prismaConnectImpl || (async () => undefined)),
         };
 
@@ -99,16 +100,14 @@ describe("worker entrypoint behavior", () => {
             error: jest.fn(),
         };
         const createDependencyReadinessTracker = jest.fn(
-            () => dependencyReadiness
+            () => dependencyReadiness,
         );
 
-        const exitMock = jest.fn(
-            processExitImpl || (() => undefined)
-        ) as any;
+        const exitMock = jest.fn(processExitImpl || (() => undefined)) as any;
         process.exit = exitMock;
 
         const shutdownWorkers = jest.fn(
-            shutdownWorkersImpl || (async () => undefined)
+            shutdownWorkersImpl || (async () => undefined),
         );
 
         jest.doMock("http", () => ({
@@ -116,7 +115,8 @@ describe("worker entrypoint behavior", () => {
         }));
         jest.doMock("../config", () => ({
             config: {
-                databaseUrl: "postgresql://soundspan:secret@db.example:5432/soundspan",
+                databaseUrl:
+                    "postgresql://soundspan:secret@db.example:5432/soundspan",
                 redisUrl: "redis://redis.example:6379/0",
                 workerEventLoop: {
                     warnThresholdMs: 1000,
@@ -124,7 +124,7 @@ describe("worker entrypoint behavior", () => {
                 },
             },
             initializeMusicConfig: jest.fn(
-                initializeMusicConfigImpl || (async () => undefined)
+                initializeMusicConfigImpl || (async () => undefined),
             ),
         }));
         jest.doMock("../utils/redis", () => ({ redisClient }));
@@ -165,13 +165,14 @@ describe("worker entrypoint behavior", () => {
 
     const waitForWorkerReadyLog = async (
         logger: { info: jest.Mock },
-        maxAttempts = 20
+        maxAttempts = 20,
     ): Promise<void> => {
         for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
             if (
                 logger.info.mock.calls.some(
                     ([message]) =>
-                        message === "[Worker Startup] Worker runtime initialized"
+                        message ===
+                        "[Worker Startup] Worker runtime initialized",
                 )
             ) {
                 return;
@@ -198,7 +199,7 @@ describe("worker entrypoint behavior", () => {
         expect(server.listen).toHaveBeenCalledWith(
             3010,
             "0.0.0.0",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(prisma.$queryRaw).toHaveBeenCalled();
         expect(redisClient.ping).toHaveBeenCalled();
@@ -217,7 +218,7 @@ describe("worker entrypoint behavior", () => {
         expect(() => require("../worker")).toThrow("exit-1");
         expect(exitMock).toHaveBeenCalledWith(1);
         expect(logger.error).toHaveBeenCalledWith(
-            '[Worker Startup] BACKEND_PROCESS_ROLE="api" is invalid for worker entrypoint.'
+            '[Worker Startup] BACKEND_PROCESS_ROLE="api" is invalid for worker entrypoint.',
         );
         expect(createServer).not.toHaveBeenCalled();
     });
@@ -233,7 +234,7 @@ describe("worker entrypoint behavior", () => {
         await Promise.resolve();
 
         expect(logger.warn).toHaveBeenCalledWith(
-            '[Worker Startup] Invalid BACKEND_PROCESS_ROLE="invalid-role", defaulting to "worker"'
+            '[Worker Startup] Invalid BACKEND_PROCESS_ROLE="invalid-role", defaulting to "worker"',
         );
     });
 
@@ -250,10 +251,10 @@ describe("worker entrypoint behavior", () => {
         expect(server.listen).toHaveBeenCalledWith(
             3010,
             "0.0.0.0",
-            expect.any(Function)
+            expect.any(Function),
         );
         expect(logger.warn).toHaveBeenCalledWith(
-            '[Worker Startup] Invalid WORKER_HEALTH_PORT="bad-port", defaulting to 3010'
+            '[Worker Startup] Invalid WORKER_HEALTH_PORT="bad-port", defaulting to 3010',
         );
     });
 
@@ -298,7 +299,7 @@ describe("worker entrypoint behavior", () => {
             "Content-Type": "application/json",
         });
         expect(missingRes.end).toHaveBeenCalledWith(
-            JSON.stringify({ error: "Not found" })
+            JSON.stringify({ error: "Not found" }),
         );
     });
 
@@ -356,7 +357,7 @@ describe("worker entrypoint behavior", () => {
         });
         expect(logger.error).toHaveBeenCalledWith(
             "[Worker Startup] readiness probe failed:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -400,7 +401,7 @@ describe("worker entrypoint behavior", () => {
         await Promise.resolve();
 
         const errorHandler = server.on.mock.calls.find(
-            ([event]: [string]) => event === "error"
+            ([event]: [string]) => event === "error",
         )?.[1] as ((error: Error) => void) | undefined;
 
         expect(errorHandler).toBeDefined();
@@ -408,7 +409,7 @@ describe("worker entrypoint behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "[Worker Startup] Health server error:",
-            expect.any(Error)
+            expect.any(Error),
         );
     });
 
@@ -423,19 +424,22 @@ describe("worker entrypoint behavior", () => {
         await flushWorkerTicks();
 
         const unhandledRejectionHandler = processOnSpy.mock.calls.find(
-            ([event]) => event === "unhandledRejection"
+            ([event]) => event === "unhandledRejection",
         )?.[1] as
             | ((reason: unknown, promise: Promise<unknown>) => void)
             | undefined;
         expect(unhandledRejectionHandler).toBeDefined();
 
-        unhandledRejectionHandler?.(new Error("unhandled-rejection"), Promise.resolve());
+        unhandledRejectionHandler?.(
+            new Error("unhandled-rejection"),
+            Promise.resolve(),
+        );
 
         expect(logger.error).toHaveBeenCalledWith(
             "Unhandled Promise Rejection:",
             expect.objectContaining({
                 reason: "unhandled-rejection",
-            })
+            }),
         );
     });
 
@@ -450,7 +454,7 @@ describe("worker entrypoint behavior", () => {
         await flushWorkerTicks();
 
         const uncaughtExceptionHandler = processOnSpy.mock.calls.find(
-            ([event]) => event === "uncaughtException"
+            ([event]) => event === "uncaughtException",
         )?.[1] as ((error: Error) => void) | undefined;
         expect(uncaughtExceptionHandler).toBeDefined();
 
@@ -461,7 +465,7 @@ describe("worker entrypoint behavior", () => {
             "Uncaught Exception - initiating graceful worker shutdown:",
             expect.objectContaining({
                 message: "uncaught-boom",
-            })
+            }),
         );
     });
 
@@ -519,7 +523,7 @@ describe("worker entrypoint behavior", () => {
 
         expect(redisClient.ping).toHaveBeenCalledTimes(2);
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Redis connection attempt 1/10 failed")
+            expect.stringContaining("Redis connection attempt 1/10 failed"),
         );
     });
 
@@ -538,7 +542,7 @@ describe("worker entrypoint behavior", () => {
             "✗ Redis connection failed after all retries:",
             expect.objectContaining({
                 error: "Redis client is not ready - connection failed or still connecting",
-            })
+            }),
         );
         expect(exitMock).toHaveBeenCalledWith(1);
     });
@@ -626,13 +630,13 @@ describe("worker entrypoint behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "Worker failed to recover database connection:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(logger.error).toHaveBeenCalledWith(
             "Worker health check failed - connections may be stale:",
             expect.objectContaining({
                 error: "worker-interval-probe-failed",
-            })
+            }),
         );
     });
 
@@ -640,14 +644,15 @@ describe("worker entrypoint behavior", () => {
         const processOnSpy = jest
             .spyOn(process, "on")
             .mockImplementation(() => process as any);
-        const { server, exitMock, logger, shutdownWorkers } = setupWorkerRuntime();
+        const { server, exitMock, logger, shutdownWorkers } =
+            setupWorkerRuntime();
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         require("../worker");
         await waitForWorkerReadyLog(logger);
 
         const sigtermHandler = processOnSpy.mock.calls.find(
-            ([event]) => event === "SIGTERM"
+            ([event]) => event === "SIGTERM",
         )?.[1] as (() => Promise<void>) | undefined;
 
         expect(sigtermHandler).toBeDefined();
@@ -659,7 +664,7 @@ describe("worker entrypoint behavior", () => {
         expect(server.close).toHaveBeenCalled();
         expect(exitMock).toHaveBeenCalledWith(0);
         expect(logger.debug).toHaveBeenCalledWith(
-            "Shutdown already in progress..."
+            "Shutdown already in progress...",
         );
     });
 
@@ -674,7 +679,7 @@ describe("worker entrypoint behavior", () => {
         await waitForWorkerReadyLog(logger);
 
         const sigintHandler = processOnSpy.mock.calls.find(
-            ([event]) => event === "SIGINT"
+            ([event]) => event === "SIGINT",
         )?.[1] as (() => Promise<void>) | undefined;
 
         expect(sigintHandler).toBeDefined();
@@ -700,7 +705,7 @@ describe("worker entrypoint behavior", () => {
         await flushWorkerTicks();
 
         const sigtermHandler = processOnSpy.mock.calls.find(
-            ([event]) => event === "SIGTERM"
+            ([event]) => event === "SIGTERM",
         )?.[1] as (() => Promise<void>) | undefined;
 
         expect(sigtermHandler).toBeDefined();
@@ -709,7 +714,7 @@ describe("worker entrypoint behavior", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             "Error during worker shutdown:",
-            expect.any(Error)
+            expect.any(Error),
         );
         expect(exitMock).toHaveBeenCalledWith(1);
     });
@@ -733,7 +738,7 @@ describe("worker entrypoint behavior", () => {
         await flushWorkerTicks();
 
         const uncaughtExceptionHandler = processOnSpy.mock.calls.find(
-            ([event]) => event === "uncaughtException"
+            ([event]) => event === "uncaughtException",
         )?.[1] as ((error: Error) => void) | undefined;
         expect(uncaughtExceptionHandler).toBeDefined();
 
@@ -761,7 +766,7 @@ describe("worker entrypoint behavior", () => {
         await flushWorkerTicks();
 
         const sigtermHandler = processOnSpy.mock.calls.find(
-            ([event]) => event === "SIGTERM"
+            ([event]) => event === "SIGTERM",
         )?.[1] as (() => Promise<void>) | undefined;
         expect(sigtermHandler).toBeDefined();
 

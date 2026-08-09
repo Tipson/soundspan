@@ -47,9 +47,7 @@ export function removePlaylistItemFromCache<
 
     let index = old.items.findIndex((item) => item.id === itemIdOrTrackId);
     if (index === -1) {
-        index = old.items.findIndex(
-            (item) => item.trackId === itemIdOrTrackId
-        );
+        index = old.items.findIndex((item) => item.trackId === itemIdOrTrackId);
     }
     if (index === -1) return old;
 

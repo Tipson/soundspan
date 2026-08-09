@@ -7,10 +7,10 @@
  * - Album ownership checking across multiple sources
  */
 
-import { prisma } from '../../utils/db';
-import { logger } from '../../utils/logger';
-import { lidarrService } from '../lidarr';
-import { subWeeks } from 'date-fns';
+import { prisma } from "../../utils/db";
+import { logger } from "../../utils/logger";
+import { lidarrService } from "../lidarr";
+import { subWeeks } from "date-fns";
 
 export interface SeedArtist {
     name: string;
@@ -29,19 +29,22 @@ export class DiscoverySeeding {
      * Gets seed artists based on user's listening history.
      * Falls back to library artists when insufficient play history.
      */
-    async getSeedArtists(userId: string, seedCount?: number): Promise<SeedArtist[]> {
+    async getSeedArtists(
+        userId: string,
+        seedCount?: number,
+    ): Promise<SeedArtist[]> {
         const limit = seedCount ?? this.DEFAULT_SEED_COUNT;
         const fourWeeksAgo = subWeeks(new Date(), 4);
 
         const recentPlays = await prisma.play.groupBy({
-            by: ['trackId'],
+            by: ["trackId"],
             where: {
                 userId,
                 playedAt: { gte: fourWeeksAgo },
-                source: { in: ['LIBRARY', 'DISCOVERY_KEPT'] },
+                source: { in: ["LIBRARY", "DISCOVERY_KEPT"] },
             },
             _count: { id: true },
-            orderBy: { _count: { id: 'desc' } },
+            orderBy: { _count: { id: "desc" } },
             take: this.RECENT_PLAYS_LIMIT,
         });
 
@@ -51,7 +54,9 @@ export class DiscoverySeeding {
 
         const recentTrackIds = recentPlays
             .map((play) => play.trackId)
-            .filter((trackId): trackId is string => typeof trackId === "string");
+            .filter(
+                (trackId): trackId is string => typeof trackId === "string",
+            );
         if (recentTrackIds.length === 0) {
             return this.getFallbackSeedArtists(limit);
         }
@@ -59,7 +64,7 @@ export class DiscoverySeeding {
         const tracks = await prisma.track.findMany({
             where: {
                 id: { in: recentTrackIds },
-                album: { location: 'LIBRARY' },
+                album: { location: "LIBRARY" },
             },
             include: { album: { include: { artist: true } } },
         });
@@ -78,7 +83,9 @@ export class DiscoverySeeding {
         }
 
         const artists = Array.from(artistMap.values()).slice(0, limit);
-        logger.debug(`[DiscoverySeeding] Found ${artists.length} seed artists from play history`);
+        logger.debug(
+            `[DiscoverySeeding] Found ${artists.length} seed artists from play history`,
+        );
         return artists;
     }
 
@@ -86,13 +93,15 @@ export class DiscoverySeeding {
      * Fallback: Get artists with most albums in library when play history is insufficient.
      */
     private async getFallbackSeedArtists(limit: number): Promise<SeedArtist[]> {
-        logger.debug('[DiscoverySeeding] Insufficient play history, falling back to library');
+        logger.debug(
+            "[DiscoverySeeding] Insufficient play history, falling back to library",
+        );
 
         const albums = await prisma.album.groupBy({
-            by: ['artistId'],
-            where: { location: 'LIBRARY' },
+            by: ["artistId"],
+            where: { location: "LIBRARY" },
             _count: { id: true },
-            orderBy: { _count: { id: 'desc' } },
+            orderBy: { _count: { id: "desc" } },
             take: limit,
         });
 
@@ -120,7 +129,9 @@ export class DiscoverySeeding {
         });
 
         if (artist && artist.albums.length > 0) {
-            logger.debug(`[DiscoverySeeding] Artist ${artistMbid} is in library`);
+            logger.debug(
+                `[DiscoverySeeding] Artist ${artistMbid} is in library`,
+            );
             return true;
         }
 
@@ -154,7 +165,7 @@ export class DiscoverySeeding {
         const pendingDownload = await prisma.downloadJob.findFirst({
             where: {
                 targetMbid: albumMbid,
-                status: { in: ['pending', 'processing'] },
+                status: { in: ["pending", "processing"] },
             },
         });
         if (pendingDownload) return true;
@@ -169,7 +180,7 @@ export class DiscoverySeeding {
      * Validates that an MBID is not null/undefined and not a temporary ID.
      */
     private isValidMbid(mbid: string | null | undefined): mbid is string {
-        return !!mbid && !mbid.startsWith('temp-');
+        return !!mbid && !mbid.startsWith("temp-");
     }
 }
 

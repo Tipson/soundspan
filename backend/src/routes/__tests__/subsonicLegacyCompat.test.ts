@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 
 jest.mock("../../middleware/subsonicAuth", () => ({
-    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) => next(),
-    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    requireSubsonicAuth: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    subsonicRateLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/subsonicResponse", () => ({
@@ -62,11 +64,7 @@ import {
     sendSubsonicError,
     sendSubsonicSuccess,
 } from "../../utils/subsonicResponse";
-import {
-    handleGetAlbumList,
-    handleGetLyrics,
-    handleSearch,
-} from "../subsonic";
+import { handleGetAlbumList, handleGetLyrics, handleSearch } from "../subsonic";
 
 function buildReq(query: Record<string, unknown>): Request {
     return {

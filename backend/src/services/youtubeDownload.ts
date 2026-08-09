@@ -125,7 +125,7 @@ const defaultSleep = (ms: number) =>
 export async function watchYouTubeDownloadJobUntilTerminal(
     jobId: string,
     getStatus: (jobId: string) => Promise<YtDownloadJobStatus>,
-    options: YtDownloadWatchOptions = {}
+    options: YtDownloadWatchOptions = {},
 ): Promise<YtDownloadWatchOutcome> {
     const intervalMs = options.intervalMs ?? DEFAULT_WATCH_INTERVAL_MS;
     const timeoutMs = options.timeoutMs ?? DEFAULT_WATCH_TIMEOUT_MS;
@@ -140,19 +140,19 @@ export async function watchYouTubeDownloadJobUntilTerminal(
             }
             if (status.status === "failed") {
                 logger.warn(
-                    `[YouTube Download] Watched job ${jobId} failed: ${status.error ?? "unknown error"}`
+                    `[YouTube Download] Watched job ${jobId} failed: ${status.error ?? "unknown error"}`,
                 );
                 return "failed";
             }
         } catch (err: any) {
             if (err.response?.status === 404) {
                 logger.warn(
-                    `[YouTube Download] Watched job ${jobId} disappeared (sidecar restart?)`
+                    `[YouTube Download] Watched job ${jobId} disappeared (sidecar restart?)`,
                 );
                 return "gone";
             }
             logger.debug(
-                `[YouTube Download] Transient status error while watching job ${jobId}: ${err.message}`
+                `[YouTube Download] Transient status error while watching job ${jobId}: ${err.message}`,
             );
         }
         await sleep(intervalMs);
@@ -160,7 +160,7 @@ export async function watchYouTubeDownloadJobUntilTerminal(
     }
 
     logger.warn(
-        `[YouTube Download] Gave up watching job ${jobId} after ${timeoutMs}ms`
+        `[YouTube Download] Gave up watching job ${jobId} after ${timeoutMs}ms`,
     );
     return "timeout";
 }
@@ -186,7 +186,11 @@ class YouTubeDownloadService {
                 // Authenticate to the sidecar (F31). Omitted when unset so the
                 // sidecar rejects fail-closed rather than sending a blank header.
                 ...(config.internalApiSecret
-                    ? { headers: { "x-internal-secret": config.internalApiSecret } }
+                    ? {
+                          headers: {
+                              "x-internal-secret": config.internalApiSecret,
+                          },
+                      }
                     : {}),
             });
         }
@@ -230,7 +234,11 @@ class YouTubeDownloadService {
      * Proxy an audio stream from a YouTube video through the sidecar.
      * Returns an axios response with responseType: "stream" for piping.
      */
-    async getStreamProxy(videoId: string, quality?: string, rangeHeader?: string) {
+    async getStreamProxy(
+        videoId: string,
+        quality?: string,
+        rangeHeader?: string,
+    ) {
         const params: Record<string, string> = {};
         if (quality) params.quality = quality;
 
@@ -256,7 +264,7 @@ class YouTubeDownloadService {
         format: string = "mp3",
         quality: string = "HIGH",
         source?: string,
-        sourceKind?: string
+        sourceKind?: string,
     ): Promise<YtDownloadJobStart> {
         const res = await this.client.post("/yt/download", {
             video_id: videoId,
@@ -266,7 +274,7 @@ class YouTubeDownloadService {
             ...(sourceKind ? { source_kind: sourceKind } : {}),
         });
         logger.debug(
-            `[YouTube Download] Job ${res.data.job_id} started for ${videoId} (status=${res.data.status})`
+            `[YouTube Download] Job ${res.data.job_id} started for ${videoId} (status=${res.data.status})`,
         );
         return {
             jobId: res.data.job_id,
@@ -281,7 +289,7 @@ class YouTubeDownloadService {
      */
     async getDownloadJobStatus(jobId: string): Promise<YtDownloadJobStatus> {
         const res = await this.client.get(
-            `/yt/download/${encodeURIComponent(jobId)}`
+            `/yt/download/${encodeURIComponent(jobId)}`,
         );
         return mapDownloadJob(res.data);
     }
@@ -303,7 +311,7 @@ class YouTubeDownloadService {
      */
     async cancelDownload(jobId: string): Promise<YtDownloadJobStatus> {
         const res = await this.client.delete(
-            `/yt/downloads/${encodeURIComponent(jobId)}`
+            `/yt/downloads/${encodeURIComponent(jobId)}`,
         );
         return mapDownloadJob(res.data);
     }

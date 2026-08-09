@@ -52,11 +52,14 @@ class ListenTogetherClusterSync {
         await this.subClient.subscribe(LISTEN_TOGETHER_STATE_SYNC_CHANNEL);
         this.started = true;
         logger.info(
-            `[ListenTogether/StateSync] Enabled on channel "${LISTEN_TOGETHER_STATE_SYNC_CHANNEL}" (node=${this.nodeId})`
+            `[ListenTogether/StateSync] Enabled on channel "${LISTEN_TOGETHER_STATE_SYNC_CHANNEL}" (node=${this.nodeId})`,
         );
     }
 
-    async publishSnapshot(groupId: string, snapshot: GroupSnapshot): Promise<void> {
+    async publishSnapshot(
+        groupId: string,
+        snapshot: GroupSnapshot,
+    ): Promise<void> {
         if (!LISTEN_TOGETHER_STATE_SYNC_ENABLED || !this.pubClient) {
             return;
         }
@@ -72,12 +75,12 @@ class ListenTogetherClusterSync {
         try {
             await this.pubClient.publish(
                 LISTEN_TOGETHER_STATE_SYNC_CHANNEL,
-                JSON.stringify(payload)
+                JSON.stringify(payload),
             );
         } catch (err) {
             logger.warn(
                 `[ListenTogether/StateSync] Failed to publish snapshot for group ${groupId}`,
-                err
+                err,
             );
         }
     }
@@ -87,7 +90,9 @@ class ListenTogetherClusterSync {
 
         if (this.subClient) {
             try {
-                await this.subClient.unsubscribe(LISTEN_TOGETHER_STATE_SYNC_CHANNEL);
+                await this.subClient.unsubscribe(
+                    LISTEN_TOGETHER_STATE_SYNC_CHANNEL,
+                );
             } catch {
                 // ignore unsubscribe failures during shutdown
             }
@@ -109,14 +114,19 @@ class ListenTogetherClusterSync {
         }
 
         try {
-            const parsed = JSON.parse(rawMessage) as ListenTogetherStateSyncEvent;
+            const parsed = JSON.parse(
+                rawMessage,
+            ) as ListenTogetherStateSyncEvent;
             if (parsed.type !== "group-snapshot") return;
             if (parsed.originNodeId === this.nodeId) return;
-            if (!parsed.snapshot || parsed.groupId !== parsed.snapshot.id) return;
+            if (!parsed.snapshot || parsed.groupId !== parsed.snapshot.id)
+                return;
 
             this.handler(parsed.snapshot);
         } catch (err) {
-            logger.warn("[ListenTogether/StateSync] Ignoring invalid sync message");
+            logger.warn(
+                "[ListenTogether/StateSync] Ignoring invalid sync message",
+            );
         }
     }
 }

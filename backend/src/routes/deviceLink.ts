@@ -57,7 +57,9 @@ router.post("/generate", requireAuthOrToken, async (req, res) => {
             code = generateLinkCode();
             attempts++;
             if (attempts > 10) {
-                return res.status(500).json({ error: "Failed to generate unique code" });
+                return res
+                    .status(500)
+                    .json({ error: "Failed to generate unique code" });
             }
         } while (
             await prisma.deviceLinkCode.findUnique({
@@ -323,43 +325,32 @@ router.get("/devices", requireAuthOrToken, async (req, res) => {
  *         description: Not authenticated
  */
 // DELETE /device-link/devices/:id - Revoke a device (requires auth)
-router.delete<{ id: string }>("/devices/:id", requireAuthOrToken, async (req, res) => {
-    try {
-        const userId = req.user!.id;
-        const { id } = req.params;
+router.delete<{ id: string }>(
+    "/devices/:id",
+    requireAuthOrToken,
+    async (req, res) => {
+        try {
+            const userId = req.user!.id;
+            const { id } = req.params;
 
-        const apiKey = await prisma.apiKey.findFirst({
-            where: { id, userId },
-        });
+            const apiKey = await prisma.apiKey.findFirst({
+                where: { id, userId },
+            });
 
-        if (!apiKey) {
-            return res.status(404).json({ error: "Device not found" });
+            if (!apiKey) {
+                return res.status(404).json({ error: "Device not found" });
+            }
+
+            await prisma.apiKey.delete({
+                where: { id },
+            });
+
+            res.json({ success: true });
+        } catch (error) {
+            logger.error("Revoke device error:", error);
+            res.status(500).json({ error: "Failed to revoke device" });
         }
-
-        await prisma.apiKey.delete({
-            where: { id },
-        });
-
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Revoke device error:", error);
-        res.status(500).json({ error: "Failed to revoke device" });
-    }
-});
+    },
+);
 
 export default router;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
