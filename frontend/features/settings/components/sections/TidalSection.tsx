@@ -188,7 +188,7 @@ export function TidalCard({ settings, onUpdate, onTest, isTesting }: TidalCardPr
 
                         {authState === "polling" && authUrl && (
                             <p className="text-xs text-white/60">
-                                If the browser didn't open, visit:{" "}
+                                If the browser didn&apos;t open, visit:{" "}
                                 <a
                                     href={authUrl}
                                     target="_blank"
@@ -260,15 +260,15 @@ export function TidalCard({ settings, onUpdate, onTest, isTesting }: TidalCardPr
                                             <code>{'{item.number}'}</code><span>Track number (use <code>{':02d'}</code> for zero-padded)</span>
                                             <code>{'{item.volume}'}</code><span>Disc / volume number</span>
                                             <code>{'{item.title}'}</code><span>Track title</span>
-                                            <code>{'{item.title_version}'}</code><span>Title + version, e.g. "One More Time (Radio Edit)"</span>
+                                            <code>{'{item.title_version}'}</code><span>Title + version, e.g. &quot;One More Time (Radio Edit)&quot;</span>
                                             <code>{'{item.artist}'}</code><span>Primary artist</span>
                                             <code>{'{item.artists}'}</code><span>All main artists</span>
                                             <code>{'{item.features}'}</code><span>Featured artists</span>
-                                            <code>{'{item.version}'}</code><span>Version string (e.g. "Remastered")</span>
+                                            <code>{'{item.version}'}</code><span>Version string (e.g. &quot;Remastered&quot;)</span>
                                             <code>{'{item.quality}'}</code><span>Audio quality</span>
                                             <code>{'{item.isrc}'}</code><span>ISRC code</span>
                                             <code>{'{item.bpm}'}</code><span>BPM (if available)</span>
-                                            <code>{'{item.explicit}'}</code><span>"E" if explicit</span>
+                                            <code>{'{item.explicit}'}</code><span>&quot;E&quot; if explicit</span>
                                         </div>
                                     </div>
                                     <div>
@@ -279,7 +279,7 @@ export function TidalCard({ settings, onUpdate, onTest, isTesting }: TidalCardPr
                                             <code>{'{album.title}'}</code><span>Album title</span>
                                             <code>{'{album.date:%Y}'}</code><span>Release year (date is formattable)</span>
                                             <code>{'{album.release}'}</code><span>Type: ALBUM, EP, or SINGLE</span>
-                                            <code>{'{album.explicit}'}</code><span>"E" if explicit</span>
+                                            <code>{'{album.explicit}'}</code><span>&quot;E&quot; if explicit</span>
                                         </div>
                                     </div>
                                     <div>

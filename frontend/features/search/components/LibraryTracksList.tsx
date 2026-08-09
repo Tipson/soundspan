@@ -64,7 +64,7 @@ export function LibraryTracksList({ tracks, limit = 10 }: LibraryTracksListProps
     );
 
     const rowSlots = useCallback(
-        (track: LibraryTrack, index: number, state: RowState): TrackRowSlots => {
+        (track: LibraryTrack, index: number, _state: RowState): TrackRowSlots => {
             const isCurrentTrack = currentTrack?.id === track.id;
             const isPlayingThis = isCurrentTrack && isPlaying;
             const artistHref = getArtistHref({

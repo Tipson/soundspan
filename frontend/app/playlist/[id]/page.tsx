@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Image from "next/image";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CoverMosaic } from "@/components/ui/CoverMosaic";
 import { createMosaicCandidates, selectMosaicCovers } from "@/utils/mosaicCoverSelection";
@@ -18,7 +17,6 @@ import { TrackOverflowMenu, TrackMenuButton } from "@/components/ui/TrackOverflo
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackList as SharedTrackList, TrackListHeader, UnplayableBadge } from "@/components/track";
-import type { TrackRowItem, TrackRowSlots, OverflowConfig, RowState } from "@/components/track";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/lib/toast-context";
 import {
@@ -40,7 +38,6 @@ import {
     EyeOff,
     ListMusic,
     Heart,
-    Music,
     Volume2,
     RefreshCw,
     AlertCircle,
@@ -448,14 +445,6 @@ export default function PlaylistDetailPage() {
         addTracksToQueue(playableTracks);
         toast.success(`Added ${playableTracks.length} tracks to queue`);
     };
-
-    const trackDisplayIndexByItemId = useMemo(() => {
-        const byId = new Map<string, number>();
-        trackItems.forEach((item, index) => {
-            byId.set(item.id, index + 1);
-        });
-        return byId;
-    }, [trackItems]);
 
     const providerCounts = useMemo(
         () =>
@@ -998,7 +987,7 @@ export default function PlaylistDetailPage() {
                                     ? { onReorder: handleReorderByIndex }
                                     : undefined
                             }
-                            toRowItem={(item, index) => ({
+                            toRowItem={(item) => ({
                                 id: item.track?.id ?? item.id,
                                 title: item.track?.title || "Unavailable track",
                                 artistName: item.track?.album?.artist?.name || "Unknown Artist",
@@ -1014,13 +1003,11 @@ export default function PlaylistDetailPage() {
                                     toast.error(unplayable.playback?.message || "Playback is unavailable for this track right now.");
                                 }
                             }}
-                            rowSlots={(item, index, state) => {
+                            rowSlots={(item, index) => {
                                 const track = item.track;
                                 const isPlayable = isPlayableTrackItem(item);
                                 const providerSource = item.provider?.source || track?.streamSource || "local";
                                 const fallbackMessage = item.playback?.message || "Playback is unavailable for this track right now.";
-                                const trackDisplayIndex = trackDisplayIndexByItemId.get(item.id) ?? index + 1;
-
                                 return {
                                     leadingColumn: isPlayable ? undefined : (
                                         <div className="flex items-center justify-center w-8">

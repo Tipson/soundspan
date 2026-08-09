@@ -142,7 +142,7 @@ export function YouTubeMusicCard({ settings, onUpdate }: YouTubeMusicCardProps) 
         try {
             const res = await api.getYtMusicStatus();
             setStatus(res);
-        } catch (err) {
+        } catch {
             setStatus({ enabled: false, available: false, authenticated: false, credentialsConfigured: false });
         } finally {
             setStatusLoading(false);

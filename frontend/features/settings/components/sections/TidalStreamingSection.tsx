@@ -136,8 +136,8 @@ export function TidalStreamingCard({
             cancelAuthentication();
             setSuccess(null);
             setError(null);
-        } catch (err: any) {
-            setError(err.message || "Failed to disconnect");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to disconnect");
         }
     }, [cancelAuthentication]);
 

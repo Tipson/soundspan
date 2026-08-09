@@ -33,7 +33,6 @@ mock.module("@/utils/cn", {
     },
 });
 
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
 type CoverMosaicMod = typeof import("../../components/ui/CoverMosaic");
 
 const loadComponent = async () => {
@@ -130,14 +129,6 @@ describe("CoverMosaic", () => {
 
     test("empty cells have no icon when showEmptyCellIcon is false", async () => {
         const CoverMosaic = await loadComponent();
-        const html = renderToStaticMarkup(
-            React.createElement(CoverMosaic, {
-                coverUrls: ["url-1"],
-                layout: "2x2",
-            }),
-        );
-        // 1 URL in 2x2 = full-bleed, no empty cells
-        // Let's test with 2 URLs instead
         const html2 = renderToStaticMarkup(
             React.createElement(CoverMosaic, {
                 coverUrls: ["url-1", "url-2"],

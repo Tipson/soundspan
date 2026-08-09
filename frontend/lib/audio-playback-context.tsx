@@ -490,7 +490,6 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         lastTrackResetEpochRef.current = currentTrackEpoch;
         currentTimeRef.current = 0;
         lastPublishedTimeRef.current = 0;
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- must zero local playback state immediately on active track swap
         setCurrentTime((prev) => prev === 0 ? prev : 0);
         lastSaveTimeRef.current = 0;
 

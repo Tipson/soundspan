@@ -34,6 +34,13 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    files: ["tests/**"],
+    rules: {
+      // Tests may use any for mock shaping; runtime code keeps the warn+budget.
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
     files: [
       "components/player/SeekSlider.tsx",
       "components/ui/Modal.tsx",

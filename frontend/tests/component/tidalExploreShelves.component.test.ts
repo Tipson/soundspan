@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { beforeEach, mock, test } from "node:test";
+import { mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 

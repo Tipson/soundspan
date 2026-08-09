@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test, mock } from "node:test";
+import { test } from "node:test";
 
 // These tests verify the URL construction logic for preview streams
 // and remote track preference routing without importing the full api.ts

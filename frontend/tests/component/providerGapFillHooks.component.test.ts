@@ -227,10 +227,9 @@ beforeEach(() => {
 });
 
 async function settleHook<T>(hookFn: () => T): Promise<T> {
-    let result = undefined as unknown as T;
     for (let pass = 0; pass < 5; pass += 1) {
         runtime.beginRender();
-        result = hookFn();
+        hookFn();
         await runtime.flushEffects();
     }
     runtime.beginRender();

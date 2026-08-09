@@ -5,7 +5,6 @@ import {
   isPreservableNetworkError,
   shouldThrottleForegroundRecovery,
   resetForegroundRecoveryThrottle,
-  type ForegroundRecoveryInput,
 } from "../../lib/audio-engine/foregroundRecoveryPolicy";
 
 // --- resolveForegroundRecoveryDecision ---
