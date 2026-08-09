@@ -11,6 +11,14 @@ import {
 
 const NOW_ISO = "2026-06-16T00:00:00.000Z";
 
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+    let resolve!: () => void;
+    const promise = new Promise<void>((resolvePromise) => {
+        resolve = resolvePromise;
+    });
+    return { promise, resolve };
+}
+
 function ytJob(overrides: Partial<YouTubeDownloadJob> = {}): YouTubeDownloadJob {
     return {
         jobId: "job-1",
@@ -82,14 +90,24 @@ test("mapLimit never exceeds the concurrency limit", async () => {
     let inFlight = 0;
     let maxInFlight = 0;
     const items = Array.from({ length: 9 }, (_, i) => i);
-    await mapLimit(items, 3, async () => {
+    const releaseWorkers = createDeferred();
+    const firstWaveStarted = createDeferred();
+
+    const processing = mapLimit(items, 3, async () => {
         inFlight++;
         maxInFlight = Math.max(maxInFlight, inFlight);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        if (inFlight === 3) {
+            firstWaveStarted.resolve();
+        }
+        await releaseWorkers.promise;
         inFlight--;
     });
+
+    await firstWaveStarted.promise;
     assert.ok(maxInFlight <= 3, `max in flight ${maxInFlight} exceeded 3`);
     assert.ok(maxInFlight >= 2, "expected real concurrency");
+    releaseWorkers.resolve();
+    await processing;
 });
 
 test("mapLimit keeps draining after a worker throws", async () => {

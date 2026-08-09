@@ -13,7 +13,7 @@ async function waitForDrain<TArg>(
         if (!state.inFlight && !state.hasQueuedArg) {
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await Promise.resolve();
     }
 
     throw new Error("latest async operation did not drain");

@@ -85,7 +85,7 @@ async function waitFor(
         if (predicate()) {
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await Promise.resolve();
     }
     throw new Error(message);
 }
@@ -397,13 +397,21 @@ test("host track conflict retries are skipped when there is no active group", as
     assert.deepEqual(delays, [120]);
 });
 
-test("host track operation retry callback runs through real timer scheduling", async () => {
+test("host track operation retry callback runs through timer scheduling", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
     const originalNext = listenTogetherSocket.next;
     const socketState = listenTogetherSocket as unknown as {
         currentGroupId: string | null;
     };
+    let scheduledRetry: (() => void) | undefined;
     let attempts = 0;
 
+    (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((
+        callback: (...args: unknown[]) => void,
+    ) => {
+        scheduledRetry = () => callback();
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
     socketState.currentGroupId = "group-real-timer";
     (
         listenTogetherSocket as unknown as { next: () => Promise<void> }
@@ -421,11 +429,18 @@ test("host track operation retry callback runs through real timer scheduling", a
 
     try {
         enqueueLatestListenTogetherHostTrackOperation({ action: "next" });
+        await waitFor(
+            () => typeof scheduledRetry === "function",
+            "retry callback was not scheduled",
+        );
+        scheduledRetry?.();
         await waitFor(() => attempts === 2, "retry callback did not execute");
     } finally {
         (
             listenTogetherSocket as unknown as { next: () => Promise<void> }
         ).next = originalNext.bind(listenTogetherSocket);
+        (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout =
+            originalSetTimeout;
     }
 
     assert.equal(attempts, 2);

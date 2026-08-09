@@ -7,6 +7,19 @@ const wait = async (durationMs: number): Promise<void> => {
     });
 };
 
+const waitForMicrotaskCondition = async (
+    predicate: () => boolean,
+    message: string,
+): Promise<void> => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+        if (predicate()) {
+            return;
+        }
+        await Promise.resolve();
+    }
+    throw new Error(message);
+};
+
 const createMockFfmpegProcess = () => {
     const processEmitter = new EventEmitter() as EventEmitter & {
         stdout: EventEmitter;
@@ -161,17 +174,24 @@ describe("segmentedSegmentService", () => {
         mocks.mockEnsureDashAssetDirectory.mockResolvedValue(undefined);
         mocks.mockSpawn.mockReturnValue(ffmpegProcess);
 
-        const result = await Promise.race([
-            segmentedSegmentService.ensureLocalDashSegments({
+        let ensureSettled = false;
+        const ensurePromise = segmentedSegmentService
+            .ensureLocalDashSegments({
                 trackId: "track-bg",
                 sourcePath: "/music/track-bg.flac",
                 sourceModified: new Date("2026-02-20T00:00:00.000Z"),
                 quality: "medium",
-            }),
-            wait(40).then(() => "timeout"),
-        ]);
+            })
+            .finally(() => {
+                ensureSettled = true;
+            });
 
-        expect(result).not.toBe("timeout");
+        await waitForMicrotaskCondition(
+            () => ensureSettled,
+            "background DASH generation blocked ensure",
+        );
+        const result = await ensurePromise;
+
         expect(result).toEqual({
             cacheKey: "cache-bg",
             outputDir: "/tmp/cache-bg",
@@ -538,12 +558,19 @@ describe("segmentedSegmentService", () => {
                 };
             });
 
-        const result = await Promise.race([
-            segmentedSegmentService.ensureLocalDashSegments(ensureInput),
-            wait(40).then(() => "timeout"),
-        ]);
+        let ensureSettled = false;
+        const ensurePromise = segmentedSegmentService
+            .ensureLocalDashSegments(ensureInput)
+            .finally(() => {
+                ensureSettled = true;
+            });
 
-        expect(result).not.toBe("timeout");
+        await waitForMicrotaskCondition(
+            () => ensureSettled,
+            "background full validation blocked cache-hit startup",
+        );
+        const result = await ensurePromise;
+
         expect(result).toEqual({
             cacheKey,
             outputDir: `/tmp/${cacheKey}`,

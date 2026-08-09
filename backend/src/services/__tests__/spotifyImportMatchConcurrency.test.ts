@@ -11,8 +11,8 @@
 // task essentially back-to-back (add() invokes fn() synchronously, so all
 // six matchTrack() calls are in flight before any of their mocked DB reads
 // resolve), so it does NOT collapse the concurrency being tested here: the
-// per-track DB delays below (assigned in REVERSE of input order, via real
-// setTimeout) still produce genuine out-of-order resolution among the six
+// per-track deferred DB reads below are released in reverse input order and
+// produce genuine out-of-order resolution among the six
 // in-flight matchTrack() calls. A naive "collect results as they complete"
 // implementation would scramble the output; a correct
 // Promise.all(tracks.map(...)) implementation is immune to this -- array
@@ -179,8 +179,15 @@ describe("spotify import matchTrack concurrency", () => {
         };
     }
 
-    function delay(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
+    function createDeferred(): {
+        promise: Promise<void>;
+        resolve: () => void;
+    } {
+        let resolve!: () => void;
+        const promise = new Promise<void>((resolvePromise) => {
+            resolve = resolvePromise;
+        });
+        return { promise, resolve };
     }
 
     it("keeps matchedTracks in input order and unmatchedByAlbum grouping order stable when per-track DB reads resolve out of order under concurrency", async () => {
@@ -218,23 +225,30 @@ describe("spotify import matchTrack concurrency", () => {
             },
         };
 
-        // Artificial delays assigned in REVERSE of input order: track 1 (first
-        // in input) resolves slowest, track 6 (last in input) resolves
-        // instantly. Under real concurrency this produces genuine out-of-order
-        // completion.
-        const delayMsByTitle: Record<string, number> = {
-            "Song One": 45,
-            "Song Two": 36,
-            "Song Three": 27,
-            "Song Four": 18,
-            "Song Five": 9,
-            "Song Six": 0,
+        const titles = tracks.map((track) => track.title as string);
+        const readGates = Object.fromEntries(
+            titles.map((title) => [title, createDeferred()]),
+        ) as Record<string, ReturnType<typeof createDeferred>>;
+        const readCompletions = Object.fromEntries(
+            titles.map((title) => [title, createDeferred()]),
+        ) as Record<string, ReturnType<typeof createDeferred>>;
+        const allReadsStarted = createDeferred();
+        let startedReadCount = 0;
+
+        const releaseRead = async (title: string): Promise<void> => {
+            readGates[title].resolve();
+            await readCompletions[title].promise;
         };
 
         (prisma.track.findFirst as jest.Mock).mockImplementation(
             async (query: any) => {
                 const title = query?.where?.title?.equals;
-                await delay(delayMsByTitle[title] ?? 0);
+                startedReadCount += 1;
+                if (startedReadCount === tracks.length) {
+                    allReadsStarted.resolve();
+                }
+                await readGates[title].promise;
+                readCompletions[title].resolve();
                 return localTrackByTitle[title] ?? null;
             }
         );
@@ -243,7 +257,7 @@ describe("spotify import matchTrack concurrency", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spotifyImportService } = require("../spotifyImport");
 
-        const preview = await (spotifyImportService as any).buildPreviewFromTracklist(
+        const previewPromise = (spotifyImportService as any).buildPreviewFromTracklist(
             tracks,
             {
                 id: "playlist-concurrency",
@@ -255,6 +269,15 @@ describe("spotify import matchTrack concurrency", () => {
             },
             "Spotify"
         );
+
+        await allReadsStarted.promise;
+        await releaseRead("Song Six");
+        await releaseRead("Song Five");
+        await releaseRead("Song Four");
+        await releaseRead("Song Three");
+        await releaseRead("Song Two");
+        await releaseRead("Song One");
+        const preview = await previewPromise;
 
         // matchedTracks must be in exact input order, regardless of the
         // reversed DB-resolution order above.
