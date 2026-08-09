@@ -1,5 +1,10 @@
+import importlib.util
 import os
+import sys
+import threading
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -21,6 +26,66 @@ TF_ENV_KEYS = [
     "TF_NUM_INTEROP_THREADS",
 ]
 ANALYZER_PATH = Path(__file__).resolve().parents[1] / "analyzer.py"
+
+
+class FakeRedisClient:
+    """Minimal Redis client returned by the recording constructor."""
+
+
+def _load_analyzer_with_recording_redis(
+    monkeypatch: pytest.MonkeyPatch,
+    timeout_calls: list[tuple[str, int, int]],
+    redis_calls: list[tuple[tuple[Any, ...], dict[str, Any]]],
+) -> ModuleType:
+    """Load the CLAP analyzer with its heavyweight dependencies isolated."""
+
+    def resolve_timeout(name: str, default: int, *, blocking_timeout: int) -> int:
+        timeout_calls.append((name, default, blocking_timeout))
+        return 23
+
+    def from_url(*args: Any, **kwargs: Any) -> FakeRedisClient:
+        redis_calls.append((args, kwargs))
+        return FakeRedisClient()
+
+    torch_stub = ModuleType("torch")
+    torch_stub.set_num_threads = lambda _count: None  # type: ignore[attr-defined]
+    torch_stub.cuda = type("Cuda", (), {"is_available": staticmethod(lambda: False)})()  # type: ignore[attr-defined]
+    torch_stub.device = lambda name: name  # type: ignore[attr-defined]
+    redis_stub = ModuleType("redis")
+    redis_stub.from_url = from_url  # type: ignore[attr-defined]
+    redis_stub.exceptions = type("Exceptions", (), {"ResponseError": Exception})()  # type: ignore[attr-defined]
+    psycopg2_stub = ModuleType("psycopg2")
+    psycopg2_stub.Error = Exception  # type: ignore[attr-defined]
+    extras_stub = ModuleType("psycopg2.extras")
+    extras_stub.RealDictCursor = object  # type: ignore[attr-defined]
+    pgvector_stub = ModuleType("pgvector")
+    pgvector_psycopg2_stub = ModuleType("pgvector.psycopg2")
+    pgvector_psycopg2_stub.register_vector = lambda _conn: None  # type: ignore[attr-defined]
+
+    monkeypatch.setenv("SLEEP_INTERVAL", "7")
+    monkeypatch.setattr(
+        "services.common.analyzer_env.get_blocking_socket_timeout",
+        resolve_timeout,
+    )
+    for name, stub in {
+        "librosa": ModuleType("librosa"),
+        "requests": ModuleType("requests"),
+        "torch": torch_stub,
+        "redis": redis_stub,
+        "psycopg2": psycopg2_stub,
+        "psycopg2.extras": extras_stub,
+        "pgvector": pgvector_stub,
+        "pgvector.psycopg2": pgvector_psycopg2_stub,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, stub)
+
+    spec = importlib.util.spec_from_file_location("clap_analyzer_env_test_module", ANALYZER_PATH)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_get_int_env_reads_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,11 +151,31 @@ def test_blocking_socket_timeout_rejects_non_positive_override(
         )
 
 
-def test_worker_applies_bounded_socket_timeout_to_queue_client() -> None:
-    source = ANALYZER_PATH.read_text(encoding="utf-8")
+def test_worker_applies_bounded_socket_timeout_to_queue_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    timeout_calls: list[tuple[str, int, int]] = []
+    redis_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    module = _load_analyzer_with_recording_redis(monkeypatch, timeout_calls, redis_calls)
 
-    assert "'CLAP_REDIS_SOCKET_TIMEOUT'" in source
-    assert "socket_timeout=REDIS_SOCKET_TIMEOUT" in source
+    class FakeDatabaseConnection:
+        def __init__(self, _url: str) -> None:
+            pass
+
+        def connect(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    stop_event = threading.Event()
+    stop_event.set()
+    monkeypatch.setattr(module, "DatabaseConnection", FakeDatabaseConnection)
+
+    module.Worker(1, object(), stop_event).start()
+
+    assert timeout_calls == [("CLAP_REDIS_SOCKET_TIMEOUT", 10, 7)]
+    assert redis_calls == [((module.REDIS_URL,), {"socket_timeout": 23})]
 
 
 def test_configure_thread_env_without_tensorflow_sets_only_blas(
