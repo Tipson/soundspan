@@ -4766,11 +4766,9 @@ router.get(
 
         const parsed = parseRemoteTrackId(req.params.id);
         if (!parsed) {
-            return res
-                .status(400)
-                .json({
-                    error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
-                });
+            return res.status(400).json({
+                error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
+            });
         }
 
         let likedAt: Date | null = null;
@@ -4885,11 +4883,9 @@ router.post(
 
         const parsed = parseRemoteTrackId(req.params.id);
         if (!parsed) {
-            return res
-                .status(400)
-                .json({
-                    error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
-                });
+            return res.status(400).json({
+                error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
+            });
         }
 
         const signal = normalizeTrackPreferenceSignal(

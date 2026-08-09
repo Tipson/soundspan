@@ -64,11 +64,9 @@ router.get("/info", requireAuth, async (req: Request, res: Response) => {
             return res.status(400).json({ error: err.issues[0].message });
         }
         if (err.response?.status === 400) {
-            return res
-                .status(400)
-                .json({
-                    error: err.response?.data?.detail || "Invalid YouTube URL",
-                });
+            return res.status(400).json({
+                error: err.response?.data?.detail || "Invalid YouTube URL",
+            });
         }
         if (err.response?.status === 404) {
             return res.status(404).json({ error: "Video not found" });
@@ -329,11 +327,9 @@ router.post(
                 });
             }
             logger.error("[YouTube Route] Download start failed:", err.message);
-            return res
-                .status(502)
-                .json({
-                    error: err.response?.data?.detail || "Download failed",
-                });
+            return res.status(502).json({
+                error: err.response?.data?.detail || "Download failed",
+            });
         }
     },
 );

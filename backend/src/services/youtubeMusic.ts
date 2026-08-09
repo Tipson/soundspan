@@ -1110,9 +1110,7 @@ class YouTubeMusicService {
         return data;
     }
 
-    async getMoodCategories(
-        userId?: string,
-    ): Promise<
+    async getMoodCategories(userId?: string): Promise<
         Array<{
             title: string;
             items: Array<{ title: string; params: string }>;

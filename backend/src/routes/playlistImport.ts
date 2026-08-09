@@ -324,11 +324,9 @@ router.post(
                 return res.status(404).json({ error: "Import job not found" });
             }
             if (job.userId !== req.user!.id) {
-                return res
-                    .status(403)
-                    .json({
-                        error: "Not authorized to cancel this import job",
-                    });
+                return res.status(403).json({
+                    error: "Not authorized to cancel this import job",
+                });
             }
             if (TERMINAL_JOB_STATUSES.has(job.status)) {
                 return res.status(409).json({

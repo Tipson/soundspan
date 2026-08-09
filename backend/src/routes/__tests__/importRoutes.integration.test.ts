@@ -81,11 +81,9 @@ describe("import routes integration", () => {
     });
 
     it("requires auth for POST /api/import/preview", async () => {
-        const res = await request(app)
-            .post("/api/import/preview")
-            .send({
-                url: "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk",
-            });
+        const res = await request(app).post("/api/import/preview").send({
+            url: "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk",
+        });
 
         expect(res.status).toBe(401);
         expect(res.body).toEqual(

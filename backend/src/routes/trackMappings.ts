@@ -129,12 +129,10 @@ router.post(
         try {
             const parsed = batchCreateSchema.safeParse(req.body);
             if (!parsed.success) {
-                return res
-                    .status(400)
-                    .json({
-                        error: "Invalid mappings array",
-                        details: parsed.error.issues,
-                    });
+                return res.status(400).json({
+                    error: "Invalid mappings array",
+                    details: parsed.error.issues,
+                });
             }
 
             const linkageKeys = new Set<string>();

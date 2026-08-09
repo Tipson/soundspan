@@ -584,9 +584,7 @@ export class ListenTogetherSocket {
         );
     }
 
-    async addToQueue(
-        tracks: string[] | QueueTrackInput[],
-    ): Promise<{
+    async addToQueue(tracks: string[] | QueueTrackInput[]): Promise<{
         acceptedCount: number;
         skippedCount: number;
         truncated: boolean;
@@ -598,9 +596,7 @@ export class ListenTogetherSocket {
         return this.resolveQueueMutationResult(response, tracks.length);
     }
 
-    async insertNext(
-        tracks: string[] | QueueTrackInput[],
-    ): Promise<{
+    async insertNext(tracks: string[] | QueueTrackInput[]): Promise<{
         acceptedCount: number;
         skippedCount: number;
         truncated: boolean;

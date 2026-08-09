@@ -1200,12 +1200,10 @@ describe("downloads routes runtime", () => {
                         .mockResolvedValueOnce([])
                         .mockResolvedValueOnce([]),
                     downloadJob: {
-                        create: jest
-                            .fn()
-                            .mockResolvedValue({
-                                id: "job-new",
-                                status: "pending",
-                            }),
+                        create: jest.fn().mockResolvedValue({
+                            id: "job-new",
+                            status: "pending",
+                        }),
                     },
                 }),
             );
@@ -1327,12 +1325,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-missing",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-missing",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1362,12 +1358,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-parse",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-parse",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1404,12 +1398,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-parse-split",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-parse-split",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1446,12 +1438,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-simple-fail",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-simple-fail",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1495,12 +1485,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-throw",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-throw",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1591,12 +1579,10 @@ describe("downloads routes runtime", () => {
                     .mockResolvedValueOnce([])
                     .mockResolvedValueOnce([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-batch-1",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-batch-1",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1637,12 +1623,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-fallback-1",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-fallback-1",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1702,12 +1686,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-fallback-3",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-fallback-3",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1757,12 +1739,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-fallback-2",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-fallback-2",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1820,12 +1800,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-tidal",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1896,12 +1874,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-tidal-fallback",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal-fallback",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -1967,12 +1943,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-tidal-fail",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal-fail",
+                        status: "pending",
+                    }),
                 },
             }),
         );
@@ -2041,12 +2015,10 @@ describe("downloads routes runtime", () => {
             callback({
                 $queryRaw: jest.fn().mockResolvedValue([]),
                 downloadJob: {
-                    create: jest
-                        .fn()
-                        .mockResolvedValue({
-                            id: "job-tidal-zero",
-                            status: "pending",
-                        }),
+                    create: jest.fn().mockResolvedValue({
+                        id: "job-tidal-zero",
+                        status: "pending",
+                    }),
                 },
             }),
         );

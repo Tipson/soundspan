@@ -1310,11 +1310,9 @@ router.post("/grab", async (req, res) => {
             !Number.isFinite(parsedLidarrAlbumId) ||
             parsedLidarrAlbumId <= 0
         ) {
-            return res
-                .status(400)
-                .json({
-                    error: "Missing required fields: guid, lidarrAlbumId",
-                });
+            return res.status(400).json({
+                error: "Missing required fields: guid, lidarrAlbumId",
+            });
         }
 
         const lidarrEnabled = await lidarrService.isEnabled();

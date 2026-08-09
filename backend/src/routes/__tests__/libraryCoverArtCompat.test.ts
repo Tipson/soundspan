@@ -512,12 +512,10 @@ describe("library cover-art proxy compatibility", () => {
 
     it("serves resized native covers when a size is requested", async () => {
         const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
-        const statSpy = jest
-            .spyOn(fs.promises, "stat")
-            .mockResolvedValue({
-                mtimeMs: 1718000000000,
-                size: 4096,
-            } as fs.Stats);
+        const statSpy = jest.spyOn(fs.promises, "stat").mockResolvedValue({
+            mtimeMs: 1718000000000,
+            size: 4096,
+        } as fs.Stats);
         const readSpy = jest
             .spyOn(fs.promises, "readFile")
             .mockResolvedValue(Buffer.from("native-bytes"));
@@ -554,12 +552,10 @@ describe("library cover-art proxy compatibility", () => {
 
     it("caches resized native cover variants in Redis keyed by file identity, size, and format", async () => {
         const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
-        const statSpy = jest
-            .spyOn(fs.promises, "stat")
-            .mockResolvedValue({
-                mtimeMs: 1718000000000,
-                size: 4096,
-            } as fs.Stats);
+        const statSpy = jest.spyOn(fs.promises, "stat").mockResolvedValue({
+            mtimeMs: 1718000000000,
+            size: 4096,
+        } as fs.Stats);
         const readSpy = jest
             .spyOn(fs.promises, "readFile")
             .mockResolvedValue(Buffer.from("native-bytes"));
@@ -611,12 +607,10 @@ describe("library cover-art proxy compatibility", () => {
 
     it("serves cached native variants and answers If-None-Match without re-decoding", async () => {
         const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
-        const statSpy = jest
-            .spyOn(fs.promises, "stat")
-            .mockResolvedValue({
-                mtimeMs: 1718000000000,
-                size: 4096,
-            } as fs.Stats);
+        const statSpy = jest.spyOn(fs.promises, "stat").mockResolvedValue({
+            mtimeMs: 1718000000000,
+            size: 4096,
+        } as fs.Stats);
         const readSpy = jest.spyOn(fs.promises, "readFile");
         const cachedBuffer = Buffer.from("cached-native-resized");
         const cachedEtag = "etag-native-cached";
@@ -666,12 +660,10 @@ describe("library cover-art proxy compatibility", () => {
 
     it("falls back to sending the native file when resize does not apply", async () => {
         const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
-        const statSpy = jest
-            .spyOn(fs.promises, "stat")
-            .mockResolvedValue({
-                mtimeMs: 1718000000000,
-                size: 4096,
-            } as fs.Stats);
+        const statSpy = jest.spyOn(fs.promises, "stat").mockResolvedValue({
+            mtimeMs: 1718000000000,
+            size: 4096,
+        } as fs.Stats);
         const readSpy = jest
             .spyOn(fs.promises, "readFile")
             .mockResolvedValue(Buffer.from("native-bytes"));
