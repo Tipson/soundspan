@@ -61,8 +61,13 @@ mock.module("@/lib/logger", {
 });
 
 mock.module("next/link", {
-    defaultExport: ({ children, href }: { children: React.ReactNode; href: string }) =>
-        React.createElement("a", { href }, children),
+    defaultExport: ({
+        children,
+        href,
+    }: {
+        children: React.ReactNode;
+        href: string;
+    }) => React.createElement("a", { href }, children),
 });
 
 mock.module("lucide-react", {
@@ -70,15 +75,14 @@ mock.module("lucide-react", {
 });
 
 async function renderMoodPills() {
-    const { MoodPills } = await import(
-        "../../features/explore/components/MoodPills"
-    );
+    const { MoodPills } =
+        await import("../../features/explore/components/MoodPills");
     return renderToStaticMarkup(
         React.createElement(
             QueryClientProvider,
             { client: new QueryClient() },
-            React.createElement(MoodPills)
-        )
+            React.createElement(MoodPills),
+        ),
     );
 }
 

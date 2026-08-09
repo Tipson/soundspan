@@ -86,7 +86,7 @@ mock.module("@/lib/query-events", {
 type DeferredAudioState = Record<string, unknown> & { commit: () => void };
 
 function createDeferredAudioState(
-    initial: Record<string, unknown>
+    initial: Record<string, unknown>,
 ): DeferredAudioState {
     const pending: Array<() => void> = [];
     const stub: DeferredAudioState = {
@@ -149,7 +149,7 @@ function createDeferredAudioState(
 }
 
 function createPlaybackStub(
-    initial: { currentTime?: number; duration?: number } = {}
+    initial: { currentTime?: number; duration?: number } = {},
 ) {
     return {
         currentTime: initial.currentTime ?? 0,
@@ -173,9 +173,8 @@ async function renderControls(options: {
     playbackHolder.current = options.playback;
     apiCalls.updatePodcastProgress.length = 0;
 
-    const { AudioControlsProvider, useAudioControls } = await import(
-        "../../lib/audio-controls-context"
-    );
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
 
     const capturedRef: {
         current: ReturnType<typeof useAudioControls> | null;
@@ -188,8 +187,8 @@ async function renderControls(options: {
         React.createElement(
             AudioControlsProvider,
             null,
-            React.createElement(Probe)
-        )
+            React.createElement(Probe),
+        ),
     );
     assert.ok(html.includes("controls-ready"));
     assert.ok(capturedRef.current);
@@ -214,7 +213,7 @@ function makeTrack(id: string, artistId: string) {
 async function makeEpisodeQueueItem(
     podcastId: string,
     episodeId: string,
-    duration = 1800
+    duration = 1800,
 ) {
     const { buildEpisodeQueueItem } = await import("../../lib/queue-item");
     return buildEpisodeQueueItem({
@@ -337,7 +336,7 @@ test("addTracksToQueue over a legacy playing episode seeds a real shuffle order"
     const controls = await renderControls({ state, playback });
     controls.addTracksToQueue(
         [makeTrack("t1", "a1"), makeTrack("t2", "a2"), makeTrack("t3", "a3")],
-        { silent: true }
+        { silent: true },
     );
     state.commit();
 
@@ -353,7 +352,7 @@ test("addTracksToQueue over a legacy playing episode seeds a real shuffle order"
     // All queue positions participate exactly once...
     assert.deepEqual(
         [...indices].sort((a, b) => a - b),
-        [0, 1, 2, 3]
+        [0, 1, 2, 3],
     );
     // ...and the order is actually shuffled, not the sequential identity.
     assert.notDeepEqual(indices, [0, 1, 2, 3]);
@@ -390,7 +389,7 @@ test("rapid addEpisodeToQueue calls append distinct shuffle indices", async () =
     // appended the same index twice so one position never played in shuffle.
     assert.deepEqual(
         [...indices].sort((a, b) => a - b),
-        [0, 1, 2, 3]
+        [0, 1, 2, 3],
     );
 });
 
@@ -414,7 +413,7 @@ test("rapid addTracksToQueue appends stamp distinct shuffle indices", async () =
     const indices = state.shuffleIndices as number[];
     assert.deepEqual(
         [...indices].sort((a, b) => a - b),
-        [0, 1, 2, 3]
+        [0, 1, 2, 3],
     );
 });
 

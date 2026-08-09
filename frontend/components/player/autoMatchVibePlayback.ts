@@ -10,7 +10,7 @@ export interface AutoMatchVibeQueueEndInput {
  * Executes shouldAutoMatchVibeAtQueueEnd.
  */
 export function shouldAutoMatchVibeAtQueueEnd(
-    input: AutoMatchVibeQueueEndInput
+    input: AutoMatchVibeQueueEndInput,
 ): boolean {
     if (input.playbackType !== "track") return false;
     if (input.isListenTogether) return false;

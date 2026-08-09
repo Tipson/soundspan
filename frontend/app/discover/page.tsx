@@ -50,7 +50,9 @@ export default function DiscoverWeeklyPage() {
                     Discover Weekly
                 </h1>
                 <div className="bg-surface-raised border border-surface-active rounded-lg p-6">
-                    <p className="text-content-secondary mb-2">Feature not available</p>
+                    <p className="text-content-secondary mb-2">
+                        Feature not available
+                    </p>
                     <p className="text-sm text-content-muted">
                         Discovery is disabled on this server.
                     </p>
@@ -83,8 +85,11 @@ function DiscoverWeeklyPageContent() {
         setPendingGeneration,
         isGenerating,
     } = useDiscoverData();
-    const { tracks: providerEnrichedTracks, providerCounts, isMatching } =
-        useDiscoverProviderGapFill(playlist?.tracks);
+    const {
+        tracks: providerEnrichedTracks,
+        providerCounts,
+        isMatching,
+    } = useDiscoverProviderGapFill(playlist?.tracks);
     const displayPlaylist = playlist
         ? { ...playlist, tracks: providerEnrichedTracks }
         : null;
@@ -99,14 +104,14 @@ function DiscoverWeeklyPageContent() {
         displayPlaylist,
         isGenerating,
         refreshBatchStatus,
-        setPendingGeneration
+        setPendingGeneration,
     );
     const { currentPreview, handleTogglePreview } = usePreviewPlayer();
     const hasDiscoverTracks = Boolean(
-        displayPlaylist && displayPlaylist.tracks.length > 0
+        displayPlaylist && displayPlaylist.tracks.length > 0,
     );
     const hasUnavailableAlbums = Boolean(
-        displayPlaylist && displayPlaylist.unavailable.length > 0
+        displayPlaylist && displayPlaylist.unavailable.length > 0,
     );
     const hasPlaylistContent = hasDiscoverTracks || hasUnavailableAlbums;
     const generatedRecently = useMemo(() => {
@@ -130,7 +135,7 @@ function DiscoverWeeklyPageContent() {
 
     // Check if we're playing from this playlist
     const isPlaylistPlaying = displayPlaylist?.tracks.some(
-        (t) => t.id === currentTrack?.id
+        (t) => t.id === currentTrack?.id,
     );
 
     useEffect(() => {
@@ -158,12 +163,20 @@ function DiscoverWeeklyPageContent() {
         setIsAddingToPlaylist(true);
         try {
             for (const track of displayPlaylist.tracks) {
-                await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef(track));
+                await api.addTrackToPlaylist(
+                    playlistId,
+                    toAddToPlaylistRef(track),
+                );
             }
-            toast.success(`Added ${displayPlaylist.tracks.length} tracks to playlist`);
+            toast.success(
+                `Added ${displayPlaylist.tracks.length} tracks to playlist`,
+            );
             setShowPlaylistSelector(false);
         } catch (error) {
-            sharedFrontendLogger.error("Failed to add tracks to playlist:", error);
+            sharedFrontendLogger.error(
+                "Failed to add tracks to playlist:",
+                error,
+            );
             toast.error("Failed to add some tracks to playlist");
         } finally {
             setIsAddingToPlaylist(false);
@@ -187,7 +200,11 @@ function DiscoverWeeklyPageContent() {
                 config={config}
                 isPlaylistPlaying={isPlaylistPlaying || false}
                 isPlaying={isPlaying}
-                onPlayToggle={isPlaylistPlaying && isPlaying ? handleTogglePlay : handlePlayPlaylist}
+                onPlayToggle={
+                    isPlaylistPlaying && isPlaying
+                        ? handleTogglePlay
+                        : handlePlayPlaylist
+                }
                 onGenerate={handleGenerate}
                 onToggleSettings={() => setShowSettings(!showSettings)}
                 onAddToPlaylist={handleAddAllToPlaylist}
@@ -208,93 +225,93 @@ function DiscoverWeeklyPageContent() {
             {/* Track Listing */}
             <div className="px-2 md:px-8 pb-32">
                 {hasPlaylistContent ? (
-                        <div className="space-y-6">
-                            {hasDiscoverTracks ? (
+                    <div className="space-y-6">
+                        {hasDiscoverTracks ? (
+                            <>
+                                <p className="text-xs text-gray-400">
+                                    Source mix: {providerCounts.local} local
+                                    {providerCounts.tidal > 0
+                                        ? ` • ${providerCounts.tidal} TIDAL gap-fill`
+                                        : ""}
+                                    {providerCounts.youtube > 0
+                                        ? ` • ${providerCounts.youtube} YouTube Music gap-fill`
+                                        : ""}
+                                </p>
+                                <TrackList
+                                    tracks={displayPlaylist?.tracks || []}
+                                    isMatching={isMatching}
+                                    currentTrack={currentTrack}
+                                    isPlaying={isPlaying}
+                                    onPlayTrack={handlePlayTrack}
+                                    onTogglePlay={handleTogglePlay}
+                                />
+                            </>
+                        ) : (
+                            <p className="text-sm text-gray-400">
+                                We are still finishing this week&apos;s track
+                                list.
+                            </p>
+                        )}
+
+                        <UnavailableAlbums
+                            unavailable={displayPlaylist?.unavailable || []}
+                            currentPreview={currentPreview}
+                            onTogglePreview={handleTogglePreview}
+                        />
+
+                        <HowItWorks />
+                    </div>
+                ) : shouldShowResolvingState ? (
+                    <div className="flex flex-col items-center justify-center py-24 text-center">
+                        <GradientSpinner size="md" />
+                        <h3 className="mt-4 text-lg font-medium text-white">
+                            Loading your latest Discover Weekly
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-400 max-w-md">
+                            Your playlist has been generated and can take a few
+                            seconds to fully appear.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-24 text-center">
+                        <div className="w-20 h-20 bg-gradient-to-br from-ai-dark/20 to-yellow-600/20 rounded-full flex items-center justify-center mb-4 shadow-xl border border-white/10">
+                            <Music2 className="w-10 h-10 text-ai-hover" />
+                        </div>
+                        <h3 className="text-lg font-medium text-white mb-1">
+                            No Discover Weekly Yet
+                        </h3>
+                        <p className="text-sm text-gray-400 mb-6 max-w-md">
+                            Generate your first playlist based on your listening
+                            history!
+                        </p>
+                        <button
+                            onClick={handleGenerate}
+                            disabled={isGenerating}
+                            className={cn(
+                                "flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold transition-all",
+                                isGenerating
+                                    ? "bg-white/5 cursor-not-allowed opacity-50"
+                                    : "bg-ai-dark/20 hover:bg-ai-dark/30 border border-ai/30 hover:scale-105",
+                            )}
+                        >
+                            {isGenerating ? (
                                 <>
-                                    <p className="text-xs text-gray-400">
-                                        Source mix: {providerCounts.local} local
-                                        {providerCounts.tidal > 0
-                                            ? ` • ${providerCounts.tidal} TIDAL gap-fill`
-                                            : ""}
-                                        {providerCounts.youtube > 0
-                                            ? ` • ${providerCounts.youtube} YouTube Music gap-fill`
-                                            : ""}
-                                    </p>
-                                    <TrackList
-                                        tracks={displayPlaylist?.tracks || []}
-                                        isMatching={isMatching}
-                                        currentTrack={currentTrack}
-                                        isPlaying={isPlaying}
-                                        onPlayTrack={handlePlayTrack}
-                                        onTogglePlay={handleTogglePlay}
-                                    />
+                                    <GradientSpinner size="sm" />
+                                    {batchStatus?.status === "scanning"
+                                        ? "Finalizing recommendations..."
+                                        : batchStatus?.status === "generating"
+                                          ? "Refreshing recommendations..."
+                                          : `Working... ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
                                 </>
                             ) : (
-                                <p className="text-sm text-gray-400">
-                                    We are still finishing this week&apos;s track list.
-                                </p>
+                                <>
+                                    <RefreshCw className="w-5 h-5" />
+                                    Generate Now
+                                </>
                             )}
-
-                            <UnavailableAlbums
-                                unavailable={displayPlaylist?.unavailable || []}
-                                currentPreview={currentPreview}
-                                onTogglePreview={handleTogglePreview}
-                            />
-
-                            <HowItWorks />
-                        </div>
-                    ) : shouldShowResolvingState ? (
-                        <div className="flex flex-col items-center justify-center py-24 text-center">
-                            <GradientSpinner size="md" />
-                            <h3 className="mt-4 text-lg font-medium text-white">
-                                Loading your latest Discover Weekly
-                            </h3>
-                            <p className="mt-1 text-sm text-gray-400 max-w-md">
-                                Your playlist has been generated and can take a few
-                                seconds to fully appear.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-24 text-center">
-                            <div className="w-20 h-20 bg-gradient-to-br from-ai-dark/20 to-yellow-600/20 rounded-full flex items-center justify-center mb-4 shadow-xl border border-white/10">
-                                <Music2 className="w-10 h-10 text-ai-hover" />
-                            </div>
-                            <h3 className="text-lg font-medium text-white mb-1">
-                                No Discover Weekly Yet
-                            </h3>
-                            <p className="text-sm text-gray-400 mb-6 max-w-md">
-                                Generate your first playlist based on your
-                                listening history!
-                            </p>
-                            <button
-                                onClick={handleGenerate}
-                                disabled={isGenerating}
-                                className={cn(
-                                    "flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold transition-all",
-                                    isGenerating
-                                        ? "bg-white/5 cursor-not-allowed opacity-50"
-                                        : "bg-ai-dark/20 hover:bg-ai-dark/30 border border-ai/30 hover:scale-105"
-                                )}
-                            >
-                                {isGenerating ? (
-                                    <>
-                                        <GradientSpinner size="sm" />
-                                        {batchStatus?.status === "scanning"
-                                            ? "Finalizing recommendations..."
-                                            : batchStatus?.status ===
-                                                "generating"
-                                              ? "Refreshing recommendations..."
-                                              : `Working... ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
-                                    </>
-                                ) : (
-                                    <>
-                                        <RefreshCw className="w-5 h-5" />
-                                        Generate Now
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    )}
+                        </button>
+                    </div>
+                )}
             </div>
 
             <PlaylistSelector

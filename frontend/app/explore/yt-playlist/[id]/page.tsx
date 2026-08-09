@@ -30,7 +30,11 @@ import { cn } from "@/utils/cn";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackList, TrackListHeader } from "@/components/track";
-import type { TrackRowItem, TrackRowSlots, OverflowConfig } from "@/components/track";
+import type {
+    TrackRowItem,
+    TrackRowSlots,
+    OverflowConfig,
+} from "@/components/track";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -146,7 +150,10 @@ function resolveSongAlbum(song: YtMusicSongResponse): string {
 }
 
 function resolveSongDuration(song: YtMusicSongResponse): number {
-    if (typeof song.duration_seconds === "number" && song.duration_seconds > 0) {
+    if (
+        typeof song.duration_seconds === "number" &&
+        song.duration_seconds > 0
+    ) {
         return Math.floor(song.duration_seconds);
     }
     if (typeof song.duration === "number" && song.duration > 0) {
@@ -173,7 +180,7 @@ function resolveSongThumbnail(song: YtMusicSongResponse): string | null {
 
 function buildSingleTrackPlaylist(
     song: YtMusicSongResponse,
-    fallbackVideoId: string
+    fallbackVideoId: string,
 ): YtMusicBrowsePlaylist {
     const videoId =
         typeof song.videoId === "string" && song.videoId.trim()
@@ -215,11 +222,19 @@ function browseToRowItem(track: YtMusicBrowseTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
-        coverArtUrl: track.thumbnailUrl ? api.getBrowseImageUrl(track.thumbnailUrl) : null,
+        coverArtUrl: track.thumbnailUrl
+            ? api.getBrowseImageUrl(track.thumbnailUrl)
+            : null,
     };
 }
 
-function BrowseTrackList({ tracks, onPlayTrack }: { tracks: YtMusicBrowseTrack[]; onPlayTrack: (index: number) => void }) {
+function BrowseTrackList({
+    tracks,
+    onPlayTrack,
+}: {
+    tracks: YtMusicBrowseTrack[];
+    onPlayTrack: (index: number) => void;
+}) {
     const handlePlay = useCallback(
         (_track: YtMusicBrowseTrack, index: number) => {
             if (tracks[index]?.videoId) {
@@ -237,7 +252,9 @@ function BrowseTrackList({ tracks, onPlayTrack }: { tracks: YtMusicBrowseTrack[]
                     {track.album}
                 </p>
             ),
-            rowClassName: !track.videoId ? "opacity-60 cursor-not-allowed" : undefined,
+            rowClassName: !track.videoId
+                ? "opacity-60 cursor-not-allowed"
+                : undefined,
         }),
         [],
     );
@@ -307,21 +324,24 @@ function YtMusicPlaylistDetailPageContent() {
     const { toast } = useToast();
     const playlistId = decodeRouteId(params.id as string);
     const isAlbumType =
-        searchParams.get("type") === "album" ||
-        playlistId.startsWith("MPREb_");
+        searchParams.get("type") === "album" || playlistId.startsWith("MPREb_");
 
     // Audio context
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
-    const { playTracks, playNow, addTracksToQueue, pause, resume } = useAudioControls();
+    const { playTracks, playNow, addTracksToQueue, pause, resume } =
+        useAudioControls();
 
     // State
-    const [playlist, setPlaylist] = useState<YtMusicBrowsePlaylist | null>(null);
+    const [playlist, setPlaylist] = useState<YtMusicBrowsePlaylist | null>(
+        null,
+    );
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState(false);
-    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } = usePlayButtonFeedback();
+    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
+        usePlayButtonFeedback();
 
     // Fetch playlist data
     useEffect(() => {
@@ -348,8 +368,8 @@ function YtMusicPlaylistDetailPageContent() {
                             setPlaylist(
                                 buildSingleTrackPlaylist(
                                     song as YtMusicSongResponse,
-                                    playlistId
-                                )
+                                    playlistId,
+                                ),
                             );
                         }
                         return;
@@ -411,19 +431,24 @@ function YtMusicPlaylistDetailPageContent() {
 
     // Likeable tracks for Like All
     const likeableTracks: LikeableTrack[] = useMemo(
-        () => (playlist?.tracks || [])
-            .filter((t) => t.videoId)
-            .map((t) => ({
-                id: `yt:${t.videoId}`,
-                title: t.title,
-                artist: t.artist,
-                album: t.album,
-                duration: t.duration,
-                thumbnailUrl: t.thumbnailUrl || undefined,
-            })),
-        [playlist?.tracks]
+        () =>
+            (playlist?.tracks || [])
+                .filter((t) => t.videoId)
+                .map((t) => ({
+                    id: `yt:${t.videoId}`,
+                    title: t.title,
+                    artist: t.artist,
+                    album: t.album,
+                    duration: t.duration,
+                    thumbnailUrl: t.thumbnailUrl || undefined,
+                })),
+        [playlist?.tracks],
     );
-    const { isAllLiked, isApplying: isApplyingLikeAll, toggleLikeAll } = useCollectionLikeAll(likeableTracks);
+    const {
+        isAllLiked,
+        isApplying: isApplyingLikeAll,
+        toggleLikeAll,
+    } = useCollectionLikeAll(likeableTracks);
 
     // Add all to queue
     const handleAddToQueue = () => {
@@ -453,21 +478,27 @@ function YtMusicPlaylistDetailPageContent() {
         try {
             for (const track of playlist.tracks) {
                 if (!track.videoId) continue;
-                await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef({
-                    id: `yt:${track.videoId}`,
-                    title: track.title,
-                    artist: track.artist,
-                    album: track.album,
-                    duration: track.duration,
-                    streamSource: "youtube",
-                    youtubeVideoId: track.videoId,
-                    thumbnailUrl: track.thumbnailUrl || undefined,
-                }));
+                await api.addTrackToPlaylist(
+                    playlistId,
+                    toAddToPlaylistRef({
+                        id: `yt:${track.videoId}`,
+                        title: track.title,
+                        artist: track.artist,
+                        album: track.album,
+                        duration: track.duration,
+                        streamSource: "youtube",
+                        youtubeVideoId: track.videoId,
+                        thumbnailUrl: track.thumbnailUrl || undefined,
+                    }),
+                );
             }
             toast.success(`Added ${playlist.tracks.length} tracks to playlist`);
             setShowPlaylistSelector(false);
         } catch (error) {
-            sharedFrontendLogger.error("Failed to add tracks to playlist:", error);
+            sharedFrontendLogger.error(
+                "Failed to add tracks to playlist:",
+                error,
+            );
             toast.error("Failed to add some tracks to playlist");
         } finally {
             setIsAddingToPlaylist(false);
@@ -495,10 +526,8 @@ function YtMusicPlaylistDetailPageContent() {
     };
 
     // Total duration
-    const totalDuration = playlist?.tracks.reduce(
-        (sum, track) => sum + track.duration,
-        0
-    ) || 0;
+    const totalDuration =
+        playlist?.tracks.reduce((sum, track) => sum + track.duration, 0) || 0;
 
     const formatTotalDuration = (seconds: number) => {
         const hours = Math.floor(seconds / 3600);
@@ -542,7 +571,8 @@ function YtMusicPlaylistDetailPageContent() {
                             Playlist not found
                         </h3>
                         <p className="text-sm text-gray-400 mb-6 max-w-sm">
-                            {error || "This playlist may be private or no longer available."}
+                            {error ||
+                                "This playlist may be private or no longer available."}
                         </p>
                         <button
                             onClick={() => router.push("/explore")}
@@ -565,7 +595,9 @@ function YtMusicPlaylistDetailPageContent() {
                     <div className="relative w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
                         {playlist.thumbnailUrl ? (
                             <Image
-                                src={api.getBrowseImageUrl(playlist.thumbnailUrl)}
+                                src={api.getBrowseImageUrl(
+                                    playlist.thumbnailUrl,
+                                )}
                                 alt={playlist.title}
                                 fill
                                 sizes="(max-width: 768px) 140px, 192px"
@@ -582,7 +614,11 @@ function YtMusicPlaylistDetailPageContent() {
                     {/* Playlist Info */}
                     <div className="flex-1 min-w-0 pb-1">
                         <div className="flex items-center gap-2 mb-1">
-                            <svg viewBox="0 0 24 24" className="w-4 h-4 text-red-500" fill="currentColor">
+                            <svg
+                                viewBox="0 0 24 24"
+                                className="w-4 h-4 text-red-500"
+                                fill="currentColor"
+                            >
                                 <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z" />
                             </svg>
                             <p className="text-xs font-medium text-white/90">
@@ -600,7 +636,9 @@ function YtMusicPlaylistDetailPageContent() {
                         <div className="flex items-center gap-1 text-sm text-white/70">
                             <span>{playlist.trackCount} songs</span>
                             {totalDuration > 0 && (
-                                <span>, {formatTotalDuration(totalDuration)}</span>
+                                <span>
+                                    , {formatTotalDuration(totalDuration)}
+                                </span>
                             )}
                         </div>
                     </div>
@@ -622,7 +660,11 @@ function YtMusicPlaylistDetailPageContent() {
                         ) : (
                             <Play className="w-5 h-5 fill-current ml-0.5" />
                         )}
-                        <span>{isThisPlaylistPlaying && isPlaying ? "Pause" : "Play All"}</span>
+                        <span>
+                            {isThisPlaylistPlaying && isPlaying
+                                ? "Pause"
+                                : "Play All"}
+                        </span>
                     </button>
 
                     {/* Shuffle */}
@@ -664,15 +706,24 @@ function YtMusicPlaylistDetailPageContent() {
                                 isApplyingLikeAll
                                     ? "cursor-not-allowed text-white/35"
                                     : isAllLiked
-                                        ? "text-brand hover:bg-white/10"
-                                        : "text-white/60 hover:bg-white/10 hover:text-white"
+                                      ? "text-brand hover:bg-white/10"
+                                      : "text-white/60 hover:bg-white/10 hover:text-white",
                             )}
-                            title={isAllLiked ? "Unlike all tracks" : "Like all tracks"}
+                            title={
+                                isAllLiked
+                                    ? "Unlike all tracks"
+                                    : "Like all tracks"
+                            }
                         >
                             {isApplyingLikeAll ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                                <Heart className={cn("h-4 w-4", isAllLiked && "fill-current")} />
+                                <Heart
+                                    className={cn(
+                                        "h-4 w-4",
+                                        isAllLiked && "fill-current",
+                                    )}
+                                />
                             )}
                         </button>
                     )}

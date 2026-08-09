@@ -134,7 +134,7 @@ test("resolveApiPathMode falls back to auto for empty or invalid values", () => 
 test("normalizeApiBaseUrlInput trims and removes all trailing slashes", () => {
     assert.equal(
         normalizeApiBaseUrlInput(" https://api.example.com/// "),
-        "https://api.example.com"
+        "https://api.example.com",
     );
 });
 

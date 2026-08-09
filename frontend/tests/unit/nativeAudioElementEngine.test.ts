@@ -661,7 +661,10 @@ test("mid-playback transient error recovers by reloading at position and resumin
         harness.scheduler.timers.filter((timer) => !timer.cleared).length,
         0,
     );
-    assert.equal(harness.mainElement().src, "https://stream.example/track.flac");
+    assert.equal(
+        harness.mainElement().src,
+        "https://stream.example/track.flac",
+    );
     // …and readiness resumes at the position where the error hit.
     const playCallsBefore = harness.mainElement().playCalls;
     harness.mainElement().fireLoadedMetadata(200);
@@ -711,8 +714,7 @@ test("NotAllowedError emits playerror and retries exactly once on the next gestu
     );
     assert.equal(playErrors.length, 1);
     const gestureBindings = harness.bindings.filter(
-        (binding) =>
-            binding.target === "document" && !binding.removed,
+        (binding) => binding.target === "document" && !binding.removed,
     );
     assert.ok(gestureBindings.length > 0, "gesture retry armed");
 

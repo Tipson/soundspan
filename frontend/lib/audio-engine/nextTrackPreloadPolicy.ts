@@ -8,19 +8,19 @@
  */
 
 export interface NextTrackPreloadInput {
-  /** Current playback type. */
-  playbackType: string | null;
-  /** Repeat mode. */
-  repeatMode: "off" | "one" | "all";
-  /** Whether this is a listen-together session. */
-  isListenTogether: boolean;
-  /** Whether the engine is currently loading. */
-  isLoading: boolean;
+    /** Current playback type. */
+    playbackType: string | null;
+    /** Repeat mode. */
+    repeatMode: "off" | "one" | "all";
+    /** Whether this is a listen-together session. */
+    isListenTogether: boolean;
+    /** Whether the engine is currently loading. */
+    isLoading: boolean;
 }
 
 export interface NextTrackPreloadDecision {
-  shouldPreload: boolean;
-  reason: string;
+    shouldPreload: boolean;
+    reason: string;
 }
 
 /**
@@ -28,23 +28,23 @@ export interface NextTrackPreloadDecision {
  * from the ended handler before React state transitions.
  */
 export function resolveNextTrackPreloadDecision(
-  input: NextTrackPreloadInput,
+    input: NextTrackPreloadInput,
 ): NextTrackPreloadDecision {
-  if (input.playbackType !== "track") {
-    return { shouldPreload: false, reason: "not_track_playback" };
-  }
+    if (input.playbackType !== "track") {
+        return { shouldPreload: false, reason: "not_track_playback" };
+    }
 
-  if (input.repeatMode === "one") {
-    return { shouldPreload: false, reason: "repeat_one_handles_itself" };
-  }
+    if (input.repeatMode === "one") {
+        return { shouldPreload: false, reason: "repeat_one_handles_itself" };
+    }
 
-  if (input.isListenTogether) {
-    return { shouldPreload: false, reason: "listen_together_controlled" };
-  }
+    if (input.isListenTogether) {
+        return { shouldPreload: false, reason: "listen_together_controlled" };
+    }
 
-  if (input.isLoading) {
-    return { shouldPreload: false, reason: "already_loading" };
-  }
+    if (input.isLoading) {
+        return { shouldPreload: false, reason: "already_loading" };
+    }
 
-  return { shouldPreload: true, reason: "eligible" };
+    return { shouldPreload: true, reason: "eligible" };
 }

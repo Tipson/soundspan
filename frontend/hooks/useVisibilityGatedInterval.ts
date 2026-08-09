@@ -12,7 +12,7 @@ import { useDocumentVisible } from "./useDocumentVisibility";
 export function useVisibilityGatedInterval(
     callback: () => void,
     intervalMs: number,
-    options: { enabled?: boolean; leadingOnVisible?: boolean } = {}
+    options: { enabled?: boolean; leadingOnVisible?: boolean } = {},
 ): void {
     const isDocumentVisible = useDocumentVisible();
     const enabled = resolvePollingEnabled(options.enabled);

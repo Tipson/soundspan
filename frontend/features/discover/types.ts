@@ -1,51 +1,51 @@
 export interface DiscoverTrack {
-  id: string;
-  title: string;
-  artist: string;
-  artistId?: string | null;
-  album: string;
-  albumId: string;
-  sourceType?: "local" | "tidal" | "youtube";
-  streamSource?: "tidal" | "youtube";
-  tidalTrackId?: number;
-  youtubeVideoId?: string;
-  isLiked: boolean;
-  likedAt: string | null;
-  similarity: number;
-  tier: "high" | "medium" | "explore" | "wildcard";
-  coverUrl: string | null;
-  available: boolean;
-  duration: number;
+    id: string;
+    title: string;
+    artist: string;
+    artistId?: string | null;
+    album: string;
+    albumId: string;
+    sourceType?: "local" | "tidal" | "youtube";
+    streamSource?: "tidal" | "youtube";
+    tidalTrackId?: number;
+    youtubeVideoId?: string;
+    isLiked: boolean;
+    likedAt: string | null;
+    similarity: number;
+    tier: "high" | "medium" | "explore" | "wildcard";
+    coverUrl: string | null;
+    available: boolean;
+    duration: number;
 }
 
 export interface UnavailableAlbum {
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  albumId: string;
-  similarity: number;
-  tier: "high" | "medium" | "explore" | "wildcard";
-  previewUrl: string | null;
-  deezerTrackId: string | null;
-  deezerAlbumId: string | null;
-  available: false;
-  attemptNumber?: number;
+    id: string;
+    title: string;
+    artist: string;
+    album: string;
+    albumId: string;
+    similarity: number;
+    tier: "high" | "medium" | "explore" | "wildcard";
+    previewUrl: string | null;
+    deezerTrackId: string | null;
+    deezerAlbumId: string | null;
+    available: false;
+    attemptNumber?: number;
 }
 
 export interface DiscoverPlaylist {
-  weekStart: string;
-  weekEnd: string;
-  tracks: DiscoverTrack[];
-  unavailable: UnavailableAlbum[];
-  totalCount: number;
-  unavailableCount: number;
+    weekStart: string;
+    weekEnd: string;
+    tracks: DiscoverTrack[];
+    unavailable: UnavailableAlbum[];
+    totalCount: number;
+    unavailableCount: number;
 }
 
 export interface DiscoverConfig {
-  playlistSize: number;
-  exclusionMonths: number; // 0-12, months to exclude albums after download (0 = no exclusion)
-  downloadRatio: number; // 1.0-2.0, multiplier for albums to request vs target songs
-  enabled: boolean;
-  lastGeneratedAt: string | null;
+    playlistSize: number;
+    exclusionMonths: number; // 0-12, months to exclude albums after download (0 = no exclusion)
+    downloadRatio: number; // 1.0-2.0, multiplier for albums to request vs target songs
+    enabled: boolean;
+    lastGeneratedAt: string | null;
 }

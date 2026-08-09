@@ -281,7 +281,7 @@ const EXPECTED_PUBLIC_METHODS: readonly string[] = [
     "updateTrackMetadata",
     "uploadProfilePicture",
     "vibeAlchemy",
-    "vibeSearch"
+    "vibeSearch",
 ];
 
 test("api facade exposes every pinned public method", () => {

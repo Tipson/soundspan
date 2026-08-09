@@ -50,7 +50,9 @@ export interface ClockPublishDecisionInput {
  * staleness bound. Never inspects the seek-lock guard: rejection is handled by
  * the caller BEFORE this runs (rejected ticks must write neither ref nor state).
  */
-export function shouldPublishClockTime(input: ClockPublishDecisionInput): boolean {
+export function shouldPublishClockTime(
+    input: ClockPublishDecisionInput,
+): boolean {
     const {
         time,
         lastPublishedTime,

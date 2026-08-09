@@ -8,8 +8,8 @@ import { useMediaSession } from "@/hooks/useMediaSession";
  * Should be placed at the root level of the app
  */
 export function MediaControlsHandler() {
-  useKeyboardShortcuts();
-  useMediaSession();
+    useKeyboardShortcuts();
+    useMediaSession();
 
-  return null; // This component doesn't render anything
+    return null; // This component doesn't render anything
 }

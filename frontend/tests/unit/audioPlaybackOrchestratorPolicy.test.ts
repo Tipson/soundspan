@@ -11,7 +11,10 @@ import {
 } from "../../components/player/audioPlaybackOrchestratorPolicy";
 
 test("unavailable buffered-ahead does not trigger segmented recovery", () => {
-    assert.equal(shouldAttemptSegmentedRecoveryOnUnexpectedPause(null, 1), false);
+    assert.equal(
+        shouldAttemptSegmentedRecoveryOnUnexpectedPause(null, 1),
+        false,
+    );
     assert.equal(
         shouldAttemptSegmentedRecoveryOnUnexpectedPause(Number.NaN, 1),
         false,
@@ -19,7 +22,10 @@ test("unavailable buffered-ahead does not trigger segmented recovery", () => {
 });
 
 test("low buffered-ahead still can trigger segmented recovery", () => {
-    assert.equal(shouldAttemptSegmentedRecoveryOnUnexpectedPause(0.25, 1), true);
+    assert.equal(
+        shouldAttemptSegmentedRecoveryOnUnexpectedPause(0.25, 1),
+        true,
+    );
 });
 
 test("buffered-ahead above threshold does not trigger segmented recovery", () => {
@@ -311,14 +317,21 @@ test("local streams return undefined (format resolved from file extension)", () 
 
 test("unknown/missing streamSource returns undefined", () => {
     assert.equal(resolveRemoteStreamFormat(undefined), undefined);
-    assert.equal(resolveRemoteStreamFormat(null as unknown as undefined), undefined);
+    assert.equal(
+        resolveRemoteStreamFormat(null as unknown as undefined),
+        undefined,
+    );
 });
 
 // ── resolvePlaybackDuration ───────────────────────────────────────
 
 test("prefers audio-reported duration when it exceeds metadata", () => {
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: 240, metadataDurationSec: 180, isRemoteStream: false }),
+        resolvePlaybackDuration({
+            loadedDurationSec: 240,
+            metadataDurationSec: 180,
+            isRemoteStream: false,
+        }),
         240,
     );
 });
@@ -326,49 +339,77 @@ test("prefers audio-reported duration when it exceeds metadata", () => {
 test("prefers metadata duration when audio element reports a suspiciously low value for remote streams", () => {
     // fMP4 fragment duration is ~4 s but track is 240 s
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: 4, metadataDurationSec: 240, isRemoteStream: true }),
+        resolvePlaybackDuration({
+            loadedDurationSec: 4,
+            metadataDurationSec: 240,
+            isRemoteStream: true,
+        }),
         240,
     );
 });
 
 test("uses loaded duration for remote streams when it is close to metadata", () => {
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: 238, metadataDurationSec: 240, isRemoteStream: true }),
+        resolvePlaybackDuration({
+            loadedDurationSec: 238,
+            metadataDurationSec: 240,
+            isRemoteStream: true,
+        }),
         238,
     );
 });
 
 test("uses metadata when loaded duration is zero", () => {
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: 0, metadataDurationSec: 180, isRemoteStream: false }),
+        resolvePlaybackDuration({
+            loadedDurationSec: 0,
+            metadataDurationSec: 180,
+            isRemoteStream: false,
+        }),
         180,
     );
 });
 
 test("uses metadata when loaded duration is NaN", () => {
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: Number.NaN, metadataDurationSec: 180, isRemoteStream: true }),
+        resolvePlaybackDuration({
+            loadedDurationSec: Number.NaN,
+            metadataDurationSec: 180,
+            isRemoteStream: true,
+        }),
         180,
     );
 });
 
 test("uses metadata when loaded duration is Infinity", () => {
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: Infinity, metadataDurationSec: 200, isRemoteStream: true }),
+        resolvePlaybackDuration({
+            loadedDurationSec: Infinity,
+            metadataDurationSec: 200,
+            isRemoteStream: true,
+        }),
         200,
     );
 });
 
 test("returns zero when both durations are zero", () => {
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: 0, metadataDurationSec: 0, isRemoteStream: false }),
+        resolvePlaybackDuration({
+            loadedDurationSec: 0,
+            metadataDurationSec: 0,
+            isRemoteStream: false,
+        }),
         0,
     );
 });
 
 test("local stream uses low loaded duration when no metadata available", () => {
     assert.equal(
-        resolvePlaybackDuration({ loadedDurationSec: 4, metadataDurationSec: 0, isRemoteStream: false }),
+        resolvePlaybackDuration({
+            loadedDurationSec: 4,
+            metadataDurationSec: 0,
+            isRemoteStream: false,
+        }),
         4,
     );
 });

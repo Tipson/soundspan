@@ -44,7 +44,7 @@ function extractColorsFromImage(imageUrl: string): Promise<ColorPalette> {
                     0,
                     0,
                     canvas.width,
-                    canvas.height
+                    canvas.height,
                 );
                 const pixels = imageData.data;
 
@@ -80,7 +80,7 @@ function extractColorsFromImage(imageUrl: string): Promise<ColorPalette> {
                         existing.count += 1;
                         existing.saturation = Math.max(
                             existing.saturation,
-                            saturation
+                            saturation,
                         );
                     } else {
                         colorMap.set(key, { count: 1, saturation });
@@ -200,28 +200,28 @@ function extractColorsFromImage(imageUrl: string): Promise<ColorPalette> {
                     vibrant: rgbToHex(
                         boostedVibrant.r,
                         boostedVibrant.g,
-                        boostedVibrant.b
+                        boostedVibrant.b,
                     ),
                     darkVibrant: rgbToHex(
                         darkVibrantColor.r,
                         darkVibrantColor.g,
-                        darkVibrantColor.b
+                        darkVibrantColor.b,
                     ),
                     lightVibrant: rgbToHex(
                         lightVibrantColor.r,
                         lightVibrantColor.g,
-                        lightVibrantColor.b
+                        lightVibrantColor.b,
                     ),
                     muted: rgbToHex(mutedColor.r, mutedColor.g, mutedColor.b),
                     darkMuted: rgbToHex(
                         darkMutedColor.r,
                         darkMutedColor.g,
-                        darkMutedColor.b
+                        darkMutedColor.b,
                     ),
                     lightMuted: rgbToHex(
                         lightMutedColor.r,
                         lightMutedColor.g,
-                        lightMutedColor.b
+                        lightMutedColor.b,
                     ),
                 });
             } catch (error) {
@@ -271,7 +271,10 @@ const PLACEHOLDER_PALETTE: ColorPalette = {
     lightMuted: "#b3b3b3",
 };
 
-function resolveSync(url: string | null | undefined): { colors: ColorPalette | null; needsAsync: boolean } {
+function resolveSync(url: string | null | undefined): {
+    colors: ColorPalette | null;
+    needsAsync: boolean;
+} {
     if (!url) return { colors: null, needsAsync: false };
     if (url.includes("placeholder") || url.startsWith("/placeholder")) {
         return { colors: PLACEHOLDER_PALETTE, needsAsync: false };
@@ -279,8 +282,14 @@ function resolveSync(url: string | null | undefined): { colors: ColorPalette | n
     if (typeof window !== "undefined") {
         try {
             const cached = localStorage.getItem(`color_cache_${url}`);
-            if (cached) return { colors: JSON.parse(cached) as ColorPalette, needsAsync: false };
-        } catch { /* ignore */ }
+            if (cached)
+                return {
+                    colors: JSON.parse(cached) as ColorPalette,
+                    needsAsync: false,
+                };
+        } catch {
+            /* ignore */
+        }
     }
     return { colors: null, needsAsync: true };
 }
@@ -301,28 +310,32 @@ export function useImageColor(imageUrl: string | null | undefined) {
     }));
     const hasSyncResolution = !resolved.needsAsync;
     const isCurrentAsyncState = asyncState.imageUrl === imageUrl;
-    const colors =
-        hasSyncResolution ?
-            resolved.colors
-        : isCurrentAsyncState ?
-            asyncState.colors
-        :   null;
-    const isLoading =
-        hasSyncResolution ?
-            false
-        : isCurrentAsyncState ?
-            asyncState.isLoading
-        :   true;
+    const colors = hasSyncResolution
+        ? resolved.colors
+        : isCurrentAsyncState
+          ? asyncState.colors
+          : null;
+    const isLoading = hasSyncResolution
+        ? false
+        : isCurrentAsyncState
+          ? asyncState.isLoading
+          : true;
 
     // Async extraction for cache misses
     useEffect(() => {
         if (!imageUrl) return;
-        if (imageUrl.includes("placeholder") || imageUrl.startsWith("/placeholder")) return;
+        if (
+            imageUrl.includes("placeholder") ||
+            imageUrl.startsWith("/placeholder")
+        )
+            return;
 
         const cacheKey = `color_cache_${imageUrl}`;
         try {
             if (localStorage.getItem(cacheKey)) return;
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
 
         let cancelled = false;
 
@@ -334,20 +347,33 @@ export function useImageColor(imageUrl: string | null | undefined) {
                     colors: palette,
                     isLoading: false,
                 });
-                try { localStorage.setItem(cacheKey, JSON.stringify(palette)); } catch { /* ignore */ }
+                try {
+                    localStorage.setItem(cacheKey, JSON.stringify(palette));
+                } catch {
+                    /* ignore */
+                }
             })
             .catch((error) => {
                 if (cancelled) return;
-                sharedFrontendLogger.error("[useImageColor] Failed to extract colors:", error.message || error);
+                sharedFrontendLogger.error(
+                    "[useImageColor] Failed to extract colors:",
+                    error.message || error,
+                );
                 setAsyncState({
                     imageUrl,
                     colors: PLACEHOLDER_PALETTE,
                     isLoading: false,
                 });
-                try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+                try {
+                    localStorage.removeItem(cacheKey);
+                } catch {
+                    /* ignore */
+                }
             });
 
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [imageUrl]);
 
     return { colors, isLoading };
@@ -358,7 +384,7 @@ export function useImageColor(imageUrl: string | null | undefined) {
  */
 export function createGradient(
     colors: ColorPalette | null,
-    fallbackColor: string = "#1db954"
+    fallbackColor: string = "#1db954",
 ): React.CSSProperties {
     if (!colors) {
         return {
@@ -377,7 +403,7 @@ export function createGradient(
  */
 export function createHeroGradient(
     colors: ColorPalette | null,
-    fallbackColor: string = "#1db954"
+    fallbackColor: string = "#1db954",
 ): React.CSSProperties {
     if (!colors) {
         return {

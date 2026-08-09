@@ -11,7 +11,7 @@ test("triggers auto Match Vibe when queue is at the final track", () => {
             repeatMode: "off",
             isListenTogether: false,
         }),
-        true
+        true,
     );
 });
 
@@ -24,7 +24,7 @@ test("does not trigger when playback is not a track queue", () => {
             repeatMode: "off",
             isListenTogether: false,
         }),
-        false
+        false,
     );
 });
 
@@ -37,7 +37,7 @@ test("does not trigger when playback type is null", () => {
             repeatMode: "off",
             isListenTogether: false,
         }),
-        false
+        false,
     );
 });
 
@@ -50,7 +50,7 @@ test("does not trigger before reaching the final queue track", () => {
             repeatMode: "off",
             isListenTogether: false,
         }),
-        false
+        false,
     );
 });
 
@@ -63,7 +63,7 @@ test("does not trigger during Listen Together sessions", () => {
             repeatMode: "off",
             isListenTogether: true,
         }),
-        false
+        false,
     );
 });
 
@@ -76,7 +76,7 @@ test("does not trigger when repeat mode is enabled", () => {
             repeatMode: "all",
             isListenTogether: false,
         }),
-        false
+        false,
     );
     assert.equal(
         shouldAutoMatchVibeAtQueueEnd({
@@ -86,7 +86,7 @@ test("does not trigger when repeat mode is enabled", () => {
             repeatMode: "one",
             isListenTogether: false,
         }),
-        false
+        false,
     );
 });
 
@@ -99,7 +99,7 @@ test("does not trigger when the queue length is zero or negative", () => {
             repeatMode: "off",
             isListenTogether: false,
         }),
-        false
+        false,
     );
     assert.equal(
         shouldAutoMatchVibeAtQueueEnd({
@@ -109,6 +109,6 @@ test("does not trigger when the queue length is zero or negative", () => {
             repeatMode: "off",
             isListenTogether: false,
         }),
-        false
+        false,
     );
 });

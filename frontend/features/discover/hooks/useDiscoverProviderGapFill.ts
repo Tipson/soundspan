@@ -50,7 +50,7 @@ export function applyDiscoverProviderGapFill(
     sourceTracks: DiscoverTrack[],
     gapIndices: number[],
     tidalMatches: Array<TidalMatch | null>,
-    ytMatches: Array<YtMatch | null>
+    ytMatches: Array<YtMatch | null>,
 ): DiscoverTrack[] {
     const gapSet = new Set(gapIndices);
     let matchIdx = 0;
@@ -93,7 +93,7 @@ export function applyDiscoverProviderGapFill(
  * Executes useDiscoverProviderGapFill.
  */
 export function useDiscoverProviderGapFill(
-    tracks: DiscoverTrack[] | undefined
+    tracks: DiscoverTrack[] | undefined,
 ): GapFillResult {
     const sourceTracks = useMemo(() => tracks || [], [tracks]);
     const tracksKey = useMemo(() => getTracksKey(sourceTracks), [sourceTracks]);
@@ -130,9 +130,7 @@ export function useDiscoverProviderGapFill(
                 !!tidalStatus?.available &&
                 !!tidalStatus?.authenticated;
             // Match/search uses public sidecar client — no user OAuth required
-            const ytAvailable =
-                !!ytStatus?.enabled &&
-                !!ytStatus?.available;
+            const ytAvailable = !!ytStatus?.enabled && !!ytStatus?.available;
 
             // Only gap-fill tracks that aren't locally available
             const gapIndices: number[] = [];
@@ -164,26 +162,32 @@ export function useDiscoverProviderGapFill(
                 };
             });
 
-            const [tidalMatchesResponse, ytMatchesResponse] = await Promise.all([
-                tidalAvailable
-                    ? api.matchTidalBatch(payload).catch(() => ({ matches: [] }))
-                    : Promise.resolve({ matches: [] }),
-                ytAvailable
-                    ? api.matchYtMusicBatch(payload).catch(() => ({ matches: [] }))
-                    : Promise.resolve({ matches: [] }),
-            ]);
+            const [tidalMatchesResponse, ytMatchesResponse] = await Promise.all(
+                [
+                    tidalAvailable
+                        ? api
+                              .matchTidalBatch(payload)
+                              .catch(() => ({ matches: [] }))
+                        : Promise.resolve({ matches: [] }),
+                    ytAvailable
+                        ? api
+                              .matchYtMusicBatch(payload)
+                              .catch(() => ({ matches: [] }))
+                        : Promise.resolve({ matches: [] }),
+                ],
+            );
 
             if (cancelled) return;
 
-            const tidalMatches = tidalMatchesResponse.matches as Array<
-                TidalMatch | null
-            >;
-            const ytMatches = ytMatchesResponse.matches as Array<YtMatch | null>;
+            const tidalMatches =
+                tidalMatchesResponse.matches as Array<TidalMatch | null>;
+            const ytMatches =
+                ytMatchesResponse.matches as Array<YtMatch | null>;
             const nextTracks = applyDiscoverProviderGapFill(
                 sourceTracks,
                 gapIndices,
                 tidalMatches,
-                ytMatches
+                ytMatches,
             );
 
             setMatchState({
@@ -194,7 +198,10 @@ export function useDiscoverProviderGapFill(
         };
 
         matchProviders().catch((error) => {
-            sharedFrontendLogger.error("[DiscoverGapFill] Provider matching failed:", error);
+            sharedFrontendLogger.error(
+                "[DiscoverGapFill] Provider matching failed:",
+                error,
+            );
             if (!cancelled) {
                 setMatchState({
                     key: tracksKey,
@@ -216,7 +223,7 @@ export function useDiscoverProviderGapFill(
                 : matchState.key === tracksKey
                   ? matchState.tracks
                   : sourceTracks,
-        [matchState.key, matchState.tracks, sourceTracks, tracksKey]
+        [matchState.key, matchState.tracks, sourceTracks, tracksKey],
     );
     const isMatching =
         sourceTracks.length > 0 &&

@@ -92,11 +92,23 @@ export interface TrackListProps<T> {
     onPlay: (item: T, index: number) => void;
     /** Custom key extractor. Defaults to rowItem.id. Use when items may share the same track ID (e.g. playlist duplicates). */
     getKey?: (item: T, index: number) => string;
-    rowSlots?: (item: T, index: number, state: RowState) => TrackRowSlots | undefined;
-    rowOverflow?: (item: T, index: number, state: RowState) => OverflowConfig | null;
+    rowSlots?: (
+        item: T,
+        index: number,
+        state: RowState,
+    ) => TrackRowSlots | undefined;
+    rowOverflow?: (
+        item: T,
+        index: number,
+        state: RowState,
+    ) => OverflowConfig | null;
     rowClassName?: string;
     header?: ReactNode;
-    separator?: (item: T, index: number, prevItem: T | null) => ReactNode | null;
+    separator?: (
+        item: T,
+        index: number,
+        prevItem: T | null,
+    ) => ReactNode | null;
     accentColor?: string;
     showCoverArt?: boolean;
     preferenceMode?: "both" | "up-only" | null;

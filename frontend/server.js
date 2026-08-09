@@ -6,7 +6,10 @@ const { createBackendProxy } = require("./server-proxy");
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
 const port = Number.parseInt(process.env.PORT || "3030", 10);
-const backendUrl = (process.env.BACKEND_URL || "http://127.0.0.1:3006").replace(/\/+$/, "");
+const backendUrl = (process.env.BACKEND_URL || "http://127.0.0.1:3006").replace(
+    /\/+$/,
+    "",
+);
 
 const LISTEN_TOGETHER_SOCKET_PATH = "/socket.io/listen-together";
 const SUBSONIC_REST_PATH = "/rest";
@@ -35,9 +38,10 @@ function serializeLogArg(arg) {
 }
 
 function emitServerLog(level, message, ...args) {
-    const payload = args.length > 0
-        ? `${message} ${args.map(serializeLogArg).join(" ")}`
-        : message;
+    const payload =
+        args.length > 0
+            ? `${message} ${args.map(serializeLogArg).join(" ")}`
+            : message;
     const line = `[${level}] [frontend.server] ${payload}\n`;
     if (level === "ERROR" || level === "WARN") {
         process.stderr.write(line);
@@ -135,7 +139,7 @@ app.prepare().then(() => {
                     status: "ok",
                     startupComplete: isStartupComplete,
                     draining: isDraining,
-                })
+                }),
             );
             return;
         }
@@ -148,7 +152,7 @@ app.prepare().then(() => {
                         status: "unready",
                         startupComplete: isStartupComplete,
                         draining: isDraining,
-                    })
+                    }),
                 );
                 return;
             }
@@ -159,7 +163,7 @@ app.prepare().then(() => {
                     status: "ok",
                     startupComplete: isStartupComplete,
                     draining: isDraining,
-                })
+                }),
             );
             return;
         }
@@ -193,14 +197,12 @@ app.prepare().then(() => {
         isStartupComplete = true;
         serverLogger.info(`> Frontend ready on http://${hostname}:${port}`);
         serverLogger.info(
-            `> Listen Together socket proxy enabled: ${LISTEN_TOGETHER_SOCKET_PATH} -> ${backendUrl}`
+            `> Listen Together socket proxy enabled: ${LISTEN_TOGETHER_SOCKET_PATH} -> ${backendUrl}`,
         );
         serverLogger.info(
-            `> Subsonic REST proxy enabled: ${SUBSONIC_REST_PATH} -> ${backendUrl}`
+            `> Subsonic REST proxy enabled: ${SUBSONIC_REST_PATH} -> ${backendUrl}`,
         );
-        serverLogger.info(
-            `> API proxy enabled: ${API_PATH} -> ${backendUrl}`
-        );
+        serverLogger.info(`> API proxy enabled: ${API_PATH} -> ${backendUrl}`);
     });
 
     const gracefulShutdown = (signal) => {
@@ -216,7 +218,9 @@ app.prepare().then(() => {
         });
 
         setTimeout(() => {
-            serverLogger.error("> Frontend shutdown timeout exceeded; forcing exit");
+            serverLogger.error(
+                "> Frontend shutdown timeout exceeded; forcing exit",
+            );
             process.exit(1);
         }, 10000).unref();
     };

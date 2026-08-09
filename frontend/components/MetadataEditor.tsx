@@ -62,7 +62,9 @@ interface MetadataEditorApiError extends Error {
     data?: MetadataEditorApiErrorData;
 }
 
-function toMetadataEditorApiError(error: unknown): MetadataEditorApiError | null {
+function toMetadataEditorApiError(
+    error: unknown,
+): MetadataEditorApiError | null {
     if (!error || typeof error !== "object") {
         return null;
     }
@@ -126,7 +128,11 @@ export function MetadataEditor({
             onSave?.(null);
             setIsOpen(false);
         } catch (error: unknown) {
-            toast.error(error instanceof Error ? error.message : "Failed to reset metadata");
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to reset metadata",
+            );
         } finally {
             setIsResetting(false);
         }
@@ -152,9 +158,9 @@ export function MetadataEditor({
                     type === "artist"
                         ? "Artist"
                         : type === "album"
-                        ? "Album"
-                        : "Track"
-                } metadata updated`
+                          ? "Album"
+                          : "Track"
+                } metadata updated`,
             );
             onSave?.(response);
             setIsOpen(false);
@@ -166,14 +172,13 @@ export function MetadataEditor({
                     typeof apiError.data.field === "string"
                         ? apiError.data.field
                         : null;
-                const message = (
+                const message =
                     typeof apiError.data.error === "string" &&
                     apiError.data.error
-                )
-                    ? apiError.data.error
-                    : apiError instanceof Error && apiError.message
-                    ? apiError.message
-                    : "Failed to update metadata";
+                        ? apiError.data.error
+                        : apiError instanceof Error && apiError.message
+                          ? apiError.message
+                          : "Failed to update metadata";
                 const hint =
                     typeof apiError.data.hint === "string"
                         ? apiError.data.hint
@@ -224,7 +229,10 @@ export function MetadataEditor({
         }
     };
 
-    const handleChange = (field: string, value: string | number | string[] | null) => {
+    const handleChange = (
+        field: string,
+        value: string | number | string[] | null,
+    ) => {
         if (formError) {
             setFormError(null);
         }
@@ -273,8 +281,8 @@ export function MetadataEditor({
                                 {type === "artist"
                                     ? "Artist"
                                     : type === "album"
-                                    ? "Album"
-                                    : "Track"}{" "}
+                                      ? "Album"
+                                      : "Track"}{" "}
                                 Metadata
                             </h2>
                             <button
@@ -299,8 +307,8 @@ export function MetadataEditor({
                                     {type === "artist"
                                         ? "Artist Name"
                                         : type === "album"
-                                        ? "Album Title"
-                                        : "Track Title"}
+                                          ? "Album Title"
+                                          : "Track Title"}
                                 </label>
                                 <input
                                     type="text"
@@ -312,7 +320,7 @@ export function MetadataEditor({
                                             type === "artist"
                                                 ? "name"
                                                 : "title",
-                                            e.target.value
+                                            e.target.value,
                                         )
                                     }
                                     className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
@@ -358,7 +366,7 @@ export function MetadataEditor({
                                                 Original:{" "}
                                                 {currentData._originalBio.substring(
                                                     0,
-                                                    100
+                                                    100,
                                                 )}
                                                 ...
                                             </p>
@@ -378,7 +386,7 @@ export function MetadataEditor({
                                         onChange={(e) =>
                                             handleChange(
                                                 "year",
-                                                parseInt(e.target.value)
+                                                parseInt(e.target.value),
                                             )
                                         }
                                         className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
@@ -411,7 +419,7 @@ export function MetadataEditor({
                                             e.target.value
                                                 .split(",")
                                                 .map((g) => g.trim())
-                                                .filter(Boolean)
+                                                .filter(Boolean),
                                         )
                                     }
                                     placeholder="Rock, Alternative, Indie"
@@ -420,15 +428,15 @@ export function MetadataEditor({
                                 {currentData._originalGenres &&
                                     currentData._originalGenres.length > 0 &&
                                     JSON.stringify(
-                                        currentData._originalGenres.sort()
+                                        currentData._originalGenres.sort(),
                                     ) !==
                                         JSON.stringify(
-                                            (formData.genres || []).sort()
+                                            (formData.genres || []).sort(),
                                         ) && (
                                         <p className="mt-1 text-xs text-gray-400">
                                             Original:{" "}
                                             {currentData._originalGenres.join(
-                                                ", "
+                                                ", ",
                                             )}
                                         </p>
                                     )}
@@ -467,18 +475,26 @@ export function MetadataEditor({
                                         }
                                     >
                                         <MusicBrainzLookup
-                                            type={type === "album" ? "album" : "artist"}
+                                            type={
+                                                type === "album"
+                                                    ? "album"
+                                                    : "artist"
+                                            }
                                             currentValue={
                                                 type === "artist"
                                                     ? formData.mbid || ""
                                                     : formData.rgMbid || ""
                                             }
-                                            currentName={formData.name || formData.title}
+                                            currentName={
+                                                formData.name || formData.title
+                                            }
                                             artistName={artistName}
                                             onSelect={(mbid) =>
                                                 handleChange(
-                                                    type === "artist" ? "mbid" : "rgMbid",
-                                                    mbid
+                                                    type === "artist"
+                                                        ? "mbid"
+                                                        : "rgMbid",
+                                                    mbid,
                                                 )
                                             }
                                         />
@@ -513,7 +529,7 @@ export function MetadataEditor({
                                             type === "artist"
                                                 ? "heroUrl"
                                                 : "coverUrl",
-                                            e.target.value
+                                            e.target.value,
                                         )
                                     }
                                     placeholder="https://..."

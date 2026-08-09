@@ -9,7 +9,15 @@ const state = {
     recentlyListened: [{ id: "listen-1" }] as unknown[],
     recentlyAdded: [{ id: "artist-1" }] as unknown[],
     recommended: [{ id: "artist-2" }] as unknown[],
-    mixes: [{ id: "mix-1", name: "Daily Mix 1", description: "desc", coverUrls: [], trackCount: 10 }] as unknown[],
+    mixes: [
+        {
+            id: "mix-1",
+            name: "Daily Mix 1",
+            description: "desc",
+            coverUrls: [],
+            trackCount: 10,
+        },
+    ] as unknown[],
     likedSummary: { total: 42, coverUrl: "/covers/liked.jpg" } as {
         total: number;
         coverUrl: string | null;
@@ -19,9 +27,23 @@ const state = {
         weekEnd: "2026-03-02",
         totalCount: 25,
         coverUrl: "/covers/discover.jpg",
-    } as { weekStart: string; weekEnd: string; totalCount: number; coverUrl: string | null } | null,
+    } as {
+        weekStart: string;
+        weekEnd: string;
+        totalCount: number;
+        coverUrl: string | null;
+    } | null,
     communityPlaylists: [
-        { id: "pl-1", source: "ytmusic", type: "playlist", title: "Community Hits", description: "Popular", creator: "", imageUrl: null, url: "" },
+        {
+            id: "pl-1",
+            source: "ytmusic",
+            type: "playlist",
+            title: "Community Hits",
+            description: "Popular",
+            creator: "",
+            imageUrl: null,
+            url: "",
+        },
     ] as unknown[],
     popularArtists: [{ id: "pop-1" }] as unknown[],
     recentPodcasts: [] as unknown[],
@@ -110,11 +132,15 @@ mock.module("@/features/home/components/AudiobooksGrid", {
 });
 
 mock.module("@/components/ui/YouTubeBadge", {
-    namedExports: { YouTubeBadge: () => React.createElement("span", null, "YT") },
+    namedExports: {
+        YouTubeBadge: () => React.createElement("span", null, "YT"),
+    },
 });
 
 mock.module("@/components/ui/LastFmBadge", {
-    namedExports: { LastFmBadge: () => React.createElement("span", null, "Last.fm") },
+    namedExports: {
+        LastFmBadge: () => React.createElement("span", null, "Last.fm"),
+    },
 });
 
 mock.module("@/components/ui/GradientSpinner", {
@@ -127,8 +153,13 @@ mock.module("@/features/home/components/FeaturedPlaylistsGrid", {
 
 mock.module("@/features/home/components/StaticPlaylistCard", {
     namedExports: {
-        StaticPlaylistCard: ({ title, subtitle }: { title: string; subtitle: string }) =>
-            React.createElement("div", null, `${title} — ${subtitle}`),
+        StaticPlaylistCard: ({
+            title,
+            subtitle,
+        }: {
+            title: string;
+            subtitle: string;
+        }) => React.createElement("div", null, `${title} — ${subtitle}`),
     },
 });
 
@@ -137,7 +168,11 @@ mock.module("@/components/ui/HorizontalCarousel", {
         HorizontalCarousel: ({ children }: { children: React.ReactNode }) =>
             React.createElement("div", { "data-testid": "carousel" }, children),
         CarouselItem: ({ children }: { children: React.ReactNode }) =>
-            React.createElement("div", { "data-testid": "carousel-item" }, children),
+            React.createElement(
+                "div",
+                { "data-testid": "carousel-item" },
+                children,
+            ),
     },
 });
 
@@ -159,7 +194,15 @@ beforeEach(() => {
     state.recentlyListened = [{ id: "listen-1" }];
     state.recentlyAdded = [{ id: "artist-1" }];
     state.recommended = [{ id: "artist-2" }];
-    state.mixes = [{ id: "mix-1", name: "Daily Mix 1", description: "desc", coverUrls: [], trackCount: 10 }];
+    state.mixes = [
+        {
+            id: "mix-1",
+            name: "Daily Mix 1",
+            description: "desc",
+            coverUrls: [],
+            trackCount: 10,
+        },
+    ];
     state.likedSummary = { total: 42, coverUrl: "/covers/liked.jpg" };
     state.discoverWeekly = {
         weekStart: "2026-02-24",
@@ -168,7 +211,16 @@ beforeEach(() => {
         coverUrl: "/covers/discover.jpg",
     };
     state.communityPlaylists = [
-        { id: "pl-1", source: "ytmusic", type: "playlist", title: "Community Hits", description: "Popular", creator: "", imageUrl: null, url: "" },
+        {
+            id: "pl-1",
+            source: "ytmusic",
+            type: "playlist",
+            title: "Community Hits",
+            description: "Popular",
+            creator: "",
+            imageUrl: null,
+            url: "",
+        },
     ];
     state.popularArtists = [{ id: "pop-1" }];
     state.recentPodcasts = [];
@@ -260,4 +312,3 @@ test("home page hides the mixes Refresh button when autoPlaylists is disabled", 
     assert.match(html, /Made For You/);
     assert.doesNotMatch(html, /Refresh/);
 });
-

@@ -36,7 +36,10 @@ function clampPercent(p: number): number {
  * ladder, linearly interpolated between the two straddling quantile values.
  * Distances at or beyond the array's ends clamp to 0 / 100.
  */
-function percentileRank(distance: number, quantiles: readonly number[]): number {
+function percentileRank(
+    distance: number,
+    quantiles: readonly number[],
+): number {
     const last = quantiles.length - 1;
     if (distance <= quantiles[0]) return 0;
     if (distance >= quantiles[last]) return last;
@@ -69,11 +72,11 @@ function labelForPercent(percent: number): string {
  */
 export function calibratedMatch(
     distance: number,
-    quantiles: readonly number[] | null
+    quantiles: readonly number[] | null,
 ): CalibratedMatch {
     if (!quantiles || quantiles.length !== EXPECTED_QUANTILE_COUNT) {
         const percent = clampPercent(
-            Math.round(Math.max(0, 1 - distance / 2) * 100)
+            Math.round(Math.max(0, 1 - distance / 2) * 100),
         );
         return { percent, label: "" };
     }
@@ -90,7 +93,7 @@ export function calibratedMatch(
  */
 export function featureMatchPercent(
     a: number | null,
-    b: number | null
+    b: number | null,
 ): number | null {
     if (a == null || b == null) return null;
     return Math.round((1 - Math.abs(a - b)) * 100);
@@ -129,12 +132,12 @@ export function matchEdgeStyle(percent: number): MatchEdgeStyle {
         opacity: clamp(
             EDGE_ANCHOR_OPACITY + delta * EDGE_OPACITY_SLOPE,
             EDGE_OPACITY_MIN,
-            EDGE_OPACITY_MAX
+            EDGE_OPACITY_MAX,
         ),
         width: clamp(
             EDGE_ANCHOR_WIDTH + delta * EDGE_WIDTH_SLOPE,
             EDGE_ANCHOR_WIDTH - EDGE_WIDTH_DELTA_MAX,
-            EDGE_ANCHOR_WIDTH + EDGE_WIDTH_DELTA_MAX
+            EDGE_ANCHOR_WIDTH + EDGE_WIDTH_DELTA_MAX,
         ),
     };
 }

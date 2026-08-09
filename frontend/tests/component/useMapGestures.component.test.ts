@@ -11,8 +11,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 after(() => {
     try {
@@ -22,18 +23,26 @@ after(() => {
     }
 });
 
-const cameraCalls: { pans: Array<[number, number]>; zooms: number[]; cancels: number } =
-    { pans: [], zooms: [], cancels: 0 };
+const cameraCalls: {
+    pans: Array<[number, number]>;
+    zooms: number[];
+    cancels: number;
+} = { pans: [], zooms: [], cancels: 0 };
 const camera = {
-    accumulatePan: (dx: number, dy: number) => void cameraCalls.pans.push([dx, dy]),
+    accumulatePan: (dx: number, dy: number) =>
+        void cameraCalls.pans.push([dx, dy]),
     accumulateZoom: (_cx: number, _cy: number, logf: number) =>
         void cameraCalls.zooms.push(logf),
     cancelFlight: () => void cameraCalls.cancels++,
     viewportRef: { current: { scale: 1000, tx: 0, ty: 0 } },
 };
 
-const sweepCalls: { begins: number; extends: number; finishes: boolean[]; discards: number } =
-    { begins: 0, extends: 0, finishes: [], discards: 0 };
+const sweepCalls: {
+    begins: number;
+    extends: number;
+    finishes: boolean[];
+    discards: number;
+} = { begins: 0, extends: 0, finishes: [], discards: 0 };
 let sweepArmed = false;
 let sweepActive = false;
 const sweep = {
@@ -92,7 +101,7 @@ function fakeEvent(
         metaKey: boolean;
         pointerType: string;
         buttons: number;
-    }> = {}
+    }> = {},
 ) {
     return {
         pointerId,
@@ -111,9 +120,8 @@ function fakeEvent(
 }
 
 async function mountGestures() {
-    const { useMapGestures } = await import(
-        "../../components/vibe/useMapGestures"
-    );
+    const { useMapGestures } =
+        await import("../../components/vibe/useMapGestures");
     const { createRoot } = await import("react-dom/client");
 
     const containerEl = document.createElement("div");
@@ -128,7 +136,11 @@ async function mountGestures() {
             hitTest,
             sweep,
             onTap: (id, mods) =>
-                taps.push({ id, shift: mods.shift, ctrlOrMeta: mods.ctrlOrMeta }),
+                taps.push({
+                    id,
+                    shift: mods.shift,
+                    ctrlOrMeta: mods.ctrlOrMeta,
+                }),
             onEmptyTap: () => void emptyTaps++,
         });
         return null;
@@ -143,7 +155,8 @@ async function mountGestures() {
 
     return {
         latest: () => {
-            if (!latestRef.current) throw new Error("useMapGestures did not run");
+            if (!latestRef.current)
+                throw new Error("useMapGestures did not run");
             return latestRef.current;
         },
         act: async (fn: () => void | Promise<void>) => {
@@ -165,7 +178,7 @@ test("a stationary click on a dot taps it with its modifiers", async () => {
     const h = await mountGestures();
     await h.act(() => h.latest().handlePointerDown(fakeEvent(1, 100, 100)));
     await h.act(() =>
-        h.latest().handlePointerUp(fakeEvent(1, 100, 100, { shiftKey: true }))
+        h.latest().handlePointerUp(fakeEvent(1, 100, 100, { shiftKey: true })),
     );
     assert.deepEqual(taps, [{ id: "dot-1", shift: true, ctrlOrMeta: false }]);
     assert.equal(emptyTaps, 0);
@@ -203,7 +216,9 @@ test("a clean click on clearly-empty canvas is an empty tap; a near-miss is neit
 test("shift-down starts a sweep, moves extend it, and a real stroke consumes the pointer-up", async () => {
     const h = await mountGestures();
     await h.act(() =>
-        h.latest().handlePointerDown(fakeEvent(1, 100, 100, { shiftKey: true }))
+        h
+            .latest()
+            .handlePointerDown(fakeEvent(1, 100, 100, { shiftKey: true })),
     );
     assert.equal(sweepCalls.begins, 1);
     await h.act(() => h.latest().handlePointerMove(fakeEvent(1, 200, 100)));
@@ -218,10 +233,12 @@ test("shift-down starts a sweep, moves extend it, and a real stroke consumes the
 test("a stationary shift-click ends the sweep as a click and falls through to a tap", async () => {
     const h = await mountGestures();
     await h.act(() =>
-        h.latest().handlePointerDown(fakeEvent(1, 100, 100, { shiftKey: true }))
+        h
+            .latest()
+            .handlePointerDown(fakeEvent(1, 100, 100, { shiftKey: true })),
     );
     await h.act(() =>
-        h.latest().handlePointerUp(fakeEvent(1, 100, 100, { shiftKey: true }))
+        h.latest().handlePointerUp(fakeEvent(1, 100, 100, { shiftKey: true })),
     );
     assert.deepEqual(sweepCalls.finishes, [true]); // wasClick
     assert.deepEqual(taps, [{ id: "dot-1", shift: true, ctrlOrMeta: false }]);
@@ -232,25 +249,41 @@ test("a second finger switches to pinch: sweep discarded, zoom accumulated, neve
     sweepArmed = true;
     const h = await mountGestures();
     await h.act(() =>
-        h.latest().handlePointerDown(fakeEvent(1, 100, 100, { pointerType: "touch" }))
+        h
+            .latest()
+            .handlePointerDown(
+                fakeEvent(1, 100, 100, { pointerType: "touch" }),
+            ),
     );
     await h.act(() =>
-        h.latest().handlePointerDown(fakeEvent(2, 200, 100, { pointerType: "touch" }))
+        h
+            .latest()
+            .handlePointerDown(
+                fakeEvent(2, 200, 100, { pointerType: "touch" }),
+            ),
     );
     assert.equal(sweepCalls.discards, 1);
 
     // Fingers spread apart → zoom in (positive logf).
     await h.act(() =>
-        h.latest().handlePointerMove(fakeEvent(2, 300, 100, { pointerType: "touch" }))
+        h
+            .latest()
+            .handlePointerMove(
+                fakeEvent(2, 300, 100, { pointerType: "touch" }),
+            ),
     );
     assert.equal(cameraCalls.zooms.length, 1);
     assert.ok(cameraCalls.zooms[0] > 0);
 
     await h.act(() =>
-        h.latest().handlePointerUp(fakeEvent(2, 300, 100, { pointerType: "touch" }))
+        h
+            .latest()
+            .handlePointerUp(fakeEvent(2, 300, 100, { pointerType: "touch" })),
     );
     await h.act(() =>
-        h.latest().handlePointerUp(fakeEvent(1, 100, 100, { pointerType: "touch" }))
+        h
+            .latest()
+            .handlePointerUp(fakeEvent(1, 100, 100, { pointerType: "touch" })),
     );
     assert.equal(taps.length, 0);
     assert.equal(emptyTaps, 0);

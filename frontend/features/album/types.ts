@@ -29,9 +29,9 @@ export interface Track {
     duration: number;
     isrc?: string;
     trackNumber?: number;
-    trackNo?: number;       // Backend field name (Prisma)
+    trackNo?: number; // Backend field name (Prisma)
     discNumber?: number;
-    discNo?: number;        // Backend field name (Prisma)
+    discNo?: number; // Backend field name (Prisma)
     playCount?: number;
     artist?: {
         id?: string;

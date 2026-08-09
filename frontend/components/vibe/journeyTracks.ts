@@ -56,7 +56,7 @@ export function mapTrackToTrack(t: MapTrack): Track {
  */
 export function journeyTracks(
     fromTrack: Track | null,
-    waypoints: readonly VibeTrackRef[]
+    waypoints: readonly VibeTrackRef[],
 ): Track[] {
     const mapped = waypoints.map(waypointToTrack);
     if (fromTrack && waypoints[0]?.id !== fromTrack.id) {
@@ -75,7 +75,7 @@ export type WithOnMap<T> = T & { onMap: boolean };
  */
 export function annotateOnMap<T extends { id: string }>(
     items: readonly T[],
-    mapIndex: ReadonlyMap<string, unknown>
+    mapIndex: ReadonlyMap<string, unknown>,
 ): Array<WithOnMap<T> & { seq: number }> {
     return items.map((item, i) => ({
         ...item,

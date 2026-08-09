@@ -95,7 +95,11 @@ export function TrackOverflowMenu({
 
     // Artist href
     const artistHref = track.artist
-        ? getArtistHref({ id: track.artist.id, name: track.artist.name, mbid: track.artist.mbid })
+        ? getArtistHref({
+              id: track.artist.id,
+              name: track.artist.name,
+              mbid: track.artist.mbid,
+          })
         : null;
 
     // Album href
@@ -106,7 +110,10 @@ export function TrackOverflowMenu({
         if (!isOpen) return;
 
         const handleOutsideClick = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(event.target as Node)
+            ) {
                 setIsOpen(false);
             }
         };
@@ -139,7 +146,7 @@ export function TrackOverflowMenu({
             controls.playNext(track);
             closeMenu();
         },
-        [track, controls, closeMenu]
+        [track, controls, closeMenu],
     );
 
     const handleAddToQueue = useCallback(
@@ -148,7 +155,7 @@ export function TrackOverflowMenu({
             controls.addToQueue(track);
             closeMenu();
         },
-        [track, controls, closeMenu]
+        [track, controls, closeMenu],
     );
 
     const handleAddToPlaylist = useCallback(
@@ -157,7 +164,7 @@ export function TrackOverflowMenu({
             closeMenu();
             setIsPlaylistSelectorOpen(true);
         },
-        [closeMenu]
+        [closeMenu],
     );
 
     const handleShare = useCallback(
@@ -166,7 +173,7 @@ export function TrackOverflowMenu({
             closeMenu();
             setIsShareModalOpen(true);
         },
-        [closeMenu]
+        [closeMenu],
     );
 
     const handleSelectPlaylist = useCallback(
@@ -174,7 +181,7 @@ export function TrackOverflowMenu({
             await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef(track));
             toast.success(`Added "${track.title}" to playlist`);
         },
-        [track]
+        [track],
     );
 
     const handleGoToArtist = useCallback(
@@ -185,7 +192,7 @@ export function TrackOverflowMenu({
             }
             closeMenu();
         },
-        [artistHref, router, closeMenu]
+        [artistHref, router, closeMenu],
     );
 
     const handleGoToAlbum = useCallback(
@@ -196,7 +203,7 @@ export function TrackOverflowMenu({
             }
             closeMenu();
         },
-        [albumHref, router, closeMenu]
+        [albumHref, router, closeMenu],
     );
 
     const handleMatchVibe = useCallback(
@@ -209,11 +216,13 @@ export function TrackOverflowMenu({
             setTimeout(async () => {
                 const result = await controls.startVibeMode();
                 if (result.success) {
-                    toast.success(`Match Vibe: found ${result.trackCount} similar tracks`);
+                    toast.success(
+                        `Match Vibe: found ${result.trackCount} similar tracks`,
+                    );
                 }
             }, 500);
         },
-        [track, controls, closeMenu]
+        [track, controls, closeMenu],
     );
 
     const handleShowVibeMap = useCallback(
@@ -222,7 +231,7 @@ export function TrackOverflowMenu({
             closeMenu();
             router.push(`/vibe?trackId=${encodeURIComponent(track.id)}`);
         },
-        [track.id, router, closeMenu]
+        [track.id, router, closeMenu],
     );
 
     const handleStartRadio = useCallback(
@@ -230,47 +239,56 @@ export function TrackOverflowMenu({
             e.stopPropagation();
             closeMenu();
             try {
-                let response:
-                    | { tracks: unknown[] }
-                    | null = null;
+                let response: { tracks: unknown[] } | null = null;
 
                 if (isRemote && track.artist?.name) {
                     response = await api.getRadioTracks(
                         "artist-name",
-                        track.artist.name
+                        track.artist.name,
                     );
                 } else if (track.artist?.id) {
-                    response = await api.getRadioTracks("artist", track.artist.id);
+                    response = await api.getRadioTracks(
+                        "artist",
+                        track.artist.id,
+                    );
                 }
 
                 if (!response) {
-                    toast.error("Artist information is required to start radio");
+                    toast.error(
+                        "Artist information is required to start radio",
+                    );
                     return;
                 }
 
                 if (response.tracks && response.tracks.length > 0) {
                     const filtered = response.tracks.filter(
-                        (t): t is Track => isPlayableTrack(t) && t.id !== track.id
+                        (t): t is Track =>
+                            isPlayableTrack(t) && t.id !== track.id,
                     );
                     controls.playTracks([track, ...filtered], 0);
                     toast.success(
-                        `Playing ${track.artist.name} Radio (${filtered.length} tracks)`
+                        `Playing ${track.artist.name} Radio (${filtered.length} tracks)`,
                     );
                 } else {
-                    toast.error("Not enough similar music in your library for artist radio");
+                    toast.error(
+                        "Not enough similar music in your library for artist radio",
+                    );
                 }
             } catch {
                 toast.error("Failed to start artist radio");
             }
         },
-        [track, controls, closeMenu, isRemote]
+        [track, controls, closeMenu, isRemote],
     );
 
     return (
         <>
             <div
                 ref={menuRef}
-                className={cn("relative flex items-center justify-center", className)}
+                className={cn(
+                    "relative flex items-center justify-center",
+                    className,
+                )}
             >
                 <button
                     type="button"
@@ -280,7 +298,7 @@ export function TrackOverflowMenu({
                         isOpen
                             ? "bg-[#2a2a2a] text-white"
                             : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
-                        triggerClassName
+                        triggerClassName,
                     )}
                     aria-label="Track actions"
                     aria-expanded={isOpen}
@@ -292,7 +310,10 @@ export function TrackOverflowMenu({
 
                 {isOpen && (
                     <div
-                        className={cn("absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-md border border-white/10 bg-[#111111] p-1 shadow-xl", menuClassName)}
+                        className={cn(
+                            "absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-md border border-white/10 bg-[#111111] p-1 shadow-xl",
+                            menuClassName,
+                        )}
                         role="menu"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
@@ -366,11 +387,11 @@ export function TrackOverflowMenu({
                         {showStartRadio &&
                             ((isRemote && track.artist?.name) ||
                                 (!isRemote && track.artist?.id)) && (
-                            <MenuButton
-                                onClick={handleStartRadio}
-                                icon={<Radio className="h-4 w-4" />}
-                                label="Start Radio"
-                            />
+                                <MenuButton
+                                    onClick={handleStartRadio}
+                                    icon={<Radio className="h-4 w-4" />}
+                                    label="Start Radio"
+                                />
                             )}
 
                         {extraItemsAfter}
@@ -420,7 +441,7 @@ function MenuButton({
                 disabled
                     ? "cursor-not-allowed text-red-300/80"
                     : "text-gray-200 hover:bg-white/10 hover:text-white",
-                customClassName
+                customClassName,
             )}
             role="menuitem"
             title={disabled && disabledTitle ? disabledTitle : label}

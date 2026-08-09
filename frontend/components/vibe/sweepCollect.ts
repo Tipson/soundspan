@@ -52,7 +52,7 @@ function isFinitePoint(p: SweepPoint): boolean {
 export function sampleSegment(
     a: SweepPoint,
     b: SweepPoint,
-    step: number = SWEEP_SAMPLE_STEP
+    step: number = SWEEP_SAMPLE_STEP,
 ): SweepPoint[] {
     if (!isFinitePoint(a) || !isFinitePoint(b)) return [];
     const effectiveStep =
@@ -61,7 +61,7 @@ export function sampleSegment(
     if (dist === 0) return [b];
     const n = Math.min(
         MAX_SEGMENT_SAMPLES,
-        Math.max(1, Math.ceil(dist / effectiveStep))
+        Math.max(1, Math.ceil(dist / effectiveStep)),
     );
     const out: SweepPoint[] = [];
     for (let i = 1; i <= n; i++) {

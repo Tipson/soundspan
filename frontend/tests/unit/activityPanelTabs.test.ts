@@ -49,7 +49,7 @@ test("resolveActivityTab keeps requested tab when visible", () => {
     const visibleTabs: ActivityTab[] = ["notifications", "social"];
     assert.equal(
         resolveActivityTab("social", visibleTabs, "notifications"),
-        "social"
+        "social",
     );
 });
 
@@ -57,7 +57,7 @@ test("resolveActivityTab falls back to first visible tab when requested tab is h
     const visibleTabs: ActivityTab[] = ["notifications", "social"];
     assert.equal(
         resolveActivityTab("active", visibleTabs, "notifications"),
-        "notifications"
+        "notifications",
     );
 });
 
@@ -78,7 +78,7 @@ test("getActivityPanelBadgeState returns admin badges and activity state", () =>
             activeBadge: 2,
             socialBadge: 1,
             hasActivity: true,
-        }
+        },
     );
 });
 
@@ -95,7 +95,7 @@ test("getActivityPanelBadgeState suppresses active badge for non-admin users", (
             activeBadge: null,
             socialBadge: null,
             hasActivity: false,
-        }
+        },
     );
 });
 
@@ -112,7 +112,7 @@ test("getActivityPanelBadgeState counts social-only activity for non-admin users
             activeBadge: null,
             socialBadge: 5,
             hasActivity: true,
-        }
+        },
     );
 });
 
@@ -129,7 +129,7 @@ test("getActivityPanelBadgeState clears admin active badge when there are no act
             activeBadge: null,
             socialBadge: null,
             hasActivity: true,
-        }
+        },
     );
 });
 
@@ -146,7 +146,7 @@ test("getActivityPanelBadgeState keeps notification badges for non-admin users",
             activeBadge: null,
             socialBadge: null,
             hasActivity: true,
-        }
+        },
     );
 });
 
@@ -163,7 +163,7 @@ test("getActivityPanelBadgeState keeps active badge when admin activity is the o
             activeBadge: 3,
             socialBadge: null,
             hasActivity: true,
-        }
+        },
     );
 });
 
@@ -180,7 +180,7 @@ test("getActivityPanelBadgeState reports no activity when every badge is empty",
             activeBadge: null,
             socialBadge: null,
             hasActivity: false,
-        }
+        },
     );
 });
 

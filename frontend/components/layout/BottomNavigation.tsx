@@ -7,29 +7,29 @@ import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
 const navigationItems = [
-    { 
-        name: "Library", 
-        href: "/library", 
+    {
+        name: "Library",
+        href: "/library",
         icon: Library,
-        matchPattern: "/library"
+        matchPattern: "/library",
     },
-    { 
-        name: "Audiobooks", 
-        href: "/audiobooks", 
+    {
+        name: "Audiobooks",
+        href: "/audiobooks",
         icon: BookOpen,
-        matchPattern: "/audiobooks"
+        matchPattern: "/audiobooks",
     },
-    { 
-        name: "Podcasts", 
-        href: "/podcasts", 
+    {
+        name: "Podcasts",
+        href: "/podcasts",
         icon: Mic,
-        matchPattern: "/podcasts"
+        matchPattern: "/podcasts",
     },
-    { 
-        name: "Playlists", 
-        href: "/playlists", 
+    {
+        name: "Playlists",
+        href: "/playlists",
         icon: ListMusic,
-        matchPattern: "/playlist" // Matches both /playlists and /playlist/[id]
+        matchPattern: "/playlist", // Matches both /playlists and /playlist/[id]
     },
 ];
 
@@ -51,7 +51,7 @@ export function BottomNavigation() {
             role="navigation"
             aria-label="Main navigation"
             style={{
-                paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+                paddingBottom: "env(safe-area-inset-bottom, 0px)",
             }}
         >
             <div className="flex items-center justify-around h-14">
@@ -67,22 +67,22 @@ export function BottomNavigation() {
                                 "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
                                 isActive
                                     ? "text-white"
-                                    : "text-gray-400 active:text-gray-300"
+                                    : "text-gray-400 active:text-gray-300",
                             )}
                             aria-label={item.name}
                             aria-current={isActive ? "page" : undefined}
                         >
-                            <Icon 
+                            <Icon
                                 className={cn(
                                     "w-5 h-5 mb-1",
-                                    isActive && "text-white"
-                                )} 
+                                    isActive && "text-white",
+                                )}
                                 strokeWidth={isActive ? 2.5 : 2}
                             />
-                            <span 
+                            <span
                                 className={cn(
                                     "text-[10px] tracking-wide",
-                                    isActive ? "font-semibold" : "font-medium"
+                                    isActive ? "font-semibold" : "font-medium",
                                 )}
                             >
                                 {item.name}

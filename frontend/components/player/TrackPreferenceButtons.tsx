@@ -2,7 +2,10 @@
 
 import { Heart } from "lucide-react";
 import { type TrackPreferenceSignal } from "@/lib/api";
-import { useTrackPreference, type TrackPreferenceMetadata } from "@/hooks/useTrackPreference";
+import {
+    useTrackPreference,
+    type TrackPreferenceMetadata,
+} from "@/hooks/useTrackPreference";
 import { cn } from "@/utils/cn";
 
 interface TrackPreferenceButtonsProps {
@@ -23,7 +26,10 @@ interface FilledHeartIconProps {
     "data-icon"?: string;
 }
 
-function HeartFilledIcon({ className, "data-icon": dataIcon }: FilledHeartIconProps) {
+function HeartFilledIcon({
+    className,
+    "data-icon": dataIcon,
+}: FilledHeartIconProps) {
     return (
         <svg
             viewBox="0 0 24 24"
@@ -61,7 +67,7 @@ function TrackPreferenceButtonsContent({
 
     const baseButtonClass = cn(
         "inline-flex items-center justify-center bg-transparent p-0 transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40",
-        buttonSizeClassName
+        buttonSizeClassName,
     );
 
     return (
@@ -74,9 +80,7 @@ function TrackPreferenceButtonsContent({
                 }}
                 className={cn(
                     baseButtonClass,
-                    isLiked ?
-                        "text-white"
-                    :   "text-white/70 hover:text-white"
+                    isLiked ? "text-white" : "text-white/70 hover:text-white",
                 )}
                 disabled={!canSetTrackPreference || isPreferenceSaving}
                 aria-label={label}
@@ -108,9 +112,7 @@ function TrackPreferenceButtonsControlled({
     isSaving,
     onToggleThumbsUp,
 }: TrackPreferenceButtonsProps) {
-    const canSetTrackPreference =
-        Boolean(trackId) ||
-        Boolean(onToggleThumbsUp);
+    const canSetTrackPreference = Boolean(trackId) || Boolean(onToggleThumbsUp);
 
     return (
         <TrackPreferenceButtonsContent
@@ -135,7 +137,6 @@ function TrackPreferenceButtonsWithQuery({
     onToggleThumbsUp,
     metadata,
 }: TrackPreferenceButtonsProps) {
-
     const {
         signal: queriedSignal,
         isSaving: queriedIsSaving,
@@ -144,9 +145,7 @@ function TrackPreferenceButtonsWithQuery({
 
     const preferenceSignal = signal ?? queriedSignal;
     const isPreferenceSaving = isSaving ?? queriedIsSaving;
-    const canSetTrackPreference =
-        Boolean(trackId) ||
-        Boolean(onToggleThumbsUp);
+    const canSetTrackPreference = Boolean(trackId) || Boolean(onToggleThumbsUp);
 
     return (
         <TrackPreferenceButtonsContent

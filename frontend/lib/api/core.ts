@@ -30,10 +30,13 @@ export type ApiData = any;
 // Mixin base constructor for domain modules. `any[]` is required by the TS
 // mixin pattern; scoped to this single alias.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ApiClientConstructor = abstract new (...args: any[]) => ApiClientCore;
+export type ApiClientConstructor = abstract new (
+    ...args: any[]
+) => ApiClientCore;
 
-
-export function toSearchParams(params: Record<string, string | number | boolean | undefined>): URLSearchParams {
+export function toSearchParams(
+    params: Record<string, string | number | boolean | undefined>,
+): URLSearchParams {
     const entries: Record<string, string> = {};
     for (const [key, value] of Object.entries(params)) {
         if (value !== undefined) {
@@ -164,10 +167,7 @@ export abstract class ApiClientCore {
     }
 
     private isTimeoutError(error: unknown): boolean {
-        return (
-            error instanceof Error &&
-            (error as ApiError).status === 408
-        );
+        return error instanceof Error && (error as ApiError).status === 408;
     }
 
     private async delay(ms: number): Promise<void> {
@@ -198,7 +198,7 @@ export abstract class ApiClientCore {
                             body: JSON.stringify({ refreshToken }),
                             credentials: "include",
                         },
-                        AUTH_REFRESH_TIMEOUT_MS
+                        AUTH_REFRESH_TIMEOUT_MS,
                     );
                     break;
                 } catch (error) {
@@ -267,7 +267,7 @@ export abstract class ApiClientCore {
     private async fetchWithTimeout(
         url: string,
         options: RequestInit,
-        timeoutMs: number
+        timeoutMs: number,
     ): Promise<Response> {
         const controller = new AbortController();
         const upstreamSignal = options.signal;
@@ -303,7 +303,7 @@ export abstract class ApiClientCore {
         } catch (error) {
             if (timedOut) {
                 const timeoutError = new Error(
-                    `Request timed out after ${timeoutMs}ms`
+                    `Request timed out after ${timeoutMs}ms`,
                 );
                 (timeoutError as ApiError).status = 408;
                 (timeoutError as ApiError).data = {
@@ -318,10 +318,7 @@ export abstract class ApiClientCore {
                 clearTimeout(timeoutId);
             }
             if (upstreamSignal) {
-                upstreamSignal.removeEventListener(
-                    "abort",
-                    abortFromUpstream
-                );
+                upstreamSignal.removeEventListener("abort", abortFromUpstream);
             }
         }
     }
@@ -329,7 +326,7 @@ export abstract class ApiClientCore {
     private buildInFlightGetKey(
         endpoint: string,
         timeoutMs: number,
-        hasSignal: boolean
+        hasSignal: boolean,
     ): string | null {
         if (hasSignal) return null;
         return `${endpoint}|timeout=${timeoutMs}|token=${this.token ?? ""}`;
@@ -342,7 +339,7 @@ export abstract class ApiClientCore {
             _retryCount?: number;
             _timeoutRetryCount?: number;
             timeoutMs?: number;
-        } = {}
+        } = {},
     ): Promise<T> {
         const {
             silent404,
@@ -358,9 +355,8 @@ export abstract class ApiClientCore {
 
         // Add Authorization header if token exists
         if (this.token) {
-            (headers as Record<string, string>)[
-                "Authorization"
-            ] = `Bearer ${this.token}`;
+            (headers as Record<string, string>)["Authorization"] =
+                `Bearer ${this.token}`;
         }
 
         // All API endpoints are prefixed with /api
@@ -373,12 +369,13 @@ export abstract class ApiClientCore {
                 ? this.buildInFlightGetKey(
                       endpoint,
                       timeoutMs,
-                      Boolean(fetchOptions.signal)
+                      Boolean(fetchOptions.signal),
                   )
                 : null;
 
         if (inFlightGetKey) {
-            const existingRequest = this.inFlightGetRequests.get(inFlightGetKey);
+            const existingRequest =
+                this.inFlightGetRequests.get(inFlightGetKey);
             if (existingRequest) {
                 return existingRequest as Promise<T>;
             }
@@ -394,7 +391,7 @@ export abstract class ApiClientCore {
                         headers,
                         credentials: "include", // Still send cookies for backward compatibility
                     },
-                    timeoutMs
+                    timeoutMs,
                 );
             } catch (error) {
                 if (
@@ -418,7 +415,10 @@ export abstract class ApiClientCore {
 
                 // Only log non-404 errors (404s are often expected)
                 if (!(silent404 && response.status === 404)) {
-                    sharedFrontendLogger.error(`[API] Request failed: ${url}`, error);
+                    sharedFrontendLogger.error(
+                        `[API] Request failed: ${url}`,
+                        error,
+                    );
                 }
 
                 // Handle 401 with token refresh (retry once)
@@ -469,7 +469,10 @@ export abstract class ApiClientCore {
         this.inFlightGetRequests.set(inFlightGetKey, requestPromise);
         void requestPromise
             .finally(() => {
-                if (this.inFlightGetRequests.get(inFlightGetKey) === requestPromise) {
+                if (
+                    this.inFlightGetRequests.get(inFlightGetKey) ===
+                    requestPromise
+                ) {
                     this.inFlightGetRequests.delete(inFlightGetKey);
                 }
             })

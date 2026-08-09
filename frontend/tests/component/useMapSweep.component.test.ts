@@ -19,8 +19,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const apiState: {
     addImpl: (playlistId: string, ref: { trackId: string }) => Promise<unknown>;
@@ -33,7 +34,9 @@ interface Deferred<T> {
 
 function deferred<T>(): Deferred<T> {
     let resolve!: (value: T) => void;
-    const promise = new Promise<T>((done) => { resolve = done; });
+    const promise = new Promise<T>((done) => {
+        resolve = done;
+    });
     return { promise, resolve };
 }
 
@@ -41,8 +44,10 @@ mock.module("@/lib/api", {
     namedExports: {
         api: {
             createPlaylist: async () => ({ id: "pl-sweep" }),
-            addTrackToPlaylist: (playlistId: string, ref: { trackId: string }) =>
-                apiState.addImpl(playlistId, ref),
+            addTrackToPlaylist: (
+                playlistId: string,
+                ref: { trackId: string },
+            ) => apiState.addImpl(playlistId, ref),
         },
     },
 });
@@ -286,13 +291,17 @@ test("save completion does not dismiss a newer sweep result", async () => {
     await h.act(() => void h.latest().finish(false));
 
     let savePromise!: Promise<void>;
-    await h.act(() => { savePromise = h.latest().save(); });
+    await h.act(() => {
+        savePromise = h.latest().save();
+    });
     await h.act(() => h.latest().begin({ x: 900, y: 500 }));
     await h.act(() => void h.latest().finish(false));
     assert.deepEqual(h.latest().result?.ids, ["t-right"]);
 
     pendingAdd.resolve({});
-    await h.act(async () => { await savePromise; });
+    await h.act(async () => {
+        await savePromise;
+    });
     assert.deepEqual(h.latest().result?.ids, ["t-right"]);
     await h.unmount();
 });

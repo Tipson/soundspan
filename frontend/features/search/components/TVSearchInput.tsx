@@ -12,7 +12,10 @@ interface TVSearchInputProps {
 /**
  * Renders the TVSearchInput component.
  */
-export function TVSearchInput({ initialQuery = "", onSearch }: TVSearchInputProps) {
+export function TVSearchInput({
+    initialQuery = "",
+    onSearch,
+}: TVSearchInputProps) {
     const isTV = useIsTV();
     const inputRef = useRef<HTMLInputElement>(null);
     const [query, setQuery] = useState(initialQuery);
@@ -77,9 +80,10 @@ export function TVSearchInput({ initialQuery = "", onSearch }: TVSearchInputProp
                             transition-all
                             outline-none
                             border-2
-                            ${isFocused
-                                ? "border-brand bg-[#242424]"
-                                : "border-transparent hover:bg-[#242424]"
+                            ${
+                                isFocused
+                                    ? "border-brand bg-[#242424]"
+                                    : "border-transparent hover:bg-[#242424]"
                             }
                         `}
                     />

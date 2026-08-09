@@ -19,7 +19,9 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
     return { promise, resolve };
 }
 
-function ytJob(overrides: Partial<YouTubeDownloadJob> = {}): YouTubeDownloadJob {
+function ytJob(
+    overrides: Partial<YouTubeDownloadJob> = {},
+): YouTubeDownloadJob {
     return {
         jobId: "job-1",
         videoId: "vid00000001",
@@ -68,14 +70,8 @@ test("summarizeBulkProgress counts each status and computes terminal pct", () =>
 });
 
 test("summarizeBulkProgress is done only when all items are terminal", () => {
-    assert.equal(
-        summarizeBulkProgress(["completed", "failed"]).done,
-        true
-    );
-    assert.equal(
-        summarizeBulkProgress(["completed", "active"]).done,
-        false
-    );
+    assert.equal(summarizeBulkProgress(["completed", "failed"]).done, true);
+    assert.equal(summarizeBulkProgress(["completed", "active"]).done, false);
 });
 
 test("mapLimit runs every item exactly once", async () => {
@@ -83,7 +79,10 @@ test("mapLimit runs every item exactly once", async () => {
     await mapLimit([10, 20, 30, 40], 2, async (item) => {
         seen.push(item);
     });
-    assert.deepEqual(seen.sort((a, b) => a - b), [10, 20, 30, 40]);
+    assert.deepEqual(
+        seen.sort((a, b) => a - b),
+        [10, 20, 30, 40],
+    );
 });
 
 test("mapLimit never exceeds the concurrency limit", async () => {
@@ -116,7 +115,10 @@ test("mapLimit keeps draining after a worker throws", async () => {
         if (item === 2) throw new Error("boom");
         completed.push(item);
     });
-    assert.deepEqual(completed.sort((a, b) => a - b), [1, 3, 4]);
+    assert.deepEqual(
+        completed.sort((a, b) => a - b),
+        [1, 3, 4],
+    );
 });
 
 test("mapLimit handles an empty list", async () => {
@@ -146,7 +148,7 @@ test("youtubeJobToDownloadItem maps a job to a tagged list row", () => {
 test("youtubeJobToDownloadItem falls back to videoId and nowIso", () => {
     const item = youtubeJobToDownloadItem(
         ytJob({ title: "", source: null, createdAt: null }),
-        NOW_ISO
+        NOW_ISO,
     );
     assert.equal(item.subject, "vid00000001");
     assert.equal(item.metadata.statusText, "43%");
@@ -157,11 +159,11 @@ test("youtubeJobToDownloadItem clamps progress to 0-100", () => {
     assert.equal(
         youtubeJobToDownloadItem(ytJob({ progressPct: 999 }), NOW_ISO).metadata
             .progressPct,
-        100
+        100,
     );
     assert.equal(
         youtubeJobToDownloadItem(ytJob({ progressPct: -5 }), NOW_ISO).metadata
             .progressPct,
-        0
+        0,
     );
 });

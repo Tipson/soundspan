@@ -39,7 +39,7 @@ export function NowPlayingConnected({
     const { playbackType } = useAudioState();
     const onTogglePlay = useCallback(
         () => (isPlaying ? pause() : play()),
-        [isPlaying, pause, play]
+        [isPlaying, pause, play],
     );
     const preferenceTrackId = playbackType === "track" ? track?.id : undefined;
     return (

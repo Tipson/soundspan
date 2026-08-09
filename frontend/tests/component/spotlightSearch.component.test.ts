@@ -17,8 +17,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const vibeSearchCalls: string[] = [];
 let vibeSearchImpl = async (q: string) => ({
@@ -61,14 +62,16 @@ beforeEach(() => {
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
-    const promise = new Promise<T>((done) => { resolve = done; });
+    const promise = new Promise<T>((done) => {
+        resolve = done;
+    });
     return { promise, resolve };
 }
 
 function track(
     id: string,
     title: string,
-    artist: string
+    artist: string,
 ): {
     id: string;
     x: number;
@@ -129,16 +132,15 @@ async function unmount(mounted: {
 function typeInto(input: HTMLInputElement, value: string) {
     const setter = Object.getOwnPropertyDescriptor(
         HTMLInputElement.prototype,
-        "value"
+        "value",
     )!.set!;
     setter.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 test("typing shows up to 8 ranked local track/artist matches in a dropdown", async () => {
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
-    );
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
     const onLocate = () => undefined;
     const onResults = () => undefined;
     const onClear = () => undefined;
@@ -149,11 +151,11 @@ test("typing shows up to 8 ranked local track/artist matches in a dropdown", asy
             onLocate,
             onResults,
             onClear,
-        })
+        }),
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
     assert.ok(input, "expected the spotlight input");
 
@@ -173,9 +175,8 @@ test("typing shows up to 8 ranked local track/artist matches in a dropdown", asy
 });
 
 test("Enter picks the highlighted local match and calls onLocate, keeping the query text", async () => {
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
-    );
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
     const located: string[] = [];
 
     const mounted = await mount(
@@ -184,11 +185,11 @@ test("Enter picks the highlighted local match and calls onLocate, keeping the qu
             onLocate: (id: string) => located.push(id),
             onResults: () => undefined,
             onClear: () => undefined,
-        })
+        }),
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -199,21 +200,24 @@ test("Enter picks the highlighted local match and calls onLocate, keeping the qu
     // "Midnight City" is a title-prefix match -> ranks first -> pre-highlighted.
     await React.act(async () => {
         input.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+            new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
         );
     });
 
     assert.deepEqual(located, ["t1"]);
     assert.equal(input.value, "midnight", "query text is kept after locating");
-    assert.equal(vibeSearchCalls.length, 0, "must not have fired the vibe search");
+    assert.equal(
+        vibeSearchCalls.length,
+        0,
+        "must not have fired the vibe search",
+    );
 
     await unmount(mounted);
 });
 
 test("clicking a match row calls onLocate for that track", async () => {
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
-    );
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
     const located: string[] = [];
 
     const mounted = await mount(
@@ -222,11 +226,11 @@ test("clicking a match row calls onLocate for that track", async () => {
             onLocate: (id: string) => located.push(id),
             onResults: () => undefined,
             onClear: () => undefined,
-        })
+        }),
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -235,7 +239,7 @@ test("clicking a match row calls onLocate for that track", async () => {
     });
 
     const option = mounted.container.querySelector(
-        '[aria-label="City Lights by Aurora"]'
+        '[aria-label="City Lights by Aurora"]',
     ) as HTMLButtonElement | null;
     assert.ok(option, "expected a match row for City Lights by Aurora");
 
@@ -249,9 +253,8 @@ test("clicking a match row calls onLocate for that track", async () => {
 });
 
 test("ArrowDown moves the highlight onto the vibe-search row, and Enter there fires api.vibeSearch", async () => {
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
-    );
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
     const located: string[] = [];
 
     const mounted = await mount(
@@ -260,11 +263,11 @@ test("ArrowDown moves the highlight onto the vibe-search row, and Enter there fi
             onLocate: (id: string) => located.push(id),
             onResults: () => undefined,
             onClear: () => undefined,
-        })
+        }),
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -275,17 +278,17 @@ test("ArrowDown moves the highlight onto the vibe-search row, and Enter there fi
     // ArrowDown twice: match[0] -> match[1] -> vibe row.
     await React.act(async () => {
         input.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+            new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
         );
     });
     await React.act(async () => {
         input.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+            new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
         );
     });
     await React.act(async () => {
         input.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+            new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
         );
     });
     // Flush the async vibeSearch call.
@@ -301,9 +304,8 @@ test("ArrowDown moves the highlight onto the vibe-search row, and Enter there fi
 });
 
 test("Enter with zero local matches falls through to the vibe search", async () => {
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
-    );
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
 
     const mounted = await mount(
         React.createElement(SpotlightSearch, {
@@ -311,11 +313,11 @@ test("Enter with zero local matches falls through to the vibe search", async () 
             onLocate: () => undefined,
             onResults: () => undefined,
             onClear: () => undefined,
-        })
+        }),
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -325,11 +327,14 @@ test("Enter with zero local matches falls through to the vibe search", async () 
 
     const listbox = mounted.container.querySelector("#spotlight-listbox");
     assert.ok(listbox, "the vibe-search row alone still opens the dropdown");
-    assert.doesNotMatch(listbox!.textContent ?? "", /Midnight|Aurora|Starlight/);
+    assert.doesNotMatch(
+        listbox!.textContent ?? "",
+        /Midnight|Aurora|Starlight/,
+    );
 
     await React.act(async () => {
         input.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+            new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
         );
     });
     await React.act(async () => {
@@ -346,17 +351,18 @@ test("typing a new query invalidates an in-flight vibe search", async () => {
     const pending = deferred<{ query: string; tracks: { id: string }[] }>();
     vibeSearchImpl = () => pending.promise;
     const results: string[][] = [];
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
+    const mounted = await mount(
+        React.createElement(SpotlightSearch, {
+            tracks,
+            onLocate: () => undefined,
+            onResults: (ids: Set<string>) => results.push([...ids]),
+            onClear: () => undefined,
+        }),
     );
-    const mounted = await mount(React.createElement(SpotlightSearch, {
-        tracks,
-        onLocate: () => undefined,
-        onResults: (ids: Set<string>) => results.push([...ids]),
-        onClear: () => undefined,
-    }));
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -364,21 +370,26 @@ test("typing a new query invalidates an in-flight vibe search", async () => {
         typeInto(input, "zzzznomatch");
     });
     await React.act(async () => {
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        input.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
     });
     assert.deepEqual(vibeSearchCalls, ["zzzznomatch"]);
 
-    await React.act(async () => { typeInto(input, "aurora"); });
+    await React.act(async () => {
+        typeInto(input, "aurora");
+    });
     pending.resolve({ query: "zzzznomatch", tracks: [{ id: "stale" }] });
-    await React.act(async () => { await pending.promise; });
+    await React.act(async () => {
+        await pending.promise;
+    });
     assert.deepEqual(results, []);
     await unmount(mounted);
 });
 
 test("first Esc clears the query and closes the dropdown", async () => {
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
-    );
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
     let cleared = 0;
 
     const mounted = await mount(
@@ -389,11 +400,11 @@ test("first Esc clears the query and closes the dropdown", async () => {
             onClear: () => {
                 cleared += 1;
             },
-        })
+        }),
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -404,7 +415,7 @@ test("first Esc clears the query and closes the dropdown", async () => {
 
     await React.act(async () => {
         input.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
         );
     });
 
@@ -416,19 +427,18 @@ test("first Esc clears the query and closes the dropdown", async () => {
 });
 
 test("placeholder invites track/artist/vibe search", async () => {
-    const { SpotlightSearch } = await import(
-        "../../components/vibe/SpotlightSearch"
-    );
+    const { SpotlightSearch } =
+        await import("../../components/vibe/SpotlightSearch");
     const mounted = await mount(
         React.createElement(SpotlightSearch, {
             tracks,
             onLocate: () => undefined,
             onResults: () => undefined,
             onClear: () => undefined,
-        })
+        }),
     );
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]'
+        'input[aria-label="Spotlight a vibe"]',
     ) as HTMLInputElement;
     assert.equal(input.placeholder, "Search tracks, artists, or a vibe…");
 

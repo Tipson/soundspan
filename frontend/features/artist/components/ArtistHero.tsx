@@ -8,7 +8,11 @@ import { useArtistDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
 
 // Lazy load MetadataEditor - modal component opened on user action
-const MetadataEditor = lazy(() => import("@/components/MetadataEditor").then(mod => ({ default: mod.MetadataEditor })));
+const MetadataEditor = lazy(() =>
+    import("@/components/MetadataEditor").then((mod) => ({
+        default: mod.MetadataEditor,
+    })),
+);
 
 interface ArtistHeroProps {
     artist: Artist;
@@ -130,7 +134,9 @@ export function ArtistHero({
                                             _originalBio:
                                                 artist.summary ?? artist.bio,
                                             _originalGenres:
-                                                artist.genres ?? artist.tags ?? [],
+                                                artist.genres ??
+                                                artist.tags ??
+                                                [],
                                             _originalHeroUrl:
                                                 artist.heroUrl ?? artist.image,
                                             _hasUserOverrides:

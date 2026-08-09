@@ -25,19 +25,12 @@ mock.module("next/link", {
     }: {
         href: string;
         children: React.ReactNode;
-    }) =>
-        React.createElement("a", { href, ...rest }, children),
+    }) => React.createElement("a", { href, ...rest }, children),
 });
 
 mock.module("next/image", {
-    defaultExport: ({
-        src,
-        alt,
-        ...rest
-    }: {
-        src: string;
-        alt: string;
-    }) => React.createElement("img", { src, alt, ...rest }),
+    defaultExport: ({ src, alt, ...rest }: { src: string; alt: string }) =>
+        React.createElement("img", { src, alt, ...rest }),
 });
 
 mock.module("@/utils/cn", {
@@ -173,13 +166,13 @@ test("keeps prefetch enabled for primary sidebar navigation links", async () => 
     for (const href of navHrefs) {
         const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const linkMatch = html.match(
-            new RegExp(`<a[^>]*href="${escapedHref}"[^>]*>`)
+            new RegExp(`<a[^>]*href="${escapedHref}"[^>]*>`),
         );
         assert.ok(linkMatch, `Expected link for ${href}`);
         assert.doesNotMatch(
             linkMatch[0],
             /\sprefetch=/,
-            `Primary nav link ${href} should not force prefetch off`
+            `Primary nav link ${href} should not force prefetch off`,
         );
     }
 });

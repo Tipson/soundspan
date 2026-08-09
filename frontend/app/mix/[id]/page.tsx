@@ -4,10 +4,22 @@ import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { api } from "@/lib/api";
-import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
+import {
+    useAudioState,
+    useAudioPlayback,
+    useAudioControls,
+} from "@/lib/audio-context";
 import { CoverMosaic } from "@/components/ui/CoverMosaic";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { Play, Pause, Music, Shuffle, Save, ListPlus, Loader2 } from "lucide-react";
+import {
+    Play,
+    Pause,
+    Music,
+    Shuffle,
+    Save,
+    ListPlus,
+    Loader2,
+} from "lucide-react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { shuffleArray } from "@/utils/shuffle";
@@ -55,7 +67,9 @@ export default function MixPage() {
             <div className="p-6">
                 <h1 className="text-xl font-semibold text-white mb-4">Mix</h1>
                 <div className="bg-surface-raised border border-surface-active rounded-lg p-6">
-                    <p className="text-content-secondary mb-2">Feature not available</p>
+                    <p className="text-content-secondary mb-2">
+                        Feature not available
+                    </p>
                     <p className="text-sm text-content-muted">
                         Auto-generated mixes are disabled on this server.
                     </p>
@@ -85,7 +99,10 @@ function MixPageContent() {
     // Calculate total duration
     const totalDuration = useMemo(() => {
         if (!mix?.tracks) return 0;
-        return mix.tracks.reduce((sum: number, track: MixTrack) => sum + (track.duration || 0), 0);
+        return mix.tracks.reduce(
+            (sum: number, track: MixTrack) => sum + (track.duration || 0),
+            0,
+        );
     }, [mix?.tracks]);
 
     const formatTotalDuration = (seconds: number) => {
@@ -96,7 +113,6 @@ function MixPageContent() {
         }
         return `${mins} min`;
     };
-
 
     // Check if this mix is currently playing
     const mixTrackIds = useMemo(() => {
@@ -186,8 +202,14 @@ function MixPageContent() {
                 router.push(`/playlist/${result.id}`);
             }, 1000);
         } catch (error: unknown) {
-            sharedFrontendLogger.error("Failed to save mix as playlist:", error);
-            const err = error as { status?: number; data?: { playlistId?: string } };
+            sharedFrontendLogger.error(
+                "Failed to save mix as playlist:",
+                error,
+            );
+            const err = error as {
+                status?: number;
+                data?: { playlistId?: string };
+            };
             if (err?.status === 409) {
                 toast.info("You've already saved this mix as a playlist.");
                 if (err?.data?.playlistId) {
@@ -224,41 +246,54 @@ function MixPageContent() {
     return (
         <div className="min-h-screen">
             {/* Compact Hero - Spotify Style */}
-            <div 
+            <div
                 className="relative pt-16 pb-10 px-4 md:px-8"
-                style={{ 
-                    background: mix.color 
-                        ? `${mix.color}, linear-gradient(to bottom, transparent, #1a1a1a)` 
-                        : 'linear-gradient(to bottom, rgba(88, 28, 135, 0.4), #1a1a1a, transparent)' 
+                style={{
+                    background: mix.color
+                        ? `${mix.color}, linear-gradient(to bottom, transparent, #1a1a1a)`
+                        : "linear-gradient(to bottom, rgba(88, 28, 135, 0.4), #1a1a1a, transparent)",
                 }}
             >
                 <div className="flex items-end gap-6">
-                        {/* Cover Art Mosaic */}
-                        <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
-                            <CoverMosaic
-                                coverUrls={(mix.coverUrls || []).slice(0, 4).map((url: string) => api.getCoverArtUrl(url, 200))}
-                                imageSizes="96px"
-                                emptyState={<Music className="w-16 h-16 text-gray-400" />}
-                            />
-                        </div>
-
-                        {/* Mix Info - Bottom Aligned */}
-                        <div className="flex-1 min-w-0 pb-1">
-                            <p className="text-xs font-medium text-white/90 mb-1">Mix</p>
-                            <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
-                                {mix.name}
-                            </h1>
-                            {mix.description && (
-                                <p className="text-sm text-white/60 mb-2 line-clamp-2">
-                                    {mix.description}
-                                </p>
-                            )}
-                            <div className="flex items-center gap-1 text-sm text-white/70">
-                                <span>{mix.trackCount || mix.tracks?.length || 0} songs</span>
-                                {totalDuration > 0 && (
-                                    <span>, {formatTotalDuration(totalDuration)}</span>
+                    {/* Cover Art Mosaic */}
+                    <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
+                        <CoverMosaic
+                            coverUrls={(mix.coverUrls || [])
+                                .slice(0, 4)
+                                .map((url: string) =>
+                                    api.getCoverArtUrl(url, 200),
                                 )}
-                            </div>
+                            imageSizes="96px"
+                            emptyState={
+                                <Music className="w-16 h-16 text-gray-400" />
+                            }
+                        />
+                    </div>
+
+                    {/* Mix Info - Bottom Aligned */}
+                    <div className="flex-1 min-w-0 pb-1">
+                        <p className="text-xs font-medium text-white/90 mb-1">
+                            Mix
+                        </p>
+                        <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
+                            {mix.name}
+                        </h1>
+                        {mix.description && (
+                            <p className="text-sm text-white/60 mb-2 line-clamp-2">
+                                {mix.description}
+                            </p>
+                        )}
+                        <div className="flex items-center gap-1 text-sm text-white/70">
+                            <span>
+                                {mix.trackCount || mix.tracks?.length || 0}{" "}
+                                songs
+                            </span>
+                            {totalDuration > 0 && (
+                                <span>
+                                    , {formatTotalDuration(totalDuration)}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -321,102 +356,122 @@ function MixPageContent() {
 
                         {/* Track Rows */}
                         <div>
-                            {mix.tracks.map((track: MixTrack, index: number) => {
-                                const isCurrentlyPlaying = currentTrack?.id === track.id;
-                                const isInQueue = queuedTrackIds.has(track.id);
-                                return (
-                                    <div
-                                        key={track.id}
-                                        onClick={() => handlePlayTrack(index)}
-                                        className={cn(
-                                            "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer",
-                                            isCurrentlyPlaying && "bg-white/10",
-                                            isInQueue &&
-                                                !isCurrentlyPlaying &&
-                                                "bg-brand/[0.06]"
-                                        )}
-                                    >
-                                        {/* Track Number / Play Icon */}
-                                        <div className="flex items-center justify-center">
-                                            <span
-                                                className={cn(
-                                                    "text-sm group-hover:hidden",
-                                                    isCurrentlyPlaying ? "text-brand" : "text-gray-400"
-                                                )}
-                                            >
-                                                {isCurrentlyPlaying && isPlaying ? (
-                                                    <Music className="w-4 h-4 text-brand animate-pulse" />
-                                                ) : (
-                                                    index + 1
-                                                )}
-                                            </span>
-                                            <Play className="w-4 h-4 text-white hidden group-hover:block" />
-                                        </div>
-
-                                        {/* Title + Artist */}
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="relative w-10 h-10 bg-surface-highlight rounded shrink-0 overflow-hidden">
-                                                {track.album?.coverUrl ? (
-                                                    <Image
-                                                        src={api.getCoverArtUrl(track.album.coverUrl, 100)}
-                                                        alt={track.title}
-                                                        fill
-                                                        sizes="40px"
-                                                        className="object-cover"
-                                                        unoptimized
-                                                    />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        <Music className="w-5 h-5 text-gray-400" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p
+                            {mix.tracks.map(
+                                (track: MixTrack, index: number) => {
+                                    const isCurrentlyPlaying =
+                                        currentTrack?.id === track.id;
+                                    const isInQueue = queuedTrackIds.has(
+                                        track.id,
+                                    );
+                                    return (
+                                        <div
+                                            key={track.id}
+                                            onClick={() =>
+                                                handlePlayTrack(index)
+                                            }
+                                            className={cn(
+                                                "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer",
+                                                isCurrentlyPlaying &&
+                                                    "bg-white/10",
+                                                isInQueue &&
+                                                    !isCurrentlyPlaying &&
+                                                    "bg-brand/[0.06]",
+                                            )}
+                                        >
+                                            {/* Track Number / Play Icon */}
+                                            <div className="flex items-center justify-center">
+                                                <span
                                                     className={cn(
-                                                        "text-sm font-medium flex items-center gap-2 min-w-0",
-                                                        isCurrentlyPlaying ? "text-brand" : "text-white"
+                                                        "text-sm group-hover:hidden",
+                                                        isCurrentlyPlaying
+                                                            ? "text-brand"
+                                                            : "text-gray-400",
                                                     )}
                                                 >
-                                                    <span className="truncate">
-                                                        {track.title}
-                                                    </span>
-                                                    {isInQueue && (
-                                                        <span className="shrink-0 text-[10px] bg-brand/15 text-brand-light px-1.5 py-0.5 rounded border border-brand/30 font-medium">
-                                                            IN QUEUE
-                                                        </span>
+                                                    {isCurrentlyPlaying &&
+                                                    isPlaying ? (
+                                                        <Music className="w-4 h-4 text-brand animate-pulse" />
+                                                    ) : (
+                                                        index + 1
                                                     )}
-                                                </p>
-                                                <p className="text-xs text-gray-400 truncate">
-                                                    {track.album.artist.name}
-                                                </p>
+                                                </span>
+                                                <Play className="w-4 h-4 text-white hidden group-hover:block" />
+                                            </div>
+
+                                            {/* Title + Artist */}
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="relative w-10 h-10 bg-surface-highlight rounded shrink-0 overflow-hidden">
+                                                    {track.album?.coverUrl ? (
+                                                        <Image
+                                                            src={api.getCoverArtUrl(
+                                                                track.album
+                                                                    .coverUrl,
+                                                                100,
+                                                            )}
+                                                            alt={track.title}
+                                                            fill
+                                                            sizes="40px"
+                                                            className="object-cover"
+                                                            unoptimized
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center">
+                                                            <Music className="w-5 h-5 text-gray-400" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p
+                                                        className={cn(
+                                                            "text-sm font-medium flex items-center gap-2 min-w-0",
+                                                            isCurrentlyPlaying
+                                                                ? "text-brand"
+                                                                : "text-white",
+                                                        )}
+                                                    >
+                                                        <span className="truncate">
+                                                            {track.title}
+                                                        </span>
+                                                        {isInQueue && (
+                                                            <span className="shrink-0 text-[10px] bg-brand/15 text-brand-light px-1.5 py-0.5 rounded border border-brand/30 font-medium">
+                                                                IN QUEUE
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 truncate">
+                                                        {
+                                                            track.album.artist
+                                                                .name
+                                                        }
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Album (hidden on mobile) */}
+                                            <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
+                                                {track.album.title}
+                                            </p>
+
+                                            {/* Duration + Actions */}
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleAddToQueue(track);
+                                                    }}
+                                                    title="Add to Queue"
+                                                >
+                                                    <ListPlus className="w-4 h-4" />
+                                                </button>
+                                                <span className="text-sm text-gray-400 w-12 text-right">
+                                                    {formatTime(track.duration)}
+                                                </span>
                                             </div>
                                         </div>
-
-                                        {/* Album (hidden on mobile) */}
-                                        <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
-                                            {track.album.title}
-                                        </p>
-
-                                        {/* Duration + Actions */}
-                                        <div className="flex items-center justify-end gap-2">
-                                            <button
-                                                className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleAddToQueue(track);
-                                                }}
-                                                title="Add to Queue"
-                                            >
-                                                <ListPlus className="w-4 h-4" />
-                                            </button>
-                                            <span className="text-sm text-gray-400 w-12 text-right">
-                                                {formatTime(track.duration)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                },
+                            )}
                         </div>
                     </div>
                 ) : (
@@ -424,8 +479,12 @@ function MixPageContent() {
                         <div className="w-20 h-20 bg-surface-highlight rounded-full flex items-center justify-center mb-4">
                             <Music className="w-10 h-10 text-gray-400" />
                         </div>
-                        <h3 className="text-lg font-medium text-white mb-1">No tracks</h3>
-                        <p className="text-sm text-gray-400">This mix is empty</p>
+                        <h3 className="text-lg font-medium text-white mb-1">
+                            No tracks
+                        </h3>
+                        <p className="text-sm text-gray-400">
+                            This mix is empty
+                        </p>
                     </div>
                 )}
             </div>

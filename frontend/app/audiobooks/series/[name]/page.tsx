@@ -10,7 +10,11 @@ import { Badge } from "@/components/ui/Badge";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/utils/formatTime";
 import { useAuth } from "@/lib/auth-context";
-import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
+import {
+    useAudioState,
+    useAudioPlayback,
+    useAudioControls,
+} from "@/lib/audio-context";
 import { useToast } from "@/lib/toast-context";
 import {
     ArrowLeft,
@@ -78,7 +82,6 @@ export default function SeriesDetailPage() {
 
         loadSeries();
     }, [seriesName, isAuthenticated, toast]);
-
 
     const getCoverUrl = (coverUrl: string | null, size = 300) => {
         if (!coverUrl) return null;
@@ -218,7 +221,12 @@ export default function SeriesDetailPage() {
                                             {book.coverUrl &&
                                             getCoverUrl(book.coverUrl, 100) ? (
                                                 <Image
-                                                    src={getCoverUrl(book.coverUrl, 100)!}
+                                                    src={
+                                                        getCoverUrl(
+                                                            book.coverUrl,
+                                                            100,
+                                                        )!
+                                                    }
                                                     alt={book.title}
                                                     fill
                                                     sizes="48px"
@@ -262,7 +270,7 @@ export default function SeriesDetailPage() {
                                             </div>
                                             <span className="text-xs text-gray-400">
                                                 {Math.round(
-                                                    book.progress.progress
+                                                    book.progress.progress,
                                                 )}
                                                 %
                                             </span>
@@ -282,7 +290,11 @@ export default function SeriesDetailPage() {
                                         }
                                         onClick={() => {
                                             if (isCurrentBook) {
-                                                if (isPlaying) { pause(); } else { resume(); }
+                                                if (isPlaying) {
+                                                    pause();
+                                                } else {
+                                                    resume();
+                                                }
                                             } else {
                                                 playAudiobook(book);
                                             }

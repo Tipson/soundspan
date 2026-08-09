@@ -10,7 +10,10 @@ import { toast } from "sonner";
 import { shuffleArray } from "@/utils/shuffle";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { RadioStationCard, RadioStationCardStation } from "@/components/ui/RadioStationCard";
+import {
+    RadioStationCard,
+    RadioStationCardStation,
+} from "@/components/ui/RadioStationCard";
 
 type RadioStation = RadioStationCardStation;
 
@@ -140,11 +143,19 @@ const getGenreColor = (genre: string): string => {
 };
 
 // Section Header Component
-function SectionHeader({ title, description }: { title: string; description?: string }) {
+function SectionHeader({
+    title,
+    description,
+}: {
+    title: string;
+    description?: string;
+}) {
     return (
         <div className="mb-4">
             <h2 className="text-xl font-bold text-white">{title}</h2>
-            {description && <p className="text-sm text-white/50 mt-1">{description}</p>}
+            {description && (
+                <p className="text-sm text-white/50 mt-1">{description}</p>
+            )}
         </div>
     );
 }
@@ -187,7 +198,9 @@ export default function RadioPage() {
             }
             params.set("limit", "100");
 
-            const response = await api.get<{ tracks: Track[] }>(`/library/radio?${params.toString()}`);
+            const response = await api.get<{ tracks: Track[] }>(
+                `/library/radio?${params.toString()}`,
+            );
 
             if (!response.tracks || response.tracks.length === 0) {
                 toast.error(`No tracks found for ${station.name}`);
@@ -241,18 +254,20 @@ export default function RadioPage() {
     return (
         <div className="min-h-screen relative">
             {/* Hero gradient */}
-            <div 
+            <div
                 className="absolute top-0 left-0 right-0 pointer-events-none"
                 style={{
-                    background: "linear-gradient(to bottom, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 40%, transparent 100%)",
-                    height: "35vh"
+                    background:
+                        "linear-gradient(to bottom, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 40%, transparent 100%)",
+                    height: "35vh",
                 }}
             />
-            <div 
+            <div
                 className="absolute top-0 left-0 right-0 pointer-events-none"
                 style={{
-                    background: "radial-gradient(ellipse at top, rgba(59, 130, 246, 0.1) 0%, transparent 70%)",
-                    height: "25vh"
+                    background:
+                        "radial-gradient(ellipse at top, rgba(59, 130, 246, 0.1) 0%, transparent 70%)",
+                    height: "25vh",
                 }}
             />
 
@@ -268,9 +283,9 @@ export default function RadioPage() {
 
                 {/* Quick Start Section */}
                 <section className="mb-10">
-                    <SectionHeader 
-                        title="Quick Start" 
-                        description="Jump into your music instantly" 
+                    <SectionHeader
+                        title="Quick Start"
+                        description="Jump into your music instantly"
                     />
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                         {STATIC_STATIONS.map((station) => (
@@ -287,14 +302,17 @@ export default function RadioPage() {
                 {/* Genres Section */}
                 {(isLoading || genreStations.length > 0) && (
                     <section className="mb-10">
-                        <SectionHeader 
-                            title="By Genre" 
-                            description="Shuffle tracks from specific genres" 
+                        <SectionHeader
+                            title="By Genre"
+                            description="Shuffle tracks from specific genres"
                         />
                         {isLoading ? (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                                 {Array.from({ length: 6 }).map((_, i) => (
-                                    <div key={i} className="aspect-square rounded-lg bg-white/5 animate-pulse" />
+                                    <div
+                                        key={i}
+                                        className="aspect-square rounded-lg bg-white/5 animate-pulse"
+                                    />
                                 ))}
                             </div>
                         ) : (
@@ -304,7 +322,9 @@ export default function RadioPage() {
                                         key={station.id}
                                         station={station}
                                         onPlay={() => startRadio(station)}
-                                        isLoading={loadingStation === station.id}
+                                        isLoading={
+                                            loadingStation === station.id
+                                        }
                                     />
                                 ))}
                             </div>
@@ -315,14 +335,17 @@ export default function RadioPage() {
                 {/* Decades Section - Only show if there are decade stations */}
                 {(isLoading || decadeStations.length > 0) && (
                     <section className="mb-10">
-                        <SectionHeader 
-                            title="By Decade" 
-                            description="Travel through time with your music" 
+                        <SectionHeader
+                            title="By Decade"
+                            description="Travel through time with your music"
                         />
                         {isLoading ? (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                                 {Array.from({ length: 6 }).map((_, i) => (
-                                    <div key={i} className="aspect-square rounded-lg bg-white/5 animate-pulse" />
+                                    <div
+                                        key={i}
+                                        className="aspect-square rounded-lg bg-white/5 animate-pulse"
+                                    />
                                 ))}
                             </div>
                         ) : (
@@ -332,7 +355,9 @@ export default function RadioPage() {
                                         key={station.id}
                                         station={station}
                                         onPlay={() => startRadio(station)}
-                                        isLoading={loadingStation === station.id}
+                                        isLoading={
+                                            loadingStation === station.id
+                                        }
                                     />
                                 ))}
                             </div>
@@ -342,11 +367,15 @@ export default function RadioPage() {
 
                 {/* Info */}
                 <div className="mt-12 p-4 rounded-lg bg-white/5 border border-white/10">
-                    <h3 className="text-sm font-semibold text-white mb-2">About Radio Stations</h3>
+                    <h3 className="text-sm font-semibold text-white mb-2">
+                        About Radio Stations
+                    </h3>
                     <p className="text-sm text-white/60">
-                        Radio stations are generated from your personal music library. As you add more music, 
-                        new genre and decade stations will automatically appear. Each station requires a minimum 
-                        number of tracks to ensure a good listening experience.
+                        Radio stations are generated from your personal music
+                        library. As you add more music, new genre and decade
+                        stations will automatically appear. Each station
+                        requires a minimum number of tracks to ensure a good
+                        listening experience.
                     </p>
                 </div>
             </div>

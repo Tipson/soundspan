@@ -49,7 +49,7 @@ export function useAuxSurface({
         (surface: Exclude<AuxSurface, null>) => {
             setAuxSurface((cur) => (cur === surface ? null : surface));
         },
-        []
+        [],
     );
 
     const closeAux = useCallback(() => setAuxSurface(null), []);
@@ -70,5 +70,10 @@ export function useAuxSurface({
         if (sweepChipOpen) setAuxSurface(null);
     }, [sweepChipOpen]);
 
-    return { auxSurface, auxOpen: auxSurface !== null, toggleAuxSurface, closeAux };
+    return {
+        auxSurface,
+        auxOpen: auxSurface !== null,
+        toggleAuxSurface,
+        closeAux,
+    };
 }

@@ -61,7 +61,7 @@ test("resolveAdaptivePollingInterval switches between active and idle cadences",
             activeIntervalMs: 10_000,
             idleIntervalMs: 30_000,
         }),
-        10_000
+        10_000,
     );
     assert.equal(
         resolveAdaptivePollingInterval({
@@ -70,7 +70,7 @@ test("resolveAdaptivePollingInterval switches between active and idle cadences",
             activeIntervalMs: 10_000,
             idleIntervalMs: 30_000,
         }),
-        30_000
+        30_000,
     );
     assert.equal(
         resolveAdaptivePollingInterval({
@@ -79,6 +79,6 @@ test("resolveAdaptivePollingInterval switches between active and idle cadences",
             activeIntervalMs: 10_000,
             idleIntervalMs: 30_000,
         }),
-        false
+        false,
     );
 });

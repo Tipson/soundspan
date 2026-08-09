@@ -45,7 +45,8 @@ mock.module("lucide-react", {
 
 mock.module("@/utils/formatTime", {
     namedExports: {
-        formatTime: (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`,
+        formatTime: (s: number) =>
+            `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`,
     },
 });
 
@@ -80,12 +81,22 @@ installTrackOverflowHarness(mock, {
 
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 mock.module("next/link", {
-    defaultExport: ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) =>
-        React.createElement("a", { href, ...props }, children),
+    defaultExport: ({
+        children,
+        href,
+        ...props
+    }: {
+        children: React.ReactNode;
+        href: string;
+        [key: string]: unknown;
+    }) => React.createElement("a", { href, ...props }, children),
 });
 
 mock.module("@/components/ui/TidalBadge", {
@@ -123,7 +134,10 @@ mock.module("@/hooks/useTrackPreference", {
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
         TrackPreferenceButtons: (props: { trackId?: string }) =>
-            React.createElement("div", { "data-testid": "track-preference-buttons", "data-track-id": props.trackId }),
+            React.createElement("div", {
+                "data-testid": "track-preference-buttons",
+                "data-track-id": props.trackId,
+            }),
     },
 });
 
@@ -145,9 +159,8 @@ beforeEach(() => {
 // ─── 7.2 Artist PopularTracks ─────────────────────────────────────────
 
 test("PopularTracks renders TrackOverflowMenu trigger on each playable track row", async () => {
-    const { PopularTracks } = await import(
-        "../../features/artist/components/PopularTracks"
-    );
+    const { PopularTracks } =
+        await import("../../features/artist/components/PopularTracks");
 
     const artist = { id: "artist-1", name: "Test Artist" };
     const tracks = [
@@ -177,19 +190,22 @@ test("PopularTracks renders TrackOverflowMenu trigger on each playable track row
             currentTrackId: undefined,
             colors: null,
             onPlayTrack: () => undefined,
-        })
+        }),
     );
 
     // Should have overflow menu triggers (aria-haspopup="menu")
     const triggerMatches = html.match(/aria-haspopup="menu"/g);
     assert.ok(triggerMatches, "Should render overflow menu triggers");
-    assert.equal(triggerMatches!.length, 2, "Should have one trigger per playable track row");
+    assert.equal(
+        triggerMatches!.length,
+        2,
+        "Should have one trigger per playable track row",
+    );
 });
 
 test("PopularTracks overflow menu renders for playable track", async () => {
-    const { PopularTracks } = await import(
-        "../../features/artist/components/PopularTracks"
-    );
+    const { PopularTracks } =
+        await import("../../features/artist/components/PopularTracks");
 
     const artist = { id: "artist-1", name: "Test Artist" };
     const tracks = [
@@ -210,7 +226,7 @@ test("PopularTracks overflow menu renders for playable track", async () => {
             currentTrackId: undefined,
             colors: null,
             onPlayTrack: () => undefined,
-        })
+        }),
     );
 
     // Should render the overflow menu (presence check)
@@ -218,9 +234,8 @@ test("PopularTracks overflow menu renders for playable track", async () => {
 });
 
 test("PopularTracks hides overflow menu for unplayable tracks", async () => {
-    const { PopularTracks } = await import(
-        "../../features/artist/components/PopularTracks"
-    );
+    const { PopularTracks } =
+        await import("../../features/artist/components/PopularTracks");
 
     const artist = { id: "artist-1", name: "Test Artist" };
     const tracks = [
@@ -240,11 +255,15 @@ test("PopularTracks hides overflow menu for unplayable tracks", async () => {
             currentTrackId: undefined,
             colors: null,
             onPlayTrack: () => undefined,
-        })
+        }),
     );
 
     // Unmatched track should NOT have overflow menu
-    assert.doesNotMatch(html, /Track actions/, "Should not render overflow menu for unplayable track");
+    assert.doesNotMatch(
+        html,
+        /Track actions/,
+        "Should not render overflow menu for unplayable track",
+    );
     // Should be dimmed
     assert.match(html, /opacity-50/, "Unplayable track row should be dimmed");
 });

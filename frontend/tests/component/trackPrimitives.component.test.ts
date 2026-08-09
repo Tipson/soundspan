@@ -84,9 +84,10 @@ type TrackExports = {
 async function loadTrackExports(): Promise<TrackExports> {
     const mod = await import("../../components/track");
     const named = mod as Record<string, unknown>;
-    const cjsDefault = (mod as { default?: Record<string, unknown> }).default ?? {};
+    const cjsDefault =
+        (mod as { default?: Record<string, unknown> }).default ?? {};
     const read = <Name extends keyof TrackExports>(
-        name: Name
+        name: Name,
     ): TrackExports[Name] => {
         const value = named[name] ?? cjsDefault[name];
         assert.ok(value, `${name} export is available`);
@@ -105,8 +106,20 @@ async function loadTrackExports(): Promise<TrackExports> {
 }
 
 const sampleItems = [
-    { id: "track-1", title: "Track One", artist: "Artist One", duration: 181, cover: null },
-    { id: "track-2", title: "Track Two", artist: "Artist Two", duration: 205, cover: "https://img.test/2.jpg" },
+    {
+        id: "track-1",
+        title: "Track One",
+        artist: "Artist One",
+        duration: 181,
+        cover: null,
+    },
+    {
+        id: "track-2",
+        title: "Track Two",
+        artist: "Artist Two",
+        duration: 205,
+        cover: "https://img.test/2.jpg",
+    },
 ];
 
 function toRowItem(item: (typeof sampleItems)[number]) {
@@ -129,7 +142,7 @@ test("TrackList renders loadingState and emptyState branches deterministically",
             onPlay: () => undefined,
             isLoading: true,
             loadingState: React.createElement("div", null, "loading-state"),
-        })
+        }),
     );
     assert.match(loadingHtml, /loading-state/);
 
@@ -140,7 +153,7 @@ test("TrackList renders loadingState and emptyState branches deterministically",
             onPlay: () => undefined,
             isLoading: false,
             emptyState: React.createElement("div", null, "empty-state"),
-        })
+        }),
     );
     assert.match(emptyHtml, /empty-state/);
 });
@@ -157,14 +170,17 @@ test("TrackList computes row state for current and queued items", async () => {
             toRowItem,
             onPlay: () => undefined,
             className: "track-list-root",
-            rowSlots: (_item: (typeof sampleItems)[number], index: number, state: { isPlaying: boolean; isInQueue: boolean }) =>
-                ({
-                    middleColumns: React.createElement(
-                        "span",
-                        null,
-                        `state:${index}:${String(state.isPlaying)}:${String(state.isInQueue)}`
-                    ),
-                }),
+            rowSlots: (
+                _item: (typeof sampleItems)[number],
+                index: number,
+                state: { isPlaying: boolean; isInQueue: boolean },
+            ) => ({
+                middleColumns: React.createElement(
+                    "span",
+                    null,
+                    `state:${index}:${String(state.isPlaying)}:${String(state.isInQueue)}`,
+                ),
+            }),
             rowOverflow: (item: (typeof sampleItems)[number]) => ({
                 track: {
                     id: item.id,
@@ -175,7 +191,7 @@ test("TrackList computes row state for current and queued items", async () => {
                     album: { title: "Album" },
                 },
             }),
-        })
+        }),
     );
 
     assert.match(html, /track-list-root/);
@@ -184,7 +200,7 @@ test("TrackList computes row state for current and queued items", async () => {
     assert.equal(
         runtimeState.overflowCalls.length,
         2,
-        "overflow menu receives one config per rendered row"
+        "overflow menu receives one config per rendered row",
     );
 });
 
@@ -199,7 +215,7 @@ test("TrackListHeader renders provided columns with shared header classes", asyn
                 { label: "Title" },
                 { label: "Album" },
             ],
-        })
+        }),
     );
 
     assert.match(html, /hidden md:grid/);
@@ -235,7 +251,7 @@ test("TrackRow renders queue badge, duration, preferences, and overflow actions"
                     album: { title: "Album" },
                 },
             },
-        })
+        }),
     );
 
     assert.match(html, /IN QUEUE/);
@@ -264,10 +280,14 @@ test("TrackRow supports slot overrides for custom row composition", async () => 
             slots: {
                 leadingColumn: React.createElement("span", null, "lead-slot"),
                 artistContent: React.createElement("span", null, "artist-slot"),
-                trailingActions: React.createElement("span", null, "trail-slot"),
+                trailingActions: React.createElement(
+                    "span",
+                    null,
+                    "trail-slot",
+                ),
                 rowClassName: "extra-row",
             },
-        })
+        }),
     );
 
     assert.match(html, /lead-slot/);
@@ -297,7 +317,14 @@ test("TrackRow enter key handler triggers play callback and prevents default", a
         },
     });
 
-    const onKeyDown = (element.props as { onKeyDown?: (event: { key: string; preventDefault: () => void }) => void }).onKeyDown;
+    const onKeyDown = (
+        element.props as {
+            onKeyDown?: (event: {
+                key: string;
+                preventDefault: () => void;
+            }) => void;
+        }
+    ).onKeyDown;
     assert.equal(typeof onKeyDown, "function");
 
     onKeyDown?.({
@@ -318,12 +345,8 @@ test("TrackRow enter key handler triggers play callback and prevents default", a
 });
 
 test("track badges render all expected labels", async () => {
-    const {
-        InQueueBadge,
-        PreviewBadge,
-        LoadingBadge,
-        UnplayableBadge,
-    } = await loadTrackExports();
+    const { InQueueBadge, PreviewBadge, LoadingBadge, UnplayableBadge } =
+        await loadTrackExports();
 
     const html = renderToStaticMarkup(
         React.createElement(
@@ -333,7 +356,7 @@ test("track badges render all expected labels", async () => {
             React.createElement(PreviewBadge),
             React.createElement(LoadingBadge),
             React.createElement(UnplayableBadge),
-        )
+        ),
     );
 
     assert.match(html, /IN QUEUE/);

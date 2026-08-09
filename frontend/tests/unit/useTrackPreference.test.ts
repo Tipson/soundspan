@@ -9,7 +9,7 @@ import { buildPreferenceMetadata } from "../../hooks/useTrackPreference";
 test("buildOptimisticTrackPreferenceResponse maps signal to expected score", () => {
     const thumbsUp = buildOptimisticTrackPreferenceResponse(
         "track-1",
-        "thumbs_up"
+        "thumbs_up",
     );
     assert.equal(thumbsUp.trackId, "track-1");
     assert.equal(thumbsUp.signal, "thumbs_up");
@@ -21,7 +21,7 @@ test("buildOptimisticTrackPreferenceResponse maps signal to expected score", () 
 
     const thumbsDown = buildOptimisticTrackPreferenceResponse(
         "track-1",
-        "thumbs_down"
+        "thumbs_down",
     );
     assert.equal(thumbsDown.trackId, "track-1");
     assert.equal(thumbsDown.signal, "thumbs_down");
@@ -66,7 +66,7 @@ test("applyOptimisticTrackPreferenceMutation updates cache without waiting for c
             typeof applyOptimisticTrackPreferenceMutation
         >[0],
         "track-1",
-        "thumbs_down"
+        "thumbs_down",
     );
 
     assert.deepEqual(context.canonicalQueryKey, [

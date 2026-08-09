@@ -17,7 +17,7 @@ test("tidalExploreEnabled: returns false while status is loading (isFetched=fals
             authenticated: true,
             isFetched: false,
         }),
-        false
+        false,
     );
 });
 
@@ -29,7 +29,7 @@ test("tidalExploreEnabled: returns true when enabled + available + authenticated
             authenticated: true,
             isFetched: true,
         }),
-        true
+        true,
     );
 });
 
@@ -41,7 +41,7 @@ test("tidalExploreEnabled: returns false when not enabled", () => {
             authenticated: true,
             isFetched: true,
         }),
-        false
+        false,
     );
 });
 
@@ -53,7 +53,7 @@ test("tidalExploreEnabled: returns false when not available", () => {
             authenticated: true,
             isFetched: true,
         }),
-        false
+        false,
     );
 });
 
@@ -65,7 +65,7 @@ test("tidalExploreEnabled: returns false when not authenticated", () => {
             authenticated: false,
             isFetched: true,
         }),
-        false
+        false,
     );
 });
 
@@ -77,7 +77,7 @@ test("tidalExploreEnabled: returns false when all flags are false", () => {
             authenticated: false,
             isFetched: true,
         }),
-        false
+        false,
     );
 });
 
@@ -90,7 +90,7 @@ test("tidalExploreEnabled: returns false when userSettingEnabled is false even w
             isFetched: true,
             userSettingEnabled: false,
         }),
-        false
+        false,
     );
 });
 
@@ -103,7 +103,7 @@ test("tidalExploreEnabled: returns true when userSettingEnabled is true and auth
             isFetched: true,
             userSettingEnabled: true,
         }),
-        true
+        true,
     );
 });
 
@@ -116,7 +116,7 @@ test("tidalExploreEnabled: returns true when userSettingEnabled is undefined (le
             isFetched: true,
             userSettingEnabled: undefined,
         }),
-        true
+        true,
     );
 });
 
@@ -129,7 +129,7 @@ test("tidalExploreEnabled: userSettingEnabled cannot override disabled service",
             isFetched: true,
             userSettingEnabled: true,
         }),
-        false
+        false,
     );
 });
 
@@ -142,6 +142,6 @@ test("tidalExploreEnabled: unauthenticated overrides userSettingEnabled", () => 
             isFetched: true,
             userSettingEnabled: true,
         }),
-        false
+        false,
     );
 });

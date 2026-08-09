@@ -2,7 +2,10 @@
 
 import { Music2, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { memo, useCallback } from "react";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import type { PlaylistPreview } from "@/hooks/useQueries";
@@ -22,7 +25,7 @@ interface PlaylistCardProps {
 const PlaylistCard = memo(function PlaylistCard({
     playlist,
     index,
-    onClick
+    onClick,
 }: PlaylistCardProps) {
     const { showSpinner, triggerPlayFeedback } = usePlayButtonFeedback();
 
@@ -58,7 +61,11 @@ const PlaylistCard = memo(function PlaylistCard({
                             {showSpinner ? (
                                 <Loader2 className="w-4 h-4 text-black animate-spin" />
                             ) : (
-                                <svg viewBox="0 0 24 24" className="w-4 h-4 text-black ml-0.5" fill="currentColor">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    className="w-4 h-4 text-black ml-0.5"
+                                    fill="currentColor"
+                                >
                                     <path d="M8 5v14l11-7z" />
                                 </svg>
                             )}
@@ -71,7 +78,7 @@ const PlaylistCard = memo(function PlaylistCard({
                 <p className="text-xs text-gray-400 mt-0.5">
                     {playlist.trackCount != null
                         ? `${playlist.trackCount} songs`
-                        : playlist.description ?? ""}
+                        : (playlist.description ?? "")}
                 </p>
             </div>
         </CarouselItem>
@@ -82,13 +89,16 @@ const PlaylistCard = memo(function PlaylistCard({
  * Renders a horizontal carousel of playlist preview cards.
  */
 export const FeaturedPlaylistsGrid = memo(function FeaturedPlaylistsGrid({
-    playlists
+    playlists,
 }: FeaturedPlaylistsGridProps) {
     const router = useRouter();
 
-    const handlePlaylistClick = useCallback((playlistId: string) => {
-        router.push(`/explore/yt-playlist/${playlistId}`);
-    }, [router]);
+    const handlePlaylistClick = useCallback(
+        (playlistId: string) => {
+            router.push(`/explore/yt-playlist/${playlistId}`);
+        },
+        [router],
+    );
 
     if (!playlists || playlists.length === 0) {
         return null;

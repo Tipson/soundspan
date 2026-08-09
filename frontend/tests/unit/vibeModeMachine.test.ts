@@ -92,7 +92,7 @@ test("alchemy: removing the last ingredient exits to explore", () => {
     if (state.mode !== "alchemy") throw new Error("expected alchemy");
     assert.deepEqual(
         state.ingredients.map((i) => i.id),
-        ["t2"]
+        ["t2"],
     );
     state = vibeModeReducer(state, { type: "REMOVE_ALCHEMY", id: "t2" });
     assert.deepEqual(state, { mode: "explore" });
@@ -117,20 +117,20 @@ test("mode-scoped actions are no-ops outside their mode", () => {
     // the new mode's state.
     assert.equal(
         vibeModeReducer(explore, { type: "TRAVEL_TO", id: "t2" }),
-        explore
+        explore,
     );
     assert.equal(vibeModeReducer(explore, { type: "TOGGLE_PICK" }), explore);
     assert.equal(
         vibeModeReducer(explore, { type: "SET_DEST", id: "t2" }),
-        explore
+        explore,
     );
     assert.equal(
         vibeModeReducer(explore, { type: "SET_WEIGHT", id: "t1", weight: 1 }),
-        explore
+        explore,
     );
     const travel = enterTravel();
     assert.equal(
         vibeModeReducer(travel, { type: "SET_STEPS", steps: 5 }),
-        travel
+        travel,
     );
 });

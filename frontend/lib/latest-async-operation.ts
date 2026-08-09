@@ -4,7 +4,9 @@ export interface LatestAsyncOperationState<TArg> {
     queuedArg: TArg | undefined;
 }
 
-export function createLatestAsyncOperationState<TArg>(): LatestAsyncOperationState<TArg> {
+export function createLatestAsyncOperationState<
+    TArg,
+>(): LatestAsyncOperationState<TArg> {
     return {
         inFlight: false,
         hasQueuedArg: false,

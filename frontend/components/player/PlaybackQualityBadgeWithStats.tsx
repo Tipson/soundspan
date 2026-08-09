@@ -42,10 +42,13 @@ function StatRow({
     value: string | number | null | undefined | boolean;
 }) {
     if (value === null || value === undefined) return null;
-    const display = typeof value === "boolean" ? (value ? "Yes" : "No") : String(value);
+    const display =
+        typeof value === "boolean" ? (value ? "Yes" : "No") : String(value);
     return (
         <div className="flex items-baseline justify-between gap-3">
-            <span className="text-gray-400 text-xs whitespace-nowrap">{label}</span>
+            <span className="text-gray-400 text-xs whitespace-nowrap">
+                {label}
+            </span>
             <span className="text-white text-xs font-medium text-right truncate">
                 {display}
             </span>
@@ -117,7 +120,8 @@ export function PlaybackQualityBadgeWithStats({
             }
         };
         document.addEventListener("mousedown", handleOutsideClick);
-        return () => document.removeEventListener("mousedown", handleOutsideClick);
+        return () =>
+            document.removeEventListener("mousedown", handleOutsideClick);
     }, [isOpen, isMobile]);
 
     // Cleanup timeout on unmount
@@ -126,7 +130,10 @@ export function PlaybackQualityBadgeWithStats({
     }, [clearCloseTimeout]);
 
     // Build stat rows based on stream source
-    const rows: { label: string; value: string | number | boolean | null | undefined }[] = [];
+    const rows: {
+        label: string;
+        value: string | number | boolean | null | undefined;
+    }[] = [];
     const variant = badge.variant;
 
     rows.push({ label: "Service", value: SERVICE_LABELS[variant] });
@@ -151,7 +158,9 @@ export function PlaybackQualityBadgeWithStats({
         });
         rows.push({
             label: "Bit Depth",
-            value: tidalQuality.bitDepth ? `${tidalQuality.bitDepth}-bit` : null,
+            value: tidalQuality.bitDepth
+                ? `${tidalQuality.bitDepth}-bit`
+                : null,
         });
         rows.push({
             label: "Sample Rate",
@@ -184,7 +193,9 @@ export function PlaybackQualityBadgeWithStats({
         });
         rows.push({
             label: "Bit Depth",
-            value: localQuality.bitDepth ? `${localQuality.bitDepth}-bit` : null,
+            value: localQuality.bitDepth
+                ? `${localQuality.bitDepth}-bit`
+                : null,
         });
         rows.push({
             label: "Sample Rate",
@@ -217,7 +228,11 @@ export function PlaybackQualityBadgeWithStats({
             onMouseLeave={handleMouseLeave}
         >
             <div onClick={handleClick} className="cursor-pointer">
-                <PlaybackQualityBadge badge={badge} size={size} showTitle={false} />
+                <PlaybackQualityBadge
+                    badge={badge}
+                    size={size}
+                    showTitle={false}
+                />
             </div>
 
             {/* Stats popup */}

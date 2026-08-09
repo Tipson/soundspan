@@ -4,8 +4,9 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 after(() => {
     try {
@@ -35,11 +36,10 @@ async function changeVisibility(state: DocumentVisibilityState): Promise<void> {
 
 async function mountHook(
     callback: () => void,
-    options?: { enabled?: boolean; leadingOnVisible?: boolean }
+    options?: { enabled?: boolean; leadingOnVisible?: boolean },
 ) {
-    const { useVisibilityGatedInterval } = await import(
-        "../../hooks/useVisibilityGatedInterval"
-    );
+    const { useVisibilityGatedInterval } =
+        await import("../../hooks/useVisibilityGatedInterval");
     const { createRoot } = await import("react-dom/client");
 
     function Probe({ onTick }: { onTick: () => void }) {
@@ -51,13 +51,13 @@ async function mountHook(
     document.body.appendChild(container);
     const root = createRoot(container);
     await React.act(async () =>
-        root.render(React.createElement(Probe, { onTick: callback }))
+        root.render(React.createElement(Probe, { onTick: callback })),
     );
 
     return {
         rerender: async (onTick: () => void) => {
             await React.act(async () =>
-                root.render(React.createElement(Probe, { onTick }))
+                root.render(React.createElement(Probe, { onTick })),
             );
         },
         unmount: async () => {
@@ -129,7 +129,7 @@ test("does not tick when disabled", async (t) => {
         () => {
             calls += 1;
         },
-        { enabled: false }
+        { enabled: false },
     );
     t.after(harness.unmount);
 

@@ -48,7 +48,7 @@ export interface RelativeTimeOptions {
  */
 export function formatRelativeTime(
     dateInput: string | number | Date,
-    options?: RelativeTimeOptions
+    options?: RelativeTimeOptions,
 ): string {
     const justNowLabel = options?.justNowLabel ?? "Just now";
     const suffix = options?.suffix ?? " ago";

@@ -25,7 +25,9 @@ mock.module("@/features/explore/components/MoodsGenresSection", {
 });
 
 mock.module("@/features/explore/components/FeaturedShelvesSection", {
-    namedExports: { FeaturedShelvesSection: marker("featured-shelves-section") },
+    namedExports: {
+        FeaturedShelvesSection: marker("featured-shelves-section"),
+    },
 });
 
 mock.module("@/features/explore/components/YtMusicMixesSection", {
@@ -41,7 +43,9 @@ mock.module("@/features/explore/components/TidalMoodsGenresSection", {
 });
 
 mock.module("@/features/explore/components/TidalFeaturedShelvesSection", {
-    namedExports: { TidalFeaturedShelvesSection: marker("tidal-featured-shelves") },
+    namedExports: {
+        TidalFeaturedShelvesSection: marker("tidal-featured-shelves"),
+    },
 });
 
 mock.module("@/features/home/components/SectionHeader", {
@@ -96,16 +100,18 @@ const baseProps = {
     genreCategories: [],
     isMoodsLoading: false,
     homeShelves: [],
-    chartPlaylists: [{
-        id: "c1",
-        source: "youtube",
-        type: "playlist",
-        title: "Chart 1",
-        description: null,
-        creator: "Test Creator",
-        imageUrl: null,
-        url: "https://music.youtube.com/playlist?list=c1",
-    } satisfies PlaylistPreview],
+    chartPlaylists: [
+        {
+            id: "c1",
+            source: "youtube",
+            type: "playlist",
+            title: "Chart 1",
+            description: null,
+            creator: "Test Creator",
+            imageUrl: null,
+            url: "https://music.youtube.com/playlist?list=c1",
+        } satisfies PlaylistPreview,
+    ],
     tidalMixes: [],
     tidalMoods: [],
     tidalGenres: [],
@@ -114,11 +120,10 @@ const baseProps = {
 };
 
 test("ProviderTabSection: both providers enabled renders tab bar with both labels", async () => {
-    const { ProviderTabSection } = await import(
-        "../../features/explore/components/ProviderTabSection"
-    );
+    const { ProviderTabSection } =
+        await import("../../features/explore/components/ProviderTabSection");
     const html = renderToStaticMarkup(
-        React.createElement(ProviderTabSection, baseProps)
+        React.createElement(ProviderTabSection, baseProps),
     );
 
     assert.match(html, /YouTube Music/);
@@ -129,12 +134,11 @@ test("ProviderTabSection: both providers enabled renders tab bar with both label
 });
 
 test("ProviderTabSection: only YouTube enabled renders content without tab bar", async () => {
-    const { ProviderTabSection } = await import(
-        "../../features/explore/components/ProviderTabSection"
-    );
+    const { ProviderTabSection } =
+        await import("../../features/explore/components/ProviderTabSection");
     const props = { ...baseProps, showTidalExplore: false };
     const html = renderToStaticMarkup(
-        React.createElement(ProviderTabSection, props)
+        React.createElement(ProviderTabSection, props),
     );
 
     // YouTube content present
@@ -149,12 +153,11 @@ test("ProviderTabSection: only YouTube enabled renders content without tab bar",
 });
 
 test("ProviderTabSection: only TIDAL enabled renders content without tab bar", async () => {
-    const { ProviderTabSection } = await import(
-        "../../features/explore/components/ProviderTabSection"
-    );
+    const { ProviderTabSection } =
+        await import("../../features/explore/components/ProviderTabSection");
     const props = { ...baseProps, showYtMusicExplore: false };
     const html = renderToStaticMarkup(
-        React.createElement(ProviderTabSection, props)
+        React.createElement(ProviderTabSection, props),
     );
 
     // TIDAL content present
@@ -169,16 +172,15 @@ test("ProviderTabSection: only TIDAL enabled renders content without tab bar", a
 });
 
 test("ProviderTabSection: neither provider enabled renders empty", async () => {
-    const { ProviderTabSection } = await import(
-        "../../features/explore/components/ProviderTabSection"
-    );
+    const { ProviderTabSection } =
+        await import("../../features/explore/components/ProviderTabSection");
     const props = {
         ...baseProps,
         showYtMusicExplore: false,
         showTidalExplore: false,
     };
     const html = renderToStaticMarkup(
-        React.createElement(ProviderTabSection, props)
+        React.createElement(ProviderTabSection, props),
     );
 
     assert.equal(html, "");

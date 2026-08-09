@@ -13,8 +13,7 @@ mock.module("next/link", {
     }: {
         href: string;
         children: React.ReactNode;
-    }) =>
-        React.createElement("a", { href, ...rest }, children),
+    }) => React.createElement("a", { href, ...rest }, children),
 });
 
 mock.module("lucide-react", {
@@ -49,12 +48,11 @@ mock.module("@/utils/cn", {
 });
 
 test("renders history settings row with my-history route", async () => {
-    const { PlaybackHistorySection } = await import(
-        "../../features/settings/components/sections/PlaybackHistorySection"
-    );
+    const { PlaybackHistorySection } =
+        await import("../../features/settings/components/sections/PlaybackHistorySection");
 
     const html = renderToStaticMarkup(
-        React.createElement(PlaybackHistorySection)
+        React.createElement(PlaybackHistorySection),
     );
 
     assert.match(html, /History &amp; Personalization/);
@@ -64,12 +62,11 @@ test("renders history settings row with my-history route", async () => {
 });
 
 test("renders configured history range options", async () => {
-    const { PlaybackHistorySection } = await import(
-        "../../features/settings/components/sections/PlaybackHistorySection"
-    );
+    const { PlaybackHistorySection } =
+        await import("../../features/settings/components/sections/PlaybackHistorySection");
 
     const html = renderToStaticMarkup(
-        React.createElement(PlaybackHistorySection)
+        React.createElement(PlaybackHistorySection),
     );
 
     assert.match(html, />Past week</);

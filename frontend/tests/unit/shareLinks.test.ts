@@ -11,7 +11,7 @@ test("canShareTrack returns true for local tracks", () => {
             album: { title: "Album" },
             duration: 200,
         }),
-        true
+        true,
     );
 });
 
@@ -26,7 +26,7 @@ test("canShareTrack returns false for remote tracks", () => {
             streamSource: "youtube",
             youtubeVideoId: "abc123",
         }),
-        false
+        false,
     );
 });
 
@@ -34,8 +34,8 @@ test("buildAbsoluteShareUrl maps backend access path to frontend share route", (
     assert.equal(
         buildAbsoluteShareUrl(
             "/api/share-links/access/token-123",
-            "https://soundspan.example"
+            "https://soundspan.example",
         ),
-        "https://soundspan.example/share/token-123"
+        "https://soundspan.example/share/token-123",
     );
 });

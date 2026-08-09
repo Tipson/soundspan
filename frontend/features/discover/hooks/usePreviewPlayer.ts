@@ -59,20 +59,25 @@ function startPreview(
         mainPlayerWasPausedRef.current = true;
     }
 
-    const audio = previewAudios.get(albumId) ?? createPreviewAudio(
-        albumId,
-        previewUrl,
-        previewAudios,
-        setCurrentPreview,
-        mainPlayerWasPausedRef,
-    );
-    audio.play().then(() => {
-        setCurrentPreview(albumId);
-    }).catch((error) => {
-        toast.error("Failed to play preview: " + error.message);
-        setCurrentPreview(null);
-        resumeMainPlayerIfPaused(mainPlayerWasPausedRef);
-    });
+    const audio =
+        previewAudios.get(albumId) ??
+        createPreviewAudio(
+            albumId,
+            previewUrl,
+            previewAudios,
+            setCurrentPreview,
+            mainPlayerWasPausedRef,
+        );
+    audio
+        .play()
+        .then(() => {
+            setCurrentPreview(albumId);
+        })
+        .catch((error) => {
+            toast.error("Failed to play preview: " + error.message);
+            setCurrentPreview(null);
+            resumeMainPlayerIfPaused(mainPlayerWasPausedRef);
+        });
 }
 
 /**

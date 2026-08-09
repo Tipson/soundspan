@@ -45,7 +45,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
         const handleSetTab = (
             e: CustomEvent<{
                 tab: "notifications" | "active" | "history" | "social";
-            }>
+            }>,
         ) => {
             activityPanel.setActiveTab(e.detail.tab);
         };
@@ -54,7 +54,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
         window.addEventListener("close-activity-panel", handleClose);
         window.addEventListener(
             "set-activity-panel-tab",
-            handleSetTab as EventListener
+            handleSetTab as EventListener,
         );
 
         return () => {
@@ -63,12 +63,14 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
             window.removeEventListener("close-activity-panel", handleClose);
             window.removeEventListener(
                 "set-activity-panel-tab",
-                handleSetTab as EventListener
+                handleSetTab as EventListener,
             );
         };
     }, [activityPanel]);
 
-    const isPublicPage = publicPaths.includes(pathname) || publicPrefixes.some((prefix) => pathname.startsWith(prefix));
+    const isPublicPage =
+        publicPaths.includes(pathname) ||
+        publicPrefixes.some((prefix) => pathname.startsWith(prefix));
 
     // Show loading state only on protected pages
     if (!isPublicPage && isLoading) {
@@ -137,7 +139,8 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                                 tabIndex={-1}
                                 className="flex-1 bg-gradient-to-b from-surface-hover via-black to-black mx-2 mb-2 rounded-lg overflow-y-auto relative focus:outline-none"
                                 style={{
-                                    marginTop: "calc(58px + env(safe-area-inset-top, 0px))",
+                                    marginTop:
+                                        "calc(58px + env(safe-area-inset-top, 0px))",
                                     marginBottom:
                                         "calc(56px + env(safe-area-inset-bottom, 0px) + 8px)",
                                 }}

@@ -13,11 +13,15 @@ interface BeforeInstallPromptEvent extends Event {
  * Renders the PWAInstallPrompt component.
  */
 export function PWAInstallPrompt() {
-    const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+    const [deferredPrompt, setDeferredPrompt] =
+        useState<BeforeInstallPromptEvent | null>(null);
     const [showPrompt, setShowPrompt] = useState(false);
     const [isIOS] = useState(() => {
         if (typeof window === "undefined") return false;
-        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as Record<string, unknown>).MSStream;
+        return (
+            /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+            !(window as unknown as Record<string, unknown>).MSStream
+        );
     });
 
     const isDismissedRecently = (): boolean => {
@@ -51,7 +55,10 @@ export function PWAInstallPrompt() {
             }, 3000);
         };
 
-        window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+        window.addEventListener(
+            "beforeinstallprompt",
+            handleBeforeInstallPrompt,
+        );
 
         // For iOS, show instructions after delay if on mobile
         if (isIOS) {
@@ -63,7 +70,10 @@ export function PWAInstallPrompt() {
         }
 
         return () => {
-            window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+            window.removeEventListener(
+                "beforeinstallprompt",
+                handleBeforeInstallPrompt,
+            );
         };
     }, [isIOS]);
 
@@ -72,11 +82,11 @@ export function PWAInstallPrompt() {
 
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
-        
+
         if (outcome === "accepted") {
             setShowPrompt(false);
         }
-        
+
         setDeferredPrompt(null);
     };
 
@@ -108,12 +118,18 @@ export function PWAInstallPrompt() {
                         </h3>
                         {isIOS ? (
                             <p className="text-white/60 text-xs leading-relaxed">
-                                Tap the <span className="text-white">Share</span> button, then{" "}
-                                <span className="text-white">&quot;Add to Home Screen&quot;</span> for the best experience.
+                                Tap the{" "}
+                                <span className="text-white">Share</span>{" "}
+                                button, then{" "}
+                                <span className="text-white">
+                                    &quot;Add to Home Screen&quot;
+                                </span>{" "}
+                                for the best experience.
                             </p>
                         ) : (
                             <p className="text-white/60 text-xs leading-relaxed">
-                                Add {BRAND_NAME} to your home screen for quick access and background audio.
+                                Add {BRAND_NAME} to your home screen for quick
+                                access and background audio.
                             </p>
                         )}
                     </div>

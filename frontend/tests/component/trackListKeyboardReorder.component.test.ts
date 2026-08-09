@@ -4,10 +4,12 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
-const Icon = (props: Record<string, unknown>) => React.createElement("svg", props);
+const Icon = (props: Record<string, unknown>) =>
+    React.createElement("svg", props);
 
 mock.module("lucide-react", {
     namedExports: {
@@ -84,7 +86,8 @@ async function mountTrackList(
             React.createElement(TrackList, {
                 items,
                 toRowItem,
-                onPlay: (item: (typeof items)[number]) => playCalls.push(item.id),
+                onPlay: (item: (typeof items)[number]) =>
+                    playCalls.push(item.id),
                 reorder: {
                     onReorder: (from: number, to: number) =>
                         reorderCalls.push([from, to]),
@@ -105,7 +108,9 @@ async function unmount(mounted: Awaited<ReturnType<typeof mountTrackList>>) {
 
 test("each reorder grip is a labelled button", async () => {
     const mounted = await mountTrackList([], []);
-    const grips = mounted.container.querySelectorAll('button[aria-label*="Reorder"]');
+    const grips = mounted.container.querySelectorAll(
+        'button[aria-label*="Reorder"]',
+    );
 
     assert.equal(grips.length, 3);
     await unmount(mounted);

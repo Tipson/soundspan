@@ -18,7 +18,10 @@ export function skipIfNoEnv(envVar: string, testInfo: TestInfo): void {
     }
 }
 
-export async function waitForApiHealth(page: Page, timeoutMs = 30000): Promise<void> {
+export async function waitForApiHealth(
+    page: Page,
+    timeoutMs = 30000,
+): Promise<void> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
         try {

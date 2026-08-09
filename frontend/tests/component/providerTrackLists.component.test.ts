@@ -25,7 +25,8 @@ mock.module("lucide-react", {
 
 mock.module("@/utils/formatTime", {
     namedExports: {
-        formatTime: (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`,
+        formatTime: (seconds: number) =>
+            `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`,
     },
 });
 
@@ -83,21 +84,15 @@ mock.module("@/components/ui/TrackOverflowMenu", {
             return React.createElement(
                 "button",
                 { "aria-label": "Track actions", type: "button" },
-                "actions"
+                "actions",
             );
         },
     },
 });
 
 mock.module("next/image", {
-    defaultExport: ({
-        src,
-        alt,
-        ...rest
-    }: {
-        src: string;
-        alt: string;
-    }) => React.createElement("img", { src, alt, ...rest }),
+    defaultExport: ({ src, alt, ...rest }: { src: string; alt: string }) =>
+        React.createElement("img", { src, alt, ...rest }),
 });
 
 mock.module("next/link", {
@@ -134,9 +129,8 @@ beforeEach(() => {
 });
 
 test("album TrackList renders disc separators and provider loading badges for unmatched tracks", async () => {
-    const { TrackList } = await import(
-        "../../features/album/components/TrackList"
-    );
+    const { TrackList } =
+        await import("../../features/album/components/TrackList");
 
     const html = renderToStaticMarkup(
         React.createElement(TrackList, {
@@ -171,7 +165,7 @@ test("album TrackList renders disc separators and provider loading badges for un
             previewPlaying: false,
             onPreview: () => undefined,
             isProviderMatching: true,
-        })
+        }),
     );
 
     assert.match(html, /Disc 1/);
@@ -180,15 +174,14 @@ test("album TrackList renders disc separators and provider loading badges for un
     assert.equal(
         (html.match(/Track actions/g) || []).length,
         0,
-        "non-playable unmatched rows should not render overflow menu"
+        "non-playable unmatched rows should not render overflow menu",
     );
 });
 
 test("album TrackList shows preview controls, queue badges, and provider badges", async () => {
     state.queuedTrackIds = new Set(["a-tidal"]);
-    const { TrackList } = await import(
-        "../../features/album/components/TrackList"
-    );
+    const { TrackList } =
+        await import("../../features/album/components/TrackList");
 
     const html = renderToStaticMarkup(
         React.createElement(TrackList, {
@@ -233,7 +226,7 @@ test("album TrackList shows preview controls, queue badges, and provider badges"
             previewPlaying: true,
             onPreview: () => undefined,
             isProviderMatching: false,
-        })
+        }),
     );
 
     assert.match(html, /PREVIEW/);
@@ -242,17 +235,13 @@ test("album TrackList shows preview controls, queue badges, and provider badges"
     assert.match(html, /TIDAL/);
     assert.match(html, /YT/);
     assert.match(html, /#7/);
-    assert.equal(
-        (html.match(/Track actions/g) || []).length,
-        2
-    );
+    assert.equal((html.match(/Track actions/g) || []).length, 2);
 });
 
 test("artist PopularTracks limits visible items and renders provider states", async () => {
     state.queuedTrackIds = new Set(["p-in-queue"]);
-    const { PopularTracks } = await import(
-        "../../features/artist/components/PopularTracks"
-    );
+    const { PopularTracks } =
+        await import("../../features/artist/components/PopularTracks");
 
     const tracks = [
         {
@@ -310,7 +299,7 @@ test("artist PopularTracks limits visible items and renders provider states", as
             isProviderMatching: true,
             popularHref: "/artist/artist-1/popular",
             onAddAllToQueue: () => undefined,
-        } as any)
+        } as any),
     );
 
     // Plus button (add to queue) renders as icon-only
@@ -328,9 +317,8 @@ test("artist PopularTracks limits visible items and renders provider states", as
 
 test("discover TrackList renders source badges, tier aliases, queue badges, and album-link fallback behavior", async () => {
     state.queuedTrackIds = new Set(["d-queue"]);
-    const { TrackList } = await import(
-        "../../features/discover/components/TrackList"
-    );
+    const { TrackList } =
+        await import("../../features/discover/components/TrackList");
 
     const html = renderToStaticMarkup(
         React.createElement(TrackList, {
@@ -413,7 +401,7 @@ test("discover TrackList renders source badges, tier aliases, queue badges, and 
             isPlaying: true,
             onPlayTrack: () => undefined,
             onTogglePlay: () => undefined,
-        } as any)
+        } as any),
     );
 
     assert.match(html, /TIDAL/);
@@ -428,8 +416,8 @@ test("discover TrackList renders source badges, tier aliases, queue badges, and 
         state.overflowTracks.some(
             (entry) =>
                 (entry.track as { id?: string })?.id === "d-queue" &&
-                entry.showGoToAlbum === false
+                entry.showGoToAlbum === false,
         ),
-        true
+        true,
     );
 });

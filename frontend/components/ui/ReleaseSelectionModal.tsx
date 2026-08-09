@@ -33,7 +33,10 @@ interface ReleaseSelectionModalProps {
 type ReleaseSortOption = "best" | "seeders" | "size" | "quality" | "indexer";
 
 const QUALITY_SCORE_RULES: Array<{ includes: string[]; score: number }> = [
-    { includes: ["24bit", "24-bit", "hi-res", "hires", "lossless"], score: 500 },
+    {
+        includes: ["24bit", "24-bit", "hi-res", "hires", "lossless"],
+        score: 500,
+    },
     { includes: ["flac"], score: 400 },
     { includes: ["alac"], score: 360 },
     { includes: ["aac"], score: 230 },
@@ -53,7 +56,11 @@ function getQualityScore(release: AlbumRelease): number {
     return 100;
 }
 
-function compareReleases(a: AlbumRelease, b: AlbumRelease, sortBy: ReleaseSortOption): number {
+function compareReleases(
+    a: AlbumRelease,
+    b: AlbumRelease,
+    sortBy: ReleaseSortOption,
+): number {
     if (sortBy === "seeders") {
         return (b.seeders ?? -1) - (a.seeders ?? -1);
     }
@@ -95,7 +102,9 @@ export function ReleaseSelectionModal({
     const [releases, setReleases] = useState<AlbumRelease[]>([]);
     const [lidarrAlbumId, setLidarrAlbumId] = useState<number | null>(null);
     const [grabbing, setGrabbing] = useState<string | null>(null);
-    const [grabbedReleaseGuids, setGrabbedReleaseGuids] = useState<string[]>([]);
+    const [grabbedReleaseGuids, setGrabbedReleaseGuids] = useState<string[]>(
+        [],
+    );
     const [sortBy, setSortBy] = useState<ReleaseSortOption>("best");
     const [qualityFilter, setQualityFilter] = useState<string>("all");
     const [indexerFilter, setIndexerFilter] = useState<string>("all");
@@ -117,7 +126,7 @@ export function ReleaseSelectionModal({
                 const result = await api.getAlbumReleases(
                     albumMbid,
                     artistName,
-                    albumTitle
+                    albumTitle,
                 );
                 setReleases(result.releases);
                 setLidarrAlbumId(result.lidarrAlbumId);
@@ -126,7 +135,7 @@ export function ReleaseSelectionModal({
                 setError(
                     err instanceof Error
                         ? err.message
-                        : "Failed to search for releases"
+                        : "Failed to search for releases",
                 );
             } finally {
                 if (isRefresh) {
@@ -136,7 +145,7 @@ export function ReleaseSelectionModal({
                 }
             }
         },
-        [albumMbid, artistName, albumTitle]
+        [albumMbid, artistName, albumTitle],
     );
 
     useEffect(() => {
@@ -155,27 +164,33 @@ export function ReleaseSelectionModal({
 
     const qualityOptions = useMemo(
         () =>
-            Array.from(new Set(releases.map((release) => release.quality))).sort(
-                (a, b) => a.localeCompare(b)
-            ),
-        [releases]
+            Array.from(
+                new Set(releases.map((release) => release.quality)),
+            ).sort((a, b) => a.localeCompare(b)),
+        [releases],
     );
 
     const indexerOptions = useMemo(
         () =>
-            Array.from(new Set(releases.map((release) => release.indexer))).sort(
-                (a, b) => a.localeCompare(b)
-            ),
-        [releases]
+            Array.from(
+                new Set(releases.map((release) => release.indexer)),
+            ).sort((a, b) => a.localeCompare(b)),
+        [releases],
     );
 
     const filteredReleases = useMemo(
         () =>
             releases.filter((release) => {
-                if (qualityFilter !== "all" && release.quality !== qualityFilter) {
+                if (
+                    qualityFilter !== "all" &&
+                    release.quality !== qualityFilter
+                ) {
                     return false;
                 }
-                if (indexerFilter !== "all" && release.indexer !== indexerFilter) {
+                if (
+                    indexerFilter !== "all" &&
+                    release.indexer !== indexerFilter
+                ) {
                     return false;
                 }
                 if (seederFilter === "1" && (release.seeders ?? 0) < 1) {
@@ -186,7 +201,7 @@ export function ReleaseSelectionModal({
                 }
                 return true;
             }),
-        [releases, qualityFilter, indexerFilter, seederFilter]
+        [releases, qualityFilter, indexerFilter, seederFilter],
     );
 
     const approvedReleases = useMemo(
@@ -194,7 +209,7 @@ export function ReleaseSelectionModal({
             filteredReleases
                 .filter((release) => release.approved)
                 .sort((a, b) => compareReleases(a, b, sortBy)),
-        [filteredReleases, sortBy]
+        [filteredReleases, sortBy],
     );
 
     const rejectedReleases = useMemo(
@@ -202,7 +217,7 @@ export function ReleaseSelectionModal({
             filteredReleases
                 .filter((release) => release.rejected)
                 .sort((a, b) => compareReleases(a, b, sortBy)),
-        [filteredReleases, sortBy]
+        [filteredReleases, sortBy],
     );
 
     const rejectionSummary = useMemo(() => {
@@ -254,7 +269,11 @@ export function ReleaseSelectionModal({
                 return;
             }
 
-            addPendingDownload("album", `${artistName} - ${albumTitle}`, albumMbid);
+            addPendingDownload(
+                "album",
+                `${artistName} - ${albumTitle}`,
+                albumMbid,
+            );
             setGrabbedReleaseGuids((prev) => [...prev, release.guid]);
             toast.success(`Downloading "${albumTitle}"`, {
                 description: `Selected: ${release.title}`,
@@ -264,7 +283,9 @@ export function ReleaseSelectionModal({
             sharedFrontendLogger.error("Failed to grab release:", err);
             toast.error("Failed to start download", {
                 description:
-                    err instanceof Error ? err.message : "Unknown release error",
+                    err instanceof Error
+                        ? err.message
+                        : "Unknown release error",
             });
         } finally {
             setGrabbing(null);
@@ -325,7 +346,8 @@ export function ReleaseSelectionModal({
                         No releases found from indexers
                     </p>
                     <p className="text-xs text-white/40">
-                        The album may not be available on your configured indexers
+                        The album may not be available on your configured
+                        indexers
                     </p>
                 </div>
             ) : (
@@ -336,7 +358,9 @@ export function ReleaseSelectionModal({
                             <select
                                 value={sortBy}
                                 onChange={(event) =>
-                                    setSortBy(event.target.value as ReleaseSortOption)
+                                    setSortBy(
+                                        event.target.value as ReleaseSortOption,
+                                    )
                                 }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
@@ -352,7 +376,9 @@ export function ReleaseSelectionModal({
                             Quality
                             <select
                                 value={qualityFilter}
-                                onChange={(event) => setQualityFilter(event.target.value)}
+                                onChange={(event) =>
+                                    setQualityFilter(event.target.value)
+                                }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
                                 <option value="all">All</option>
@@ -368,7 +394,9 @@ export function ReleaseSelectionModal({
                             Indexer
                             <select
                                 value={indexerFilter}
-                                onChange={(event) => setIndexerFilter(event.target.value)}
+                                onChange={(event) =>
+                                    setIndexerFilter(event.target.value)
+                                }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
                                 <option value="all">All</option>
@@ -385,7 +413,12 @@ export function ReleaseSelectionModal({
                             <select
                                 value={seederFilter}
                                 onChange={(event) =>
-                                    setSeederFilter(event.target.value as "all" | "1" | "10")
+                                    setSeederFilter(
+                                        event.target.value as
+                                            | "all"
+                                            | "1"
+                                            | "10",
+                                    )
                                 }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
@@ -424,7 +457,8 @@ export function ReleaseSelectionModal({
                                     <div className="mb-3 flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 text-green-400" />
                                         <h3 className="text-sm font-medium text-white/80">
-                                            Available Releases ({approvedReleases.length})
+                                            Available Releases (
+                                            {approvedReleases.length})
                                         </h3>
                                     </div>
                                     <div className="space-y-2">
@@ -433,10 +467,12 @@ export function ReleaseSelectionModal({
                                                 key={release.guid}
                                                 release={release}
                                                 onGrab={handleGrabRelease}
-                                                grabbing={grabbing === release.guid}
+                                                grabbing={
+                                                    grabbing === release.guid
+                                                }
                                                 disabled={Boolean(grabbing)}
                                                 alreadyGrabbed={grabbedReleaseGuids.includes(
-                                                    release.guid
+                                                    release.guid,
                                                 )}
                                             />
                                         ))}
@@ -448,13 +484,15 @@ export function ReleaseSelectionModal({
                                 <div>
                                     <button
                                         type="button"
-                                        onClick={() => setShowRejected((prev) => !prev)}
+                                        onClick={() =>
+                                            setShowRejected((prev) => !prev)
+                                        }
                                         className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-white/60 transition hover:text-white"
                                     >
                                         <ChevronDown
                                             className={cn(
                                                 "h-4 w-4 transition-transform",
-                                                !showRejected && "-rotate-90"
+                                                !showRejected && "-rotate-90",
                                             )}
                                         />
                                         <XCircle className="h-4 w-4 text-red-400/70" />
@@ -469,29 +507,42 @@ export function ReleaseSelectionModal({
                                                         Top rejection reasons
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {rejectionSummary.map(([reason, count]) => (
-                                                            <span
-                                                                key={reason}
-                                                                className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-200"
-                                                            >
-                                                                {reason} ({count})
-                                                            </span>
-                                                        ))}
+                                                        {rejectionSummary.map(
+                                                            ([
+                                                                reason,
+                                                                count,
+                                                            ]) => (
+                                                                <span
+                                                                    key={reason}
+                                                                    className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-200"
+                                                                >
+                                                                    {reason} (
+                                                                    {count})
+                                                                </span>
+                                                            ),
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
 
                                             <div className="space-y-2 opacity-70">
-                                                {rejectedReleases.map((release) => (
-                                                    <ReleaseRow
-                                                        key={release.guid}
-                                                        release={release}
-                                                        onGrab={handleGrabRelease}
-                                                        grabbing={grabbing === release.guid}
-                                                        disabled
-                                                        showRejections
-                                                    />
-                                                ))}
+                                                {rejectedReleases.map(
+                                                    (release) => (
+                                                        <ReleaseRow
+                                                            key={release.guid}
+                                                            release={release}
+                                                            onGrab={
+                                                                handleGrabRelease
+                                                            }
+                                                            grabbing={
+                                                                grabbing ===
+                                                                release.guid
+                                                            }
+                                                            disabled
+                                                            showRejections
+                                                        />
+                                                    ),
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -529,7 +580,9 @@ function ReleaseRow({
             className={cn(
                 "flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-3 transition-colors",
                 "hover:bg-white/10",
-                isActionDisabled && !grabbing && "cursor-not-allowed opacity-50"
+                isActionDisabled &&
+                    !grabbing &&
+                    "cursor-not-allowed opacity-50",
             )}
         >
             <div className="flex items-start gap-3">
@@ -565,9 +618,13 @@ function ReleaseRow({
                         "shrink-0 rounded-full p-2 transition-all",
                         isActionDisabled
                             ? "cursor-not-allowed text-white/30"
-                            : "text-brand hover:scale-105 hover:bg-white/10 hover:text-brand-hover"
+                            : "text-brand hover:scale-105 hover:bg-white/10 hover:text-brand-hover",
                     )}
-                    title={alreadyGrabbed ? "Release already selected" : "Grab this release"}
+                    title={
+                        alreadyGrabbed
+                            ? "Release already selected"
+                            : "Grab this release"
+                    }
                 >
                     {grabbing ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -604,7 +661,7 @@ function ReleaseRow({
                                     ? "text-green-400"
                                     : release.seeders > 0
                                       ? "text-yellow-400"
-                                      : "text-red-400"
+                                      : "text-red-400",
                             )}
                             title="Seeders"
                         >
@@ -627,7 +684,8 @@ function ReleaseRow({
                     ))}
                     {release.rejections.length > 3 && (
                         <p className="text-xs text-red-300/70">
-                            +{release.rejections.length - 3} more rejection reason(s)
+                            +{release.rejections.length - 3} more rejection
+                            reason(s)
                         </p>
                     )}
                 </div>

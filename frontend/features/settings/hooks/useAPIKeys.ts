@@ -21,10 +21,10 @@ export function useAPIKeys() {
             setLoadingApiKeys(true);
             const response = await api.listApiKeys();
             // Map API response to match ApiKey type
-            const mappedKeys = response.apiKeys.map(key => ({
+            const mappedKeys = response.apiKeys.map((key) => ({
                 ...key,
                 lastUsedAt: key.lastUsed,
-                keyPreview: key.id.substring(0, 8) + "..." // Generate preview from ID
+                keyPreview: key.id.substring(0, 8) + "...", // Generate preview from ID
             }));
             setApiKeys(mappedKeys);
         } catch (error) {
@@ -39,7 +39,9 @@ export function useAPIKeys() {
      * Create a new API key
      * Returns { success: true } or { success: false, error: string }
      */
-    const createApiKey = async (name: string): Promise<{ success: boolean; error?: string }> => {
+    const createApiKey = async (
+        name: string,
+    ): Promise<{ success: boolean; error?: string }> => {
         const trimmedName = name.trim();
         if (!trimmedName) {
             return { success: false, error: "Device name required" };
@@ -55,7 +57,11 @@ export function useAPIKeys() {
             return { success: true };
         } catch (error: unknown) {
             logger.error("Failed to create API key", { error });
-            return { success: false, error: error instanceof Error ? error.message : "Failed to create" };
+            return {
+                success: false,
+                error:
+                    error instanceof Error ? error.message : "Failed to create",
+            };
         } finally {
             setCreatingApiKey(false);
         }
@@ -65,14 +71,20 @@ export function useAPIKeys() {
      * Revoke an API key
      * Returns { success: true } or { success: false, error: string }
      */
-    const revokeApiKey = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const revokeApiKey = async (
+        id: string,
+    ): Promise<{ success: boolean; error?: string }> => {
         try {
             await api.revokeApiKey(id);
             await loadApiKeys();
             return { success: true };
         } catch (error: unknown) {
             logger.error("Failed to revoke API key", { id, error });
-            return { success: false, error: error instanceof Error ? error.message : "Failed to revoke" };
+            return {
+                success: false,
+                error:
+                    error instanceof Error ? error.message : "Failed to revoke",
+            };
         }
     };
 

@@ -26,7 +26,7 @@ function planBase(i: number, denom: number): number {
 
 function strokeOpacities(html: string): number[] {
     return [...html.matchAll(/stroke-opacity="([\d.]+)"/g)].map((m) =>
-        Number(m[1])
+        Number(m[1]),
     );
 }
 
@@ -42,7 +42,7 @@ test("trail segment opacity multiplies the oldest->newest ramp by the average of
             width: 400,
             height: 400,
             trail,
-        })
+        }),
     );
 
     const denom = Math.max(1, trail.length - 1); // 2
@@ -53,11 +53,11 @@ test("trail segment opacity multiplies the oldest->newest ramp by the average of
     assert.equal(opacities.length, 2, "two trail segments for 3 points");
     assert.ok(
         Math.abs(opacities[0] - seg1Expected) < 1e-9,
-        `segment 1 opacity ${opacities[0]} !== expected ${seg1Expected}`
+        `segment 1 opacity ${opacities[0]} !== expected ${seg1Expected}`,
     );
     assert.ok(
         Math.abs(opacities[1] - seg2Expected) < 1e-9,
-        `segment 2 opacity ${opacities[1]} !== expected ${seg2Expected}`
+        `segment 2 opacity ${opacities[1]} !== expected ${seg2Expected}`,
     );
     // The fade must actually reduce segment 2's opacity below what the same
     // ramp position would render at full (unfaded) alpha — i.e. the
@@ -77,7 +77,12 @@ test("averages a segment's two endpoint alphas — a single aged-out endpoint di
         { x: 0.2, y: 0.2, alpha: 0 },
     ];
     const html = renderToStaticMarkup(
-        React.createElement(MapOverlay, { viewport, width: 400, height: 400, trail })
+        React.createElement(MapOverlay, {
+            viewport,
+            width: 400,
+            height: 400,
+            trail,
+        }),
     );
     const denom = Math.max(1, trail.length - 1); // 1
     const expected = trailBase(1, denom) * ((1 + 0) / 2);
@@ -94,7 +99,12 @@ test("trail mode 'on' (every point alpha 1) reproduces the original oldest->newe
         { x: 0.3, y: 0.3, alpha: 1 },
     ];
     const html = renderToStaticMarkup(
-        React.createElement(MapOverlay, { viewport, width: 400, height: 400, trail })
+        React.createElement(MapOverlay, {
+            viewport,
+            width: 400,
+            height: 400,
+            trail,
+        }),
     );
     const denom = Math.max(1, trail.length - 1);
     const opacities = strokeOpacities(html);
@@ -112,7 +122,12 @@ test("flight-plan segments are unaffected by trail alpha (no alpha field on plan
         { x: 0.3, y: 0.3 },
     ];
     const html = renderToStaticMarkup(
-        React.createElement(MapOverlay, { viewport, width: 400, height: 400, plan })
+        React.createElement(MapOverlay, {
+            viewport,
+            width: 400,
+            height: 400,
+            plan,
+        }),
     );
     const denom = Math.max(1, plan.length - 1);
     const opacities = strokeOpacities(html);
@@ -130,7 +145,7 @@ test("renders the beacon and no trail/plan lines when neither is provided", () =
             width: 400,
             height: 400,
             beacon: { x: 0.5, y: 0.5 },
-        })
+        }),
     );
     assert.equal(strokeOpacities(html).length, 0);
     assert.match(html, /vibe-beacon/);

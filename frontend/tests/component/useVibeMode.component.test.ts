@@ -16,8 +16,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -136,7 +137,7 @@ function mapTrack(id: string) {
 }
 
 const trackById = new Map(
-    ["t1", "t2", "t3", "t4"].map((id) => [id, mapTrack(id)])
+    ["t1", "t2", "t3", "t4"].map((id) => [id, mapTrack(id)]),
 );
 
 const currentTrack = {
@@ -249,7 +250,7 @@ test("alchemy mode: shift-click on a dot queues it instead of adding it as an in
     assert.equal(h.latest().mode, "alchemy");
     assert.deepEqual(
         h.latest().alchemy?.ingredients.map((i) => i.id),
-        ["t2"]
+        ["t2"],
     );
 
     // Shift-click a different dot: queues it, ingredient list untouched.
@@ -259,7 +260,7 @@ test("alchemy mode: shift-click on a dot queues it instead of adding it as an in
     assert.deepEqual(controlsCalls.addToQueue, ["t3"]);
     assert.deepEqual(
         h.latest().alchemy?.ingredients.map((i) => i.id),
-        ["t2"]
+        ["t2"],
     );
     assert.deepEqual(controlsCalls.playTrack, []);
 
@@ -320,7 +321,7 @@ test("ctrl+shift on a dot: ctrl/alchemy-add still wins over shift (ordering cons
     assert.equal(h.latest().mode, "alchemy");
     assert.deepEqual(
         h.latest().alchemy?.ingredients.map((i) => i.id),
-        ["t2"]
+        ["t2"],
     );
     assert.deepEqual(controlsCalls.addToQueue, []);
 
@@ -340,7 +341,9 @@ test("journey teardown resets loading before the mode is re-entered", async () =
 
     assert.equal(h.latest().journey?.loading, false);
     apiCalls.journey[0].resolve({ target: {}, waypoints: [] });
-    await h.act(async () => { await apiCalls.journey[0].promise; });
+    await h.act(async () => {
+        await apiCalls.journey[0].promise;
+    });
     assert.equal(h.latest().journey?.loading, false);
     await h.unmount();
 });
@@ -359,7 +362,9 @@ test("journey input changes invalidate an in-flight route", async () => {
         target: { label: "Happy" },
         waypoints: [],
     });
-    await h.act(async () => { await apiCalls.journey[0].promise; });
+    await h.act(async () => {
+        await apiCalls.journey[0].promise;
+    });
     assert.equal(h.latest().journey?.targetLabel, null);
     await h.unmount();
 });
@@ -367,10 +372,10 @@ test("journey input changes invalidate an in-flight route", async () => {
 test("alchemy teardown resets loading before the mode is re-entered", async () => {
     const h = await mountVibe();
     await h.act(() =>
-        h.latest().onDotClick("t2", { ctrlOrMeta: true, shift: false })
+        h.latest().onDotClick("t2", { ctrlOrMeta: true, shift: false }),
     );
     await h.act(() =>
-        h.latest().onDotClick("t3", { ctrlOrMeta: true, shift: false })
+        h.latest().onDotClick("t3", { ctrlOrMeta: true, shift: false }),
     );
     await h.act(() => h.latest().alchemy?.blend());
     assert.equal(h.latest().alchemy?.loading, true);
@@ -378,12 +383,14 @@ test("alchemy teardown resets loading before the mode is re-entered", async () =
 
     await h.act(() => h.latest().exitToExplore());
     await h.act(() =>
-        h.latest().onDotClick("t4", { ctrlOrMeta: true, shift: false })
+        h.latest().onDotClick("t4", { ctrlOrMeta: true, shift: false }),
     );
 
     assert.equal(h.latest().alchemy?.loading, false);
     apiCalls.alchemy[0].resolve({ tracks: [] });
-    await h.act(async () => { await apiCalls.alchemy[0].promise; });
+    await h.act(async () => {
+        await apiCalls.alchemy[0].promise;
+    });
     assert.equal(h.latest().alchemy?.loading, false);
     await h.unmount();
 });
@@ -391,10 +398,10 @@ test("alchemy teardown resets loading before the mode is re-entered", async () =
 test("alchemy ingredient changes invalidate an in-flight blend", async () => {
     const h = await mountVibe();
     await h.act(() =>
-        h.latest().onDotClick("t2", { ctrlOrMeta: true, shift: false })
+        h.latest().onDotClick("t2", { ctrlOrMeta: true, shift: false }),
     );
     await h.act(() =>
-        h.latest().onDotClick("t3", { ctrlOrMeta: true, shift: false })
+        h.latest().onDotClick("t3", { ctrlOrMeta: true, shift: false }),
     );
     await h.act(() => h.latest().alchemy?.blend());
     assert.equal(h.latest().alchemy?.loading, true);
@@ -403,7 +410,9 @@ test("alchemy ingredient changes invalidate an in-flight blend", async () => {
     assert.equal(h.latest().alchemy?.loading, false);
 
     apiCalls.alchemy[0].resolve({ tracks: [] });
-    await h.act(async () => { await apiCalls.alchemy[0].promise; });
+    await h.act(async () => {
+        await apiCalls.alchemy[0].promise;
+    });
     assert.deepEqual(h.latest().alchemy?.results, []);
     await h.unmount();
 });
@@ -425,7 +434,9 @@ test("journey teardown resets saving before the mode is re-entered", async () =>
             },
         ],
     });
-    await h.act(async () => { await apiCalls.journey[0].promise; });
+    await h.act(async () => {
+        await apiCalls.journey[0].promise;
+    });
     await h.act(() => {
         void h.latest().journey?.save();
     });
@@ -436,7 +447,9 @@ test("journey teardown resets saving before the mode is re-entered", async () =>
 
     assert.equal(h.latest().journey?.saving, false);
     apiCalls.playlists[0].resolve({ id: "playlist-1" });
-    await h.act(async () => { await apiCalls.playlists[0].promise; });
+    await h.act(async () => {
+        await apiCalls.playlists[0].promise;
+    });
     assert.equal(h.latest().journey?.saving, false);
     await h.unmount();
 });

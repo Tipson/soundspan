@@ -56,13 +56,18 @@ test.describe("Media Contract", () => {
         test.skip(!baseURL, "Skipping: Playwright baseURL is required");
 
         const requestOrigin = new URL(baseURL).origin;
-        const tracksResponse = await page.request.get("/api/library/tracks?limit=1");
+        const tracksResponse = await page.request.get(
+            "/api/library/tracks?limit=1",
+        );
         expect(tracksResponse.ok()).toBeTruthy();
 
         const tracksPayload =
             (await tracksResponse.json()) as TrackListResponse;
         const trackId = tracksPayload.tracks?.[0]?.id;
-        test.skip(!trackId, "Skipping: no library tracks available for media contract checks");
+        test.skip(
+            !trackId,
+            "Skipping: no library tracks available for media contract checks",
+        );
 
         const directStreamResponse = await page.request.get(
             `/api/library/tracks/${encodeURIComponent(trackId)}/stream?quality=original`,
@@ -83,12 +88,21 @@ test.describe("Media Contract", () => {
         );
         expectCorsHeader(directStreamResponse, requestOrigin);
 
-        const directContentType = readHeader(directStreamResponse, "content-type");
+        const directContentType = readHeader(
+            directStreamResponse,
+            "content-type",
+        );
         expect(directContentType).toBeTruthy();
         expect(directContentType.toLowerCase()).not.toContain("text/html");
-        expect(directContentType.toLowerCase()).not.toContain("application/json");
+        expect(directContentType.toLowerCase()).not.toContain(
+            "application/json",
+        );
 
-        if (/(^|;)\s*(audio|video)\/mp4\b|(^|;)\s*audio\/x-m4a\b/i.test(directContentType)) {
+        if (
+            /(^|;)\s*(audio|video)\/mp4\b|(^|;)\s*audio\/x-m4a\b/i.test(
+                directContentType,
+            )
+        ) {
             const mp4ProbeBytes = await directStreamResponse.body();
             const moovOffset = mp4ProbeBytes.indexOf(Buffer.from("moov"));
             expect(
@@ -125,9 +139,9 @@ test.describe("Media Contract", () => {
 
         expect(manifestResponse.status()).toBe(200);
         expectCorsHeader(manifestResponse, requestOrigin);
-        expect(readHeader(manifestResponse, "content-type").toLowerCase()).toContain(
-            "application/dash+xml",
-        );
+        expect(
+            readHeader(manifestResponse, "content-type").toLowerCase(),
+        ).toContain("application/dash+xml");
 
         const manifestBody = await manifestResponse.text();
         const initSegmentName = resolveInitSegmentName(manifestBody);
@@ -139,13 +153,16 @@ test.describe("Media Contract", () => {
         const manifestUrl = new URL(segmentedSession.manifestUrl!, baseURL);
         const initSegmentUrl = new URL(initSegmentName, manifestUrl);
 
-        const segmentResponse = await page.request.get(initSegmentUrl.toString(), {
-            headers: {
-                Range: "bytes=0-63",
-                Origin: requestOrigin,
-                "x-streaming-session-token": segmentedSession.sessionToken!,
+        const segmentResponse = await page.request.get(
+            initSegmentUrl.toString(),
+            {
+                headers: {
+                    Range: "bytes=0-63",
+                    Origin: requestOrigin,
+                    "x-streaming-session-token": segmentedSession.sessionToken!,
+                },
             },
-        });
+        );
 
         expect(segmentResponse.status()).toBe(206);
         expect(readHeader(segmentResponse, "accept-ranges")).toContain("bytes");
@@ -153,8 +170,8 @@ test.describe("Media Contract", () => {
             /^bytes\s+\d+-\d+\/\d+$/i,
         );
         expectCorsHeader(segmentResponse, requestOrigin);
-        expect(readHeader(segmentResponse, "content-type").toLowerCase()).toContain(
-            "video/iso.segment",
-        );
+        expect(
+            readHeader(segmentResponse, "content-type").toLowerCase(),
+        ).toContain("video/iso.segment");
     });
 });

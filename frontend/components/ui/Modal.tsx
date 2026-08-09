@@ -111,7 +111,7 @@ export function Modal({
                 tabIndex={-1}
                 className={cn(
                     "bg-gradient-to-br from-surface-overlay to-surface-raised border border-line rounded-sm shadow-2xl max-w-md w-full p-6",
-                    className
+                    className,
                 )}
             >
                 {/* Header */}

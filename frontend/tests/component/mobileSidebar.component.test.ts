@@ -24,19 +24,12 @@ mock.module("next/link", {
     }: {
         href: string;
         children: React.ReactNode;
-    }) =>
-        React.createElement("a", { href, ...rest }, children),
+    }) => React.createElement("a", { href, ...rest }, children),
 });
 
 mock.module("next/image", {
-    defaultExport: ({
-        src,
-        alt,
-        ...rest
-    }: {
-        src: string;
-        alt: string;
-    }) => React.createElement("img", { src, alt, ...rest }),
+    defaultExport: ({ src, alt, ...rest }: { src: string; alt: string }) =>
+        React.createElement("img", { src, alt, ...rest }),
 });
 
 mock.module("lucide-react", {
@@ -98,32 +91,30 @@ beforeEach(() => {
 });
 
 test("returns null when closed", async () => {
-    const { MobileSidebar } = await import(
-        "../../components/layout/MobileSidebar"
-    );
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
 
     const html = renderToStaticMarkup(
         React.createElement(MobileSidebar, {
             isOpen: false,
             onClose: () => undefined,
             hasActiveSessions: false,
-        })
+        }),
     );
 
     assert.equal(html, "");
 });
 
 test("renders quick links and omits my history", async () => {
-    const { MobileSidebar } = await import(
-        "../../components/layout/MobileSidebar"
-    );
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
 
     const html = renderToStaticMarkup(
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
             hasActiveSessions: state.hasActiveSessions,
-        })
+        }),
     );
 
     assert.match(html, /Quick Links/);
@@ -137,16 +128,15 @@ test("shows listen-together marker when sessions are active", async () => {
     state.hasActiveSessions = true;
     state.pathname = "/listen-together";
 
-    const { MobileSidebar } = await import(
-        "../../components/layout/MobileSidebar"
-    );
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
 
     const html = renderToStaticMarkup(
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
             hasActiveSessions: state.hasActiveSessions,
-        })
+        }),
     );
 
     assert.match(html, /eq-bars/);
@@ -155,16 +145,15 @@ test("shows listen-together marker when sessions are active", async () => {
 test("marks settings as the current route when viewing settings", async () => {
     state.pathname = "/settings";
 
-    const { MobileSidebar } = await import(
-        "../../components/layout/MobileSidebar"
-    );
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
 
     const html = renderToStaticMarkup(
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
             hasActiveSessions: state.hasActiveSessions,
-        })
+        }),
     );
 
     assert.match(html, /href="\/settings"/);

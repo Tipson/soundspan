@@ -5,7 +5,10 @@ import Image from "next/image";
 import { BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
 import { Audiobook } from "../types";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { memo } from "react";
 
 interface AudiobooksGridProps {
@@ -17,9 +20,9 @@ interface AudiobookCardProps {
     index: number;
 }
 
-const AudiobookCard = memo(function AudiobookCard({ 
-    audiobook, 
-    index 
+const AudiobookCard = memo(function AudiobookCard({
+    audiobook,
+    index,
 }: AudiobookCardProps) {
     return (
         <CarouselItem>
@@ -33,7 +36,10 @@ const AudiobookCard = memo(function AudiobookCard({
                     <div className="aspect-square bg-surface-highlight rounded-full mb-3 flex items-center justify-center overflow-hidden relative shadow-lg">
                         {audiobook.coverUrl ? (
                             <Image
-                                src={api.getCoverArtUrl(audiobook.coverUrl, 300)}
+                                src={api.getCoverArtUrl(
+                                    audiobook.coverUrl,
+                                    300,
+                                )}
                                 alt={audiobook.title}
                                 fill
                                 sizes="180px"
@@ -63,10 +69,10 @@ export function AudiobooksGrid({ audiobooks }: AudiobooksGridProps) {
     return (
         <HorizontalCarousel>
             {audiobooks.map((audiobook, index) => (
-                <AudiobookCard 
-                    key={audiobook.id} 
-                    audiobook={audiobook} 
-                    index={index} 
+                <AudiobookCard
+                    key={audiobook.id}
+                    audiobook={audiobook}
+                    index={index}
                 />
             ))}
         </HorizontalCarousel>

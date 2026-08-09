@@ -62,7 +62,7 @@ mock.module("@/components/track", {
             return React.createElement(
                 "div",
                 { "data-testid": "track-list" },
-                `items:${items.length}`
+                `items:${items.length}`,
             );
         },
     },
@@ -96,12 +96,11 @@ beforeEach(() => {
 });
 
 test("returns null when tracks is empty or undefined", async () => {
-    const { LibraryTracksList } = await import(
-        "../../features/search/components/LibraryTracksList"
-    );
+    const { LibraryTracksList } =
+        await import("../../features/search/components/LibraryTracksList");
 
     const emptyHtml = renderToStaticMarkup(
-        React.createElement(LibraryTracksList, { tracks: [] })
+        React.createElement(LibraryTracksList, { tracks: [] }),
     );
     assert.equal(emptyHtml, "");
     assert.equal(trackListRenderState.props, null);
@@ -109,23 +108,22 @@ test("returns null when tracks is empty or undefined", async () => {
     const undefinedHtml = renderToStaticMarkup(
         React.createElement(LibraryTracksList as unknown as React.FC<any>, {
             tracks: undefined,
-        })
+        }),
     );
     assert.equal(undefinedHtml, "");
     assert.equal(trackListRenderState.props, null);
 });
 
 test("applies limit to rendered rows but play action still queues all tracks", async () => {
-    const { LibraryTracksList } = await import(
-        "../../features/search/components/LibraryTracksList"
-    );
+    const { LibraryTracksList } =
+        await import("../../features/search/components/LibraryTracksList");
     const tracks = [buildTrack("1"), buildTrack("2"), buildTrack("3")];
 
     const html = renderToStaticMarkup(
         React.createElement(LibraryTracksList, {
             tracks,
             limit: 1,
-        })
+        }),
     );
     assert.match(html, /items:1/);
 
@@ -146,7 +144,7 @@ test("applies limit to rendered rows but play action still queues all tracks", a
     }>;
     assert.deepEqual(
         queued.map((track) => track.id),
-        ["1", "2", "3"]
+        ["1", "2", "3"],
     );
     assert.deepEqual(queued[0], {
         id: "1",
@@ -161,16 +159,13 @@ test("applies limit to rendered rows but play action still queues all tracks", a
 });
 
 test("toggles pause/resume instead of requeueing when current track is selected", async () => {
-    const { LibraryTracksList } = await import(
-        "../../features/search/components/LibraryTracksList"
-    );
+    const { LibraryTracksList } =
+        await import("../../features/search/components/LibraryTracksList");
     const tracks = [buildTrack("1"), buildTrack("2")];
 
     playbackState.currentTrack = { id: "1" };
     playbackState.isPlaying = true;
-    renderToStaticMarkup(
-        React.createElement(LibraryTracksList, { tracks })
-    );
+    renderToStaticMarkup(React.createElement(LibraryTracksList, { tracks }));
     let onPlay = trackListRenderState.props?.onPlay as
         | ((track: LibraryTrack, index: number) => void)
         | undefined;
@@ -181,9 +176,7 @@ test("toggles pause/resume instead of requeueing when current track is selected"
     assert.equal(controlCalls.playTracks.length, 0);
 
     playbackState.isPlaying = false;
-    renderToStaticMarkup(
-        React.createElement(LibraryTracksList, { tracks })
-    );
+    renderToStaticMarkup(React.createElement(LibraryTracksList, { tracks }));
     onPlay = trackListRenderState.props?.onPlay as
         | ((track: LibraryTrack, index: number) => void)
         | undefined;

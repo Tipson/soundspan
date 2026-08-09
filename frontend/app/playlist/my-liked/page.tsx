@@ -2,14 +2,28 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Heart, ListMusic, Loader2, Music, Pause, Play, Plus, Radio, Shuffle } from "lucide-react";
+import {
+    Heart,
+    ListMusic,
+    Loader2,
+    Music,
+    Pause,
+    Play,
+    Plus,
+    Radio,
+    Shuffle,
+} from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import {
     useAudioControls,
     useAudioPlayback,
     useAudioState,
 } from "@/lib/audio-context";
-import { api, type LikedPlaylistResponse, type LikedPlaylistTrack } from "@/lib/api";
+import {
+    api,
+    type LikedPlaylistResponse,
+    type LikedPlaylistTrack,
+} from "@/lib/api";
 import { queryKeys, useLikedPlaylistQuery } from "@/hooks/useQueries";
 import { formatTime } from "@/utils/formatTime";
 import { shuffleArray } from "@/utils/shuffle";
@@ -33,7 +47,7 @@ const EMPTY_TRACKS: LikedPlaylistTrack[] = [];
  */
 export function resolveLikedTrackCoverUrl(
     track: LikedPlaylistTrack,
-    size: number
+    size: number,
 ): string | null {
     if (!track.album.coverArt) {
         return null;
@@ -65,7 +79,13 @@ interface LikedTrackListProps {
     onUnlike: (trackId: string) => void;
 }
 
-function LikedTrackList({ tracks, likedTrackIds, removingTrackId, onPlay, onUnlike }: LikedTrackListProps) {
+function LikedTrackList({
+    tracks,
+    likedTrackIds,
+    removingTrackId,
+    onPlay,
+    onUnlike,
+}: LikedTrackListProps) {
     const handlePlay = useCallback(
         (track: LikedPlaylistTrack) => onPlay(track),
         [onPlay],
@@ -73,10 +93,18 @@ function LikedTrackList({ tracks, likedTrackIds, removingTrackId, onPlay, onUnli
 
     const rowSlots = useCallback(
         (track: LikedPlaylistTrack): TrackRowSlots => {
-            const isRemote = track.streamSource === "youtube" || track.streamSource === "tidal";
+            const isRemote =
+                track.streamSource === "youtube" ||
+                track.streamSource === "tidal";
             return {
                 titleBadges: isRemote ? (
-                    <>{track.streamSource === "tidal" ? <TidalBadge /> : <YouTubeBadge />}</>
+                    <>
+                        {track.streamSource === "tidal" ? (
+                            <TidalBadge />
+                        ) : (
+                            <YouTubeBadge />
+                        )}
+                    </>
                 ) : undefined,
                 middleColumns: (
                     <p className="hidden truncate text-sm text-gray-400 md:flex items-center">
@@ -84,7 +112,10 @@ function LikedTrackList({ tracks, likedTrackIds, removingTrackId, onPlay, onUnli
                     </p>
                 ),
                 trailingActions: (
-                    <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div
+                        className="flex items-center justify-end gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <span className="hidden sm:inline text-xs text-gray-400 w-10 text-right tabular-nums">
                             {formatTime(track.duration)}
                         </span>
@@ -92,7 +123,11 @@ function LikedTrackList({ tracks, likedTrackIds, removingTrackId, onPlay, onUnli
                             trackId={track.id}
                             mode="up-only"
                             resolveFromQuery={false}
-                            signal={likedTrackIds.has(track.id) ? "thumbs_up" : "clear"}
+                            signal={
+                                likedTrackIds.has(track.id)
+                                    ? "thumbs_up"
+                                    : "clear"
+                            }
                             isSaving={removingTrackId === track.id}
                             onToggleThumbsUp={() => onUnlike(track.id)}
                             buttonSizeClassName="h-8 w-8"
@@ -144,25 +179,28 @@ export default function MyLikedPlaylistPage() {
     const { toast } = useToast();
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
-    const { playTracks, playNow, pause, resume, addTracksToQueue } = useAudioControls();
+    const { playTracks, playNow, pause, resume, addTracksToQueue } =
+        useAudioControls();
     const { data, isLoading, isError } = useLikedPlaylistQuery();
     const [removingTrackId, setRemovingTrackId] = useState<string | null>(null);
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState(false);
-    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } = usePlayButtonFeedback();
+    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
+        usePlayButtonFeedback();
 
     const likedTracks = data?.tracks ?? EMPTY_TRACKS;
     const likedTrackIds = useMemo(
         () => new Set(likedTracks.map((track) => track.id)),
-        [likedTracks]
+        [likedTracks],
     );
     const audioTracks = useMemo(
         () => likedTracks.map((track) => toAudioTrack(track)),
-        [likedTracks]
+        [likedTracks],
     );
     const totalDuration = useMemo(
-        () => likedTracks.reduce((sum, track) => sum + (track.duration || 0), 0),
-        [likedTracks]
+        () =>
+            likedTracks.reduce((sum, track) => sum + (track.duration || 0), 0),
+        [likedTracks],
     );
     const providerCounts = useMemo(
         () =>
@@ -174,9 +212,9 @@ export default function MyLikedPlaylistPage() {
                     else acc.local += 1;
                     return acc;
                 },
-                { local: 0, tidal: 0, youtube: 0 }
+                { local: 0, tidal: 0, youtube: 0 },
             ),
-        [likedTracks]
+        [likedTracks],
     );
 
     const isThisPlaylistPlaying = useMemo(() => {
@@ -192,12 +230,15 @@ export default function MyLikedPlaylistPage() {
     }, [likedTracks]);
 
     const unlikeMutation = useMutation({
-        mutationFn: (trackId: string) => api.setTrackPreference(trackId, "clear"),
+        mutationFn: (trackId: string) =>
+            api.setTrackPreference(trackId, "clear"),
         onMutate: async (trackId: string) => {
             setRemovingTrackId(trackId);
-            await queryClient.cancelQueries({ queryKey: queryKeys.likedPlaylist() });
+            await queryClient.cancelQueries({
+                queryKey: queryKeys.likedPlaylist(),
+            });
             const previous = queryClient.getQueryData<LikedPlaylistResponse>(
-                queryKeys.likedPlaylist()
+                queryKeys.likedPlaylist(),
             );
 
             queryClient.setQueryData<LikedPlaylistResponse>(
@@ -205,7 +246,7 @@ export default function MyLikedPlaylistPage() {
                 (old) => {
                     if (!old) return old;
                     const nextTracks = old.tracks.filter(
-                        (track) => track.id !== trackId
+                        (track) => track.id !== trackId,
                     );
                     if (nextTracks.length === old.tracks.length) return old;
                     return {
@@ -213,27 +254,32 @@ export default function MyLikedPlaylistPage() {
                         tracks: nextTracks,
                         total: Math.max(0, old.total - 1),
                     };
-                }
+                },
             );
 
             return { previous };
         },
         onError: (_error, _trackId, context) => {
             if (context?.previous) {
-                queryClient.setQueryData(queryKeys.likedPlaylist(), context.previous);
+                queryClient.setQueryData(
+                    queryKeys.likedPlaylist(),
+                    context.previous,
+                );
             }
             toast.error("Failed to update liked tracks");
         },
         onSuccess: (preference) => {
             queryClient.setQueryData(
                 ["track-preference", preference.trackId],
-                preference
+                preference,
             );
             toast.success("Removed from My Liked");
         },
         onSettled: () => {
             setRemovingTrackId(null);
-            queryClient.invalidateQueries({ queryKey: ["library", "liked-playlist"] });
+            queryClient.invalidateQueries({
+                queryKey: ["library", "liked-playlist"],
+            });
         },
     });
 
@@ -257,22 +303,28 @@ export default function MyLikedPlaylistPage() {
         setIsAddingToPlaylist(true);
         try {
             for (const track of likedTracks) {
-                await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef({
-                    id: track.id,
-                    title: track.title,
-                    artist: track.artist?.name,
-                    album: track.album?.title,
-                    duration: track.duration,
-                    streamSource: track.streamSource,
-                    youtubeVideoId: track.youtubeVideoId,
-                    tidalTrackId: track.tidalTrackId,
-                    thumbnailUrl: track.album?.coverArt || undefined,
-                }));
+                await api.addTrackToPlaylist(
+                    playlistId,
+                    toAddToPlaylistRef({
+                        id: track.id,
+                        title: track.title,
+                        artist: track.artist?.name,
+                        album: track.album?.title,
+                        duration: track.duration,
+                        streamSource: track.streamSource,
+                        youtubeVideoId: track.youtubeVideoId,
+                        tidalTrackId: track.tidalTrackId,
+                        thumbnailUrl: track.album?.coverArt || undefined,
+                    }),
+                );
             }
             toast.success(`Added ${likedTracks.length} tracks to playlist`);
             setShowPlaylistSelector(false);
         } catch (error) {
-            sharedFrontendLogger.error("Failed to add tracks to playlist:", error);
+            sharedFrontendLogger.error(
+                "Failed to add tracks to playlist:",
+                error,
+            );
             toast.error("Failed to add some tracks to playlist");
         } finally {
             setIsAddingToPlaylist(false);
@@ -306,22 +358,34 @@ export default function MyLikedPlaylistPage() {
         if (!data?.playlist.id) return;
         try {
             toast.info("Starting playlist radio...");
-            const response = await api.getRadioTracks("playlist", data.playlist.id);
+            const response = await api.getRadioTracks(
+                "playlist",
+                data.playlist.id,
+            );
             if (response.tracks && response.tracks.length > 0) {
-                const tracks = response.tracks.map((t: Record<string, unknown>) => ({
-                    id: t.id as string,
-                    title: t.title as string,
-                    artist: t.artist as { name: string; id?: string },
-                    album: t.album as { title: string; coverArt?: string; id?: string },
-                    duration: t.duration as number,
-                }));
+                const tracks = response.tracks.map(
+                    (t: Record<string, unknown>) => ({
+                        id: t.id as string,
+                        title: t.title as string,
+                        artist: t.artist as { name: string; id?: string },
+                        album: t.album as {
+                            title: string;
+                            coverArt?: string;
+                            id?: string;
+                        },
+                        duration: t.duration as number,
+                    }),
+                );
                 playTracks(tracks, 0);
                 toast.success(`Playing ${tracks.length} radio tracks`);
             } else {
                 toast.error("No radio tracks found for this playlist");
             }
         } catch (error) {
-            sharedFrontendLogger.error("Failed to start playlist radio:", error);
+            sharedFrontendLogger.error(
+                "Failed to start playlist radio:",
+                error,
+            );
             toast.error("Failed to start playlist radio");
         }
     };
@@ -375,13 +439,18 @@ export default function MyLikedPlaylistPage() {
                             </div>
                         )}
                         <div className="absolute bottom-2 right-2 drop-shadow-lg">
-                            <Heart className="w-7 h-7 text-pink-500" strokeWidth={2.5} />
+                            <Heart
+                                className="w-7 h-7 text-pink-500"
+                                strokeWidth={2.5}
+                            />
                         </div>
                     </div>
 
                     {/* Info */}
                     <div className="flex-1 min-w-0 pb-1">
-                        <p className="text-xs font-medium text-white/90 mb-1">Playlist</p>
+                        <p className="text-xs font-medium text-white/90 mb-1">
+                            Playlist
+                        </p>
                         <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
                             {data.playlist.name}
                         </h1>
@@ -418,7 +487,11 @@ export default function MyLikedPlaylistPage() {
                             ) : (
                                 <Play className="h-5 w-5 fill-current ml-0.5" />
                             )}
-                            <span>{isThisPlaylistPlaying && isPlaying ? "Pause" : "Play All"}</span>
+                            <span>
+                                {isThisPlaylistPlaying && isPlaying
+                                    ? "Pause"
+                                    : "Play All"}
+                            </span>
                         </button>
                     )}
                     {likedTracks.length > 1 && (

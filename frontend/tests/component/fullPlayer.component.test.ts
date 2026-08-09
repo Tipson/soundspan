@@ -3,7 +3,8 @@ import { beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const Icon = (props: Record<string, unknown>) => React.createElement("i", props);
+const Icon = (props: Record<string, unknown>) =>
+    React.createElement("i", props);
 
 const state = {
     hasMedia: true,
@@ -93,13 +94,11 @@ mock.module("next/image", {
 });
 
 mock.module("next/link", {
-    defaultExport: (
-        props: {
-            href: string;
-            children?: React.ReactNode;
-            [key: string]: unknown;
-        },
-    ) => React.createElement("a", { href: props.href }, props.children),
+    defaultExport: (props: {
+        href: string;
+        children?: React.ReactNode;
+        [key: string]: unknown;
+    }) => React.createElement("a", { href: props.href }, props.children),
 });
 
 mock.module("@/lib/audio-state-context", {

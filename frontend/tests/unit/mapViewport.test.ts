@@ -18,7 +18,7 @@ import {
 function approx(actual: number, expected: number, eps = 1e-6): void {
     assert.ok(
         Math.abs(actual - expected) <= eps,
-        `expected ~${expected}, got ${actual}`
+        `expected ~${expected}, got ${actual}`,
     );
 }
 
@@ -105,7 +105,10 @@ test("clampViewport keeps the content from being lost off-screen", () => {
     assert.ok(clampedFar.tx <= 800 - 40 + 1e-6);
     assert.ok(clampedFar.ty <= 600 - 40 + 1e-6);
     // Pushed far past the left/top edge.
-    const clampedNeg = clampViewport({ scale, tx: -100000, ty: -100000 }, bounds);
+    const clampedNeg = clampViewport(
+        { scale, tx: -100000, ty: -100000 },
+        bounds,
+    );
     assert.ok(clampedNeg.tx >= -scale + 40 - 1e-6);
     assert.ok(clampedNeg.ty >= -scale + 40 - 1e-6);
     // A viewport already on-screen is untouched.
@@ -116,7 +119,12 @@ test("clampViewport keeps the content from being lost off-screen", () => {
 test("zoomAt with bounds still clamps translation", () => {
     const bounds = { width: 800, height: 600 };
     // Zoom out hard at a corner; result must remain on-screen.
-    const next = zoomAt({ scale: 4000, tx: -3000, ty: -3000 }, { x: 0, y: 0 }, 0.1, bounds);
+    const next = zoomAt(
+        { scale: 4000, tx: -3000, ty: -3000 },
+        { x: 0, y: 0 },
+        0.1,
+        bounds,
+    );
     assert.ok(next.tx <= 800 - 40 + 1e-6 && next.tx >= -next.scale + 40 - 1e-6);
     assert.ok(next.ty <= 600 - 40 + 1e-6 && next.ty >= -next.scale + 40 - 1e-6);
 });
@@ -138,7 +146,10 @@ test("fitBounds centers the box and keeps it inside the padding", () => {
 
 test("fitBounds caps a degenerate (single-point) box at the max-zoom multiple", () => {
     const bounds = { width: 800, height: 600 };
-    const vp = fitBounds({ minX: 0.5, minY: 0.5, maxX: 0.5, maxY: 0.5 }, bounds);
+    const vp = fitBounds(
+        { minX: 0.5, minY: 0.5, maxX: 0.5, maxY: 0.5 },
+        bounds,
+    );
     const cap = fitViewport(bounds).scale * FIT_BOUNDS_MAX_ZOOM;
     assert.ok(vp.scale <= cap + 1e-6, `scale ${vp.scale} exceeds cap ${cap}`);
 });

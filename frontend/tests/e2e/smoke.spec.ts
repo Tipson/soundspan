@@ -3,7 +3,9 @@ import { test, expect } from "@playwright/test";
 const username = process.env.SOUNDSPAN_TEST_USERNAME || "predeploy";
 const password = process.env.SOUNDSPAN_TEST_PASSWORD || "predeploy-password";
 
-test("core smoke: login → play album → play/pause/next/prev", async ({ page }) => {
+test("core smoke: login → play album → play/pause/next/prev", async ({
+    page,
+}) => {
     // Login
     await page.goto("/login");
     await page.locator("#username").fill(username);
@@ -15,7 +17,9 @@ test("core smoke: login → play album → play/pause/next/prev", async ({ page 
 
     // Navigate to albums and open the first one
     await page.goto("/albums");
-    await expect(page.getByRole("heading", { name: "All Albums" })).toBeVisible();
+    await expect(
+        page.getByRole("heading", { name: "All Albums" }),
+    ).toBeVisible();
 
     const firstAlbum = page.locator('a[href^="/album/"]').first();
     const albumCount = await firstAlbum.count();
@@ -26,7 +30,9 @@ test("core smoke: login → play album → play/pause/next/prev", async ({ page 
     await page.getByLabel("Play all").click();
 
     // Mini player should reflect playing state
-    const playPause = page.locator('button[title="Pause"], button[title="Play"]').first();
+    const playPause = page
+        .locator('button[title="Pause"], button[title="Play"]')
+        .first();
     await expect(playPause).toHaveAttribute("title", "Pause");
 
     // Toggle pause/play
@@ -44,11 +50,3 @@ test("core smoke: login → play album → play/pause/next/prev", async ({ page 
     await nextBtn.click();
     await prevBtn.click();
 });
-
-
-
-
-
-
-
-

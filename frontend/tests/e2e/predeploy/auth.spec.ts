@@ -17,10 +17,14 @@ test.describe("Authentication", () => {
         await page.locator("#password").fill("wrong-password");
         await page.getByRole("button", { name: "Sign In" }).click();
         // Error can be "Invalid credentials" or "Not authenticated"
-        await expect(page.locator("text=/Invalid|Not authenticated/i")).toBeVisible({ timeout: 5000 });
+        await expect(
+            page.locator("text=/Invalid|Not authenticated/i"),
+        ).toBeVisible({ timeout: 5000 });
     });
 
-    test("protected routes redirect to login when unauthenticated", async ({ page }) => {
+    test("protected routes redirect to login when unauthenticated", async ({
+        page,
+    }) => {
         await page.goto("/library");
         await expect(page).toHaveURL(/login/);
     });

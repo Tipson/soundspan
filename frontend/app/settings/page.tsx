@@ -8,10 +8,7 @@ import { createFrontendLogger } from "@/lib/logger";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
-import {
-    SettingsLayout,
-    SidebarItem
-} from "@/features/settings/components/ui";
+import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
 
 // Section components
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
@@ -39,18 +36,18 @@ function renderSectionFallback() {
 
 const PlaybackHistorySection = dynamic(
     () =>
-        import(
-            "@/features/settings/components/sections/PlaybackHistorySection"
-        ).then((mod) => mod.PlaybackHistorySection),
-    { loading: renderSectionFallback }
+        import("@/features/settings/components/sections/PlaybackHistorySection").then(
+            (mod) => mod.PlaybackHistorySection,
+        ),
+    { loading: renderSectionFallback },
 );
 
 const APIKeysSection = dynamic(
     () =>
-        import(
-            "@/features/settings/components/sections/APIKeysSection"
-        ).then((mod) => mod.APIKeysSection),
-    { loading: renderSectionFallback }
+        import("@/features/settings/components/sections/APIKeysSection").then(
+            (mod) => mod.APIKeysSection,
+        ),
+    { loading: renderSectionFallback },
 );
 
 const logger = createFrontendLogger("Settings.Page");
@@ -81,7 +78,10 @@ export default function SettingsPage() {
                 setTimeout(() => {
                     const element = document.getElementById(hash);
                     if (element) {
-                        element.scrollIntoView({ behavior: "smooth", block: "start" });
+                        element.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                        });
                     }
                 }, 100);
             }
@@ -97,7 +97,9 @@ export default function SettingsPage() {
             setIsSaving(false);
             saveStatus.setSuccess("Saved");
         } catch (error) {
-            logger.error("Failed to save user settings from settings page", { error });
+            logger.error("Failed to save user settings from settings page", {
+                error,
+            });
             setIsSaving(false);
             saveStatus.setError("Failed to save");
         }
@@ -135,7 +137,9 @@ export default function SettingsPage() {
             <SocialSection
                 settings={userSettings}
                 onUpdate={updateUserSettings}
-                onReloadSettings={() => reloadUserSettings({ background: true })}
+                onReloadSettings={() =>
+                    reloadUserSettings({ background: true })
+                }
             />
 
             {/* History & Personalization */}
@@ -144,7 +148,9 @@ export default function SettingsPage() {
             {/* Playback */}
             <PlaybackSection
                 value={userSettings.playbackQuality}
-                onChange={(quality) => updateUserSettings({ playbackQuality: quality })}
+                onChange={(quality) =>
+                    updateUserSettings({ playbackQuality: quality })
+                }
             />
 
             {/* Integrations (YouTube Music + TIDAL — visible to all users) */}

@@ -12,58 +12,58 @@
 export const DEFAULT_CONSECUTIVE_ERROR_THRESHOLD = 3;
 
 export interface ConsecutiveErrorBreakerState {
-  consecutiveErrors: number;
-  tripped: boolean;
+    consecutiveErrors: number;
+    tripped: boolean;
 }
 
 export interface ConsecutiveErrorBreaker {
-  /** Record a playback error. Returns true if the breaker just tripped. */
-  recordError(): boolean;
-  /** Record a successful play — resets the error counter. */
-  recordSuccess(): void;
-  /** Check whether the breaker is currently tripped. */
-  isTripped(): boolean;
-  /** Get the current consecutive error count. */
-  getErrorCount(): number;
-  /** Manually reset the breaker state. */
-  reset(): void;
+    /** Record a playback error. Returns true if the breaker just tripped. */
+    recordError(): boolean;
+    /** Record a successful play — resets the error counter. */
+    recordSuccess(): void;
+    /** Check whether the breaker is currently tripped. */
+    isTripped(): boolean;
+    /** Get the current consecutive error count. */
+    getErrorCount(): number;
+    /** Manually reset the breaker state. */
+    reset(): void;
 }
 
 /**
  * Creates a consecutive error circuit breaker.
  */
 export function createConsecutiveErrorBreaker(
-  threshold: number = DEFAULT_CONSECUTIVE_ERROR_THRESHOLD,
+    threshold: number = DEFAULT_CONSECUTIVE_ERROR_THRESHOLD,
 ): ConsecutiveErrorBreaker {
-  let consecutiveErrors = 0;
-  let tripped = false;
+    let consecutiveErrors = 0;
+    let tripped = false;
 
-  return {
-    recordError(): boolean {
-      consecutiveErrors += 1;
-      if (consecutiveErrors >= threshold && !tripped) {
-        tripped = true;
-        return true;
-      }
-      return false;
-    },
+    return {
+        recordError(): boolean {
+            consecutiveErrors += 1;
+            if (consecutiveErrors >= threshold && !tripped) {
+                tripped = true;
+                return true;
+            }
+            return false;
+        },
 
-    recordSuccess(): void {
-      consecutiveErrors = 0;
-      tripped = false;
-    },
+        recordSuccess(): void {
+            consecutiveErrors = 0;
+            tripped = false;
+        },
 
-    isTripped(): boolean {
-      return tripped;
-    },
+        isTripped(): boolean {
+            return tripped;
+        },
 
-    getErrorCount(): number {
-      return consecutiveErrors;
-    },
+        getErrorCount(): number {
+            return consecutiveErrors;
+        },
 
-    reset(): void {
-      consecutiveErrors = 0;
-      tripped = false;
-    },
-  };
+        reset(): void {
+            consecutiveErrors = 0;
+            tripped = false;
+        },
+    };
 }

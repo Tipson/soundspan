@@ -24,7 +24,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 const state: {
     api: {
         createPlaylist: (name: string) => Promise<{ id: string }>;
-        addTrackToPlaylist: (playlistId: string, ref: unknown) => Promise<unknown>;
+        addTrackToPlaylist: (
+            playlistId: string,
+            ref: unknown,
+        ) => Promise<unknown>;
     };
 } = {
     api: {
@@ -65,9 +68,8 @@ beforeEach(() => {
 });
 
 async function panels() {
-    const { TravelPanel, NeighborRow } = await import(
-        "../../components/vibe/TravelPanel"
-    );
+    const { TravelPanel, NeighborRow } =
+        await import("../../components/vibe/TravelPanel");
     const { JourneyPanel } = await import("../../components/vibe/JourneyPanel");
     const { AlchemyTray } = await import("../../components/vibe/AlchemyTray");
     return { TravelPanel, NeighborRow, JourneyPanel, AlchemyTray };
@@ -87,7 +89,7 @@ function neighbor(
     overrides: {
         danceability?: number | null;
         arousal?: number | null;
-    } = {}
+    } = {},
 ): {
     id: string;
     title: string;
@@ -140,7 +142,7 @@ test("TravelPanel renders compass, breadcrumb and on/off-map neighbours", async 
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(TravelPanel, { view })
+        React.createElement(TravelPanel, { view }),
     );
     assert.match(html, /Travel/);
     assert.match(html, /Origin Song/);
@@ -174,7 +176,7 @@ test("TravelPanel shows the loading state", async () => {
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(TravelPanel, { view })
+        React.createElement(TravelPanel, { view }),
     );
     assert.match(html, /Finding nearby vibes/);
 });
@@ -198,7 +200,7 @@ test("TravelPanel surfaces an error", async () => {
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(TravelPanel, { view })
+        React.createElement(TravelPanel, { view }),
     );
     // renderToStaticMarkup HTML-escapes the apostrophe in the copy.
     assert.match(html, /load nearby vibes/);
@@ -258,7 +260,7 @@ test("JourneyPanel disables thin mood chips and renders the numbered route", asy
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(JourneyPanel, { view })
+        React.createElement(JourneyPanel, { view }),
     );
     assert.match(html, /Journey/);
     assert.match(html, /Now Playing Song/);
@@ -303,7 +305,7 @@ test("JourneyPanel shows the pick-on-map prompt and a backend 404 error", async 
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(JourneyPanel, { view })
+        React.createElement(JourneyPanel, { view }),
     );
     assert.match(html, /Click a dot to set destination/);
     assert.match(html, /This track has no embedding yet/);
@@ -353,7 +355,7 @@ test("AlchemyTray renders ingredients, weights, count and blend results", async 
         clear: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(AlchemyTray, { view })
+        React.createElement(AlchemyTray, { view }),
     );
     assert.match(html, /Alchemy/);
     assert.match(html, /2\/10/); // ingredient count
@@ -389,7 +391,7 @@ test("AlchemyTray disables Blend below two ingredients and shows an error", asyn
         clear: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(AlchemyTray, { view })
+        React.createElement(AlchemyTray, { view }),
     );
     assert.match(html, /1\/10/);
     assert.match(html, /disabled=""/); // Blend button disabled
@@ -399,9 +401,8 @@ test("AlchemyTray disables Blend below two ingredients and shows an error", asyn
 // --- NowPlayingCard -------------------------------------------------------
 
 async function nowPlayingCard() {
-    const { NowPlayingCard } = await import(
-        "../../components/vibe/NowPlayingCard"
-    );
+    const { NowPlayingCard } =
+        await import("../../components/vibe/NowPlayingCard");
     return NowPlayingCard;
 }
 
@@ -420,7 +421,7 @@ test("NowPlayingCard shows the playing track's title, artist and pause control",
             moodColor: "#facc15",
             onFlyTo: noop,
             onTogglePlay: noop,
-        })
+        }),
     );
     assert.match(html, /Playing Title/);
     assert.match(html, /Playing Artist/);
@@ -448,7 +449,7 @@ test("NowPlayingCard disables fly-to when the track isn't on the map", async () 
             moodColor: null,
             onFlyTo: noop,
             onTogglePlay: noop,
-        })
+        }),
     );
     assert.match(html, /Off Map Song/);
     assert.match(html, /not on the map/i);
@@ -467,7 +468,7 @@ test("NowPlayingCard renders nothing when there is no track", async () => {
             onMapPresent: false,
             onFlyTo: noop,
             onTogglePlay: noop,
-        })
+        }),
     );
     assert.equal(html, "");
 });
@@ -489,7 +490,7 @@ test("NowPlayingCard renders a progress strip sized from currentTime/duration", 
             onTogglePlay: noop,
             currentTime: 90,
             duration: 180,
-        })
+        }),
     );
     assert.match(html, /role="progressbar"/);
     assert.match(html, /aria-valuemin="0"/);
@@ -521,12 +522,12 @@ test("NowPlayingCard hides the progress strip when duration is 0/unknown", async
             ...baseProps,
             currentTime: 0,
             duration: 0,
-        })
+        }),
     );
     assert.doesNotMatch(zeroDuration, /role="progressbar"/);
 
     const noDuration = renderToStaticMarkup(
-        React.createElement(NowPlayingCard, baseProps)
+        React.createElement(NowPlayingCard, baseProps),
     );
     assert.doesNotMatch(noDuration, /role="progressbar"/);
 
@@ -535,7 +536,7 @@ test("NowPlayingCard hides the progress strip when duration is 0/unknown", async
             ...baseProps,
             currentTime: 10,
             duration: NaN,
-        })
+        }),
     );
     assert.doesNotMatch(nanDuration, /role="progressbar"/);
 });
@@ -555,7 +556,7 @@ test("NowPlayingCard links the title to the album page and the artist to the art
             moodColor: "#facc15",
             onFlyTo: noop,
             onTogglePlay: noop,
-        })
+        }),
     );
     assert.match(html, /<a href="\/album\/al-1"[^>]*>Linked Title<\/a>/);
     assert.match(html, /<a href="\/artist\/ar-1"[^>]*>Linked Artist<\/a>/);
@@ -566,7 +567,7 @@ test("NowPlayingCard links the title to the album page and the artist to the art
     assert.ok(buttonClose !== -1 && albumLinkOpen !== -1);
     assert.ok(
         buttonClose < albumLinkOpen,
-        "album link must not be nested inside the fly-to button"
+        "album link must not be nested inside the fly-to button",
     );
 });
 
@@ -585,7 +586,7 @@ test("NowPlayingCard renders plain text (not a link) for title/artist when ids a
             moodColor: null,
             onFlyTo: noop,
             onTogglePlay: noop,
-        })
+        }),
     );
     assert.match(html, /No Link Title/);
     assert.match(html, /No Link Artist/);
@@ -611,9 +612,9 @@ test("NowPlayingCard renders the likeSlot content when provided", async () => {
             likeSlot: React.createElement(
                 "button",
                 { "data-testid": "np-like" },
-                "heart"
+                "heart",
             ),
-        })
+        }),
     );
     assert.match(html, /data-testid="np-like"/);
 });
@@ -633,7 +634,7 @@ test("NowPlayingCard renders no like control when likeSlot is omitted", async ()
             moodColor: "#facc15",
             onFlyTo: noop,
             onTogglePlay: noop,
-        })
+        }),
     );
     assert.doesNotMatch(html, /data-testid="np-like"/);
 });
@@ -674,11 +675,9 @@ function viewControlsBaseProps() {
 }
 
 test("ViewControls exposes labelled zoom/reset/layout/brush/locate/journey/trail/fullscreen buttons", async () => {
-    const { ViewControls } = await import(
-        "../../components/vibe/ViewControls"
-    );
+    const { ViewControls } = await import("../../components/vibe/ViewControls");
     const html = renderToStaticMarkup(
-        React.createElement(ViewControls, viewControlsBaseProps())
+        React.createElement(ViewControls, viewControlsBaseProps()),
     );
     assert.match(html, /aria-label="Zoom in"/);
     assert.match(html, /aria-label="Zoom out"/);
@@ -700,18 +699,16 @@ test("ViewControls exposes labelled zoom/reset/layout/brush/locate/journey/trail
     // content is absent and the button reports aria-expanded="false".
     assert.doesNotMatch(html, /neighborhoods are/i);
     const aboutButtonClosed = html.match(
-        /<button[^>]*aria-label="About this map"[^>]*>/
+        /<button[^>]*aria-label="About this map"[^>]*>/,
     )?.[0];
     assert.ok(aboutButtonClosed, "expected the About this map button markup");
     assert.match(aboutButtonClosed!, /aria-expanded="false"/);
 });
 
 test("ViewControls about popover follows the lifted aboutPopoverOpen/onToggleAboutPopover props (VibeMap's auxSurface)", async () => {
-    const { ViewControls } = await import(
-        "../../components/vibe/ViewControls"
-    );
+    const { ViewControls } = await import("../../components/vibe/ViewControls");
     const closed = renderToStaticMarkup(
-        React.createElement(ViewControls, viewControlsBaseProps())
+        React.createElement(ViewControls, viewControlsBaseProps()),
     );
     assert.doesNotMatch(closed, /Mood colors/);
 
@@ -719,29 +716,27 @@ test("ViewControls about popover follows the lifted aboutPopoverOpen/onToggleAbo
         React.createElement(ViewControls, {
             ...viewControlsBaseProps(),
             aboutPopoverOpen: true,
-        })
+        }),
     );
     // The popover's content (AboutMapPopover) renders when the prop is true.
     assert.match(open, /neighborhoods are/i);
     assert.match(open, /Mood colors/);
     const aboutButtonOpen = open.match(
-        /<button[^>]*aria-label="About this map"[^>]*>/
+        /<button[^>]*aria-label="About this map"[^>]*>/,
     )?.[0];
     assert.ok(aboutButtonOpen, "expected the About this map button markup");
     assert.match(aboutButtonOpen!, /aria-expanded="true"/);
 });
 
 test("ViewControls trail popover renders the segmented mode control and a disabled Clear history when the trail is empty", async () => {
-    const { ViewControls } = await import(
-        "../../components/vibe/ViewControls"
-    );
+    const { ViewControls } = await import("../../components/vibe/ViewControls");
     const html = renderToStaticMarkup(
         React.createElement(ViewControls, {
             ...viewControlsBaseProps(),
             trailMode: "fade",
             trailPopoverOpen: true,
             trailEmpty: true,
-        })
+        }),
     );
     assert.match(html, /role="menu"/);
     assert.match(html, /role="radiogroup"/);
@@ -758,32 +753,28 @@ test("ViewControls trail popover renders the segmented mode control and a disabl
 });
 
 test("ViewControls: trail mode 'off' un-presses the Footprints button", async () => {
-    const { ViewControls } = await import(
-        "../../components/vibe/ViewControls"
-    );
+    const { ViewControls } = await import("../../components/vibe/ViewControls");
     const html = renderToStaticMarkup(
         React.createElement(ViewControls, {
             ...viewControlsBaseProps(),
             trailMode: "off",
-        })
+        }),
     );
     const footprintsButton = html.match(
-        /<button[^>]*aria-label="Session trail settings"[^>]*>/
+        /<button[^>]*aria-label="Session trail settings"[^>]*>/,
     )?.[0];
     assert.ok(footprintsButton, "expected the Footprints button markup");
     assert.match(footprintsButton!, /aria-pressed="false"/);
 });
 
 test("ViewControls: queue toggle exposes aria-pressed and a count badge capped at 99+", async () => {
-    const { ViewControls } = await import(
-        "../../components/vibe/ViewControls"
-    );
+    const { ViewControls } = await import("../../components/vibe/ViewControls");
     const closedNoBadge = renderToStaticMarkup(
-        React.createElement(ViewControls, viewControlsBaseProps())
+        React.createElement(ViewControls, viewControlsBaseProps()),
     );
     assert.match(closedNoBadge, /aria-label="Show queue"/);
     const queueButton = closedNoBadge.match(
-        /<button[^>]*aria-label="Show queue"[^>]*>/
+        /<button[^>]*aria-label="Show queue"[^>]*>/,
     )?.[0];
     assert.ok(queueButton, "expected the queue toggle button markup");
     assert.match(queueButton!, /aria-pressed="false"/);
@@ -795,10 +786,10 @@ test("ViewControls: queue toggle exposes aria-pressed and a count badge capped a
             ...viewControlsBaseProps(),
             queueOpen: true,
             queueCount: 7,
-        })
+        }),
     );
     const openQueueButton = openWithCount.match(
-        /<button[^>]*aria-label="Show queue"[^>]*>/
+        /<button[^>]*aria-label="Show queue"[^>]*>/,
     )?.[0];
     assert.ok(openQueueButton, "expected the queue toggle button markup");
     assert.match(openQueueButton!, /aria-pressed="true"/);
@@ -808,7 +799,7 @@ test("ViewControls: queue toggle exposes aria-pressed and a count badge capped a
         React.createElement(ViewControls, {
             ...viewControlsBaseProps(),
             queueCount: 140,
-        })
+        }),
     );
     assert.match(cappedCount, />99\+</);
 });
@@ -825,7 +816,7 @@ test("SweepChip renders the count, cap marker and labelled actions", async () =>
             onQueue: noop,
             onSave: noop,
             onDismiss: noop,
-        })
+        }),
     );
     assert.match(html, /23 tracks swept/);
     assert.match(html, /aria-label="Play 23 swept tracks"/);
@@ -841,7 +832,7 @@ test("SweepChip renders the count, cap marker and labelled actions", async () =>
             onQueue: noop,
             onSave: noop,
             onDismiss: noop,
-        })
+        }),
     );
     assert.match(capped, /100 tracks swept \(max\)/);
 });
@@ -849,9 +840,7 @@ test("SweepChip renders the count, cap marker and labelled actions", async () =>
 // --- FiltersPanel ---------------------------------------------------------
 
 async function filtersPanel() {
-    const { FiltersPanel } = await import(
-        "../../components/vibe/FiltersPanel"
-    );
+    const { FiltersPanel } = await import("../../components/vibe/FiltersPanel");
     return FiltersPanel;
 }
 
@@ -885,7 +874,7 @@ test("FiltersPanel collapsed renders a Filters count pill", async () => {
             total: 10,
             expanded: false,
             onExpandedChange: noop,
-        })
+        }),
     );
     assert.match(html, /Filters/);
     assert.match(html, /4\/10/); // {visible}/{total}
@@ -901,7 +890,7 @@ test("FiltersPanel expanded renders mood chips, the solo hint and both sliders",
             expanded: true,
             onExpandedChange: noop,
             reducedMotion: true,
-        })
+        }),
     );
     // Mood chips as real toggle buttons (all active in the stub).
     assert.match(html, />Happy</);
@@ -933,7 +922,7 @@ test("FiltersPanel default chip list includes a toggleable Neutral chip for the 
             expanded: true,
             onExpandedChange: noop,
             reducedMotion: true,
-        })
+        }),
     );
     assert.match(html, />Neutral</);
     // The neutral chip's dot uses the shared fallback gray, same as any
@@ -971,7 +960,7 @@ test("TravelPanel renders the library-calibrated percent + label when quantiles 
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(TravelPanel, { view })
+        React.createElement(TravelPanel, { view }),
     );
     // Calibrated (90%, "same vibe") wins over the uncalibrated linear mapping
     // (Math.round((1 - 0.2/2) * 100) = 90 too here by coincidence of the
@@ -1020,7 +1009,7 @@ test("JourneyPanel waypoint rows use the calibrated percent when quantiles are s
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(JourneyPanel, { view })
+        React.createElement(JourneyPanel, { view }),
     );
     assert.match(html, /75%/);
     assert.match(html, /title="close neighbors"/);
@@ -1059,7 +1048,7 @@ test("NeighborRow expansion renders the calibrated sentence and per-feature matc
             originFeatures,
             expanded: true,
             onToggleExpand: noop,
-        })
+        }),
     );
     // Uncalibrated sentence form + all four feature bars (every feature has
     // both sides non-null in this fixture, so none are skipped).
@@ -1096,7 +1085,7 @@ test("NeighborRow collapsed (expanded=false) does not render the breakdown", asy
             originFeatures: null,
             expanded: false,
             onToggleExpand: noop,
-        })
+        }),
     );
     assert.doesNotMatch(html, /Groove/);
     assert.match(html, /aria-expanded="false"/);
@@ -1113,13 +1102,14 @@ test("JourneyPanel's Save button is wired to view.save, which calls createPlayli
             return { id: "pl-journey" };
         },
         addTrackToPlaylist: async (playlistId, ref) => {
-            calls.push(`add:${playlistId}:${(ref as { trackId: string }).trackId}`);
+            calls.push(
+                `add:${playlistId}:${(ref as { trackId: string }).trackId}`,
+            );
             return {};
         },
     };
-    const { saveTracksAsPlaylist } = await import(
-        "../../components/vibe/savePlaylist"
-    );
+    const { saveTracksAsPlaylist } =
+        await import("../../components/vibe/savePlaylist");
     const view = {
         fromId: "f1",
         fromLabel: "Origin",
@@ -1164,7 +1154,7 @@ test("JourneyPanel's Save button is wired to view.save, which calls createPlayli
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(JourneyPanel, { view })
+        React.createElement(JourneyPanel, { view }),
     );
     assert.match(html, /aria-label="Save journey as playlist"/);
 
@@ -1216,10 +1206,10 @@ test("JourneyPanel's Save button shows a spinner and is disabled while saving", 
         close: noop,
     };
     const html = renderToStaticMarkup(
-        React.createElement(JourneyPanel, { view })
+        React.createElement(JourneyPanel, { view }),
     );
     const saveButton = html.match(
-        /<button[^>]*aria-label="Save journey as playlist"[^>]*>/
+        /<button[^>]*aria-label="Save journey as playlist"[^>]*>/,
     )?.[0];
     assert.ok(saveButton, "expected the Save button markup");
     assert.match(saveButton!, /disabled=""/);
@@ -1236,7 +1226,7 @@ test("SweepChip renders a Save action alongside Play/Queue, disabled while savin
             onSave: noop,
             saving: false,
             onDismiss: noop,
-        })
+        }),
     );
     assert.match(html, /aria-label="Save 12 swept tracks as a playlist"/);
 
@@ -1249,10 +1239,10 @@ test("SweepChip renders a Save action alongside Play/Queue, disabled while savin
             onSave: noop,
             saving: true,
             onDismiss: noop,
-        })
+        }),
     );
     const playButton = savingHtml.match(
-        /<button[^>]*aria-label="Play 12 swept tracks"[^>]*>/
+        /<button[^>]*aria-label="Play 12 swept tracks"[^>]*>/,
     )?.[0];
     assert.ok(playButton, "expected the Play button markup");
     assert.match(playButton!, /disabled=""/);
@@ -1261,9 +1251,8 @@ test("SweepChip renders a Save action alongside Play/Queue, disabled while savin
 // --- About this map ---------------------------------------------------------
 
 test("AboutMapPopover explains map distance semantics and renders the mood/glyph/gesture legends", async () => {
-    const { AboutMapPopover } = await import(
-        "../../components/vibe/ViewControls"
-    );
+    const { AboutMapPopover } =
+        await import("../../components/vibe/ViewControls");
     const html = renderToStaticMarkup(React.createElement(AboutMapPopover));
     assert.match(html, /neighborhoods are/i);
     assert.match(html, /calibrated against random pairs/i);
@@ -1282,9 +1271,8 @@ test("AboutMapPopover explains map distance semantics and renders the mood/glyph
 // --- QueuePanel ---------------------------------------------------------
 
 async function queuePanel() {
-    const { QueuePanel, resolveQueueDropIndices } = await import(
-        "../../components/vibe/QueuePanel"
-    );
+    const { QueuePanel, resolveQueueDropIndices } =
+        await import("../../components/vibe/QueuePanel");
     return { QueuePanel, resolveQueueDropIndices };
 }
 
@@ -1324,7 +1312,7 @@ test("QueuePanel marks the current track, lists upcoming rows (incl. episodes) w
             onClose: noop,
             onReorder: noop,
             onRemove: noop,
-        })
+        }),
     );
     assert.match(html, />Queue</);
     assert.match(html, /Current Song/);
@@ -1355,7 +1343,7 @@ test("QueuePanel hides drag handles during Listen Together and omits remove when
             onReorder: noop,
             reorderDisabled: true,
             // onRemove intentionally omitted.
-        })
+        }),
     );
     assert.doesNotMatch(html, /draggable="true"/);
     assert.doesNotMatch(html, /aria-label="Remove Next Song from queue"/);
@@ -1369,7 +1357,7 @@ test("QueuePanel shows the empty state when nothing is queued", async () => {
             currentIndex: 0,
             onClose: noop,
             onReorder: noop,
-        })
+        }),
     );
     assert.match(html, /Nothing queued — sweep some dots or play a journey\./);
 });

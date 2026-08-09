@@ -10,7 +10,7 @@ export interface RadioMosaicCandidate {
  * Builds artwork candidates from radio tracks, skipping entries without cover art.
  */
 export const createRadioMosaicCandidates = (
-    tracks: Track[]
+    tracks: Track[],
 ): RadioMosaicCandidate[] => {
     return tracks
         .filter((track) => Boolean(track?.album?.coverArt))
@@ -34,7 +34,7 @@ export const createRadioMosaicCandidates = (
  */
 export const selectRadioMosaicTiles = (
     candidates: RadioMosaicCandidate[],
-    tileCount = 6
+    tileCount = 6,
 ): RadioMosaicCandidate[] => {
     if (tileCount <= 0 || candidates.length === 0) {
         return [];

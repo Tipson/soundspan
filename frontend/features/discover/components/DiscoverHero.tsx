@@ -49,7 +49,10 @@ export function DiscoverHero({ playlist, config }: DiscoverHeroProps) {
                         </div>
                     )}
                     <div className="absolute bottom-2 right-2 drop-shadow-lg">
-                        <Zap className="w-7 h-7 text-pink-500" strokeWidth={2.5} />
+                        <Zap
+                            className="w-7 h-7 text-pink-500"
+                            strokeWidth={2.5}
+                        />
                     </div>
                 </div>
 
@@ -72,7 +75,7 @@ export function DiscoverHero({ playlist, config }: DiscoverHeroProps) {
                                     Week of{" "}
                                     {format(
                                         new Date(playlist.weekStart),
-                                        "MMM d, yyyy"
+                                        "MMM d, yyyy",
                                     )}
                                 </span>
                                 <span className="mx-1">•</span>
@@ -91,7 +94,7 @@ export function DiscoverHero({ playlist, config }: DiscoverHeroProps) {
                                     Updated{" "}
                                     {format(
                                         new Date(config.lastGeneratedAt),
-                                        "MMM d"
+                                        "MMM d",
                                     )}
                                 </span>
                             </>

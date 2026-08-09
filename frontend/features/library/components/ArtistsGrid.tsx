@@ -82,9 +82,15 @@ const ArtistCardItem = memo(
                 tabIndex={0}
                 className="group"
             >
-                <div className="p-3 rounded-md cursor-pointer hover:bg-white/5 transition-colors" style={{ transform: "translateZ(0)" }}>
+                <div
+                    className="p-3 rounded-md cursor-pointer hover:bg-white/5 transition-colors"
+                    style={{ transform: "translateZ(0)" }}
+                >
                     <div className="relative aspect-square mb-3">
-                        <div className="w-full h-full bg-surface-highlight rounded-full flex items-center justify-center overflow-hidden" style={{ contain: "content" }}>
+                        <div
+                            className="w-full h-full bg-surface-highlight rounded-full flex items-center justify-center overflow-hidden"
+                            style={{ contain: "content" }}
+                        >
                             {coverArtUrl ? (
                                 <CachedImage
                                     src={coverArtUrl}

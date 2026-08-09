@@ -62,7 +62,9 @@ export function useMediaSession() {
     useEffect(() => {
         // Check if Media Session API is supported
         if (!("mediaSession" in navigator)) {
-            sharedFrontendLogger.warn("[MediaSession] Media Session API not supported");
+            sharedFrontendLogger.warn(
+                "[MediaSession] Media Session API not supported",
+            );
             return;
         }
 
@@ -77,7 +79,7 @@ export function useMediaSession() {
         if (playbackType === "track" && currentTrack) {
             const coverUrl = currentTrack.album?.coverArt
                 ? getAbsoluteUrl(
-                      api.getCoverArtUrl(currentTrack.album.coverArt, 512)
+                      api.getCoverArtUrl(currentTrack.album.coverArt, 512),
                   )
                 : undefined;
 
@@ -119,7 +121,7 @@ export function useMediaSession() {
         } else if (playbackType === "audiobook" && currentAudiobook) {
             const coverUrl = currentAudiobook.coverUrl
                 ? getAbsoluteUrl(
-                      api.getCoverArtUrl(currentAudiobook.coverUrl, 512)
+                      api.getCoverArtUrl(currentAudiobook.coverUrl, 512),
                   )
                 : undefined;
 
@@ -163,7 +165,7 @@ export function useMediaSession() {
         } else if (playbackType === "podcast" && currentPodcast) {
             const coverUrl = currentPodcast.coverUrl
                 ? getAbsoluteUrl(
-                      api.getCoverArtUrl(currentPodcast.coverUrl, 512)
+                      api.getCoverArtUrl(currentPodcast.coverUrl, 512),
                   )
                 : undefined;
 
@@ -263,7 +265,7 @@ export function useMediaSession() {
                 (details) => {
                     const skipTime = details.seekOffset || 10;
                     seek(Math.max(currentTime - skipTime, 0));
-                }
+                },
             );
 
             navigator.mediaSession.setActionHandler(
@@ -276,7 +278,7 @@ export function useMediaSession() {
                         currentPodcast?.duration ||
                         0;
                     seek(Math.min(currentTime + skipTime, duration));
-                }
+                },
             );
 
             navigator.mediaSession.setActionHandler("seekto", (details) => {
@@ -298,11 +300,11 @@ export function useMediaSession() {
                 try {
                     navigator.mediaSession.setActionHandler(
                         "seekbackward",
-                        null
+                        null,
                     );
                     navigator.mediaSession.setActionHandler(
                         "seekforward",
-                        null
+                        null,
                     );
                     navigator.mediaSession.setActionHandler("seekto", null);
                 } catch {
@@ -344,7 +346,7 @@ export function useMediaSession() {
                 // Some browsers may not support position state
                 sharedFrontendLogger.warn(
                     "[MediaSession] Failed to set position state:",
-                    error
+                    error,
                 );
             }
         }

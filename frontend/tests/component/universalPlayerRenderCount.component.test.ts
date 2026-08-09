@@ -36,16 +36,17 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
  */
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // --- leaf mocks (audio contexts stay REAL) ---------------------------------
 // Any api method resolves to null so the mount-time playback-state restore is a
 // no-op and nothing sets a track (which would re-render UniversalPlayer).
-const apiStub = new Proxy(
-    {},
-    { get: () => async () => null },
-) as Record<string, unknown>;
+const apiStub = new Proxy({}, { get: () => async () => null }) as Record<
+    string,
+    unknown
+>;
 mock.module("@/lib/api", { namedExports: { api: apiStub } });
 
 mock.module("@/hooks/useMediaQuery", {
@@ -70,7 +71,11 @@ mock.module("@/lib/audio-controls-context", {
 // A child stub re-renders exactly when UniversalPlayer re-renders (no memo
 // boundary between them), giving a Profiler-independent count of UniversalPlayer
 // renders as a cross-check.
-const childRenderCounts = { "full-player-stub": 0, "mini-player-stub": 0, "overlay-player-stub": 0 };
+const childRenderCounts = {
+    "full-player-stub": 0,
+    "mini-player-stub": 0,
+    "overlay-player-stub": 0,
+};
 const childStub = (label: keyof typeof childRenderCounts) => {
     const ChildStub = () => {
         childRenderCounts[label] += 1;
@@ -117,13 +122,12 @@ test("UniversalPlayer renders exactly 0 times across 8 clock ticks; clock publis
     // from localStorage, so start from a clean slate (initial published clock 0).
     localStorage.clear();
     const { createRoot } = await import("react-dom/client");
-    const { AudioStateProvider } = await import("../../lib/audio-state-context");
-    const { AudioPlaybackProvider, useAudioPlayback } = await import(
-        "../../lib/audio-playback-context"
-    );
-    const { UniversalPlayer } = await import(
-        "../../components/player/UniversalPlayer"
-    );
+    const { AudioStateProvider } =
+        await import("../../lib/audio-state-context");
+    const { AudioPlaybackProvider, useAudioPlayback } =
+        await import("../../lib/audio-playback-context");
+    const { UniversalPlayer } =
+        await import("../../components/player/UniversalPlayer");
 
     let commitCount = 0;
     // Ref-shaped mutation containers: the react-hooks lint rule forbids
@@ -198,7 +202,8 @@ test("UniversalPlayer renders exactly 0 times across 8 clock ticks; clock publis
     }
 
     const tickCommits = commitCount - mountCommits;
-    const tickPlaybackRenders = playbackRendersRef.current - mountPlaybackRenders;
+    const tickPlaybackRenders =
+        playbackRendersRef.current - mountPlaybackRenders;
     const tickChildRenders =
         childRenderCounts["full-player-stub"] - mountChildRenders;
     t.diagnostic(

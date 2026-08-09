@@ -25,7 +25,10 @@ export function LibraryPodcastsGrid({
     const items = limit ? podcasts.slice(0, limit) : podcasts;
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-4" data-tv-section="search-results-podcasts">
+        <div
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-4"
+            data-tv-section="search-results-podcasts"
+        >
             {items.map((podcast, index) => {
                 const imageUrl = getProxiedImageUrl(podcast.imageUrl);
                 return (
@@ -58,11 +61,12 @@ export function LibraryPodcastsGrid({
                             <p className="text-sm text-[#b3b3b3] line-clamp-1">
                                 {podcast.author || "Podcast"}
                             </p>
-                            {podcast.episodeCount && podcast.episodeCount > 0 && (
-                                <p className="text-xs text-gray-400 mt-1">
-                                    {podcast.episodeCount} episodes
-                                </p>
-                            )}
+                            {podcast.episodeCount &&
+                                podcast.episodeCount > 0 && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        {podcast.episodeCount} episodes
+                                    </p>
+                                )}
                         </div>
                     </Link>
                 );

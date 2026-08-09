@@ -16,7 +16,7 @@ export const PROVIDER_STATUS_NEGATIVE_TTL_MS = 5_000;
  */
 export function isProviderStatusCacheFresh(
     entry: ProviderStatusCacheEntry,
-    now: number = Date.now()
+    now: number = Date.now(),
 ): boolean {
     const ttlMs = entry.available
         ? PROVIDER_STATUS_POSITIVE_TTL_MS
@@ -27,7 +27,7 @@ export function isProviderStatusCacheFresh(
 /** Builds a status-cache entry anchored to the provided timestamp. */
 export function createProviderStatusCacheEntry(
     available: boolean,
-    now: number = Date.now()
+    now: number = Date.now(),
 ): ProviderStatusCacheEntry {
     return {
         available,

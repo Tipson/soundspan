@@ -50,9 +50,7 @@ function createHookRuntime() {
                         ? (initial as () => T)()
                         : initial;
             }
-            const setState = (
-                value: T | ((current: T) => T)
-            ) => {
+            const setState = (value: T | ((current: T) => T)) => {
                 const current = stateValues[idx] as T;
                 stateValues[idx] =
                     typeof value === "function"
@@ -80,7 +78,7 @@ function createHookRuntime() {
         },
         useCallback<T extends (...args: never[]) => unknown>(
             callback: T,
-            deps: DependencyList
+            deps: DependencyList,
         ) {
             return this.useMemo(() => callback, deps);
         },
@@ -237,9 +235,8 @@ async function settleHook<T>(hookFn: () => T): Promise<T> {
 }
 
 test("useTidalGapFill enriches discovery tracks and applies match duration fallback", async () => {
-    const { useTidalGapFill, invalidateTidalStatusCache } = await import(
-        "../../features/album/hooks/useTidalGapFill"
-    );
+    const { useTidalGapFill, invalidateTidalStatusCache } =
+        await import("../../features/album/hooks/useTidalGapFill");
     invalidateTidalStatusCache();
 
     apiState.tidalMatches = [
@@ -266,9 +263,7 @@ test("useTidalGapFill enriches discovery tracks and applies match duration fallb
         ],
     };
 
-    const result = await settleHook(() =>
-        useTidalGapFill(album, "discovery")
-    );
+    const result = await settleHook(() => useTidalGapFill(album, "discovery"));
 
     assert.equal(apiState.tidalPayloads.length, 1);
     assert.equal(apiState.tidalPayloads[0].length, 2);
@@ -281,9 +276,8 @@ test("useTidalGapFill enriches discovery tracks and applies match duration fallb
 });
 
 test("useTidalGapFill reports resolved unavailable state when status lookup fails", async () => {
-    const { useTidalGapFill, invalidateTidalStatusCache } = await import(
-        "../../features/album/hooks/useTidalGapFill"
-    );
+    const { useTidalGapFill, invalidateTidalStatusCache } =
+        await import("../../features/album/hooks/useTidalGapFill");
     invalidateTidalStatusCache();
     apiState.failTidalStatus = true;
 
@@ -294,8 +288,8 @@ test("useTidalGapFill reports resolved unavailable state when status lookup fail
                 title: "Album Two",
                 tracks: [{ id: "track-1", title: "Track", duration: 200 }],
             },
-            "library"
-        )
+            "library",
+        ),
     );
 
     assert.equal(result.tidalAvailable, false);
@@ -304,9 +298,8 @@ test("useTidalGapFill reports resolved unavailable state when status lookup fail
 });
 
 test("useYtMusicGapFill skips TIDAL-enriched tracks and enriches remaining matches", async () => {
-    const { useYtMusicGapFill, invalidateYtMusicStatusCache } = await import(
-        "../../features/album/hooks/useYtMusicGapFill"
-    );
+    const { useYtMusicGapFill, invalidateYtMusicStatusCache } =
+        await import("../../features/album/hooks/useYtMusicGapFill");
     invalidateYtMusicStatusCache();
 
     apiState.ytMatches = [{ videoId: "yt-101", title: "YT", duration: 222 }];
@@ -333,7 +326,7 @@ test("useYtMusicGapFill skips TIDAL-enriched tracks and enriches remaining match
     };
 
     const result = await settleHook(() =>
-        useYtMusicGapFill(album as any, "discovery")
+        useYtMusicGapFill(album as any, "discovery"),
     );
 
     assert.equal(apiState.ytPayloads.length, 1);
@@ -346,9 +339,8 @@ test("useYtMusicGapFill skips TIDAL-enriched tracks and enriches remaining match
 });
 
 test("useYtMusicGapFill logs and clears matches when batch match fails", async () => {
-    const { useYtMusicGapFill, invalidateYtMusicStatusCache } = await import(
-        "../../features/album/hooks/useYtMusicGapFill"
-    );
+    const { useYtMusicGapFill, invalidateYtMusicStatusCache } =
+        await import("../../features/album/hooks/useYtMusicGapFill");
     invalidateYtMusicStatusCache();
     apiState.rejectYtBatch = true;
 
@@ -359,26 +351,27 @@ test("useYtMusicGapFill logs and clears matches when batch match fails", async (
                 title: "Album YT Fail",
                 tracks: [{ id: "track-1", title: "Track", duration: 210 }],
             },
-            "library"
-        )
+            "library",
+        ),
     );
 
     assert.equal(result.matchCount, 0);
     assert.equal(result.isMatching, false);
     assert.equal(
         loggerState.errors.some((entry) =>
-            entry.includes("[YTMusic Gap-Fill] Batch match failed:")
+            entry.includes("[YTMusic Gap-Fill] Batch match failed:"),
         ),
-        true
+        true,
     );
 });
 
 test("useTidalTopTracks enriches only unowned top tracks", async () => {
-    const { useTidalTopTracks } = await import(
-        "../../features/artist/hooks/useTidalTopTracks"
-    );
+    const { useTidalTopTracks } =
+        await import("../../features/artist/hooks/useTidalTopTracks");
 
-    apiState.tidalMatches = [{ id: 777, title: "Matched", artist: "A", duration: 260 }];
+    apiState.tidalMatches = [
+        { id: 777, title: "Matched", artist: "A", duration: 260 },
+    ];
 
     const artist = {
         id: "artist-top-1",
@@ -411,11 +404,12 @@ test("useTidalTopTracks enriches only unowned top tracks", async () => {
 });
 
 test("useYtMusicTopTracks preserves TIDAL tracks and enriches unowned non-tidal tracks", async () => {
-    const { useYtMusicTopTracks } = await import(
-        "../../features/artist/hooks/useYtMusicTopTracks"
-    );
+    const { useYtMusicTopTracks } =
+        await import("../../features/artist/hooks/useYtMusicTopTracks");
 
-    apiState.ytMatches = [{ videoId: "yt-artist-2", title: "YT", duration: 233 }];
+    apiState.ytMatches = [
+        { videoId: "yt-artist-2", title: "YT", duration: 233 },
+    ];
 
     const artist = {
         id: "artist-top-2",
@@ -456,12 +450,19 @@ test("useYtMusicTopTracks preserves TIDAL tracks and enriches unowned non-tidal 
 });
 
 test("useDiscoverProviderGapFill marks tracks local when neither provider is available", async () => {
-    const { useDiscoverProviderGapFill } = await import(
-        "../../features/discover/hooks/useDiscoverProviderGapFill"
-    );
+    const { useDiscoverProviderGapFill } =
+        await import("../../features/discover/hooks/useDiscoverProviderGapFill");
 
-    apiState.tidalStatus = { enabled: true, available: false, authenticated: false };
-    apiState.ytStatus = { enabled: true, available: false, authenticated: false };
+    apiState.tidalStatus = {
+        enabled: true,
+        available: false,
+        authenticated: false,
+    };
+    apiState.ytStatus = {
+        enabled: true,
+        available: false,
+        authenticated: false,
+    };
 
     const tracks = [
         {
@@ -483,7 +484,9 @@ test("useDiscoverProviderGapFill marks tracks local when neither provider is ava
         },
     ];
 
-    const result = await settleHook(() => useDiscoverProviderGapFill(tracks as any));
+    const result = await settleHook(() =>
+        useDiscoverProviderGapFill(tracks as any),
+    );
 
     assert.equal(result.isMatching, false);
     assert.equal(result.tracks[0].sourceType, "local");
@@ -494,11 +497,14 @@ test("useDiscoverProviderGapFill marks tracks local when neither provider is ava
 });
 
 test("useDiscoverProviderGapFill prioritizes TIDAL matches over YT and handles matching errors", async () => {
-    const { useDiscoverProviderGapFill } = await import(
-        "../../features/discover/hooks/useDiscoverProviderGapFill"
-    );
+    const { useDiscoverProviderGapFill } =
+        await import("../../features/discover/hooks/useDiscoverProviderGapFill");
 
-    apiState.tidalStatus = { enabled: true, available: true, authenticated: true };
+    apiState.tidalStatus = {
+        enabled: true,
+        available: true,
+        authenticated: true,
+    };
     apiState.ytStatus = { enabled: true, available: true, authenticated: true };
     apiState.tidalMatches = [{ id: 11 }, null];
     apiState.ytMatches = [{ videoId: "yt-11" }, { videoId: "yt-22" }];
@@ -548,7 +554,7 @@ test("useDiscoverProviderGapFill prioritizes TIDAL matches over YT and handles m
     ];
 
     const matched = await settleHook(() =>
-        useDiscoverProviderGapFill(matchedInput as any)
+        useDiscoverProviderGapFill(matchedInput as any),
     );
 
     // Local track stays local, unavailable tracks get gap-filled
@@ -584,14 +590,14 @@ test("useDiscoverProviderGapFill prioritizes TIDAL matches over YT and handles m
     ];
 
     const failed = await settleHook(() =>
-        useDiscoverProviderGapFill(failedInput as any)
+        useDiscoverProviderGapFill(failedInput as any),
     );
 
     assert.equal(failed.tracks[0].sourceType, undefined);
     assert.equal(
         loggerState.errors.some((entry) =>
-            entry.includes("[DiscoverGapFill] Provider matching failed:")
+            entry.includes("[DiscoverGapFill] Provider matching failed:"),
         ),
-        true
+        true,
     );
 });

@@ -6,7 +6,7 @@ type ModuleMocker = {
         options: {
             namedExports?: Record<string, unknown>;
             defaultExport?: unknown;
-        }
+        },
     ) => void;
 };
 
@@ -20,7 +20,7 @@ export const trackOverflowIcon = (props: Record<string, unknown>) =>
 
 export function installTrackOverflowHarness(
     moduleMocker: ModuleMocker,
-    options: TrackOverflowHarnessOptions
+    options: TrackOverflowHarnessOptions,
 ): void {
     moduleMocker.module("@/utils/cn", {
         namedExports: {
@@ -48,7 +48,7 @@ export function installTrackOverflowHarness(
                     ? React.createElement(
                           "div",
                           { "data-testid": "playlist-selector" },
-                          "PlaylistSelector"
+                          "PlaylistSelector",
                       )
                     : null,
         },

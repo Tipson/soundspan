@@ -31,7 +31,9 @@ export function SearchFilters({
                 onClick={() => onFilterChange("all")}
                 className={cn(
                     "px-4 py-2 text-sm font-bold rounded-full transition-all",
-                    filterTab === "all" ? "bg-white text-black" : "bg-[#232323] text-white hover:bg-[#2a2a2a]"
+                    filterTab === "all"
+                        ? "bg-white text-black"
+                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
                 )}
             >
                 All
@@ -43,7 +45,9 @@ export function SearchFilters({
                 onClick={() => onFilterChange("library")}
                 className={cn(
                     "px-4 py-2 text-sm font-bold rounded-full transition-all",
-                    filterTab === "library" ? "bg-white text-black" : "bg-[#232323] text-white hover:bg-[#2a2a2a]"
+                    filterTab === "library"
+                        ? "bg-white text-black"
+                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
                 )}
             >
                 My Library
@@ -55,7 +59,9 @@ export function SearchFilters({
                 onClick={() => onFilterChange("discover")}
                 className={cn(
                     "px-4 py-2 text-sm font-bold rounded-full transition-all",
-                    filterTab === "discover" ? "bg-white text-black" : "bg-[#232323] text-white hover:bg-[#2a2a2a]"
+                    filterTab === "discover"
+                        ? "bg-white text-black"
+                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
                 )}
             >
                 Discover
@@ -69,7 +75,7 @@ export function SearchFilters({
                     "px-4 py-2 text-sm font-bold rounded-full transition-all",
                     filterTab === "podcasts"
                         ? "bg-white text-black"
-                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]"
+                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
                 )}
             >
                 Podcasts
@@ -82,7 +88,9 @@ export function SearchFilters({
                     onClick={() => onFilterChange("soulseek")}
                     className={cn(
                         "px-4 py-2 text-sm font-bold rounded-full transition-all flex items-center gap-2",
-                        filterTab === "soulseek" ? "bg-brand text-black" : "bg-[#232323] text-white hover:bg-[#2a2a2a]"
+                        filterTab === "soulseek"
+                            ? "bg-brand text-black"
+                            : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
                     )}
                 >
                     <Download className="w-4 h-4" />

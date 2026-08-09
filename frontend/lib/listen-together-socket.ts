@@ -365,10 +365,9 @@ export class ListenTogetherSocket {
         };
 
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-            lastResult =
-                !LISTEN_TOGETHER_ALLOW_POLLING ?
-                    await this.runWebSocketRouteProbe()
-                :   await this.runPollingRouteProbe();
+            lastResult = !LISTEN_TOGETHER_ALLOW_POLLING
+                ? await this.runWebSocketRouteProbe()
+                : await this.runPollingRouteProbe();
 
             if (lastResult.ok || !this.shouldRetryProbe(lastResult)) {
                 return lastResult;
@@ -376,7 +375,7 @@ export class ListenTogetherSocket {
 
             if (attempt < maxAttempts) {
                 await new Promise((resolve) =>
-                    setTimeout(resolve, 250 * attempt)
+                    setTimeout(resolve, 250 * attempt),
                 );
             }
         }
@@ -415,10 +414,11 @@ export class ListenTogetherSocket {
             });
 
             const text = (await response.text()).trim();
-            const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+            const contentType =
+                response.headers.get("content-type")?.toLowerCase() ?? "";
             const sample = text.slice(0, 120);
             const isEnginePayload =
-                (text.includes("\"sid\"") && text.includes("\"upgrades\"")) ||
+                (text.includes('"sid"') && text.includes('"upgrades"')) ||
                 text.startsWith("0{") ||
                 text.includes(":0{");
 
@@ -435,7 +435,9 @@ export class ListenTogetherSocket {
                 return { ok: true };
             }
 
-            const isHtml = contentType.includes("text/html") || /^<!doctype html|^<html/i.test(text);
+            const isHtml =
+                contentType.includes("text/html") ||
+                /^<!doctype html|^<html/i.test(text);
             return {
                 ok: false,
                 reason: isHtml ? "frontend-route" : "unexpected-response",
@@ -460,12 +462,11 @@ export class ListenTogetherSocket {
                 return;
             }
 
-            const wsBaseUrl =
-                baseUrl.startsWith("https://") ?
-                    `wss://${baseUrl.slice("https://".length)}`
-                : baseUrl.startsWith("http://") ?
-                    `ws://${baseUrl.slice("http://".length)}`
-                : `wss://${baseUrl.replace(/^\/+/, "")}`;
+            const wsBaseUrl = baseUrl.startsWith("https://")
+                ? `wss://${baseUrl.slice("https://".length)}`
+                : baseUrl.startsWith("http://")
+                  ? `ws://${baseUrl.slice("http://".length)}`
+                  : `wss://${baseUrl.replace(/^\/+/, "")}`;
 
             const probeUrl = `${wsBaseUrl}/socket.io/listen-together/?EIO=4&transport=websocket&t=${Date.now().toString(36)}`;
             let settled = false;
@@ -497,8 +498,10 @@ export class ListenTogetherSocket {
             try {
                 ws = new WebSocket(probeUrl);
                 ws.onopen = () => settle({ ok: true });
-                ws.onerror = () => settle({ ok: false, reason: "network-error" });
-                ws.onclose = () => settle({ ok: false, reason: "network-error" });
+                ws.onerror = () =>
+                    settle({ ok: false, reason: "network-error" });
+                ws.onclose = () =>
+                    settle({ ok: false, reason: "network-error" });
             } catch {
                 settle({ ok: false, reason: "network-error" });
             }
@@ -550,37 +553,61 @@ export class ListenTogetherSocket {
     }
 
     seek(positionMs: number): Promise<void> {
-        return this.emit("playback", { action: "seek", positionMs }, TRANSIENT_CONFLICT_RETRY_POLICY);
+        return this.emit(
+            "playback",
+            { action: "seek", positionMs },
+            TRANSIENT_CONFLICT_RETRY_POLICY,
+        );
     }
 
     next(): Promise<void> {
-        return this.emit("playback", { action: "next" }, TRANSIENT_CONFLICT_RETRY_POLICY);
+        return this.emit(
+            "playback",
+            { action: "next" },
+            TRANSIENT_CONFLICT_RETRY_POLICY,
+        );
     }
 
     previous(): Promise<void> {
-        return this.emit("playback", { action: "previous" }, TRANSIENT_CONFLICT_RETRY_POLICY);
+        return this.emit(
+            "playback",
+            { action: "previous" },
+            TRANSIENT_CONFLICT_RETRY_POLICY,
+        );
     }
 
     setTrack(index: number): Promise<void> {
-        return this.emit("playback", { action: "set-track", index }, TRANSIENT_CONFLICT_RETRY_POLICY);
+        return this.emit(
+            "playback",
+            { action: "set-track", index },
+            TRANSIENT_CONFLICT_RETRY_POLICY,
+        );
     }
 
     async addToQueue(
-        tracks: string[] | QueueTrackInput[]
-    ): Promise<{ acceptedCount: number; skippedCount: number; truncated: boolean }> {
+        tracks: string[] | QueueTrackInput[],
+    ): Promise<{
+        acceptedCount: number;
+        skippedCount: number;
+        truncated: boolean;
+    }> {
         const response = await this.emitWithResponse(
             "queue",
-            this.buildQueuePayload("add", tracks)
+            this.buildQueuePayload("add", tracks),
         );
         return this.resolveQueueMutationResult(response, tracks.length);
     }
 
     async insertNext(
-        tracks: string[] | QueueTrackInput[]
-    ): Promise<{ acceptedCount: number; skippedCount: number; truncated: boolean }> {
+        tracks: string[] | QueueTrackInput[],
+    ): Promise<{
+        acceptedCount: number;
+        skippedCount: number;
+        truncated: boolean;
+    }> {
         const response = await this.emitWithResponse(
             "queue",
-            this.buildQueuePayload("insert-next", tracks)
+            this.buildQueuePayload("insert-next", tracks),
         );
         return this.resolveQueueMutationResult(response, tracks.length);
     }
@@ -605,7 +632,7 @@ export class ListenTogetherSocket {
         return this.emit(
             "track:playback-failed",
             { queueIndex },
-            TRANSIENT_CONFLICT_RETRY_POLICY
+            TRANSIENT_CONFLICT_RETRY_POLICY,
         );
     }
 
@@ -616,10 +643,13 @@ export class ListenTogetherSocket {
                 reject(new Error("Not connected"));
                 return;
             }
-            this.socket.emit("lt-ping", (res: { serverTime?: number; error?: string }) => {
-                if (res?.error) reject(new Error(res.error));
-                else resolve(res?.serverTime ?? Date.now());
-            });
+            this.socket.emit(
+                "lt-ping",
+                (res: { serverTime?: number; error?: string }) => {
+                    if (res?.error) reject(new Error(res.error));
+                    else resolve(res?.serverTime ?? Date.now());
+                },
+            );
         });
     }
 
@@ -630,7 +660,7 @@ export class ListenTogetherSocket {
     private async emit(
         event: string,
         data?: unknown,
-        retryPolicy?: EmitRetryPolicy
+        retryPolicy?: EmitRetryPolicy,
     ): Promise<void> {
         await this.emitWithResponse(event, data, retryPolicy);
     }
@@ -640,7 +670,7 @@ export class ListenTogetherSocket {
     >(
         event: string,
         data?: unknown,
-        retryPolicy?: EmitRetryPolicy
+        retryPolicy?: EmitRetryPolicy,
     ): Promise<TResponse> {
         let retries = 0;
 
@@ -658,13 +688,20 @@ export class ListenTogetherSocket {
                 throw this.createAckError(response);
             }
 
-            const waitMs = this.computeRetryDelayMs(retries, retryPolicy, response.retryAfterMs);
+            const waitMs = this.computeRetryDelayMs(
+                retries,
+                retryPolicy,
+                response.retryAfterMs,
+            );
             retries += 1;
             await this.delay(waitMs);
         }
     }
 
-    private emitOnce(event: string, data?: unknown): Promise<ListenTogetherAckResponse> {
+    private emitOnce(
+        event: string,
+        data?: unknown,
+    ): Promise<ListenTogetherAckResponse> {
         return new Promise((resolve, reject) => {
             if (!this.socket?.connected) {
                 reject(new Error("Not connected"));
@@ -685,8 +722,12 @@ export class ListenTogetherSocket {
 
     private buildQueuePayload(
         action: "add" | "insert-next",
-        tracks: string[] | QueueTrackInput[]
-    ): { action: "add" | "insert-next"; trackIds?: string[]; tracks?: QueueTrackInput[] } {
+        tracks: string[] | QueueTrackInput[],
+    ): {
+        action: "add" | "insert-next";
+        trackIds?: string[];
+        tracks?: QueueTrackInput[];
+    } {
         if (tracks.length === 0) {
             return { action, trackIds: [] };
         }
@@ -700,14 +741,16 @@ export class ListenTogetherSocket {
 
     private resolveQueueMutationResult(
         response: ListenTogetherAckResponse,
-        requestedCount: number
+        requestedCount: number,
     ): { acceptedCount: number; skippedCount: number; truncated: boolean } {
         const acceptedCount =
-            typeof response.acceptedCount === "number" && Number.isFinite(response.acceptedCount)
+            typeof response.acceptedCount === "number" &&
+            Number.isFinite(response.acceptedCount)
                 ? Math.max(0, Math.trunc(response.acceptedCount))
                 : requestedCount;
         const skippedCount =
-            typeof response.skippedCount === "number" && Number.isFinite(response.skippedCount)
+            typeof response.skippedCount === "number" &&
+            Number.isFinite(response.skippedCount)
                 ? Math.max(0, Math.trunc(response.skippedCount))
                 : Math.max(0, requestedCount - acceptedCount);
         return {
@@ -717,7 +760,9 @@ export class ListenTogetherSocket {
         };
     }
 
-    private isTransientConflictAck(response: ListenTogetherAckResponse): boolean {
+    private isTransientConflictAck(
+        response: ListenTogetherAckResponse,
+    ): boolean {
         return (
             response.code === "CONFLICT" &&
             response.transient === true &&
@@ -726,7 +771,9 @@ export class ListenTogetherSocket {
     }
 
     private createAckError(response: ListenTogetherAckResponse): Error {
-        const err = new Error(response.error || "Listen Together request failed");
+        const err = new Error(
+            response.error || "Listen Together request failed",
+        );
         const ackError = err as Error & {
             code?: string;
             transient?: boolean;
@@ -754,11 +801,11 @@ export class ListenTogetherSocket {
     private computeRetryDelayMs(
         retryAttempt: number,
         policy: EmitRetryPolicy,
-        retryAfterMs?: number
+        retryAfterMs?: number,
     ): number {
         const exponentialDelay = Math.min(
             policy.maxDelayMs,
-            policy.baseDelayMs * 2 ** retryAttempt
+            policy.baseDelayMs * 2 ** retryAttempt,
         );
         const serverHintDelay =
             typeof retryAfterMs === "number" &&
@@ -769,7 +816,7 @@ export class ListenTogetherSocket {
         const baselineDelay = Math.max(exponentialDelay, serverHintDelay);
         const jitterWindow = Math.max(
             1,
-            Math.floor(baselineDelay * policy.jitterFactor)
+            Math.floor(baselineDelay * policy.jitterFactor),
         );
         const jitter = Math.floor(Math.random() * (jitterWindow + 1));
 

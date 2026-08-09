@@ -110,9 +110,8 @@ beforeEach(() => {
 });
 
 test("desktop: renders via useAudioState and never calls the ticking clock hooks", async () => {
-    const { UniversalPlayer } = await import(
-        "../../components/player/UniversalPlayer"
-    );
+    const { UniversalPlayer } =
+        await import("../../components/player/UniversalPlayer");
 
     const html = renderToStaticMarkup(React.createElement(UniversalPlayer));
 
@@ -138,9 +137,8 @@ test("mobile overlay: drives playerMode + currentTrack from state, still no cloc
     stubState.playerMode = "overlay";
     stubState.currentTrack = { id: "track-1" };
 
-    const { UniversalPlayer } = await import(
-        "../../components/player/UniversalPlayer"
-    );
+    const { UniversalPlayer } =
+        await import("../../components/player/UniversalPlayer");
 
     const html = renderToStaticMarkup(React.createElement(UniversalPlayer));
 

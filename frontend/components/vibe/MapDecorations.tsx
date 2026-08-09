@@ -34,17 +34,28 @@ export interface MapDecorationsProps {
 type Travel = NonNullable<MapDecorationsProps["travel"]>;
 type PositionResolver = MapDecorationsProps["posOf"];
 
-function breadcrumbNode(viewport: Viewport, posOf: PositionResolver, travel: Travel): ReactNode {
+function breadcrumbNode(
+    viewport: Viewport,
+    posOf: PositionResolver,
+    travel: Travel,
+): ReactNode {
     const points = travel.breadcrumbIds.flatMap((id) => {
         const point = posOf(id);
         return point ? [worldToScreen(viewport, point)] : [];
     });
     if (points.length < 2) return null;
     return (
-        <polyline key="travel-breadcrumb" className="vibe-deco-in"
+        <polyline
+            key="travel-breadcrumb"
+            className="vibe-deco-in"
             points={points.map((point) => `${point.x},${point.y}`).join(" ")}
-            fill="none" stroke={EDGE_COLOR} strokeWidth={3} strokeOpacity={0.55}
-            strokeLinejoin="round" strokeLinecap="round" />
+            fill="none"
+            stroke={EDGE_COLOR}
+            strokeWidth={3}
+            strokeOpacity={0.55}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+        />
     );
 }
 
@@ -52,7 +63,7 @@ function travelEdgeNodes(
     viewport: Viewport,
     posOf: PositionResolver,
     travel: Travel,
-    quantiles: readonly number[] | null
+    quantiles: readonly number[] | null,
 ): ReactNode[] {
     const origin = posOf(travel.currentId);
     if (!origin) return [];
@@ -64,9 +75,17 @@ function travelEdgeNodes(
         const { percent } = calibratedMatch(neighbor.distance, quantiles);
         const { opacity, width } = matchEdgeStyle(percent);
         return [
-            <line key={`edge-${neighbor.id}`} className="vibe-deco-in"
-                x1={screenOrigin.x} y1={screenOrigin.y} x2={screen.x} y2={screen.y}
-                stroke={EDGE_COLOR} strokeWidth={width} strokeOpacity={opacity} />,
+            <line
+                key={`edge-${neighbor.id}`}
+                className="vibe-deco-in"
+                x1={screenOrigin.x}
+                y1={screenOrigin.y}
+                x2={screen.x}
+                y2={screen.y}
+                stroke={EDGE_COLOR}
+                strokeWidth={width}
+                strokeOpacity={opacity}
+            />,
         ];
     });
 }
@@ -75,7 +94,7 @@ function handleHaloClick(
     event: React.MouseEvent<SVGCircleElement>,
     neighbor: CompassCandidate,
     travel: Travel,
-    addIngredient?: (id: string) => void
+    addIngredient?: (id: string) => void,
 ): void {
     if (event.ctrlKey || event.metaKey) {
         addIngredient?.(neighbor.id);
@@ -91,19 +110,28 @@ function travelHaloNodes(
     posOf: PositionResolver,
     travel: Travel,
     pointerDown?: MapDecorationsProps["onHaloPointerDown"],
-    addIngredient?: (id: string) => void
+    addIngredient?: (id: string) => void,
 ): ReactNode[] {
     return travel.onMapNeighbors.flatMap((neighbor) => {
         const point = posOf(neighbor.id);
         if (!point) return [];
         const screen = worldToScreen(viewport, point);
         return [
-            <circle key={`halo-${neighbor.id}`} className="vibe-deco-in"
-                cx={screen.x} cy={screen.y} r={8} fill="transparent"
-                stroke={EDGE_COLOR} strokeWidth={2}
+            <circle
+                key={`halo-${neighbor.id}`}
+                className="vibe-deco-in"
+                cx={screen.x}
+                cy={screen.y}
+                r={8}
+                fill="transparent"
+                stroke={EDGE_COLOR}
+                strokeWidth={2}
                 style={{ pointerEvents: "auto", cursor: "pointer" }}
                 onPointerDown={pointerDown}
-                onClick={(event) => handleHaloClick(event, neighbor, travel, addIngredient)}>
+                onClick={(event) =>
+                    handleHaloClick(event, neighbor, travel, addIngredient)
+                }
+            >
                 <title>{neighbor.title}</title>
             </circle>,
         ];
@@ -113,17 +141,38 @@ function travelHaloNodes(
 function travelNodes(props: MapDecorationsProps): ReactNode[] {
     if (!props.travel) return [];
     const origin = props.posOf(props.travel.currentId);
-    const nodes: ReactNode[] = [breadcrumbNode(props.viewport, props.posOf, props.travel)];
-    nodes.push(...travelEdgeNodes(props.viewport, props.posOf, props.travel, props.quantiles ?? null));
-    nodes.push(...travelHaloNodes(
-        props.viewport, props.posOf, props.travel,
-        props.onHaloPointerDown, props.onHaloAddIngredient
-    ));
+    const nodes: ReactNode[] = [
+        breadcrumbNode(props.viewport, props.posOf, props.travel),
+    ];
+    nodes.push(
+        ...travelEdgeNodes(
+            props.viewport,
+            props.posOf,
+            props.travel,
+            props.quantiles ?? null,
+        ),
+    );
+    nodes.push(
+        ...travelHaloNodes(
+            props.viewport,
+            props.posOf,
+            props.travel,
+            props.onHaloPointerDown,
+            props.onHaloAddIngredient,
+        ),
+    );
     if (origin) {
         const screen = worldToScreen(props.viewport, origin);
         nodes.push(
-            <circle key="travel-origin" className="vibe-deco-in" cx={screen.x}
-                cy={screen.y} r={5} fill={EDGE_COLOR} fillOpacity={0.9} />
+            <circle
+                key="travel-origin"
+                className="vibe-deco-in"
+                cx={screen.x}
+                cy={screen.y}
+                r={5}
+                fill={EDGE_COLOR}
+                fillOpacity={0.9}
+            />,
         );
     }
     return nodes;
@@ -132,18 +181,28 @@ function travelNodes(props: MapDecorationsProps): ReactNode[] {
 function journeyNodes(props: MapDecorationsProps): ReactNode[] {
     if (!props.journey) return [];
     const onMap = props.journey.waypoints.filter((waypoint) => waypoint.onMap);
-    const points = [props.journey.fromId, ...onMap.map((waypoint) => waypoint.id)]
-        .flatMap((id) => {
-            const point = props.posOf(id);
-            return point ? [worldToScreen(props.viewport, point)] : [];
-        });
+    const points = [
+        props.journey.fromId,
+        ...onMap.map((waypoint) => waypoint.id),
+    ].flatMap((id) => {
+        const point = props.posOf(id);
+        return point ? [worldToScreen(props.viewport, point)] : [];
+    });
     const nodes: ReactNode[] = [];
     if (points.length >= 2) {
         nodes.push(
-            <polyline key="journey-line" className="vibe-deco-in"
-                points={points.map((point) => `${point.x},${point.y}`).join(" ")}
-                fill="none" stroke={ROUTE_COLOR} strokeWidth={1.75}
-                strokeOpacity={0.7} strokeLinejoin="round" />
+            <polyline
+                key="journey-line"
+                className="vibe-deco-in"
+                points={points
+                    .map((point) => `${point.x},${point.y}`)
+                    .join(" ")}
+                fill="none"
+                stroke={ROUTE_COLOR}
+                strokeWidth={1.75}
+                strokeOpacity={0.7}
+                strokeLinejoin="round"
+            />,
         );
     }
     for (const waypoint of onMap) {
@@ -152,11 +211,26 @@ function journeyNodes(props: MapDecorationsProps): ReactNode[] {
         const screen = worldToScreen(props.viewport, point);
         nodes.push(
             <Fragment key={`wp-${waypoint.id}-${waypoint.seq}`}>
-                <circle className="vibe-deco-in" cx={screen.x} cy={screen.y} r={9}
-                    fill="#1e1b4b" stroke={ROUTE_COLOR} strokeWidth={1.75} />
-                <text className="vibe-deco-in" x={screen.x} y={screen.y + 3}
-                    textAnchor="middle" fontSize={9} fill="#e0e7ff">{waypoint.seq}</text>
-            </Fragment>
+                <circle
+                    className="vibe-deco-in"
+                    cx={screen.x}
+                    cy={screen.y}
+                    r={9}
+                    fill="#1e1b4b"
+                    stroke={ROUTE_COLOR}
+                    strokeWidth={1.75}
+                />
+                <text
+                    className="vibe-deco-in"
+                    x={screen.x}
+                    y={screen.y + 3}
+                    textAnchor="middle"
+                    fontSize={9}
+                    fill="#e0e7ff"
+                >
+                    {waypoint.seq}
+                </text>
+            </Fragment>,
         );
     }
     return nodes;

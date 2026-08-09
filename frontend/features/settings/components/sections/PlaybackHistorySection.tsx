@@ -62,7 +62,9 @@ export function PlaybackHistorySection() {
         try {
             const result = await api.clearPlayHistory(selectedRange);
             setStatus("success");
-            setStatusMessage(`Cleared ${result.deletedCount.toLocaleString()} play events`);
+            setStatusMessage(
+                `Cleared ${result.deletedCount.toLocaleString()} play events`,
+            );
             setConfirmClear(false);
             await loadSummary();
         } catch (error: unknown) {
@@ -70,7 +72,7 @@ export function PlaybackHistorySection() {
             setStatusMessage(
                 error instanceof Error
                     ? error.message
-                    : "Failed to clear play history"
+                    : "Failed to clear play history",
             );
         } finally {
             setClearing(false);
@@ -87,8 +89,14 @@ export function PlaybackHistorySection() {
                 <div className="flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
                     <div className="text-xs text-yellow-100/90 space-y-1">
-                        <p>Clearing play history will reduce personalization accuracy until new listening data builds up.</p>
-                        <p>Affected areas: Recommended artists, discovery seeding, top tracks, and programmatic mixes.</p>
+                        <p>
+                            Clearing play history will reduce personalization
+                            accuracy until new listening data builds up.
+                        </p>
+                        <p>
+                            Affected areas: Recommended artists, discovery
+                            seeding, top tracks, and programmatic mixes.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -113,7 +121,9 @@ export function PlaybackHistorySection() {
                 <div className="flex flex-col items-end gap-2">
                     <SettingsSelect
                         value={selectedRange}
-                        onChange={(value) => setSelectedRange(value as HistoryRange)}
+                        onChange={(value) =>
+                            setSelectedRange(value as HistoryRange)
+                        }
                         options={HISTORY_RANGE_OPTIONS}
                         disabled={clearing}
                     />
@@ -138,9 +148,13 @@ export function PlaybackHistorySection() {
                         className="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-surface-highlight text-red-500 focus:ring-red-500/40"
                     />
                     <span>
-                        I understand this will affect personalization based on my listening history.
+                        I understand this will affect personalization based on
+                        my listening history.
                         {selectedRange === "all" && (
-                            <span className="text-red-300"> This clears all-time play history.</span>
+                            <span className="text-red-300">
+                                {" "}
+                                This clears all-time play history.
+                            </span>
                         )}
                     </span>
                 </label>

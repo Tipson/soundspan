@@ -25,7 +25,7 @@ function installImmediateTimerMock(): void {
     Math.random = () => 0;
     (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((
         callback: (...args: unknown[]) => void,
-        delay?: number
+        delay?: number,
     ) => {
         scheduledDelaysMs.push(Number(delay ?? 0));
         callback();
@@ -52,12 +52,12 @@ function createSocketWithAckSequence(sequence: AckResponse[]): {
         emit: (
             event: string,
             payloadOrAck: unknown,
-            maybeAck?: (response: AckResponse) => void
+            maybeAck?: (response: AckResponse) => void,
         ) => {
             const ack =
-                typeof payloadOrAck === "function" ?
-                    (payloadOrAck as (response: AckResponse) => void)
-                :   maybeAck;
+                typeof payloadOrAck === "function"
+                    ? (payloadOrAck as (response: AckResponse) => void)
+                    : maybeAck;
             const payload =
                 typeof payloadOrAck === "function" ? undefined : payloadOrAck;
 
@@ -105,9 +105,9 @@ test("seek retries transient conflicts with bounded backoff and succeeds", async
             (entry) =>
                 entry.event === "playback" &&
                 JSON.stringify(entry.payload) ===
-                    JSON.stringify({ action: "seek", positionMs: 1337 })
+                    JSON.stringify({ action: "seek", positionMs: 1337 }),
         ),
-        true
+        true,
     );
     assert.deepEqual(scheduledDelaysMs, [120, 120]);
 });
@@ -124,7 +124,7 @@ test("seek does not retry non-conflict errors", async () => {
 
     await assert.rejects(
         socketClient.seek(5000),
-        /Only host can control playback/
+        /Only host can control playback/,
     );
 
     assert.equal(emits.length, 1);
@@ -140,12 +140,12 @@ test("next/previous/setTrack emit playback actions and accept empty ack payloads
         emit: (
             event: string,
             payloadOrAck: unknown,
-            maybeAck?: (response: AckResponse) => void
+            maybeAck?: (response: AckResponse) => void,
         ) => {
             const ack =
-                typeof payloadOrAck === "function" ?
-                    (payloadOrAck as (response: AckResponse) => void)
-                :   maybeAck;
+                typeof payloadOrAck === "function"
+                    ? (payloadOrAck as (response: AckResponse) => void)
+                    : maybeAck;
             const payload =
                 typeof payloadOrAck === "function" ? undefined : payloadOrAck;
             emits.push({ event, payload });
@@ -215,10 +215,13 @@ test("reportReady exhausts retry budget and fails deterministically", async () =
 
     await assert.rejects(
         socketClient.reportReady(),
-        /Another group update is in progress. Please retry./
+        /Another group update is in progress. Please retry./,
     );
 
     assert.equal(emits.length, 4);
-    assert.equal(emits.every((entry) => entry.event === "ready"), true);
+    assert.equal(
+        emits.every((entry) => entry.event === "ready"),
+        true,
+    );
     assert.deepEqual(scheduledDelaysMs, [80, 120, 240]);
 });

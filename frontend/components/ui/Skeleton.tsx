@@ -12,7 +12,10 @@ interface SkeletonProps {
 export function Skeleton({ className }: SkeletonProps) {
     return (
         <div
-            className={cn("animate-pulse bg-surface-hover rounded-sm", className)}
+            className={cn(
+                "animate-pulse bg-surface-hover rounded-sm",
+                className,
+            )}
         />
     );
 }

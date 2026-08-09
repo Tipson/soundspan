@@ -9,14 +9,21 @@ import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 interface SoulseekCardProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (
+        service: string,
+    ) => Promise<{ success: boolean; version?: string; error?: string }>;
     isTesting: boolean;
 }
 
 /**
  * Renders the SoulseekCard component.
  */
-export function SoulseekCard({ settings, onUpdate, onTest, isTesting }: SoulseekCardProps) {
+export function SoulseekCard({
+    settings,
+    onUpdate,
+    onTest,
+    isTesting,
+}: SoulseekCardProps) {
     const [testStatus, setTestStatus] = useState<StatusType>("idle");
     const [testMessage, setTestMessage] = useState("");
 
@@ -33,15 +40,17 @@ export function SoulseekCard({ settings, onUpdate, onTest, isTesting }: Soulseek
         }
     };
 
-    const hasCredentials = settings.soulseekUsername && settings.soulseekPassword;
+    const hasCredentials =
+        settings.soulseekUsername && settings.soulseekPassword;
 
     const warningBanner = (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Soulseek is a peer-to-peer network. You are responsible for ensuring your use complies with
-                applicable copyright laws. Do not use this feature to download or distribute copyrighted material
-                without authorization.
+                Soulseek is a peer-to-peer network. You are responsible for
+                ensuring your use complies with applicable copyright laws. Do
+                not use this feature to download or distribute copyrighted
+                material without authorization.
             </p>
         </div>
     );
@@ -103,7 +112,9 @@ export function SoulseekCard({ settings, onUpdate, onTest, isTesting }: Soulseek
                             className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
-                            {testStatus === "loading" ? "Connecting..." : "Test Connection"}
+                            {testStatus === "loading"
+                                ? "Connecting..."
+                                : "Test Connection"}
                         </button>
                         <InlineStatus
                             status={testStatus}
@@ -112,7 +123,8 @@ export function SoulseekCard({ settings, onUpdate, onTest, isTesting }: Soulseek
                         />
                     </div>
                     <p className="text-xs text-white/40">
-                        Downloads will be saved to your Singles folder automatically
+                        Downloads will be saved to your Singles folder
+                        automatically
                     </p>
                 </div>
             </div>

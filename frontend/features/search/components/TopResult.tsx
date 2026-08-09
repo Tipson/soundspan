@@ -19,10 +19,10 @@ export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
     }
 
     const isLibrary = !!libraryArtist;
-    
+
     // Get the display name
     const name = libraryArtist?.name || discoveryArtist?.name || "";
-    
+
     // Get the artist ID for linking - prefer MBID for consistent URLs
     const artistId = isLibrary
         ? getArtistRouteParam({
@@ -35,12 +35,12 @@ export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
                   mbid: discoveryArtist?.mbid,
                   name: discoveryArtist?.name,
               },
-              { preferLibraryId: false }
+              { preferLibraryId: false },
           ) || encodeURIComponent(name);
 
     // Get the image URL
-    const imageUrl = isLibrary 
-        ? libraryArtist?.heroUrl 
+    const imageUrl = isLibrary
+        ? libraryArtist?.heroUrl
         : discoveryArtist?.image;
 
     return (

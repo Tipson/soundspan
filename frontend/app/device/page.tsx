@@ -5,22 +5,20 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useVisibilityGatedInterval } from "@/hooks/useVisibilityGatedInterval";
 import { api } from "@/lib/api";
-import {
-    BRAND_DEEP_LINK_SCHEME,
-} from "@/lib/brand";
+import { BRAND_DEEP_LINK_SCHEME } from "@/lib/brand";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { QRCodeSVG } from "qrcode.react";
 import { Card } from "@/components/ui/Card";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { 
-    Smartphone, 
-    RefreshCw, 
-    Check, 
-    Clock, 
-    Copy, 
+import {
+    Smartphone,
+    RefreshCw,
+    Check,
+    Clock,
+    Copy,
     Trash2,
-    AlertCircle 
+    AlertCircle,
 } from "lucide-react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
@@ -62,7 +60,9 @@ export default function DeviceLinkPage() {
     // Load linked devices
     const loadDevices = useCallback(async () => {
         try {
-            const response = await api.request<LinkedDevice[]>("/device-link/devices");
+            const response = await api.request<LinkedDevice[]>(
+                "/device-link/devices",
+            );
             setDevices(response);
         } catch (err) {
             sharedFrontendLogger.error("Failed to load devices:", err);
@@ -82,15 +82,20 @@ export default function DeviceLinkPage() {
         setIsGenerating(true);
         setError(null);
         setCodeUsed(false);
-        
+
         try {
-            const response = await api.request<DeviceLinkCode>("/device-link/generate", {
-                method: "POST",
-            });
+            const response = await api.request<DeviceLinkCode>(
+                "/device-link/generate",
+                {
+                    method: "POST",
+                },
+            );
             setLinkCode(response);
             setTimeRemaining(response.expiresIn);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to generate code");
+            setError(
+                err instanceof Error ? err.message : "Failed to generate code",
+            );
         } finally {
             setIsGenerating(false);
         }
@@ -118,9 +123,10 @@ export default function DeviceLinkPage() {
         if (!linkCode) return;
 
         try {
-            const status = await api.request<{ status: string; deviceName?: string }>(
-                `/device-link/status/${linkCode.code}`
-            );
+            const status = await api.request<{
+                status: string;
+                deviceName?: string;
+            }>(`/device-link/status/${linkCode.code}`);
 
             if (status.status === "used") {
                 setCodeUsed(true);
@@ -159,7 +165,8 @@ export default function DeviceLinkPage() {
     // Build QR code URL (contains code and server URL)
     const getQRValue = () => {
         if (!linkCode) return "";
-        const serverUrl = typeof window !== "undefined" ? window.location.origin : "";
+        const serverUrl =
+            typeof window !== "undefined" ? window.location.origin : "";
         return `${BRAND_DEEP_LINK_SCHEME}://link?code=${linkCode.code}&server=${encodeURIComponent(serverUrl)}`;
     };
 
@@ -175,7 +182,10 @@ export default function DeviceLinkPage() {
         <div className="min-h-screen relative pb-24">
             {/* Header gradient */}
             <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-0 bg-gradient-to-b from-ai/10 via-transparent to-transparent" style={{ height: "50vh" }} />
+                <div
+                    className="absolute inset-0 bg-gradient-to-b from-ai/10 via-transparent to-transparent"
+                    style={{ height: "50vh" }}
+                />
             </div>
 
             <div className="relative max-w-4xl mx-auto px-6 md:px-8 py-8">
@@ -185,10 +195,12 @@ export default function DeviceLinkPage() {
                         Link Device
                     </h1>
                     <p className="text-gray-400">
-                        Scan the QR code or enter the code in a compatible client to link your device
+                        Scan the QR code or enter the code in a compatible
+                        client to link your device
                     </p>
                     <p className="text-gray-400 text-sm mt-2">
-                        Mobile direction is PWA-first. For native mobile clients, use Subsonic-compatible apps.
+                        Mobile direction is PWA-first. For native mobile
+                        clients, use Subsonic-compatible apps.
                     </p>
                 </div>
 
@@ -210,7 +222,8 @@ export default function DeviceLinkPage() {
                         {!linkCode && !isGenerating && (
                             <div className="text-center py-8">
                                 <p className="text-gray-400 mb-4">
-                                    Generate a one-time code to link a compatible device
+                                    Generate a one-time code to link a
+                                    compatible device
                                 </p>
                                 <button
                                     onClick={generateCode}
@@ -238,7 +251,8 @@ export default function DeviceLinkPage() {
                                             Device Linked!
                                         </h3>
                                         <p className="text-gray-400 mb-4">
-                                            Your device has been successfully connected
+                                            Your device has been successfully
+                                            connected
                                         </p>
                                         <button
                                             onClick={generateCode}
@@ -304,7 +318,7 @@ export default function DeviceLinkPage() {
                                                         "p-2 rounded-lg transition-all",
                                                         copied
                                                             ? "bg-green-500/20 text-green-400"
-                                                            : "bg-white/10 hover:bg-white/20 text-gray-400"
+                                                            : "bg-white/10 hover:bg-white/20 text-gray-400",
                                                     )}
                                                     title="Copy code"
                                                 >
@@ -321,7 +335,8 @@ export default function DeviceLinkPage() {
                                         <div className="flex items-center justify-center gap-2 text-gray-400">
                                             <Clock className="w-4 h-4" />
                                             <span>
-                                                Expires in {formatTime(timeRemaining)}
+                                                Expires in{" "}
+                                                {formatTime(timeRemaining)}
                                             </span>
                                         </div>
                                     </>
@@ -362,12 +377,16 @@ export default function DeviceLinkPage() {
                                                 </p>
                                                 <p className="text-gray-400 text-sm">
                                                     Last used:{" "}
-                                                    {new Date(device.lastUsed).toLocaleDateString()}
+                                                    {new Date(
+                                                        device.lastUsed,
+                                                    ).toLocaleDateString()}
                                                 </p>
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => revokeDevice(device.id)}
+                                            onClick={() =>
+                                                revokeDevice(device.id)
+                                            }
                                             className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                                             title="Revoke device"
                                         >
@@ -390,25 +409,36 @@ export default function DeviceLinkPage() {
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 1
                             </span>
-                            <span>Open a compatible mobile client on your device</span>
+                            <span>
+                                Open a compatible mobile client on your device
+                            </span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 2
                             </span>
-                            <span>Tap &quot;Scan QR Code&quot; or &quot;Enter Code&quot; if that client supports this flow</span>
+                            <span>
+                                Tap &quot;Scan QR Code&quot; or &quot;Enter
+                                Code&quot; if that client supports this flow
+                            </span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 3
                             </span>
-                            <span>Scan the QR code above, or manually enter the 6-digit code</span>
+                            <span>
+                                Scan the QR code above, or manually enter the
+                                6-digit code
+                            </span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 4
                             </span>
-                            <span>Your device will be linked to your account after the client completes verification</span>
+                            <span>
+                                Your device will be linked to your account after
+                                the client completes verification
+                            </span>
                         </li>
                     </ol>
                 </Card>

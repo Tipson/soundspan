@@ -79,7 +79,8 @@ const SyncBadge = memo(function SyncBadge({ compact = false }: SyncBadgeProps) {
             }
         };
         document.addEventListener("mousedown", handleOutsideClick);
-        return () => document.removeEventListener("mousedown", handleOutsideClick);
+        return () =>
+            document.removeEventListener("mousedown", handleOutsideClick);
     }, [isOpen, isMobile]);
 
     useEffect(() => {
@@ -102,7 +103,7 @@ const SyncBadge = memo(function SyncBadge({ compact = false }: SyncBadgeProps) {
                 className={cn(
                     "inline-flex items-center gap-1 font-bold rounded transition-colors",
                     accentClass,
-                    "text-[9px] px-1 py-0.5 leading-none"
+                    "text-[9px] px-1 py-0.5 leading-none",
                 )}
                 title={`Listen Together — ${memberCount} listener${memberCount === 1 ? "" : "s"}`}
             >
@@ -132,7 +133,7 @@ const SyncBadge = memo(function SyncBadge({ compact = false }: SyncBadgeProps) {
                 className={cn(
                     "inline-flex items-center gap-1 font-bold rounded transition-colors cursor-pointer",
                     accentClass,
-                    "text-[10px] px-1.5 py-0.5"
+                    "text-[10px] px-1.5 py-0.5",
                 )}
             >
                 <Users className="w-3 h-3" />

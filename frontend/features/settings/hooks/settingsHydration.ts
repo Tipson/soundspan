@@ -7,7 +7,7 @@ export const SETTINGS_BACKGROUND_RETRY_COOLDOWN_MS = 15_000;
 export function shouldRetryFailedSettingsLoad(
     hasLoadError: boolean,
     lastAttemptAt: number,
-    now: number = Date.now()
+    now: number = Date.now(),
 ): boolean {
     if (!hasLoadError) return false;
     if (!Number.isFinite(lastAttemptAt) || lastAttemptAt <= 0) return true;
@@ -27,7 +27,7 @@ export interface SettingsPageLoadingInput {
  * are hydrated, preventing default-value flashes.
  */
 export function shouldShowSettingsPageLoading(
-    input: SettingsPageLoadingInput
+    input: SettingsPageLoadingInput,
 ): boolean {
     if (input.authLoading) return true;
     if (!input.isAuthenticated) return false;

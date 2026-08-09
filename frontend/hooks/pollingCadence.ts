@@ -19,7 +19,7 @@ export function resolvePollingEnabled(enabled?: boolean): boolean {
  */
 export function resolveAdminGatedPollingEnabled(
     enabled: boolean | undefined,
-    role: string | null | undefined
+    role: string | null | undefined,
 ): boolean {
     return resolvePollingEnabled(enabled) && role === "admin";
 }
@@ -29,7 +29,7 @@ export function resolveAdminGatedPollingEnabled(
  */
 export function resolveFixedPollingInterval(
     enabled: boolean,
-    intervalMs: number
+    intervalMs: number,
 ): number | false {
     return enabled ? intervalMs : false;
 }
@@ -48,7 +48,7 @@ export function resolvePollingJitter(maxJitterMs: number): number {
  */
 export function resolveVisibilityGatedPollingInterval(
     intervalMs: number | false,
-    isDocumentVisible: boolean
+    isDocumentVisible: boolean,
 ): number | false {
     return isDocumentVisible ? intervalMs : false;
 }
@@ -57,7 +57,7 @@ export function resolveVisibilityGatedPollingInterval(
  * Resolves adaptive polling intervals, switching between active/idle cadences.
  */
 export function resolveAdaptivePollingInterval(
-    options: AdaptivePollingIntervalOptions
+    options: AdaptivePollingIntervalOptions,
 ): number | false {
     if (!options.enabled) {
         return false;

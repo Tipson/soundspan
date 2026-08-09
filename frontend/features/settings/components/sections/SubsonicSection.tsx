@@ -111,9 +111,11 @@ export function SubsonicRows() {
                     </button>
                     {showTooltip && (
                         <span className="absolute left-0 top-full z-30 mt-1 w-72 rounded-md border border-white/15 bg-surface-overlay p-2 text-[11px] leading-relaxed text-gray-300 shadow-2xl">
-                            Using an app password is recommended so you do not share your main
-                            {BRAND_NAME} login with third-party clients. If a device is lost, you can
-                            rotate this password without changing your main account password.
+                            Using an app password is recommended so you do not
+                            share your main
+                            {BRAND_NAME} login with third-party clients. If a
+                            device is lost, you can rotate this password without
+                            changing your main account password.
                         </span>
                     )}
                 </span>

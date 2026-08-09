@@ -10,7 +10,11 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { getArtistHref } from "@/utils/artistRoute";
 
 // Lazy load MetadataEditor - modal component opened on user action
-const MetadataEditor = lazy(() => import("@/components/MetadataEditor").then(mod => ({ default: mod.MetadataEditor })));
+const MetadataEditor = lazy(() =>
+    import("@/components/MetadataEditor").then((mod) => ({
+        default: mod.MetadataEditor,
+    })),
+);
 
 interface AlbumHeroProps {
     album: Album;
@@ -139,9 +143,12 @@ export function AlbumHero({
                                             // Pass originals for reset comparison
                                             _originalTitle: album.title,
                                             _originalYear: album.year,
-                                            _originalGenres: album.genre ? [album.genre] : [],
+                                            _originalGenres: album.genre
+                                                ? [album.genre]
+                                                : [],
                                             _originalCoverUrl: album.coverUrl,
-                                            _hasUserOverrides: displayData.hasUserOverrides,
+                                            _hasUserOverrides:
+                                                displayData.hasUserOverrides,
                                         }}
                                         artistName={album.artist?.name}
                                         onSave={async () => {

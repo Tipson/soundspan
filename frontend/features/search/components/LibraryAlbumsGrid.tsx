@@ -12,12 +12,18 @@ interface LibraryAlbumsGridProps {
 /**
  * Renders the LibraryAlbumsGrid component.
  */
-export function LibraryAlbumsGrid({ albums, limit = 6 }: LibraryAlbumsGridProps) {
+export function LibraryAlbumsGrid({
+    albums,
+    limit = 6,
+}: LibraryAlbumsGridProps) {
     const visibleAlbums =
         typeof limit === "number" ? albums.slice(0, limit) : albums;
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-4" data-tv-section="search-results-albums">
+        <div
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-4"
+            data-tv-section="search-results-albums"
+        >
             {visibleAlbums.map((album, index) => (
                 <Link
                     key={album.id}
@@ -32,7 +38,7 @@ export function LibraryAlbumsGrid({ albums, limit = 6 }: LibraryAlbumsGridProps)
                                 <Image
                                     src={api.getCoverArtUrl(
                                         album.coverUrl || album.albumId,
-                                        200
+                                        200,
                                     )}
                                     alt={album.title}
                                     fill

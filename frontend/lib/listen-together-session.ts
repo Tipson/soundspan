@@ -6,7 +6,8 @@ import {
     enqueueLatestAsyncOperation,
 } from "./latest-async-operation";
 
-export const LISTEN_TOGETHER_SESSION_STORAGE_KEY = "soundspan_listen_together_session";
+export const LISTEN_TOGETHER_SESSION_STORAGE_KEY =
+    "soundspan_listen_together_session";
 export const LISTEN_TOGETHER_MEMBERSHIP_PENDING_STORAGE_KEY =
     "soundspan_listen_together_membership_pending";
 
@@ -113,7 +114,9 @@ function parseSessionSnapshot(
 export function getListenTogetherSessionSnapshot(): ListenTogetherSessionSnapshot | null {
     if (isWindowUnavailable()) return inMemorySessionSnapshot;
     try {
-        const raw = window.localStorage.getItem(LISTEN_TOGETHER_SESSION_STORAGE_KEY);
+        const raw = window.localStorage.getItem(
+            LISTEN_TOGETHER_SESSION_STORAGE_KEY,
+        );
         const parsed = parseSessionSnapshot(raw);
         if (parsed || raw === null) {
             inMemorySessionSnapshot = parsed;
@@ -130,7 +133,9 @@ export function getListenTogetherSessionSnapshot(): ListenTogetherSessionSnapsho
 /**
  * Executes setListenTogetherSessionSnapshot.
  */
-export function setListenTogetherSessionSnapshot(snapshot: ListenTogetherSessionSnapshot | null): void {
+export function setListenTogetherSessionSnapshot(
+    snapshot: ListenTogetherSessionSnapshot | null,
+): void {
     inMemorySessionSnapshot = snapshot;
     if (isWindowUnavailable()) return;
     try {
@@ -234,7 +239,9 @@ function isRetryableConflictError(
     );
 }
 
-function resolveConflictRetryDelayMs(error: ListenTogetherAckLikeError): number {
+function resolveConflictRetryDelayMs(
+    error: ListenTogetherAckLikeError,
+): number {
     if (
         typeof error.retryAfterMs === "number" &&
         Number.isFinite(error.retryAfterMs) &&
@@ -254,14 +261,16 @@ function enqueueHostTrackOperation(operation: QueuedHostTrackOperation): void {
             onError: async (error, failedOperation) => {
                 if (
                     isRetryableConflictError(error) &&
-                    failedOperation.generation === latestHostTrackOperationGeneration &&
+                    failedOperation.generation ===
+                        latestHostTrackOperationGeneration &&
                     failedOperation.conflictRetryCount <
                         HOST_TRACK_OPERATION_CONFLICT_RECOVERY_MAX_RETRIES
                 ) {
                     const retryOperation: QueuedHostTrackOperation = {
                         operation: failedOperation.operation,
                         generation: failedOperation.generation,
-                        conflictRetryCount: failedOperation.conflictRetryCount + 1,
+                        conflictRetryCount:
+                            failedOperation.conflictRetryCount + 1,
                     };
                     const retryDelayMs = resolveConflictRetryDelayMs(error);
                     setTimeout(() => {

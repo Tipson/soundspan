@@ -28,7 +28,7 @@ export const MOBILE_QUICK_LINKS: MobileQuickLinkItem[] = [
  * Executes hasMyHistoryLink.
  */
 export function hasMyHistoryLink(
-    links: ReadonlyArray<{ href: string }>
+    links: ReadonlyArray<{ href: string }>,
 ): boolean {
     return links.some((link) => link.href === "/my-history");
 }

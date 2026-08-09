@@ -8,14 +8,25 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
 import { useAuth } from "@/lib/auth-context";
 import { useAudioControls } from "@/lib/audio-context";
-import { Play, Music, Eye, EyeOff, Loader2, Heart, Download } from "lucide-react";
+import {
+    Play,
+    Music,
+    Eye,
+    EyeOff,
+    Loader2,
+    Heart,
+    Download,
+} from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { api } from "@/lib/api";
 import { cn } from "@/utils/cn";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CoverMosaic } from "@/components/ui/CoverMosaic";
-import { createMosaicCandidates, selectMosaicCovers } from "@/utils/mosaicCoverSelection";
+import {
+    createMosaicCandidates,
+    selectMosaicCovers,
+} from "@/utils/mosaicCoverSelection";
 import { useLikedPlaylistQuery } from "@/hooks/useQueries";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
@@ -58,8 +69,9 @@ function PlaylistMosaic({
             getId: (item) => item.id,
             getCoverUrl: (item) => item.track?.album?.coverArt,
         });
-        return selectMosaicCovers(candidates, { count: size })
-            .map((r) => api.getCoverArtUrl(r.coverUrl, 200));
+        return selectMosaicCovers(candidates, { count: size }).map((r) =>
+            api.getCoverArtUrl(r.coverUrl, 200),
+        );
     }, [items, size]);
 
     return (
@@ -69,10 +81,12 @@ function PlaylistMosaic({
             imageSizes="200px"
             showEmptyCellIcon
             emptyState={
-                <div className={cn(
-                    "w-full h-full flex items-center justify-center bg-gradient-to-br from-surface-highlight to-surface-elevated",
-                    greyed && "opacity-50"
-                )}>
+                <div
+                    className={cn(
+                        "w-full h-full flex items-center justify-center bg-gradient-to-br from-surface-highlight to-surface-elevated",
+                        greyed && "opacity-50",
+                    )}
+                >
                     <Music className="w-10 h-10 text-gray-400" />
                 </div>
             }
@@ -114,7 +128,7 @@ function PlaylistCard({
             <div
                 className={cn(
                     "group cursor-pointer p-3 rounded-md transition-colors hover:bg-white/5",
-                    isHiddenView && "opacity-60 hover:opacity-100"
+                    isHiddenView && "opacity-60 hover:opacity-100",
                 )}
                 data-tv-card
                 data-tv-card-index={index}
@@ -139,7 +153,7 @@ function PlaylistCard({
                                 playlist.isHidden
                                     ? "text-green-400"
                                     : "text-gray-400",
-                                isHiding && "opacity-50 cursor-not-allowed"
+                                isHiding && "opacity-50 cursor-not-allowed",
                             )}
                             title={
                                 playlist.isHidden
@@ -168,7 +182,7 @@ function PlaylistCard({
                             "absolute bottom-2 right-2 w-10 h-10 rounded-full flex items-center justify-center",
                             "shadow-lg shadow-black/40 transition-all duration-200",
                             "hover:scale-105 hover:brightness-110",
-                            "opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
+                            "opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0",
                         )}
                         title="Play playlist"
                     >
@@ -184,7 +198,7 @@ function PlaylistCard({
                 <h3
                     className={cn(
                         "text-sm font-semibold truncate",
-                        isHiddenView ? "text-gray-400" : "text-white"
+                        isHiddenView ? "text-gray-400" : "text-white",
                     )}
                 >
                     {playlist.name}
@@ -255,20 +269,34 @@ export default function PlaylistsPage() {
         try {
             const playlist = await api.getPlaylist(playlistId);
             if (playlist?.items && playlist.items.length > 0) {
-                const tracks = playlist.items.map((item: { track: { id: string; title: string; duration: number; album?: { id?: string; title?: string; coverArt?: string; artist?: { id?: string; name?: string } } } }) => ({
-                    id: item.track.id,
-                    title: item.track.title,
-                    artist: {
-                        name: item.track.album?.artist?.name || "Unknown",
-                        id: item.track.album?.artist?.id,
-                    },
-                    album: {
-                        title: item.track.album?.title || "Unknown",
-                        coverArt: item.track.album?.coverArt,
-                        id: item.track.album?.id,
-                    },
-                    duration: item.track.duration,
-                }));
+                const tracks = playlist.items.map(
+                    (item: {
+                        track: {
+                            id: string;
+                            title: string;
+                            duration: number;
+                            album?: {
+                                id?: string;
+                                title?: string;
+                                coverArt?: string;
+                                artist?: { id?: string; name?: string };
+                            };
+                        };
+                    }) => ({
+                        id: item.track.id,
+                        title: item.track.title,
+                        artist: {
+                            name: item.track.album?.artist?.name || "Unknown",
+                            id: item.track.album?.artist?.id,
+                        },
+                        album: {
+                            title: item.track.album?.title || "Unknown",
+                            coverArt: item.track.album?.coverArt,
+                            id: item.track.album?.id,
+                        },
+                        duration: item.track.duration,
+                    }),
+                );
                 playTracks(tracks, 0);
             }
         } catch (error) {
@@ -286,7 +314,10 @@ export default function PlaylistsPage() {
             // Invalidate and refetch playlists
             queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
         } catch (error) {
-            sharedFrontendLogger.error("Failed to toggle playlist visibility:", error);
+            sharedFrontendLogger.error(
+                "Failed to toggle playlist visibility:",
+                error,
+            );
         }
     };
 
@@ -343,12 +374,14 @@ export default function PlaylistsPage() {
 
                             {hiddenPlaylists.length > 0 && (
                                 <button
-                                    onClick={() => setShowHiddenTab(!showHiddenTab)}
+                                    onClick={() =>
+                                        setShowHiddenTab(!showHiddenTab)
+                                    }
                                     className={cn(
                                         "px-4 py-2 rounded-full text-sm font-medium transition-all",
                                         showHiddenTab
                                             ? "bg-white/10 text-white"
-                                            : "bg-transparent text-gray-400 hover:text-white hover:bg-white/5"
+                                            : "bg-transparent text-gray-400 hover:text-white hover:bg-white/5",
                                     )}
                                 >
                                     {showHiddenTab
@@ -367,13 +400,14 @@ export default function PlaylistsPage() {
                 {showHiddenTab && (
                     <div className="mx-2 mb-4 px-4 py-3 bg-white/5 rounded-lg">
                         <p className="text-sm text-gray-400">
-                            Hidden playlists won&apos;t appear in your library. Hover
-                            and click the eye icon to restore.
+                            Hidden playlists won&apos;t appear in your library.
+                            Hover and click the eye icon to restore.
                         </p>
                     </div>
                 )}
 
-                {displayedPlaylists.length > 0 || (!showHiddenTab && likedTotal > 0) ? (
+                {displayedPlaylists.length > 0 ||
+                (!showHiddenTab && likedTotal > 0) ? (
                     <div
                         data-tv-section="playlists"
                         className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2"
@@ -394,7 +428,8 @@ export default function PlaylistsPage() {
                                         My Liked
                                     </h3>
                                     <p className="text-xs text-gray-400 mt-0.5 truncate">
-                                        {likedTotal} {likedTotal === 1 ? "song" : "songs"}
+                                        {likedTotal}{" "}
+                                        {likedTotal === 1 ? "song" : "songs"}
                                     </p>
                                 </div>
                             </Link>
@@ -404,12 +439,16 @@ export default function PlaylistsPage() {
                                 <PlaylistCard
                                     key={playlist.id}
                                     playlist={playlist}
-                                    index={!showHiddenTab && likedTotal > 0 ? index + 1 : index}
+                                    index={
+                                        !showHiddenTab && likedTotal > 0
+                                            ? index + 1
+                                            : index
+                                    }
                                     onPlay={handlePlayPlaylist}
                                     onToggleHide={handleToggleHide}
                                     isHiddenView={showHiddenTab}
                                 />
-                            )
+                            ),
                         )}
                     </div>
                 ) : (

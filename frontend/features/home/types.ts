@@ -23,7 +23,7 @@ export interface ListenedItem {
     id: string;
     name: string;
     coverArt?: string;
-    type: 'artist' | 'podcast' | 'audiobook';
+    type: "artist" | "podcast" | "audiobook";
     progress?: number; // 0-100 percentage for podcasts/audiobooks
     author?: string; // For podcasts and audiobooks
 }

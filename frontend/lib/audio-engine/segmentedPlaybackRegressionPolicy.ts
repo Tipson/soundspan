@@ -141,7 +141,8 @@ export function resolveStartupGuardedRecoveryPositionSec(
 ): number {
     const trustedPositionSec = Math.max(0, input.trustedPositionSec || 0);
     const startupProgressThresholdSec = DEFAULT_STARTUP_PROGRESS_THRESHOLD_SEC;
-    const startupTrackMatches = input.startupStabilityTrackId === input.targetTrackId;
+    const startupTrackMatches =
+        input.startupStabilityTrackId === input.targetTrackId;
     const startupProgressObserved =
         startupTrackMatches && input.startupFirstProgressAtMs !== null;
 
@@ -266,14 +267,14 @@ export function resolveBufferingRecoveryAction(
 export function resolveHeartbeatGuardedRefreshDecision(
     input: HeartbeatGuardedRefreshDecisionInput,
 ): HeartbeatGuardedRefreshDecision {
-    const consecutiveFailureCount =
-        Number.isFinite(input.consecutiveFailureCount)
-            ? Math.max(0, Math.floor(input.consecutiveFailureCount))
-            : 0;
-    const failureThreshold =
-        Number.isFinite(input.failureThreshold)
-            ? Math.max(1, Math.floor(input.failureThreshold))
-            : 1;
+    const consecutiveFailureCount = Number.isFinite(
+        input.consecutiveFailureCount,
+    )
+        ? Math.max(0, Math.floor(input.consecutiveFailureCount))
+        : 0;
+    const failureThreshold = Number.isFinite(input.failureThreshold)
+        ? Math.max(1, Math.floor(input.failureThreshold))
+        : 1;
 
     if (consecutiveFailureCount < failureThreshold) {
         return {
@@ -323,12 +324,16 @@ export function isSeekWithinTolerance(
     requestedPositionSec: number,
     toleranceSec: number = DEFAULT_SEEK_TOLERANCE_SEC,
 ): boolean {
-    if (!Number.isFinite(actualPositionSec) || !Number.isFinite(requestedPositionSec)) {
+    if (
+        !Number.isFinite(actualPositionSec) ||
+        !Number.isFinite(requestedPositionSec)
+    ) {
         return false;
     }
 
     const normalizedTolerance = Math.max(0, toleranceSec);
     return (
-        Math.abs(actualPositionSec - requestedPositionSec) <= normalizedTolerance
+        Math.abs(actualPositionSec - requestedPositionSec) <=
+        normalizedTolerance
     );
 }

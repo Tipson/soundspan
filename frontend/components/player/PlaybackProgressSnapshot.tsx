@@ -17,29 +17,27 @@ interface PlaybackProgressSnapshotProps {
  * Keeps trusted playback snapshots current while isolating per-clock-tick
  * re-renders from the audio playback orchestrator body.
  */
-export const PlaybackProgressSnapshot = memo(
-    function PlaybackProgressSnapshot({
+export const PlaybackProgressSnapshot = memo(function PlaybackProgressSnapshot({
+    snapshotRef,
+    snapshotTrackIdRef,
+    currentTrackRef,
+    playbackType,
+}: PlaybackProgressSnapshotProps) {
+    const { currentTime } = usePlaybackProgress();
+
+    useEffect(() => {
+        snapshotRef.current = currentTime;
+        snapshotTrackIdRef.current =
+            playbackType === "track"
+                ? (currentTrackRef.current?.id ?? null)
+                : null;
+    }, [
+        currentTime,
+        playbackType,
         snapshotRef,
         snapshotTrackIdRef,
         currentTrackRef,
-        playbackType,
-    }: PlaybackProgressSnapshotProps) {
-        const { currentTime } = usePlaybackProgress();
+    ]);
 
-        useEffect(() => {
-            snapshotRef.current = currentTime;
-            snapshotTrackIdRef.current =
-                playbackType === "track"
-                    ? currentTrackRef.current?.id ?? null
-                    : null;
-        }, [
-            currentTime,
-            playbackType,
-            snapshotRef,
-            snapshotTrackIdRef,
-            currentTrackRef,
-        ]);
-
-        return null;
-    },
-);
+    return null;
+});

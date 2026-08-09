@@ -11,8 +11,9 @@ import type {
 } from "../../hooks/useDeviceAuthPolling";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 after(() => {
     try {
@@ -43,9 +44,12 @@ function session(deviceCode: string, expiresAtMs = 10_000): DeviceAuthSession {
 }
 
 async function mountHook(options: UseDeviceAuthPollingOptions) {
-    const { useDeviceAuthPolling } = await import("../../hooks/useDeviceAuthPolling");
+    const { useDeviceAuthPolling } =
+        await import("../../hooks/useDeviceAuthPolling");
     const { createRoot } = await import("react-dom/client");
-    const latestRef: { current: UseDeviceAuthPollingReturn | null } = { current: null };
+    const latestRef: { current: UseDeviceAuthPollingReturn | null } = {
+        current: null,
+    };
 
     function Probe() {
         latestRef.current = useDeviceAuthPolling(options);
@@ -87,7 +91,10 @@ async function advance(
 }
 
 test("start transitions through loading to polling and reports the session", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
+    t.mock.timers.enable({
+        apis: ["setTimeout", "setInterval", "Date"],
+        now: 0,
+    });
     const initiated = deferred<DeviceAuthSession>();
     const started: DeviceAuthSession[] = [];
     const harness = await mountHook({
@@ -114,7 +121,10 @@ test("start transitions through loading to polling and reports the session", asy
 });
 
 test("a successful poll stops all future polling and calls onSuccess", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
+    t.mock.timers.enable({
+        apis: ["setTimeout", "setInterval", "Date"],
+        now: 0,
+    });
     const polledCodes: string[] = [];
     let successCalls = 0;
     const harness = await mountHook({
@@ -140,7 +150,10 @@ test("a successful poll stops all future polling and calls onSuccess", async (t)
 });
 
 test("a re-entrant start cancels the first polling chain", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
+    t.mock.timers.enable({
+        apis: ["setTimeout", "setInterval", "Date"],
+        now: 0,
+    });
     const sessions = [session("first"), session("second")];
     const polledCodes: string[] = [];
     let initiationIndex = 0;
@@ -163,10 +176,16 @@ test("a re-entrant start cancels the first polling chain", async (t) => {
 });
 
 test("expiry stops polling and surfaces the configured message", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
+    t.mock.timers.enable({
+        apis: ["setTimeout", "setInterval", "Date"],
+        now: 0,
+    });
     let pollCalls = 0;
     const harness = await mountHook({
-        initiate: async () => ({ ...session("expiring", 2_000), pollIntervalMs: 5_000 }),
+        initiate: async () => ({
+            ...session("expiring", 2_000),
+            pollIntervalMs: 5_000,
+        }),
         poll: async () => {
             pollCalls += 1;
             return { status: "pending" };
@@ -186,7 +205,10 @@ test("expiry stops polling and surfaces the configured message", async (t) => {
 });
 
 test("unmount cancels polling without post-unmount React errors", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
+    t.mock.timers.enable({
+        apis: ["setTimeout", "setInterval", "Date"],
+        now: 0,
+    });
     const errors: unknown[][] = [];
     t.mock.method(console, "error", (...args: unknown[]) => errors.push(args));
     let pollCalls = 0;
@@ -207,7 +229,10 @@ test("unmount cancels polling without post-unmount React errors", async (t) => {
 });
 
 test("transient rejection retries, then an error outcome stops polling", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
+    t.mock.timers.enable({
+        apis: ["setTimeout", "setInterval", "Date"],
+        now: 0,
+    });
     const outcomes: Array<DeviceAuthPollOutcome | Error> = [
         new Error("temporary"),
         { status: "error", message: "Authorization denied" },

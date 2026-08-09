@@ -164,7 +164,7 @@ export function useAlbumActions() {
             await api.downloadAlbum(
                 album.artist?.name || "Unknown Artist",
                 album.title,
-                mbid
+                mbid,
             );
 
             // Update the loading toast to success
@@ -180,7 +180,7 @@ export function useAlbumActions() {
 
     const setAlbumPreference = async (
         album: Album | null,
-        signal: TrackPreferenceSignal
+        signal: TrackPreferenceSignal,
     ) => {
         if (!album) {
             toast.error("Album data not available");
@@ -194,9 +194,9 @@ export function useAlbumActions() {
                     .filter(
                         (trackId): trackId is string =>
                             typeof trackId === "string" &&
-                            trackId.trim().length > 0
-                    )
-            )
+                            trackId.trim().length > 0,
+                    ),
+            ),
         );
 
         if (trackIds.length === 0) {
@@ -211,30 +211,32 @@ export function useAlbumActions() {
             for (const trackId of trackIds) {
                 queryClient.setQueryData(
                     ["track-preference", trackId],
-                    buildOptimisticTrackPreferenceResponse(trackId, signal)
+                    buildOptimisticTrackPreferenceResponse(trackId, signal),
                 );
             }
 
             // Refresh the liked-playlist sidebar count
-            queryClient.invalidateQueries({ queryKey: ["library", "liked-playlist"] });
+            queryClient.invalidateQueries({
+                queryKey: ["library", "liked-playlist"],
+            });
 
             if (signal === "thumbs_up") {
                 toast.success(
-                    trackIds.length === 1 ?
-                        "Liked 1 track from this album"
-                    :   `Liked ${trackIds.length} tracks from this album`
+                    trackIds.length === 1
+                        ? "Liked 1 track from this album"
+                        : `Liked ${trackIds.length} tracks from this album`,
                 );
             } else if (signal === "thumbs_down") {
                 toast.success(
-                    trackIds.length === 1 ?
-                        "Disliked 1 track from this album"
-                    :   `Disliked ${trackIds.length} tracks from this album`
+                    trackIds.length === 1
+                        ? "Disliked 1 track from this album"
+                        : `Disliked ${trackIds.length} tracks from this album`,
                 );
             } else {
                 toast.success(
-                    trackIds.length === 1 ?
-                        "Cleared preference for 1 album track"
-                    :   `Cleared preferences for ${trackIds.length} album tracks`
+                    trackIds.length === 1
+                        ? "Cleared preference for 1 album track"
+                        : `Cleared preferences for ${trackIds.length} album tracks`,
                 );
             }
         } catch {
@@ -267,8 +269,11 @@ export function useAlbumLikedState(album: Album | null) {
         () =>
             (album?.tracks || [])
                 .map((t) => t.id)
-                .filter((id): id is string => typeof id === "string" && id.trim().length > 0),
-        [album?.tracks]
+                .filter(
+                    (id): id is string =>
+                        typeof id === "string" && id.trim().length > 0,
+                ),
+        [album?.tracks],
     );
 
     const prefQueries = useQueries({
@@ -283,7 +288,9 @@ export function useAlbumLikedState(album: Album | null) {
     const isAlbumLiked = useMemo(() => {
         if (trackIds.length === 0) return false;
         return prefQueries.every(
-            (q) => (q.data as TrackPreferenceResponse | undefined)?.signal === "thumbs_up"
+            (q) =>
+                (q.data as TrackPreferenceResponse | undefined)?.signal ===
+                "thumbs_up",
         );
     }, [trackIds.length, prefQueries]);
 

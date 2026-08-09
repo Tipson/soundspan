@@ -21,7 +21,12 @@ import { toast } from "sonner";
 import type { Track } from "@/lib/audio-state-context";
 import type { MapTrack } from "./types";
 import { mapTrackToTrack } from "./journeyTracks";
-import { vibeModeReducer, type ModeAction, type ModeState, type VibeMode } from "./vibeModeMachine";
+import {
+    vibeModeReducer,
+    type ModeAction,
+    type ModeState,
+    type VibeMode,
+} from "./vibeModeMachine";
 import { useTravelMode, type TravelView } from "./useTravelMode";
 import { useJourneyMode, type JourneyView } from "./useJourneyMode";
 import { useAlchemyMode, type AlchemyView } from "./useAlchemyMode";
@@ -47,7 +52,7 @@ export interface VibeControls {
     playTracks: (
         tracks: Track[],
         startIndex?: number,
-        isVibeQueue?: boolean
+        isVibeQueue?: boolean,
     ) => void;
     addToQueue: (track: Track, options?: { silent?: boolean }) => void;
 }
@@ -69,7 +74,7 @@ export interface UseVibeMode {
     mode: VibeMode;
     onDotClick: (
         id: string,
-        mods: { ctrlOrMeta: boolean; shift: boolean }
+        mods: { ctrlOrMeta: boolean; shift: boolean },
     ) => void;
     /** A click on clearly-empty canvas: dissolves travel; other modes ignore it. */
     onEmptyClick: () => void;
@@ -99,7 +104,7 @@ interface DotActionContext {
 function routeDotClick(
     id: string,
     mods: { ctrlOrMeta: boolean; shift: boolean },
-    context: DotActionContext
+    context: DotActionContext,
 ): void {
     const track = context.trackById.get(id);
     if (!track) return;
@@ -130,15 +135,24 @@ function routeDotClick(
     }
 }
 
-export function useVibeMode({ trackById, currentTrack, controls,
-    quantiles = null }: UseVibeModeArgs): UseVibeMode {
+export function useVibeMode({
+    trackById,
+    currentTrack,
+    controls,
+    quantiles = null,
+}: UseVibeModeArgs): UseVibeMode {
     const [state, dispatch] = useReducer(vibeModeReducer, INITIAL_STATE);
     const exitToExplore = useCallback(() => dispatch({ type: "RESET" }), []);
-    const titleOf = useCallback((id: string | null): string => {
-        if (!id) return "";
-        return trackById.get(id)?.title ??
-            (currentTrack?.id === id ? currentTrack.title : id);
-    }, [trackById, currentTrack]);
+    const titleOf = useCallback(
+        (id: string | null): string => {
+            if (!id) return "";
+            return (
+                trackById.get(id)?.title ??
+                (currentTrack?.id === id ? currentTrack.title : id)
+            );
+        },
+        [trackById, currentTrack],
+    );
     const travel = useTravelMode({
         state,
         dispatch,
@@ -148,22 +162,57 @@ export function useVibeMode({ trackById, currentTrack, controls,
         titleOf,
         exitToExplore,
     });
-    const journeyMode = useJourneyMode({ state, dispatch, trackById,
-        currentTrack, controls, quantiles, titleOf, exitToExplore });
+    const journeyMode = useJourneyMode({
+        state,
+        dispatch,
+        trackById,
+        currentTrack,
+        controls,
+        quantiles,
+        titleOf,
+        exitToExplore,
+    });
     const { alchemy, addIngredient, highlightIds } = useAlchemyMode({
-        state, dispatch, trackById, controls, quantiles, exitToExplore,
+        state,
+        dispatch,
+        trackById,
+        controls,
+        quantiles,
+        exitToExplore,
     });
     const inTravel = state.mode === "travel";
     const onEmptyClick = useCallback(() => {
         if (inTravel) dispatch({ type: "RESET" });
     }, [inTravel]);
-    const onDotClick = useCallback((id: string,
-        mods: { ctrlOrMeta: boolean; shift: boolean }) => routeDotClick(id, mods, {
-            state, trackById, controls, dispatch, addIngredient,
-            pickDestination: journeyMode.pickDestination,
-        }), [state, trackById, controls, addIngredient, journeyMode.pickDestination]);
-    return { mode: state.mode, onDotClick, onEmptyClick, exitToExplore,
+    const onDotClick = useCallback(
+        (id: string, mods: { ctrlOrMeta: boolean; shift: boolean }) =>
+            routeDotClick(id, mods, {
+                state,
+                trackById,
+                controls,
+                dispatch,
+                addIngredient,
+                pickDestination: journeyMode.pickDestination,
+            }),
+        [
+            state,
+            trackById,
+            controls,
+            addIngredient,
+            journeyMode.pickDestination,
+        ],
+    );
+    return {
+        mode: state.mode,
+        onDotClick,
+        onEmptyClick,
+        exitToExplore,
         canStartJourney: journeyMode.canStartJourney,
-        startJourney: journeyMode.startJourney, highlightIds, addIngredient,
-        travel, journey: journeyMode.journey, alchemy };
+        startJourney: journeyMode.startJourney,
+        highlightIds,
+        addIngredient,
+        travel,
+        journey: journeyMode.journey,
+        alchemy,
+    };
 }

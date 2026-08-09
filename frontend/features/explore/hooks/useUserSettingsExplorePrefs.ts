@@ -21,14 +21,19 @@ interface ExplorePrefs {
  * Once the settings have loaded, falls back to `true` (the DB default).
  */
 export function useUserSettingsExplorePrefs(): ExplorePrefs {
-    const { data, isFetched } = useQuery<{ showYtMusicExplore?: boolean; showTidalExplore?: boolean }>({
+    const { data, isFetched } = useQuery<{
+        showYtMusicExplore?: boolean;
+        showTidalExplore?: boolean;
+    }>({
         queryKey: ["user-settings"],
         queryFn: () => api.getSettings(),
         staleTime: 5 * 60 * 1000,
     });
 
     return {
-        showYtMusicExplore: isFetched ? (data?.showYtMusicExplore ?? true) : false,
+        showYtMusicExplore: isFetched
+            ? (data?.showYtMusicExplore ?? true)
+            : false,
         showTidalExplore: isFetched ? (data?.showTidalExplore ?? true) : false,
     };
 }

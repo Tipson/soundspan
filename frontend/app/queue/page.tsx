@@ -14,10 +14,7 @@ import {
     type DropPosition,
 } from "@/components/track/reorderDnd";
 import type { Track } from "@/lib/audio-state-context";
-import {
-    isEpisodeQueueItem,
-    type EpisodeQueueItem,
-} from "@/lib/queue-item";
+import { isEpisodeQueueItem, type EpisodeQueueItem } from "@/lib/queue-item";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { api } from "@/lib/api";
@@ -36,7 +33,10 @@ import {
     X,
     Save,
 } from "lucide-react";
-import { TrackOverflowMenu, TrackMenuButton } from "@/components/ui/TrackOverflowMenu";
+import {
+    TrackOverflowMenu,
+    TrackMenuButton,
+} from "@/components/ui/TrackOverflowMenu";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { formatTime } from "@/utils/formatTime";
@@ -51,7 +51,8 @@ export default function QueuePage() {
     const router = useRouter();
     const { isAuthenticated } = useAuth();
     const { queue, currentTrack, currentIndex } = useAudioState();
-    const { playQueueIndex, removeFromQueue, clearQueue, moveQueueItem } = useAudioControls();
+    const { playQueueIndex, removeFromQueue, clearQueue, moveQueueItem } =
+        useAudioControls();
     const { toast } = useToast();
     const listenTogether = useListenTogether();
     const { isInGroup, isHost, syncSetTrack } = listenTogether;
@@ -68,7 +69,11 @@ export default function QueuePage() {
         fallback?: "tidal" | "youtube" | "youtube-direct",
     ): "local" | "tidal" | "youtube" => {
         const resolved = trackAvailability.get(index)?.source;
-        if (resolved === "local" || resolved === "tidal" || resolved === "youtube") {
+        if (
+            resolved === "local" ||
+            resolved === "tidal" ||
+            resolved === "youtube"
+        ) {
             return resolved;
         }
         if (fallback === "tidal" || fallback === "youtube") {
@@ -82,7 +87,9 @@ export default function QueuePage() {
 
     const handleClearQueue = () => {
         clearQueue();
-        toast.success(isInGroup ? "Listen Together queue cleared" : "Queue cleared");
+        toast.success(
+            isInGroup ? "Listen Together queue cleared" : "Queue cleared",
+        );
     };
 
     const handleRemoveTrack = (index: number) => {
@@ -91,9 +98,13 @@ export default function QueuePage() {
     };
 
     const handlePlayFromQueue = (index: number) => {
-        const availability = isInGroup ? trackAvailability.get(index) : undefined;
+        const availability = isInGroup
+            ? trackAvailability.get(index)
+            : undefined;
         if (availability?.available === false) {
-            toast.info("Track unavailable for your account in this Listen Together session");
+            toast.info(
+                "Track unavailable for your account in this Listen Together session",
+            );
             return;
         }
         if (isInGroup) {
@@ -147,13 +158,13 @@ export default function QueuePage() {
                       e.dataTransfer.effectAllowed = "move";
                       e.dataTransfer.setData("text/plain", String(idx));
                       const row = (e.currentTarget as HTMLElement).closest(
-                          "[data-queue-dnd-row]"
+                          "[data-queue-dnd-row]",
                       );
                       if (row instanceof HTMLElement) {
                           e.dataTransfer.setDragImage(
                               row,
                               16,
-                              row.clientHeight / 2
+                              row.clientHeight / 2,
                           );
                       }
                   },
@@ -171,7 +182,7 @@ export default function QueuePage() {
                 idx,
                 position: resolveDropPosition(
                     e.clientY - rect.top,
-                    rect.height
+                    rect.height,
                 ),
             });
         },
@@ -187,13 +198,13 @@ export default function QueuePage() {
             const toIdx = resolveDropTargetIndex(
                 fromIdx,
                 idx,
-                resolveDropPosition(e.clientY - rect.top, rect.height)
+                resolveDropPosition(e.clientY - rect.top, rect.height),
             );
             clearQueueDragState();
             if (toIdx !== fromIdx) {
                 moveQueueItem(
                     currentIndex + 1 + fromIdx,
-                    currentIndex + 1 + toIdx
+                    currentIndex + 1 + toIdx,
                 );
             }
         },
@@ -205,16 +216,20 @@ export default function QueuePage() {
 
     // Podcast episodes cannot be saved to playlists; only track items are.
     const playlistTracks = queue.filter(
-        (item): item is Track => !isEpisodeQueueItem(item)
+        (item): item is Track => !isEpisodeQueueItem(item),
     );
 
     const handleSaveAsPlaylist = async () => {
-        const name = playlistName.trim() || `Queue — ${new Date().toLocaleDateString()}`;
+        const name =
+            playlistName.trim() || `Queue — ${new Date().toLocaleDateString()}`;
         setIsSaving(true);
         try {
             const playlist = await api.createPlaylist(name);
             for (const track of playlistTracks) {
-                await api.addTrackToPlaylist(playlist.id, toAddToPlaylistRef(track));
+                await api.addTrackToPlaylist(
+                    playlist.id,
+                    toAddToPlaylistRef(track),
+                );
             }
             toast.success(`Saved ${playlistTracks.length} tracks to "${name}"`);
             setShowSaveDialog(false);
@@ -296,13 +311,15 @@ export default function QueuePage() {
                             Now Playing
                         </h2>
                         <Card>
-                            <div className={`flex items-center gap-4 p-4 bg-surface-hover border-l-2 border-ai group ${isCurrentUnavailable ? "opacity-50" : ""}`}>
+                            <div
+                                className={`flex items-center gap-4 p-4 bg-surface-hover border-l-2 border-ai group ${isCurrentUnavailable ? "opacity-50" : ""}`}
+                            >
                                 <div className="relative flex-shrink-0 w-16 h-16">
                                     {currentTrack.album?.coverArt ? (
                                         <Image
                                             src={api.getCoverArtUrl(
                                                 currentTrack.album.coverArt,
-                                                100
+                                                100,
                                             )}
                                             alt={currentTrack.album.title}
                                             fill
@@ -333,10 +350,18 @@ export default function QueuePage() {
                                                 Unavailable
                                             </span>
                                         ) : null}
-                                        {isInGroup && resolveQueueSource(currentIndex, currentTrack.streamSource) === "tidal" ? (
+                                        {isInGroup &&
+                                        resolveQueueSource(
+                                            currentIndex,
+                                            currentTrack.streamSource,
+                                        ) === "tidal" ? (
                                             <TidalBadge />
                                         ) : null}
-                                        {isInGroup && resolveQueueSource(currentIndex, currentTrack.streamSource) === "youtube" ? (
+                                        {isInGroup &&
+                                        resolveQueueSource(
+                                            currentIndex,
+                                            currentTrack.streamSource,
+                                        ) === "youtube" ? (
                                             <YouTubeBadge />
                                         ) : null}
                                     </div>
@@ -353,7 +378,9 @@ export default function QueuePage() {
                                         mode="up-only"
                                         buttonSizeClassName="h-8 w-8"
                                         iconSizeClassName="h-4 w-4"
-                                        metadata={buildPreferenceMetadata(currentTrack)}
+                                        metadata={buildPreferenceMetadata(
+                                            currentTrack,
+                                        )}
                                     />
                                     <TrackOverflowMenu
                                         track={currentTrack}
@@ -419,8 +446,15 @@ export default function QueuePage() {
                             <Virtuoso
                                 totalCount={nextTracks.length}
                                 initialItemCount={nextTracks.length}
-                                computeItemKey={(idx) => `next-${nextTracks[idx]?.id ?? idx}-${idx}`}
-                                style={{ height: Math.min(nextTracks.length * 80, 600) }}
+                                computeItemKey={(idx) =>
+                                    `next-${nextTracks[idx]?.id ?? idx}-${idx}`
+                                }
+                                style={{
+                                    height: Math.min(
+                                        nextTracks.length * 80,
+                                        600,
+                                    ),
+                                }}
                                 itemContent={(idx) => {
                                     const item = nextTracks[idx];
                                     const queueIndex = currentIndex + 1 + idx;
@@ -430,14 +464,22 @@ export default function QueuePage() {
                                             onPlay={
                                                 isInGroup
                                                     ? undefined
-                                                    : () => handlePlayFromQueue(queueIndex)
+                                                    : () =>
+                                                          handlePlayFromQueue(
+                                                              queueIndex,
+                                                          )
                                             }
                                             onRemove={
                                                 isInGroup
                                                     ? undefined
-                                                    : () => handleRemoveTrack(queueIndex)
+                                                    : () =>
+                                                          handleRemoveTrack(
+                                                              queueIndex,
+                                                          )
                                             }
-                                            dragHandleProps={buildDragHandleProps(idx)}
+                                            dragHandleProps={buildDragHandleProps(
+                                                idx,
+                                            )}
                                         />
                                     ) : (
                                         <NextTrackRow
@@ -446,13 +488,19 @@ export default function QueuePage() {
                                             queueLength={queue.length}
                                             currentIndex={currentIndex}
                                             isInGroup={isInGroup}
-                                            resolveQueueSource={resolveQueueSource}
+                                            resolveQueueSource={
+                                                resolveQueueSource
+                                            }
                                             onMoveUp={handleMoveUp}
                                             onMoveDown={handleMoveDown}
                                             onPlay={handlePlayFromQueue}
                                             onRemove={handleRemoveTrack}
-                                            trackAvailability={trackAvailability}
-                                            dragHandleProps={buildDragHandleProps(idx)}
+                                            trackAvailability={
+                                                trackAvailability
+                                            }
+                                            dragHandleProps={buildDragHandleProps(
+                                                idx,
+                                            )}
                                         />
                                     );
                                     return (
@@ -468,7 +516,8 @@ export default function QueuePage() {
                                                 dragFromIdx !== idx && (
                                                     <div
                                                         className={`pointer-events-none absolute left-0 right-0 h-0.5 rounded bg-blue-400 z-10 ${
-                                                            dragOver.position === "before"
+                                                            dragOver.position ===
+                                                            "before"
                                                                 ? "top-0"
                                                                 : "bottom-0"
                                                         }`}
@@ -493,20 +542,36 @@ export default function QueuePage() {
                             <Virtuoso
                                 totalCount={previousTracks.length}
                                 initialItemCount={previousTracks.length}
-                                computeItemKey={(idx) => `prev-${previousTracks[idx]?.id ?? idx}-${idx}`}
-                                style={{ height: Math.min(previousTracks.length * 80, 600) }}
+                                computeItemKey={(idx) =>
+                                    `prev-${previousTracks[idx]?.id ?? idx}-${idx}`
+                                }
+                                style={{
+                                    height: Math.min(
+                                        previousTracks.length * 80,
+                                        600,
+                                    ),
+                                }}
                                 itemContent={(idx) => {
                                     const item = previousTracks[idx];
                                     if (isEpisodeQueueItem(item)) {
-                                        return <EpisodeQueueRow episode={item} played />;
+                                        return (
+                                            <EpisodeQueueRow
+                                                episode={item}
+                                                played
+                                            />
+                                        );
                                     }
                                     return (
                                         <PreviousTrackRow
                                             track={item}
                                             idx={idx}
                                             isInGroup={isInGroup}
-                                            resolveQueueSource={resolveQueueSource}
-                                            trackAvailability={trackAvailability}
+                                            resolveQueueSource={
+                                                resolveQueueSource
+                                            }
+                                            trackAvailability={
+                                                trackAvailability
+                                            }
                                         />
                                     );
                                 }}
@@ -538,8 +603,12 @@ export default function QueuePage() {
                             <input
                                 type="text"
                                 value={playlistName}
-                                onChange={(e) => setPlaylistName(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && handleSaveAsPlaylist()}
+                                onChange={(e) =>
+                                    setPlaylistName(e.target.value)
+                                }
+                                onKeyDown={(e) =>
+                                    e.key === "Enter" && handleSaveAsPlaylist()
+                                }
                                 placeholder={`Queue — ${new Date().toLocaleDateString()}`}
                                 className="w-full px-3 py-2 bg-surface-hover border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-brand/50"
                                 autoFocus
@@ -620,7 +689,9 @@ function EpisodeQueueRow({
                 <p className="text-sm text-gray-400 truncate">
                     {episode.podcastTitle}
                 </p>
-                <p className="text-[11px] text-gray-400 truncate">Podcast episode</p>
+                <p className="text-[11px] text-gray-400 truncate">
+                    Podcast episode
+                </p>
             </div>
             {(onPlay || onRemove) && (
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -672,7 +743,10 @@ function NextTrackRow({
     queueLength: number;
     currentIndex: number;
     isInGroup: boolean;
-    resolveQueueSource: (index: number, fallback?: "tidal" | "youtube" | "youtube-direct") => "local" | "tidal" | "youtube";
+    resolveQueueSource: (
+        index: number,
+        fallback?: "tidal" | "youtube" | "youtube-direct",
+    ) => "local" | "tidal" | "youtube";
     onMoveUp: (index: number) => void;
     onMoveDown: (index: number) => void;
     onPlay: (index: number) => void;
@@ -682,7 +756,9 @@ function NextTrackRow({
         draggable?: boolean;
     };
 }) {
-    const availability = isInGroup ? trackAvailability.get(queueIndex) : undefined;
+    const availability = isInGroup
+        ? trackAvailability.get(queueIndex)
+        : undefined;
     const isUnavailable = availability?.available === false;
     const resolvedSource = resolveQueueSource(queueIndex, track.streamSource);
 
@@ -720,18 +796,26 @@ function NextTrackRow({
                 <h3 className="text-sm font-medium text-white truncate">
                     {track.displayTitle ?? track.title}
                 </h3>
-                <p className="text-sm text-gray-400 truncate">{track.artist?.name}</p>
+                <p className="text-sm text-gray-400 truncate">
+                    {track.artist?.name}
+                </p>
                 <div className="mt-1 flex items-center gap-2">
                     {isUnavailable ? (
                         <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
                             Unavailable
                         </span>
                     ) : null}
-                    {isInGroup && resolvedSource === "tidal" ? <TidalBadge /> : null}
-                    {isInGroup && resolvedSource === "youtube" ? <YouTubeBadge /> : null}
+                    {isInGroup && resolvedSource === "tidal" ? (
+                        <TidalBadge />
+                    ) : null}
+                    {isInGroup && resolvedSource === "youtube" ? (
+                        <YouTubeBadge />
+                    ) : null}
                 </div>
                 {track.album?.title && (
-                    <p className="text-[11px] text-gray-400 truncate">{track.album.title}</p>
+                    <p className="text-[11px] text-gray-400 truncate">
+                        {track.album.title}
+                    </p>
                 )}
             </div>
             <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -810,7 +894,10 @@ function PreviousTrackRow({
     track: Track;
     idx: number;
     isInGroup: boolean;
-    resolveQueueSource: (index: number, fallback?: "tidal" | "youtube" | "youtube-direct") => "local" | "tidal" | "youtube";
+    resolveQueueSource: (
+        index: number,
+        fallback?: "tidal" | "youtube" | "youtube-direct",
+    ) => "local" | "tidal" | "youtube";
     trackAvailability: Map<number, AvailabilityItem>;
 }) {
     const availability = isInGroup ? trackAvailability.get(idx) : undefined;
@@ -838,19 +925,29 @@ function PreviousTrackRow({
                 )}
             </div>
             <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-white truncate">{track.title}</h3>
-                <p className="text-sm text-gray-400 truncate">{track.artist?.name}</p>
+                <h3 className="text-sm font-medium text-white truncate">
+                    {track.title}
+                </h3>
+                <p className="text-sm text-gray-400 truncate">
+                    {track.artist?.name}
+                </p>
                 <div className="mt-1 flex items-center gap-2">
                     {isUnavailable ? (
                         <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
                             Unavailable
                         </span>
                     ) : null}
-                    {isInGroup && resolvedSource === "tidal" ? <TidalBadge /> : null}
-                    {isInGroup && resolvedSource === "youtube" ? <YouTubeBadge /> : null}
+                    {isInGroup && resolvedSource === "tidal" ? (
+                        <TidalBadge />
+                    ) : null}
+                    {isInGroup && resolvedSource === "youtube" ? (
+                        <YouTubeBadge />
+                    ) : null}
                 </div>
                 {track.album?.title && (
-                    <p className="text-[11px] text-gray-400 truncate">{track.album.title}</p>
+                    <p className="text-[11px] text-gray-400 truncate">
+                        {track.album.title}
+                    </p>
                 )}
             </div>
             <div className="flex items-center gap-1">

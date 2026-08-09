@@ -33,7 +33,7 @@ export interface UseJobStatusReturn {
 export function useJobStatus(
     jobId: string | null,
     jobType: JobType,
-    options?: UseJobStatusOptions
+    options?: UseJobStatusOptions,
 ): UseJobStatusReturn {
     const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
     const [isPolling, setIsPolling] = useState(false);
@@ -69,7 +69,9 @@ export function useJobStatus(
             } else if (statusData.status === "failed") {
                 setIsPolling(false);
                 if (optionsRef.current?.onError) {
-                    const errorMsg = resolveJobFailureMessage(statusData.result);
+                    const errorMsg = resolveJobFailureMessage(
+                        statusData.result,
+                    );
                     optionsRef.current.onError(errorMsg);
                 }
             }
@@ -82,7 +84,11 @@ export function useJobStatus(
             });
             setIsPolling(false);
             if (optionsRef.current?.onError) {
-                optionsRef.current.onError(error instanceof Error ? error.message : "Failed to check job status");
+                optionsRef.current.onError(
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to check job status",
+                );
             }
         }
     }, [jobId, jobType]);

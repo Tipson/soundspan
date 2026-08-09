@@ -69,7 +69,9 @@ export function IntegrationCard({
 
                     {/* Title + status */}
                     <div>
-                        <div className="text-sm font-medium text-white">{title}</div>
+                        <div className="text-sm font-medium text-white">
+                            {title}
+                        </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
                             {statusIcon}
                             <span className="text-xs text-gray-400">
@@ -84,34 +86,32 @@ export function IntegrationCard({
                 {/* Action area */}
                 {headerAction
                     ? headerAction
-                    : !disabled && (connected ? onDisconnect : onConnect) && (
-                        <button
-                            onClick={connected ? onDisconnect : onConnect}
-                            disabled={isLoading}
-                            className={`
+                    : !disabled &&
+                      (connected ? onDisconnect : onConnect) && (
+                          <button
+                              onClick={connected ? onDisconnect : onConnect}
+                              disabled={isLoading}
+                              className={`
                                 px-4 py-1.5 text-sm font-medium rounded-full transition-all shrink-0
                                 ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
-                                ${connected
-                                    ? "bg-transparent border border-gray-600 text-white hover:border-white"
-                                    : "bg-white text-black hover:scale-105"
+                                ${
+                                    connected
+                                        ? "bg-transparent border border-gray-600 text-white hover:border-white"
+                                        : "bg-white text-black hover:scale-105"
                                 }
                             `}
-                        >
-                            {isLoading
-                                ? "..."
-                                : connected
-                                  ? disconnectLabel
-                                  : connectLabel}
-                        </button>
-                    )}
+                          >
+                              {isLoading
+                                  ? "..."
+                                  : connected
+                                    ? disconnectLabel
+                                    : connectLabel}
+                          </button>
+                      )}
             </div>
 
             {/* Warning banner */}
-            {warning && !disabled && (
-                <div className="px-4 pb-2">
-                    {warning}
-                </div>
-            )}
+            {warning && !disabled && <div className="px-4 pb-2">{warning}</div>}
 
             {/* Collapsible body */}
             <div
@@ -122,9 +122,7 @@ export function IntegrationCard({
             >
                 <div className="overflow-hidden min-h-0">
                     {children && (
-                        <div className="px-4 pb-4 pt-1">
-                            {children}
-                        </div>
+                        <div className="px-4 pb-4 pt-1">{children}</div>
                     )}
                 </div>
             </div>

@@ -5,8 +5,16 @@ import { DiscoverTrack } from "../types";
 import { api } from "@/lib/api";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
-import { TrackList as SharedTrackList, TrackListHeader } from "@/components/track";
-import type { TrackRowItem, TrackRowSlots, OverflowConfig, RowState } from "@/components/track";
+import {
+    TrackList as SharedTrackList,
+    TrackListHeader,
+} from "@/components/track";
+import type {
+    TrackRowItem,
+    TrackRowSlots,
+    OverflowConfig,
+    RowState,
+} from "@/components/track";
 import type { ReactNode } from "react";
 
 const tierColors: Record<string, string> = {
@@ -55,10 +63,12 @@ function getSourceBadge(
     if (!track.available) {
         if (isMatching) {
             label = "LOADING";
-            badgeClassName = "bg-gray-500/20 text-gray-300 border border-gray-400/30 animate-pulse";
+            badgeClassName =
+                "bg-gray-500/20 text-gray-300 border border-gray-400/30 animate-pulse";
         } else {
             label = "PREVIEW";
-            badgeClassName = "bg-blue-500/20 text-blue-400 border border-blue-500/30";
+            badgeClassName =
+                "bg-blue-500/20 text-blue-400 border border-blue-500/30";
         }
     } else {
         label = "Local";
@@ -66,7 +76,13 @@ function getSourceBadge(
     }
 
     return (
-        <span className={cn("shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded", badgeClassName, extraClassName)}>
+        <span
+            className={cn(
+                "shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded",
+                badgeClassName,
+                extraClassName,
+            )}
+        >
             {label}
         </span>
     );
@@ -78,9 +94,10 @@ function toRowItem(track: DiscoverTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
-        coverArtUrl: (track.coverUrl || track.albumId)
-            ? api.getCoverArtUrl(track.coverUrl || track.albumId, 80)
-            : null,
+        coverArtUrl:
+            track.coverUrl || track.albumId
+                ? api.getCoverArtUrl(track.coverUrl || track.albumId, 80)
+                : null,
     };
 }
 
@@ -109,7 +126,11 @@ export function TrackList({
     );
 
     const rowSlots = useCallback(
-        (track: DiscoverTrack, _index: number, _state: RowState): TrackRowSlots => {
+        (
+            track: DiscoverTrack,
+            _index: number,
+            _state: RowState,
+        ): TrackRowSlots => {
             const sourceBadge = getSourceBadge(track, isMatching);
             return {
                 artistContent: (
@@ -124,9 +145,7 @@ export function TrackList({
                     </p>
                 ),
                 subtitleExtra: (
-                    <div className="md:hidden mt-1">
-                        {sourceBadge}
-                    </div>
+                    <div className="md:hidden mt-1">{sourceBadge}</div>
                 ),
                 middleColumns: (
                     <>
@@ -159,7 +178,11 @@ export function TrackList({
                 id: track.id,
                 title: track.title,
                 artist: { name: track.artist, id: track.artistId ?? undefined },
-                album: { title: track.album, id: track.albumId, coverArt: track.coverUrl ?? track.albumId ?? undefined },
+                album: {
+                    title: track.album,
+                    id: track.albumId,
+                    coverArt: track.coverUrl ?? track.albumId ?? undefined,
+                },
                 duration: track.duration,
                 streamSource: track.streamSource,
             },

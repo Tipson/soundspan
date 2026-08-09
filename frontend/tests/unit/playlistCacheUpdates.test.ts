@@ -20,7 +20,7 @@ test("removes the item matching by playlist item id", () => {
     const next = removePlaylistItemFromCache(cache(), "item-2");
     assert.deepEqual(
         next?.items.map((i) => i.id),
-        ["item-1", "item-3", "item-4"]
+        ["item-1", "item-3", "item-4"],
     );
 });
 
@@ -28,7 +28,7 @@ test("falls back to removing the FIRST item matching by track id (mirrors backen
     const next = removePlaylistItemFromCache(cache(), "track-b");
     assert.deepEqual(
         next?.items.map((i) => i.id),
-        ["item-1", "item-3", "item-4"]
+        ["item-1", "item-3", "item-4"],
     );
 });
 
@@ -42,7 +42,7 @@ test("prefers an item-id match over a track-id match", () => {
     const next = removePlaylistItemFromCache(data, "track-x");
     assert.deepEqual(
         next?.items.map((i) => i.id),
-        ["item-9"]
+        ["item-9"],
     );
 });
 
@@ -74,7 +74,7 @@ test("moves an item up by one position", () => {
     const next = movePlaylistItemToIndexInCache(cache(), "item-3", 1);
     assert.deepEqual(
         next?.items.map((i) => i.id),
-        ["item-1", "item-3", "item-2", "item-4"]
+        ["item-1", "item-3", "item-2", "item-4"],
     );
 });
 
@@ -82,7 +82,7 @@ test("moves an item down by one position", () => {
     const next = movePlaylistItemToIndexInCache(cache(), "item-1", 1);
     assert.deepEqual(
         next?.items.map((i) => i.id),
-        ["item-2", "item-1", "item-3", "item-4"]
+        ["item-2", "item-1", "item-3", "item-4"],
     );
 });
 
@@ -90,7 +90,7 @@ test("moves an item to the top", () => {
     const next = movePlaylistItemToIndexInCache(cache(), "item-4", 0);
     assert.deepEqual(
         next?.items.map((i) => i.id),
-        ["item-4", "item-1", "item-2", "item-3"]
+        ["item-4", "item-1", "item-2", "item-3"],
     );
 });
 
@@ -98,7 +98,7 @@ test("clamps a past-the-end target to the last position", () => {
     const next = movePlaylistItemToIndexInCache(cache(), "item-1", 99);
     assert.deepEqual(
         next?.items.map((i) => i.id),
-        ["item-2", "item-3", "item-4", "item-1"]
+        ["item-2", "item-3", "item-4", "item-1"],
     );
 });
 
@@ -115,5 +115,8 @@ test("returns the same reference for an unknown item id", () => {
 test("returns the input unchanged when the payload has no items array", () => {
     const payload = { id: "pl-1" } as { id: string; items?: { id: string }[] };
     assert.equal(movePlaylistItemToIndexInCache(payload, "item-1", 0), payload);
-    assert.equal(movePlaylistItemToIndexInCache(undefined, "item-1", 0), undefined);
+    assert.equal(
+        movePlaylistItemToIndexInCache(undefined, "item-1", 0),
+        undefined,
+    );
 });

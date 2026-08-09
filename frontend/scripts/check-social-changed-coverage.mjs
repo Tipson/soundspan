@@ -26,7 +26,7 @@ function run(command, args, cwd) {
     const output = `${result.stdout || ""}${result.stderr || ""}`;
     if (result.status !== 0) {
         const error = new Error(
-            `Command failed: ${command} ${args.join(" ")} (status ${result.status})`
+            `Command failed: ${command} ${args.join(" ")} (status ${result.status})`,
         );
         error.output = output;
         throw error;
@@ -48,9 +48,9 @@ function parseUncoveredRanges(uncoveredSpec) {
                 const [startText, endText] = token.split("-");
                 const start = Number.parseInt(startText, 10);
                 const end = Number.parseInt(endText, 10);
-                return Number.isNaN(start) || Number.isNaN(end) ?
-                        null
-                    :   { start, end };
+                return Number.isNaN(start) || Number.isNaN(end)
+                    ? null
+                    : { start, end };
             }
 
             const line = Number.parseInt(token, 10);
@@ -87,7 +87,7 @@ function parseCoverageRows(coverageOutput) {
     for (const line of coverageOutput.split(/\r?\n/)) {
         const cleanLine = line.replace(/\u001B\[[0-9;]*m/g, "");
         const match = cleanLine.match(
-            /^\s*(?:ℹ)?\s+(.+?)\s+\|\s+([\d.]+)\s+\|\s+([\d.]+)\s+\|\s+([\d.]+)\s+\|\s*(.*)$/
+            /^\s*(?:ℹ)?\s+(.+?)\s+\|\s+([\d.]+)\s+\|\s+([\d.]+)\s+\|\s+([\d.]+)\s+\|\s*(.*)$/,
         );
         if (!match) {
             continue;
@@ -102,7 +102,9 @@ function parseCoverageRows(coverageOutput) {
 }
 
 function intersectsUncovered(line, uncoveredRanges) {
-    return uncoveredRanges.some((range) => line >= range.start && line <= range.end);
+    return uncoveredRanges.some(
+        (range) => line >= range.start && line <= range.end,
+    );
 }
 
 const frontendRoot = process.cwd();
@@ -120,7 +122,7 @@ async function readStdin() {
 const coverageOutput = await readStdin();
 if (!coverageOutput.trim()) {
     process.stderr.write(
-        "No coverage input received. Pipe `npm run test:component:coverage` into this script.\n"
+        "No coverage input received. Pipe `npm run test:component:coverage` into this script.\n",
     );
     process.exit(1);
 }
@@ -136,7 +138,7 @@ for (const targetFile of TARGET_FILES) {
 
     if (!uncoveredRanges) {
         process.stderr.write(
-            `Missing coverage row for ${targetFile}; unable to verify changed-line coverage.\n`
+            `Missing coverage row for ${targetFile}; unable to verify changed-line coverage.\n`,
         );
         failed = true;
         continue;
@@ -145,15 +147,17 @@ for (const targetFile of TARGET_FILES) {
     const committedDiff = run(
         "git",
         ["diff", "--unified=0", `${BASE_REF}..HEAD`, "--", targetFile],
-        frontendRoot
+        frontendRoot,
     );
     const workingTreeDiff = run(
         "git",
         ["diff", "--unified=0", "HEAD", "--", targetFile],
-        frontendRoot
+        frontendRoot,
     );
 
-    const changedLines = extractChangedLines(`${committedDiff}\n${workingTreeDiff}`);
+    const changedLines = extractChangedLines(
+        `${committedDiff}\n${workingTreeDiff}`,
+    );
     if (changedLines.size === 0) {
         process.stdout.write(`[coverage] ${targetFile}: no changed lines\n`);
         continue;
@@ -166,11 +170,11 @@ for (const targetFile of TARGET_FILES) {
     if (uncoveredChangedLines.length > 0) {
         failed = true;
         process.stderr.write(
-            `[coverage] ${targetFile}: changed lines not covered -> ${uncoveredChangedLines.join(", ")}\n`
+            `[coverage] ${targetFile}: changed lines not covered -> ${uncoveredChangedLines.join(", ")}\n`,
         );
     } else {
         process.stdout.write(
-            `[coverage] ${targetFile}: ${changedLines.size} changed lines covered\n`
+            `[coverage] ${targetFile}: ${changedLines.size} changed lines covered\n`,
         );
     }
 }

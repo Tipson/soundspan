@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Lifecycle phase for a device-code authentication attempt. */
-export type DeviceAuthPhase = "idle" | "loading" | "polling" | "success" | "error";
+export type DeviceAuthPhase =
+    | "idle"
+    | "loading"
+    | "polling"
+    | "success"
+    | "error";
 
 /** Normalized device-code session returned by an authentication initiator. */
 export interface DeviceAuthSession {
@@ -128,17 +133,36 @@ export function useDeviceAuthPolling(
             optionsRef.current.onSessionStarted?.(nextSession);
         } catch (caught) {
             if (!mountedRef.current || generationRef.current !== runId) return;
-            const fallback = optionsRef.current.startErrorMessage ??
+            const fallback =
+                optionsRef.current.startErrorMessage ??
                 "Failed to start device authentication";
             setPhase("error");
             setError(errorMessage(caught, fallback));
         }
     }, [invalidate]);
 
-    usePolling({ phase, session, generationRef, timers, invalidate, optionsRef,
-        setPhase, setError, setTimeLeftSeconds });
-    useExpiry({ phase, session, generationRef, timers, invalidate,
-        optionsRef, setPhase, setError, setTimeLeftSeconds });
+    usePolling({
+        phase,
+        session,
+        generationRef,
+        timers,
+        invalidate,
+        optionsRef,
+        setPhase,
+        setError,
+        setTimeLeftSeconds,
+    });
+    useExpiry({
+        phase,
+        session,
+        generationRef,
+        timers,
+        invalidate,
+        optionsRef,
+        setPhase,
+        setError,
+        setTimeLeftSeconds,
+    });
 
     useEffect(() => {
         // Re-arm on every mount so Strict Mode's simulated unmount/remount
@@ -165,8 +189,17 @@ interface PollingEffectArgs {
     setTimeLeftSeconds: React.Dispatch<React.SetStateAction<number | null>>;
 }
 
-function usePolling({ phase, session, generationRef, timers, invalidate, optionsRef,
-    setPhase, setError, setTimeLeftSeconds }: PollingEffectArgs): void {
+function usePolling({
+    phase,
+    session,
+    generationRef,
+    timers,
+    invalidate,
+    optionsRef,
+    setPhase,
+    setError,
+    setTimeLeftSeconds,
+}: PollingEffectArgs): void {
     useEffect(() => {
         if (phase !== "polling" || !session) return;
         const runId = generationRef.current;
@@ -175,7 +208,9 @@ function usePolling({ phase, session, generationRef, timers, invalidate, options
         const schedule = () => {
             timers.schedulePoll(execute, delay);
         };
-        const finish = (outcome: Exclude<DeviceAuthPollOutcome, { status: "pending" }>) => {
+        const finish = (
+            outcome: Exclude<DeviceAuthPollOutcome, { status: "pending" }>,
+        ) => {
             invalidate();
             setTimeLeftSeconds(null);
             setPhase(outcome.status);
@@ -197,8 +232,17 @@ function usePolling({ phase, session, generationRef, timers, invalidate, options
         }
         schedule();
         return timers.clearPoll;
-    }, [phase, session, generationRef, timers, invalidate, optionsRef, setPhase,
-        setError, setTimeLeftSeconds]);
+    }, [
+        phase,
+        session,
+        generationRef,
+        timers,
+        invalidate,
+        optionsRef,
+        setPhase,
+        setError,
+        setTimeLeftSeconds,
+    ]);
 }
 
 interface ExpiryEffectArgs {
@@ -213,8 +257,17 @@ interface ExpiryEffectArgs {
     setTimeLeftSeconds: React.Dispatch<React.SetStateAction<number | null>>;
 }
 
-function useExpiry({ phase, session, generationRef, timers, invalidate, optionsRef,
-    setPhase, setError, setTimeLeftSeconds }: ExpiryEffectArgs): void {
+function useExpiry({
+    phase,
+    session,
+    generationRef,
+    timers,
+    invalidate,
+    optionsRef,
+    setPhase,
+    setError,
+    setTimeLeftSeconds,
+}: ExpiryEffectArgs): void {
     useEffect(() => {
         if (phase !== "polling" || !session) {
             setTimeLeftSeconds(null);
@@ -234,11 +287,22 @@ function useExpiry({ phase, session, generationRef, timers, invalidate, optionsR
             invalidate();
             setTimeLeftSeconds(null);
             setPhase("error");
-            setError(optionsRef.current.expiredMessage ?? "Device code expired");
+            setError(
+                optionsRef.current.expiredMessage ?? "Device code expired",
+            );
         };
         tick();
         timers.scheduleCountdown(tick);
         return timers.clearCountdown;
-    }, [phase, session, generationRef, timers, invalidate, optionsRef, setPhase,
-        setError, setTimeLeftSeconds]);
+    }, [
+        phase,
+        session,
+        generationRef,
+        timers,
+        invalidate,
+        optionsRef,
+        setPhase,
+        setError,
+        setTimeLeftSeconds,
+    ]);
 }

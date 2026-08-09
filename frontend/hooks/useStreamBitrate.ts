@@ -36,18 +36,21 @@ const CODEC_FRIENDLY_NAMES: Record<string, string> = {
     "MPEG 2 Layer 3": "MP3",
     "MPEG 2.5 Layer 3": "MP3",
     "MPEG 4/ISO/AVC": "AAC",
-    "Vorbis": "OGG",
-    "Opus": "Opus",
-    "ALAC": "ALAC",
-    "FLAC": "FLAC",
-    "PCM": "WAV",
-    "WMA": "WMA",
-    "DSD": "DSD",
+    Vorbis: "OGG",
+    Opus: "Opus",
+    ALAC: "ALAC",
+    FLAC: "FLAC",
+    PCM: "WAV",
+    WMA: "WMA",
+    DSD: "DSD",
 };
 
 // Shared across all hook instances so Mini/Full players do not duplicate requests.
 const ytInfoCache = new Map<string, { abr: number; acodec: string }>();
-const ytInfoInFlight = new Map<string, Promise<{ abr: number; acodec: string }>>();
+const ytInfoInFlight = new Map<
+    string,
+    Promise<{ abr: number; acodec: string }>
+>();
 const tidalInfoCache = new Map<number, TidalStreamQuality>();
 const tidalInfoInFlight = new Map<number, Promise<TidalStreamQuality>>();
 const localInfoCache = new Map<string, LocalTrackQuality>();
@@ -55,7 +58,9 @@ const localInfoInFlight = new Map<string, Promise<LocalTrackQuality>>();
 const localPlaybackInfoCache = new Map<string, LocalTrackQuality>();
 const localPlaybackInfoInFlight = new Map<string, Promise<LocalTrackQuality>>();
 
-function fetchYtStreamInfo(videoId: string): Promise<{ abr: number; acodec: string }> {
+function fetchYtStreamInfo(
+    videoId: string,
+): Promise<{ abr: number; acodec: string }> {
     const cached = ytInfoCache.get(videoId);
     if (cached) return Promise.resolve(cached);
 
@@ -157,7 +162,9 @@ export function friendlyCodecName(raw: string): string {
 export function formatSampleRateKHz(hz?: number | null): string | null {
     if (!hz || !Number.isFinite(hz) || hz <= 0) return null;
     const khz = hz / 1000;
-    const label = Number.isInteger(khz) ? khz.toString() : khz.toFixed(1).replace(/\.0$/, "");
+    const label = Number.isInteger(khz)
+        ? khz.toString()
+        : khz.toFixed(1).replace(/\.0$/, "");
     return `${label}kHz`;
 }
 
@@ -184,14 +191,12 @@ function isLosslessCodec(codec?: string | null): boolean {
 export function resolveEffectiveLocalPlaybackQuality(input: {
     sourceQuality: LocalTrackQuality | null;
     playbackQuality: LocalTrackQuality | null;
-    streamProfile:
-        | {
-            mode: "direct" | "dash";
-            sourceType: "local" | "tidal" | "ytmusic" | "unknown";
-            codec: string | null;
-            bitrateKbps: number | null;
-        }
-        | null;
+    streamProfile: {
+        mode: "direct" | "dash";
+        sourceType: "local" | "tidal" | "ytmusic" | "unknown";
+        codec: string | null;
+        bitrateKbps: number | null;
+    } | null;
 }): LocalTrackQuality | null {
     if (!input.streamProfile || input.streamProfile.sourceType !== "local") {
         return input.sourceQuality;
@@ -219,9 +224,12 @@ export function resolveEffectiveLocalPlaybackQuality(input: {
     return {
         codec: profileCodec,
         bitrate:
-            input.streamProfile.bitrateKbps && input.streamProfile.bitrateKbps > 0
+            input.streamProfile.bitrateKbps &&
+            input.streamProfile.bitrateKbps > 0
                 ? input.streamProfile.bitrateKbps
-                : (input.playbackQuality?.bitrate ?? input.sourceQuality?.bitrate ?? null),
+                : (input.playbackQuality?.bitrate ??
+                  input.sourceQuality?.bitrate ??
+                  null),
         sampleRate: null,
         bitDepth: null,
         lossless: false,
@@ -235,13 +243,20 @@ export function isLikelyLosslessTidal(quality: TidalStreamQuality): boolean {
     if (quality.bitDepth && quality.sampleRate) return true;
     if (/LOSSLESS/i.test(quality.quality || "")) return true;
     const codec = normalizeCodecLabel(quality.codec);
-    return codec === "FLAC" || codec === "ALAC" || codec === "WAV" || codec === "PCM";
+    return (
+        codec === "FLAC" ||
+        codec === "ALAC" ||
+        codec === "WAV" ||
+        codec === "PCM"
+    );
 }
 
 /**
  * Executes estimateTidalLossyBitrateKbps.
  */
-export function estimateTidalLossyBitrateKbps(qualityTier?: string): number | null {
+export function estimateTidalLossyBitrateKbps(
+    qualityTier?: string,
+): number | null {
     const tier = (qualityTier || "").toUpperCase();
     if (tier === "LOW") return 96;
     if (tier === "MEDIUM") return 160;
@@ -252,7 +267,9 @@ export function estimateTidalLossyBitrateKbps(qualityTier?: string): number | nu
 /**
  * Executes formatTidalQualityBadge.
  */
-export function formatTidalQualityBadge(quality?: TidalStreamQuality | null): string | null {
+export function formatTidalQualityBadge(
+    quality?: TidalStreamQuality | null,
+): string | null {
     if (!quality) return null;
     const codec = normalizeCodecLabel(quality.codec);
 
@@ -280,7 +297,9 @@ export function formatTidalQualityBadge(quality?: TidalStreamQuality | null): st
 /**
  * Executes formatLocalQualityBadge.
  */
-export function formatLocalQualityBadge(quality?: LocalTrackQuality | null): string | null {
+export function formatLocalQualityBadge(
+    quality?: LocalTrackQuality | null,
+): string | null {
     if (!quality) return null;
     const codec = normalizeCodecLabel(quality.codec);
     const codecLabel = codec || "UNKNOWN";
@@ -302,9 +321,13 @@ export function formatLocalQualityBadge(quality?: LocalTrackQuality | null): str
 /**
  * Executes formatYtQualityBadge.
  */
-export function formatYtQualityBadge(codec?: string | null, bitrate?: number | null): string | null {
+export function formatYtQualityBadge(
+    codec?: string | null,
+    bitrate?: number | null,
+): string | null {
     const codecLabel = normalizeCodecLabel(codec);
-    const bitrateLabel = bitrate && bitrate > 0 ? `${Math.round(bitrate)} kbps` : null;
+    const bitrateLabel =
+        bitrate && bitrate > 0 ? `${Math.round(bitrate)} kbps` : null;
 
     if (codecLabel && bitrateLabel) return `${codecLabel} · ${bitrateLabel}`;
     if (codecLabel) return codecLabel;
@@ -317,7 +340,11 @@ export interface PlaybackQualityBadge {
     label: string;
 }
 
-export type PlaybackStreamSource = "local" | "tidal" | "youtube" | "youtube-direct";
+export type PlaybackStreamSource =
+    | "local"
+    | "tidal"
+    | "youtube"
+    | "youtube-direct";
 
 /**
  * Executes resolvePlaybackQualityBadge.
@@ -339,7 +366,8 @@ export function resolvePlaybackQualityBadge(input: {
     if (input.streamSource === "youtube") {
         return {
             variant: "youtube",
-            label: formatYtQualityBadge(input.codec, input.bitrate) || "Unknown",
+            label:
+                formatYtQualityBadge(input.codec, input.bitrate) || "Unknown",
         };
     }
 
@@ -390,8 +418,12 @@ export function useStreamBitrate(): {
     const { streamProfile } = useAudioPlayback();
     const [bitrate, setBitrate] = useState<number | null>(null);
     const [codec, setCodec] = useState<string | null>(null);
-    const [tidalQuality, setTidalQuality] = useState<TidalStreamQuality | null>(null);
-    const [localQuality, setLocalQuality] = useState<LocalTrackQuality | null>(null);
+    const [tidalQuality, setTidalQuality] = useState<TidalStreamQuality | null>(
+        null,
+    );
+    const [localQuality, setLocalQuality] = useState<LocalTrackQuality | null>(
+        null,
+    );
     const [localPlaybackQuality, setLocalPlaybackQuality] =
         useState<LocalTrackQuality | null>(null);
 
@@ -527,24 +559,25 @@ export function useStreamBitrate(): {
     const effectiveLocalQuality =
         playbackType === "track" && currentTrack
             ? resolveEffectiveLocalPlaybackQuality({
-                sourceQuality: localQuality,
-                playbackQuality: localPlaybackQuality,
-                streamProfile:
-                    !currentTrack.streamSource && streamProfile?.sourceType === "local"
-                        ? streamProfile
-                        : null,
-            })
+                  sourceQuality: localQuality,
+                  playbackQuality: localPlaybackQuality,
+                  streamProfile:
+                      !currentTrack.streamSource &&
+                      streamProfile?.sourceType === "local"
+                          ? streamProfile
+                          : null,
+              })
             : null;
 
     const qualityBadge =
         playbackType === "track" && currentTrack
             ? resolvePlaybackQualityBadge({
-                streamSource: currentTrack.streamSource,
-                tidalQuality,
-                localQuality: effectiveLocalQuality,
-                codec,
-                bitrate,
-            })
+                  streamSource: currentTrack.streamSource,
+                  tidalQuality,
+                  localQuality: effectiveLocalQuality,
+                  codec,
+                  bitrate,
+              })
             : null;
 
     return {

@@ -84,7 +84,7 @@ export function SeekSlider({
             e.preventDefault();
             e.stopPropagation();
         },
-        [canSeek, calculateProgress]
+        [canSeek, calculateProgress],
     );
 
     const handleTouchMove = useCallback(
@@ -93,7 +93,7 @@ export function SeekSlider({
 
             // Find the touch that we're tracking
             const touch = Array.from(e.touches).find(
-                (t) => t.identifier === touchIdentifierRef.current
+                (t) => t.identifier === touchIdentifierRef.current,
             );
 
             if (!touch) return;
@@ -105,7 +105,7 @@ export function SeekSlider({
             e.preventDefault();
             e.stopPropagation();
         },
-        [isDragging, canSeek, calculateProgress]
+        [isDragging, canSeek, calculateProgress],
     );
 
     const handleTouchEnd = useCallback(
@@ -114,7 +114,7 @@ export function SeekSlider({
 
             // Check if the touch we're tracking ended
             const touchEnded = !Array.from(e.touches).some(
-                (t) => t.identifier === touchIdentifierRef.current
+                (t) => t.identifier === touchIdentifierRef.current,
             );
 
             if (!touchEnded) return;
@@ -131,7 +131,7 @@ export function SeekSlider({
             // Stop propagation to prevent parent swipe handlers
             e.stopPropagation();
         },
-        [isDragging, canSeek, previewProgress, duration, onSeek]
+        [isDragging, canSeek, previewProgress, duration, onSeek],
     );
 
     const handleMouseDown = useCallback(
@@ -142,7 +142,7 @@ export function SeekSlider({
             const newProgress = calculateProgress(e.clientX);
             setPreviewProgress(newProgress);
         },
-        [canSeek, calculateProgress]
+        [canSeek, calculateProgress],
     );
 
     const handleMouseMove = useCallback(
@@ -152,7 +152,7 @@ export function SeekSlider({
             const newProgress = calculateProgress(e.clientX);
             setPreviewProgress(newProgress);
         },
-        [isDragging, canSeek, calculateProgress]
+        [isDragging, canSeek, calculateProgress],
     );
 
     const handleMouseUp = useCallback(() => {
@@ -177,7 +177,7 @@ export function SeekSlider({
             const newTime = (newProgress / 100) * duration;
             onSeek(newTime);
         },
-        [isDragging, canSeek, calculateProgress, duration, onSeek]
+        [isDragging, canSeek, calculateProgress, duration, onSeek],
     );
 
     const handleKeyDown = useCallback(
@@ -188,7 +188,7 @@ export function SeekSlider({
             e.preventDefault();
             onSeek(nextTime);
         },
-        [canSeek, currentTime, duration, onSeek]
+        [canSeek, currentTime, duration, onSeek],
     );
 
     // Add global mouse event listeners when dragging
@@ -233,8 +233,8 @@ export function SeekSlider({
                     progress: isActive
                         ? "bg-white"
                         : hasMedia
-                        ? "bg-white/50"
-                        : "bg-gray-600",
+                          ? "bg-white/50"
+                          : "bg-gray-600",
                 };
             case "overlay":
                 return {
@@ -251,8 +251,8 @@ export function SeekSlider({
                     progress: isActive
                         ? "bg-white group-hover:bg-white"
                         : hasMedia
-                        ? "bg-white/50"
-                        : "bg-gray-600",
+                          ? "bg-white/50"
+                          : "bg-gray-600",
                 };
         }
     };
@@ -274,7 +274,9 @@ export function SeekSlider({
         "aria-orientation": "horizontal" as const,
         "aria-valuemin": 0,
         "aria-valuemax":
-            Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 0,
+            Number.isFinite(duration) && duration > 0
+                ? Math.round(duration)
+                : 0,
         "aria-valuenow": Math.round(currentSeconds),
         "aria-valuetext": `${formatTime(currentSeconds)} of ${formatTime(duration)}`,
         "aria-disabled": !canSeek,
@@ -290,7 +292,7 @@ export function SeekSlider({
                 styles.track,
                 isActive ? "cursor-pointer group" : "cursor-not-allowed",
                 isDragging && "h-2", // Expand when dragging
-                className
+                className,
             )}
             {...(!hitZoneClassName ? interactionProps : {})}
             {...(!hitZoneClassName ? accessibilityProps : {})}
@@ -300,7 +302,7 @@ export function SeekSlider({
                 className={cn(
                     "h-full rounded-full relative",
                     !isDragging && "transition-all duration-150",
-                    styles.progress
+                    styles.progress,
                 )}
                 style={{ width: `${displayProgress}%` }}
             >
@@ -311,9 +313,9 @@ export function SeekSlider({
                             isDragging
                                 ? "opacity-100 scale-125"
                                 : alwaysShowHandle
-                                ? "opacity-100"
-                                : "opacity-0 group-hover:opacity-100",
-                            handleClassName
+                                  ? "opacity-100"
+                                  : "opacity-0 group-hover:opacity-100",
+                            handleClassName,
                         )}
                     />
                 )}
@@ -335,7 +337,10 @@ export function SeekSlider({
        pointer events are captured by the wider wrapper. */
     return (
         <div
-            className={cn(hitZoneClassName, isActive ? "cursor-pointer" : "cursor-not-allowed")}
+            className={cn(
+                hitZoneClassName,
+                isActive ? "cursor-pointer" : "cursor-not-allowed",
+            )}
             {...interactionProps}
             {...accessibilityProps}
             title={getTooltipText()}

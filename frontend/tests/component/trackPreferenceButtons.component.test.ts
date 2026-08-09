@@ -46,11 +46,10 @@ beforeEach(() => {
 });
 
 test("renders like control without circular chrome", async () => {
-    const { TrackPreferenceButtons } = await import(
-        "../../components/player/TrackPreferenceButtons"
-    );
+    const { TrackPreferenceButtons } =
+        await import("../../components/player/TrackPreferenceButtons");
     const html = renderToStaticMarkup(
-        React.createElement(TrackPreferenceButtons, { trackId: "track-1" })
+        React.createElement(TrackPreferenceButtons, { trackId: "track-1" }),
     );
 
     assert.match(html, /data-icon="heart-outline"/);
@@ -64,11 +63,10 @@ test("renders like control without circular chrome", async () => {
 test("active signal renders a filled heart icon", async () => {
     state.signal = "thumbs_up";
 
-    const { TrackPreferenceButtons } = await import(
-        "../../components/player/TrackPreferenceButtons"
-    );
+    const { TrackPreferenceButtons } =
+        await import("../../components/player/TrackPreferenceButtons");
     const html = renderToStaticMarkup(
-        React.createElement(TrackPreferenceButtons, { trackId: "track-2" })
+        React.createElement(TrackPreferenceButtons, { trackId: "track-2" }),
     );
 
     assert.match(html, /data-icon="heart-filled"/);

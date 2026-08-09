@@ -20,7 +20,10 @@ test("resolveLyricsQueryStaleTime keeps successful lyrics cached long-term", () 
         source: "embedded",
     };
 
-    assert.equal(resolveLyricsQueryStaleTime(undefined), LYRICS_QUERY_STALE_TIME);
+    assert.equal(
+        resolveLyricsQueryStaleTime(undefined),
+        LYRICS_QUERY_STALE_TIME,
+    );
     assert.equal(resolveLyricsQueryStaleTime(synced), LYRICS_QUERY_STALE_TIME);
     assert.equal(resolveLyricsQueryStaleTime(plain), LYRICS_QUERY_STALE_TIME);
 });
@@ -40,10 +43,10 @@ test("resolveLyricsQueryStaleTime refreshes empty none responses quickly", () =>
 
     assert.equal(
         resolveLyricsQueryStaleTime(emptyNone),
-        LYRICS_EMPTY_RESULT_STALE_TIME
+        LYRICS_EMPTY_RESULT_STALE_TIME,
     );
     assert.equal(
         resolveLyricsQueryStaleTime(nonEmptyNone),
-        LYRICS_QUERY_STALE_TIME
+        LYRICS_QUERY_STALE_TIME,
     );
 });

@@ -38,7 +38,7 @@ export function appendTrailEntry(
     trail: readonly TrailEntry[],
     trackId: string,
     at: number,
-    cap: number = TRAIL_CAP
+    cap: number = TRAIL_CAP,
 ): TrailEntry[] {
     const last = trail[trail.length - 1];
     if (last && last.trackId === trackId) return trail as TrailEntry[];
@@ -66,7 +66,7 @@ export function sessionStorageSafe(): StorageLike | null {
 /** Read a raw string value; null on SSR, a missing key, or a thrown access. */
 export function readStoredString(
     storage: StorageLike | null,
-    key: string
+    key: string,
 ): string | null {
     if (!storage) return null;
     try {
@@ -80,7 +80,7 @@ export function readStoredString(
 export function writeStoredString(
     storage: StorageLike | null,
     key: string,
-    value: string
+    value: string,
 ): void {
     if (!storage) return;
     try {
@@ -100,7 +100,7 @@ export function readStoredTrail(storage: StorageLike | null): TrailEntry[] {
             (e): e is TrailEntry =>
                 !!e &&
                 typeof (e as TrailEntry).trackId === "string" &&
-                typeof (e as TrailEntry).at === "number"
+                typeof (e as TrailEntry).at === "number",
         );
     } catch {
         return [];
@@ -109,7 +109,7 @@ export function readStoredTrail(storage: StorageLike | null): TrailEntry[] {
 
 export function writeStoredTrail(
     storage: StorageLike | null,
-    trail: readonly TrailEntry[]
+    trail: readonly TrailEntry[],
 ): void {
     writeStoredString(storage, TRAIL_STORAGE_KEY, JSON.stringify(trail));
 }
@@ -133,7 +133,7 @@ export function readStoredTrailMode(storage: StorageLike | null): TrailMode {
 
 export function writeStoredTrailMode(
     storage: StorageLike | null,
-    mode: TrailMode
+    mode: TrailMode,
 ): void {
     writeStoredString(storage, TRAIL_MODE_STORAGE_KEY, mode);
 }
@@ -178,10 +178,10 @@ export interface UseSessionTrailResult {
 export function useSessionTrail(): UseSessionTrailResult {
     const { currentTrack } = useAudioState();
     const [trail, setTrail] = useState<TrailEntry[]>(() =>
-        readStoredTrail(sessionStorageSafe())
+        readStoredTrail(sessionStorageSafe()),
     );
     const lastId = useRef<string | null>(
-        trail.length ? trail[trail.length - 1].trackId : null
+        trail.length ? trail[trail.length - 1].trackId : null,
     );
 
     const currentId = currentTrack?.id ?? null;

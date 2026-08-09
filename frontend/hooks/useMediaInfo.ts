@@ -17,12 +17,8 @@ export interface MediaInfo {
  * Executes useMediaInfo.
  */
 export function useMediaInfo(coverSize: number = 100): MediaInfo {
-    const {
-        currentTrack,
-        currentAudiobook,
-        currentPodcast,
-        playbackType,
-    } = useAudioState();
+    const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
+        useAudioState();
 
     return useMemo(() => {
         const hasMedia = !!(currentTrack || currentAudiobook || currentPodcast);
@@ -89,5 +85,11 @@ export function useMediaInfo(coverSize: number = 100): MediaInfo {
             mediaLink: null,
             hasMedia,
         };
-    }, [currentTrack, currentAudiobook, currentPodcast, playbackType, coverSize]);
+    }, [
+        currentTrack,
+        currentAudiobook,
+        currentPodcast,
+        playbackType,
+        coverSize,
+    ]);
 }

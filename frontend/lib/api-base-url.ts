@@ -46,7 +46,7 @@ const getBrowserDefaultBackendUrl = (location: BrowserLocationLike): string => {
  * Resolves the frontend API base URL for both server and browser contexts.
  */
 export const resolveApiBaseUrl = (
-    options: ResolveApiBaseUrlOptions
+    options: ResolveApiBaseUrlOptions,
 ): string => {
     if (options.isServer) {
         return (
@@ -60,9 +60,7 @@ export const resolveApiBaseUrl = (
         return "";
     }
 
-    const configuredApiUrl = normalizeApiBaseUrlInput(
-        options.configuredApiUrl
-    );
+    const configuredApiUrl = normalizeApiBaseUrlInput(options.configuredApiUrl);
     if (mode === "direct") {
         if (configuredApiUrl) {
             return configuredApiUrl;

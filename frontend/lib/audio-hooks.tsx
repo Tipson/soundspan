@@ -32,7 +32,7 @@ export function useAudio() {
         playerMode: state.playerMode,
         volume: state.volume,
         isMuted: state.isMuted,
-        
+
         // Vibe mode state
         vibeMode: state.vibeMode,
         vibeSourceFeatures: state.vibeSourceFeatures,
@@ -79,7 +79,7 @@ export function useAudio() {
         returnToPreviousMode: controls.returnToPreviousMode,
         setVolume: controls.setVolume,
         toggleMute: controls.toggleMute,
-        
+
         // Vibe mode controls
         startVibeMode: controls.startVibeMode,
         stopVibeMode: controls.stopVibeMode,

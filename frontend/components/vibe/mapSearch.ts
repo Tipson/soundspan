@@ -33,7 +33,7 @@ function normalize(s: string): string {
 export function searchMapTracks(
     tracks: readonly MapTrack[],
     query: string,
-    limit = 8
+    limit = 8,
 ): MapTrack[] {
     const q = normalize(query);
     if (q.length < MIN_QUERY_LENGTH) return [];

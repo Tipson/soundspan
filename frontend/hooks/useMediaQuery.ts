@@ -21,7 +21,7 @@ export function useMediaQuery(query: string): boolean {
             return window.matchMedia(query).matches;
         },
         // Get server snapshot (always false on server)
-        () => false
+        () => false,
     );
 
     return matches;
@@ -35,7 +35,8 @@ export const useIsMobile = () => useMediaQuery("(max-width: 768px)");
 /**
  * Implements useIsTablet.
  */
-export const useIsTablet = () => useMediaQuery("(min-width: 769px) and (max-width: 1024px)");
+export const useIsTablet = () =>
+    useMediaQuery("(min-width: 769px) and (max-width: 1024px)");
 /**
  * Implements useIsDesktop.
  */

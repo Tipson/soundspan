@@ -12,7 +12,10 @@
 
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { api } from "@/lib/api";
 import type { YtMusicMixPreview } from "@/hooks/useQueries";
 import { BrowseCard } from "./BrowseCard";
@@ -32,13 +35,18 @@ export function YtMusicMixesSection({ mixes }: YtMusicMixesSectionProps) {
             <SectionHeader title="Your Mixes" badge={<YouTubeBadge />} />
             <HorizontalCarousel gap="lg">
                 {mixes.map((mix) => {
-                    const thumbnail = mix.thumbnails?.find((t) => t.width >= 200)
-                        ?? mix.thumbnails?.[0];
+                    const thumbnail =
+                        mix.thumbnails?.find((t) => t.width >= 200) ??
+                        mix.thumbnails?.[0];
                     return (
                         <CarouselItem key={mix.playlistId}>
                             <BrowseCard
                                 href={`/explore/yt-playlist/${encodeURIComponent(mix.playlistId)}`}
-                                imageUrl={thumbnail?.url ? api.getBrowseImageUrl(thumbnail.url) : null}
+                                imageUrl={
+                                    thumbnail?.url
+                                        ? api.getBrowseImageUrl(thumbnail.url)
+                                        : null
+                                }
                                 title={mix.title}
                                 subtitle={mix.description}
                             />

@@ -56,7 +56,10 @@ function toRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function getTrackSortValue(track: Record<string, unknown>): number {
-    return toNumber(track.trackNumber ?? track.trackNo ?? track.displayTrackNo, 0);
+    return toNumber(
+        track.trackNumber ?? track.trackNo ?? track.displayTrackNo,
+        0,
+    );
 }
 
 function getDiscSortValue(track: Record<string, unknown>): number {
@@ -84,8 +87,12 @@ function normalizeAlbums(albums: unknown[]): ArtistPlaybackAlbum[] {
         .filter((album) => !!album.id);
 }
 
-function sortAlbumsNewestFirst(albums: ArtistPlaybackAlbum[]): ArtistPlaybackAlbum[] {
-    return [...albums].sort((a, b) => toNumber(b.year, 0) - toNumber(a.year, 0));
+function sortAlbumsNewestFirst(
+    albums: ArtistPlaybackAlbum[],
+): ArtistPlaybackAlbum[] {
+    return [...albums].sort(
+        (a, b) => toNumber(b.year, 0) - toNumber(a.year, 0),
+    );
 }
 
 /**
@@ -107,21 +114,25 @@ export async function loadOwnedArtistTracksNewestFirst({
                           sortBy: "recent",
                           limit: 500,
                       })
-                  ).albums || []
+                  ).albums || [],
               );
 
     if (candidateAlbums.length === 0) return [];
 
     const sortedAlbums = sortAlbumsNewestFirst(candidateAlbums);
     const albumResults = await Promise.all(
-        sortedAlbums.map((album) => api.getAlbum(album.id).catch(() => null))
+        sortedAlbums.map((album) => api.getAlbum(album.id).catch(() => null)),
     );
 
     const queueTracks: ArtistPlaybackTrack[] = [];
 
     albumResults.forEach((albumData, albumIndex) => {
         const seedAlbum = sortedAlbums[albumIndex];
-        if (!albumData || !Array.isArray(albumData.tracks) || albumData.tracks.length === 0) {
+        if (
+            !albumData ||
+            !Array.isArray(albumData.tracks) ||
+            albumData.tracks.length === 0
+        ) {
             return;
         }
 
@@ -130,7 +141,7 @@ export async function loadOwnedArtistTracksNewestFirst({
                 const discDiff = getDiscSortValue(a) - getDiscSortValue(b);
                 if (discDiff !== 0) return discDiff;
                 return getTrackSortValue(a) - getTrackSortValue(b);
-            }
+            },
         );
 
         const resolvedArtistName =

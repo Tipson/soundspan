@@ -21,7 +21,7 @@ export interface PlayNowInsertionResult {
  * Does NOT mutate any arrays — returns new values for the caller to apply.
  */
 export function computePlayNowInsertion(
-    input: PlayNowInsertionInput
+    input: PlayNowInsertionInput,
 ): PlayNowInsertionResult {
     const { currentIndex, isShuffle, shuffleIndices } = input;
     const insertAt = currentIndex + 1;
@@ -30,9 +30,7 @@ export function computePlayNowInsertion(
 
     if (isShuffle && shuffleIndices.length > 0) {
         // Shift all indices >= insertAt up by 1
-        const shifted = shuffleIndices.map((i) =>
-            i >= insertAt ? i + 1 : i
-        );
+        const shifted = shuffleIndices.map((i) => (i >= insertAt ? i + 1 : i));
         // Find current track's position in shuffle order and insert right after it
         const currentShufflePos = shifted.indexOf(currentIndex);
         const shuffleInsertPos =
@@ -88,7 +86,7 @@ export type PodcastContextPlacement<T> =
  * Does NOT mutate any arrays — returns new values for the caller to apply.
  */
 export function computePodcastContextPlacement<T extends { id: string }>(
-    input: PodcastContextPlacementInput<T>
+    input: PodcastContextPlacementInput<T>,
 ): PodcastContextPlacement<T> {
     const {
         queue,
@@ -108,13 +106,13 @@ export function computePodcastContextPlacement<T extends { id: string }>(
             items: contextItems,
             startIndex: Math.max(
                 0,
-                contextItems.findIndex((item) => item.id === selected.id)
+                contextItems.findIndex((item) => item.id === selected.id),
             ),
         };
     }
 
     const existingIndex = queue.findIndex(
-        (entry) => entry.itemType === "episode" && entry.id === selected.id
+        (entry) => entry.itemType === "episode" && entry.id === selected.id,
     );
     if (existingIndex >= 0) {
         return { action: "jump", index: existingIndex };
@@ -122,7 +120,7 @@ export function computePodcastContextPlacement<T extends { id: string }>(
 
     const queuedIds = new Set(queue.map((entry) => entry.id));
     const items = contextItems.filter(
-        (item) => item.id === selected.id || !queuedIds.has(item.id)
+        (item) => item.id === selected.id || !queuedIds.has(item.id),
     );
     const insertAt = Math.min(Math.max(currentIndex + 1, 0), queue.length);
 
@@ -131,7 +129,7 @@ export function computePodcastContextPlacement<T extends { id: string }>(
         // Shift all indices >= insertAt up by the inserted count, then slot
         // the inserted items right after the current shuffle position.
         const shifted = shuffleIndices.map((i) =>
-            i >= insertAt ? i + items.length : i
+            i >= insertAt ? i + items.length : i,
         );
         const currentShufflePos = shifted.indexOf(currentIndex);
         const shuffleInsertPos =
@@ -140,7 +138,7 @@ export function computePodcastContextPlacement<T extends { id: string }>(
         newShuffleIndices.splice(
             shuffleInsertPos,
             0,
-            ...items.map((_, offset) => insertAt + offset)
+            ...items.map((_, offset) => insertAt + offset),
         );
     }
 
@@ -152,7 +150,7 @@ export function computePodcastContextPlacement<T extends { id: string }>(
             insertAt +
             Math.max(
                 0,
-                items.findIndex((item) => item.id === selected.id)
+                items.findIndex((item) => item.id === selected.id),
             ),
         newShuffleIndices,
     };

@@ -32,7 +32,11 @@ mock.module("@/hooks/usePlayButtonFeedback", {
 mock.module("@/app/radio/RadioStationMosaic", {
     namedExports: {
         RadioStationMosaic: ({ filter }: { filter: { type: string } }) =>
-            React.createElement("div", { "data-testid": "radio-station-mosaic" }, filter.type),
+            React.createElement(
+                "div",
+                { "data-testid": "radio-station-mosaic" },
+                filter.type,
+            ),
     },
 });
 
@@ -60,10 +64,21 @@ const baseStation: Station = {
 async function loadCardComponent() {
     const mod = await import("../../components/ui/RadioStationCard");
     const named = mod as unknown as {
-        RadioStationCard?: (props: Record<string, unknown>) => React.ReactElement;
+        RadioStationCard?: (
+            props: Record<string, unknown>,
+        ) => React.ReactElement;
     };
-    const cjsDefault = (mod as { default?: { RadioStationCard?: (props: Record<string, unknown>) => React.ReactElement } }).default;
-    const RadioStationCard = named.RadioStationCard ?? cjsDefault?.RadioStationCard;
+    const cjsDefault = (
+        mod as {
+            default?: {
+                RadioStationCard?: (
+                    props: Record<string, unknown>,
+                ) => React.ReactElement;
+            };
+        }
+    ).default;
+    const RadioStationCard =
+        named.RadioStationCard ?? cjsDefault?.RadioStationCard;
     assert.ok(RadioStationCard, "RadioStationCard export is available");
     return RadioStationCard;
 }
@@ -75,7 +90,7 @@ test("RadioStationCard renders station metadata and mosaic", async () => {
             station: baseStation,
             onPlay: () => undefined,
             isLoading: false,
-        })
+        }),
     );
 
     assert.match(html, /Deep Focus Radio/);
@@ -91,7 +106,7 @@ test("RadioStationCard shows play icon when not loading", async () => {
             station: baseStation,
             onPlay: () => undefined,
             isLoading: false,
-        })
+        }),
     );
 
     assert.match(html, /data-icon="play"/);
@@ -106,7 +121,7 @@ test("RadioStationCard shows spinner icon while loading or play feedback spinner
             station: baseStation,
             onPlay: () => undefined,
             isLoading: true,
-        })
+        }),
     );
     assert.match(loadingHtml, /data-icon="loader"/);
 
@@ -116,7 +131,7 @@ test("RadioStationCard shows spinner icon while loading or play feedback spinner
             station: baseStation,
             onPlay: () => undefined,
             isLoading: false,
-        })
+        }),
     );
     assert.match(feedbackSpinnerHtml, /data-icon="loader"/);
 });

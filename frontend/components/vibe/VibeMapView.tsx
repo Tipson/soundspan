@@ -9,18 +9,25 @@ import { VibeMapFeedback } from "./VibeMapFeedback";
 import type { VibeMapViewModel } from "./useVibeMapController";
 
 /** Render the full map surface without owning interaction state. */
-export function VibeMapView({ model, containerRef }: {
+export function VibeMapView({
+    model,
+    containerRef,
+}: {
     model: VibeMapViewModel;
     containerRef: RefObject<HTMLDivElement | null>;
 }) {
-    const className = model.shell.fullscreen ?
-        "fixed inset-0 z-[10005] bg-surface overflow-hidden" :
-        "relative w-full h-full overflow-hidden";
-    const bottomInset = model.shell.fullscreen ? 0 : model.props.bottomInset ?? 0;
+    const className = model.shell.fullscreen
+        ? "fixed inset-0 z-[10005] bg-surface overflow-hidden"
+        : "relative w-full h-full overflow-hidden";
+    const bottomInset = model.shell.fullscreen
+        ? 0
+        : (model.props.bottomInset ?? 0);
     return (
-        <div className={className}
+        <div
+            className={className}
             style={{ "--vibe-binset": `${bottomInset}px` } as CSSProperties}
-            data-vibe-mode={model.vibe.mode}>
+            data-vibe-mode={model.vibe.mode}
+        >
             <VibeMapCanvasStage model={model} containerRef={containerRef} />
             <VibeMapControlsSurface model={model} />
             <VibeMapFeedback model={model} />

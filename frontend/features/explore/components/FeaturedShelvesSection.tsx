@@ -23,8 +23,9 @@ export function FeaturedShelvesSection({
     // Exclude shelves where no items are navigable (video-only / artist-only shelves)
     const visibleShelves = homeShelves.filter((shelf) =>
         shelf.contents?.some(
-            (item) => item.playlistId || (item.browseId && item.type === "album")
-        )
+            (item) =>
+                item.playlistId || (item.browseId && item.type === "album"),
+        ),
     );
 
     if (visibleShelves.length === 0) return null;
@@ -46,9 +47,20 @@ export function FeaturedShelvesSection({
                                   : null;
                             return (
                                 <BrowseCard
-                                    key={item.playlistId ?? item.browseId ?? item.videoId ?? i}
+                                    key={
+                                        item.playlistId ??
+                                        item.browseId ??
+                                        item.videoId ??
+                                        i
+                                    }
                                     href={href}
-                                    imageUrl={item.thumbnailUrl ? api.getBrowseImageUrl(item.thumbnailUrl) : null}
+                                    imageUrl={
+                                        item.thumbnailUrl
+                                            ? api.getBrowseImageUrl(
+                                                  item.thumbnailUrl,
+                                              )
+                                            : null
+                                    }
                                     title={item.title ?? ""}
                                     subtitle={item.subtitle}
                                 />

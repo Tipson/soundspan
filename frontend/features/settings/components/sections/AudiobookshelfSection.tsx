@@ -1,21 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle } from "../ui";
+import {
+    SettingsSection,
+    SettingsRow,
+    SettingsInput,
+    SettingsToggle,
+} from "../ui";
 import { SystemSettings } from "../../types";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 
 interface AudiobookshelfSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (
+        service: string,
+    ) => Promise<{ success: boolean; version?: string; error?: string }>;
     isTesting: boolean;
 }
 
 /**
  * Renders the AudiobookshelfSection component.
  */
-export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }: AudiobookshelfSectionProps) {
+export function AudiobookshelfSection({
+    settings,
+    onUpdate,
+    onTest,
+    isTesting,
+}: AudiobookshelfSectionProps) {
     const [testStatus, setTestStatus] = useState<StatusType>("idle");
     const [testMessage, setTestMessage] = useState("");
 
@@ -33,12 +45,12 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
     };
 
     return (
-        <SettingsSection 
-            id="audiobookshelf" 
+        <SettingsSection
+            id="audiobookshelf"
             title="Media Servers"
             description="Connect to external media servers for audiobooks and podcasts"
         >
-            <SettingsRow 
+            <SettingsRow
                 label="Enable Audiobookshelf"
                 description="Connect for audiobooks and podcasts"
                 htmlFor="abs-enabled"
@@ -46,7 +58,9 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                 <SettingsToggle
                     id="abs-enabled"
                     checked={settings.audiobookshelfEnabled}
-                    onChange={(checked) => onUpdate({ audiobookshelfEnabled: checked })}
+                    onChange={(checked) =>
+                        onUpdate({ audiobookshelfEnabled: checked })
+                    }
                 />
             </SettingsRow>
 
@@ -65,7 +79,9 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                         <SettingsInput
                             type="password"
                             value={settings.audiobookshelfApiKey}
-                            onChange={(v) => onUpdate({ audiobookshelfApiKey: v })}
+                            onChange={(v) =>
+                                onUpdate({ audiobookshelfApiKey: v })
+                            }
                             placeholder="Enter API key"
                             className="w-64"
                         />
@@ -75,14 +91,20 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                         <div className="inline-flex items-center gap-3">
                             <button
                                 onClick={handleTest}
-                                disabled={isTesting || !settings.audiobookshelfUrl || !settings.audiobookshelfApiKey}
+                                disabled={
+                                    isTesting ||
+                                    !settings.audiobookshelfUrl ||
+                                    !settings.audiobookshelfApiKey
+                                }
                                 className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
-                                {testStatus === "loading" ? "Testing..." : "Test Connection"}
+                                {testStatus === "loading"
+                                    ? "Testing..."
+                                    : "Test Connection"}
                             </button>
-                            <InlineStatus 
-                                status={testStatus} 
+                            <InlineStatus
+                                status={testStatus}
                                 message={testMessage}
                                 onClear={() => setTestStatus("idle")}
                             />

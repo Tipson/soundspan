@@ -52,7 +52,7 @@ export function useTrackPreview<T extends PreviewableTrack>() {
     const handlePreview = async (
         track: T,
         artistName: string,
-        e: React.MouseEvent
+        e: React.MouseEvent,
     ) => {
         e.stopPropagation();
 
@@ -64,7 +64,11 @@ export function useTrackPreview<T extends PreviewableTrack>() {
         }
 
         // If the same track is paused, resume it
-        if (previewTrack === track.id && !previewPlaying && previewAudioRef.current) {
+        if (
+            previewTrack === track.id &&
+            !previewPlaying &&
+            previewAudioRef.current
+        ) {
             try {
                 await previewAudioRef.current.play();
             } catch (err: unknown) {
@@ -138,7 +142,9 @@ export function useTrackPreview<T extends PreviewableTrack>() {
                 (((error as Record<string, unknown>).error as unknown) ===
                     "Preview not found" ||
                     /preview not found/i.test(
-                        String((error as Record<string, unknown>).message || "")
+                        String(
+                            (error as Record<string, unknown>).message || "",
+                        ),
                     ))
             ) {
                 noPreviewTrackIdsRef.current.add(track.id);

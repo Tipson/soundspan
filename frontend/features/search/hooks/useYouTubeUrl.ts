@@ -44,7 +44,7 @@ export function useYouTubeUrl({
     const [isLoading, setIsLoading] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState<number | null>(
-        null
+        null,
     );
     const abortRef = useRef<AbortController | null>(null);
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,7 +90,7 @@ export function useYouTubeUrl({
             try {
                 const info = await api.getYouTubeVideoInfo(
                     query,
-                    abortController.signal
+                    abortController.signal,
                 );
                 if (!abortController.signal.aborted) {
                     setVideoInfo(info);
@@ -99,7 +99,7 @@ export function useYouTubeUrl({
                 if (!abortController.signal.aborted) {
                     sharedFrontendLogger.error(
                         "Failed to fetch YouTube video info:",
-                        error
+                        error,
                     );
                     setVideoInfo(null);
                 }
@@ -162,7 +162,7 @@ export function useYouTubeUrl({
                 const job = await api.downloadYouTube(
                     videoInfo.videoId,
                     format,
-                    quality
+                    quality,
                 );
 
                 if (job.status === "completed") {
@@ -183,7 +183,7 @@ export function useYouTubeUrl({
                     if (pollSettledRef.current) return;
                     try {
                         const status = await api.getYouTubeDownloadStatus(
-                            job.jobId
+                            job.jobId,
                         );
                         if (pollSettledRef.current) return;
                         pollFailuresRef.current = 0;
@@ -213,14 +213,14 @@ export function useYouTubeUrl({
                         pollFailuresRef.current += 1;
                         sharedFrontendLogger.error(
                             "YouTube download status poll failed:",
-                            pollError
+                            pollError,
                         );
                         // Tolerate transient failures (backend redeploy,
                         // network blip) — the download continues server-side
                         // and the backend job watcher imports it on finish.
                         if (
                             !shouldAbandonYouTubeDownloadPolling(
-                                pollFailuresRef.current
+                                pollFailuresRef.current,
                             )
                         ) {
                             return;
@@ -231,7 +231,7 @@ export function useYouTubeUrl({
                         setDownloadProgress(null);
                         toast.info(
                             "Lost download progress — the download continues in the background",
-                            { description: title }
+                            { description: title },
                         );
                     }
                 }, DOWNLOAD_POLL_INTERVAL_MS);
@@ -240,11 +240,11 @@ export function useYouTubeUrl({
                 finishWithError(
                     error instanceof Error
                         ? error.message
-                        : "Failed to download"
+                        : "Failed to download",
                 );
             }
         },
-        [videoInfo, stopPolling]
+        [videoInfo, stopPolling],
     );
 
     return {

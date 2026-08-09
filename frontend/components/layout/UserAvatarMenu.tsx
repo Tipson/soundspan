@@ -29,7 +29,9 @@ export function UserAvatarMenu() {
     const { isPolling: isScanPolling } = useJobStatus(scanJobId, "scan", {
         onComplete: () => {
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
-            queryClient.invalidateQueries({ queryKey: ["enrichment-progress"] });
+            queryClient.invalidateQueries({
+                queryKey: ["enrichment-progress"],
+            });
             setScanJobId(null);
         },
         onError: () => setScanJobId(null),
@@ -60,7 +62,11 @@ export function UserAvatarMenu() {
             setImgKey((k) => k + 1);
         };
         window.addEventListener("profile-picture-changed", handlePfpChange);
-        return () => window.removeEventListener("profile-picture-changed", handlePfpChange);
+        return () =>
+            window.removeEventListener(
+                "profile-picture-changed",
+                handlePfpChange,
+            );
     }, []);
 
     // Close on Escape
@@ -84,7 +90,10 @@ export function UserAvatarMenu() {
             setScanJobId(response.jobId);
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
         } catch (error) {
-            sharedFrontendLogger.error("Failed to trigger library scan:", error);
+            sharedFrontendLogger.error(
+                "Failed to trigger library scan:",
+                error,
+            );
         }
     };
 
@@ -107,7 +116,7 @@ export function UserAvatarMenu() {
                     "w-9 h-9 rounded-full flex items-center justify-center overflow-hidden transition-all ring-2",
                     isOpen
                         ? "ring-white/40"
-                        : "ring-transparent hover:ring-white/20"
+                        : "ring-transparent hover:ring-white/20",
                 )}
                 aria-label="User menu"
                 aria-haspopup="true"
@@ -147,7 +156,7 @@ export function UserAvatarMenu() {
                         <RefreshCw
                             className={cn(
                                 "w-4 h-4",
-                                isScanPolling && "animate-spin"
+                                isScanPolling && "animate-spin",
                             )}
                         />
                         {isScanPolling ? "Scanning..." : "Scan Library"}

@@ -8,10 +8,7 @@ import {
 } from "../../scripts/check-hardcoded-hex.mjs";
 
 test("counts arbitrary-value hex color utilities", () => {
-    assert.equal(
-        countArbitraryHexClasses("a bg-[#3b82f6] text-[#fff] w-4"),
-        2
-    );
+    assert.equal(countArbitraryHexClasses("a bg-[#3b82f6] text-[#fff] w-4"), 2);
 });
 
 test("ignores token and palette color utilities", () => {

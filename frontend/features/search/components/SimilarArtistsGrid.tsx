@@ -51,7 +51,7 @@ export function SimilarArtistsGrid({
                                 mbid: result.mbid,
                                 name: result.name,
                             },
-                            { preferLibraryId: false }
+                            { preferLibraryId: false },
                         ) || encodeURIComponent(result.name);
                     const imageUrl = getProxiedImageUrl(result.image);
 

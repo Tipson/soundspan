@@ -30,7 +30,11 @@ import { cn } from "@/utils/cn";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { TrackList, TrackListHeader } from "@/components/track";
-import type { TrackRowItem, TrackRowSlots, OverflowConfig } from "@/components/track";
+import type {
+    TrackRowItem,
+    TrackRowSlots,
+    OverflowConfig,
+} from "@/components/track";
 
 // -- Types -------------------------------------------------------------------
 
@@ -81,11 +85,19 @@ function browseToRowItem(track: TidalBrowseTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
-        coverArtUrl: track.thumbnailUrl ? api.getTidalBrowseImageUrl(track.thumbnailUrl) : null,
+        coverArtUrl: track.thumbnailUrl
+            ? api.getTidalBrowseImageUrl(track.thumbnailUrl)
+            : null,
     };
 }
 
-function BrowseTrackList({ tracks, onPlayTrack }: { tracks: TidalBrowseTrack[]; onPlayTrack: (index: number) => void }) {
+function BrowseTrackList({
+    tracks,
+    onPlayTrack,
+}: {
+    tracks: TidalBrowseTrack[];
+    onPlayTrack: (index: number) => void;
+}) {
     const handlePlay = useCallback(
         (_track: TidalBrowseTrack, index: number) => {
             if (tracks[index]?.trackId) {
@@ -103,7 +115,9 @@ function BrowseTrackList({ tracks, onPlayTrack }: { tracks: TidalBrowseTrack[]; 
                     {track.album}
                 </p>
             ),
-            rowClassName: !track.trackId ? "opacity-60 cursor-not-allowed" : undefined,
+            rowClassName: !track.trackId
+                ? "opacity-60 cursor-not-allowed"
+                : undefined,
         }),
         [],
     );
@@ -175,7 +189,8 @@ function TidalPlaylistDetailPageContent() {
     // Audio context
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
-    const { playTracks, playNow, addTracksToQueue, pause, resume } = useAudioControls();
+    const { playTracks, playNow, addTracksToQueue, pause, resume } =
+        useAudioControls();
 
     // State
     const [playlist, setPlaylist] = useState<TidalBrowsePlaylist | null>(null);
@@ -183,7 +198,8 @@ function TidalPlaylistDetailPageContent() {
     const [error, setError] = useState<string | null>(null);
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState(false);
-    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } = usePlayButtonFeedback();
+    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
+        usePlayButtonFeedback();
 
     // Fetch playlist data
     useEffect(() => {
@@ -253,19 +269,24 @@ function TidalPlaylistDetailPageContent() {
 
     // Likeable tracks for Like All
     const likeableTracks: LikeableTrack[] = useMemo(
-        () => (playlist?.tracks || [])
-            .filter((t) => t.trackId)
-            .map((t) => ({
-                id: `tidal:${t.trackId}`,
-                title: t.title,
-                artist: t.artist,
-                album: t.album,
-                duration: t.duration,
-                thumbnailUrl: t.thumbnailUrl || undefined,
-            })),
-        [playlist?.tracks]
+        () =>
+            (playlist?.tracks || [])
+                .filter((t) => t.trackId)
+                .map((t) => ({
+                    id: `tidal:${t.trackId}`,
+                    title: t.title,
+                    artist: t.artist,
+                    album: t.album,
+                    duration: t.duration,
+                    thumbnailUrl: t.thumbnailUrl || undefined,
+                })),
+        [playlist?.tracks],
     );
-    const { isAllLiked, isApplying: isApplyingLikeAll, toggleLikeAll } = useCollectionLikeAll(likeableTracks);
+    const {
+        isAllLiked,
+        isApplying: isApplyingLikeAll,
+        toggleLikeAll,
+    } = useCollectionLikeAll(likeableTracks);
 
     // Add all to queue
     const handleAddToQueue = () => {
@@ -295,21 +316,27 @@ function TidalPlaylistDetailPageContent() {
         try {
             for (const track of playlist.tracks) {
                 if (!track.trackId) continue;
-                await api.addTrackToPlaylist(targetPlaylistId, toAddToPlaylistRef({
-                    id: `tidal:${track.trackId}`,
-                    title: track.title,
-                    artist: track.artist,
-                    album: track.album,
-                    duration: track.duration,
-                    streamSource: "tidal",
-                    tidalTrackId: track.trackId,
-                    thumbnailUrl: track.thumbnailUrl || undefined,
-                }));
+                await api.addTrackToPlaylist(
+                    targetPlaylistId,
+                    toAddToPlaylistRef({
+                        id: `tidal:${track.trackId}`,
+                        title: track.title,
+                        artist: track.artist,
+                        album: track.album,
+                        duration: track.duration,
+                        streamSource: "tidal",
+                        tidalTrackId: track.trackId,
+                        thumbnailUrl: track.thumbnailUrl || undefined,
+                    }),
+                );
             }
             toast.success(`Added ${playlist.tracks.length} tracks to playlist`);
             setShowPlaylistSelector(false);
         } catch (addError) {
-            sharedFrontendLogger.error("Failed to add tracks to playlist:", addError);
+            sharedFrontendLogger.error(
+                "Failed to add tracks to playlist:",
+                addError,
+            );
             toast.error("Failed to add some tracks to playlist");
         } finally {
             setIsAddingToPlaylist(false);
@@ -337,10 +364,8 @@ function TidalPlaylistDetailPageContent() {
     };
 
     // Total duration
-    const totalDuration = playlist?.tracks.reduce(
-        (sum, track) => sum + track.duration,
-        0
-    ) || 0;
+    const totalDuration =
+        playlist?.tracks.reduce((sum, track) => sum + track.duration, 0) || 0;
 
     const formatTotalDuration = (seconds: number) => {
         const hours = Math.floor(seconds / 3600);
@@ -384,7 +409,8 @@ function TidalPlaylistDetailPageContent() {
                             Playlist not found
                         </h3>
                         <p className="text-sm text-gray-400 mb-6 max-w-sm">
-                            {error || "This playlist may be private or no longer available."}
+                            {error ||
+                                "This playlist may be private or no longer available."}
                         </p>
                         <button
                             onClick={() => router.push("/explore")}
@@ -407,7 +433,9 @@ function TidalPlaylistDetailPageContent() {
                     <div className="relative w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
                         {playlist.thumbnailUrl ? (
                             <Image
-                                src={api.getTidalBrowseImageUrl(playlist.thumbnailUrl)}
+                                src={api.getTidalBrowseImageUrl(
+                                    playlist.thumbnailUrl,
+                                )}
                                 alt={playlist.title}
                                 fill
                                 sizes="(max-width: 768px) 140px, 192px"
@@ -424,7 +452,11 @@ function TidalPlaylistDetailPageContent() {
                     {/* Playlist Info */}
                     <div className="flex-1 min-w-0 pb-1">
                         <div className="flex items-center gap-2 mb-1">
-                            <svg viewBox="0 0 12 8" className="w-4 h-4 text-[#00BFFF]" fill="currentColor">
+                            <svg
+                                viewBox="0 0 12 8"
+                                className="w-4 h-4 text-[#00BFFF]"
+                                fill="currentColor"
+                            >
                                 <path d="M2 0 L4 2 L2 4 L0 2Z" />
                                 <path d="M6 0 L8 2 L6 4 L4 2Z" />
                                 <path d="M10 0 L12 2 L10 4 L8 2Z" />
@@ -440,7 +472,9 @@ function TidalPlaylistDetailPageContent() {
                         <div className="flex items-center gap-1 text-sm text-white/70">
                             <span>{playlist.trackCount} songs</span>
                             {totalDuration > 0 && (
-                                <span>, {formatTotalDuration(totalDuration)}</span>
+                                <span>
+                                    , {formatTotalDuration(totalDuration)}
+                                </span>
                             )}
                         </div>
                     </div>
@@ -462,7 +496,11 @@ function TidalPlaylistDetailPageContent() {
                         ) : (
                             <Play className="w-5 h-5 fill-current ml-0.5" />
                         )}
-                        <span>{isThisPlaylistPlaying && isPlaying ? "Pause" : "Play All"}</span>
+                        <span>
+                            {isThisPlaylistPlaying && isPlaying
+                                ? "Pause"
+                                : "Play All"}
+                        </span>
                     </button>
 
                     {/* Shuffle */}
@@ -504,15 +542,24 @@ function TidalPlaylistDetailPageContent() {
                                 isApplyingLikeAll
                                     ? "cursor-not-allowed text-white/35"
                                     : isAllLiked
-                                        ? "text-brand hover:bg-white/10"
-                                        : "text-white/60 hover:bg-white/10 hover:text-white"
+                                      ? "text-brand hover:bg-white/10"
+                                      : "text-white/60 hover:bg-white/10 hover:text-white",
                             )}
-                            title={isAllLiked ? "Unlike all tracks" : "Like all tracks"}
+                            title={
+                                isAllLiked
+                                    ? "Unlike all tracks"
+                                    : "Like all tracks"
+                            }
                         >
                             {isApplyingLikeAll ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                                <Heart className={cn("h-4 w-4", isAllLiked && "fill-current")} />
+                                <Heart
+                                    className={cn(
+                                        "h-4 w-4",
+                                        isAllLiked && "fill-current",
+                                    )}
+                                />
                             )}
                         </button>
                     )}

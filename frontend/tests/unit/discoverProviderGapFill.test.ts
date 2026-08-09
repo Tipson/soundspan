@@ -3,7 +3,11 @@ import test from "node:test";
 import { applyDiscoverProviderGapFill } from "../../features/discover/hooks/useDiscoverProviderGapFill";
 import type { DiscoverTrack } from "../../features/discover/types";
 
-function makeTrack(id: string, similarity: number, available = true): DiscoverTrack {
+function makeTrack(
+    id: string,
+    similarity: number,
+    available = true,
+): DiscoverTrack {
     return {
         id,
         title: `Title ${id}`,
@@ -34,7 +38,7 @@ test("keeps unmatched unavailable tracks local", () => {
         tracks,
         [0, 1],
         [null, null],
-        [null, null]
+        [null, null],
     );
 
     assert.ok(result.every((track) => track.sourceType === "local"));
@@ -67,20 +71,20 @@ test("prefers TIDAL matches and falls back to YouTube when needed", () => {
             { videoId: "yt-7" },
             { videoId: "yt-8" },
             null,
-        ]
+        ],
     );
 
     assert.equal(
         result.filter((track) => track.sourceType === "tidal").length,
-        3
+        3,
     );
     assert.equal(
         result.filter((track) => track.sourceType === "youtube").length,
-        3
+        3,
     );
     assert.equal(
         result.filter((track) => track.sourceType === "local").length,
-        4
+        4,
     );
     assert.equal(result[1].sourceType, "tidal");
     assert.equal(result[0].sourceType, "youtube");

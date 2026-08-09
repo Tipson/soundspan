@@ -16,13 +16,30 @@ const PLAYLIST: YouTubePlaylistInfo = {
     truncated: false,
     count: 3,
     entries: [
-        { videoId: "aaaaaaaaaaa", title: "Track One", uploader: "X", duration: 100 },
-        { videoId: "bbbbbbbbbbb", title: "Track Two", uploader: "X", duration: 200 },
-        { videoId: "ccccccccccc", title: "Track Three", uploader: "X", duration: 300 },
+        {
+            videoId: "aaaaaaaaaaa",
+            title: "Track One",
+            uploader: "X",
+            duration: 100,
+        },
+        {
+            videoId: "bbbbbbbbbbb",
+            title: "Track Two",
+            uploader: "X",
+            duration: 200,
+        },
+        {
+            videoId: "ccccccccccc",
+            title: "Track Three",
+            uploader: "X",
+            duration: 300,
+        },
     ],
 };
 
-function render(props: Partial<Parameters<typeof YouTubePlaylistPreviewCard>[0]>) {
+function render(
+    props: Partial<Parameters<typeof YouTubePlaylistPreviewCard>[0]>,
+) {
     return renderToStaticMarkup(
         React.createElement(YouTubePlaylistPreviewCard, {
             playlistInfo: PLAYLIST,
@@ -34,7 +51,7 @@ function render(props: Partial<Parameters<typeof YouTubePlaylistPreviewCard>[0]>
             onDownloadAll: async () => undefined,
             onCancel: () => undefined,
             ...props,
-        })
+        }),
     );
 }
 

@@ -34,9 +34,8 @@ const VIDEO = {
 } as const;
 
 async function render(props: Record<string, unknown>) {
-    const { YouTubePreviewCard } = await import(
-        "../../features/search/components/YouTubePreviewCard"
-    );
+    const { YouTubePreviewCard } =
+        await import("../../features/search/components/YouTubePreviewCard");
     return renderToStaticMarkup(
         React.createElement(YouTubePreviewCard, {
             videoInfo: VIDEO,
@@ -47,7 +46,7 @@ async function render(props: Record<string, unknown>) {
             onPlay: () => undefined,
             onDownload: async () => undefined,
             ...props,
-        } as never)
+        } as never),
     );
 }
 

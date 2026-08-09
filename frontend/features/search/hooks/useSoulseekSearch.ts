@@ -23,11 +23,15 @@ interface UseSoulseekSearchReturn {
 export function useSoulseekSearch({
     query,
 }: UseSoulseekSearchProps): UseSoulseekSearchReturn {
-    const [soulseekResults, setSoulseekResults] = useState<SoulseekResult[]>([]);
+    const [soulseekResults, setSoulseekResults] = useState<SoulseekResult[]>(
+        [],
+    );
     const [isSoulseekSearching, setIsSoulseekSearching] = useState(false);
     const [isSoulseekPolling, setIsSoulseekPolling] = useState(false);
     const [soulseekEnabled, setSoulseekEnabled] = useState(false);
-    const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
+    const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(
+        new Set(),
+    );
 
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -38,7 +42,10 @@ export function useSoulseekSearch({
                 const status = await api.getSlskdStatus();
                 setSoulseekEnabled(Boolean(status.enabled));
             } catch (error) {
-                sharedFrontendLogger.error("Failed to check Soulseek status:", error);
+                sharedFrontendLogger.error(
+                    "Failed to check Soulseek status:",
+                    error,
+                );
                 setSoulseekEnabled(false);
             }
         };
@@ -96,14 +103,16 @@ export function useSoulseekSearch({
                     }
 
                     try {
-                        const { results } = await api.getSoulseekResults(searchId);
+                        const { results } =
+                            await api.getSoulseekResults(searchId);
 
                         if (abortController.signal.aborted) return;
 
                         if (results && results.length > 0) {
                             setSoulseekResults(results);
                             if (results.length >= 10) {
-                                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                                if (pollIntervalRef.current)
+                                    clearInterval(pollIntervalRef.current);
                                 pollIntervalRef.current = null;
                                 setIsSoulseekPolling(false);
                             }
@@ -111,14 +120,19 @@ export function useSoulseekSearch({
 
                         pollCount++;
                         if (pollCount >= maxPolls) {
-                            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                            if (pollIntervalRef.current)
+                                clearInterval(pollIntervalRef.current);
                             pollIntervalRef.current = null;
                             setIsSoulseekPolling(false);
                         }
                     } catch (error) {
                         if (abortController.signal.aborted) return;
-                        sharedFrontendLogger.error("Error polling Soulseek results:", error);
-                        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                        sharedFrontendLogger.error(
+                            "Error polling Soulseek results:",
+                            error,
+                        );
+                        if (pollIntervalRef.current)
+                            clearInterval(pollIntervalRef.current);
                         pollIntervalRef.current = null;
                         setIsSoulseekPolling(false);
                     }
@@ -126,7 +140,10 @@ export function useSoulseekSearch({
             } catch (error) {
                 if (abortController.signal.aborted) return;
                 sharedFrontendLogger.error("Soulseek search error:", error);
-                if (error instanceof Error && error.message?.includes("not enabled")) {
+                if (
+                    error instanceof Error &&
+                    error.message?.includes("not enabled")
+                ) {
                     setSoulseekEnabled(false);
                 }
                 setIsSoulseekSearching(false);
@@ -156,7 +173,9 @@ export function useSoulseekSearch({
 
             if (typeof window !== "undefined") {
                 window.dispatchEvent(
-                    new CustomEvent("set-activity-panel-tab", { detail: { tab: "active" } }),
+                    new CustomEvent("set-activity-panel-tab", {
+                        detail: { tab: "active" },
+                    }),
                 );
                 window.dispatchEvent(new CustomEvent("open-activity-panel"));
                 window.dispatchEvent(new CustomEvent("notifications-changed"));
@@ -172,7 +191,9 @@ export function useSoulseekSearch({
         } catch (error) {
             sharedFrontendLogger.error("Download error:", error);
             const message =
-                error instanceof Error ? error.message : "Failed to start download";
+                error instanceof Error
+                    ? error.message
+                    : "Failed to start download";
             toast.error(message);
             setDownloadingFiles((prev) => {
                 const newSet = new Set(prev);

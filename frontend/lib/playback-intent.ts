@@ -19,7 +19,7 @@ export type PlaybackMachineState =
  */
 export function resolveHydratedPlaybackIntent(
     serverState: PlaybackIntentSnapshot | null | undefined,
-    fallbackIsPlaying: boolean
+    fallbackIsPlaying: boolean,
 ): boolean {
     if (typeof serverState?.isPlaying === "boolean") {
         return serverState.isPlaying;
@@ -33,7 +33,7 @@ export function resolveHydratedPlaybackIntent(
  */
 export function resolveMachinePlaybackIntent(
     machineState: PlaybackMachineState,
-    previousIntent: boolean
+    previousIntent: boolean,
 ): boolean {
     if (machineState === "PLAYING") {
         return true;

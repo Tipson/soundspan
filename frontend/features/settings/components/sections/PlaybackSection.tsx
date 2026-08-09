@@ -1,6 +1,11 @@
 "use client";
 
-import { SettingsSection, SettingsRow, SettingsSelect, InfoTooltip } from "../ui";
+import {
+    SettingsSection,
+    SettingsRow,
+    SettingsSelect,
+    InfoTooltip,
+} from "../ui";
 import { UserSettings } from "../../types";
 
 interface PlaybackSectionProps {
@@ -33,11 +38,12 @@ export function PlaybackSection({ value, onChange }: PlaybackSectionProps) {
             >
                 <SettingsSelect
                     value={value}
-                    onChange={(v) => onChange(v as UserSettings["playbackQuality"])}
+                    onChange={(v) =>
+                        onChange(v as UserSettings["playbackQuality"])
+                    }
                     options={qualityOptions}
                 />
             </SettingsRow>
         </SettingsSection>
     );
 }
-

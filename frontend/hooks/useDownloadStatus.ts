@@ -34,21 +34,21 @@ export interface DownloadStatus {
 
 function classifyDownloads(
     downloads: DownloadJob[],
-    now: Date
+    now: Date,
 ): DownloadStatus {
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
     const activeDownloads = downloads.filter(
-        (job) => job.status === "pending" || job.status === "processing"
+        (job) => job.status === "pending" || job.status === "processing",
     );
     const isRecent = (job: DownloadJob) =>
         new Date(job.completedAt || job.createdAt) > fiveMinutesAgo;
     const recentDownloads = downloads.filter(
         (job) =>
             (job.status === "completed" || job.status === "failed") &&
-            isRecent(job)
+            isRecent(job),
     );
     const failedDownloads = downloads.filter(
-        (job) => job.status === "failed" && isRecent(job)
+        (job) => job.status === "failed" && isRecent(job),
     );
 
     return {
@@ -70,7 +70,7 @@ interface DownloadPollingState {
 
 function scheduleDownloadPoll(
     state: DownloadPollingState,
-    delayMs: number
+    delayMs: number,
 ): void {
     if (state.pollTimeout !== null) {
         clearTimeout(state.pollTimeout);
@@ -80,12 +80,12 @@ function scheduleDownloadPoll(
 
 function handleDownloadPollError(
     state: DownloadPollingState,
-    error: unknown
+    error: unknown,
 ): void {
     state.errorCount += 1;
     const backoffDelay = resolveDownloadErrorBackoffMs(
         state.pollingInterval,
-        state.errorCount
+        state.errorCount,
     );
     if (!(error instanceof Error) || error.message !== "Too Many Requests") {
         logger.error("Download polling error", {
@@ -99,16 +99,19 @@ function handleDownloadPollError(
 
 function handleDownloadPollSuccess(
     state: DownloadPollingState,
-    response: DownloadJob[]
+    response: DownloadJob[],
 ): void {
     state.errorCount = 0;
     const nextStatus = classifyDownloads(response, new Date());
     state.publishStatus(nextStatus);
     if (state.active) {
-        scheduleDownloadPoll(state, resolveDownloadPollDelayMs(
-            nextStatus.activeDownloads.length,
-            response.length
-        ));
+        scheduleDownloadPoll(
+            state,
+            resolveDownloadPollDelayMs(
+                nextStatus.activeDownloads.length,
+                response.length,
+            ),
+        );
     }
 }
 
@@ -123,7 +126,7 @@ async function pollDownloads(state: DownloadPollingState): Promise<void> {
 
 function startDownloadPolling(
     pollingInterval: number,
-    publishStatus: (status: DownloadStatus) => void
+    publishStatus: (status: DownloadStatus) => void,
 ): () => void {
     const state: DownloadPollingState = {
         active: true,
@@ -143,7 +146,10 @@ function startDownloadPolling(
     return () => {
         state.active = false;
         if (state.pollTimeout !== null) clearTimeout(state.pollTimeout);
-        window.removeEventListener("download-status-changed", handleStatusChanged);
+        window.removeEventListener(
+            "download-status-changed",
+            handleStatusChanged,
+        );
     };
 }
 
@@ -155,7 +161,7 @@ function startDownloadPolling(
  */
 export function useDownloadStatus(
     pollingInterval: number = 15000,
-    isAuthenticated: boolean = false
+    isAuthenticated: boolean = false,
 ): DownloadStatus {
     const [status, setStatus] = useState<DownloadStatus>({
         activeDownloads: [],

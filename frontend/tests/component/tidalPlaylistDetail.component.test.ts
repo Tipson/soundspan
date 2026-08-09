@@ -42,7 +42,10 @@ mock.module("next/navigation", {
 
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 mock.module("@/lib/api", {
@@ -77,7 +80,8 @@ mock.module("@/lib/toast-context", {
 
 mock.module("@/components/ui/GradientSpinner", {
     namedExports: {
-        GradientSpinner: () => React.createElement("span", null, "gradient-spinner"),
+        GradientSpinner: () =>
+            React.createElement("span", null, "gradient-spinner"),
     },
 });
 
@@ -130,7 +134,8 @@ mock.module("@/hooks/useCollectionLikeAll", {
 
 mock.module("@/components/ui/PlaylistSelector", {
     namedExports: {
-        PlaylistSelector: () => React.createElement("div", null, "playlist-selector"),
+        PlaylistSelector: () =>
+            React.createElement("div", null, "playlist-selector"),
     },
 });
 
@@ -142,7 +147,7 @@ mock.module("@/lib/trackRef", {
 
 mock.module("@/utils/shuffle", {
     namedExports: {
-        shuffleArray: <T,>(value: T[]) => value,
+        shuffleArray: <T>(value: T[]) => value,
     },
 });
 
@@ -176,7 +181,8 @@ mock.module("@/components/track", {
             state.trackListRendered = true;
             return React.createElement("div", null, "track-list");
         },
-        TrackListHeader: () => React.createElement("div", null, "track-list-header"),
+        TrackListHeader: () =>
+            React.createElement("div", null, "track-list-header"),
     },
 });
 
@@ -190,9 +196,10 @@ beforeEach(() => {
 async function loadPage() {
     const mod = await import("../../app/explore/tidal-playlist/[id]/page");
     const directDefault = (mod as { default?: unknown }).default;
-    const Page = typeof directDefault === "function"
-        ? (directDefault as React.FC)
-        : (directDefault as { default?: React.FC } | undefined)?.default;
+    const Page =
+        typeof directDefault === "function"
+            ? (directDefault as React.FC)
+            : (directDefault as { default?: React.FC } | undefined)?.default;
     assert.ok(Page, "tidal playlist page default export is available");
     return Page;
 }
@@ -207,7 +214,7 @@ test("tidal playlist page renders deterministic loading state on server render",
     assert.equal(
         state.getPlaylistCalls,
         0,
-        "useEffect fetch does not run during static server render"
+        "useEffect fetch does not run during static server render",
     );
 });
 

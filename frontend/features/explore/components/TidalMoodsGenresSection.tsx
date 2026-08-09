@@ -90,12 +90,16 @@ export function TidalMoodsGenresSection({
         try {
             const response = await api.getTidalGenrePlaylists(normalizedPath);
             if (thisRequest !== requestIdRef.current) return;
-            setPlaylists(Array.isArray(response.playlists) ? response.playlists : []);
+            setPlaylists(
+                Array.isArray(response.playlists) ? response.playlists : [],
+            );
         } catch (error) {
             if (thisRequest !== requestIdRef.current) return;
             frontendLogger.warn("Failed to load TIDAL genre playlists", error);
             setPlaylists([]);
-            setLoadError("Failed to load playlists. Try another mood or genre.");
+            setLoadError(
+                "Failed to load playlists. Try another mood or genre.",
+            );
         } finally {
             if (thisRequest === requestIdRef.current) {
                 setIsLoadingPlaylists(false);
@@ -147,7 +151,9 @@ export function TidalMoodsGenresSection({
                                     <div className="relative aspect-square mb-3 rounded-md overflow-hidden bg-surface-highlight shadow-lg">
                                         {item.thumbnailUrl ? (
                                             <img
-                                                src={api.getTidalBrowseImageUrl(item.thumbnailUrl)}
+                                                src={api.getTidalBrowseImageUrl(
+                                                    item.thumbnailUrl,
+                                                )}
                                                 alt={item.title}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
@@ -180,17 +186,19 @@ export function TidalMoodsGenresSection({
                         </div>
                     )}
 
-                    {!isLoadingPlaylists && !loadError && playlists.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <Music2 className="w-12 h-12 text-gray-400 mb-4" />
-                            <h3 className="text-lg font-medium text-white mb-2">
-                                No playlists found
-                            </h3>
-                            <p className="text-sm text-gray-400">
-                                Try another mood or genre.
-                            </p>
-                        </div>
-                    )}
+                    {!isLoadingPlaylists &&
+                        !loadError &&
+                        playlists.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-20 text-center">
+                                <Music2 className="w-12 h-12 text-gray-400 mb-4" />
+                                <h3 className="text-lg font-medium text-white mb-2">
+                                    No playlists found
+                                </h3>
+                                <p className="text-sm text-gray-400">
+                                    Try another mood or genre.
+                                </p>
+                            </div>
+                        )}
                 </div>
             </div>
         );
@@ -213,7 +221,6 @@ export function TidalMoodsGenresSection({
                     <PillRow items={genres} onPillClick={handlePillClick} />
                 </section>
             )}
-
         </div>
     );
 }

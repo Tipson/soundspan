@@ -27,7 +27,8 @@ function assertHookGuardError(
 }
 
 test("useAudioControls throws when rendered outside provider", async () => {
-    const { useAudioControls } = await import("../../lib/audio-controls-context");
+    const { useAudioControls } =
+        await import("../../lib/audio-controls-context");
 
     const HookProbe = () => {
         useAudioControls();
@@ -41,13 +42,16 @@ test("useAudioControls throws when rendered outside provider", async () => {
 });
 
 test("useAudioControls resolves within provider stack", async () => {
-    const { AudioStateProvider } = await import("../../lib/audio-state-context");
-    const { AudioPlaybackProvider } = await import("../../lib/audio-playback-context");
-    const { AudioControlsProvider, useAudioControls } = await import(
-        "../../lib/audio-controls-context"
-    );
+    const { AudioStateProvider } =
+        await import("../../lib/audio-state-context");
+    const { AudioPlaybackProvider } =
+        await import("../../lib/audio-playback-context");
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
 
-    const capturedRef = { current: null as ReturnType<typeof useAudioControls> | null };
+    const capturedRef = {
+        current: null as ReturnType<typeof useAudioControls> | null,
+    };
     const HookProbe = () => {
         capturedRef.current = useAudioControls();
         return React.createElement("div", null, "controls-ready");
@@ -254,7 +258,8 @@ test("audio-controls helper exports cover queue and listen-together session bran
 });
 
 test("useAudioPlayback throws when rendered outside provider", async () => {
-    const { useAudioPlayback } = await import("../../lib/audio-playback-context");
+    const { useAudioPlayback } =
+        await import("../../lib/audio-playback-context");
 
     const HookProbe = () => {
         useAudioPlayback();
@@ -268,12 +273,14 @@ test("useAudioPlayback throws when rendered outside provider", async () => {
 });
 
 test("useAudioPlayback resolves within provider stack", async () => {
-    const { AudioStateProvider } = await import("../../lib/audio-state-context");
-    const { AudioPlaybackProvider, useAudioPlayback } = await import(
-        "../../lib/audio-playback-context"
-    );
+    const { AudioStateProvider } =
+        await import("../../lib/audio-state-context");
+    const { AudioPlaybackProvider, useAudioPlayback } =
+        await import("../../lib/audio-playback-context");
 
-    const capturedRef = { current: null as ReturnType<typeof useAudioPlayback> | null };
+    const capturedRef = {
+        current: null as ReturnType<typeof useAudioPlayback> | null,
+    };
     const HookProbe = () => {
         capturedRef.current = useAudioPlayback();
         return React.createElement("div", null, "playback-ready");
@@ -294,7 +301,10 @@ test("useAudioPlayback resolves within provider stack", async () => {
     assert.ok(html.includes("playback-ready"));
     assert.ok(capturedRef.current);
     assert.equal(typeof capturedRef.current.setCurrentTime, "function");
-    assert.equal(typeof capturedRef.current.setCurrentTimeFromEngine, "function");
+    assert.equal(
+        typeof capturedRef.current.setCurrentTimeFromEngine,
+        "function",
+    );
     assert.equal(typeof capturedRef.current.clearAudioError, "function");
 });
 
@@ -400,11 +410,11 @@ test("useListenTogether resolves within provider with deterministic mocked depen
         resolveListenTogetherMembershipPendingState,
         canIssueListenTogetherHostPlaybackCommand,
         resolveListenTogetherReadyReportRecoveryAction,
-    } = await import(
-        "../../lib/listen-together-context"
-    );
+    } = await import("../../lib/listen-together-context");
 
-    const capturedRef = { current: null as ReturnType<typeof useListenTogether> | null };
+    const capturedRef = {
+        current: null as ReturnType<typeof useListenTogether> | null,
+    };
     const HookProbe = () => {
         capturedRef.current = useListenTogether();
         return React.createElement("div", null, "listen-together-ready");
@@ -521,7 +531,8 @@ test("useListenTogether resolves within provider with deterministic mocked depen
 });
 
 test("useListenTogether throws when rendered outside provider", async () => {
-    const { useListenTogether } = await import("../../lib/listen-together-context");
+    const { useListenTogether } =
+        await import("../../lib/listen-together-context");
 
     const HookProbe = () => {
         useListenTogether();

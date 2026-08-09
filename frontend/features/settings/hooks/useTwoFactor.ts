@@ -15,11 +15,12 @@ export function useTwoFactor() {
     const [twoFactorQR, setTwoFactorQR] = useState("");
     const [twoFactorToken, setTwoFactorToken] = useState("");
     const [disablingTwoFactor, setDisablingTwoFactor] = useState(false);
-    const [disableTwoFactorPassword, setDisableTwoFactorPassword] = useState("");
+    const [disableTwoFactorPassword, setDisableTwoFactorPassword] =
+        useState("");
     const [disableTwoFactorToken, setDisableTwoFactorToken] = useState("");
     const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
     const [showRecoveryCodes, setShowRecoveryCodes] = useState(false);
-    
+
     // Retry tracking to prevent infinite loops on failure
     const retryCountRef = useRef(0);
     const maxRetries = 3;
@@ -30,23 +31,28 @@ export function useTwoFactor() {
         if (hasFailedRef.current) {
             return;
         }
-        
+
         try {
             setLoadingTwoFactor(true);
-            const status = await api.get<{ enabled: boolean }>("/auth/2fa/status");
+            const status = await api.get<{ enabled: boolean }>(
+                "/auth/2fa/status",
+            );
             setTwoFactorEnabled(status.enabled);
             // Reset retry count on success
             retryCountRef.current = 0;
         } catch (error) {
             logger.error("Failed to load 2FA status", { error });
             retryCountRef.current++;
-            
+
             // Stop retrying after max attempts
             if (retryCountRef.current >= maxRetries) {
                 hasFailedRef.current = true;
-                logger.warn("2FA status load failed after max retries, giving up", {
-                    maxRetries,
-                });
+                logger.warn(
+                    "2FA status load failed after max retries, giving up",
+                    {
+                        maxRetries,
+                    },
+                );
             }
         } finally {
             setLoadingTwoFactor(false);
@@ -56,7 +62,10 @@ export function useTwoFactor() {
     const setup2FA = async () => {
         try {
             setLoadingTwoFactor(true);
-            const response = await api.post<{ secret: string; qrCode: string }>("/auth/2fa/setup", {});
+            const response = await api.post<{ secret: string; qrCode: string }>(
+                "/auth/2fa/setup",
+                {},
+            );
             setTwoFactorSecret(response.secret);
             setTwoFactorQR(response.qrCode);
             setSettingUpTwoFactor(true);
@@ -71,10 +80,13 @@ export function useTwoFactor() {
     const enable2FA = async (token: string) => {
         try {
             setLoadingTwoFactor(true);
-            const response = await api.post<{ recoveryCodes: string[] }>("/auth/2fa/enable", {
-                secret: twoFactorSecret,
-                token,
-            });
+            const response = await api.post<{ recoveryCodes: string[] }>(
+                "/auth/2fa/enable",
+                {
+                    secret: twoFactorSecret,
+                    token,
+                },
+            );
 
             setRecoveryCodes(response.recoveryCodes);
             setShowRecoveryCodes(true);

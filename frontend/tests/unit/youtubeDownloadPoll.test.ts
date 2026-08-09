@@ -77,23 +77,19 @@ test("unknown status keeps polling without progress", () => {
 test("isolated poll failures are tolerated as still in progress", () => {
     assert.equal(shouldAbandonYouTubeDownloadPolling(1), false);
     assert.equal(
-        shouldAbandonYouTubeDownloadPolling(
-            MAX_CONSECUTIVE_POLL_FAILURES - 1
-        ),
-        false
+        shouldAbandonYouTubeDownloadPolling(MAX_CONSECUTIVE_POLL_FAILURES - 1),
+        false,
     );
 });
 
 test("polling is abandoned only after the consecutive-failure budget", () => {
     assert.equal(
         shouldAbandonYouTubeDownloadPolling(MAX_CONSECUTIVE_POLL_FAILURES),
-        true
+        true,
     );
     assert.equal(
-        shouldAbandonYouTubeDownloadPolling(
-            MAX_CONSECUTIVE_POLL_FAILURES + 1
-        ),
-        true
+        shouldAbandonYouTubeDownloadPolling(MAX_CONSECUTIVE_POLL_FAILURES + 1),
+        true,
     );
 });
 

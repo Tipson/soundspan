@@ -4,10 +4,12 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register();
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-    true;
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
-const Icon = (props: Record<string, unknown>) => React.createElement("i", props);
+const Icon = (props: Record<string, unknown>) =>
+    React.createElement("i", props);
 
 mock.module("lucide-react", {
     namedExports: { AlertTriangle: Icon, X: Icon },
@@ -55,13 +57,20 @@ async function unmountDialog(
 }
 
 test("ConfirmDialog renders its content and actions in a dialog", async () => {
-    const mounted = await mountConfirmDialog(() => undefined, () => undefined);
+    const mounted = await mountConfirmDialog(
+        () => undefined,
+        () => undefined,
+    );
     assert.ok(mounted.container.querySelector('[role="dialog"]'));
     assert.match(mounted.container.textContent, /Delete playlist\?/);
-    assert.match(mounted.container.textContent, /This action cannot be undone\./);
+    assert.match(
+        mounted.container.textContent,
+        /This action cannot be undone\./,
+    );
 
-    const labels = Array.from(mounted.container.querySelectorAll("button"), (button) =>
-        button.textContent?.trim(),
+    const labels = Array.from(
+        mounted.container.querySelectorAll("button"),
+        (button) => button.textContent?.trim(),
     );
     assert.ok(labels.includes("Keep playlist"));
     assert.ok(labels.includes("Delete"));

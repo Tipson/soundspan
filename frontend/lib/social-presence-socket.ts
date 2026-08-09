@@ -88,4 +88,3 @@ class SocialPresenceSocket {
 }
 
 export const socialPresenceSocket = new SocialPresenceSocket();
-

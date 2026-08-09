@@ -8,7 +8,12 @@ interface SettingsToggleProps {
 /**
  * Renders the SettingsToggle component.
  */
-export function SettingsToggle({ id, checked, onChange, disabled }: SettingsToggleProps) {
+export function SettingsToggle({
+    id,
+    checked,
+    onChange,
+    disabled,
+}: SettingsToggleProps) {
     return (
         <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -19,17 +24,18 @@ export function SettingsToggle({ id, checked, onChange, disabled }: SettingsTogg
                 disabled={disabled}
                 className="sr-only peer"
             />
-            <div className={`
+            <div
+                className={`
                 w-10 h-6 rounded-full transition-colors
-                ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                ${checked ? 'bg-[#1DB954]' : 'bg-line-muted'}
+                ${disabled ? "opacity-50 cursor-not-allowed" : ""}
+                ${checked ? "bg-[#1DB954]" : "bg-line-muted"}
                 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1DB954]/30
                 after:content-[''] after:absolute after:top-[2px] after:left-[2px]
                 after:bg-white after:rounded-full after:h-5 after:w-5
                 after:transition-transform after:duration-200
-                ${checked ? 'after:translate-x-4' : 'after:translate-x-0'}
-            `} />
+                ${checked ? "after:translate-x-4" : "after:translate-x-0"}
+            `}
+            />
         </label>
     );
 }
-

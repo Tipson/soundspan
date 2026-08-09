@@ -87,7 +87,7 @@ export interface YouTubeDownloadListItem {
  */
 export function youtubeJobToDownloadItem(
     job: YouTubeDownloadJob,
-    nowIso: string
+    nowIso: string,
 ): YouTubeDownloadListItem {
     const pct = Math.max(0, Math.min(100, Math.round(job.progressPct || 0)));
     const createdAt = job.createdAt
@@ -135,7 +135,7 @@ export interface BulkDownloadProgress {
 
 /** Summarize per-item statuses into an aggregate progress snapshot. */
 export function summarizeBulkProgress(
-    statuses: BulkItemStatus[]
+    statuses: BulkItemStatus[],
 ): BulkDownloadProgress {
     const total = statuses.length;
     let completed = 0;
@@ -169,7 +169,7 @@ export function summarizeBulkProgress(
 export async function mapLimit<T>(
     items: T[],
     limit: number,
-    worker: (item: T, index: number) => Promise<void>
+    worker: (item: T, index: number) => Promise<void>,
 ): Promise<void> {
     const max = Math.max(1, limit);
     let cursor = 0;
@@ -186,9 +186,8 @@ export async function mapLimit<T>(
         }
     }
 
-    const runners = Array.from(
-        { length: Math.min(max, items.length) },
-        () => runner()
+    const runners = Array.from({ length: Math.min(max, items.length) }, () =>
+        runner(),
     );
     await Promise.all(runners);
 }

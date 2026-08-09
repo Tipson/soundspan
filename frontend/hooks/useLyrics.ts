@@ -38,7 +38,7 @@ export const lyricsQueryKeys = {
  */
 export async function fetchLyrics(
     trackId: string,
-    metadata?: LyricsLookupMetadata
+    metadata?: LyricsLookupMetadata,
 ): Promise<LyricsData> {
     return await new Promise<LyricsData>((resolve, reject) => {
         const timeout = setTimeout(() => {
@@ -66,7 +66,7 @@ export async function fetchLyrics(
  */
 export function useLyrics(
     trackId: string | undefined,
-    metadata?: LyricsLookupMetadata
+    metadata?: LyricsLookupMetadata,
 ) {
     return useQuery<LyricsData>({
         queryKey: lyricsQueryKeys.lyrics(trackId || "", metadata),
@@ -76,7 +76,9 @@ export function useLyrics(
         },
         enabled: !!trackId,
         staleTime: (query) =>
-            resolveLyricsQueryStaleTime(query.state.data as LyricsData | undefined),
+            resolveLyricsQueryStaleTime(
+                query.state.data as LyricsData | undefined,
+            ),
         gcTime: LYRICS_QUERY_GC_TIME,
         retry: 1,
     });

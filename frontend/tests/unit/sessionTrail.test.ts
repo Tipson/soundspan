@@ -40,7 +40,7 @@ test("appendTrailEntry appends when the track id changes", () => {
     trail = appendTrailEntry(trail, "c", 3);
     assert.deepEqual(
         trail.map((e) => e.trackId),
-        ["a", "b", "c"]
+        ["a", "b", "c"],
     );
 });
 
@@ -55,7 +55,7 @@ test("appendTrailEntry does not duplicate the most recent id", () => {
     trail = appendTrailEntry(trail, "a", 4);
     assert.deepEqual(
         trail.map((e) => e.trackId),
-        ["a", "b", "a"]
+        ["a", "b", "a"],
     );
 });
 
@@ -76,8 +76,14 @@ test("readStoredTrail returns [] for null storage (SSR) or missing key", () => {
 });
 
 test("readStoredTrail rejects malformed / non-array / bad-shape payloads", () => {
-    assert.deepEqual(readStoredTrail(makeStorage({ [TRAIL_STORAGE_KEY]: "{not json" })), []);
-    assert.deepEqual(readStoredTrail(makeStorage({ [TRAIL_STORAGE_KEY]: '{"a":1}' })), []);
+    assert.deepEqual(
+        readStoredTrail(makeStorage({ [TRAIL_STORAGE_KEY]: "{not json" })),
+        [],
+    );
+    assert.deepEqual(
+        readStoredTrail(makeStorage({ [TRAIL_STORAGE_KEY]: '{"a":1}' })),
+        [],
+    );
     // Array with bad entries is filtered down to valid ones.
     const mixed = makeStorage({
         [TRAIL_STORAGE_KEY]: JSON.stringify([
@@ -89,7 +95,7 @@ test("readStoredTrail rejects malformed / non-array / bad-shape payloads", () =>
     });
     assert.deepEqual(
         readStoredTrail(mixed).map((e) => e.trackId),
-        ["a", "b"]
+        ["a", "b"],
     );
 });
 
@@ -170,7 +176,7 @@ test("readStoredTrailMode defaults to 'on' for null storage, a missing key, or g
     assert.equal(readStoredTrailMode(makeStorage()), "on");
     assert.equal(
         readStoredTrailMode(makeStorage({ [TRAIL_MODE_STORAGE_KEY]: "bogus" })),
-        "on"
+        "on",
     );
 });
 

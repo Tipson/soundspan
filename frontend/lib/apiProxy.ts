@@ -1,15 +1,19 @@
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { normalizeApiBaseUrlInput } from "./api-base-url";
 const getEnv = (): Record<string, string | undefined> => {
-    return (globalThis as { process?: { env?: Record<string, string | undefined> } })
-        .process?.env ?? {};
+    return (
+        (
+            globalThis as {
+                process?: { env?: Record<string, string | undefined> };
+            }
+        ).process?.env ?? {}
+    );
 };
 
 const getBackendUrl = (): string => {
     const env = getEnv();
     return (
-        normalizeApiBaseUrlInput(env?.BACKEND_URL) ??
-        "http://127.0.0.1:3006"
+        normalizeApiBaseUrlInput(env?.BACKEND_URL) ?? "http://127.0.0.1:3006"
     );
 };
 
@@ -30,7 +34,7 @@ const normalizeTargetPath = (targetPath: string): string =>
 
 export const resolveProxyTimeoutMs = (
     targetPath: string,
-    env: Record<string, string | undefined> = getEnv()
+    env: Record<string, string | undefined> = getEnv(),
 ): number => {
     const globalTimeout =
         parsePositiveTimeoutMs(env.PROXY_REQUEST_TIMEOUT_MS) ??
@@ -41,7 +45,7 @@ export const resolveProxyTimeoutMs = (
     }
 
     const importPreviewTimeout = parsePositiveTimeoutMs(
-        env.PROXY_IMPORT_PREVIEW_TIMEOUT_MS
+        env.PROXY_IMPORT_PREVIEW_TIMEOUT_MS,
     );
     if (importPreviewTimeout !== null) {
         return importPreviewTimeout;
@@ -61,7 +65,7 @@ const lastProxyLogByKey = new Map<string, number>();
 const logProxyError = (
     key: string,
     summary: string,
-    details?: unknown
+    details?: unknown,
 ): void => {
     if (isProxyDebugEnabled()) {
         if (details !== undefined) {
@@ -118,7 +122,7 @@ const isExpectedStreamTermination = (error: unknown): boolean => {
 const wrapUpstreamBody = (
     body: ReadableStream<Uint8Array> | null,
     method: string,
-    targetPath: string
+    targetPath: string,
 ): ReadableStream<Uint8Array> | null => {
     if (!body) return null;
 
@@ -144,7 +148,7 @@ const wrapUpstreamBody = (
                     const networkCode = extractNetworkCode(error);
                     logProxyError(
                         `stream-close:${method}:${targetPath}:${networkCode}`,
-                        `[apiProxy] Upstream stream closed ${method} ${targetPath} (${networkCode})`
+                        `[apiProxy] Upstream stream closed ${method} ${targetPath} (${networkCode})`,
                     );
                     controller.close();
                     return;
@@ -179,7 +183,7 @@ const buildProxyHeaders = (request: Request): Headers => {
     }
     headers.set(
         "x-forwarded-proto",
-        new URL(request.url).protocol.replace(":", "")
+        new URL(request.url).protocol.replace(":", ""),
     );
 
     const forwardedFor = request.headers.get("x-forwarded-for");
@@ -194,7 +198,7 @@ const buildProxyHeaders = (request: Request): Headers => {
 export const proxyRequest = async (
     request: Request,
     targetPath: string,
-    methodOverride?: string
+    methodOverride?: string,
 ): Promise<Response> => {
     // Used by frontend same-origin API mode (`/app/api/[...path]` route handlers).
     const targetUrl = buildTargetUrl(request, targetPath);
@@ -248,7 +252,11 @@ export const proxyRequest = async (
         responseHeaders.delete("content-length");
         responseHeaders.delete("transfer-encoding");
 
-        const responseBody = wrapUpstreamBody(upstream.body, method, targetPath);
+        const responseBody = wrapUpstreamBody(
+            upstream.body,
+            method,
+            targetPath,
+        );
 
         return new Response(responseBody, {
             status: upstream.status,
@@ -259,15 +267,16 @@ export const proxyRequest = async (
         if (timedOut) {
             logProxyError(
                 `timeout:${method}:${targetPath}`,
-                `[apiProxy] Upstream timeout (${timeoutMs}ms) ${method} ${targetPath}`
+                `[apiProxy] Upstream timeout (${timeoutMs}ms) ${method} ${targetPath}`,
             );
             return Response.json(
                 {
                     error: "Upstream request timed out",
                     code: "UPSTREAM_TIMEOUT",
-                    description: "The frontend could not get a response from the backend in time.",
+                    description:
+                        "The frontend could not get a response from the backend in time.",
                 },
-                { status: 504 }
+                { status: 504 },
             );
         }
 
@@ -275,16 +284,17 @@ export const proxyRequest = async (
         logProxyError(
             `network:${method}:${targetPath}:${networkCode}`,
             `[apiProxy] Upstream unavailable ${method} ${targetPath} (${networkCode})`,
-            error
+            error,
         );
 
         return Response.json(
             {
                 error: "Backend service unavailable",
                 code: "UPSTREAM_UNAVAILABLE",
-                description: "The frontend could not reach the backend service.",
+                description:
+                    "The frontend could not reach the backend service.",
             },
-            { status: 503 }
+            { status: 503 },
         );
     } finally {
         if (timeoutId) {

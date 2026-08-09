@@ -5,16 +5,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-    fadeAlphaForAge, readStoredTrailMode, sessionStorageSafe, useSessionTrail,
-    writeStoredTrailMode, type TrailEntry, type TrailMode,
+    fadeAlphaForAge,
+    readStoredTrailMode,
+    sessionStorageSafe,
+    useSessionTrail,
+    writeStoredTrailMode,
+    type TrailEntry,
+    type TrailMode,
 } from "./useSessionTrail";
-import { describeSaveResult, formatPlaylistDate, saveTracksAsPlaylist } from "./savePlaylist";
+import {
+    describeSaveResult,
+    formatPlaylistDate,
+    saveTracksAsPlaylist,
+} from "./savePlaylist";
 
 export const TRAIL_DRAW_LIMIT = 12;
 const TRAIL_FADE_RECOMPUTE_MS = 60_000;
 const EMPTY_TRAIL: TrailPoint[] = [];
 
-export interface TrailPoint { x: number; y: number; alpha: number }
+export interface TrailPoint {
+    x: number;
+    y: number;
+    alpha: number;
+}
 export interface UseTrailDisplay {
     trailIds: string[];
     trailMode: TrailMode;
@@ -30,7 +43,8 @@ export interface UseTrailDisplayArgs {
 
 function useTrailModeState(): [TrailMode, (mode: TrailMode) => void] {
     const [mode, setMode] = useState<TrailMode>(() =>
-        readStoredTrailMode(sessionStorageSafe()));
+        readStoredTrailMode(sessionStorageSafe()),
+    );
     const update = useCallback((next: TrailMode) => {
         setMode(next);
         writeStoredTrailMode(sessionStorageSafe(), next);
@@ -61,13 +75,15 @@ function useTrailSave(trailIds: readonly string[]) {
 function useTrailPoints(
     entries: readonly TrailEntry[],
     mode: TrailMode,
-    posOf: UseTrailDisplayArgs["posOf"]
+    posOf: UseTrailDisplayArgs["posOf"],
 ): TrailPoint[] {
     const [fadeTick, setFadeTick] = useState(0);
     useEffect(() => {
         if (mode !== "fade") return;
-        const id = setInterval(() => setFadeTick((tick) => tick + 1),
-            TRAIL_FADE_RECOMPUTE_MS);
+        const id = setInterval(
+            () => setFadeTick((tick) => tick + 1),
+            TRAIL_FADE_RECOMPUTE_MS,
+        );
         return () => clearInterval(id);
     }, [mode]);
     return useMemo(() => {
@@ -81,12 +97,14 @@ function useTrailPoints(
             if (alpha > 0) points.push({ ...position, alpha });
         }
         return points;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fadeTick deliberately triggers aging.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- fadeTick deliberately triggers aging.
     }, [entries, posOf, mode, fadeTick]);
 }
 
 /** Compose stored trail data into the map's display and action surface. */
-export function useTrailDisplay({ posOf }: UseTrailDisplayArgs): UseTrailDisplay {
+export function useTrailDisplay({
+    posOf,
+}: UseTrailDisplayArgs): UseTrailDisplay {
     const { trailIds, entries, clear } = useSessionTrail();
     const [trailMode, setTrailMode] = useTrailModeState();
     const save = useTrailSave(trailIds);
@@ -94,7 +112,13 @@ export function useTrailDisplay({ posOf }: UseTrailDisplayArgs): UseTrailDisplay
         clear();
         toast.success("Trail cleared");
     }, [clear]);
-    return { trailIds, trailMode, setTrailMode,
+    return {
+        trailIds,
+        trailMode,
+        setTrailMode,
         trailPoints: useTrailPoints(entries, trailMode, posOf),
-        clearTrail, saveTrail: save.save, trailSaving: save.saving };
+        clearTrail,
+        saveTrail: save.save,
+        trailSaving: save.saving,
+    };
 }

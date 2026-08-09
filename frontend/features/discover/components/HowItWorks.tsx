@@ -17,25 +17,29 @@ export function HowItWorks() {
                 <div className="flex items-start gap-3">
                     <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
                     <p>
-                        Builds recommendations from your listening history and local library first.
+                        Builds recommendations from your listening history and
+                        local library first.
                     </p>
                 </div>
                 <div className="flex items-start gap-3">
                     <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
                     <p>
-                        Similarity tiers keep a mix of safe picks and exploration tracks.
+                        Similarity tiers keep a mix of safe picks and
+                        exploration tracks.
                     </p>
                 </div>
                 <div className="flex items-start gap-3">
                     <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
                     <p>
-                        When TIDAL or YouTube Music is connected, a portion of tracks can stream via gap-fill.
+                        When TIDAL or YouTube Music is connected, a portion of
+                        tracks can stream via gap-fill.
                     </p>
                 </div>
                 <div className="flex items-start gap-3">
                     <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
                     <p>
-                        Source badges show whether each track is Local, TIDAL, or YouTube Music.
+                        Source badges show whether each track is Local, TIDAL,
+                        or YouTube Music.
                     </p>
                 </div>
                 <div className="flex items-start gap-3">
@@ -45,7 +49,8 @@ export function HowItWorks() {
                 <div className="flex items-start gap-3">
                     <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
                     <p>
-                        No automatic downloads or library writes are performed by this flow.
+                        No automatic downloads or library writes are performed
+                        by this flow.
                     </p>
                 </div>
             </div>

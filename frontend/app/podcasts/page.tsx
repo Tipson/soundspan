@@ -55,19 +55,20 @@ export default function PodcastsPage() {
         useTopPodcastsQuery(12);
 
     // Fetch genre-based discovery podcasts
-    const { data: relatedPodcasts = {}, isLoading: isLoadingRelatedPodcasts } = useQuery({
-        queryKey: ["podcasts", "discovery", "genres"],
-        queryFn: async () => {
-            const genreIds = [1303, 1324, 1489, 1488, 1321, 1545, 1502];
-            return api.getPodcastsByGenre(genreIds);
-        },
-        staleTime: 10 * 60 * 1000,
-        enabled: isAuthenticated,
-    });
+    const { data: relatedPodcasts = {}, isLoading: isLoadingRelatedPodcasts } =
+        useQuery({
+            queryKey: ["podcasts", "discovery", "genres"],
+            queryFn: async () => {
+                const genreIds = [1303, 1324, 1489, 1488, 1321, 1545, 1502];
+                return api.getPodcastsByGenre(genreIds);
+            },
+            staleTime: 10 * 60 * 1000,
+            enabled: isAuthenticated,
+        });
 
     // Sorting and pagination state for "My Podcasts"
-    type SortOption = 'title' | 'author' | 'recent';
-    const [sortBy, setSortBy] = useState<SortOption>('title');
+    type SortOption = "title" | "author" | "recent";
+    const [sortBy, setSortBy] = useState<SortOption>("title");
     const [itemsPerPage, setItemsPerPage] = useState<number>(50);
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -83,15 +84,17 @@ export default function PodcastsPage() {
     const sortedPodcasts = useMemo(() => {
         const sorted = [...podcasts];
         switch (sortBy) {
-            case 'title':
+            case "title":
                 sorted.sort((a, b) => a.title.localeCompare(b.title));
                 break;
-            case 'author':
+            case "author":
                 sorted.sort((a, b) => a.author.localeCompare(b.author));
                 break;
-            case 'recent':
+            case "recent":
                 // Sort by episode count (most episodes = most likely actively listened)
-                sorted.sort((a, b) => (b.episodeCount || 0) - (a.episodeCount || 0));
+                sorted.sort(
+                    (a, b) => (b.episodeCount || 0) - (a.episodeCount || 0),
+                );
                 break;
         }
         return sorted;
@@ -143,13 +146,13 @@ export default function PodcastsPage() {
                 const results = await api.discoverSearch(
                     searchQuery,
                     "podcasts",
-                    8
+                    8,
                 );
 
                 // Filter for podcasts from the results array
                 const podcastResults =
                     results?.results?.filter(
-                        (r: { type: string }) => r.type === "podcast"
+                        (r: { type: string }) => r.type === "podcast",
                     ) || [];
                 setSearchResults(podcastResults);
                 setShowDropdown(podcastResults.length > 0);
@@ -208,7 +211,7 @@ export default function PodcastsPage() {
             toast.error(
                 error instanceof Error
                     ? error.message
-                    : "Failed to subscribe to RSS feed"
+                    : "Failed to subscribe to RSS feed",
             );
         } finally {
             setIsAddingRss(false);
@@ -262,14 +265,16 @@ export default function PodcastsPage() {
                         {showDropdown && searchResults.length > 0 && (
                             <div className="absolute top-full left-0 mt-2 w-full bg-surface-sunken border border-white/10 rounded-lg shadow-2xl overflow-hidden z-50 max-h-96 overflow-y-auto">
                                 {searchResults.map((result) => {
-                                    const imageUrl = getProxiedImageUrl(result.coverUrl);
+                                    const imageUrl = getProxiedImageUrl(
+                                        result.coverUrl,
+                                    );
                                     return (
                                         <div
                                             key={result.id}
                                             className="flex items-center gap-3 p-3 hover:bg-white/5 transition-colors cursor-pointer border-b border-white/5 last:border-b-0"
                                             onClick={() => {
                                                 router.push(
-                                                    `/podcasts/${result.id}`
+                                                    `/podcasts/${result.id}`,
                                                 );
                                                 setShowDropdown(false);
                                             }}
@@ -279,7 +284,10 @@ export default function PodcastsPage() {
                                                 {imageUrl ? (
                                                     <Image
                                                         src={imageUrl}
-                                                        alt={result.name || "Podcast"}
+                                                        alt={
+                                                            result.name ||
+                                                            "Podcast"
+                                                        }
                                                         fill
                                                         sizes="48px"
                                                         className="object-cover"
@@ -321,7 +329,8 @@ export default function PodcastsPage() {
                             searchQuery.length >= 2 && (
                                 <div className="absolute top-full left-0 mt-2 w-full bg-surface-sunken border border-white/10 rounded-lg shadow-2xl p-4 z-50">
                                     <p className="text-gray-400 text-sm text-center">
-                                        No podcasts found for &quot;{searchQuery}&quot;
+                                        No podcasts found for &quot;
+                                        {searchQuery}&quot;
                                     </p>
                                 </div>
                             )}
@@ -376,13 +385,17 @@ export default function PodcastsPage() {
                                 {/* Sort Dropdown */}
                                 <select
                                     value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                                    onChange={(e) =>
+                                        setSortBy(e.target.value as SortOption)
+                                    }
                                     className="px-4 py-2 bg-surface-hover border border-white/10 rounded-full text-white text-sm focus:outline-none focus:border-ai [&>option]:bg-surface-hover [&>option]:text-white"
                                     disabled={showMyPodcastsSkeleton}
                                 >
                                     <option value="title">Title (A-Z)</option>
                                     <option value="author">Author (A-Z)</option>
-                                    <option value="recent">Most Episodes</option>
+                                    <option value="recent">
+                                        Most Episodes
+                                    </option>
                                 </select>
 
                                 {/* Items per page */}
@@ -402,7 +415,10 @@ export default function PodcastsPage() {
                                 </select>
 
                                 <span className="text-sm text-gray-400">
-                                    {podcasts.length} {podcasts.length === 1 ? 'podcast' : 'podcasts'}
+                                    {podcasts.length}{" "}
+                                    {podcasts.length === 1
+                                        ? "podcast"
+                                        : "podcasts"}
                                 </span>
                             </div>
                         </div>
@@ -414,12 +430,16 @@ export default function PodcastsPage() {
                                 data-tv-section="my-podcasts"
                             >
                                 {paginatedPodcasts.map((podcast, index) => {
-                                    const imageUrl = getProxiedImageUrl(podcast.coverUrl);
+                                    const imageUrl = getProxiedImageUrl(
+                                        podcast.coverUrl,
+                                    );
                                     return (
                                         <div
                                             key={podcast.id}
                                             onClick={() =>
-                                                router.push(`/podcasts/${podcast.id}`)
+                                                router.push(
+                                                    `/podcasts/${podcast.id}`,
+                                                )
                                             }
                                             data-tv-card
                                             data-tv-card-index={index}
@@ -465,7 +485,11 @@ export default function PodcastsPage() {
                                     First
                                 </button>
                                 <button
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    onClick={() =>
+                                        setCurrentPage((p) =>
+                                            Math.max(1, p - 1),
+                                        )
+                                    }
                                     disabled={currentPage === 1}
                                     className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
@@ -475,7 +499,11 @@ export default function PodcastsPage() {
                                     Page {currentPage} of {totalPages}
                                 </span>
                                 <button
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    onClick={() =>
+                                        setCurrentPage((p) =>
+                                            Math.min(totalPages, p + 1),
+                                        )
+                                    }
                                     disabled={currentPage === totalPages}
                                     className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
@@ -507,12 +535,16 @@ export default function PodcastsPage() {
                                 data-tv-section="top-podcasts"
                             >
                                 {topPodcasts.map((podcast, index) => {
-                                    const imageUrl = getProxiedImageUrl(podcast.coverUrl);
+                                    const imageUrl = getProxiedImageUrl(
+                                        podcast.coverUrl,
+                                    );
                                     return (
                                         <div
                                             key={podcast.id}
                                             onClick={() =>
-                                                router.push(`/podcasts/${podcast.id}`)
+                                                router.push(
+                                                    `/podcasts/${podcast.id}`,
+                                                )
                                             }
                                             data-tv-card
                                             data-tv-card-index={index}
@@ -579,7 +611,7 @@ export default function PodcastsPage() {
                                 <button
                                     onClick={() =>
                                         router.push(
-                                            `/podcasts/genre/${genreId}`
+                                            `/podcasts/genre/${genreId}`,
                                         )
                                     }
                                     className="text-sm font-semibold text-gray-400 hover:text-white transition-colors"
@@ -592,13 +624,15 @@ export default function PodcastsPage() {
                                 data-tv-section={`genre-${genreId}`}
                             >
                                 {genrePodcasts.map((podcast, index) => {
-                                    const imageUrl = getProxiedImageUrl(podcast.coverUrl);
+                                    const imageUrl = getProxiedImageUrl(
+                                        podcast.coverUrl,
+                                    );
                                     return (
                                         <div
                                             key={podcast.id}
                                             onClick={() =>
                                                 router.push(
-                                                    `/podcasts/${podcast.id}`
+                                                    `/podcasts/${podcast.id}`,
                                                 )
                                             }
                                             data-tv-card
@@ -642,17 +676,17 @@ export default function PodcastsPage() {
                     !showGenreDiscoverySkeleton &&
                     podcasts.length === 0 &&
                     topPodcasts.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-24">
-                        <Mic2 className="w-24 h-24 text-gray-400 mb-6" />
-                        <h2 className="text-2xl font-bold text-white mb-2">
-                            Discover Podcasts
-                        </h2>
-                        <p className="text-gray-400 text-center max-w-md">
-                            Search for podcasts above to subscribe and start
-                            listening
-                        </p>
-                    </div>
-                )}
+                        <div className="flex flex-col items-center justify-center py-24">
+                            <Mic2 className="w-24 h-24 text-gray-400 mb-6" />
+                            <h2 className="text-2xl font-bold text-white mb-2">
+                                Discover Podcasts
+                            </h2>
+                            <p className="text-gray-400 text-center max-w-md">
+                                Search for podcasts above to subscribe and start
+                                listening
+                            </p>
+                        </div>
+                    )}
             </div>
         </div>
     );

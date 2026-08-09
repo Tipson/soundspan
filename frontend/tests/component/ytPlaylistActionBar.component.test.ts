@@ -44,7 +44,10 @@ mock.module("next/navigation", {
 
 mock.module("next/image", {
     defaultExport: (props: Record<string, unknown>) =>
-        React.createElement("img", { src: props.src as string, alt: props.alt as string }),
+        React.createElement("img", {
+            src: props.src as string,
+            alt: props.alt as string,
+        }),
 });
 
 mock.module("@/lib/api", {
@@ -138,7 +141,7 @@ mock.module("@/lib/trackRef", {
 
 mock.module("@/utils/shuffle", {
     namedExports: {
-        shuffleArray: <T,>(arr: T[]) => arr,
+        shuffleArray: <T>(arr: T[]) => arr,
     },
 });
 
@@ -169,7 +172,8 @@ mock.module("@/components/ui/YouTubeBadge", {
 mock.module("@/components/track", {
     namedExports: {
         TrackList: () => React.createElement("div", null, "track-list"),
-        TrackListHeader: () => React.createElement("div", null, "track-list-header"),
+        TrackListHeader: () =>
+            React.createElement("div", null, "track-list-header"),
     },
 });
 
@@ -228,8 +232,8 @@ async function renderPage() {
         React.createElement(
             QueryClientProvider,
             { client: queryClient },
-            React.createElement(Page)
-        )
+            React.createElement(Page),
+        ),
     );
 }
 

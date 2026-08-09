@@ -110,7 +110,10 @@ class MockVideoJsPlayer {
     private volumeLevel = 1;
     private mutedState = false;
     private pausedState = true;
-    private readonly techEventHandlers = new Map<string, Set<PlayerEventHandler>>();
+    private readonly techEventHandlers = new Map<
+        string,
+        Set<PlayerEventHandler>
+    >();
     private readonly xhrRequestHooks = new Set<
         (config: XhrRequestConfig) => XhrRequestConfig
     >();
@@ -122,7 +125,9 @@ class MockVideoJsPlayer {
         ) => void
     >();
     private readonly vhsXhr = {
-        onRequest: (callback: (config: XhrRequestConfig) => XhrRequestConfig) => {
+        onRequest: (
+            callback: (config: XhrRequestConfig) => XhrRequestConfig,
+        ) => {
             this.xhrRequestHooks.add(callback);
         },
         onResponse: (
@@ -134,7 +139,9 @@ class MockVideoJsPlayer {
         ) => {
             this.xhrResponseHooks.add(callback);
         },
-        offRequest: (callback: (config: XhrRequestConfig) => XhrRequestConfig) => {
+        offRequest: (
+            callback: (config: XhrRequestConfig) => XhrRequestConfig,
+        ) => {
             this.xhrRequestHooks.delete(callback);
         },
         offResponse: (
@@ -285,21 +292,19 @@ class MockVideoJsPlayer {
             },
             dash: state.hasDashJsRuntime
                 ? {
-                    mediaPlayer: this.dashMediaPlayer,
-                }
+                      mediaPlayer: this.dashMediaPlayer,
+                  }
                 : undefined,
         };
     }
 
     qualityLevels() {
-        return activeQualityLevelList as
-            | {
-                  length: number;
-                  selectedIndex?: number;
-                  on: (event: string, callback: () => void) => void;
-                  off?: (event: string, callback: () => void) => void;
-              }
-            | null;
+        return activeQualityLevelList as {
+            length: number;
+            selectedIndex?: number;
+            on: (event: string, callback: () => void) => void;
+            off?: (event: string, callback: () => void) => void;
+        } | null;
     }
 
     error() {
@@ -318,7 +323,7 @@ const mockVideoJs = Object.assign(
     },
     {
         Vhs: vhsGlobal,
-    }
+    },
 );
 
 mock.module("video.js", {
@@ -426,9 +431,8 @@ afterEach(() => {
 });
 
 test("applies steady-state buffer controls immediately for DASH VOD", async () => {
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -463,9 +467,8 @@ test("reapplies steady-state controls when preset matches but VHS globals drift"
     state.isLive = true;
     state.durationSec = Number.POSITIVE_INFINITY;
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -497,9 +500,8 @@ test("reapplies steady-state controls when preset matches but VHS globals drift"
 });
 
 test("detaches request hooks before src transition and reattaches after load", async () => {
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -524,9 +526,8 @@ test("detaches request hooks before src transition and reattaches after load", a
 });
 
 test("does not clear stale quality levels before new source quality list binds", async () => {
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     const staleLevels = createMockQualityLevelList([
@@ -564,9 +565,8 @@ test("does not clear stale quality levels before new source quality list binds",
 test("emits manifeststall when DASH manifest succeeds without a segment response", async () => {
     mock.timers.enable();
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
     const manifestStallEvents: Array<Record<string, unknown>> = [];
     const legacyManifestStallEvents: Array<Record<string, unknown>> = [];
@@ -610,21 +610,18 @@ test("emits manifeststall when DASH manifest succeeds without a segment response
     assert.equal(manifestStallEvents[0].reason, "playlist_refresh_timeout");
     assert.equal(manifestStallEvents[0].trackId, "manifest-stall-track");
     assert.equal(manifestStallEvents[0].sessionId, "manifest-stall-session");
-    assert.equal(manifestStallEvents[0].manifestUri, "/audio/manifest-stall.mpd");
+    assert.equal(
+        manifestStallEvents[0].manifestUri,
+        "/audio/manifest-stall.mpd",
+    );
 
     const manifestStallMetrics = state.clientMetricPayloads.filter(
         (payload) => payload.event === "player.manifest_stall",
     );
     assert.equal(manifestStallMetrics.length, 1);
-    assert.equal(
-        manifestStallMetrics[0].reason,
-        "playlist_refresh_timeout",
-    );
+    assert.equal(manifestStallMetrics[0].reason, "playlist_refresh_timeout");
     assert.equal(manifestStallMetrics[0].trackId, "manifest-stall-track");
-    assert.equal(
-        manifestStallMetrics[0].sessionId,
-        "manifest-stall-session",
-    );
+    assert.equal(manifestStallMetrics[0].sessionId, "manifest-stall-session");
 
     engine.destroy();
 });
@@ -632,9 +629,8 @@ test("emits manifeststall when DASH manifest succeeds without a segment response
 test("cancels manifeststall timer when the first segment response arrives", async () => {
     mock.timers.enable();
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
     const manifestStallEvents: Array<Record<string, unknown>> = [];
 
@@ -686,9 +682,8 @@ test("cancels manifeststall timer when the first segment response arrives", asyn
 test("cancels manifeststall timer when source is reset before timeout", async () => {
     mock.timers.enable();
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
     const manifestStallEvents: Array<Record<string, unknown>> = [];
 
@@ -737,9 +732,8 @@ test("keeps steady-state controls for live DASH and applies dash.js liveDelay wh
     state.hasDashJsRuntime = true;
     state.durationSec = Number.POSITIVE_INFINITY;
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -773,9 +767,8 @@ test("keeps steady-state controls for live DASH when dash.js runtime is unavaila
     state.hasDashJsRuntime = false;
     state.durationSec = Number.POSITIVE_INFINITY;
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -798,9 +791,8 @@ test("retains steady-state controls while DASH live/vod state becomes knowable",
     state.playlistMode = "unknown";
     state.durationSec = 0;
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -825,9 +817,8 @@ test("keeps steady-state controls when DASH live/vod state remains unknown after
     state.playlistMode = "unknown";
     state.durationSec = 0;
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -856,9 +847,8 @@ test("keeps steady-state controls when DASH live/vod state remains unknown after
 });
 
 test("uses steady-state controls for DASH and keeps steady-state on non-DASH source load", async () => {
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -889,9 +879,8 @@ test("ignores runtime fragment duration for startup buffer controls", async () =
         [SEGMENTED_EFFECTIVE_FRAGMENT_DURATION_SEC_KEY]: 0.5,
     };
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({
@@ -920,9 +909,8 @@ test("keeps explicit runtime VHS buffer overrides for DASH VOD tuning", async ()
         [SEGMENTED_VHS_MAX_BUFFER_LOW_WATER_LINE_SEC_KEY]: 20,
     };
 
-    const { VideoJsSegmentedEngine } = await import(
-        "../../lib/audio-engine/videoJsSegmentedEngine"
-    );
+    const { VideoJsSegmentedEngine } =
+        await import("../../lib/audio-engine/videoJsSegmentedEngine");
     const engine = new VideoJsSegmentedEngine();
 
     engine.load({

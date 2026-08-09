@@ -9,10 +9,7 @@ import { RestartModal } from "@/components/ui/RestartModal";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
-import {
-    SettingsLayout,
-    SidebarItem
-} from "@/features/settings/components/ui";
+import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
 
 const sidebarItems: SidebarItem[] = [
     { id: "download-preferences", label: "Download Preferences" },
@@ -37,82 +34,82 @@ function renderSectionFallback() {
 
 const DownloadPreferencesSection = dynamic(
     () =>
-        import(
-            "@/features/settings/components/sections/DownloadPreferencesSection"
-        ).then((mod) => mod.DownloadPreferencesSection),
-    { loading: renderSectionFallback }
+        import("@/features/settings/components/sections/DownloadPreferencesSection").then(
+            (mod) => mod.DownloadPreferencesSection,
+        ),
+    { loading: renderSectionFallback },
 );
 
 const DownloadServicesSection = dynamic(
     () =>
-        import(
-            "@/features/settings/components/sections/DownloadServicesSection"
-        ).then((mod) => mod.DownloadServicesSection),
-    { loading: renderSectionFallback }
+        import("@/features/settings/components/sections/DownloadServicesSection").then(
+            (mod) => mod.DownloadServicesSection,
+        ),
+    { loading: renderSectionFallback },
 );
 
 const AudiobookshelfSection = dynamic(
     () =>
-        import(
-            "@/features/settings/components/sections/AudiobookshelfSection"
-        ).then((mod) => mod.AudiobookshelfSection),
-    { loading: renderSectionFallback }
+        import("@/features/settings/components/sections/AudiobookshelfSection").then(
+            (mod) => mod.AudiobookshelfSection,
+        ),
+    { loading: renderSectionFallback },
 );
 
 const YouTubeMusicAdminSection = dynamic(
     () =>
         import("@/features/settings/components/sections/YouTubeMusicSection").then(
-            (mod) => mod.YouTubeMusicAdminSection
+            (mod) => mod.YouTubeMusicAdminSection,
         ),
-    { loading: renderSectionFallback }
+    { loading: renderSectionFallback },
 );
 
 const AIServicesSection = dynamic(
     () =>
         import("@/features/settings/components/sections/AIServicesSection").then(
-            (mod) => mod.AIServicesSection
+            (mod) => mod.AIServicesSection,
         ),
-    { loading: renderSectionFallback }
+    { loading: renderSectionFallback },
 );
 
 const StoragePathsSection = dynamic(
     () =>
         import("@/features/settings/components/sections/StoragePathsSection").then(
-            (mod) => mod.StoragePathsSection
+            (mod) => mod.StoragePathsSection,
         ),
-    { loading: renderSectionFallback }
+    { loading: renderSectionFallback },
 );
 
 const LibrarySafetySection = dynamic(
     () =>
         import("@/features/settings/components/sections/LibrarySafetySection").then(
-            (mod) => mod.LibrarySafetySection
+            (mod) => mod.LibrarySafetySection,
         ),
-    { loading: renderSectionFallback }
+    { loading: renderSectionFallback },
 );
 
 const LibraryHealthSection = dynamic(
     () =>
         import("@/features/settings/components/sections/LibraryHealthSection").then(
-            (mod) => mod.LibraryHealthSection
+            (mod) => mod.LibraryHealthSection,
         ),
-    { loading: renderSectionFallback }
+    { loading: renderSectionFallback },
 );
 
 const CacheSection = dynamic(
     () =>
         import("@/features/settings/components/sections/CacheSection").then(
-            (mod) => mod.CacheSection
+            (mod) => mod.CacheSection,
         ),
-    { loading: renderSectionFallback }
+    { loading: renderSectionFallback },
 );
 
 const UserManagementSection = dynamic(
     () =>
-        import(
-            "@/features/settings/components/sections/UserManagementSection"
-        ).then((mod) => mod.UserManagementSection),
-    { loading: renderSectionFallback }
+        import("@/features/settings/components/sections/UserManagementSection").then(
+            (mod) => mod.UserManagementSection,
+        ),
+    { loading: renderSectionFallback },
 );
 
 const logger = createFrontendLogger("Admin.Page");
@@ -125,7 +122,9 @@ export default function AdminPage() {
     const router = useRouter();
     const [isSaving, setIsSaving] = useState(false);
     const [showRestartModal, setShowRestartModal] = useState(false);
-    const [testingServices, setTestingServices] = useState<Record<string, boolean>>({});
+    const [testingServices, setTestingServices] = useState<
+        Record<string, boolean>
+    >({});
     const saveStatus = useInlineStatus();
 
     const isAdmin = user?.role === "admin";
@@ -156,7 +155,10 @@ export default function AdminPage() {
                 setTimeout(() => {
                     const element = document.getElementById(hash);
                     if (element) {
-                        element.scrollIntoView({ behavior: "smooth", block: "start" });
+                        element.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                        });
                     }
                 }, 100);
             }
@@ -170,27 +172,33 @@ export default function AdminPage() {
         saveStatus.setLoading();
 
         try {
-            const changedSystemServices = await saveSystemSettings(systemSettings) || [];
+            const changedSystemServices =
+                (await saveSystemSettings(systemSettings)) || [];
             setIsSaving(false);
             saveStatus.setSuccess("Saved");
             if (changedSystemServices.length > 0) {
                 setShowRestartModal(true);
             }
         } catch (error) {
-            logger.error("Failed to save system settings from admin page", { error });
+            logger.error("Failed to save system settings from admin page", {
+                error,
+            });
             setIsSaving(false);
             saveStatus.setError("Failed to save");
         }
     }, [systemSettings, saveSystemSettings, saveStatus]);
 
-    const handleTestService = useCallback(async (service: string) => {
-        setTestingServices(prev => ({ ...prev, [service]: true }));
-        try {
-            return await testService(service);
-        } finally {
-            setTestingServices(prev => ({ ...prev, [service]: false }));
-        }
-    }, [testService]);
+    const handleTestService = useCallback(
+        async (service: string) => {
+            setTestingServices((prev) => ({ ...prev, [service]: true }));
+            try {
+                return await testService(service);
+            } finally {
+                setTestingServices((prev) => ({ ...prev, [service]: false }));
+            }
+        },
+        [testService],
+    );
 
     if (authLoading) {
         return (
@@ -216,7 +224,8 @@ export default function AdminPage() {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-surface gap-4 px-4">
                 <p className="text-red-400 text-sm text-center">
-                    Failed to load settings from the server. Settings cannot be edited until they are loaded.
+                    Failed to load settings from the server. Settings cannot be
+                    edited until they are loaded.
                 </p>
                 <button
                     onClick={() => loadSystemSettings()}
@@ -230,7 +239,11 @@ export default function AdminPage() {
 
     return (
         <>
-            <SettingsLayout sidebarItems={sidebarItems} isAdmin={true} title="Admin">
+            <SettingsLayout
+                sidebarItems={sidebarItems}
+                isAdmin={true}
+                title="Admin"
+            >
                 <DownloadPreferencesSection
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
@@ -259,7 +272,11 @@ export default function AdminPage() {
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
                     onTest={handleTestService}
-                    isTesting={testingServices.openai || testingServices.fanart || false}
+                    isTesting={
+                        testingServices.openai ||
+                        testingServices.fanart ||
+                        false
+                    }
                 />
 
                 <StoragePathsSection

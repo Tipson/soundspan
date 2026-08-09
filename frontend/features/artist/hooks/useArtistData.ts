@@ -112,7 +112,7 @@ export function useArtistData() {
         ) {
             const delay = Math.min(
                 2000 * Math.pow(2, retryCountRef.current),
-                10000
+                10000,
             );
             const timeoutId = setTimeout(() => {
                 retryCountRef.current += 1;

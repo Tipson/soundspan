@@ -6,21 +6,26 @@ import { SystemSettings } from "../../types";
 interface StoragePathsSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (
+        service: string,
+    ) => Promise<{ success: boolean; version?: string; error?: string }>;
     isTesting: boolean;
 }
 
 /**
  * Renders the StoragePathsSection component.
  */
-export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionProps) {
+export function StoragePathsSection({
+    settings,
+    onUpdate,
+}: StoragePathsSectionProps) {
     return (
-        <SettingsSection 
-            id="storage" 
+        <SettingsSection
+            id="storage"
             title="Storage"
             description="Configure storage paths for your music library"
         >
-            <SettingsRow 
+            <SettingsRow
                 label="Music library path"
                 description="Path to your music library"
             >
@@ -32,7 +37,7 @@ export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionP
                 />
             </SettingsRow>
 
-            <SettingsRow 
+            <SettingsRow
                 label="Download path"
                 description="Path for new downloads"
             >

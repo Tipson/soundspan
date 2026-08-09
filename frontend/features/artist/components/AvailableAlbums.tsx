@@ -20,7 +20,10 @@ interface AvailableAlbumsProps {
 
 const COVER_PREFETCH_ROOT_MARGIN = "320px 0px";
 
-function resolveAlbumCoverUrl(album: Album, source: ArtistSource): string | null {
+function resolveAlbumCoverUrl(
+    album: Album,
+    source: ArtistSource,
+): string | null {
     if (source === "library" && album.coverArt) {
         return api.getCoverArtUrl(album.coverArt, 300);
     }
@@ -51,7 +54,7 @@ function LazyAlbumCard({
     downloadsEnabled?: boolean;
 }) {
     const [coverArt, setCoverArt] = useState<string | null>(() =>
-        resolveAlbumCoverUrl(album, source)
+        resolveAlbumCoverUrl(album, source),
     );
     const [fetchAttempted, setFetchAttempted] = useState(false);
     const [isNearViewport, setIsNearViewport] = useState(false);
@@ -93,7 +96,7 @@ function LazyAlbumCard({
             {
                 rootMargin: COVER_PREFETCH_ROOT_MARGIN,
                 threshold: 0.01,
-            }
+            },
         );
 
         observer.observe(target);
@@ -107,7 +110,7 @@ function LazyAlbumCard({
         const fetchCover = async () => {
             try {
                 const response = await api.request<{ coverUrl: string }>(
-                    `/library/album-cover/${mbid}`
+                    `/library/album-cover/${mbid}`,
                 );
                 if (!cancelled && response.coverUrl) {
                     setCoverArt(api.getCoverArtUrl(response.coverUrl, 300));
@@ -143,9 +146,7 @@ function LazyAlbumCard({
                 coverArt={coverArt}
                 title={album.title}
                 subtitle={subtitle}
-                placeholderIcon={
-                    <Disc3 className="w-12 h-12 text-gray-400" />
-                }
+                placeholderIcon={<Disc3 className="w-12 h-12 text-gray-400" />}
                 circular={false}
                 badge={downloadsEnabled ? "download" : null}
                 showPlayButton={false}
@@ -153,9 +154,7 @@ function LazyAlbumCard({
                 isDownloading={isPendingDownload(albumMbid)}
                 onDownload={(e) => onDownloadAlbum(album, e)}
                 onSearch={
-                    onSearchAlbum ?
-                        (e) => onSearchAlbum(album, e)
-                    :   undefined
+                    onSearchAlbum ? (e) => onSearchAlbum(album, e) : undefined
                 }
                 tvCardIndex={index}
             />
@@ -210,10 +209,10 @@ export function AvailableAlbums({
 
     // Separate studio albums from EPs/Singles/Demos
     const studioAlbums = albums.filter(
-        (album) => album.type?.toLowerCase() === "album"
+        (album) => album.type?.toLowerCase() === "album",
     );
     const epsAndSingles = albums.filter(
-        (album) => album.type?.toLowerCase() !== "album"
+        (album) => album.type?.toLowerCase() !== "album",
     );
 
     return (
@@ -221,9 +220,7 @@ export function AvailableAlbums({
             {/* Studio Albums Section */}
             {studioAlbums.length > 0 && (
                 <section>
-                    <h2 className="text-xl font-bold mb-4">
-                        Albums Available
-                    </h2>
+                    <h2 className="text-xl font-bold mb-4">Albums Available</h2>
                     <div data-tv-section="available-albums">
                         <AlbumGrid
                             albums={studioAlbums}
@@ -241,9 +238,7 @@ export function AvailableAlbums({
             {/* EPs, Singles & Demos Section */}
             {epsAndSingles.length > 0 && (
                 <section>
-                    <h2 className="text-xl font-bold mb-4">
-                        Singles and EPs
-                    </h2>
+                    <h2 className="text-xl font-bold mb-4">Singles and EPs</h2>
                     <div data-tv-section="available-eps-singles">
                         <AlbumGrid
                             albums={epsAndSingles}

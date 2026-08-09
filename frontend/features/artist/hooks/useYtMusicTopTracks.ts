@@ -30,7 +30,10 @@ const YT_STATUS_CACHE_TTL = 60_000;
 
 async function getYtMusicAvailable(): Promise<boolean> {
     const now = Date.now();
-    if (_ytStatusCache && now - _ytStatusCache.checkedAt < YT_STATUS_CACHE_TTL) {
+    if (
+        _ytStatusCache &&
+        now - _ytStatusCache.checkedAt < YT_STATUS_CACHE_TTL
+    ) {
         return _ytStatusCache.available;
     }
     try {
@@ -56,10 +59,10 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
     const [loading, setLoading] = useState(false);
     const matchedArtistIdRef = useRef<string | null>(null);
     const [ytMusicAvailable, setYtMusicAvailable] = useState(
-        _ytStatusCache?.available ?? false
+        _ytStatusCache?.available ?? false,
     );
     const [isStatusResolved, setIsStatusResolved] = useState(
-        _ytStatusCache !== null
+        _ytStatusCache !== null,
     );
 
     // Discovery artists only have mbid, not id — use either as a stable key.
@@ -90,7 +93,7 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
                 t.streamSource !== "tidal" &&
                 (!t.album?.id ||
                     !t.album?.title ||
-                    t.album.title === "Unknown Album")
+                    t.album.title === "Unknown Album"),
         );
     }, [topTracks, ytMusicAvailable]);
 
@@ -134,7 +137,8 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
             }));
 
             try {
-                const { matches: batchMatches } = await api.matchYtMusicBatch(trackPayload);
+                const { matches: batchMatches } =
+                    await api.matchYtMusicBatch(trackPayload);
 
                 if (cancelled) return;
 
@@ -148,7 +152,10 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
                 _artistMatchCache.set(artistKey!, newMatches);
                 setMatches(newMatches);
             } catch (err) {
-                sharedFrontendLogger.error("[YTMusic TopTracks] Batch match failed:", err);
+                sharedFrontendLogger.error(
+                    "[YTMusic TopTracks] Batch match failed:",
+                    err,
+                );
                 if (!cancelled) {
                     _artistMatchCache.set(artistKey!, {});
                     setMatches({});

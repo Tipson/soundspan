@@ -34,7 +34,11 @@ interface RadioStationCardProps {
  * Square radio station card with mosaic cover art, gradient overlay,
  * hover play button, and title + description below.
  */
-export function RadioStationCard({ station, onPlay, isLoading }: RadioStationCardProps) {
+export function RadioStationCard({
+    station,
+    onPlay,
+    isLoading,
+}: RadioStationCardProps) {
     const { showSpinner, triggerPlayFeedback } = usePlayButtonFeedback();
 
     const handlePlayClick = () => {
@@ -53,7 +57,10 @@ export function RadioStationCard({ station, onPlay, isLoading }: RadioStationCar
         >
             {/* Square cover art */}
             <div className="relative aspect-square bg-surface-highlight rounded-lg mb-3 overflow-hidden shadow-lg">
-                <RadioStationMosaic filter={station.filter} className="absolute inset-0" />
+                <RadioStationMosaic
+                    filter={station.filter}
+                    className="absolute inset-0"
+                />
                 {/* Gradient tint overlay */}
                 <div
                     className={`absolute inset-0 bg-gradient-to-br ${station.color} opacity-40 pointer-events-none`}
@@ -64,7 +71,7 @@ export function RadioStationCard({ station, onPlay, isLoading }: RadioStationCar
                         "absolute bottom-2 right-2 transition-all duration-200",
                         isLoading || showSpinner
                             ? "opacity-100 translate-y-0"
-                            : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 translate-y-2 group-hover:translate-y-0 group-focus-visible:translate-y-0"
+                            : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 translate-y-2 group-hover:translate-y-0 group-focus-visible:translate-y-0",
                     )}
                 >
                     <div className="w-10 h-10 rounded-full bg-brand-hover flex items-center justify-center shadow-xl hover:scale-105 transition-transform">

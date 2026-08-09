@@ -43,7 +43,7 @@ export function ContinueListening({
 
     // Find the index in sorted episodes
     const currentIndex = sortedEpisodes.findIndex(
-        (ep) => ep.id === recentEpisode.id
+        (ep) => ep.id === recentEpisode.id,
     );
     const previousEpisode =
         currentIndex > 0 ? sortedEpisodes[currentIndex - 1] : null;
@@ -75,7 +75,9 @@ export function ContinueListening({
                             <h3 className="font-medium text-white/80 truncate text-sm">
                                 {previousEpisode.title}
                             </h3>
-                            <p className="text-xs text-white/40">Previous episode</p>
+                            <p className="text-xs text-white/40">
+                                Previous episode
+                            </p>
                         </div>
                     </div>
                 )}
@@ -97,7 +99,10 @@ export function ContinueListening({
                         ) : isCurrentPlaying && isPlaying ? (
                             <Pause className="w-5 h-5 text-black" />
                         ) : (
-                            <Play className="w-5 h-5 text-black ml-0.5" fill="black" />
+                            <Play
+                                className="w-5 h-5 text-black ml-0.5"
+                                fill="black"
+                            />
                         )}
                     </button>
                     <div className="flex-1 min-w-0">
@@ -105,7 +110,9 @@ export function ContinueListening({
                             {recentEpisode.title}
                         </h3>
                         <div className="flex items-center gap-3 mt-1 text-xs text-white/50">
-                            <span>{formatDuration(recentEpisode.duration)}</span>
+                            <span>
+                                {formatDuration(recentEpisode.duration)}
+                            </span>
                             <span>•</span>
                             <span>{formatDate(recentEpisode.publishedAt)}</span>
                         </div>
@@ -122,7 +129,10 @@ export function ContinueListening({
                                         />
                                     </div>
                                     <span className="text-xs text-brand">
-                                        {Math.floor(recentEpisode.progress.progress)}%
+                                        {Math.floor(
+                                            recentEpisode.progress.progress,
+                                        )}
+                                        %
                                     </span>
                                 </div>
                             </div>
@@ -143,7 +153,9 @@ export function ContinueListening({
                             <h3 className="font-medium text-white/80 truncate text-sm">
                                 {nextEpisode.title}
                             </h3>
-                            <p className="text-xs text-white/40">Next episode</p>
+                            <p className="text-xs text-white/40">
+                                Next episode
+                            </p>
                         </div>
                     </div>
                 )}

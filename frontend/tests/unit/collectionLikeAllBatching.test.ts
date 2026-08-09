@@ -33,7 +33,10 @@ test("batchProcess processes all items", async () => {
         processed.push(item);
     });
 
-    assert.deepStrictEqual(processed.sort((a, b) => a - b), items);
+    assert.deepStrictEqual(
+        processed.sort((a, b) => a - b),
+        items,
+    );
 });
 
 test("batchProcess respects batch size concurrency", async () => {
@@ -72,7 +75,10 @@ test("batchProcess handles items fewer than batch size", async () => {
     await batchProcess([1, 2, 3], 10, async (item) => {
         processed.push(item);
     });
-    assert.deepStrictEqual(processed.sort((a, b) => a - b), [1, 2, 3]);
+    assert.deepStrictEqual(
+        processed.sort((a, b) => a - b),
+        [1, 2, 3],
+    );
 });
 
 test("batchProcess waits for each batch to complete before starting next", async () => {
@@ -108,9 +114,18 @@ test("batchProcess waits for each batch to complete before starting next", async
     const indexOf1End = endOrder.indexOf(1);
 
     // Items 2 must not start before items 0 AND 1 finish
-    assert.ok(indexOf2Start >= 2, "item 2 should start after batch 1 completes");
-    assert.ok(indexOf0End < endOrder.indexOf(2), "item 0 should finish before item 2");
-    assert.ok(indexOf1End < endOrder.indexOf(2), "item 1 should finish before item 2");
+    assert.ok(
+        indexOf2Start >= 2,
+        "item 2 should start after batch 1 completes",
+    );
+    assert.ok(
+        indexOf0End < endOrder.indexOf(2),
+        "item 0 should finish before item 2",
+    );
+    assert.ok(
+        indexOf1End < endOrder.indexOf(2),
+        "item 1 should finish before item 2",
+    );
 });
 
 test("batchProcess propagates errors from batch items", async () => {
@@ -121,7 +136,7 @@ test("batchProcess propagates errors from batch items", async () => {
             batchProcess(items, 3, async (item) => {
                 if (item === 2) throw new Error("item 2 failed");
             }),
-        { message: "item 2 failed" }
+        { message: "item 2 failed" },
     );
 });
 
@@ -138,7 +153,8 @@ test("batchProcess with batch size of 1 processes sequentially", async () => {
 });
 
 test("collectLikeableTrackIds deduplicates and trims IDs while preserving order", async () => {
-    const { collectLikeableTrackIds } = await import("../../hooks/useCollectionLikeAll");
+    const { collectLikeableTrackIds } =
+        await import("../../hooks/useCollectionLikeAll");
 
     const ids = collectLikeableTrackIds([
         { id: " track-1 " },

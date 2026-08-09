@@ -34,7 +34,7 @@ export type QueueItem = TrackQueueItem | EpisodeQueueItem;
 
 /** Narrows a queue item (or nullable) to a podcast episode entry. */
 export function isEpisodeQueueItem(
-    item: QueueItem | null | undefined
+    item: QueueItem | null | undefined,
 ): item is EpisodeQueueItem {
     return Boolean(item) && (item as EpisodeQueueItem).itemType === "episode";
 }
@@ -51,7 +51,7 @@ export interface BuildEpisodeQueueItemInput {
 
 /** Builds an episode queue entry with the composite "podcastId:episodeId" id. */
 export function buildEpisodeQueueItem(
-    input: BuildEpisodeQueueItemInput
+    input: BuildEpisodeQueueItemInput,
 ): EpisodeQueueItem {
     return {
         itemType: "episode",
@@ -89,7 +89,7 @@ export function episodeQueueItemFromPodcast(podcast: {
 }
 
 function normalizeEpisodeQueueItem(
-    raw: Record<string, unknown>
+    raw: Record<string, unknown>,
 ): EpisodeQueueItem | null {
     const id = typeof raw.id === "string" ? raw.id : "";
     if (!id) return null;

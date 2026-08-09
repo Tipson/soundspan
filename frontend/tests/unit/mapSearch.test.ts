@@ -40,13 +40,13 @@ test("matches case-insensitively on title or artist substrings", () => {
     const results = searchMapTracks(library, "MIDNIGHT");
     assert.deepEqual(
         results.map((t) => t.id),
-        ["1"]
+        ["1"],
     );
 
     const byArtist = searchMapTracks(library, "muse");
     assert.deepEqual(
         byArtist.map((t) => t.id),
-        ["3"]
+        ["3"],
     );
 });
 
@@ -54,7 +54,7 @@ test("trims and collapses internal whitespace before matching", () => {
     const results = searchMapTracks(library, "  city   lights  ");
     assert.deepEqual(
         results.map((t) => t.id),
-        ["2"]
+        ["2"],
     );
 });
 
@@ -67,7 +67,7 @@ test("ranks title-prefix above artist-prefix above title-substring above artist-
     const results = searchMapTracks(library, "city");
     assert.deepEqual(
         results.map((t) => t.id),
-        ["2", "6", "1", "4"]
+        ["2", "6", "1", "4"],
     );
 });
 
@@ -80,13 +80,13 @@ test("alphabetical tie-break within the same rank tier", () => {
     const results = searchMapTracks(tied, "horizon");
     assert.deepEqual(
         results.map((t) => t.id),
-        ["a", "b", "c"]
+        ["a", "b", "c"],
     );
 });
 
 test("respects the limit parameter (default 8)", () => {
     const many: MapTrack[] = Array.from({ length: 20 }, (_, i) =>
-        track({ id: `t${i}`, title: `Vibe Track ${i}`, artist: "A" })
+        track({ id: `t${i}`, title: `Vibe Track ${i}`, artist: "A" }),
     );
     assert.equal(searchMapTracks(many, "vibe").length, 8);
     assert.equal(searchMapTracks(many, "vibe", 3).length, 3);

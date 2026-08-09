@@ -4,19 +4,34 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CoverMosaic } from "@/components/ui/CoverMosaic";
-import { createMosaicCandidates, selectMosaicCovers } from "@/utils/mosaicCoverSelection";
+import {
+    createMosaicCandidates,
+    selectMosaicCovers,
+} from "@/utils/mosaicCoverSelection";
 import { api } from "@/lib/api";
-import { useAudioState, usePlaybackStatus, useAudioControls, Track as AudioTrack } from "@/lib/audio-context";
+import {
+    useAudioState,
+    usePlaybackStatus,
+    useAudioControls,
+    Track as AudioTrack,
+} from "@/lib/audio-context";
 import { cn } from "@/utils/cn";
 import { shuffleArray } from "@/utils/shuffle";
 import { formatTime } from "@/utils/formatTime";
 import { usePlaylistQuery } from "@/hooks/useQueries";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
-import { TrackOverflowMenu, TrackMenuButton } from "@/components/ui/TrackOverflowMenu";
+import {
+    TrackOverflowMenu,
+    TrackMenuButton,
+} from "@/components/ui/TrackOverflowMenu";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
-import { TrackList as SharedTrackList, TrackListHeader, UnplayableBadge } from "@/components/track";
+import {
+    TrackList as SharedTrackList,
+    TrackListHeader,
+    UnplayableBadge,
+} from "@/components/track";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/lib/toast-context";
 import {
@@ -116,7 +131,9 @@ function isPlayableTrackItem(item: PlaylistItem): item is PlayablePlaylistItem {
     return Boolean(item.track && item.playback?.isPlayable !== false);
 }
 
-function isLocalPlayableTrackItem(item: PlaylistItem): item is PlayablePlaylistItem {
+function isLocalPlayableTrackItem(
+    item: PlaylistItem,
+): item is PlayablePlaylistItem {
     if (!isPlayableTrackItem(item)) return false;
     return (item.provider?.source || "local") === "local";
 }
@@ -162,7 +179,8 @@ export default function PlaylistDetailPage() {
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = usePlaybackStatus();
-    const { playTracks, playNow, pause, resume, addTracksToQueue } = useAudioControls();
+    const { playTracks, playNow, pause, resume, addTracksToQueue } =
+        useAudioControls();
     const playlistId = params.id as string;
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -170,7 +188,7 @@ export default function PlaylistDetailPage() {
     const [isTogglingShare, setIsTogglingShare] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
     const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(
-        null
+        null,
     );
     const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
         usePlayButtonFeedback();
@@ -219,7 +237,10 @@ export default function PlaylistDetailPage() {
             audio.volume = 0.5;
             audio.onended = () => setPlayingPreviewId(null);
             audio.onerror = (e) => {
-                sharedFrontendLogger.error("Deezer preview playback failed:", e);
+                sharedFrontendLogger.error(
+                    "Deezer preview playback failed:",
+                    e,
+                );
                 setPlayingPreviewId(null);
                 toast.error("Preview playback failed");
             };
@@ -244,7 +265,7 @@ export default function PlaylistDetailPage() {
                 window.dispatchEvent(
                     new CustomEvent("set-activity-panel-tab", {
                         detail: { tab: "active" },
-                    })
+                    }),
                 );
                 window.dispatchEvent(new CustomEvent("open-activity-panel"));
                 // If the backend emits a scan/download notification, refresh it
@@ -276,7 +297,10 @@ export default function PlaylistDetailPage() {
                 queryKey: ["playlist", playlistId],
             });
         } catch (error) {
-            sharedFrontendLogger.error("Failed to remove pending track:", error);
+            sharedFrontendLogger.error(
+                "Failed to remove pending track:",
+                error,
+            );
         } finally {
             setRemovingTrackId(null);
         }
@@ -292,18 +316,26 @@ export default function PlaylistDetailPage() {
         if (!playlist) return;
         setIsTogglingShare(true);
         try {
-            await api.updatePlaylist(playlistId, { isPublic: !playlist.isPublic });
-
-            queryClient.setQueryData(["playlist", playlistId], (old: Record<string, unknown>) => ({
-                ...old,
+            await api.updatePlaylist(playlistId, {
                 isPublic: !playlist.isPublic,
-            }));
+            });
+
+            queryClient.setQueryData(
+                ["playlist", playlistId],
+                (old: Record<string, unknown>) => ({
+                    ...old,
+                    isPublic: !playlist.isPublic,
+                }),
+            );
 
             window.dispatchEvent(
-                new CustomEvent("playlist-updated", { detail: { playlistId } })
+                new CustomEvent("playlist-updated", { detail: { playlistId } }),
             );
         } catch (error) {
-            sharedFrontendLogger.error("Failed to toggle playlist sharing:", error);
+            sharedFrontendLogger.error(
+                "Failed to toggle playlist sharing:",
+                error,
+            );
             toast.error("Failed to update sharing");
         } finally {
             setIsTogglingShare(false);
@@ -336,22 +368,28 @@ export default function PlaylistDetailPage() {
         const previousName = playlist.name;
         try {
             // Optimistic update
-            queryClient.setQueryData(["playlist", playlistId], (old: Record<string, unknown>) => ({
-                ...old,
-                name: trimmed,
-            }));
+            queryClient.setQueryData(
+                ["playlist", playlistId],
+                (old: Record<string, unknown>) => ({
+                    ...old,
+                    name: trimmed,
+                }),
+            );
             await api.updatePlaylist(playlistId, { name: trimmed });
             window.dispatchEvent(
-                new CustomEvent("playlist-updated", { detail: { playlistId } })
+                new CustomEvent("playlist-updated", { detail: { playlistId } }),
             );
         } catch (error) {
             sharedFrontendLogger.error("Failed to rename playlist:", error);
             toast.error("Failed to rename playlist");
             // Revert optimistic update
-            queryClient.setQueryData(["playlist", playlistId], (old: Record<string, unknown>) => ({
-                ...old,
-                name: previousName,
-            }));
+            queryClient.setQueryData(
+                ["playlist", playlistId],
+                (old: Record<string, unknown>) => ({
+                    ...old,
+                    name: previousName,
+                }),
+            );
         } finally {
             setIsSavingName(false);
             setIsRenaming(false);
@@ -383,14 +421,17 @@ export default function PlaylistDetailPage() {
             }
 
             // Update local state immediately
-            queryClient.setQueryData(["playlist", playlistId], (old: Record<string, unknown>) => ({
-                ...old,
-                isHidden: !playlist.isHidden,
-            }));
+            queryClient.setQueryData(
+                ["playlist", playlistId],
+                (old: Record<string, unknown>) => ({
+                    ...old,
+                    isHidden: !playlist.isHidden,
+                }),
+            );
 
             // Dispatch event to update sidebar and other components
             window.dispatchEvent(
-                new CustomEvent("playlist-updated", { detail: { playlistId } })
+                new CustomEvent("playlist-updated", { detail: { playlistId } }),
             );
 
             // Optionally navigate away if hiding
@@ -398,7 +439,10 @@ export default function PlaylistDetailPage() {
                 router.push("/playlists");
             }
         } catch (error) {
-            sharedFrontendLogger.error("Failed to toggle playlist visibility:", error);
+            sharedFrontendLogger.error(
+                "Failed to toggle playlist visibility:",
+                error,
+            );
         } finally {
             setIsHiding(false);
         }
@@ -406,39 +450,44 @@ export default function PlaylistDetailPage() {
 
     const trackItems = useMemo(
         () => (playlist?.items as PlaylistItem[] | undefined) || [],
-        [playlist?.items]
+        [playlist?.items],
     );
 
     const playableTrackItems = useMemo(
         () => trackItems.filter((item) => isPlayableTrackItem(item)),
-        [trackItems]
+        [trackItems],
     );
 
     const unplayableTrackItems = useMemo(
         () =>
             trackItems.filter(
                 (item) =>
-                    item.track === null || item.playback?.isPlayable === false
+                    item.track === null || item.playback?.isPlayable === false,
             ),
-        [trackItems]
+        [trackItems],
     );
 
     const playableTracks = useMemo(
         () => playableTrackItems.map((item) => toAudioTrack(item)),
-        [playableTrackItems]
+        [playableTrackItems],
     );
 
     const likeableTracks: LikeableTrack[] = useMemo(
-        () => playableTrackItems.map((item) => ({
-            id: item.track.id,
-            title: item.track.title,
-            artist: item.track.album.artist.name,
-            album: item.track.album.title,
-            duration: item.track.duration,
-        })),
-        [playableTrackItems]
+        () =>
+            playableTrackItems.map((item) => ({
+                id: item.track.id,
+                title: item.track.title,
+                artist: item.track.album.artist.name,
+                album: item.track.album.title,
+                duration: item.track.duration,
+            })),
+        [playableTrackItems],
     );
-    const { isAllLiked, isApplying: isApplyingLikeAll, toggleLikeAll } = useCollectionLikeAll(likeableTracks);
+    const {
+        isAllLiked,
+        isApplying: isApplyingLikeAll,
+        toggleLikeAll,
+    } = useCollectionLikeAll(likeableTracks);
 
     const handleAddAllToQueue = () => {
         if (playableTracks.length === 0) return;
@@ -456,9 +505,9 @@ export default function PlaylistDetailPage() {
                     else if (source === "local") acc.local += 1;
                     return acc;
                 },
-                { local: 0, tidal: 0, youtube: 0 }
+                { local: 0, tidal: 0, youtube: 0 },
             ),
-        [trackItems]
+        [trackItems],
     );
 
     // Calculate cover arts from playlist tracks for mosaic (memoized, artist+album diversity)
@@ -467,11 +516,13 @@ export default function PlaylistDetailPage() {
         const candidates = createMosaicCandidates(trackItems, {
             getId: (item) => item.id,
             getCoverUrl: (item) => item.track?.album?.coverArt,
-            getArtistKey: (item) => item.track?.album?.artist?.name?.toLowerCase(),
+            getArtistKey: (item) =>
+                item.track?.album?.artist?.name?.toLowerCase(),
             getAlbumKey: (item) => item.track?.album?.title?.toLowerCase(),
         });
-        return selectMosaicCovers(candidates, { count: 4 })
-            .map((r) => api.getCoverArtUrl(r.coverUrl, 200));
+        return selectMosaicCovers(candidates, { count: 4 }).map((r) =>
+            api.getCoverArtUrl(r.coverUrl, 200),
+        );
     }, [trackItems]);
 
     const handleRemoveTrack = async (itemIdOrTrackId: string) => {
@@ -485,9 +536,16 @@ export default function PlaylistDetailPage() {
                 ["playlist", playlistId],
                 (old: Record<string, unknown> | undefined) =>
                     removePlaylistItemFromCache(
-                        old as { items?: { id: string; trackId?: string | null }[] } | undefined,
-                        itemIdOrTrackId
-                    )
+                        old as
+                            | {
+                                  items?: {
+                                      id: string;
+                                      trackId?: string | null;
+                                  }[];
+                              }
+                            | undefined,
+                        itemIdOrTrackId,
+                    ),
             );
             queryClient.invalidateQueries({
                 queryKey: ["playlist", playlistId],
@@ -513,14 +571,18 @@ export default function PlaylistDetailPage() {
         try {
             await api.reorderPlaylistItems(
                 playlistId,
-                moved.items.map((entry) => entry.id)
+                moved.items.map((entry) => entry.id),
             );
-            queryClient.invalidateQueries({ queryKey: ["playlist", playlistId] });
+            queryClient.invalidateQueries({
+                queryKey: ["playlist", playlistId],
+            });
         } catch (error) {
             sharedFrontendLogger.error("Failed to reorder playlist:", error);
             toast.error("Failed to reorder playlist");
             // Restore the server's order.
-            queryClient.invalidateQueries({ queryKey: ["playlist", playlistId] });
+            queryClient.invalidateQueries({
+                queryKey: ["playlist", playlistId],
+            });
         }
     };
 
@@ -538,7 +600,7 @@ export default function PlaylistDetailPage() {
 
             // Dispatch event to update sidebar
             window.dispatchEvent(
-                new CustomEvent("playlist-deleted", { detail: { playlistId } })
+                new CustomEvent("playlist-deleted", { detail: { playlistId } }),
             );
 
             router.push("/playlists");
@@ -565,7 +627,7 @@ export default function PlaylistDetailPage() {
         return trackItems.reduce(
             (sum: number, item: PlaylistItem) =>
                 sum + (item.track?.duration || 0),
-            0
+            0,
         );
     }, [trackItems]);
 
@@ -620,20 +682,29 @@ export default function PlaylistDetailPage() {
             toast.info("Starting playlist radio...");
             const response = await api.getRadioTracks("playlist", playlistId);
             if (response.tracks && response.tracks.length > 0) {
-                const tracks = response.tracks.map((t: Record<string, unknown>) => ({
-                    id: t.id as string,
-                    title: t.title as string,
-                    artist: t.artist as { name: string; id?: string },
-                    album: t.album as { title: string; coverArt?: string; id?: string },
-                    duration: t.duration as number,
-                }));
+                const tracks = response.tracks.map(
+                    (t: Record<string, unknown>) => ({
+                        id: t.id as string,
+                        title: t.title as string,
+                        artist: t.artist as { name: string; id?: string },
+                        album: t.album as {
+                            title: string;
+                            coverArt?: string;
+                            id?: string;
+                        },
+                        duration: t.duration as number,
+                    }),
+                );
                 playTracks(tracks, 0);
                 toast.success(`Playing ${tracks.length} radio tracks`);
             } else {
                 toast.error("No radio tracks found for this playlist");
             }
         } catch (error) {
-            sharedFrontendLogger.error("Failed to start playlist radio:", error);
+            sharedFrontendLogger.error(
+                "Failed to start playlist radio:",
+                error,
+            );
             toast.error("Failed to start playlist radio");
         }
     };
@@ -661,10 +732,7 @@ export default function PlaylistDetailPage() {
                 <div className="flex items-end gap-6">
                     {/* Cover Art */}
                     <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
-                        <CoverMosaic
-                            coverUrls={coverUrls}
-                            imageSizes="96px"
-                        />
+                        <CoverMosaic coverUrls={coverUrls} imageSizes="96px" />
                     </div>
 
                     {/* Playlist Info - Bottom Aligned */}
@@ -685,10 +753,12 @@ export default function PlaylistDetailPage() {
                                 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight mb-2 bg-white/10 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-white/30 w-full"
                             />
                         ) : (
-                            <h1 className={cn(
-                                "text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2",
-                                playlist.isOwner === true && "group/title"
-                            )}>
+                            <h1
+                                className={cn(
+                                    "text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2",
+                                    playlist.isOwner === true && "group/title",
+                                )}
+                            >
                                 {playlist.name}
                                 {playlist.isOwner === true && (
                                     <button
@@ -747,7 +817,11 @@ export default function PlaylistDetailPage() {
                             ) : (
                                 <Play className="w-5 h-5 fill-current ml-0.5" />
                             )}
-                            <span>{isThisPlaylistPlaying && isPlaying ? "Pause" : "Play All"}</span>
+                            <span>
+                                {isThisPlaylistPlaying && isPlaying
+                                    ? "Pause"
+                                    : "Play All"}
+                            </span>
                         </button>
                     )}
 
@@ -788,15 +862,24 @@ export default function PlaylistDetailPage() {
                                 isApplyingLikeAll
                                     ? "cursor-not-allowed text-white/35"
                                     : isAllLiked
-                                        ? "text-brand hover:bg-white/10"
-                                        : "text-white/60 hover:bg-white/10 hover:text-white"
+                                      ? "text-brand hover:bg-white/10"
+                                      : "text-white/60 hover:bg-white/10 hover:text-white",
                             )}
-                            title={isAllLiked ? "Unlike all tracks" : "Like all tracks"}
+                            title={
+                                isAllLiked
+                                    ? "Unlike all tracks"
+                                    : "Like all tracks"
+                            }
                         >
                             {isApplyingLikeAll ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                                <Heart className={cn("h-4 w-4", isAllLiked && "fill-current")} />
+                                <Heart
+                                    className={cn(
+                                        "h-4 w-4",
+                                        isAllLiked && "fill-current",
+                                    )}
+                                />
                             )}
                         </button>
                     )}
@@ -825,9 +908,14 @@ export default function PlaylistDetailPage() {
                                 playlist.isPublic
                                     ? "text-brand hover:text-brand-dark"
                                     : "text-white/40 hover:text-white",
-                                isTogglingShare && "opacity-50 cursor-not-allowed"
+                                isTogglingShare &&
+                                    "opacity-50 cursor-not-allowed",
                             )}
-                            title={playlist.isPublic ? "Make private" : "Share with others"}
+                            title={
+                                playlist.isPublic
+                                    ? "Make private"
+                                    : "Share with others"
+                            }
                         >
                             {playlist.isPublic ? (
                                 <Globe className="w-5 h-5" />
@@ -858,7 +946,7 @@ export default function PlaylistDetailPage() {
                             playlist.isHidden
                                 ? "text-brand hover:text-brand-dark"
                                 : "text-white/40 hover:text-white",
-                            isHiding && "opacity-50 cursor-not-allowed"
+                            isHiding && "opacity-50 cursor-not-allowed",
                         )}
                         title={
                             playlist.isHidden
@@ -905,7 +993,9 @@ export default function PlaylistDetailPage() {
                         <AlertCircle className="w-4 h-4 text-amber-300" />
                         <span className="text-sm text-amber-100">
                             {unplayableTrackItems.length} track
-                            {unplayableTrackItems.length !== 1 ? "s are" : " is"}{" "}
+                            {unplayableTrackItems.length !== 1
+                                ? "s are"
+                                : " is"}{" "}
                             currently not playable.{" "}
                             {unplayableTrackItems[0]?.playback?.message ||
                                 "Open track details or re-import to restore playback."}
@@ -913,70 +1003,109 @@ export default function PlaylistDetailPage() {
                     </div>
                 )}
 
-                {trackItems.length > 0 ||
-                playlist.pendingTracks?.length > 0 ? (
+                {trackItems.length > 0 || playlist.pendingTracks?.length > 0 ? (
                     <div className="w-full">
                         {/* Pending/failed tracks (custom inline - no playback, fundamentally different) */}
-                        {(playlist.pendingTracks || []).map((pendingItem: PendingTrack) => {
-                            const pending = pendingItem.pending;
-                            const isPreviewPlaying = playingPreviewId === pending.id;
-                            const isRetrying = retryingTrackId === pending.id;
-                            const isRemoving = removingTrackId === pending.id;
+                        {(playlist.pendingTracks || []).map(
+                            (pendingItem: PendingTrack) => {
+                                const pending = pendingItem.pending;
+                                const isPreviewPlaying =
+                                    playingPreviewId === pending.id;
+                                const isRetrying =
+                                    retryingTrackId === pending.id;
+                                const isRemoving =
+                                    removingTrackId === pending.id;
 
-                            return (
-                                <div
-                                    key={`pending-${pending.id}`}
-                                    className="grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_120px] gap-4 px-4 py-2 rounded-md opacity-60 hover:opacity-80 group transition-opacity"
-                                >
-                                    <div className="flex items-center justify-center">
-                                        <AlertCircle className="w-4 h-4 text-red-400" />
-                                    </div>
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 bg-surface-highlight rounded shrink-0 overflow-hidden flex items-center justify-center">
-                                            <button
-                                                onClick={() => handlePlayPreview(pending.id)}
-                                                className="w-full h-full flex items-center justify-center hover:bg-white/10 transition-colors"
-                                                title="Play 30s Deezer preview"
-                                            >
-                                                {isPreviewPlaying ? (
-                                                    <Volume2 className="w-5 h-5 text-brand animate-pulse" />
-                                                ) : (
-                                                    <Play className="w-5 h-5 text-gray-400 hover:text-white" />
-                                                )}
-                                            </button>
+                                return (
+                                    <div
+                                        key={`pending-${pending.id}`}
+                                        className="grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_120px] gap-4 px-4 py-2 rounded-md opacity-60 hover:opacity-80 group transition-opacity"
+                                    >
+                                        <div className="flex items-center justify-center">
+                                            <AlertCircle className="w-4 h-4 text-red-400" />
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium truncate text-gray-400">{pending.title}</p>
-                                            <p className="text-xs text-gray-400 truncate">{pending.artist}</p>
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-10 h-10 bg-surface-highlight rounded shrink-0 overflow-hidden flex items-center justify-center">
+                                                <button
+                                                    onClick={() =>
+                                                        handlePlayPreview(
+                                                            pending.id,
+                                                        )
+                                                    }
+                                                    className="w-full h-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                                                    title="Play 30s Deezer preview"
+                                                >
+                                                    {isPreviewPlaying ? (
+                                                        <Volume2 className="w-5 h-5 text-brand animate-pulse" />
+                                                    ) : (
+                                                        <Play className="w-5 h-5 text-gray-400 hover:text-white" />
+                                                    )}
+                                                </button>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium truncate text-gray-400">
+                                                    {pending.title}
+                                                </p>
+                                                <p className="text-xs text-gray-400 truncate">
+                                                    {pending.artist}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
+                                            {pending.album}
+                                        </p>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <span className="text-xs text-red-400 mr-2 hidden sm:inline">
+                                                Failed
+                                            </span>
+                                            {downloadsEnabled && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRetryPendingTrack(
+                                                            pending.id,
+                                                        );
+                                                    }}
+                                                    disabled={isRetrying}
+                                                    className={cn(
+                                                        "p-1.5 rounded-full hover:bg-white/10 transition-all",
+                                                        isRetrying
+                                                            ? "text-brand"
+                                                            : "text-gray-400 hover:text-white",
+                                                    )}
+                                                    title="Retry download"
+                                                >
+                                                    {isRetrying ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <RefreshCw className="w-4 h-4" />
+                                                    )}
+                                                </button>
+                                            )}
+                                            {playlist.isOwner && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRemovePendingTrack(
+                                                            pending.id,
+                                                        );
+                                                    }}
+                                                    disabled={isRemoving}
+                                                    className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all"
+                                                    title="Remove from playlist"
+                                                >
+                                                    {isRemoving ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <X className="w-4 h-4" />
+                                                    )}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
-                                    <p className="hidden md:flex items-center text-sm text-gray-400 truncate">{pending.album}</p>
-                                    <div className="flex items-center justify-end gap-1">
-                                        <span className="text-xs text-red-400 mr-2 hidden sm:inline">Failed</span>
-                                        {downloadsEnabled && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleRetryPendingTrack(pending.id); }}
-                                                disabled={isRetrying}
-                                                className={cn("p-1.5 rounded-full hover:bg-white/10 transition-all", isRetrying ? "text-brand" : "text-gray-400 hover:text-white")}
-                                                title="Retry download"
-                                            >
-                                                {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                            </button>
-                                        )}
-                                        {playlist.isOwner && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleRemovePendingTrack(pending.id); }}
-                                                disabled={isRemoving}
-                                                className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all"
-                                                title="Remove from playlist"
-                                            >
-                                                {isRemoving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            },
+                        )}
 
                         {/* Regular tracks via shared TrackList */}
                         <SharedTrackList<PlaylistItem>
@@ -990,9 +1119,16 @@ export default function PlaylistDetailPage() {
                             toRowItem={(item) => ({
                                 id: item.track?.id ?? item.id,
                                 title: item.track?.title || "Unavailable track",
-                                artistName: item.track?.album?.artist?.name || "Unknown Artist",
+                                artistName:
+                                    item.track?.album?.artist?.name ||
+                                    "Unknown Artist",
                                 duration: item.track?.duration || 0,
-                                coverArtUrl: item.track?.album?.coverArt ? api.getCoverArtUrl(item.track.album.coverArt, 100) : null,
+                                coverArtUrl: item.track?.album?.coverArt
+                                    ? api.getCoverArtUrl(
+                                          item.track.album.coverArt,
+                                          100,
+                                      )
+                                    : null,
                             })}
                             onPlay={(item) => {
                                 if (isPlayableTrackItem(item)) {
@@ -1000,14 +1136,22 @@ export default function PlaylistDetailPage() {
                                 } else {
                                     // Cast needed: type guard narrows else branch to `never`
                                     const unplayable = item as PlaylistItem;
-                                    toast.error(unplayable.playback?.message || "Playback is unavailable for this track right now.");
+                                    toast.error(
+                                        unplayable.playback?.message ||
+                                            "Playback is unavailable for this track right now.",
+                                    );
                                 }
                             }}
                             rowSlots={(item, index) => {
                                 const track = item.track;
                                 const isPlayable = isPlayableTrackItem(item);
-                                const providerSource = item.provider?.source || track?.streamSource || "local";
-                                const fallbackMessage = item.playback?.message || "Playback is unavailable for this track right now.";
+                                const providerSource =
+                                    item.provider?.source ||
+                                    track?.streamSource ||
+                                    "local";
+                                const fallbackMessage =
+                                    item.playback?.message ||
+                                    "Playback is unavailable for this track right now.";
                                 return {
                                     leadingColumn: isPlayable ? undefined : (
                                         <div className="flex items-center justify-center w-8">
@@ -1016,98 +1160,268 @@ export default function PlaylistDetailPage() {
                                             </span>
                                         </div>
                                     ),
-                                    titleBadges: providerSource === "tidal" ? (
-                                        <TidalBadge />
-                                    ) : providerSource === "youtube" ? (
-                                        <YouTubeBadge />
-                                    ) : undefined,
+                                    titleBadges:
+                                        providerSource === "tidal" ? (
+                                            <TidalBadge />
+                                        ) : providerSource === "youtube" ? (
+                                            <YouTubeBadge />
+                                        ) : undefined,
                                     subtitleExtra: !isPlayable ? (
                                         <>
                                             <div className="mt-1 flex items-center gap-1.5">
                                                 <UnplayableBadge />
                                             </div>
-                                            <p className="text-[11px] text-amber-200/90 truncate mt-1">{fallbackMessage}</p>
+                                            <p className="text-[11px] text-amber-200/90 truncate mt-1">
+                                                {fallbackMessage}
+                                            </p>
                                         </>
                                     ) : undefined,
                                     middleColumns: (
                                         <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
-                                            {track?.album?.title || "Unavailable"}
+                                            {track?.album?.title ||
+                                                "Unavailable"}
                                         </p>
                                     ),
                                     trailingActions: (() => {
-                                        const localTrackId = (typeof item.trackId === "string" && item.trackId.length > 0) ? item.trackId : isLocalPlayableTrackItem(item) ? (track?.id || null) : null;
-                                        const canShowLocalActions = Boolean(localTrackId) && isLocalPlayableTrackItem(item);
-                                        const isRemotePlayable = isPlayable && !canShowLocalActions && Boolean(track);
+                                        const localTrackId =
+                                            typeof item.trackId === "string" &&
+                                            item.trackId.length > 0
+                                                ? item.trackId
+                                                : isLocalPlayableTrackItem(item)
+                                                  ? track?.id || null
+                                                  : null;
+                                        const canShowLocalActions =
+                                            Boolean(localTrackId) &&
+                                            isLocalPlayableTrackItem(item);
+                                        const isRemotePlayable =
+                                            isPlayable &&
+                                            !canShowLocalActions &&
+                                            Boolean(track);
                                         const removeTargetId = item.id;
-                                        const canShowFallbackRemoveAction = playlist.isOwner && !canShowLocalActions && !isRemotePlayable;
+                                        const canShowFallbackRemoveAction =
+                                            playlist.isOwner &&
+                                            !canShowLocalActions &&
+                                            !isRemotePlayable;
 
-                                        const removeMenuItem = playlist.isOwner ? (
-                                            <>
-                                                {index > 0 && (
+                                        const removeMenuItem =
+                                            playlist.isOwner ? (
+                                                <>
+                                                    {index > 0 && (
+                                                        <TrackMenuButton
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleMoveTrack(
+                                                                    item.id,
+                                                                    index - 1,
+                                                                );
+                                                            }}
+                                                            icon={
+                                                                <ArrowUp className="h-4 w-4" />
+                                                            }
+                                                            label="Move up"
+                                                        />
+                                                    )}
+                                                    {index <
+                                                        trackItems.length -
+                                                            1 && (
+                                                        <TrackMenuButton
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleMoveTrack(
+                                                                    item.id,
+                                                                    index + 1,
+                                                                );
+                                                            }}
+                                                            icon={
+                                                                <ArrowDown className="h-4 w-4" />
+                                                            }
+                                                            label="Move down"
+                                                        />
+                                                    )}
+                                                    {index > 0 && (
+                                                        <TrackMenuButton
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleMoveTrack(
+                                                                    item.id,
+                                                                    0,
+                                                                );
+                                                            }}
+                                                            icon={
+                                                                <ArrowUpToLine className="h-4 w-4" />
+                                                            }
+                                                            label="Move to top"
+                                                        />
+                                                    )}
                                                     <TrackMenuButton
-                                                        onClick={(e) => { e.stopPropagation(); handleMoveTrack(item.id, index - 1); }}
-                                                        icon={<ArrowUp className="h-4 w-4" />}
-                                                        label="Move up"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRemoveTrack(
+                                                                removeTargetId,
+                                                            );
+                                                        }}
+                                                        icon={
+                                                            <Trash2 className="h-4 w-4" />
+                                                        }
+                                                        label="Remove from playlist"
+                                                        className="text-red-400 hover:text-red-300"
                                                     />
-                                                )}
-                                                {index < trackItems.length - 1 && (
-                                                    <TrackMenuButton
-                                                        onClick={(e) => { e.stopPropagation(); handleMoveTrack(item.id, index + 1); }}
-                                                        icon={<ArrowDown className="h-4 w-4" />}
-                                                        label="Move down"
-                                                    />
-                                                )}
-                                                {index > 0 && (
-                                                    <TrackMenuButton
-                                                        onClick={(e) => { e.stopPropagation(); handleMoveTrack(item.id, 0); }}
-                                                        icon={<ArrowUpToLine className="h-4 w-4" />}
-                                                        label="Move to top"
-                                                    />
-                                                )}
-                                                <TrackMenuButton
-                                                    onClick={(e) => { e.stopPropagation(); handleRemoveTrack(removeTargetId); }}
-                                                    icon={<Trash2 className="h-4 w-4" />}
-                                                    label="Remove from playlist"
-                                                    className="text-red-400 hover:text-red-300"
-                                                />
-                                            </>
-                                        ) : undefined;
+                                                </>
+                                            ) : undefined;
 
                                         return (
                                             <div className="flex items-center justify-end gap-1">
                                                 <span className="hidden sm:inline text-xs text-gray-400 w-10 text-right tabular-nums">
-                                                    {track?.duration ? formatTime(track.duration) : "--:--"}
+                                                    {track?.duration
+                                                        ? formatTime(
+                                                              track.duration,
+                                                          )
+                                                        : "--:--"}
                                                 </span>
                                                 {canShowLocalActions && (
                                                     <>
-                                                        <TrackPreferenceButtons trackId={localTrackId!} mode="both" buttonSizeClassName="h-8 w-8" iconSizeClassName="h-4 w-4" />
+                                                        <TrackPreferenceButtons
+                                                            trackId={
+                                                                localTrackId!
+                                                            }
+                                                            mode="both"
+                                                            buttonSizeClassName="h-8 w-8"
+                                                            iconSizeClassName="h-4 w-4"
+                                                        />
                                                         <TrackOverflowMenu
                                                             track={{
                                                                 id: localTrackId!,
-                                                                title: track?.title || "Unknown title",
-                                                                artist: { name: track?.album?.artist?.name || "Unknown Artist", id: track?.album?.artist?.id },
-                                                                album: { title: track?.album?.title || "Unknown Album", coverArt: track?.album?.coverArt || undefined, id: track?.album?.id },
-                                                                duration: track?.duration || 0,
+                                                                title:
+                                                                    track?.title ||
+                                                                    "Unknown title",
+                                                                artist: {
+                                                                    name:
+                                                                        track
+                                                                            ?.album
+                                                                            ?.artist
+                                                                            ?.name ||
+                                                                        "Unknown Artist",
+                                                                    id: track
+                                                                        ?.album
+                                                                        ?.artist
+                                                                        ?.id,
+                                                                },
+                                                                album: {
+                                                                    title:
+                                                                        track
+                                                                            ?.album
+                                                                            ?.title ||
+                                                                        "Unknown Album",
+                                                                    coverArt:
+                                                                        track
+                                                                            ?.album
+                                                                            ?.coverArt ||
+                                                                        undefined,
+                                                                    id: track
+                                                                        ?.album
+                                                                        ?.id,
+                                                                },
+                                                                duration:
+                                                                    track?.duration ||
+                                                                    0,
                                                             }}
-                                                            extraItemsAfter={removeMenuItem}
+                                                            extraItemsAfter={
+                                                                removeMenuItem
+                                                            }
                                                         />
                                                     </>
                                                 )}
                                                 {isRemotePlayable && (
                                                     <>
-                                                        <TrackPreferenceButtons trackId={track!.id} mode="both" buttonSizeClassName="h-8 w-8" iconSizeClassName="h-4 w-4" metadata={buildPreferenceMetadata({ id: track!.id, title: track!.title, artist: track!.album?.artist, album: track!.album, duration: track!.duration })} />
+                                                        <TrackPreferenceButtons
+                                                            trackId={track!.id}
+                                                            mode="both"
+                                                            buttonSizeClassName="h-8 w-8"
+                                                            iconSizeClassName="h-4 w-4"
+                                                            metadata={buildPreferenceMetadata(
+                                                                {
+                                                                    id: track!
+                                                                        .id,
+                                                                    title: track!
+                                                                        .title,
+                                                                    artist: track!
+                                                                        .album
+                                                                        ?.artist,
+                                                                    album: track!
+                                                                        .album,
+                                                                    duration:
+                                                                        track!
+                                                                            .duration,
+                                                                },
+                                                            )}
+                                                        />
                                                         <TrackOverflowMenu
                                                             track={{
                                                                 id: track!.id,
-                                                                title: track!.title || "Unknown title",
-                                                                artist: { name: track!.album?.artist?.name || "Unknown Artist", id: track!.album?.artist?.id },
-                                                                album: { title: track!.album?.title || "Unknown Album", coverArt: track!.album?.coverArt || undefined, id: track!.album?.id },
-                                                                duration: track!.duration || 0,
-                                                                ...(track!.streamSource === "tidal" ? { streamSource: "tidal" as const, tidalTrackId: track!.tidalTrackId } : {}),
-                                                                ...(track!.streamSource === "youtube" ? { streamSource: "youtube" as const, youtubeVideoId: track!.youtubeVideoId } : {}),
+                                                                title:
+                                                                    track!
+                                                                        .title ||
+                                                                    "Unknown title",
+                                                                artist: {
+                                                                    name:
+                                                                        track!
+                                                                            .album
+                                                                            ?.artist
+                                                                            ?.name ||
+                                                                        "Unknown Artist",
+                                                                    id: track!
+                                                                        .album
+                                                                        ?.artist
+                                                                        ?.id,
+                                                                },
+                                                                album: {
+                                                                    title:
+                                                                        track!
+                                                                            .album
+                                                                            ?.title ||
+                                                                        "Unknown Album",
+                                                                    coverArt:
+                                                                        track!
+                                                                            .album
+                                                                            ?.coverArt ||
+                                                                        undefined,
+                                                                    id: track!
+                                                                        .album
+                                                                        ?.id,
+                                                                },
+                                                                duration:
+                                                                    track!
+                                                                        .duration ||
+                                                                    0,
+                                                                ...(track!
+                                                                    .streamSource ===
+                                                                "tidal"
+                                                                    ? {
+                                                                          streamSource:
+                                                                              "tidal" as const,
+                                                                          tidalTrackId:
+                                                                              track!
+                                                                                  .tidalTrackId,
+                                                                      }
+                                                                    : {}),
+                                                                ...(track!
+                                                                    .streamSource ===
+                                                                "youtube"
+                                                                    ? {
+                                                                          streamSource:
+                                                                              "youtube" as const,
+                                                                          youtubeVideoId:
+                                                                              track!
+                                                                                  .youtubeVideoId,
+                                                                      }
+                                                                    : {}),
                                                             }}
-                                                            showMatchVibe={false}
-                                                            extraItemsAfter={removeMenuItem}
+                                                            showMatchVibe={
+                                                                false
+                                                            }
+                                                            extraItemsAfter={
+                                                                removeMenuItem
+                                                            }
                                                         />
                                                     </>
                                                 )}
@@ -1115,16 +1429,36 @@ export default function PlaylistDetailPage() {
                                                     <>
                                                         {index > 0 && (
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); handleMoveTrack(item.id, index - 1); }}
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    handleMoveTrack(
+                                                                        item.id,
+                                                                        index -
+                                                                            1,
+                                                                    );
+                                                                }}
                                                                 className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all"
                                                                 title="Move up"
                                                             >
                                                                 <ArrowUp className="h-4 w-4" />
                                                             </button>
                                                         )}
-                                                        {index < trackItems.length - 1 && (
+                                                        {index <
+                                                            trackItems.length -
+                                                                1 && (
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); handleMoveTrack(item.id, index + 1); }}
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    handleMoveTrack(
+                                                                        item.id,
+                                                                        index +
+                                                                            1,
+                                                                    );
+                                                                }}
                                                                 className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all"
                                                                 title="Move down"
                                                             >
@@ -1132,7 +1466,12 @@ export default function PlaylistDetailPage() {
                                                             </button>
                                                         )}
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); handleRemoveTrack(removeTargetId); }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleRemoveTrack(
+                                                                    removeTargetId,
+                                                                );
+                                                            }}
                                                             className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-400 transition-all"
                                                             title="Remove from playlist"
                                                         >
@@ -1140,12 +1479,17 @@ export default function PlaylistDetailPage() {
                                                         </button>
                                                     </>
                                                 )}
-                                                {!isPlayable && <span className="text-[11px] text-amber-200">Cannot play</span>}
+                                                {!isPlayable && (
+                                                    <span className="text-[11px] text-amber-200">
+                                                        Cannot play
+                                                    </span>
+                                                )}
                                             </div>
                                         );
                                     })(),
                                     rowClassName: cn(
-                                        !isPlayable && "bg-amber-500/[0.06] hover:bg-amber-500/[0.1] cursor-not-allowed",
+                                        !isPlayable &&
+                                            "bg-amber-500/[0.06] hover:bg-amber-500/[0.1] cursor-not-allowed",
                                     ),
                                 };
                             }}
@@ -1155,7 +1499,10 @@ export default function PlaylistDetailPage() {
                                 <TrackListHeader
                                     className="grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto] gap-4 mb-2"
                                     columns={[
-                                        { label: "#", className: "text-center" },
+                                        {
+                                            label: "#",
+                                            className: "text-center",
+                                        },
                                         { label: "Title" },
                                         { label: "Album" },
                                         { label: "" },

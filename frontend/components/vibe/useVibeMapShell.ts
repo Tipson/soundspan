@@ -5,7 +5,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { HINTS_DISMISSED_KEY } from "./mapHints";
-import { readStoredString, sessionStorageSafe, writeStoredString } from "./useSessionTrail";
+import {
+    readStoredString,
+    sessionStorageSafe,
+    writeStoredString,
+} from "./useSessionTrail";
 import { useLatest } from "./useLatest";
 import { resolveEscapeAction } from "./vibeMapModel";
 import type { AuxSurface } from "./useAuxSurface";
@@ -18,7 +22,8 @@ function readHintsDismissed(): boolean {
 /** Own fullscreen, filter, hint, highlight, media, and container state. */
 export function useVibeMapShell() {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [spotlightHighlight, setSpotlightHighlight] = useState<Set<string> | null>(null);
+    const [spotlightHighlight, setSpotlightHighlight] =
+        useState<Set<string> | null>(null);
     const [fullscreen, setFullscreen] = useState(false);
     const [filtersExpanded, setFiltersExpanded] = useState(false);
     const [hintsDismissed, setHintsDismissed] = useState(readHintsDismissed);
@@ -27,9 +32,15 @@ export function useVibeMapShell() {
         writeStoredString(sessionStorageSafe(), HINTS_DISMISSED_KEY, "1");
     }, []);
     return {
-        containerRef, spotlightHighlight, setSpotlightHighlight,
-        fullscreen, setFullscreen, filtersExpanded, setFiltersExpanded,
-        hintsDismissed, dismissHints,
+        containerRef,
+        spotlightHighlight,
+        setSpotlightHighlight,
+        fullscreen,
+        setFullscreen,
+        filtersExpanded,
+        setFiltersExpanded,
+        hintsDismissed,
+        dismissHints,
         reducedMotion: useMediaQuery("(prefers-reduced-motion: reduce)"),
         smallScreen: useMediaQuery("(max-width: 639px)"),
         coarsePointer: useMediaQuery("(pointer: coarse)"),
@@ -55,8 +66,12 @@ export function useVibeMapEscape(args: EscapeArgs): boolean {
         const onKey = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
             const current = latest.current;
-            const action = resolveEscapeAction(current.sweepOpen, current.auxSurface !== null,
-                current.mode, current.fullscreen);
+            const action = resolveEscapeAction(
+                current.sweepOpen,
+                current.auxSurface !== null,
+                current.mode,
+                current.fullscreen,
+            );
             if (action === "dismiss-sweep") current.dismissSweep();
             else if (action === "close-aux") current.closeAux();
             else if (action === "exit-mode") current.exitMode();

@@ -12,7 +12,13 @@ import { api } from "@/lib/api";
 import { DPAD_KEYS } from "@/lib/tv-utils";
 import { useTVNavigation } from "@/hooks/useTVNavigation";
 import { formatTime, clampTime, formatTimeRemaining } from "@/utils/formatTime";
-import { RefreshCw, SkipBack, SkipForward, Shuffle, Repeat } from "lucide-react";
+import {
+    RefreshCw,
+    SkipBack,
+    SkipForward,
+    Shuffle,
+    Repeat,
+} from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
@@ -39,7 +45,9 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
     } = useTVNavigation({
         onBack: () => {
             setIsNavFocused(true);
-            const currentIndex = tvNavigation.findIndex(n => n.href === pathname);
+            const currentIndex = tvNavigation.findIndex(
+                (n) => n.href === pathname,
+            );
             setFocusedTabIndex(currentIndex >= 0 ? currentIndex : 0);
         },
     });
@@ -65,11 +73,11 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
 
     // Add tv-mode class to body on mount
     useEffect(() => {
-        document.documentElement.classList.add('tv-mode');
-        document.body.classList.add('tv-mode');
+        document.documentElement.classList.add("tv-mode");
+        document.body.classList.add("tv-mode");
         return () => {
-            document.documentElement.classList.remove('tv-mode');
-            document.body.classList.remove('tv-mode');
+            document.documentElement.classList.remove("tv-mode");
+            document.body.classList.remove("tv-mode");
         };
     }, []);
 
@@ -114,68 +122,96 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        // Media keys work globally regardless of focus state
-        if (hasMedia) {
-            switch (e.key) {
-                case DPAD_KEYS.PLAY_PAUSE:
-                case "MediaPlayPause":
-                case " ": // Space bar as play/pause
-                    // Only use space when not in an input field
-                    if (e.key === " ") {
-                        const target = e.target as HTMLElement;
-                        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
-                            return;
+    const handleKeyDown = useCallback(
+        (e: KeyboardEvent) => {
+            // Media keys work globally regardless of focus state
+            if (hasMedia) {
+                switch (e.key) {
+                    case DPAD_KEYS.PLAY_PAUSE:
+                    case "MediaPlayPause":
+                    case " ": // Space bar as play/pause
+                        // Only use space when not in an input field
+                        if (e.key === " ") {
+                            const target = e.target as HTMLElement;
+                            if (
+                                target.tagName === "INPUT" ||
+                                target.tagName === "TEXTAREA"
+                            ) {
+                                return;
+                            }
                         }
-                    }
-                    e.preventDefault();
-                    if (isPlaying) { pause(); } else { resume(); }
-                    return;
-                case "MediaTrackNext":
-                    e.preventDefault();
-                    next();
-                    return;
-                case "MediaTrackPrevious":
-                    e.preventDefault();
-                    previous();
-                    return;
-                case DPAD_KEYS.FAST_FORWARD:
-                case "MediaFastForward":
-                    e.preventDefault();
-                    seek(Math.min(currentTime + 10, duration));
-                    return;
-                case DPAD_KEYS.REWIND:
-                case "MediaRewind":
-                    e.preventDefault();
-                    seek(Math.max(currentTime - 10, 0));
-                    return;
-            }
-        }
-
-        if (isNavFocused) {
-            if (e.key === DPAD_KEYS.LEFT) {
-                e.preventDefault();
-                setFocusedTabIndex(prev => Math.max(0, prev - 1));
-            } else if (e.key === DPAD_KEYS.RIGHT) {
-                e.preventDefault();
-                setFocusedTabIndex(prev => Math.min(tvNavigation.length - 1, prev + 1));
-            } else if (e.key === DPAD_KEYS.DOWN) {
-                e.preventDefault();
-                setIsNavFocused(false);
-                // Use the navigation hook to focus first card
-                focusFirstCard();
-            } else if (e.key === DPAD_KEYS.CENTER) {
-                e.preventDefault();
-                const focusedTab = tvNavigation[focusedTabIndex];
-                if (focusedTab) {
-                    router.push(focusedTab.href);
+                        e.preventDefault();
+                        if (isPlaying) {
+                            pause();
+                        } else {
+                            resume();
+                        }
+                        return;
+                    case "MediaTrackNext":
+                        e.preventDefault();
+                        next();
+                        return;
+                    case "MediaTrackPrevious":
+                        e.preventDefault();
+                        previous();
+                        return;
+                    case DPAD_KEYS.FAST_FORWARD:
+                    case "MediaFastForward":
+                        e.preventDefault();
+                        seek(Math.min(currentTime + 10, duration));
+                        return;
+                    case DPAD_KEYS.REWIND:
+                    case "MediaRewind":
+                        e.preventDefault();
+                        seek(Math.max(currentTime - 10, 0));
+                        return;
                 }
             }
-        } else {
-            // Delegate to content navigation hook
-            handleContentKeyDown(e);
-        }
-    }, [isNavFocused, focusedTabIndex, router, hasMedia, isPlaying, pause, resume, next, previous, seek, currentTime, duration, focusFirstCard, handleContentKeyDown, tvNavigation]);
+
+            if (isNavFocused) {
+                if (e.key === DPAD_KEYS.LEFT) {
+                    e.preventDefault();
+                    setFocusedTabIndex((prev) => Math.max(0, prev - 1));
+                } else if (e.key === DPAD_KEYS.RIGHT) {
+                    e.preventDefault();
+                    setFocusedTabIndex((prev) =>
+                        Math.min(tvNavigation.length - 1, prev + 1),
+                    );
+                } else if (e.key === DPAD_KEYS.DOWN) {
+                    e.preventDefault();
+                    setIsNavFocused(false);
+                    // Use the navigation hook to focus first card
+                    focusFirstCard();
+                } else if (e.key === DPAD_KEYS.CENTER) {
+                    e.preventDefault();
+                    const focusedTab = tvNavigation[focusedTabIndex];
+                    if (focusedTab) {
+                        router.push(focusedTab.href);
+                    }
+                }
+            } else {
+                // Delegate to content navigation hook
+                handleContentKeyDown(e);
+            }
+        },
+        [
+            isNavFocused,
+            focusedTabIndex,
+            router,
+            hasMedia,
+            isPlaying,
+            pause,
+            resume,
+            next,
+            previous,
+            seek,
+            currentTime,
+            duration,
+            focusFirstCard,
+            handleContentKeyDown,
+            tvNavigation,
+        ],
+    );
 
     useEffect(() => {
         window.addEventListener("keydown", handleKeyDown);
@@ -185,15 +221,20 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
     // Focus correct nav tab when isNavFocused changes or focusedTabIndex changes
     useEffect(() => {
         if (isNavFocused && navRef.current) {
-            const tabs = navRef.current.querySelectorAll<HTMLAnchorElement>('[data-tv-tab]');
+            const tabs =
+                navRef.current.querySelectorAll<HTMLAnchorElement>(
+                    "[data-tv-tab]",
+                );
             tabs[focusedTabIndex]?.focus();
         }
     }, [focusedTabIndex, isNavFocused]);
 
     // On initial mount and pathname change, set the correct focused tab
     useEffect(() => {
-        const currentIndex = tvNavigation.findIndex(n =>
-            n.href === pathname || (n.href !== "/" && pathname.startsWith(n.href))
+        const currentIndex = tvNavigation.findIndex(
+            (n) =>
+                n.href === pathname ||
+                (n.href !== "/" && pathname.startsWith(n.href)),
         );
         if (currentIndex >= 0) {
             setFocusedTabIndex(currentIndex);
@@ -203,8 +244,8 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
     // Clamp focus when the nav list shrinks (e.g. Discovery hidden after the
     // features fetch resolves with the discovery flag off).
     useEffect(() => {
-        setFocusedTabIndex(prev =>
-            Math.min(prev, Math.max(0, tvNavigation.length - 1))
+        setFocusedTabIndex((prev) =>
+            Math.min(prev, Math.max(0, tvNavigation.length - 1)),
         );
     }, [tvNavigation]);
 
@@ -213,22 +254,35 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
             {/* Nav */}
             <header className="tv-nav">
                 <Link href="/" className="tv-logo">
-                    <Image src="/assets/images/soundspan.webp" alt={BRAND_NAME} width={24} height={24} sizes="24px" />
+                    <Image
+                        src="/assets/images/soundspan.webp"
+                        alt={BRAND_NAME}
+                        width={24}
+                        height={24}
+                        sizes="24px"
+                    />
                     <span className="brand-wordmark">{BRAND_NAME}</span>
                 </Link>
 
                 <nav ref={navRef} className="tv-nav-links">
                     {tvNavigation.map((item, index) => {
-                        const isActive = pathname === item.href || 
-                            (item.href !== "/" && pathname.startsWith(item.href));
-                        const isFocused = isNavFocused && focusedTabIndex === index;
+                        const isActive =
+                            pathname === item.href ||
+                            (item.href !== "/" &&
+                                pathname.startsWith(item.href));
+                        const isFocused =
+                            isNavFocused && focusedTabIndex === index;
 
                         return (
                             <Link
                                 key={item.name}
                                 href={item.href}
                                 data-tv-tab
-                                className={cn("tv-nav-link", isActive && "active", isFocused && "focused")}
+                                className={cn(
+                                    "tv-nav-link",
+                                    isActive && "active",
+                                    isFocused && "focused",
+                                )}
                                 onFocus={() => {
                                     setIsNavFocused(true);
                                     setFocusedTabIndex(index);
@@ -244,13 +298,15 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                 <div className="flex-1" />
 
                 {/* Sync button */}
-                <button 
+                <button
                     onClick={handleSync}
                     disabled={isSyncing}
                     className="tv-sync-btn"
                     title="Sync Library"
                 >
-                    <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+                    <RefreshCw
+                        className={cn("w-4 h-4", isSyncing && "animate-spin")}
+                    />
                 </button>
             </header>
 
@@ -258,20 +314,29 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
             {hasMedia && (
                 <div className="tv-now-playing-bar">
                     {coverUrl && (
-                        <Image src={coverUrl} alt={title} width={48} height={48} sizes="48px" className="tv-np-cover" />
+                        <Image
+                            src={coverUrl}
+                            alt={title}
+                            width={48}
+                            height={48}
+                            sizes="48px"
+                            className="tv-np-cover"
+                        />
                     )}
                     <div className="tv-np-info">
                         <div className="tv-np-title">{title}</div>
                         <div className="tv-np-artist">{artist}</div>
                     </div>
-                    
+
                     {/* Time counter */}
                     <div className="tv-np-time">
-                        {formatTime(clampedCurrentTime)} / {
-                            playbackType === "podcast" || playbackType === "audiobook"
-                                ? formatTimeRemaining(Math.max(0, duration - clampedCurrentTime))
-                                : formatTime(duration)
-                        }
+                        {formatTime(clampedCurrentTime)} /{" "}
+                        {playbackType === "podcast" ||
+                        playbackType === "audiobook"
+                            ? formatTimeRemaining(
+                                  Math.max(0, duration - clampedCurrentTime),
+                              )
+                            : formatTime(duration)}
                     </div>
 
                     {/* Shuffle */}
@@ -284,19 +349,36 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     </button>
 
                     {/* Previous */}
-                    <button onClick={previous} className="tv-np-ctrl" title="Previous">
+                    <button
+                        onClick={previous}
+                        className="tv-np-ctrl"
+                        title="Previous"
+                    >
                         <SkipBack className="w-4 h-4" />
                     </button>
 
                     {/* Play/Pause */}
-                    <button onClick={() => isPlaying ? pause() : resume()} className="tv-np-btn">
+                    <button
+                        onClick={() => (isPlaying ? pause() : resume())}
+                        className="tv-np-btn"
+                    >
                         {isPlaying ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                            >
                                 <rect x="6" y="4" width="4" height="16" />
                                 <rect x="14" y="4" width="4" height="16" />
                             </svg>
                         ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                            >
                                 <polygon points="5,3 19,12 5,21" />
                             </svg>
                         )}
@@ -310,17 +392,33 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     {/* Repeat */}
                     <button
                         onClick={toggleRepeat}
-                        className={cn("tv-np-ctrl", repeatMode !== "off" && "active")}
-                        title={repeatMode === "one" ? "Repeat One" : repeatMode === "all" ? "Repeat All" : "Repeat Off"}
+                        className={cn(
+                            "tv-np-ctrl",
+                            repeatMode !== "off" && "active",
+                        )}
+                        title={
+                            repeatMode === "one"
+                                ? "Repeat One"
+                                : repeatMode === "all"
+                                  ? "Repeat All"
+                                  : "Repeat Off"
+                        }
                     >
                         <Repeat className="w-4 h-4" />
-                        {repeatMode === "one" && <span className="tv-np-repeat-one">1</span>}
+                        {repeatMode === "one" && (
+                            <span className="tv-np-repeat-one">1</span>
+                        )}
                     </button>
                 </div>
             )}
 
             {/* Content */}
-            <main id="main-content" tabIndex={-1} ref={contentRef} className="tv-content">
+            <main
+                id="main-content"
+                tabIndex={-1}
+                ref={contentRef}
+                className="tv-content"
+            >
                 {children}
             </main>
         </>

@@ -18,7 +18,13 @@ interface SettingsSelectProps {
 /**
  * Renders the SettingsSelect component.
  */
-export function SettingsSelect({ id, value, onChange, options, disabled }: SettingsSelectProps) {
+export function SettingsSelect({
+    id,
+    value,
+    onChange,
+    options,
+    disabled,
+}: SettingsSelectProps) {
     return (
         <div className="relative">
             <select
@@ -33,7 +39,7 @@ export function SettingsSelect({ id, value, onChange, options, disabled }: Setti
                     ${SETTINGS_FIELD_FOCUS_RING}
                     cursor-pointer transition-colors
                     hover:bg-line-muted
-                    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${disabled ? "opacity-50 cursor-not-allowed" : ""}
                 `}
             >
                 {options.map((option) => (

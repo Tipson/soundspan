@@ -15,7 +15,11 @@ import { BRAND_MARKETING_TAGLINE, BRAND_NAME } from "@/lib/brand";
 export default function OnboardingPage() {
     const router = useRouter();
     const { user, isLoading: authLoading } = useAuth();
-    const { musicCNN, vibeEmbeddings, loading: featuresLoading } = useFeatures();
+    const {
+        musicCNN,
+        vibeEmbeddings,
+        loading: featuresLoading,
+    } = useFeatures();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
@@ -45,7 +49,9 @@ export default function OnboardingPage() {
             }
         }
         checkOnboarding();
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [router]);
 
     // Use auth context state instead of duplicate API call
@@ -81,7 +87,6 @@ export default function OnboardingPage() {
         enabled: false,
     });
 
-
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
@@ -99,10 +104,10 @@ export default function OnboardingPage() {
 
         setLoading(true);
         try {
-            const response = await api.post<{ token: string; user: { id: string; username: string } }>(
-                "/onboarding/register",
-                { username, password }
-            );
+            const response = await api.post<{
+                token: string;
+                user: { id: string; username: string };
+            }>("/onboarding/register", { username, password });
             // Store the JWT token for subsequent API calls
             if (response.token) {
                 api.setToken(response.token);
@@ -113,7 +118,7 @@ export default function OnboardingPage() {
             // Check if user already exists
             if (message?.includes("already taken")) {
                 setError(
-                    "Username already taken. If this is you, please refresh and continue where you left off."
+                    "Username already taken. If this is you, please refresh and continue where you left off.",
                 );
             } else {
                 setError(message || "Failed to create account");
@@ -124,7 +129,7 @@ export default function OnboardingPage() {
     };
 
     const testConnection = async (
-        type: "lidarr" | "audiobookshelf" | "soulseek"
+        type: "lidarr" | "audiobookshelf" | "soulseek",
     ) => {
         setError("");
         setSuccess("");
@@ -158,7 +163,10 @@ export default function OnboardingPage() {
             }
             setSuccess(`${type} connected successfully!`);
         } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : `Failed to connect to ${type}`;
+            const errorMessage =
+                err instanceof Error
+                    ? err.message
+                    : `Failed to connect to ${type}`;
             setError(errorMessage);
         } finally {
             setLoading(false);
@@ -185,7 +193,9 @@ export default function OnboardingPage() {
             }
         } catch (err: unknown) {
             setError(
-                err instanceof Error ? err.message : "Failed to save configuration"
+                err instanceof Error
+                    ? err.message
+                    : "Failed to save configuration",
             );
         } finally {
             setLoading(false);
@@ -248,8 +258,8 @@ export default function OnboardingPage() {
                                                 s.num === step
                                                     ? "bg-brand text-black shadow-lg shadow-brand/20 scale-110"
                                                     : s.num < step
-                                                    ? "bg-white/5 text-white/80 border border-white/10"
-                                                    : "bg-white/5 text-white/40 border border-white/10"
+                                                      ? "bg-white/5 text-white/80 border border-white/10"
+                                                      : "bg-white/5 text-white/40 border border-white/10"
                                             }`}
                                         >
                                             {s.num}
@@ -287,8 +297,8 @@ export default function OnboardingPage() {
                                                 Create Your Account
                                             </h2>
                                             <p className="text-white/60">
-                                                Let&apos;s get you set up with your
-                                                personal music library
+                                                Let&apos;s get you set up with
+                                                your personal music library
                                             </p>
                                         </div>
 
@@ -305,7 +315,7 @@ export default function OnboardingPage() {
                                                     value={username}
                                                     onChange={(e) =>
                                                         setUsername(
-                                                            e.target.value
+                                                            e.target.value,
                                                         )
                                                     }
                                                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
@@ -324,7 +334,7 @@ export default function OnboardingPage() {
                                                     value={password}
                                                     onChange={(e) =>
                                                         setPassword(
-                                                            e.target.value
+                                                            e.target.value,
                                                         )
                                                     }
                                                     className={`w-full px-4 py-3 bg-white/5 border rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all  ${
@@ -347,7 +357,7 @@ export default function OnboardingPage() {
                                                     value={confirmPassword}
                                                     onChange={(e) =>
                                                         setConfirmPassword(
-                                                            e.target.value
+                                                            e.target.value,
                                                         )
                                                     }
                                                     className={`w-full px-4 py-3 bg-white/5 border rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all  ${
@@ -491,7 +501,7 @@ export default function OnboardingPage() {
                                                 }
                                                 onTest={() =>
                                                     testConnection(
-                                                        "audiobookshelf"
+                                                        "audiobookshelf",
                                                     )
                                                 }
                                                 loading={loading}
@@ -530,20 +540,27 @@ export default function OnboardingPage() {
 
                                         {success && (
                                             <div className="flex items-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                                                <p className="text-sm text-green-500">{success}</p>
+                                                <p className="text-sm text-green-500">
+                                                    {success}
+                                                </p>
                                             </div>
                                         )}
 
                                         {error && (
                                             <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                                                <p className="text-sm text-red-500">{error}</p>
+                                                <p className="text-sm text-red-500">
+                                                    {error}
+                                                </p>
                                             </div>
                                         )}
 
                                         <div className="flex gap-3 mt-8">
                                             <button
                                                 onClick={() => setStep(3)}
-                                                onKeyDown={(e) => e.key === 'Enter' && setStep(3)}
+                                                onKeyDown={(e) =>
+                                                    e.key === "Enter" &&
+                                                    setStep(3)
+                                                }
                                                 tabIndex={0}
                                                 className="flex-1 bg-white/5 border border-white/10 text-white/70 font-medium py-3.5 rounded-lg hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-brand/30"
                                             >
@@ -551,7 +568,11 @@ export default function OnboardingPage() {
                                             </button>
                                             <button
                                                 onClick={handleNextStep}
-                                                onKeyDown={(e) => e.key === 'Enter' && !loading && handleNextStep()}
+                                                onKeyDown={(e) =>
+                                                    e.key === "Enter" &&
+                                                    !loading &&
+                                                    handleNextStep()
+                                                }
                                                 disabled={loading}
                                                 tabIndex={0}
                                                 className="flex-1 py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/30"
@@ -571,7 +592,8 @@ export default function OnboardingPage() {
                                                 Analysis Features
                                             </h2>
                                             <p className="text-white/60">
-                                                Advanced audio analysis capabilities detected
+                                                Advanced audio analysis
+                                                capabilities detected
                                             </p>
                                         </div>
 
@@ -583,34 +605,77 @@ export default function OnboardingPage() {
                                             {featuresLoading ? (
                                                 <div className="flex items-center gap-3 text-gray-400">
                                                     <GradientSpinner size="sm" />
-                                                    <span>Detecting available features...</span>
+                                                    <span>
+                                                        Detecting available
+                                                        features...
+                                                    </span>
                                                 </div>
                                             ) : (
                                                 <div className="space-y-4">
-                                                    <div className={`p-4 rounded-lg border ${musicCNN ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}>
+                                                    <div
+                                                        className={`p-4 rounded-lg border ${musicCNN ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}
+                                                    >
                                                         <div className="flex items-center gap-3 mb-2">
-                                                            <span className={musicCNN ? "text-green-400" : "text-gray-400"}>
-                                                                {musicCNN ? "\u2713" : "\u2014"}
+                                                            <span
+                                                                className={
+                                                                    musicCNN
+                                                                        ? "text-green-400"
+                                                                        : "text-gray-400"
+                                                                }
+                                                            >
+                                                                {musicCNN
+                                                                    ? "\u2713"
+                                                                    : "\u2014"}
                                                             </span>
-                                                            <span className={`font-medium ${musicCNN ? "text-white" : "text-gray-400"}`}>
-                                                                MusicCNN Audio Analysis
+                                                            <span
+                                                                className={`font-medium ${musicCNN ? "text-white" : "text-gray-400"}`}
+                                                            >
+                                                                MusicCNN Audio
+                                                                Analysis
                                                             </span>
                                                         </div>
                                                         <p className="text-sm text-white/50 ml-7">
-                                                            Extracts BPM, musical key, mood, energy, danceability, and other audio features using neural networks trained on music.
+                                                            Extracts BPM,
+                                                            musical key, mood,
+                                                            energy,
+                                                            danceability, and
+                                                            other audio features
+                                                            using neural
+                                                            networks trained on
+                                                            music.
                                                         </p>
                                                     </div>
-                                                    <div className={`p-4 rounded-lg border ${vibeEmbeddings ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}>
+                                                    <div
+                                                        className={`p-4 rounded-lg border ${vibeEmbeddings ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}
+                                                    >
                                                         <div className="flex items-center gap-3 mb-2">
-                                                            <span className={vibeEmbeddings ? "text-green-400" : "text-gray-400"}>
-                                                                {vibeEmbeddings ? "\u2713" : "\u2014"}
+                                                            <span
+                                                                className={
+                                                                    vibeEmbeddings
+                                                                        ? "text-green-400"
+                                                                        : "text-gray-400"
+                                                                }
+                                                            >
+                                                                {vibeEmbeddings
+                                                                    ? "\u2713"
+                                                                    : "\u2014"}
                                                             </span>
-                                                            <span className={`font-medium ${vibeEmbeddings ? "text-white" : "text-gray-400"}`}>
-                                                                CLAP Vibe Embeddings
+                                                            <span
+                                                                className={`font-medium ${vibeEmbeddings ? "text-white" : "text-gray-400"}`}
+                                                            >
+                                                                CLAP Vibe
+                                                                Embeddings
                                                             </span>
                                                         </div>
                                                         <p className="text-sm text-white/50 ml-7">
-                                                            Creates audio fingerprints that capture the overall &quot;vibe&quot; of each track, enabling &quot;find similar tracks&quot; functionality.
+                                                            Creates audio
+                                                            fingerprints that
+                                                            capture the overall
+                                                            &quot;vibe&quot; of
+                                                            each track, enabling
+                                                            &quot;find similar
+                                                            tracks&quot;
+                                                            functionality.
                                                         </p>
                                                     </div>
                                                 </div>
@@ -618,21 +683,38 @@ export default function OnboardingPage() {
 
                                             <div className="mt-6 pt-4 border-t border-white/10">
                                                 <p className="text-sm text-gray-400">
-                                                    {(musicCNN || vibeEmbeddings) ? (
+                                                    {musicCNN ||
+                                                    vibeEmbeddings ? (
                                                         <>
-                                                            These analyzers run in the background and use ~3-4GB RAM combined.
-                                                            To disable them and save resources, copy{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">docker-compose.override.lite-mode.yml</code>{" "}
+                                                            These analyzers run
+                                                            in the background
+                                                            and use ~3-4GB RAM
+                                                            combined. To disable
+                                                            them and save
+                                                            resources, copy{" "}
+                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
+                                                                docker-compose.override.lite-mode.yml
+                                                            </code>{" "}
                                                             to{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">docker-compose.override.yml</code>{" "}
+                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
+                                                                docker-compose.override.yml
+                                                            </code>{" "}
                                                             and restart.
                                                         </>
                                                     ) : (
                                                         <>
-                                                            Running in lite mode. To enable analyzers, remove{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">docker-compose.override.yml</code>{" "}
+                                                            Running in lite
+                                                            mode. To enable
+                                                            analyzers, remove{" "}
+                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
+                                                                docker-compose.override.yml
+                                                            </code>{" "}
                                                             and restart with{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">docker compose up -d</code>.
+                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
+                                                                docker compose
+                                                                up -d
+                                                            </code>
+                                                            .
                                                         </>
                                                     )}
                                                 </p>
@@ -661,10 +743,16 @@ export default function OnboardingPage() {
                                                         Artist Enrichment
                                                     </h3>
                                                     <p className="text-white/60 text-sm leading-relaxed">
-                                                        Enrichment automatically fetches additional metadata like
-                                                        artist bios, high-quality images, genres, and relationships
-                                                        from external sources. This powers smart features and provides
-                                                        a richer listening experience.
+                                                        Enrichment automatically
+                                                        fetches additional
+                                                        metadata like artist
+                                                        bios, high-quality
+                                                        images, genres, and
+                                                        relationships from
+                                                        external sources. This
+                                                        powers smart features
+                                                        and provides a richer
+                                                        listening experience.
                                                     </p>
                                                 </div>
                                             </div>
@@ -681,7 +769,11 @@ export default function OnboardingPage() {
                                         <div className="flex gap-3 mt-8">
                                             <button
                                                 onClick={handleNextStep}
-                                                onKeyDown={(e) => e.key === 'Enter' && !loading && handleNextStep()}
+                                                onKeyDown={(e) =>
+                                                    e.key === "Enter" &&
+                                                    !loading &&
+                                                    handleNextStep()
+                                                }
                                                 disabled={loading}
                                                 className="w-full py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100 relative group overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand/30"
                                             >
@@ -781,7 +873,7 @@ function IntegrationCard({
                     </div>
                     <button
                         onClick={onToggle}
-                        onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+                        onKeyDown={(e) => e.key === "Enter" && onToggle()}
                         tabIndex={0}
                         className={`relative w-11 h-6 rounded-lg transition-all ${
                             enabled ? "bg-brand" : "bg-white/20"
@@ -844,7 +936,12 @@ function IntegrationCard({
                         )}
                         <button
                             onClick={onTest}
-                            onKeyDown={(e) => e.key === 'Enter' && !loading && !e.defaultPrevented && onTest()}
+                            onKeyDown={(e) =>
+                                e.key === "Enter" &&
+                                !loading &&
+                                !e.defaultPrevented &&
+                                onTest()
+                            }
                             disabled={
                                 loading ||
                                 !url ||
@@ -926,7 +1023,7 @@ function SoulseekCard({
                     </div>
                     <button
                         onClick={onToggle}
-                        onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+                        onKeyDown={(e) => e.key === "Enter" && onToggle()}
                         tabIndex={0}
                         className={`relative w-11 h-6 rounded-lg transition-all ${
                             enabled ? "bg-brand" : "bg-white/20"
@@ -969,7 +1066,13 @@ function SoulseekCard({
                         </p>
                         <button
                             onClick={onTest}
-                            onKeyDown={(e) => e.key === 'Enter' && !loading && username && password && onTest()}
+                            onKeyDown={(e) =>
+                                e.key === "Enter" &&
+                                !loading &&
+                                username &&
+                                password &&
+                                onTest()
+                            }
                             disabled={loading || !username || !password}
                             tabIndex={0}
                             className="w-full bg-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand/30"

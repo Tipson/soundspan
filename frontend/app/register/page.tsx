@@ -50,7 +50,7 @@ export default function RegisterPage() {
         const checkStatus = async () => {
             try {
                 const status = await api.get<{ hasAccount: boolean }>(
-                    "/onboarding/status"
+                    "/onboarding/status",
                 );
                 if (!status.hasAccount) {
                     router.replace("/onboarding");
@@ -86,7 +86,7 @@ export default function RegisterPage() {
             router.push("/");
         } catch (err) {
             setError(
-                err instanceof Error ? err.message : "Registration failed"
+                err instanceof Error ? err.message : "Registration failed",
             );
         } finally {
             setIsLoading(false);
@@ -170,7 +170,7 @@ export default function RegisterPage() {
                                     value={inviteCode}
                                     onChange={(e) =>
                                         setInviteCode(
-                                            e.target.value.toUpperCase()
+                                            e.target.value.toUpperCase(),
                                         )
                                     }
                                     placeholder="ABCD1234"

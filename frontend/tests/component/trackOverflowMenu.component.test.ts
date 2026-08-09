@@ -87,9 +87,8 @@ beforeEach(() => {
 });
 
 test("renders trigger button with EllipsisVertical icon", async () => {
-    const { TrackOverflowMenu } = await import(
-        "../../components/ui/TrackOverflowMenu"
-    );
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
 
     const html = renderToStaticMarkup(
         React.createElement(TrackOverflowMenu, {
@@ -100,7 +99,7 @@ test("renders trigger button with EllipsisVertical icon", async () => {
                 album: { title: "Test Album", id: "album-1" },
                 duration: 240,
             },
-        })
+        }),
     );
 
     // Should have a button with aria-label
@@ -112,9 +111,8 @@ test("renders all standard menu items when track has full metadata", async () =>
     // NOTE: SSR renders the initial state (menu closed), so we can't
     // test the open menu via renderToStaticMarkup. Instead, we verify
     // the component mounts without error and has the trigger button.
-    const { TrackOverflowMenu } = await import(
-        "../../components/ui/TrackOverflowMenu"
-    );
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
 
     const html = renderToStaticMarkup(
         React.createElement(TrackOverflowMenu, {
@@ -125,7 +123,7 @@ test("renders all standard menu items when track has full metadata", async () =>
                 album: { title: "Test Album", id: "album-1" },
                 duration: 240,
             },
-        })
+        }),
     );
 
     // Component should render without crashing and have the trigger
@@ -134,9 +132,8 @@ test("renders all standard menu items when track has full metadata", async () =>
 });
 
 test("does not render PlaylistSelector when menu is closed", async () => {
-    const { TrackOverflowMenu } = await import(
-        "../../components/ui/TrackOverflowMenu"
-    );
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
 
     const html = renderToStaticMarkup(
         React.createElement(TrackOverflowMenu, {
@@ -147,7 +144,7 @@ test("does not render PlaylistSelector when menu is closed", async () => {
                 album: { title: "Test Album", id: "album-1" },
                 duration: 240,
             },
-        })
+        }),
     );
 
     // PlaylistSelector should not be visible in initial state
@@ -155,9 +152,8 @@ test("does not render PlaylistSelector when menu is closed", async () => {
 });
 
 test("respects showPlayNext=false to hide Play Next item", async () => {
-    const { TrackOverflowMenu } = await import(
-        "../../components/ui/TrackOverflowMenu"
-    );
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
 
     // Rendering with menu closed - we verify props are accepted without error
     const html = renderToStaticMarkup(
@@ -171,7 +167,7 @@ test("respects showPlayNext=false to hide Play Next item", async () => {
             },
             showPlayNext: false,
             showMatchVibe: false,
-        })
+        }),
     );
 
     // Should render without error
@@ -179,9 +175,8 @@ test("respects showPlayNext=false to hide Play Next item", async () => {
 });
 
 test("renders extraItemsBefore and extraItemsAfter slots", async () => {
-    const { TrackOverflowMenu } = await import(
-        "../../components/ui/TrackOverflowMenu"
-    );
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
 
     // Note: extraItems are only visible when menu is open (stateful).
     // Since we use SSR with initial state (closed), they won't appear.
@@ -197,16 +192,15 @@ test("renders extraItemsBefore and extraItemsAfter slots", async () => {
             },
             extraItemsBefore: React.createElement("div", null, "BEFORE"),
             extraItemsAfter: React.createElement("div", null, "AFTER"),
-        })
+        }),
     );
 
     assert.match(html, /Track actions/);
 });
 
 test("accepts custom className and triggerClassName", async () => {
-    const { TrackOverflowMenu } = await import(
-        "../../components/ui/TrackOverflowMenu"
-    );
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
 
     const html = renderToStaticMarkup(
         React.createElement(TrackOverflowMenu, {
@@ -219,7 +213,7 @@ test("accepts custom className and triggerClassName", async () => {
             },
             className: "custom-container",
             triggerClassName: "custom-trigger",
-        })
+        }),
     );
 
     assert.match(html, /custom-container/);

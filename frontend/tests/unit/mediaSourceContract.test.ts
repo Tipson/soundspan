@@ -55,7 +55,10 @@ test("normalizeCanonicalMediaSource normalizes supported source values", () => {
 });
 
 test("resolveCanonicalMediaSource resolves explicit and inferred sources", () => {
-    assert.equal(resolveCanonicalMediaSource({ mediaSource: "tidal" }), "tidal");
+    assert.equal(
+        resolveCanonicalMediaSource({ mediaSource: "tidal" }),
+        "tidal",
+    );
     assert.equal(
         resolveCanonicalMediaSource({ streamSource: "ytmusic" }),
         "youtube",
@@ -76,10 +79,13 @@ test("resolveCanonicalMediaSource resolves explicit and inferred sources", () =>
 });
 
 test("toLegacyStreamFields maps canonical identities to legacy fields", () => {
-    assert.deepEqual(toLegacyStreamFields({ source: "tidal", tidalTrackId: 5 }), {
-        streamSource: "tidal",
-        tidalTrackId: 5,
-    });
+    assert.deepEqual(
+        toLegacyStreamFields({ source: "tidal", tidalTrackId: 5 }),
+        {
+            streamSource: "tidal",
+            tidalTrackId: 5,
+        },
+    );
     assert.deepEqual(
         toLegacyStreamFields({ source: "youtube", youtubeVideoId: "x" }),
         {

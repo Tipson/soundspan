@@ -70,7 +70,12 @@ test("initial state is idle with no source and no retry debt", () => {
 test("LOAD_REQUESTED enters loading, captures autoplay, and applies exactly one load", () => {
     const { state, effects } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     assert.equal(state.status, "loading");
     assert.equal(state.autoplay, true);
@@ -145,7 +150,12 @@ test("same-source load with autoplay while paused just plays (no reload)", () =>
 test("same-source load while still loading merges play intent without a second load", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: false, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: false,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "LOAD_REQUESTED",
@@ -175,7 +185,12 @@ test("same-source load with a start position seeks instead of dropping it", () =
 test("same-source load with a start position before readiness queues the seek", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: false, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: false,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "LOAD_REQUESTED",
@@ -271,9 +286,7 @@ test("play-state changes never trigger re-loads", () => {
         0,
     );
     assert.equal(
-        combined.filter(
-            (effect) => effect.kind === "reloadFromSource",
-        ).length,
+        combined.filter((effect) => effect.kind === "reloadFromSource").length,
         0,
     );
 });
@@ -285,7 +298,12 @@ test("play-state changes never trigger re-loads", () => {
 test("LOADED_METADATA emits load, applies queued seek with a seek mark, and honors captured autoplay", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: 42, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: 42,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "LOADED_METADATA",
@@ -306,7 +324,12 @@ test("LOADED_METADATA emits load, applies queued seek with a seek mark, and hono
 test("LOADED_METADATA without autoplay parks in paused and does not call play", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: false, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: false,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "LOADED_METADATA",
@@ -333,7 +356,12 @@ test("duplicate LOADED_METADATA is ignored", () => {
 test("PLAY_REQUESTED before readiness only flips captured autoplay", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: false, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: false,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "PLAY_REQUESTED",
@@ -396,7 +424,12 @@ test("PAUSE_REQUESTED while playing classifies the pause as user-intended", () =
 test("PAUSE_REQUESTED during load cancels captured autoplay without a pause call", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "PAUSE_REQUESTED",
@@ -550,7 +583,12 @@ test("FORCE_ENDED synthesizes end only while playing", () => {
 test("SEEK_REQUESTED before readiness queues the seek and emits optimistically", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: false, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: false,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "SEEK_REQUESTED",
@@ -566,7 +604,12 @@ test("SEEK_REQUESTED before readiness queues the seek and emits optimistically",
 test("queued seek is applied once metadata is ready (resume-at-position path)", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: false, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: false,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state: seeked } = transitionNativeEngine(loading, {
         type: "SEEK_REQUESTED",
@@ -661,7 +704,12 @@ test("ELEMENT_SEEKED clears the seek mark and snaps the position", () => {
 test("timeupdate during loading is suppressed", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { effects } = transitionNativeEngine(loading, {
         type: "ELEMENT_TIME_UPDATE",
@@ -756,7 +804,12 @@ test("classifyNativeMediaError exposes the MEDIA_ERR name for orchestrator match
 test("aborted errors are ignored (our own source swap)", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { effects } = transitionNativeEngine(loading, {
         type: "ELEMENT_ERROR",
@@ -811,7 +864,12 @@ test("stale source after a long pause reloads from source at the current positio
 test("transient load errors schedule bounded retries with backoff", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "ELEMENT_ERROR",
@@ -866,7 +924,12 @@ test("automatic retries exhaust and then emit a load error instead of silently s
 test("RETRY_TIMER_FIRED re-applies the load as a retry without resetting the budget", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state: retrying } = transitionNativeEngine(loading, {
         type: "ELEMENT_ERROR",
@@ -940,7 +1003,11 @@ test("repeated transient errors across a mid-playback reload still exhaust into 
     assert.equal(transition.state.automaticRetriesUsed, 1);
     // Further failures during the reload burn the remaining budget…
     let finalEffects: NativeEnginePolicyEffect[] = [];
-    for (let round = 0; round < NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES; round += 1) {
+    for (
+        let round = 0;
+        round < NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES;
+        round += 1
+    ) {
         transition = transitionNativeEngine(transition.state, {
             type: "ELEMENT_ERROR",
             mediaErrorCode: 2,
@@ -1010,7 +1077,12 @@ test("RETRY_TIMER_FIRED after leaving loading is ignored", () => {
 test("fatal src-not-supported errors fail immediately without retries", () => {
     const { state: loading } = transitionNativeEngine(
         createInitialNativeEngineState(),
-        { type: "LOAD_REQUESTED", autoplay: true, startTimeSec: null, nowMs: 1_000 },
+        {
+            type: "LOAD_REQUESTED",
+            autoplay: true,
+            startTimeSec: null,
+            nowMs: 1_000,
+        },
     );
     const { state, effects } = transitionNativeEngine(loading, {
         type: "ELEMENT_ERROR",
@@ -1087,13 +1159,16 @@ test("GESTURE_RETRY_FIRED plays once and disarms", () => {
 });
 
 test("AbortError from an interrupted play() is ignored", () => {
-    const { effects } = transitionNativeEngine(loadedState({ autoplay: true }), {
-        type: "PLAY_PROMISE_REJECTED",
-        errorName: "AbortError",
-        errorMessage: "interrupted by a new load request",
-        isPageHidden: false,
-        nowMs: 2_000,
-    });
+    const { effects } = transitionNativeEngine(
+        loadedState({ autoplay: true }),
+        {
+            type: "PLAY_PROMISE_REJECTED",
+            errorName: "AbortError",
+            errorMessage: "interrupted by a new load request",
+            isPageHidden: false,
+            nowMs: 2_000,
+        },
+    );
     assert.deepEqual(effects, []);
 });
 
@@ -1189,13 +1264,16 @@ test("NotAllowedError while hidden arms a visibility retry alongside the gesture
 });
 
 test("NotAllowedError while visible does not arm a visibility retry", () => {
-    const { effects } = transitionNativeEngine(loadedState({ autoplay: true }), {
-        type: "PLAY_PROMISE_REJECTED",
-        errorName: "NotAllowedError",
-        errorMessage: "blocked",
-        isPageHidden: false,
-        nowMs: 2_000,
-    });
+    const { effects } = transitionNativeEngine(
+        loadedState({ autoplay: true }),
+        {
+            type: "PLAY_PROMISE_REJECTED",
+            errorName: "NotAllowedError",
+            errorMessage: "blocked",
+            isPageHidden: false,
+            nowMs: 2_000,
+        },
+    );
     assert.equal(kinds(effects).includes("armVisibilityRetry"), false);
 });
 

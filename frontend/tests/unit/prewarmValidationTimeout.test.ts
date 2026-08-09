@@ -62,8 +62,7 @@ describe("prewarm validation timeout signal composition", () => {
             controllerSignal: AbortSignal,
         ): string => {
             const isTimeout =
-                error instanceof DOMException &&
-                error.name === "TimeoutError";
+                error instanceof DOMException && error.name === "TimeoutError";
             if (isTimeout) {
                 return "timeout";
             }
@@ -76,7 +75,10 @@ describe("prewarm validation timeout signal composition", () => {
         };
 
         // Timeout scenario
-        const timeoutError = new DOMException("Signal timed out", "TimeoutError");
+        const timeoutError = new DOMException(
+            "Signal timed out",
+            "TimeoutError",
+        );
         const idleController = new AbortController();
         assert.equal(
             resolveAbortReason(timeoutError, idleController.signal),
@@ -86,7 +88,10 @@ describe("prewarm validation timeout signal composition", () => {
         // External abort scenario
         const abortedController = new AbortController();
         abortedController.abort("superseded");
-        const abortError = new DOMException("The operation was aborted.", "AbortError");
+        const abortError = new DOMException(
+            "The operation was aborted.",
+            "AbortError",
+        );
         assert.equal(
             resolveAbortReason(abortError, abortedController.signal),
             "superseded",

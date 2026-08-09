@@ -7,7 +7,10 @@ export function canShareTrack(track: Track): boolean {
     return Boolean(track.id) && !isRemoteTrack(track);
 }
 
-export function buildAbsoluteShareUrl(accessPath: string, origin: string): string {
+export function buildAbsoluteShareUrl(
+    accessPath: string,
+    origin: string,
+): string {
     const token = accessPath.split("/").pop() ?? accessPath;
     return new URL(`/share/${token}`, origin).toString();
 }

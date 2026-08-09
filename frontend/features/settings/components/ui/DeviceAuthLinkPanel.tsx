@@ -1,7 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CheckCircle, Copy, ExternalLink, Loader2, type LucideIcon } from "lucide-react";
+import {
+    CheckCircle,
+    Copy,
+    ExternalLink,
+    Loader2,
+    type LucideIcon,
+} from "lucide-react";
 import { formatTime } from "@/utils/formatTime";
 
 /** Content and controls displayed by the shared device-code linking panel. */
@@ -45,7 +51,12 @@ function NumberedStep({ number, children }: NumberedStepProps) {
     );
 }
 
-function CodeStep({ userCode, copied, onCopyCode, pasteInstruction }: Pick<
+function CodeStep({
+    userCode,
+    copied,
+    onCopyCode,
+    pasteInstruction,
+}: Pick<
     DeviceAuthLinkPanelProps,
     "userCode" | "copied" | "onCopyCode" | "pasteInstruction"
 >) {
@@ -62,10 +73,19 @@ function CodeStep({ userCode, copied, onCopyCode, pasteInstruction }: Pick<
                     <code className="px-4 py-2 text-lg font-mono font-bold tracking-wider bg-surface-hover text-white rounded-lg border border-[#444] select-all">
                         {userCode}
                     </code>
-                    <button onClick={onCopyCode} className="p-2 text-gray-400 hover:text-white transition-colors" title="Copy code">
-                        {copied
-                            ? <PanelIcon icon={CheckCircle} className="w-4 h-4 text-green-400" />
-                            : <PanelIcon icon={Copy} className="w-4 h-4" />}
+                    <button
+                        onClick={onCopyCode}
+                        className="p-2 text-gray-400 hover:text-white transition-colors"
+                        title="Copy code"
+                    >
+                        {copied ? (
+                            <PanelIcon
+                                icon={CheckCircle}
+                                className="w-4 h-4 text-green-400"
+                            />
+                        ) : (
+                            <PanelIcon icon={Copy} className="w-4 h-4" />
+                        )}
                     </button>
                 </div>
             </div>
@@ -73,7 +93,9 @@ function CodeStep({ userCode, copied, onCopyCode, pasteInstruction }: Pick<
     );
 }
 
-function WaitingRow({ timeLeftSeconds }: Pick<DeviceAuthLinkPanelProps, "timeLeftSeconds">) {
+function WaitingRow({
+    timeLeftSeconds,
+}: Pick<DeviceAuthLinkPanelProps, "timeLeftSeconds">) {
     return (
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -81,9 +103,13 @@ function WaitingRow({ timeLeftSeconds }: Pick<DeviceAuthLinkPanelProps, "timeLef
                 <span>Waiting for you to complete sign-in...</span>
             </div>
             {timeLeftSeconds !== null && (
-                <span className={`text-xs tabular-nums ${
-                    timeLeftSeconds < 120 ? "text-amber-400/70" : "text-gray-400"
-                }`}>
+                <span
+                    className={`text-xs tabular-nums ${
+                        timeLeftSeconds < 120
+                            ? "text-amber-400/70"
+                            : "text-gray-400"
+                    }`}
+                >
                     Expires in {formatTime(timeLeftSeconds)}
                 </span>
             )}
@@ -99,7 +125,9 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
                 <p className="text-sm text-gray-300">{props.introText}</p>
                 <CodeStep {...props} />
                 <NumberedStep number={2}>
-                    <p className="text-sm text-gray-300">{props.signInInstruction}</p>
+                    <p className="text-sm text-gray-300">
+                        {props.signInInstruction}
+                    </p>
                 </NumberedStep>
                 <NumberedStep number={3}>
                     <p className="text-sm text-gray-300">
@@ -120,7 +148,10 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
                 </a>
             )}
             <WaitingRow timeLeftSeconds={props.timeLeftSeconds} />
-            <button onClick={props.onCancel} className="text-xs text-gray-400 hover:text-gray-300 transition-colors">
+            <button
+                onClick={props.onCancel}
+                className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
+            >
                 Cancel
             </button>
         </div>

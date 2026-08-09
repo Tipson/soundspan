@@ -42,7 +42,7 @@ function resolveSequentialIndex(
     action: QueueAdvanceAction,
     queueLength: number,
     currentIndex: number,
-    repeatMode: QueueAdvanceRepeatMode
+    repeatMode: QueueAdvanceRepeatMode,
 ): number | null {
     if (action === "next") {
         if (currentIndex < queueLength - 1 && currentIndex >= 0) {
@@ -64,7 +64,7 @@ function resolveShuffleIndex(
     action: QueueAdvanceAction,
     shuffleIndices: readonly number[],
     currentIndex: number,
-    repeatMode: QueueAdvanceRepeatMode
+    repeatMode: QueueAdvanceRepeatMode,
 ): number | null {
     const currentShufflePos = shuffleIndices.indexOf(currentIndex);
     if (currentShufflePos < 0) {
@@ -96,10 +96,16 @@ function resolveShuffleIndex(
  * back to sequential order so playback never dead-ends on a stale order.
  */
 export function resolveQueueAdvance(
-    input: ResolveQueueAdvanceInput
+    input: ResolveQueueAdvanceInput,
 ): QueueAdvanceResolution {
-    const { action, queue, currentIndex, isShuffle, shuffleIndices, repeatMode } =
-        input;
+    const {
+        action,
+        queue,
+        currentIndex,
+        isShuffle,
+        shuffleIndices,
+        repeatMode,
+    } = input;
     if (queue.length === 0) return { kind: "stop" };
 
     let targetIndex: number | null = null;
@@ -108,14 +114,14 @@ export function resolveQueueAdvance(
             action,
             shuffleIndices,
             currentIndex,
-            repeatMode
+            repeatMode,
         );
     } else {
         targetIndex = resolveSequentialIndex(
             action,
             queue.length,
             currentIndex,
-            repeatMode
+            repeatMode,
         );
     }
 

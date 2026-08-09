@@ -63,7 +63,7 @@ export default function LoginPage() {
         const checkOnboarding = async () => {
             try {
                 const status = await api.get<{ hasAccount: boolean }>(
-                    "/onboarding/status"
+                    "/onboarding/status",
                 );
                 if (!status.hasAccount) {
                     router.replace("/onboarding");
@@ -92,17 +92,24 @@ export default function LoginPage() {
                         userHeroUrl?: string | null;
                         coverArt?: string | null;
                         albumCount?: number;
-                    }) => item.type === "artist"
+                    }) => item.type === "artist",
                 );
                 const artistsWithImages: Artist[] = artistItems
                     .map((item) => ({
                         id: item.id || "",
                         mbid: item.mbid,
                         name: item.name || "Unknown Artist",
-                        heroUrl: item.userHeroUrl || item.heroUrl || item.coverArt || null,
+                        heroUrl:
+                            item.userHeroUrl ||
+                            item.heroUrl ||
+                            item.coverArt ||
+                            null,
                         albumCount: item.albumCount,
                     }))
-                    .filter((artist) => Boolean(artist.id) && Boolean(artist.heroUrl));
+                    .filter(
+                        (artist) =>
+                            Boolean(artist.id) && Boolean(artist.heroUrl),
+                    );
                 setArtists(artistsWithImages);
                 // Silently ignore errors (expected when not authenticated)
             } catch {
@@ -363,17 +370,17 @@ export default function LoginPage() {
                                                         e.target.value
                                                             .replace(
                                                                 /[^A-Fa-f0-9]/g,
-                                                                ""
+                                                                "",
                                                             )
                                                             .slice(0, 8)
-                                                            .toUpperCase()
+                                                            .toUpperCase(),
                                                     );
                                                 } else {
                                                     // TOTP: 6 digits
                                                     setTwoFactorToken(
                                                         e.target.value
                                                             .replace(/\D/g, "")
-                                                            .slice(0, 6)
+                                                            .slice(0, 6),
                                                     );
                                                 }
                                             }}
@@ -402,7 +409,7 @@ export default function LoginPage() {
                                             type="button"
                                             onClick={() => {
                                                 setUseRecoveryCode(
-                                                    !useRecoveryCode
+                                                    !useRecoveryCode,
                                                 );
                                                 setTwoFactorToken("");
                                                 setError("");

@@ -36,13 +36,13 @@ export function PageHeader({
                         <Icon
                             className={cn(
                                 "w-8 h-8 text-brand shrink-0",
-                                iconClassName
+                                iconClassName,
                             )}
                         />
                         <h1
                             className={cn(
                                 "text-3xl font-bold text-white",
-                                titleClassName
+                                titleClassName,
                             )}
                         >
                             {title}
@@ -53,7 +53,9 @@ export function PageHeader({
                         {subtitle}
                     </p>
                 </div>
-                {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+                {actions ? (
+                    <div className="flex items-center gap-2">{actions}</div>
+                ) : null}
             </div>
         </div>
     );

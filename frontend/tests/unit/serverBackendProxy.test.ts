@@ -117,7 +117,11 @@ test("proxy error handler responds with the structured 503 JSON contract", () =>
     });
     const res = createFakeResponse();
 
-    handler(new Error("connect ECONNREFUSED"), { method: "GET", url: "/api/library" }, res);
+    handler(
+        new Error("connect ECONNREFUSED"),
+        { method: "GET", url: "/api/library" },
+        res,
+    );
 
     assert.equal(res.writeHeadCalls.length, 1);
     assert.equal(res.writeHeadCalls[0]?.statusCode, 503);
@@ -129,7 +133,10 @@ test("proxy error handler responds with the structured 503 JSON contract", () =>
         code: "API_PROXY_UNAVAILABLE",
     });
     assert.equal(logger.errors.length, 1);
-    assert.match(logger.errors[0]?.[0] ?? "", /\[api-proxy\] GET \/api\/library failed:/);
+    assert.match(
+        logger.errors[0]?.[0] ?? "",
+        /\[api-proxy\] GET \/api\/library failed:/,
+    );
 });
 
 test("proxy error handler does not write once headers were already sent", () => {
@@ -141,7 +148,11 @@ test("proxy error handler does not write once headers were already sent", () => 
     });
     const res = createFakeResponse(true);
 
-    handler(new Error("socket hang up"), { method: "GET", url: "/api/stream" }, res);
+    handler(
+        new Error("socket hang up"),
+        { method: "GET", url: "/api/stream" },
+        res,
+    );
 
     assert.equal(res.writeHeadCalls.length, 0);
     assert.equal(res.body, null);
@@ -164,7 +175,11 @@ test("proxy error handler destroys socket-like responses from websocket upgrades
         },
     };
 
-    handler(new Error("connect ECONNREFUSED"), { method: "GET", url: "/socket.io" }, socketLike);
+    handler(
+        new Error("connect ECONNREFUSED"),
+        { method: "GET", url: "/socket.io" },
+        socketLike,
+    );
 
     assert.equal(destroyCalls, 1);
 });
@@ -203,40 +218,40 @@ test("resolveProxyTimeoutMs honors PROXY_REQUEST_TIMEOUT_MS and PROXY_IMPORT_PRE
         resolveProxyTimeoutMs("/api/library", {
             PROXY_REQUEST_TIMEOUT_MS: "5000",
         }),
-        5_000
+        5_000,
     );
     assert.equal(
         resolveProxyTimeoutMs("/api/import/preview", {
             PROXY_IMPORT_PREVIEW_TIMEOUT_MS: "120000",
         }),
-        120_000
+        120_000,
     );
     // A lower global timeout never shrinks the import-preview default…
     assert.equal(
         resolveProxyTimeoutMs("/api/import/preview", {
             PROXY_REQUEST_TIMEOUT_MS: "5000",
         }),
-        90_000
+        90_000,
     );
     // …but a higher global raises it when no explicit preview override exists.
     assert.equal(
         resolveProxyTimeoutMs("/api/import/preview", {
             PROXY_REQUEST_TIMEOUT_MS: "100000",
         }),
-        100_000
+        100_000,
     );
     // Invalid values fall back to the defaults.
     assert.equal(
         resolveProxyTimeoutMs("/api/library", {
             PROXY_REQUEST_TIMEOUT_MS: "not-a-number",
         }),
-        20_000
+        20_000,
     );
     assert.equal(
         resolveProxyTimeoutMs("/api/library", {
             PROXY_REQUEST_TIMEOUT_MS: "-1",
         }),
-        20_000
+        20_000,
     );
 });
 
@@ -304,7 +319,7 @@ test("first-byte timeout answers 504 UPSTREAM_TIMEOUT and aborts the upstream re
     assert.equal(logger.errors.length, 1);
     assert.match(
         logger.errors[0]?.[0] ?? "",
-        /\[api-proxy\] GET \/api\/library timed out after 20000ms/
+        /\[api-proxy\] GET \/api\/library timed out after 20000ms/,
     );
 });
 
@@ -318,7 +333,11 @@ test("first-byte timeout uses the import-preview budget for import preview paths
     const proxyReq = createFakeProxyReq();
     const res = createFakeResponse();
 
-    handler(proxyReq, { method: "POST", url: "/api/import/preview?src=x" }, res);
+    handler(
+        proxyReq,
+        { method: "POST", url: "/api/import/preview?src=x" },
+        res,
+    );
 
     t.mock.timers.tick(20_000);
     assert.equal(res.writeHeadCalls.length, 0);

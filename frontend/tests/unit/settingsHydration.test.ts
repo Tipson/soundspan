@@ -15,17 +15,17 @@ test("shouldRetryFailedSettingsLoad only retries failed loads after cooldown", (
         shouldRetryFailedSettingsLoad(
             true,
             now - SETTINGS_BACKGROUND_RETRY_COOLDOWN_MS + 1,
-            now
+            now,
         ),
-        false
+        false,
     );
     assert.equal(
         shouldRetryFailedSettingsLoad(
             true,
             now - SETTINGS_BACKGROUND_RETRY_COOLDOWN_MS,
-            now
+            now,
         ),
-        true
+        true,
     );
 });
 
@@ -38,7 +38,7 @@ test("shouldShowSettingsPageLoading gates rendering until required payloads hydr
             isAdmin: false,
             isSystemSettingsLoading: false,
         }),
-        true
+        true,
     );
 
     assert.equal(
@@ -49,7 +49,7 @@ test("shouldShowSettingsPageLoading gates rendering until required payloads hydr
             isAdmin: true,
             isSystemSettingsLoading: true,
         }),
-        false
+        false,
     );
 
     assert.equal(
@@ -60,7 +60,7 @@ test("shouldShowSettingsPageLoading gates rendering until required payloads hydr
             isAdmin: false,
             isSystemSettingsLoading: false,
         }),
-        true
+        true,
     );
 
     assert.equal(
@@ -71,7 +71,7 @@ test("shouldShowSettingsPageLoading gates rendering until required payloads hydr
             isAdmin: true,
             isSystemSettingsLoading: true,
         }),
-        true
+        true,
     );
 
     assert.equal(
@@ -82,7 +82,6 @@ test("shouldShowSettingsPageLoading gates rendering until required payloads hydr
             isAdmin: true,
             isSystemSettingsLoading: false,
         }),
-        false
+        false,
     );
 });
-

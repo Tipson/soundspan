@@ -81,7 +81,9 @@ interface PollingOptions {
  * Hook for managing notifications using React Query as single source of truth.
  * All components using this hook share the same cache and update together.
  */
-export function useNotifications(options: PollingOptions = {}): UseNotificationsReturn {
+export function useNotifications(
+    options: PollingOptions = {},
+): UseNotificationsReturn {
     const enabled = resolvePollingEnabled(options.enabled);
     const isDocumentVisible = useDocumentVisible();
     const queryClient = useQueryClient();
@@ -102,9 +104,9 @@ export function useNotifications(options: PollingOptions = {}): UseNotifications
         refetchInterval: resolveVisibilityGatedPollingInterval(
             resolveFixedPollingInterval(
                 enabled,
-                NOTIFICATIONS_POLL_INTERVAL_MS
+                NOTIFICATIONS_POLL_INTERVAL_MS,
             ),
-            isDocumentVisible
+            isDocumentVisible,
         ),
     });
     useRefetchOnVisible(enabled, refetch);
@@ -117,10 +119,15 @@ export function useNotifications(options: PollingOptions = {}): UseNotifications
         mutationFn: (id: string) => api.post(`/notifications/${id}/read`),
         onMutate: async (id: string) => {
             await queryClient.cancelQueries({ queryKey: ["notifications"] });
-            const previous = queryClient.getQueryData<Notification[]>(["notifications"]);
+            const previous = queryClient.getQueryData<Notification[]>([
+                "notifications",
+            ]);
 
-            queryClient.setQueryData<Notification[]>(["notifications"], (old) =>
-                old?.map((n) => (n.id === id ? { ...n, read: true } : n)) || []
+            queryClient.setQueryData<Notification[]>(
+                ["notifications"],
+                (old) =>
+                    old?.map((n) => (n.id === id ? { ...n, read: true } : n)) ||
+                    [],
             );
 
             return { previous };
@@ -137,10 +144,13 @@ export function useNotifications(options: PollingOptions = {}): UseNotifications
         mutationFn: () => api.post("/notifications/read-all"),
         onMutate: async () => {
             await queryClient.cancelQueries({ queryKey: ["notifications"] });
-            const previous = queryClient.getQueryData<Notification[]>(["notifications"]);
+            const previous = queryClient.getQueryData<Notification[]>([
+                "notifications",
+            ]);
 
-            queryClient.setQueryData<Notification[]>(["notifications"], (old) =>
-                old?.map((n) => ({ ...n, read: true })) || []
+            queryClient.setQueryData<Notification[]>(
+                ["notifications"],
+                (old) => old?.map((n) => ({ ...n, read: true })) || [],
             );
 
             return { previous };
@@ -157,10 +167,13 @@ export function useNotifications(options: PollingOptions = {}): UseNotifications
         mutationFn: (id: string) => api.post(`/notifications/${id}/clear`),
         onMutate: async (id: string) => {
             await queryClient.cancelQueries({ queryKey: ["notifications"] });
-            const previous = queryClient.getQueryData<Notification[]>(["notifications"]);
+            const previous = queryClient.getQueryData<Notification[]>([
+                "notifications",
+            ]);
 
-            queryClient.setQueryData<Notification[]>(["notifications"], (old) =>
-                old?.filter((n) => n.id !== id) || []
+            queryClient.setQueryData<Notification[]>(
+                ["notifications"],
+                (old) => old?.filter((n) => n.id !== id) || [],
             );
 
             return { previous };
@@ -177,7 +190,9 @@ export function useNotifications(options: PollingOptions = {}): UseNotifications
         mutationFn: () => api.post("/notifications/clear-all"),
         onMutate: async () => {
             await queryClient.cancelQueries({ queryKey: ["notifications"] });
-            const previous = queryClient.getQueryData<Notification[]>(["notifications"]);
+            const previous = queryClient.getQueryData<Notification[]>([
+                "notifications",
+            ]);
 
             queryClient.setQueryData<Notification[]>(["notifications"], []);
 
@@ -209,7 +224,9 @@ export function useNotifications(options: PollingOptions = {}): UseNotifications
 export function useDownloadHistory(): UseDownloadHistoryReturn {
     const isDocumentVisible = useDocumentVisible();
     const fetchHistory = useCallback(async () => {
-        return api.get<DownloadHistoryItem[]>("/notifications/downloads/history");
+        return api.get<DownloadHistoryItem[]>(
+            "/notifications/downloads/history",
+        );
     }, []);
 
     const {
@@ -226,45 +243,54 @@ export function useDownloadHistory(): UseDownloadHistoryReturn {
         // 30s - history doesn't need frequent updates; paused while hidden
         refetchInterval: resolveVisibilityGatedPollingInterval(
             30000,
-            isDocumentVisible
+            isDocumentVisible,
         ),
     });
     useRefetchOnVisible(true, refetch);
 
     const queryClient = useQueryClient();
 
-    const clearDownload = useCallback(async (id: string) => {
-        try {
-            await api.post(`/notifications/downloads/${id}/clear`);
-            queryClient.setQueryData<DownloadHistoryItem[]>(
-                ["download-history"],
-                (old) => old?.filter((d) => d.id !== id) || []
-            );
-        } catch (err: unknown) {
-            logger.error("Failed to clear download", { id, err });
-        }
-    }, [queryClient]);
+    const clearDownload = useCallback(
+        async (id: string) => {
+            try {
+                await api.post(`/notifications/downloads/${id}/clear`);
+                queryClient.setQueryData<DownloadHistoryItem[]>(
+                    ["download-history"],
+                    (old) => old?.filter((d) => d.id !== id) || [],
+                );
+            } catch (err: unknown) {
+                logger.error("Failed to clear download", { id, err });
+            }
+        },
+        [queryClient],
+    );
 
     const clearAll = useCallback(async () => {
         try {
             await api.post("/notifications/downloads/clear-all");
-            queryClient.setQueryData<DownloadHistoryItem[]>(["download-history"], []);
+            queryClient.setQueryData<DownloadHistoryItem[]>(
+                ["download-history"],
+                [],
+            );
         } catch (err: unknown) {
             logger.error("Failed to clear all download history", { err });
         }
     }, [queryClient]);
 
-    const retryDownload = useCallback(async (id: string) => {
-        try {
-            await api.post(`/notifications/downloads/${id}/retry`);
-            queryClient.setQueryData<DownloadHistoryItem[]>(
-                ["download-history"],
-                (old) => old?.filter((d) => d.id !== id) || []
-            );
-        } catch (err: unknown) {
-            logger.error("Failed to retry download", { id, err });
-        }
-    }, [queryClient]);
+    const retryDownload = useCallback(
+        async (id: string) => {
+            try {
+                await api.post(`/notifications/downloads/${id}/retry`);
+                queryClient.setQueryData<DownloadHistoryItem[]>(
+                    ["download-history"],
+                    (old) => old?.filter((d) => d.id !== id) || [],
+                );
+            } catch (err: unknown) {
+                logger.error("Failed to retry download", { id, err });
+            }
+        },
+        [queryClient],
+    );
 
     return {
         history,
@@ -283,11 +309,13 @@ export function useDownloadHistory(): UseDownloadHistoryReturn {
  * - Polls every 30s when idle (to catch new downloads)
  */
 export function useActiveDownloads(
-    options: PollingOptions = {}
+    options: PollingOptions = {},
 ): UseActiveDownloadsReturn {
     const enabled = resolvePollingEnabled(options.enabled);
     const fetchDownloads = useCallback(async () => {
-        return api.get<DownloadHistoryItem[]>("/notifications/downloads/active");
+        return api.get<DownloadHistoryItem[]>(
+            "/notifications/downloads/active",
+        );
     }, []);
 
     const {

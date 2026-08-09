@@ -12,10 +12,7 @@ import {
 
 test("normalizeStreamingEngineMode trims, lowercases, and validates values", () => {
     assert.equal(normalizeStreamingEngineMode(" VIDEOJS "), "videojs");
-    assert.equal(
-        normalizeStreamingEngineMode(" Howler "),
-        "howler"
-    );
+    assert.equal(normalizeStreamingEngineMode(" Howler "), "howler");
     assert.equal(normalizeStreamingEngineMode(" NATIVE "), "native");
     assert.equal(normalizeStreamingEngineMode("native"), "native");
     assert.equal(normalizeStreamingEngineMode(""), null);
@@ -40,16 +37,16 @@ test("normalizeSegmentedStartupFallbackTimeoutMs clamps and rejects invalid valu
 test("normalizeListenTogetherSegmentedPlaybackEnabled trims, lowercases, and validates values", () => {
     assert.equal(
         normalizeListenTogetherSegmentedPlaybackEnabled(" TRUE "),
-        true
+        true,
     );
     assert.equal(
         normalizeListenTogetherSegmentedPlaybackEnabled(" false "),
-        false
+        false,
     );
     assert.equal(normalizeListenTogetherSegmentedPlaybackEnabled(""), null);
     assert.equal(
         normalizeListenTogetherSegmentedPlaybackEnabled("enable"),
-        null
+        null,
     );
 });
 
@@ -66,26 +63,26 @@ test("normalizeSegmentedEffectiveFragmentDurationSec follows backend defaults an
         normalizeSegmentedEffectiveFragmentDurationSec({
             SEGMENTED_LOCAL_SEG_DURATION_SEC: " 0.5 ",
         }),
-        0.05
+        0.05,
     );
     assert.equal(
         normalizeSegmentedEffectiveFragmentDurationSec({
             SEGMENTED_LOCAL_SEG_DURATION_SEC: " 0.5 ",
             SEGMENTED_DASH_FRAGMENT_DURATION_RATIO: "0.25",
         }),
-        0.125
+        0.125,
     );
     assert.equal(
         normalizeSegmentedEffectiveFragmentDurationSec({
             SEGMENTED_LOCAL_SEG_DURATION_SEC: "0",
         }),
-        0.2
+        0.2,
     );
     assert.equal(
         normalizeSegmentedEffectiveFragmentDurationSec({
             SEGMENTED_LOCAL_SEG_DURATION_SEC: "invalid",
         }),
-        0.2
+        0.2,
     );
 });
 
@@ -95,21 +92,21 @@ test("normalizeSegmentedEffectiveFragmentDurationSec fails closed on non-positiv
             SEGMENTED_LOCAL_SEG_DURATION_SEC: "3",
             SEGMENTED_DASH_FRAGMENT_DURATION_RATIO: "-1",
         }),
-        0.3
+        0.3,
     );
     assert.equal(
         normalizeSegmentedEffectiveFragmentDurationSec({
             SEGMENTED_LOCAL_SEG_DURATION_SEC: "-2",
             SEGMENTED_DASH_FRAGMENT_DURATION_RATIO: "0.5",
         }),
-        1
+        1,
     );
     assert.equal(
         normalizeSegmentedEffectiveFragmentDurationSec({
             SEGMENTED_LOCAL_SEG_DURATION_SEC: "3.3333333",
             SEGMENTED_DASH_FRAGMENT_DURATION_RATIO: "0.3",
         }),
-        1
+        1,
     );
 });
 

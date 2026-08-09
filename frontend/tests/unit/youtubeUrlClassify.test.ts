@@ -10,21 +10,21 @@ const PLAYLIST_ID = "PL-TQY69MwxBRttHQST4uYTaFs4RQPLuOH";
 
 test("pure playlist URL classifies as playlist", () => {
     const result = classifyYouTubeUrl(
-        `https://www.youtube.com/playlist?list=${PLAYLIST_ID}`
+        `https://www.youtube.com/playlist?list=${PLAYLIST_ID}`,
     );
     assert.deepEqual(result, { kind: "playlist", playlistId: PLAYLIST_ID });
 });
 
 test("watch URL with a real list prefers the playlist over the video", () => {
     const result = classifyYouTubeUrl(
-        `https://www.youtube.com/watch?v=${VIDEO_ID}&list=${PLAYLIST_ID}`
+        `https://www.youtube.com/watch?v=${VIDEO_ID}&list=${PLAYLIST_ID}`,
     );
     assert.deepEqual(result, { kind: "playlist", playlistId: PLAYLIST_ID });
 });
 
 test("RD radio/mix list classifies as mix with its focused video", () => {
     const result = classifyYouTubeUrl(
-        `https://www.youtube.com/watch?v=${VIDEO_ID}&list=RD${VIDEO_ID}&start_radio=1`
+        `https://www.youtube.com/watch?v=${VIDEO_ID}&list=RD${VIDEO_ID}&start_radio=1`,
     );
     assert.deepEqual(result, {
         kind: "mix",
@@ -50,34 +50,34 @@ for (const url of [
 test("@handle channel classifies as channel", () => {
     assert.deepEqual(
         classifyYouTubeUrl("https://www.youtube.com/@BookClubRadio"),
-        { kind: "channel", channel: "@BookClubRadio" }
+        { kind: "channel", channel: "@BookClubRadio" },
     );
 });
 
 test("@handle with a tab still classifies as channel", () => {
     assert.deepEqual(
         classifyYouTubeUrl("https://www.youtube.com/@BookClubRadio/streams"),
-        { kind: "channel", channel: "@BookClubRadio" }
+        { kind: "channel", channel: "@BookClubRadio" },
     );
 });
 
 test("/channel/UC… classifies as channel", () => {
     assert.deepEqual(
         classifyYouTubeUrl(
-            "https://www.youtube.com/channel/UCabcdEFGHijklMNOpqrSTUvw"
+            "https://www.youtube.com/channel/UCabcdEFGHijklMNOpqrSTUvw",
         ),
-        { kind: "channel", channel: "UCabcdEFGHijklMNOpqrSTUvw" }
+        { kind: "channel", channel: "UCabcdEFGHijklMNOpqrSTUvw" },
     );
 });
 
 test("legacy /c/ and /user/ classify as channel", () => {
     assert.equal(
         classifyYouTubeUrl("https://www.youtube.com/c/SomeName").kind,
-        "channel"
+        "channel",
     );
     assert.equal(
         classifyYouTubeUrl("https://www.youtube.com/user/LegacyName").kind,
-        "channel"
+        "channel",
     );
 });
 
@@ -95,24 +95,24 @@ for (const url of [
 test("isYouTubePlaylistOrChannelUrl gates only playlist/channel", () => {
     assert.equal(
         isYouTubePlaylistOrChannelUrl(
-            `https://www.youtube.com/playlist?list=${PLAYLIST_ID}`
+            `https://www.youtube.com/playlist?list=${PLAYLIST_ID}`,
         ),
-        true
+        true,
     );
     assert.equal(
         isYouTubePlaylistOrChannelUrl("https://www.youtube.com/@BookClubRadio"),
-        true
+        true,
     );
     assert.equal(
         isYouTubePlaylistOrChannelUrl(
-            `https://www.youtube.com/watch?v=${VIDEO_ID}`
+            `https://www.youtube.com/watch?v=${VIDEO_ID}`,
         ),
-        false
+        false,
     );
     assert.equal(
         isYouTubePlaylistOrChannelUrl(
-            `https://www.youtube.com/watch?v=${VIDEO_ID}&list=RD${VIDEO_ID}`
+            `https://www.youtube.com/watch?v=${VIDEO_ID}&list=RD${VIDEO_ID}`,
         ),
-        false
+        false,
     );
 });

@@ -14,7 +14,7 @@ test("each mode gets its own verb hint", () => {
 test("journey picking narrows the hint to the pick action", () => {
     assert.match(
         hintForMode("journey", { picking: true }),
-        /Click any dot to set the journey's destination/
+        /Click any dot to set the journey's destination/,
     );
 });
 

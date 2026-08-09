@@ -10,10 +10,14 @@ test.describe("Analyzers", () => {
         await expect(page.locator("body")).toBeVisible();
 
         // Should see the main navigation
-        await expect(page.locator("text=Library")).toBeVisible({ timeout: 5000 });
+        await expect(page.locator("text=Library")).toBeVisible({
+            timeout: 5000,
+        });
     });
 
-    test("library shows content (requires working backend)", async ({ page }) => {
+    test("library shows content (requires working backend)", async ({
+        page,
+    }) => {
         await loginAsTestUser(page);
         await page.goto("/library?tab=albums");
 

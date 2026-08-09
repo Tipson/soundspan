@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import {
-    Home,
-    Search,
-    Menu,
-    Bell,
-    ChevronLeft,
-} from "lucide-react";
+import { Home, Search, Menu, Bell, ChevronLeft } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
 import { UserAvatarMenu } from "./UserAvatarMenu";
 import { cn } from "@/utils/cn";
@@ -96,7 +90,11 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 const tag = (e.target as HTMLElement)?.tagName;
-                if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) {
+                if (
+                    tag === "INPUT" ||
+                    tag === "TEXTAREA" ||
+                    (e.target as HTMLElement)?.isContentEditable
+                ) {
                     return;
                 }
                 e.preventDefault();
@@ -125,7 +123,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                         onClick={() => {
                             // Dispatch custom event to toggle mobile menu
                             window.dispatchEvent(
-                                new CustomEvent("toggle-mobile-menu")
+                                new CustomEvent("toggle-mobile-menu"),
                             );
                         }}
                         className="w-10 h-10 flex items-center justify-center bg-surface-raised border border-line rounded-md text-white hover:bg-surface-overlay transition-colors mr-2 flex-shrink-0"
@@ -157,7 +155,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                             "w-10 h-10 rounded-full flex items-center justify-center transition-all flex-shrink-0 mr-1",
                             pathname === "/"
                                 ? "bg-white text-black"
-                                : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white"
+                                : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white",
                         )}
                         aria-label="Home"
                         title="Home"
@@ -190,7 +188,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                     <button
                         onClick={() => {
                             window.dispatchEvent(
-                                new CustomEvent("toggle-activity-panel")
+                                new CustomEvent("toggle-activity-panel"),
                             );
                         }}
                         className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors ml-2 flex-shrink-0 relative"
@@ -245,7 +243,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                         "w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0",
                                         pathname === "/"
                                             ? "bg-white text-black"
-                                            : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white hover:scale-105"
+                                            : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white hover:scale-105",
                                     )}
                                     aria-label="Home"
                                     title="Home"
@@ -254,10 +252,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 </Link>
                             </div>
 
-                            <form
-                                onSubmit={handleSearch}
-                                className="w-full"
-                            >
+                            <form onSubmit={handleSearch} className="w-full">
                                 <div
                                     className="relative"
                                     data-tv-section="search-input"

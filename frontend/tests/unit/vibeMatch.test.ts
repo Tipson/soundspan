@@ -40,7 +40,10 @@ test("calibratedMatch: an exact quantile hit maps to 100 minus its percentile in
 test("calibratedMatch interpolates linearly between two straddling quantiles", () => {
     // Halfway between quantiles[9]=0.18 and quantiles[10]=0.2 -> rank 9.5 -> 90.5 -> rounds to 91 or 90.
     const { percent } = calibratedMatch(0.19, EVEN_QUANTILES);
-    assert.ok(percent === 90 || percent === 91, `expected ~90.5, got ${percent}`);
+    assert.ok(
+        percent === 90 || percent === 91,
+        `expected ~90.5, got ${percent}`,
+    );
 });
 
 test("calibratedMatch clamps a distance below the lowest quantile to 100%", () => {
@@ -55,32 +58,50 @@ test("calibratedMatch clamps a distance above the highest quantile to 0%", () =>
 
 test("calibratedMatch labels: nearly identical vibe >= 97", () => {
     // rank 2 -> percent 98
-    assert.equal(calibratedMatch(EVEN_QUANTILES[2], EVEN_QUANTILES).label, "nearly identical vibe");
+    assert.equal(
+        calibratedMatch(EVEN_QUANTILES[2], EVEN_QUANTILES).label,
+        "nearly identical vibe",
+    );
 });
 
 test("calibratedMatch labels: same vibe >= 90", () => {
     // rank 10 -> percent 90
-    assert.equal(calibratedMatch(EVEN_QUANTILES[10], EVEN_QUANTILES).label, "same vibe");
+    assert.equal(
+        calibratedMatch(EVEN_QUANTILES[10], EVEN_QUANTILES).label,
+        "same vibe",
+    );
 });
 
 test("calibratedMatch labels: close neighbors >= 75", () => {
     // rank 25 -> percent 75
-    assert.equal(calibratedMatch(EVEN_QUANTILES[25], EVEN_QUANTILES).label, "close neighbors");
+    assert.equal(
+        calibratedMatch(EVEN_QUANTILES[25], EVEN_QUANTILES).label,
+        "close neighbors",
+    );
 });
 
 test("calibratedMatch labels: same neighborhood >= 50", () => {
     // rank 50 -> percent 50
-    assert.equal(calibratedMatch(EVEN_QUANTILES[50], EVEN_QUANTILES).label, "same neighborhood");
+    assert.equal(
+        calibratedMatch(EVEN_QUANTILES[50], EVEN_QUANTILES).label,
+        "same neighborhood",
+    );
 });
 
 test("calibratedMatch labels: distant relatives >= 25", () => {
     // rank 75 -> percent 25
-    assert.equal(calibratedMatch(EVEN_QUANTILES[75], EVEN_QUANTILES).label, "distant relatives");
+    assert.equal(
+        calibratedMatch(EVEN_QUANTILES[75], EVEN_QUANTILES).label,
+        "distant relatives",
+    );
 });
 
 test("calibratedMatch labels: different worlds below 25", () => {
     // rank 76 -> percent 24
-    assert.equal(calibratedMatch(EVEN_QUANTILES[76], EVEN_QUANTILES).label, "different worlds");
+    assert.equal(
+        calibratedMatch(EVEN_QUANTILES[76], EVEN_QUANTILES).label,
+        "different worlds",
+    );
 });
 
 test("calibratedMatch treats a flat quantile segment by snapping to the upper percentile", () => {
@@ -133,6 +154,9 @@ test("matchEdgeStyle: lower percent thins/dims the edge, clamped to a sane floor
 test("matchEdgeStyle: width never strays more than ~0.5px from the anchor", () => {
     for (const p of [0, 25, 50, 75, 90, 100]) {
         const { width } = matchEdgeStyle(p);
-        assert.ok(Math.abs(width - 1.25) <= 0.5 + 1e-9, `width ${width} at percent ${p} out of range`);
+        assert.ok(
+            Math.abs(width - 1.25) <= 0.5 + 1e-9,
+            `width ${width} at percent ${p} out of range`,
+        );
     }
 });

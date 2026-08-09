@@ -76,7 +76,7 @@ describe("formatRelativeTime", () => {
         assert.equal(formatRelativeTime(twoHoursAgo), "2h ago");
         assert.equal(
             formatRelativeTime(threeDaysAgo),
-            threeDaysAgo.toLocaleDateString()
+            threeDaysAgo.toLocaleDateString(),
         );
     });
 
@@ -85,15 +85,15 @@ describe("formatRelativeTime", () => {
 
         assert.equal(
             formatRelativeTime(new Date(Date.now() - 30_000), options),
-            "Just started"
+            "Just started",
         );
         assert.equal(
             formatRelativeTime(new Date(Date.now() - 5 * 60_000), options),
-            "5m"
+            "5m",
         );
         assert.equal(
             formatRelativeTime(new Date(Date.now() - 2 * 3_600_000), options),
-            "2h"
+            "2h",
         );
     });
 });
@@ -105,7 +105,7 @@ test("podcast overflow values stay clamped to duration", () => {
     const remaining = Math.max(0, podcastDuration - clampedTime);
     const progress = Math.min(
         100,
-        Math.max(0, (clampedTime / podcastDuration) * 100)
+        Math.max(0, (clampedTime / podcastDuration) * 100),
     );
 
     assert.equal(clampedTime, podcastDuration);

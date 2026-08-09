@@ -7,52 +7,58 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     isLoading?: boolean;
 }
 
-const Button = memo(forwardRef<HTMLButtonElement, ButtonProps>(
-    (
-        {
-            className,
-            variant = "secondary",
-            isLoading,
-            children,
-            disabled,
-            ...props
+const Button = memo(
+    forwardRef<HTMLButtonElement, ButtonProps>(
+        (
+            {
+                className,
+                variant = "secondary",
+                isLoading,
+                children,
+                disabled,
+                ...props
+            },
+            ref,
+        ) => {
+            const baseStyles =
+                "inline-flex items-center justify-center rounded-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed";
+
+            // soundspan brand color: #3b82f6
+            const variantStyles = {
+                primary:
+                    "bg-brand hover:bg-brand-hover text-black px-4 py-2 shadow-lg shadow-brand/10",
+                secondary:
+                    "bg-surface-hover hover:bg-[#222] text-white px-4 py-2 border border-line",
+                ghost: "text-gray-400 hover:text-white hover:bg-surface-hover px-4 py-2",
+                danger: "text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-4 py-2",
+                ai: "bg-surface-hover hover:bg-brand/10 text-brand border border-surface-active hover:border-brand/30 px-4 py-2",
+                icon: "w-8 h-8 text-gray-400 hover:text-white hover:bg-surface-hover",
+            };
+
+            return (
+                <button
+                    ref={ref}
+                    className={cn(
+                        baseStyles,
+                        variantStyles[variant],
+                        className,
+                    )}
+                    disabled={disabled || isLoading}
+                    {...props}
+                >
+                    {isLoading ? (
+                        <>
+                            <GradientSpinner size="sm" className="mr-2" />
+                            {children}
+                        </>
+                    ) : (
+                        children
+                    )}
+                </button>
+            );
         },
-        ref
-    ) => {
-        const baseStyles =
-            "inline-flex items-center justify-center rounded-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed";
-
-        // soundspan brand color: #3b82f6
-        const variantStyles = {
-            primary:
-                "bg-brand hover:bg-brand-hover text-black px-4 py-2 shadow-lg shadow-brand/10",
-            secondary:
-                "bg-surface-hover hover:bg-[#222] text-white px-4 py-2 border border-line",
-            ghost: "text-gray-400 hover:text-white hover:bg-surface-hover px-4 py-2",
-            danger: "text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-4 py-2",
-            ai: "bg-surface-hover hover:bg-brand/10 text-brand border border-surface-active hover:border-brand/30 px-4 py-2",
-            icon: "w-8 h-8 text-gray-400 hover:text-white hover:bg-surface-hover",
-        };
-
-        return (
-            <button
-                ref={ref}
-                className={cn(baseStyles, variantStyles[variant], className)}
-                disabled={disabled || isLoading}
-                {...props}
-            >
-                {isLoading ? (
-                    <>
-                        <GradientSpinner size="sm" className="mr-2" />
-                        {children}
-                    </>
-                ) : (
-                    children
-                )}
-            </button>
-        );
-    }
-));
+    ),
+);
 
 Button.displayName = "Button";
 

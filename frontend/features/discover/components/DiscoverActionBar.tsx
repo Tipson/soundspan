@@ -1,6 +1,15 @@
 "use client";
 
-import { Play, Pause, RefreshCw, Settings, Loader2, Plus, Shuffle, ListMusic } from "lucide-react";
+import {
+    Play,
+    Pause,
+    RefreshCw,
+    Settings,
+    Loader2,
+    Plus,
+    Shuffle,
+    ListMusic,
+} from "lucide-react";
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
@@ -51,7 +60,7 @@ export function DiscoverActionBar({
 
     const getStatusText = () => {
         if (!isGenerating) return null;
-        
+
         if (batchStatus?.status === "scanning") {
             return "Finalizing recommendations...";
         }
@@ -59,11 +68,11 @@ export function DiscoverActionBar({
         if (batchStatus?.status === "generating") {
             return "Refreshing recommendations...";
         }
-        
+
         if (batchStatus?.total) {
             return `Progress ${batchStatus.completed || 0}%`;
         }
-        
+
         return "Starting...";
     };
 
@@ -84,7 +93,7 @@ export function DiscoverActionBar({
                             "flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg transition-all border font-semibold text-sm",
                             isGenerating
                                 ? "bg-white/5 border-transparent text-white/50 cursor-not-allowed"
-                                : "bg-ai-dark/20 hover:bg-ai-dark/30 border-ai/30 text-white hover:scale-105"
+                                : "bg-ai-dark/20 hover:bg-ai-dark/30 border-ai/30 text-white hover:scale-105",
                         )}
                     >
                         {showSpinner ? (
@@ -94,7 +103,11 @@ export function DiscoverActionBar({
                         ) : (
                             <Play className="w-5 h-5 fill-current ml-0.5" />
                         )}
-                        <span>{isPlaylistPlaying && isPlaying ? "Pause" : "Play All"}</span>
+                        <span>
+                            {isPlaylistPlaying && isPlaying
+                                ? "Pause"
+                                : "Play All"}
+                        </span>
                     </button>
                 )}
 
@@ -107,7 +120,7 @@ export function DiscoverActionBar({
                             "h-8 w-8 rounded-full flex items-center justify-center transition-all",
                             isGenerating
                                 ? "text-white/30 cursor-not-allowed"
-                                : "text-white/60 hover:text-white hover:bg-white/10"
+                                : "text-white/60 hover:text-white hover:bg-white/10",
                         )}
                         title="Shuffle all"
                     >
@@ -124,7 +137,7 @@ export function DiscoverActionBar({
                             "h-8 w-8 rounded-full flex items-center justify-center transition-all",
                             isGenerating
                                 ? "text-white/30 cursor-not-allowed"
-                                : "text-white/60 hover:text-white hover:bg-white/10"
+                                : "text-white/60 hover:text-white hover:bg-white/10",
                         )}
                         title="Add all to queue"
                     >
@@ -151,9 +164,15 @@ export function DiscoverActionBar({
                         "h-8 w-8 rounded-full flex items-center justify-center transition-all",
                         isGenerating || !config?.enabled
                             ? "text-white/30 cursor-not-allowed"
-                            : "text-white/60 hover:text-white hover:bg-white/10"
+                            : "text-white/60 hover:text-white hover:bg-white/10",
                     )}
-                    title={isGenerating ? (getStatusText() || "Generating...") : playlist ? "Regenerate" : "Generate"}
+                    title={
+                        isGenerating
+                            ? getStatusText() || "Generating..."
+                            : playlist
+                              ? "Regenerate"
+                              : "Generate"
+                    }
                 >
                     {isGenerating ? (
                         <GradientSpinner size="sm" />
@@ -173,7 +192,7 @@ export function DiscoverActionBar({
                         "h-8 w-8 rounded-full flex items-center justify-center transition-all",
                         isGenerating
                             ? "text-white/30 cursor-not-allowed"
-                            : "text-white/60 hover:text-white hover:bg-white/10"
+                            : "text-white/60 hover:text-white hover:bg-white/10",
                     )}
                     title="Settings"
                 >

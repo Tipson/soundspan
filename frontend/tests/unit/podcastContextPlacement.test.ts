@@ -136,7 +136,7 @@ test("shuffle order shifts and slots inserted items after the current position",
     assert.equal(result.action, "insert");
     assert.deepEqual(
         result.action === "insert" ? result.newShuffleIndices : [],
-        [0, 1, 2, 4, 3]
+        [0, 1, 2, 4, 3],
     );
 });
 

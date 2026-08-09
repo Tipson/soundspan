@@ -247,7 +247,8 @@ export function resolveSegmentedStartupRecoveryBackoffDelayMs(
     const safeMaxDelayMs = Math.max(safeBaseDelayMs, input.maxDelayMs);
     const safeJitterRatio = Math.max(0, Math.min(1, input.jitterRatio));
     const randomValue =
-        typeof input.randomValue === "number" && Number.isFinite(input.randomValue)
+        typeof input.randomValue === "number" &&
+        Number.isFinite(input.randomValue)
             ? Math.max(0, Math.min(1, input.randomValue))
             : Math.random();
     const backoffDelayMs = Math.min(
@@ -290,7 +291,8 @@ export function resolveSegmentedStartupRecoveryDecision(
         if (input.sessionResetsUsed < Math.max(0, input.maxSessionResets)) {
             return {
                 action: "reset_session_and_retry",
-                nextStageAttempts: createEmptySegmentedStartupRecoveryStageAttempts(),
+                nextStageAttempts:
+                    createEmptySegmentedStartupRecoveryStageAttempts(),
                 nextSessionResetsUsed: input.sessionResetsUsed + 1,
                 delayMs: resolveSegmentedStartupRecoveryBackoffDelayMs({
                     attempt: 1,

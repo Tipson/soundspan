@@ -50,12 +50,12 @@ export interface UseActiveYouTubeDownloadsReturn {
  * admin role), so polling is disabled entirely for non-admin users.
  */
 export function useActiveYouTubeDownloads(
-    options: { enabled?: boolean } = {}
+    options: { enabled?: boolean } = {},
 ): UseActiveYouTubeDownloadsReturn {
     const { user } = useAuth();
     const enabled = resolveAdminGatedPollingEnabled(
         options.enabled,
-        user?.role
+        user?.role,
     );
     const queryClient = useQueryClient();
 
@@ -101,7 +101,7 @@ export function useActiveYouTubeDownloads(
 
     const cancel = useCallback(
         (jobId: string) => cancelMutation.mutate(jobId),
-        [cancelMutation]
+        [cancelMutation],
     );
     const cancelAll = useCallback(() => {
         jobs.forEach((job) => cancelMutation.mutate(job.jobId));

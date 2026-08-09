@@ -55,7 +55,7 @@ async function downloadOneToTerminal(
     quality: string,
     source: string | undefined,
     sourceKind: "playlist" | "channel",
-    isCancelled: () => boolean
+    isCancelled: () => boolean,
 ): Promise<BulkItemStatus> {
     try {
         const job = await api.downloadYouTube(
@@ -63,7 +63,7 @@ async function downloadOneToTerminal(
             format,
             quality,
             source,
-            sourceKind
+            sourceKind,
         );
         if (job.status === "completed") {
             return "completed";
@@ -85,7 +85,7 @@ async function downloadOneToTerminal(
                 if (failures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                     sharedFrontendLogger.error(
                         "Bulk item poll abandoned:",
-                        pollError
+                        pollError,
                     );
                     return "failed";
                 }
@@ -141,7 +141,7 @@ export function useYouTubePlaylist({
             try {
                 const info = await api.getYouTubePlaylistInfo(
                     query,
-                    abortController.signal
+                    abortController.signal,
                 );
                 if (!abortController.signal.aborted) {
                     setPlaylistInfo(info);
@@ -150,14 +150,17 @@ export function useYouTubePlaylist({
                 if (!abortController.signal.aborted) {
                     sharedFrontendLogger.error(
                         "Failed to fetch YouTube playlist info:",
-                        err
+                        err,
                     );
                     setPlaylistInfo(null);
-                    const e = err as { data?: { error?: string }; message?: string };
+                    const e = err as {
+                        data?: { error?: string };
+                        message?: string;
+                    };
                     setError(
                         e?.data?.error ||
                             e?.message ||
-                            "Couldn't load this playlist or channel"
+                            "Couldn't load this playlist or channel",
                     );
                 }
             } finally {
@@ -189,7 +192,7 @@ export function useYouTubePlaylist({
 
             cancelRef.current = false;
             const statuses: BulkItemStatus[] = info.entries.map(
-                () => "pending"
+                () => "pending",
             );
             const sync = () => {
                 if (mountedRef.current) {
@@ -217,10 +220,10 @@ export function useYouTubePlaylist({
                         quality,
                         info.title || info.kind,
                         info.kind,
-                        () => cancelRef.current
+                        () => cancelRef.current,
                     );
                     sync();
-                }
+                },
             );
 
             if (!mountedRef.current) return;
@@ -230,12 +233,12 @@ export function useYouTubePlaylist({
             if (cancelRef.current) {
                 toast.info(
                     `Stopped — ${final.completed} of ${final.total} downloaded`,
-                    { description: info.title }
+                    { description: info.title },
                 );
             } else if (final.failed === 0) {
                 toast.success(
                     `Downloaded ${final.completed} of ${final.total} — scanning library`,
-                    { description: info.title }
+                    { description: info.title },
                 );
             } else {
                 toast.warning(
@@ -243,11 +246,11 @@ export function useYouTubePlaylist({
                     {
                         description:
                             "Unfinished items may still complete in the background.",
-                    }
+                    },
                 );
             }
         },
-        [playlistInfo, isDownloading]
+        [playlistInfo, isDownloading],
     );
 
     return {

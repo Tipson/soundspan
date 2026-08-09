@@ -84,34 +84,43 @@ export function MoodsGenresSection({
     const [loadError, setLoadError] = useState<string | null>(null);
     const requestIdRef = useRef(0);
 
-    const handlePillClick = useCallback(async (params: string, title: string) => {
-        const normalizedParams = params.trim();
-        if (!normalizedParams) return;
+    const handlePillClick = useCallback(
+        async (params: string, title: string) => {
+            const normalizedParams = params.trim();
+            if (!normalizedParams) return;
 
-        const thisRequest = ++requestIdRef.current;
-        setActiveMoodTitle(title);
-        setMoodPlaylists([]);
-        setLoadError(null);
-        setIsLoadingMood(true);
-
-        try {
-            const response = await api.get<{
-                playlists: MoodPlaylist[];
-                source: string;
-            }>(`/browse/ytmusic/mood-playlists?params=${encodeURIComponent(normalizedParams)}`);
-            if (thisRequest !== requestIdRef.current) return;
-            setMoodPlaylists(Array.isArray(response.playlists) ? response.playlists : []);
-        } catch (error) {
-            if (thisRequest !== requestIdRef.current) return;
-            frontendLogger.warn("Failed to load YT mood playlists", error);
+            const thisRequest = ++requestIdRef.current;
+            setActiveMoodTitle(title);
             setMoodPlaylists([]);
-            setLoadError("Failed to load playlists. Try another mood or genre.");
-        } finally {
-            if (thisRequest === requestIdRef.current) {
-                setIsLoadingMood(false);
+            setLoadError(null);
+            setIsLoadingMood(true);
+
+            try {
+                const response = await api.get<{
+                    playlists: MoodPlaylist[];
+                    source: string;
+                }>(
+                    `/browse/ytmusic/mood-playlists?params=${encodeURIComponent(normalizedParams)}`,
+                );
+                if (thisRequest !== requestIdRef.current) return;
+                setMoodPlaylists(
+                    Array.isArray(response.playlists) ? response.playlists : [],
+                );
+            } catch (error) {
+                if (thisRequest !== requestIdRef.current) return;
+                frontendLogger.warn("Failed to load YT mood playlists", error);
+                setMoodPlaylists([]);
+                setLoadError(
+                    "Failed to load playlists. Try another mood or genre.",
+                );
+            } finally {
+                if (thisRequest === requestIdRef.current) {
+                    setIsLoadingMood(false);
+                }
             }
-        }
-    }, []);
+        },
+        [],
+    );
 
     const handleBack = useCallback(() => {
         setActiveMoodTitle(null);
@@ -120,7 +129,12 @@ export function MoodsGenresSection({
     }, []);
 
     // No content available — render nothing
-    if (!isLoading && moodCategories.length === 0 && genreCategories.length === 0) return null;
+    if (
+        !isLoading &&
+        moodCategories.length === 0 &&
+        genreCategories.length === 0
+    )
+        return null;
 
     // Drilldown view: show playlists for the selected mood/genre
     if (activeMoodTitle) {
@@ -157,7 +171,9 @@ export function MoodsGenresSection({
                                     <div className="relative aspect-square mb-3 rounded-md overflow-hidden bg-surface-highlight shadow-lg">
                                         {item.thumbnailUrl ? (
                                             <img
-                                                src={api.getBrowseImageUrl(item.thumbnailUrl)}
+                                                src={api.getBrowseImageUrl(
+                                                    item.thumbnailUrl,
+                                                )}
                                                 alt={item.title}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
@@ -190,17 +206,19 @@ export function MoodsGenresSection({
                         </div>
                     )}
 
-                    {!isLoadingMood && !loadError && moodPlaylists.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <Music2 className="w-12 h-12 text-gray-400 mb-4" />
-                            <h3 className="text-lg font-medium text-white mb-2">
-                                No playlists found
-                            </h3>
-                            <p className="text-sm text-gray-400">
-                                Try another mood or genre.
-                            </p>
-                        </div>
-                    )}
+                    {!isLoadingMood &&
+                        !loadError &&
+                        moodPlaylists.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-20 text-center">
+                                <Music2 className="w-12 h-12 text-gray-400 mb-4" />
+                                <h3 className="text-lg font-medium text-white mb-2">
+                                    No playlists found
+                                </h3>
+                                <p className="text-sm text-gray-400">
+                                    Try another mood or genre.
+                                </p>
+                            </div>
+                        )}
                 </div>
             </div>
         );
@@ -235,7 +253,6 @@ export function MoodsGenresSection({
                     ))}
                 </section>
             )}
-
         </div>
     );
 }

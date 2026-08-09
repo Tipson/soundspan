@@ -34,7 +34,7 @@ interface DownloadContextType {
     addPendingDownload: (
         type: "artist" | "album",
         subject: string,
-        mbid: string
+        mbid: string,
     ) => string | null;
     removePendingDownload: (id: string) => void;
     removePendingByMbid: (mbid: string) => void;
@@ -44,7 +44,7 @@ interface DownloadContextType {
 }
 
 const DownloadContext = createContext<DownloadContextType | undefined>(
-    undefined
+    undefined,
 );
 
 /**
@@ -52,12 +52,11 @@ const DownloadContext = createContext<DownloadContextType | undefined>(
  */
 export function DownloadProvider({ children }: { children: ReactNode }) {
     const [pendingDownloads, setPendingDownloads] = useState<PendingDownload[]>(
-        []
+        [],
     );
     const pendingRef = useRef(pendingDownloads);
     const { isAuthenticated, user } = useAuth();
-    const shouldPollDownloads =
-        isAuthenticated && user?.role === "admin";
+    const shouldPollDownloads = isAuthenticated && user?.role === "admin";
     const downloadStatus = useDownloadStatus(15000, shouldPollDownloads);
     const [downloadsEnabled, setDownloadsEnabled] = useState(false);
 
@@ -82,7 +81,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
                 if (mounted) setDownloadsEnabled(false);
             });
 
-        return () => { mounted = false; };
+        return () => {
+            mounted = false;
+        };
     }, [isAuthenticated, user?.role]);
 
     // Sync pending downloads with actual download status.
@@ -90,7 +91,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         setPendingDownloads((prev) => {
             const next = prev.filter((pending) => {
                 const hasActiveJob = downloadStatus.activeDownloads.some(
-                    (job) => job.targetMbid === pending.mbid
+                    (job) => job.targetMbid === pending.mbid,
                 );
                 if (hasActiveJob) return false;
 
@@ -132,32 +133,35 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         return () => clearInterval(cleanup);
     }, []);
 
-    const addPendingDownload = useCallback((
-        type: "artist" | "album",
-        subject: string,
-        mbid: string
-    ): string | null => {
-        if (pendingRef.current.some((download) => download.mbid === mbid)) {
-            return null;
-        }
+    const addPendingDownload = useCallback(
+        (
+            type: "artist" | "album",
+            subject: string,
+            mbid: string,
+        ): string | null => {
+            if (pendingRef.current.some((download) => download.mbid === mbid)) {
+                return null;
+            }
 
-        const timestamp = Date.now();
-        const id = `${timestamp}-${Math.random()}`;
-        const download: PendingDownload = {
-            id,
-            type,
-            subject,
-            mbid,
-            timestamp,
-        };
-        pendingRef.current = [...pendingRef.current, download];
-        setPendingDownloads((prev) =>
-            prev.some((pending) => pending.mbid === mbid)
-                ? prev
-                : [...prev, download]
-        );
-        return id;
-    }, []);
+            const timestamp = Date.now();
+            const id = `${timestamp}-${Math.random()}`;
+            const download: PendingDownload = {
+                id,
+                type,
+                subject,
+                mbid,
+                timestamp,
+            };
+            pendingRef.current = [...pendingRef.current, download];
+            setPendingDownloads((prev) =>
+                prev.some((pending) => pending.mbid === mbid)
+                    ? prev
+                    : [...prev, download],
+            );
+            return id;
+        },
+        [],
+    );
 
     const removePendingDownload = useCallback((id: string) => {
         setPendingDownloads((prev) => prev.filter((d) => d.id !== id));
@@ -167,46 +171,57 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         setPendingDownloads((prev) => prev.filter((d) => d.mbid !== mbid));
     }, []);
 
-    const isPending = useCallback((subject: string): boolean => {
-        return pendingDownloads.some((d) => d.subject === subject);
-    }, [pendingDownloads]);
+    const isPending = useCallback(
+        (subject: string): boolean => {
+            return pendingDownloads.some((d) => d.subject === subject);
+        },
+        [pendingDownloads],
+    );
 
-    const isPendingByMbid = useCallback((mbid: string): boolean => {
-        // Check both pending downloads AND active download jobs
-        const isPendingLocal = pendingDownloads.some((d) => d.mbid === mbid);
-        const hasActiveJob = downloadStatus.activeDownloads.some(
-            (job) => job.targetMbid === mbid
-        );
+    const isPendingByMbid = useCallback(
+        (mbid: string): boolean => {
+            // Check both pending downloads AND active download jobs
+            const isPendingLocal = pendingDownloads.some(
+                (d) => d.mbid === mbid,
+            );
+            const hasActiveJob = downloadStatus.activeDownloads.some(
+                (job) => job.targetMbid === mbid,
+            );
 
-        return isPendingLocal || hasActiveJob;
-    }, [pendingDownloads, downloadStatus.activeDownloads]);
+            return isPendingLocal || hasActiveJob;
+        },
+        [pendingDownloads, downloadStatus.activeDownloads],
+    );
 
     const isAnyPending = useCallback((): boolean => {
         return pendingDownloads.length > 0;
     }, [pendingDownloads]);
 
     // Memoize context value to prevent unnecessary re-renders
-    const contextValue = useMemo(() => ({
-        pendingDownloads,
-        downloadStatus,
-        downloadsEnabled,
-        addPendingDownload,
-        removePendingDownload,
-        removePendingByMbid,
-        isPending,
-        isPendingByMbid,
-        isAnyPending,
-    }), [
-        pendingDownloads,
-        downloadStatus,
-        downloadsEnabled,
-        addPendingDownload,
-        removePendingDownload,
-        removePendingByMbid,
-        isPending,
-        isPendingByMbid,
-        isAnyPending,
-    ]);
+    const contextValue = useMemo(
+        () => ({
+            pendingDownloads,
+            downloadStatus,
+            downloadsEnabled,
+            addPendingDownload,
+            removePendingDownload,
+            removePendingByMbid,
+            isPending,
+            isPendingByMbid,
+            isAnyPending,
+        }),
+        [
+            pendingDownloads,
+            downloadStatus,
+            downloadsEnabled,
+            addPendingDownload,
+            removePendingDownload,
+            removePendingByMbid,
+            isPending,
+            isPendingByMbid,
+            isAnyPending,
+        ],
+    );
 
     return (
         <DownloadContext.Provider value={contextValue}>
@@ -222,7 +237,7 @@ export function useDownloadContext() {
     const context = useContext(DownloadContext);
     if (!context) {
         throw new Error(
-            "useDownloadContext must be used within DownloadProvider"
+            "useDownloadContext must be used within DownloadProvider",
         );
     }
     return context;

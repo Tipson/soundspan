@@ -33,7 +33,10 @@ let _tidalStatusInFlight: Promise<boolean> | null = null;
 
 async function getTidalAvailable(): Promise<boolean> {
     const now = Date.now();
-    if (_tidalStatusCache && isProviderStatusCacheFresh(_tidalStatusCache, now)) {
+    if (
+        _tidalStatusCache &&
+        isProviderStatusCacheFresh(_tidalStatusCache, now)
+    ) {
         return _tidalStatusCache.available;
     }
     if (_tidalStatusInFlight) {
@@ -80,16 +83,16 @@ const _albumMatchCache = new Map<string, Record<string, TidalMatch>>();
  */
 export function useTidalGapFill(
     album: Album | null | undefined,
-    source?: AlbumSource
+    source?: AlbumSource,
 ) {
     const [matches, setMatches] = useState<Record<string, TidalMatch>>({});
     const [loading, setLoading] = useState(false);
     const matchedAlbumIdRef = useRef<string | null>(null);
     const [tidalAvailable, setTidalAvailable] = useState(
-        _tidalStatusCache?.available ?? false
+        _tidalStatusCache?.available ?? false,
     );
     const [isStatusResolved, setIsStatusResolved] = useState(
-        _tidalStatusCache !== null
+        _tidalStatusCache !== null,
     );
     const albumTracks = album?.tracks;
 
@@ -115,9 +118,7 @@ export function useTidalGapFill(
         if (source === "discovery") return albumTracks;
 
         // For library albums, only tracks without a local file need matching
-        return albumTracks.filter(
-            (t) => !t.filePath
-        );
+        return albumTracks.filter((t) => !t.filePath);
     }, [albumTracks, source, tidalAvailable]);
 
     // Match unowned tracks against TIDAL (single batch call)
@@ -174,7 +175,7 @@ export function useTidalGapFill(
 
             // Step 2: Find tracks still unmatched after persisted lookup
             const unmatchedTracks = unownedTracks.filter(
-                (t) => !newMatches[t.id]
+                (t) => !newMatches[t.id],
             );
 
             // Step 3: Call match-batch only for tracks without persisted mappings
@@ -202,7 +203,10 @@ export function useTidalGapFill(
                         }
                     });
                 } catch (err) {
-                    sharedFrontendLogger.error("[TIDAL GapFill] Batch match failed:", err);
+                    sharedFrontendLogger.error(
+                        "[TIDAL GapFill] Batch match failed:",
+                        err,
+                    );
                 }
             }
 

@@ -40,7 +40,9 @@ export default function LibraryPage() {
     // Get active tab from URL params, default to "artists"
     const validTabs: Tab[] = ["artists", "albums", "tracks"];
     const tabParam = searchParams.get("tab");
-    const activeTab: Tab = validTabs.includes(tabParam as Tab) ? (tabParam as Tab) : "artists";
+    const activeTab: Tab = validTabs.includes(tabParam as Tab)
+        ? (tabParam as Tab)
+        : "artists";
 
     // Read page from URL params
     const urlPage = parseInt(searchParams.get("page") || "1", 10);
@@ -122,12 +124,10 @@ export default function LibraryPage() {
 
     // Get data based on active tab
     const artists = useMemo(
-        () => (activeTab === "artists" ? (artistsQuery.data?.artists ?? []) : []),
+        () =>
+            activeTab === "artists" ? (artistsQuery.data?.artists ?? []) : [],
         [activeTab, artistsQuery.data?.artists],
     );
-
-
-
 
     const albums = useMemo(
         () => (activeTab === "albums" ? (albumsQuery.data?.albums ?? []) : []),
@@ -144,7 +144,6 @@ export default function LibraryPage() {
         (activeTab === "albums" && albumsQuery.isLoading) ||
         (activeTab === "tracks" && tracksQuery.isLoading);
 
-
     // Scroll to top when page changes (after data loads)
     useEffect(() => {
         if (prevPageRef.current !== currentPage) {
@@ -158,32 +157,31 @@ export default function LibraryPage() {
     }, [currentPage]);
 
     // Pagination from active query
-    const pagination = useMemo(
-        () => {
-            // Get the total from the query data
-            const total =
-                activeTab === "artists" ? (artistsQuery.data?.total ?? 0)
-                : activeTab === "albums" ? (albumsQuery.data?.total ?? 0)
-                : (tracksQuery.data?.total ?? 0);
+    const pagination = useMemo(() => {
+        // Get the total from the query data
+        const total =
+            activeTab === "artists"
+                ? (artistsQuery.data?.total ?? 0)
+                : activeTab === "albums"
+                  ? (albumsQuery.data?.total ?? 0)
+                  : (tracksQuery.data?.total ?? 0);
 
-            return {
-                total,
-                offset: 0,
-                limit: itemsPerPage,
-                totalPages: Math.ceil(total / itemsPerPage),
-                currentPage,
-                itemsPerPage,
-            };
-        },
-        [
-            activeTab,
-            artistsQuery.data,
-            albumsQuery.data,
-            tracksQuery.data,
-            itemsPerPage,
+        return {
+            total,
+            offset: 0,
+            limit: itemsPerPage,
+            totalPages: Math.ceil(total / itemsPerPage),
             currentPage,
-        ],
-    );
+            itemsPerPage,
+        };
+    }, [
+        activeTab,
+        artistsQuery.data,
+        albumsQuery.data,
+        tracksQuery.data,
+        itemsPerPage,
+        currentPage,
+    ]);
 
     // Reload data function using React Query invalidation
     const reloadData = useCallback(async () => {
@@ -202,13 +200,8 @@ export default function LibraryPage() {
         }
     }, [activeTab, queryClient]);
 
-    const {
-        playArtist,
-        playAlbum,
-        deleteArtist,
-        deleteAlbum,
-        deleteTrack,
-    } = useLibraryActions();
+    const { playArtist, playAlbum, deleteArtist, deleteAlbum, deleteTrack } =
+        useLibraryActions();
 
     // Reset page and filter when tab changes
     useEffect(() => {
@@ -277,8 +270,14 @@ export default function LibraryPage() {
     // When startIndex is provided, it's a single track click — use playNow
     const handlePlayTracks = useCallback(
         (libraryTracks: typeof tracks, startIndex?: number) => {
-            if (startIndex !== undefined && startIndex >= 0 && startIndex < libraryTracks.length) {
-                const formattedTrack = formatTracksForAudio([libraryTracks[startIndex]])[0];
+            if (
+                startIndex !== undefined &&
+                startIndex >= 0 &&
+                startIndex < libraryTracks.length
+            ) {
+                const formattedTrack = formatTracksForAudio([
+                    libraryTracks[startIndex],
+                ])[0];
                 playNow(formattedTrack);
                 return;
             }
@@ -339,41 +338,60 @@ export default function LibraryPage() {
                 title: "",
             });
         } catch (error) {
-            sharedFrontendLogger.error(`Failed to delete ${deleteConfirm.type}:`, error);
+            sharedFrontendLogger.error(
+                `Failed to delete ${deleteConfirm.type}:`,
+                error,
+            );
             // Keep dialog open on error so user can retry
         }
-    }, [canDeleteFromLibrary, deleteConfirm, deleteArtist, deleteAlbum, deleteTrack, reloadData]);
+    }, [
+        canDeleteFromLibrary,
+        deleteConfirm,
+        deleteArtist,
+        deleteAlbum,
+        deleteTrack,
+        reloadData,
+    ]);
 
     // Memoize delete handlers to prevent grid re-renders
-    const handleDeleteArtist = useCallback((id: string, name: string) => {
-        if (!canDeleteFromLibrary) return;
-        setDeleteConfirm({
-            isOpen: true,
-            type: "artist",
-            id,
-            title: name,
-        });
-    }, [canDeleteFromLibrary]);
+    const handleDeleteArtist = useCallback(
+        (id: string, name: string) => {
+            if (!canDeleteFromLibrary) return;
+            setDeleteConfirm({
+                isOpen: true,
+                type: "artist",
+                id,
+                title: name,
+            });
+        },
+        [canDeleteFromLibrary],
+    );
 
-    const handleDeleteAlbum = useCallback((id: string, title: string) => {
-        if (!canDeleteFromLibrary) return;
-        setDeleteConfirm({
-            isOpen: true,
-            type: "album",
-            id,
-            title,
-        });
-    }, [canDeleteFromLibrary]);
+    const handleDeleteAlbum = useCallback(
+        (id: string, title: string) => {
+            if (!canDeleteFromLibrary) return;
+            setDeleteConfirm({
+                isOpen: true,
+                type: "album",
+                id,
+                title,
+            });
+        },
+        [canDeleteFromLibrary],
+    );
 
-    const handleDeleteTrack = useCallback((id: string, title: string) => {
-        if (!canDeleteFromLibrary) return;
-        setDeleteConfirm({
-            isOpen: true,
-            type: "track",
-            id,
-            title,
-        });
-    }, [canDeleteFromLibrary]);
+    const handleDeleteTrack = useCallback(
+        (id: string, title: string) => {
+            if (!canDeleteFromLibrary) return;
+            setDeleteConfirm({
+                isOpen: true,
+                type: "track",
+                id,
+                title,
+            });
+        },
+        [canDeleteFromLibrary],
+    );
 
     return (
         <div className="min-h-screen relative">
@@ -401,9 +419,9 @@ export default function LibraryPage() {
                         <button
                             onClick={() => setShowFilters(!showFilters)}
                             className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
-                                showFilters ?
-                                    "bg-white/20 text-white"
-                                :   "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                                showFilters
+                                    ? "bg-white/20 text-white"
+                                    : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
                             }`}
                             title="Show Filters"
                         >
@@ -413,11 +431,11 @@ export default function LibraryPage() {
                         {/* Item Count */}
                         <span className="text-sm text-gray-400 ml-2">
                             {totalItems.toLocaleString()}{" "}
-                            {activeTab === "artists" ?
-                                "artists"
-                            : activeTab === "albums" ?
-                                "albums"
-                            :   "songs"}
+                            {activeTab === "artists"
+                                ? "artists"
+                                : activeTab === "albums"
+                                  ? "albums"
+                                  : "songs"}
                         </span>
                     </div>
                 </div>
@@ -432,9 +450,9 @@ export default function LibraryPage() {
                                 <button
                                     onClick={() => setFilter("owned")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-                                        filter === "owned" ?
-                                            "bg-brand text-black"
-                                        :   "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                                        filter === "owned"
+                                            ? "bg-brand text-black"
+                                            : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
                                     }`}
                                 >
                                     Owned
@@ -442,9 +460,9 @@ export default function LibraryPage() {
                                 <button
                                     onClick={() => setFilter("discovery")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-                                        filter === "discovery" ?
-                                            "bg-ai text-white"
-                                        :   "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                                        filter === "discovery"
+                                            ? "bg-ai text-white"
+                                            : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
                                     }`}
                                 >
                                     Discovery
@@ -452,9 +470,9 @@ export default function LibraryPage() {
                                 <button
                                     onClick={() => setFilter("all")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-                                        filter === "all" ?
-                                            "bg-white/20 text-white"
-                                        :   "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                                        filter === "all"
+                                            ? "bg-white/20 text-white"
+                                            : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
                                     }`}
                                 >
                                     All
@@ -583,17 +601,18 @@ export default function LibraryPage() {
                     }
                     onConfirm={handleDelete}
                     title={`Delete ${
-                        deleteConfirm.type === "artist" ? "Artist"
-                        : deleteConfirm.type === "album" ? "Album"
-                        : "Track"
+                        deleteConfirm.type === "artist"
+                            ? "Artist"
+                            : deleteConfirm.type === "album"
+                              ? "Album"
+                              : "Track"
                     }?`}
                     message={
-                        deleteConfirm.type === "track" ?
-                            `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete the file from your system.`
-                        : deleteConfirm.type === "album" ?
-                            `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all tracks and files from your system.`
-                        :   `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all albums, tracks, and files from your system.`
-
+                        deleteConfirm.type === "track"
+                            ? `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete the file from your system.`
+                            : deleteConfirm.type === "album"
+                              ? `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all tracks and files from your system.`
+                              : `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all albums, tracks, and files from your system.`
                     }
                     confirmText="Delete"
                     cancelText="Cancel"

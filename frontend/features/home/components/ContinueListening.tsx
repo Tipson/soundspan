@@ -4,7 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { Music, Disc, BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
-import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
+import {
+    HorizontalCarousel,
+    CarouselItem,
+} from "@/components/ui/HorizontalCarousel";
 import { memo } from "react";
 import { getArtistHref } from "@/utils/artistRoute";
 
@@ -68,9 +71,9 @@ interface ContinueListeningCardProps {
     index: number;
 }
 
-const ContinueListeningCard = memo(function ContinueListeningCard({ 
-    item, 
-    index 
+const ContinueListeningCard = memo(function ContinueListeningCard({
+    item,
+    index,
 }: ContinueListeningCardProps) {
     const isPodcast = item.type === "podcast";
     const isAudiobook = item.type === "audiobook";
@@ -81,12 +84,10 @@ const ContinueListeningCard = memo(function ContinueListeningCard({
     const href = isPodcast
         ? `/podcasts/${item.id}`
         : isAudiobook
-        ? `/audiobooks/${item.id}`
-        : artistHref;
+          ? `/audiobooks/${item.id}`
+          : artistHref;
     const hasProgress =
-        (isPodcast || isAudiobook) &&
-        item.progress &&
-        item.progress > 0;
+        (isPodcast || isAudiobook) && item.progress && item.progress > 0;
 
     return (
         <CarouselItem>
@@ -147,10 +148,10 @@ export function ContinueListening({ items }: ContinueListeningProps) {
     return (
         <HorizontalCarousel>
             {items.map((item, index) => (
-                <ContinueListeningCard 
-                    key={`${item.type}-${item.id}`} 
-                    item={item} 
-                    index={index} 
+                <ContinueListeningCard
+                    key={`${item.type}-${item.id}`}
+                    item={item}
+                    index={index}
                 />
             ))}
         </HorizontalCarousel>
