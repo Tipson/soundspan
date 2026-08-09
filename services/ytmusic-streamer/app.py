@@ -26,9 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Optional, Literal, cast
 
-import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from ytmusicapi import YTMusic, OAuthCredentials
 
@@ -38,9 +36,12 @@ if str(SERVICES_ROOT) not in sys.path:
 
 from common.logging_utils import configure_service_logger
 from common.sidecar_runtime_utils import (
-    build_stream_proxy_client,
+    ThreadSafeRatePacer,
+    build_full_proxy_response,
+    build_range_proxy_response,
     env_float,
     env_int,
+    register_error_handlers,
     require_internal_secret,
     validate_user_id,
 )
@@ -170,6 +171,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+register_error_handlers(app, log)
 
 # ── Paths ───────────────────────────────────────────────────────────
 DATA_PATH = Path(os.getenv("DATA_PATH", "/data"))
@@ -202,12 +204,14 @@ BATCH_DELAY_MAX = env_float("YTMUSIC_BATCH_DELAY_MAX", "1.0")
 # Delay range (seconds) between yt-dlp extractions.
 EXTRACT_DELAY_MIN = env_float("YTMUSIC_EXTRACT_DELAY_MIN", "0.5")
 EXTRACT_DELAY_MAX = env_float("YTMUSIC_EXTRACT_DELAY_MAX", "2.0")
-_extract_lock = asyncio.Lock()   # Serialize yt-dlp extractions
-_last_extract_time: float = 0.0  # Timestamp of last extraction
+_extract_pacer = ThreadSafeRatePacer(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
+EXTRACT_TIMEOUT = env_float("YTMUSIC_EXTRACT_TIMEOUT", "60")
+YTDLP_SOCKET_TIMEOUT = env_float("YTMUSIC_YTDLP_SOCKET_TIMEOUT", "20")
 
 # Search result cache (in-memory, short TTL to reduce duplicate requests)
 _search_cache: dict[str, dict] = {}
 SEARCH_CACHE_TTL = env_int("YTMUSIC_SEARCH_CACHE_TTL", "300")  # 5 minutes
+SEARCH_CACHE_MAX = env_int("YTMUSIC_SEARCH_CACHE_MAX", "1024")
 SEARCH_MODE = (os.getenv("YTMUSIC_SEARCH_MODE", "auto") or "auto").strip().lower()
 if SEARCH_MODE not in {"tv", "native", "auto"}:
     log.warning(
@@ -243,8 +247,15 @@ import random
 # Keys are "{user_id}:{video_id}" to isolate per-user sessions
 _stream_cache: dict[str, dict] = {}
 STREAM_CACHE_TTL = 5 * 60 * 60  # 5 hours (YouTube URLs expire at ~6h)
+STREAM_CACHE_MAX = env_int("YTMUSIC_STREAM_CACHE_MAX", "1024")
 TV_CLIENT_NAME = "TVHTML5"
 TV_CLIENT_VERSION = "7.20250101.00.00"
+
+
+def _bound_cache(cache: dict, max_size: int) -> None:
+    """Evict oldest entries until an insertion-ordered cache is bounded."""
+    while len(cache) > max_size:
+        cache.pop(next(iter(cache)))
 
 # ── YTMusic instances ────────────────────────────────────────────────
 # Per-user authenticated clients are used for user-private operations
@@ -707,80 +718,71 @@ def _is_issue_813_invalid_argument_error(err: Exception) -> bool:
     return any(marker in message for marker in markers)
 
 
-def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> dict:
-    """
-    Use yt-dlp to extract audio stream URL for a regular YouTube video.
-    Same as _get_stream_url_sync but targets youtube.com (not music.youtube.com)
-    and does not require OAuth authentication.
-    Returns dict with url, format, duration, expires_at.
+def _stream_extraction_http_error(
+    video_id: str, error_label: str, error: Exception
+) -> HTTPException:
+    """Convert an extraction failure to the existing sanitized HTTP error."""
+    error_str = str(error)
+    age_restricted = "Sign in to confirm your age" in error_str or (
+        "age" in error_str.lower() and "confirm" in error_str.lower()
+    )
+    if age_restricted:
+        log.error("%s failed: %s", error_label, error, exc_info=True)
+        return HTTPException(
+            status_code=451,
+            detail={
+                "error": "age_restricted",
+                "message": "This content requires age verification and cannot be streamed.",
+                "video_id": video_id,
+            },
+        )
+    return _sanitized_http_error(
+        error_label, error, 502, "Failed to extract stream"
+    )
+
+
+def _best_audio_stream_url(info: dict) -> Optional[str]:
+    """Return the direct URL or the highest-bitrate audio-only format URL."""
+    stream_url = info.get("url")
+    if stream_url:
+        return cast(str, stream_url)
+    audio_formats = [
+        item
+        for item in info.get("formats", [])
+        if item.get("acodec") != "none"
+        and item.get("vcodec") in ("none", None)
+    ]
+    audio_formats.sort(key=lambda item: item.get("abr", 0) or 0, reverse=True)
+    return audio_formats[0].get("url") if audio_formats else None
+
+
+def _extract_stream_info(
+    cache_key: str,
+    url: str,
+    ydl_opts: dict,
+    video_id: str,
+    error_label: str,
+) -> dict:
+    """Extract a yt-dlp audio URL through the shared paced cache workflow.
+
+    Performs cache lookup, paced extraction, result construction, cache store,
+    and sanitized error mapping for both YouTube stream paths.
     """
     import yt_dlp
 
-    cache_key = f"yt:{video_id}"
-
-    # Check cache first
     cached = _stream_cache.get(cache_key)
     if cached and cached.get("expires_at", 0) > time.time():
         log.debug(f"Stream URL cache hit for {cache_key}")
         return cached
-
-    # Enforce inter-extraction delay to avoid rapid-fire requests
-    global _last_extract_time
-    now = time.time()
-    elapsed = now - _last_extract_time
-    min_gap = random.uniform(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
-    if elapsed < min_gap:
-        sleep_time = min_gap - elapsed
-        log.debug(f"Throttling yt-dlp extraction by {sleep_time:.2f}s")
-        time.sleep(sleep_time)
-    _last_extract_time = time.time()
-
-    # Map quality to yt-dlp format selection (shared with /yt/info so the
-    # audioFormat hint matches what this proxy serves)
-    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(
-        quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"]
-    )
-
-    ydl_opts = {
-        "format": fmt,
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": False,
-        "http_headers": {
-            "User-Agent": _USER_AGENT,
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.youtube.com/",
-        },
-        "extractor_args": {
-            "youtube": {
-                "player_client": YT_PLAYER_CLIENTS,
-            },
-        },
-    }
-
-    url = f"https://www.youtube.com/watch?v={video_id}"
-
+    _extract_pacer.wait()
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-
             if not info:
                 raise ValueError("No info extracted")
-
-            stream_url = info.get("url")
-            if not stream_url:
-                formats = info.get("formats", [])
-                audio_formats = [
-                    f for f in formats
-                    if f.get("acodec") != "none" and f.get("vcodec") in ("none", None)
-                ]
-                if audio_formats:
-                    audio_formats.sort(key=lambda f: f.get("abr", 0) or 0, reverse=True)
-                    stream_url = audio_formats[0].get("url")
-
+            stream_url = _best_audio_stream_url(info)
             if not stream_url:
                 raise ValueError("No audio stream URL found")
-
             result = {
                 "url": stream_url,
                 "content_type": info.get("audio_ext", "m4a"),
@@ -791,71 +793,53 @@ def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> dict:
                 "abr": info.get("abr", 0),
                 "acodec": info.get("acodec", ""),
             }
-
             _stream_cache[cache_key] = result
-            log.debug(f"Extracted YT stream URL for {cache_key}: {result['acodec']} @ {result['abr']}kbps")
+            _clean_stream_cache()
+            _bound_cache(_stream_cache, STREAM_CACHE_MAX)
+            log.debug(
+                "Extracted stream URL for %s: %s @ %skbps",
+                cache_key,
+                result["acodec"],
+                result["abr"],
+            )
             return result
-
-    except Exception as e:
-        error_str = str(e)
-        if "Sign in to confirm your age" in error_str or (
-            "age" in error_str.lower() and "confirm" in error_str.lower()
-        ):
-            log.error(
-                "yt-dlp extraction failed for YT video %s: %s",
-                video_id,
-                e,
-                exc_info=True,
-            )
-            raise HTTPException(
-                status_code=451,
-                detail={
-                    "error": "age_restricted",
-                    "message": "This content requires age verification and cannot be streamed.",
-                    "video_id": video_id,
-                },
-            )
-
-        raise _sanitized_http_error(
-            f"yt-dlp extraction for YT video {video_id}",
-            e,
-            502,
-            "Failed to extract stream",
-        ) from e
+    except Exception as error:
+        raise _stream_extraction_http_error(
+            video_id, error_label, error
+        ) from error
 
 
-def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> dict:
-    """
-    Use yt-dlp to extract audio stream URL for a YouTube Music video.
-    Returns dict with url, format, duration, expires_at.
+def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> dict:
+    """Extract a cached audio stream URL for a regular YouTube video."""
+    fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(
+        quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"]
+    )
+    ydl_opts = {
+        "format": fmt,
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+        "socket_timeout": YTDLP_SOCKET_TIMEOUT,
+        "http_headers": {
+            "User-Agent": _USER_AGENT,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.youtube.com/",
+        },
+        "extractor_args": {"youtube": {"player_client": YT_PLAYER_CLIENTS}},
+    }
+    return _extract_stream_info(
+        f"yt:{video_id}",
+        f"https://www.youtube.com/watch?v={video_id}",
+        ydl_opts,
+        video_id,
+        f"yt-dlp extraction for YT video {video_id}",
+    )
 
-    Rate-pacing measures:
-    - Realistic browser User-Agent in HTTP headers
-    - sleep_interval between yt-dlp requests
-    - Extraction serialized via _extract_lock with random inter-request delay
-    """
-    import yt_dlp
 
-    cache_key = f"{user_id}:{video_id}"
-
-    # Check cache first
-    cached = _stream_cache.get(cache_key)
-    if cached and cached.get("expires_at", 0) > time.time():
-        log.debug(f"Stream URL cache hit for {cache_key}")
-        return cached
-
-    # Enforce inter-extraction delay to avoid rapid-fire requests
-    global _last_extract_time
-    now = time.time()
-    elapsed = now - _last_extract_time
-    min_gap = random.uniform(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
-    if elapsed < min_gap:
-        sleep_time = min_gap - elapsed
-        log.debug(f"Throttling yt-dlp extraction by {sleep_time:.2f}s")
-        time.sleep(sleep_time)
-    _last_extract_time = time.time()
-
-    # Map quality to yt-dlp format selection
+def _get_stream_url_sync(
+    user_id: str, video_id: str, quality: str = "HIGH"
+) -> dict:
+    """Extract a cached audio stream URL for a YouTube Music video."""
     format_map = {
         "LOW": "ba[abr<=64]/worstaudio/ba",
         "MEDIUM": "ba[abr<=128]/ba[abr<=192]/ba",
@@ -869,87 +853,38 @@ def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> 
         "quiet": True,
         "no_warnings": True,
         "extract_flat": False,
-        # ── Request safety ───────────────────────────────────────────
-        # Realistic browser headers so yt-dlp requests look like a
-        # normal Chrome session rather than a scripted extractor.
+        "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "http_headers": {
             "User-Agent": _USER_AGENT,
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://music.youtube.com/",
         },
-        # Use the Android client for extraction — it exposes direct
-        # audio URLs more reliably and is less aggressively throttled.
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android_music"],
-            },
-        },
+        "extractor_args": {"youtube": {"player_client": ["android_music"]}},
     }
+    return _extract_stream_info(
+        f"{user_id}:{video_id}",
+        f"https://music.youtube.com/watch?v={video_id}",
+        ydl_opts,
+        video_id,
+        f"yt-dlp extraction for {video_id}",
+    )
 
-    url = f"https://music.youtube.com/watch?v={video_id}"
 
+async def _extract_stream_info_bounded(func, *args) -> dict:
+    """Run a sync stream extraction off the event loop with an overall deadline.
+
+    asyncio.wait_for cancels the awaiting request after EXTRACT_TIMEOUT
+    seconds and maps it to HTTP 504. The orphaned worker thread cannot
+    hang forever: yt-dlp's socket_timeout bounds its network reads.
+    """
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-
-            if not info:
-                raise ValueError("No info extracted")
-
-            stream_url = info.get("url")
-            if not stream_url:
-                # Try to find audio format in formats list
-                formats = info.get("formats", [])
-                audio_formats = [
-                    f for f in formats
-                    if f.get("acodec") != "none" and f.get("vcodec") in ("none", None)
-                ]
-                if audio_formats:
-                    audio_formats.sort(key=lambda f: f.get("abr", 0) or 0, reverse=True)
-                    stream_url = audio_formats[0].get("url")
-
-            if not stream_url:
-                raise ValueError("No audio stream URL found")
-
-            result = {
-                "url": stream_url,
-                "content_type": info.get("audio_ext", "m4a"),
-                "duration": info.get("duration", 0),
-                "title": info.get("title", ""),
-                "artist": info.get("artist") or info.get("uploader", ""),
-                "expires_at": time.time() + STREAM_CACHE_TTL,
-                "abr": info.get("abr", 0),
-                "acodec": info.get("acodec", ""),
-            }
-
-            _stream_cache[cache_key] = result
-            log.debug(f"Extracted stream URL for {cache_key}: {result['acodec']} @ {result['abr']}kbps")
-            return result
-
-    except Exception as e:
-        error_str = str(e)
-        # Detect age-restricted content
-        if "Sign in to confirm your age" in error_str or "age" in error_str.lower() and "confirm" in error_str.lower():
-            log.error(
-                "yt-dlp extraction failed for %s: %s",
-                video_id,
-                e,
-                exc_info=True,
-            )
-            raise HTTPException(
-                status_code=451,
-                detail={
-                    "error": "age_restricted",
-                    "message": "This content requires age verification and cannot be streamed.",
-                    "video_id": video_id,
-                }
-            )
-
-        raise _sanitized_http_error(
-            f"yt-dlp extraction for {video_id}",
-            e,
-            502,
-            "Failed to extract stream",
-        ) from e
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, *args), timeout=EXTRACT_TIMEOUT
+        )
+    except TimeoutError as error:
+        raise HTTPException(
+            status_code=504, detail="Stream extraction timed out"
+        ) from error
 
 
 def _tv_search(yt: YTMusic, query: str, filter: Optional[str] = None, limit: int = 20) -> list[dict]:
@@ -1274,6 +1209,8 @@ def _set_cached_search(
         "results": results,
         "expires_at": time.time() + SEARCH_CACHE_TTL,
     }
+    _clean_search_cache()
+    _bound_cache(_search_cache, SEARCH_CACHE_MAX)
 
 
 def _search_once(
@@ -1631,7 +1568,8 @@ async def search(req: SearchRequest, user_id: str = Query(...)):
       - native: force ytmusicapi yt.search()
     """
     try:
-        items, strategy = _search_with_mode_fallback(
+        items, strategy = await asyncio.to_thread(
+            _search_with_mode_fallback,
             user_id,
             req.query,
             req.filter,
@@ -1772,7 +1710,8 @@ async def get_album(browse_id: str, user_id: str = Query(...)):
             yt = _get_public_ytmusic("native")
             album = yt.get_album(browse_id)
         else:
-            album = _run_ytmusic_with_auth_retry(
+            album = await asyncio.to_thread(
+                _run_ytmusic_with_auth_retry,
                 user_id,
                 operation=f"get_album({browse_id})",
                 func=lambda yt: yt.get_album(browse_id),
@@ -1797,7 +1736,8 @@ async def get_artist(channel_id: str, user_id: str = Query(...)):
             yt = _get_public_ytmusic("native")
             artist = yt.get_artist(channel_id)
         else:
-            artist = _run_ytmusic_with_auth_retry(
+            artist = await asyncio.to_thread(
+                _run_ytmusic_with_auth_retry,
                 user_id,
                 operation=f"get_artist({channel_id})",
                 func=lambda yt: yt.get_artist(channel_id),
@@ -1854,7 +1794,8 @@ async def get_song(video_id: str, user_id: str = Query(...)):
             yt = _get_public_ytmusic("native")
             song = yt.get_song(video_id)
         else:
-            song = _run_ytmusic_with_auth_retry(
+            song = await asyncio.to_thread(
+                _run_ytmusic_with_auth_retry,
                 user_id,
                 operation=f"get_song({video_id})",
                 func=lambda yt: yt.get_song(video_id),
@@ -1892,7 +1833,9 @@ async def get_stream_info(video_id: str, user_id: str = Query(...), quality: str
     if user_id != "__public__":
         _get_ytmusic(user_id)
 
-    result = await asyncio.to_thread(_get_stream_url_sync, user_id, video_id, quality)
+    result = await _extract_stream_info_bounded(
+        _get_stream_url_sync, user_id, video_id, quality
+    )
     return {
         "videoId": video_id,
         "url": result["url"],
@@ -1926,7 +1869,9 @@ async def proxy_stream(
     if user_id != "__public__":
         _get_ytmusic(user_id)
 
-    stream_info = await asyncio.to_thread(_get_stream_url_sync, user_id, video_id, quality)
+    stream_info = await _extract_stream_info_bounded(
+        _get_stream_url_sync, user_id, video_id, quality
+    )
     stream_url = stream_info["url"]
 
     # Determine content type for the response
@@ -1950,69 +1895,12 @@ async def proxy_stream(
     if request and "range" in request.headers:
         headers["Range"] = request.headers["range"]
 
-    async def stream_audio():
-        async with build_stream_proxy_client(user_agent=_USER_AGENT) as client:
-            try:
-                async with client.stream("GET", stream_url, headers=headers) as response:
-                    async for chunk in response.aiter_bytes(chunk_size=65536):
-                        yield chunk
-            except (httpx.HTTPError, httpx.StreamError, httpx.ReadError) as e:
-                log.error(f"Upstream stream error for {video_id}: {e}")
-                # Don't re-raise — just end the stream gracefully so the
-                # browser audio element can retry with a new Range request.
-                return
-
-    # For range requests, fetch upstream first to get headers
     if headers.get("Range"):
-        # IMPORTANT: Do NOT use `async with` for the client here.
-        # The client must stay alive for the entire duration of the stream,
-        # not just until the StreamingResponse object is created.  If we
-        # used `async with`, the `return` would exit the context manager,
-        # closing the client/connection before Starlette ever iterates
-        # the generator — causing an immediate ReadError on every request.
-        client = build_stream_proxy_client(user_agent=_USER_AGENT)
-        upstream = await client.send(
-            client.build_request("GET", stream_url, headers=headers),
-            stream=True,
+        return await build_range_proxy_response(
+            stream_url, headers, content_type, _USER_AGENT, log, video_id
         )
-        response_headers = {
-            "Content-Type": content_type,
-            "Accept-Ranges": "bytes",
-        }
-        if "content-range" in upstream.headers:
-            response_headers["Content-Range"] = upstream.headers["content-range"]
-        # NOTE: We intentionally do NOT forward Content-Length here.
-        # If the upstream drops mid-stream (ReadError), h11 enforces the
-        # declared length and raises "Too little data for declared
-        # Content-Length", crashing the ASGI app.  By omitting it,
-        # Starlette uses chunked transfer encoding, which allows the
-        # stream to end cleanly on error and lets the browser retry
-        # with a new Range request.
-
-        async def range_stream():
-            try:
-                async for chunk in upstream.aiter_bytes(chunk_size=65536):
-                    yield chunk
-            except (httpx.HTTPError, httpx.StreamError, httpx.ReadError) as e:
-                log.warning(f"Upstream read error during range stream for {video_id}: {e}")
-                # End the stream gracefully — the browser will retry
-            finally:
-                await upstream.aclose()
-                await client.aclose()
-
-        return StreamingResponse(
-            range_stream(),
-            status_code=upstream.status_code,
-            headers=response_headers,
-        )
-
-    return StreamingResponse(
-        stream_audio(),
-        media_type=content_type,
-        headers={
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-cache",
-        },
+    return build_full_proxy_response(
+        stream_url, headers, content_type, _USER_AGENT, log, video_id
     )
 
 
@@ -2022,7 +1910,8 @@ async def proxy_stream(
 async def library_songs(user_id: str = Query(...), limit: int = 100, order: str = "recently_added"):
     """Get user's liked/library songs from YouTube Music."""
     try:
-        songs = _run_ytmusic_with_auth_retry(
+        songs = await asyncio.to_thread(
+            _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_library_songs(limit={limit}, order={order})",
             func=lambda yt: yt.get_library_songs(limit=limit, order=order),
@@ -2057,7 +1946,8 @@ async def library_songs(user_id: str = Query(...), limit: int = 100, order: str 
 async def library_albums(user_id: str = Query(...), limit: int = 100, order: str = "recently_added"):
     """Get user's saved albums from YouTube Music."""
     try:
-        albums = _run_ytmusic_with_auth_retry(
+        albums = await asyncio.to_thread(
+            _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_library_albums(limit={limit}, order={order})",
             func=lambda yt: yt.get_library_albums(limit=limit, order=order),
@@ -2116,7 +2006,8 @@ async def library_playlists(
     excluding user-created playlists and special IDs like Liked Music.
     """
     try:
-        playlists = _run_ytmusic_with_auth_retry(
+        playlists = await asyncio.to_thread(
+            _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_library_playlists(limit={limit})",
             func=lambda yt: yt.get_library_playlists(limit),
@@ -2329,7 +2220,9 @@ async def yt_proxy_stream(
     """
     video_id = _validate_video_id(video_id)
     quality = _validate_stream_quality(quality)
-    stream_info = await asyncio.to_thread(_get_yt_stream_url_sync, video_id, quality)
+    stream_info = await _extract_stream_info_bounded(
+        _get_yt_stream_url_sync, video_id, quality
+    )
     stream_url = stream_info["url"]
 
     acodec = stream_info.get("acodec", "")
@@ -2350,60 +2243,12 @@ async def yt_proxy_stream(
     if request and "range" in request.headers:
         headers["Range"] = request.headers["range"]
 
-    async def stream_audio():
-        async with build_stream_proxy_client(user_agent=_USER_AGENT) as client:
-            try:
-                async with client.stream("GET", stream_url, headers=headers) as response:
-                    async for chunk in response.aiter_bytes(chunk_size=65536):
-                        yield chunk
-            except (httpx.HTTPError, httpx.StreamError, httpx.ReadError) as e:
-                log.error(f"Upstream stream error for YT {video_id}: {e}")
-                return
-
     if headers.get("Range"):
-        client = build_stream_proxy_client(user_agent=_USER_AGENT)
-        try:
-            upstream = await client.send(
-                client.build_request("GET", stream_url, headers=headers),
-                stream=True,
-            )
-        except Exception:
-            # client.send failed before the StreamingResponse generator took
-            # ownership — close the client here or the connection leaks.
-            await client.aclose()
-            raise
-        response_headers = {
-            "Content-Type": content_type,
-            "Accept-Ranges": "bytes",
-        }
-        if "content-range" in upstream.headers:
-            response_headers["Content-Range"] = upstream.headers["content-range"]
-        if "content-length" in upstream.headers:
-            response_headers["Content-Length"] = upstream.headers["content-length"]
-
-        async def range_stream():
-            try:
-                async for chunk in upstream.aiter_bytes(chunk_size=65536):
-                    yield chunk
-            except (httpx.HTTPError, httpx.StreamError, httpx.ReadError) as e:
-                log.warning(f"Upstream read error during YT range stream for {video_id}: {e}")
-            finally:
-                await upstream.aclose()
-                await client.aclose()
-
-        return StreamingResponse(
-            range_stream(),
-            status_code=upstream.status_code,
-            headers=response_headers,
+        return await build_range_proxy_response(
+            stream_url, headers, content_type, _USER_AGENT, log, video_id
         )
-
-    return StreamingResponse(
-        stream_audio(),
-        media_type=content_type,
-        headers={
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-cache",
-        },
+    return build_full_proxy_response(
+        stream_url, headers, content_type, _USER_AGENT, log, video_id
     )
 
 
@@ -2504,47 +2349,36 @@ def _yt_download_job_payload(job: dict) -> dict:
     }
 
 
-def _yt_download_sync(job: dict, audio_format: str, quality: str, output_dir: str):
-    """
-    Blocking yt-dlp download executed in a worker thread. Updates the job
-    record via progress hooks (downloading -> processing -> completed).
-    """
-    import yt_dlp
+def _update_yt_download_progress(job: dict, update: dict, download_cancelled):
+    """Apply one yt-dlp progress update to a download job."""
+    if job.get("cancel_requested"):
+        raise download_cancelled("cancelled by user")
+    status = update.get("status")
+    if status == "downloading":
+        job["status"] = "downloading"
+        total = (
+            update.get("total_bytes")
+            or update.get("total_bytes_estimate")
+            or 0
+        )
+        downloaded = update.get("downloaded_bytes") or 0
+        if total > 0:
+            job["progress_pct"] = round(
+                min(99.0, downloaded * 100.0 / total), 1
+            )
+    elif status == "finished":
+        job["status"] = "processing"
+        job["progress_pct"] = max(float(job.get("progress_pct") or 0), 99.0)
 
-    video_id = job["video_id"]
 
-    # Enforce inter-extraction delay to avoid rapid-fire requests —
-    # same pacing pattern as the stream-URL extraction paths.
-    global _last_extract_time
-    now = time.time()
-    elapsed = now - _last_extract_time
-    min_gap = random.uniform(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
-    if elapsed < min_gap:
-        sleep_time = min_gap - elapsed
-        log.debug(f"Throttling yt-dlp download by {sleep_time:.2f}s")
-        time.sleep(sleep_time)
-    _last_extract_time = time.time()
-
-    def _progress_hook(d: dict):
-        # Abort an in-flight download when the job has been cancelled; yt-dlp
-        # propagates the exception out of extract_info().
-        if job.get("cancel_requested"):
-            raise yt_dlp.utils.DownloadCancelled("cancelled by user")
-        status = d.get("status")
-        if status == "downloading":
-            job["status"] = "downloading"
-            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-            downloaded = d.get("downloaded_bytes") or 0
-            if total > 0:
-                job["progress_pct"] = round(
-                    min(99.0, downloaded * 100.0 / total), 1
-                )
-        elif status == "finished":
-            # Raw media fetched — FFmpeg postprocessing (extract/convert,
-            # metadata, thumbnail) runs next.
-            job["status"] = "processing"
-            job["progress_pct"] = max(float(job.get("progress_pct") or 0), 99.0)
-
+def _build_yt_download_opts(
+    job: dict,
+    audio_format: str,
+    quality: str,
+    output_dir: str,
+    download_cancelled,
+) -> dict:
+    """Build yt-dlp options for a bounded audio download."""
     outtmpl = os.path.join(output_dir, "%(title)s [%(id)s].%(ext)s")
     postprocessors = [
         {
@@ -2560,7 +2394,10 @@ def _yt_download_sync(job: dict, audio_format: str, quality: str, output_dir: st
         quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"]
     )
 
-    ydl_opts = {
+    def _progress_hook(update: dict):
+        _update_yt_download_progress(job, update, download_cancelled)
+
+    return {
         "format": fmt,
         "outtmpl": outtmpl,
         "postprocessors": postprocessors,
@@ -2568,6 +2405,7 @@ def _yt_download_sync(job: dict, audio_format: str, quality: str, output_dir: st
         "quiet": True,
         "no_warnings": True,
         "progress_hooks": [_progress_hook],
+        "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "http_headers": {
             "User-Agent": _USER_AGENT,
             "Accept-Language": "en-US,en;q=0.9",
@@ -2580,32 +2418,18 @@ def _yt_download_sync(job: dict, audio_format: str, quality: str, output_dir: st
         },
     }
 
-    url = f"https://www.youtube.com/watch?v={video_id}"
 
-    # Cancelled while still queued in the executor — never start the download.
-    if job.get("cancel_requested"):
-        job["status"] = "cancelled"
-        return
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-
-    if not info:
-        raise ValueError("Download failed — no info returned")
-
-    # Resolve the real output path from yt-dlp's info dict (postprocessors
-    # change the extension); fall back to the escaped-glob directory scan.
+def _complete_yt_download(
+    job: dict, info: dict, audio_format: str, output_dir: str
+) -> None:
+    """Resolve output metadata and mark a successful download completed."""
+    video_id = job["video_id"]
     filepath = resolve_download_filepath(info, audio_format)
     if not filepath:
         filepath = find_existing_download(output_dir, video_id)
     if not filepath:
         raise ValueError("Download completed but output file not found")
 
-    # Bulk (playlist/channel) downloads: stamp the source as artist/album so
-    # the channel's videos group under one artist instead of each video's own
-    # (often per-DJ) YouTube artist tag. Written via ffmpeg so the tagged files
-    # stay readable by the library scanner. Single-video downloads (no source)
-    # keep their native metadata.
     bulk_tags = bulk_album_metadata(job.get("source"), job.get("source_kind"))
     if bulk_tags:
         _stamp_audio_tags(filepath, bulk_tags)
@@ -2615,6 +2439,28 @@ def _yt_download_sync(job: dict, audio_format: str, quality: str, output_dir: st
     job["progress_pct"] = 100.0
     job["status"] = "completed"
     log.info(f"YT download completed for {video_id}: {filepath}")
+
+
+def _yt_download_sync(job: dict, audio_format: str, quality: str, output_dir: str):
+    """Run a blocking yt-dlp download and update its job record."""
+    import yt_dlp
+
+    video_id = job["video_id"]
+    _extract_pacer.wait()
+    ydl_opts = _build_yt_download_opts(
+        job, audio_format, quality, output_dir, yt_dlp.utils.DownloadCancelled
+    )
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    if job.get("cancel_requested"):
+        job["status"] = "cancelled"
+        return
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+    if not info:
+        raise ValueError("Download failed — no info returned")
+    _complete_yt_download(job, info, audio_format, output_dir)
 
 
 async def _run_yt_download_job(job: dict, audio_format: str, quality: str, output_dir: str):
@@ -2815,8 +2661,9 @@ async def get_charts(country: str = "US", user_id: Optional[str] = Query(None)):
     with HTTP 400.
     """
     try:
-        yt = _get_public_ytmusic("native")
-        charts = yt.get_charts(country=country)
+        charts = await asyncio.to_thread(
+            lambda: _get_public_ytmusic("native").get_charts(country=country)
+        )
 
         result = {}
         # Extract top songs/videos if present
@@ -2852,8 +2699,9 @@ async def get_moods_and_genres(user_id: Optional[str] = Query(None)):
     sessions with HTTP 400.
     """
     try:
-        yt = _get_public_ytmusic("native")
-        categories = yt.get_mood_categories()
+        categories = await asyncio.to_thread(
+            lambda: _get_public_ytmusic("native").get_mood_categories()
+        )
 
         result = []
         for cat_title, cat_items in categories.items():
@@ -2883,8 +2731,9 @@ async def get_home(limit: int = Query(6, ge=1, le=20), user_id: Optional[str] = 
     with HTTP 400.
     """
     try:
-        yt = _get_public_ytmusic("native")
-        home = yt.get_home(limit=limit)
+        home = await asyncio.to_thread(
+            lambda: _get_public_ytmusic("native").get_home(limit=limit)
+        )
 
         shelves = []
         for shelf in home:
@@ -2939,8 +2788,9 @@ async def get_home(limit: int = Query(6, ge=1, le=20), user_id: Optional[str] = 
 async def get_browse_album(browse_id: str):
     """Get album details from YouTube Music (unauthenticated, public browse)."""
     try:
-        yt = _get_public_ytmusic("native")
-        album = yt.get_album(browse_id)
+        album = await asyncio.to_thread(
+            lambda: _get_public_ytmusic("native").get_album(browse_id)
+        )
         return _format_album_response(browse_id, album)
     except HTTPException:
         raise
@@ -2971,8 +2821,9 @@ async def get_mood_playlists(params: str = Query(..., min_length=1, max_length=5
         if not params:
             raise HTTPException(status_code=400, detail="params must be a non-empty string")
 
-        yt = _get_public_ytmusic("native")
-        playlists = _fetch_mood_playlists(yt, params)
+        playlists = await asyncio.to_thread(
+            lambda: _fetch_mood_playlists(_get_public_ytmusic("native"), params)
+        )
 
         result = []
         for item in playlists:
@@ -3022,7 +2873,8 @@ async def get_playlist(
     try:
         if user_id and user_id != "__public__":
             try:
-                playlist = _run_ytmusic_with_auth_retry(
+                playlist = await asyncio.to_thread(
+                    _run_ytmusic_with_auth_retry,
                     user_id,
                     operation=f"get_playlist({playlist_id})",
                     func=lambda yt: yt.get_playlist(playlist_id, limit=limit),
