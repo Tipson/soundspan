@@ -15,7 +15,7 @@ It defines:
 | --- | --- | --- | --- |
 | Backend (`backend/`) | Jest + ts-jest | `npm --prefix backend test`, `npm --prefix backend run test:coverage` | Unit/integration/contract/runtime tests under `backend/src/**/__tests__` |
 | Frontend (`frontend/`) | Node test runner (unit + component + coverage), Playwright (E2E), ESLint, TypeScript | `npm --prefix frontend run typecheck`, `npm --prefix frontend run test:unit`, `npm --prefix frontend run test:coverage`, `npm --prefix frontend run test:component`, `npm --prefix frontend run test:component:coverage`, `npm --prefix frontend run test:component:coverage:changed`, `npm --prefix frontend run test:coverage:social`, `npm --prefix frontend run test:config:runtime`, `npm --prefix frontend run test:e2e`, `npm --prefix frontend run test:predeploy`, `npm --prefix frontend run lint` | Standalone typecheck covers source and test files; unit specs live under `frontend/tests/unit`; component specs under `frontend/tests/component`; E2E specs under `frontend/tests/e2e`; the runtime-config smoke reloads production Next.js config after dependency pruning in the AIO image |
-| Python sidecars (`services/*`) | `pytest` | `npm run verify:python`, or `pytest services/<service>/tests -q` per service | Suites run in CI through the `Python Sidecar Tests` matrix job in `quality-visibility.yml`; currently 141 test functions total (tidal-downloader 55, ytmusic-streamer 81, audio-analyzer 3, audio-analyzer-clap 2), though counts will drift as coverage grows |
+| Python sidecars (`services/*`) | `pytest`, Ruff, mypy | `npm run verify:python`, `npm run verify:python-quality`, or `pytest services/<service>/tests -q` per service | Test suites run through the `Python Sidecar Tests` matrix; blocking static-analysis and format checks run through `Python Quality`. The current suites contain 141 test functions total (tidal-downloader 55, ytmusic-streamer 81, audio-analyzer 3, audio-analyzer-clap 2), though counts will drift as coverage grows. |
 
 ## Directory Structure (Canonical)
 
@@ -88,6 +88,12 @@ These scripts intentionally run outside Jest because they are operator diagnosti
 
 ## Running Tests Locally
 
+### Repository orchestration
+
+`npm run verify` runs the backend, frontend, Helm, and enforcement-gate checks.
+Run `npm run verify:python` and `npm run verify:python-quality` separately for
+the Python sidecar tests and blocking Python quality checks.
+
 ### Backend
 
 ```bash
@@ -127,6 +133,28 @@ Notes:
 
 - `test:unit` and `test:coverage` use the `tsx` loader with Node's test runner.
 - `typecheck` disables incremental state so local verification matches a clean CI checkout and includes standalone `tests/**` files.
+- `lint` enforces the current ESLint warning budget with `--max-warnings=183`.
+- `lint:hex` blocks increases above the 130-use baseline for arbitrary hardcoded
+  hex utilities; use the centralized Tailwind theme tokens for new colors.
+
+### Python sidecars
+
+Use a Python 3.11+ environment with the quality tools from
+`services/requirements-quality.txt` and each sidecar's test requirements
+installed. The CI quality job uses Python 3.12 and one shared environment to
+mirror local verification; runtime dependency conflicts are irrelevant to this
+static-analysis environment.
+
+```bash
+pip install \
+  -r services/requirements-quality.txt \
+  -r services/audio-analyzer/requirements-test.txt \
+  -r services/audio-analyzer-clap/requirements-test.txt \
+  -r services/tidal-downloader/requirements-test.txt \
+  -r services/ytmusic-streamer/requirements-test.txt
+npm run verify:python
+npm run verify:python-quality
+```
 
 ### Frontend E2E on host-run +1 ports (recommended)
 
@@ -157,14 +185,37 @@ Quality visibility workflow:
 
 - `.github/workflows/quality-visibility.yml`
 
-Current behavior:
+| CI job | Blocking | Checks |
+| --- | --- | --- |
+| Backend Tests + Coverage | Configurable | Backend Jest tests plus coverage summary and artifacts. |
+| Frontend Quality Visibility | Configurable | ESLint with the enforced 183-warning ceiling, Next build, targeted unit coverage, component tests, and E2E inventory visibility. |
+| Python Sidecar Tests (matrix) | Configurable | The four sidecar `pytest` suites. |
+| Backend Typecheck / Frontend Typecheck | Configurable | Standalone TypeScript checks. |
+| Helm Chart Visibility | Configurable | Helm lint and render assertions. |
+| Python Quality | **Yes** | `ruff check`, `ruff format --check`, the configured aggregate `mypy` run, and the standalone Tidal downloader `mypy` run needed to avoid the top-level `app` module collision. |
+| Enforcement Gates | **Yes** | Route-error canonicalization and its self-test, the 130-use hardcoded-hex baseline, OpenAPI route synchronization, and repository-wide Prettier checks. |
 
-- backend Jest tests + coverage summary/artifacts,
-- frontend lint/build + targeted unit coverage and E2E inventory visibility,
-- Python sidecar `pytest` suites through the four-service `Python Sidecar Tests` matrix,
-- standalone backend and frontend TypeScript checks,
-- Helm chart lint/render visibility,
-- non-blocking by default (configurable to blocking via repo vars).
+The configurable visibility jobs are non-blocking by default and can be made
+blocking through repository variables. `Python Quality` and `Enforcement Gates`
+do not use `continue-on-error`; failures always fail the workflow.
+
+### Enforced ratchets
+
+- Frontend ESLint runs with `--max-warnings=183`; any warning count above that
+  budget fails lint.
+- `npm --prefix frontend run lint:hex` blocks increases above the baseline of
+  130 arbitrary hardcoded-hex Tailwind utilities.
+- `node scripts/ci/check-route-error-canon.mjs` enforces per-route-file
+  baselines for ad-hoc `res.status(500).json(...)` responses. New route files
+  have a zero baseline; lower a file's baseline when canonicalizing it.
+- `openapiRouteSync.test.ts` keeps documented OpenAPI paths under their mounted
+  namespaces, rejects known phantom unprefixed paths, and checks that the API
+  version matches the backend package version.
+- `npm run format:check` applies Prettier checks to the contract, backend,
+  frontend, root scripts, and root JSON. `ruff format --check services/` is the
+  corresponding blocking Python format check.
+- `ruff check services/` and the two mypy invocations enforce the configured
+  Python lint and typing baseline.
 
 Backend coverage artifacts include:
 
@@ -187,12 +238,8 @@ changes; they do not require workflow edits:
    the totals in the current coverage-summary artifact so coverage can only
    ratchet upward.
 
-Known follow-ups are deliberately not gated here: Python lint/type tooling
-(`ruff`/`mypy`) for `services/**`; real-timer sleeps in the
-`listenTogetherSession` and `listenTogetherSocketRetry` component tests and a
-few unit tests; the frontend `strict: true`/ES2020 tsconfig ratchet; and enforced
-coverage for the large `frontend/lib/api.ts` boundary after it is typed and
-split.
+Known follow-ups are deliberately not gated here: the frontend strict-mode /
+ES2020 tsconfig ratchet and enforced coverage for the frontend API boundary.
 
 Module-scope eager ioredis clients in `backend/src/workers/index.ts` and
 `backend/src/workers/processors/discoverProcessor.ts` remain test-leak

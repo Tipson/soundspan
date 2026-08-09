@@ -186,6 +186,99 @@ jobs:
       - name: Run sidecar tests
         run: pytest services/${{ matrix.service }}/tests -q
 
+  python-quality:
+    name: Python Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            services/requirements-quality.txt
+            services/audio-analyzer/requirements-test.txt
+            services/audio-analyzer-clap/requirements-test.txt
+            services/tidal-downloader/requirements-test.txt
+            services/ytmusic-streamer/requirements-test.txt
+
+      - name: Install quality and sidecar test dependencies
+        run: |
+          pip install \
+            -r services/requirements-quality.txt \
+            -r services/audio-analyzer/requirements-test.txt \
+            -r services/audio-analyzer-clap/requirements-test.txt \
+            -r services/tidal-downloader/requirements-test.txt \
+            -r services/ytmusic-streamer/requirements-test.txt
+
+      - name: Ruff lint
+        run: ruff check services/
+
+      - name: Ruff format check
+        run: ruff format --check services/
+
+      - name: Mypy services
+        run: mypy
+
+      - name: Mypy tidal downloader standalone
+        run: MYPYPATH=services mypy services/tidal-downloader/app.py
+
+  enforcement-gates:
+    name: Enforcement Gates
+    runs-on: ubuntu-latest
+    env:
+      NPM_CONFIG_CACHE: ${{ github.workspace }}/.npm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            packages/media-metadata-contract/package-lock.json
+
+      - name: Check route error canonicalization
+        run: node scripts/ci/check-route-error-canon.mjs
+
+      - name: Test route error canonicalization gate
+        run: npm run check:error-canon:test
+
+      - name: Check frontend hardcoded hex baseline
+        run: npm --prefix frontend run lint:hex
+
+      - name: Install and build media metadata contract
+        working-directory: packages/media-metadata-contract
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      # Prisma 7 no longer auto-generates the client on install
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Check OpenAPI route sync
+        run: npm --prefix backend test -- --maxWorkers=2 src/config/__tests__/openapiRouteSync.test.ts
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check repository formatting
+        run: npm run format:check
+
   backend-typecheck:
     name: Backend Typecheck
     runs-on: ubuntu-latest

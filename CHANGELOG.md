@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+### Added
+
+- Added repo-wide Prettier and EditorConfig conventions, applied through
+  mechanical per-package formatting commits. The six formatting-only commits
+  are excluded from blame through `.git-blame-ignore-revs`.
+- Added a blocking Python quality gate for Ruff lint/format checks and mypy
+  analysis across all four sidecars.
+
 ### Accessibility
 
 - The player seek slider now exposes screen-reader slider semantics and supports
@@ -20,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   protect the hardened accessibility components.
 
 ### Changed
+
+- Lowered the enforced frontend ESLint warning budget from 244 to 183 and made
+  timer-dependent frontend tests deterministic instead of waiting on real-time
+  sleeps.
+- Made the hardcoded-hex baseline (130), per-file route-error canonicalization
+  baselines, OpenAPI route synchronization, and repository-wide Prettier/Ruff
+  format checks blocking CI enforcement gates.
 
 - **Frontend audio orchestrator decomposition (first increment).** The
   `AudioPlaybackOrchestrator` no longer reads the deprecated composite
