@@ -193,13 +193,16 @@ def _build_public_browse_session(quality: str | None = None) -> tidalapi.Session
 # Models
 # ════════════════════════════════════════════════════════════════════
 
+
 class AuthTokenRequest(BaseModel):
     """Payload for device-code token exchange polling."""
+
     device_code: str
 
 
 class AuthTokensPayload(BaseModel):
     """Tokens + metadata provided by the Node.js backend."""
+
     access_token: str
     refresh_token: str
     user_id: str
@@ -208,6 +211,7 @@ class AuthTokensPayload(BaseModel):
 
 class SessionCheckPayload(BaseModel):
     """Payload for session verification (refresh_token not needed)."""
+
     access_token: str
     user_id: str
     country_code: str
@@ -215,16 +219,19 @@ class SessionCheckPayload(BaseModel):
 
 class RefreshRequest(BaseModel):
     """Payload for refreshing a TIDAL access token."""
+
     refresh_token: str
 
 
 class SearchRequest(BaseModel):
     """Payload for TIDAL catalog search queries."""
+
     query: str
 
 
 class DownloadTrackRequest(BaseModel):
     """Payload for downloading a single TIDAL track."""
+
     track_id: int
     quality: Literal["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"] = "HIGH"
     output_template: str = "{album.artist}/{album.title}/{item.number:02d}. {item.title}"
@@ -232,6 +239,7 @@ class DownloadTrackRequest(BaseModel):
 
 class DownloadAlbumRequest(BaseModel):
     """Payload for downloading all tracks from a TIDAL album."""
+
     album_id: int
     quality: Literal["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"] = "HIGH"
     output_template: str = "{album.artist}/{album.title}/{item.number:02d}. {item.title}"
@@ -239,6 +247,7 @@ class DownloadAlbumRequest(BaseModel):
 
 class UserAuthRestoreRequest(BaseModel):
     """Restore per-user OAuth credentials (sent by Node.js backend)."""
+
     access_token: str
     refresh_token: str
     user_id: str
@@ -247,6 +256,7 @@ class UserAuthRestoreRequest(BaseModel):
 
 class BatchSearchQuery(BaseModel):
     """Single query descriptor for batch TIDAL search requests."""
+
     query: str
     filter: str | None = None
     limit: int = 5
@@ -263,6 +273,7 @@ class AdminCredentials(NamedTuple):
 # ════════════════════════════════════════════════════════════════════
 # Helpers
 # ════════════════════════════════════════════════════════════════════
+
 
 def _parse_bearer_token(authorization: str | None) -> str | None:
     """Return a nonempty bearer token from an Authorization header."""
@@ -287,9 +298,7 @@ def require_admin_credentials(
     if bearer_token is not None:
         resolved_user_id = x_tidal_user_id if x_tidal_user_id is not None else user_id
         resolved_country = (
-            x_tidal_country_code
-            if x_tidal_country_code is not None
-            else country_code
+            x_tidal_country_code if x_tidal_country_code is not None else country_code
         )
         return AdminCredentials(bearer_token, resolved_user_id, resolved_country)
 
@@ -382,6 +391,7 @@ def _download_track_sync(
 
     # Download raw bytes
     from tiddl.core.utils.download import download as download_bytes
+
     stream_data = download_bytes(urls)
 
     # 4. Write to disk
@@ -396,6 +406,7 @@ def _download_track_sync(
     if file_extension == ".flac":
         try:
             from tiddl.core.utils.ffmpeg import extract_flac
+
             extract_flac(tmp_path, file_path)
             tmp_path.unlink(missing_ok=True)
         except Exception:
@@ -437,6 +448,7 @@ def _download_track_sync(
 # Per-user streaming helpers
 # ════════════════════════════════════════════════════════════════════
 
+
 def _get_user_api(user_id: str) -> TidalAPI:
     """
     Get or raise for a per-user TidalAPI instance.
@@ -465,9 +477,7 @@ def _clear_stream_cache(
     quality: str | None = None,
 ):
     """Clear cached stream URLs for a user, optionally scoped by track/quality."""
-    normalized_quality = (
-        _normalize_stream_quality(quality) if quality is not None else None
-    )
+    normalized_quality = _normalize_stream_quality(quality) if quality is not None else None
     keys_to_remove = []
     for cache_user_id, cache_track_id, cache_quality in _stream_cache:
         if cache_user_id != user_id:
@@ -512,9 +522,7 @@ def _is_token_expired_error(err: Exception) -> bool:
 
     message = str(err).lower()
     return status == 401 and (
-        str(sub_status) == "11003"
-        or "token has expired" in message
-        or "expired on time" in message
+        str(sub_status) == "11003" or "token has expired" in message or "expired on time" in message
     )
 
 
@@ -544,9 +552,7 @@ async def _refresh_user_api(user_id: str) -> TidalAPI:
 
         try:
             auth_api = AuthAPI()
-            auth_response = await asyncio.to_thread(
-                auth_api.refresh_token, creds["refresh_token"]
-            )
+            auth_response = await asyncio.to_thread(auth_api.refresh_token, creds["refresh_token"])
 
             new_access_token = auth_response.access_token
             new_user_id = str(auth_response.user.userId)
@@ -631,13 +637,9 @@ def _find_segment_template(tree):
     back to AdaptationSet.
     """
     ns = _DASH_NS
-    seg_tpl = tree.find(
-        f"{ns}Period/{ns}AdaptationSet/{ns}Representation/{ns}SegmentTemplate"
-    )
+    seg_tpl = tree.find(f"{ns}Period/{ns}AdaptationSet/{ns}Representation/{ns}SegmentTemplate")
     if seg_tpl is None:
-        seg_tpl = tree.find(
-            f"{ns}Period/{ns}AdaptationSet/{ns}SegmentTemplate"
-        )
+        seg_tpl = tree.find(f"{ns}Period/{ns}AdaptationSet/{ns}SegmentTemplate")
     return seg_tpl
 
 
@@ -762,12 +764,14 @@ def _clean_stream_cache():
 # Browse serialization helpers
 # ════════════════════════════════════════════════════════════════════
 
+
 def _tidal_image_url(image_id, w=480, h=480):
     """Convert a TIDAL image UUID to a resources.tidal.com URL."""
     if not image_id:
         return None
     uuid_path = image_id.replace("-", "/")
     return f"https://resources.tidal.com/images/{uuid_path}/{w}x{h}.jpg"
+
 
 def _serialize_page_item(item):
     """Serialize a single item from a tidalapi PageCategory."""
@@ -800,9 +804,12 @@ def _serialize_page_item(item):
     result["thumbnailUrl"] = thumb
 
     # Subtitle
-    result["subtitle"] = getattr(item, "sub_title", None) or getattr(item, "description", None) or ""
+    result["subtitle"] = (
+        getattr(item, "sub_title", None) or getattr(item, "description", None) or ""
+    )
 
     return result
+
 
 def _serialize_page(page):
     """Serialize a tidalapi Page to shelf format.
@@ -812,20 +819,24 @@ def _serialize_page(page):
     frontend never receives empty rows.
     """
     shelves = []
-    for cat in (page.categories or []):
+    for cat in page.categories or []:
         items_list = getattr(cat, "items", None) or []
         serialized_items = [
-            si for si in (_serialize_page_item(item) for item in items_list)
+            si
+            for si in (_serialize_page_item(item) for item in items_list)
             if si.get("playlistId") or si.get("mixId") or si.get("albumId")
         ]
         # Skip categories that produced no actionable items
         if not serialized_items:
             continue
-        shelves.append({
-            "title": getattr(cat, "title", "") or "",
-            "contents": serialized_items,
-        })
+        shelves.append(
+            {
+                "title": getattr(cat, "title", "") or "",
+                "contents": serialized_items,
+            }
+        )
     return shelves
+
 
 def _extract_page_links(page) -> list[dict]:
     """Extract individual PageLink items from a genre/mood Page.
@@ -834,7 +845,7 @@ def _extract_page_links(page) -> list[dict]:
     each holding a list of PageLink items with .title, .api_path, .image_id.
     """
     results = []
-    for cat in (page.categories or []):
+    for cat in page.categories or []:
         items = getattr(cat, "items", None) or []
         for item in items:
             results.append(_serialize_genre(item))
@@ -862,7 +873,7 @@ def _serialize_genre(genre):
     path = getattr(genre, "api_path", "") or getattr(genre, "path", "") or ""
     # Strip leading "pages/" — the genre-playlists endpoint adds it back
     if path.startswith("pages/"):
-        path = path[len("pages/"):]
+        path = path[len("pages/") :]
 
     return {
         "name": getattr(genre, "name", "") or getattr(genre, "title", "") or "",
@@ -870,6 +881,7 @@ def _serialize_genre(genre):
         "hasPlaylists": bool(getattr(genre, "has_playlists", True)),
         "imageUrl": img,
     }
+
 
 def _serialize_mix(mix):
     """Serialize a tidalapi Mix to dict."""
@@ -886,11 +898,16 @@ def _serialize_mix(mix):
         "thumbnailUrl": img,
     }
 
+
 def _serialize_track(track):
     """Serialize a tidalapi Track to dict."""
     artist = track.artist if hasattr(track, "artist") else None
     artist_name = getattr(artist, "name", "Unknown") if artist else "Unknown"
-    artists = [getattr(a, "name", "") for a in (track.artists or [])] if hasattr(track, "artists") and track.artists else [artist_name]
+    artists = (
+        [getattr(a, "name", "") for a in (track.artists or [])]
+        if hasattr(track, "artists") and track.artists
+        else [artist_name]
+    )
     album = track.album if hasattr(track, "album") else None
     album_name = getattr(album, "name", "") if album else ""
 
@@ -911,6 +928,7 @@ def _serialize_track(track):
         "thumbnailUrl": thumb,
     }
 
+
 def _serialize_playlist_preview(playlist):
     """Serialize a tidalapi Playlist to a preview dict (no tracks)."""
     img = None
@@ -925,6 +943,7 @@ def _serialize_playlist_preview(playlist):
         "numTracks": getattr(playlist, "num_tracks", 0) or 0,
         "thumbnailUrl": img,
     }
+
 
 def _serialize_playlist_detail(playlist):
     """Serialize a tidalapi Playlist to a detail dict with tracks."""
@@ -948,11 +967,14 @@ def _serialize_playlist_detail(playlist):
 # Routes
 # ════════════════════════════════════════════════════════════════════
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "tidal-downloader"}
 
+
 # ── Authentication ──────────────────────────────────────────────────
+
 
 @app.post("/auth/device")
 async def auth_device():
@@ -994,11 +1016,14 @@ async def auth_token(req: AuthTokenRequest):
         }
     except AuthClientError as e:
         # Expected while user hasn't authorised yet
-        raise HTTPException(status_code=428, detail={
-            "error": e.error,
-            "sub_status": e.sub_status,
-            "error_description": e.error_description,
-        })
+        raise HTTPException(
+            status_code=428,
+            detail={
+                "error": e.error,
+                "sub_status": e.sub_status,
+                "error_description": e.error_description,
+            },
+        )
     except Exception as e:
         raise _sanitized_http_error(
             "TIDAL token exchange", e, 500, "TIDAL token exchange failed"
@@ -1019,11 +1044,14 @@ async def auth_refresh(req: RefreshRequest):
             "country_code": auth_response.user.countryCode,
         }
     except AuthClientError as e:
-        raise HTTPException(status_code=401, detail={
-            "error": e.error,
-            "sub_status": e.sub_status,
-            "error_description": e.error_description,
-        })
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": e.error,
+                "sub_status": e.sub_status,
+                "error_description": e.error_description,
+            },
+        )
     except Exception as e:
         raise _sanitized_http_error(
             "TIDAL token refresh", e, 500, "TIDAL token refresh failed"
@@ -1053,6 +1081,7 @@ async def auth_session(tokens: SessionCheckPayload):
 
 
 # ── Search ──────────────────────────────────────────────────────────
+
 
 @app.post("/search")
 async def search(
@@ -1101,9 +1130,7 @@ async def search(
         }
     except ApiError as e:
         status_code = e.status if hasattr(e, "status") else 500
-        raise _sanitized_http_error(
-            "TIDAL search", e, status_code, "TIDAL search failed"
-        ) from e
+        raise _sanitized_http_error("TIDAL search", e, status_code, "TIDAL search failed") from e
 
 
 # ── Download ────────────────────────────────────────────────────────
@@ -1163,11 +1190,13 @@ async def _download_album_tracks(
             results.append(result)
         except Exception as e:
             log.error("Failed to download track %s (%s): %s", track.id, track.title, e)
-            errors.append({
-                "track_id": track.id,
-                "title": track.title,
-                "error": "Download failed",
-            })
+            errors.append(
+                {
+                    "track_id": track.id,
+                    "title": track.title,
+                    "error": "Download failed",
+                }
+            )
     return results, errors
 
 
@@ -1239,6 +1268,7 @@ async def download_album(
 # Per-user streaming routes
 # ════════════════════════════════════════════════════════════════════
 
+
 def _store_user_session(
     soundspan_user_id: str,
     api: TidalAPI,
@@ -1255,9 +1285,7 @@ def _store_user_session(
         "tidal_user_id": tidal_user_id,
         "country_code": country_code,
     }
-    for key in [
-        key for key in _browse_sessions if key.startswith(f"{soundspan_user_id}:")
-    ]:
+    for key in [key for key in _browse_sessions if key.startswith(f"{soundspan_user_id}:")]:
         _browse_sessions.pop(key, None)
 
 
@@ -1411,6 +1439,7 @@ async def user_search_batch(
     Batch search — run multiple search queries in one request.
     Used for gap-fill matching (find streaming versions of unowned tracks).
     """
+
     async def _run_one(q: BatchSearchQuery) -> dict:
         try:
             results = await _run_user_api_call(
@@ -1486,9 +1515,7 @@ async def user_stream_proxy(
     # Resolve stream info (may come from cache)
     stream_info = await _run_user_api_call(
         user_id,
-        lambda _current_api: _get_stream_url_sync(
-            user_id, track_id, normalized_quality
-        ),
+        lambda _current_api: _get_stream_url_sync(user_id, track_id, normalized_quality),
         operation=f"stream URL fetch for track {track_id}",
     )
 
@@ -1583,9 +1610,12 @@ async def user_stream_proxy(
 
             raise HTTPException(status_code=502, detail="Unable to refresh TIDAL stream URL")
 
-        client, first_segment_response, dash_urls, dash_content_type = (
-            await _open_dash_stream_start()
-        )
+        (
+            client,
+            first_segment_response,
+            dash_urls,
+            dash_content_type,
+        ) = await _open_dash_stream_start()
 
         async def dash_concat_stream():
             """Fetch each DASH segment sequentially and yield bytes."""
@@ -1764,8 +1794,11 @@ async def user_get_track(
 
 # ── Browse (tidalapi) ──────────────────────────────────────────────
 
+
 @app.get("/user/browse/home")
-async def user_browse_home(user_id: str = Query(...), limit: int = Query(6), quality: str | None = Query(None)):
+async def user_browse_home(
+    user_id: str = Query(...), limit: int = Query(6), quality: str | None = Query(None)
+):
     """Get personalized TIDAL home page shelves."""
     try:
         session = _build_browse_session(user_id, quality)
@@ -1782,8 +1815,11 @@ async def user_browse_home(user_id: str = Query(...), limit: int = Query(6), qua
             "Failed to load TIDAL home",
         ) from e
 
+
 @app.get("/user/browse/explore")
-async def user_browse_explore(user_id: str = Query(...), limit: int = Query(6), quality: str | None = Query(None)):
+async def user_browse_explore(
+    user_id: str = Query(...), limit: int = Query(6), quality: str | None = Query(None)
+):
     """Get TIDAL editorial/new releases shelves."""
     try:
         session = _build_browse_session(user_id, quality)
@@ -1799,6 +1835,7 @@ async def user_browse_explore(user_id: str = Query(...), limit: int = Query(6), 
             500,
             "Failed to load TIDAL explore",
         ) from e
+
 
 @app.get("/user/browse/genres")
 async def user_browse_genres(user_id: str = Query(...), quality: str | None = Query(None)):
@@ -1818,6 +1855,7 @@ async def user_browse_genres(user_id: str = Query(...), quality: str | None = Qu
             "Failed to load TIDAL genres",
         ) from e
 
+
 @app.get("/user/browse/moods")
 async def user_browse_moods(user_id: str = Query(...), quality: str | None = Query(None)):
     """Get TIDAL mood categories."""
@@ -1836,6 +1874,7 @@ async def user_browse_moods(user_id: str = Query(...), quality: str | None = Que
             "Failed to load TIDAL moods",
         ) from e
 
+
 @app.get("/user/browse/mixes")
 async def user_browse_mixes(user_id: str = Query(...), quality: str | None = Query(None)):
     """Get personal TIDAL mixes (daily discovery, etc.)."""
@@ -1843,8 +1882,8 @@ async def user_browse_mixes(user_id: str = Query(...), quality: str | None = Que
         session = _build_browse_session(user_id, quality)
         page = await asyncio.to_thread(session.mixes)
         mixes = []
-        for cat in (page.categories or []):
-            for item in (getattr(cat, "items", None) or []):
+        for cat in page.categories or []:
+            for item in getattr(cat, "items", None) or []:
                 mixes.append(_serialize_mix(item))
         return {"mixes": mixes}
     except HTTPException:
@@ -1857,6 +1896,7 @@ async def user_browse_mixes(user_id: str = Query(...), quality: str | None = Que
             "Failed to load TIDAL mixes",
         ) from e
 
+
 @app.get("/user/browse/genre-playlists")
 async def user_browse_genre_playlists(
     user_id: str = Query(...),
@@ -1866,7 +1906,8 @@ async def user_browse_genre_playlists(
     """Get playlists for a specific genre/mood path."""
     # Sanitize path to prevent directory traversal / injection
     import re
-    if not re.match(r'^[a-zA-Z0-9_\-/]+$', path) or '..' in path:
+
+    if not re.match(r"^[a-zA-Z0-9_\-/]+$", path) or ".." in path:
         raise HTTPException(status_code=400, detail="Invalid genre path")
     try:
         session = _build_browse_session(user_id, quality)
@@ -1877,12 +1918,14 @@ async def user_browse_genre_playlists(
         for shelf in shelves:
             for item in shelf.get("contents", []):
                 if item.get("playlistId"):
-                    playlists.append({
-                        "playlistId": item["playlistId"],
-                        "title": item.get("title", ""),
-                        "thumbnailUrl": item.get("thumbnailUrl"),
-                        "numTracks": 0,
-                    })
+                    playlists.append(
+                        {
+                            "playlistId": item["playlistId"],
+                            "title": item.get("title", ""),
+                            "thumbnailUrl": item.get("thumbnailUrl"),
+                            "numTracks": 0,
+                        }
+                    )
         return {"playlists": playlists}
     except HTTPException:
         raise
@@ -1893,6 +1936,7 @@ async def user_browse_genre_playlists(
             500,
             "Failed to load TIDAL genre playlists",
         ) from e
+
 
 @app.get("/browse/playlist/{playlist_uuid}")
 async def browse_playlist(
@@ -1916,6 +1960,7 @@ async def browse_playlist(
             raise HTTPException(status_code=404, detail="Playlist not found")
         raise HTTPException(status_code=502, detail="Failed to load playlist")
 
+
 @app.get("/user/browse/playlist/{playlist_uuid}")
 async def user_browse_playlist(
     playlist_uuid: str,
@@ -1938,6 +1983,7 @@ async def user_browse_playlist(
         if _is_playlist_not_found_error(e):
             raise HTTPException(status_code=404, detail="Playlist not found")
         raise HTTPException(status_code=502, detail="Failed to load playlist")
+
 
 @app.get("/user/browse/mix/{mix_id}")
 async def user_browse_mix(
@@ -1967,4 +2013,5 @@ async def user_browse_mix(
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8585)  # noqa: S104 -- container service must accept pod traffic

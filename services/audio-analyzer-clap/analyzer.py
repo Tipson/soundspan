@@ -56,7 +56,7 @@ from services.common.analyzer_env import (
 from services.common.logging_utils import configure_service_logger
 
 # CPU thread limiting must be set before importing torch
-THREADS_PER_WORKER = get_int_env('THREADS_PER_WORKER', 1)
+THREADS_PER_WORKER = get_int_env("THREADS_PER_WORKER", 1)
 configure_thread_env(THREADS_PER_WORKER)
 
 import torch
@@ -65,10 +65,10 @@ torch.set_num_threads(THREADS_PER_WORKER)
 
 # Device detection - use GPU if available
 if torch.cuda.is_available():
-    DEVICE = torch.device('cuda')
+    DEVICE = torch.device("cuda")
     GPU_NAME = torch.cuda.get_device_name(0)
 else:
-    DEVICE = torch.device('cpu')
+    DEVICE = torch.device("cpu")
     GPU_NAME = None
 
 import psycopg2
@@ -76,35 +76,35 @@ import redis
 from pgvector.psycopg2 import register_vector
 from psycopg2.extras import RealDictCursor
 
-logger = configure_service_logger('clap-analyzer')
+logger = configure_service_logger("clap-analyzer")
 
 # Configuration from environment
-REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
-DATABASE_URL = os.getenv('DATABASE_URL', '')
-MUSIC_PATH = os.getenv('MUSIC_PATH', '/music')
-SLEEP_INTERVAL = get_int_env('SLEEP_INTERVAL', 5)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+MUSIC_PATH = os.getenv("MUSIC_PATH", "/music")
+SLEEP_INTERVAL = get_int_env("SLEEP_INTERVAL", 5)
 REDIS_SOCKET_TIMEOUT = get_blocking_socket_timeout(
-    'CLAP_REDIS_SOCKET_TIMEOUT',
+    "CLAP_REDIS_SOCKET_TIMEOUT",
     10,
     blocking_timeout=SLEEP_INTERVAL,
 )
-NUM_WORKERS = get_int_env('NUM_WORKERS', 2)
-BACKEND_URL = os.getenv('BACKEND_URL', 'http://backend:3006')
-MODEL_IDLE_TIMEOUT = get_int_env('MODEL_IDLE_TIMEOUT', 300)
+NUM_WORKERS = get_int_env("NUM_WORKERS", 2)
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3006")
+MODEL_IDLE_TIMEOUT = get_int_env("MODEL_IDLE_TIMEOUT", 300)
 IDLE_POLL_SECONDS = 5
 
 # Queue and channel names
-ANALYSIS_QUEUE = 'audio:clap:queue'
-TEXT_EMBED_REQUEST_STREAM = 'audio:text:embed:requests'
-TEXT_EMBED_GROUP = os.getenv('TEXT_EMBED_GROUP', 'clap:text:embed:group')
-TEXT_EMBED_RESPONSE_PREFIX = 'audio:text:embed:response:'
-TEXT_EMBED_RESPONSE_TTL_SECONDS = get_int_env('TEXT_EMBED_RESPONSE_TTL_SECONDS', 120)
-TEXT_EMBED_CLAIM_IDLE_MS = get_int_env('TEXT_EMBED_CLAIM_IDLE_MS', 60000)
-TEXT_EMBED_CLAIM_BATCH = get_int_env('TEXT_EMBED_CLAIM_BATCH', 10)
-CONTROL_CHANNEL = 'audio:clap:control'
+ANALYSIS_QUEUE = "audio:clap:queue"
+TEXT_EMBED_REQUEST_STREAM = "audio:text:embed:requests"
+TEXT_EMBED_GROUP = os.getenv("TEXT_EMBED_GROUP", "clap:text:embed:group")
+TEXT_EMBED_RESPONSE_PREFIX = "audio:text:embed:response:"
+TEXT_EMBED_RESPONSE_TTL_SECONDS = get_int_env("TEXT_EMBED_RESPONSE_TTL_SECONDS", 120)
+TEXT_EMBED_CLAIM_IDLE_MS = get_int_env("TEXT_EMBED_CLAIM_IDLE_MS", 60000)
+TEXT_EMBED_CLAIM_BATCH = get_int_env("TEXT_EMBED_CLAIM_BATCH", 10)
+CONTROL_CHANNEL = "audio:clap:control"
 
 # Model version identifier
-MODEL_VERSION = 'laion-clap-music-v1'
+MODEL_VERSION = "laion-clap-music-v1"
 
 # Audio processing: extract middle segment for consistent, efficient embedding
 # 60 seconds captures the "vibe" without intros/outros and reduces memory usage
@@ -140,11 +140,8 @@ class CLAPAnalyzer:
             try:
                 import laion_clap
 
-                self.model = laion_clap.CLAP_Module(
-                    enable_fusion=False,
-                    amodel='HTSAT-base'
-                )
-                self.model.load_ckpt('/app/models/music_audioset_epoch_15_esc_90.14.pt')
+                self.model = laion_clap.CLAP_Module(enable_fusion=False, amodel="HTSAT-base")
+                self.model.load_ckpt("/app/models/music_audioset_epoch_15_esc_90.14.pt")
 
                 # Move to detected device (GPU if available, else CPU)
                 self.model = self.model.to(DEVICE).eval()
@@ -174,6 +171,7 @@ class CLAPAnalyzer:
             # Force glibc to return freed pages to OS (Python/PyTorch hold RSS otherwise)
             try:
                 import ctypes
+
                 ctypes.CDLL("libc.so.6").malloc_trim(0)
             except Exception:  # noqa: S110 -- releasing libc pages is optional best-effort cleanup
                 pass
@@ -185,7 +183,9 @@ class CLAPAnalyzer:
             logger.info("Reloading CLAP model (new work arrived)...")
             self.load_model()
 
-    def _load_audio_chunk(self, audio_path: str, duration_hint: float | None = None) -> tuple[np.ndarray | None, int]:
+    def _load_audio_chunk(
+        self, audio_path: str, duration_hint: float | None = None
+    ) -> tuple[np.ndarray | None, int]:
         """
         Load audio from the middle of a file for efficient embedding.
 
@@ -211,7 +211,7 @@ class CLAPAnalyzer:
                     sr=CLAP_SAMPLE_RATE,
                     offset=offset,
                     duration=MAX_AUDIO_DURATION,
-                    mono=True
+                    mono=True,
                 )
             else:
                 # Short track, load entirely
@@ -224,7 +224,9 @@ class CLAPAnalyzer:
             traceback.print_exc()
             return None, 0
 
-    def get_audio_embedding(self, audio_path: str, duration: float | None = None) -> np.ndarray | None:
+    def get_audio_embedding(
+        self, audio_path: str, duration: float | None = None
+    ) -> np.ndarray | None:
         """
         Generate a 512-dimensional embedding from an audio file.
 
@@ -252,17 +254,14 @@ class CLAPAnalyzer:
             if audio is None:
                 return None
 
-            logger.debug(f"Loaded audio: {len(audio)/sr:.1f}s at {sr}Hz")
+            logger.debug(f"Loaded audio: {len(audio) / sr:.1f}s at {sr}Hz")
 
             with self._lock:
                 if self.model is None:
                     self.load_model()
                 # Use get_audio_embedding_from_data for pre-loaded audio
                 # This gives us control over memory usage
-                embeddings = self.model.get_audio_embedding_from_data(
-                    [audio],
-                    use_tensor=False
-                )
+                embeddings = self.model.get_audio_embedding_from_data([audio], use_tensor=False)
 
                 # Result is shape (1, 512) for HTSAT-base model, normalized
                 embedding = embeddings[0]
@@ -299,10 +298,7 @@ class CLAPAnalyzer:
                 if self.model is None:
                     self.load_model()
                 # CLAP expects a list of text prompts
-                embeddings = self.model.get_text_embedding(
-                    [text],
-                    use_tensor=False
-                )
+                embeddings = self.model.get_text_embedding([text], use_tensor=False)
 
                 embedding = embeddings[0]
 
@@ -330,11 +326,8 @@ class DatabaseConnection:
         if not self.url:
             raise ValueError("DATABASE_URL not set")
 
-        self.conn = psycopg2.connect(
-            self.url,
-            options="-c client_encoding=UTF8"
-        )
-        self.conn.set_client_encoding('UTF8')
+        self.conn = psycopg2.connect(self.url, options="-c client_encoding=UTF8")
+        self.conn.set_client_encoding("UTF8")
         self.conn.autocommit = False
 
         # Register pgvector type
@@ -446,9 +439,9 @@ class Worker:
         _, raw_job = job_data
         job = json.loads(raw_job)
 
-        track_id = job.get('trackId')
-        file_path = job.get('filePath', '')
-        duration = job.get('duration')  # Pre-computed duration in seconds
+        track_id = job.get("trackId")
+        file_path = job.get("filePath", "")
+        duration = job.get("duration")  # Pre-computed duration in seconds
 
         if not track_id:
             logger.warning(f"Invalid job (no trackId): {job}")
@@ -457,10 +450,10 @@ class Worker:
         logger.info(f"Worker {self.worker_id} processing track: {track_id}")
 
         # Update track status to processing
-        self._update_track_status(track_id, 'processing')
+        self._update_track_status(track_id, "processing")
 
         # Build full path (normalize Windows-style paths)
-        normalized_path = file_path.replace('\\', '/')
+        normalized_path = file_path.replace("\\", "/")
         full_path = os.path.join(MUSIC_PATH, normalized_path)
 
         # Generate embedding (pass duration to avoid file probe)
@@ -474,7 +467,7 @@ class Worker:
         success = self._store_embedding(track_id, embedding)
 
         if success:
-            self._update_track_status(track_id, 'completed')
+            self._update_track_status(track_id, "completed")
             logger.info(f"Worker {self.worker_id} completed track: {track_id}")
         else:
             self._mark_failed(track_id, "Failed to store embedding")
@@ -483,13 +476,16 @@ class Worker:
         """Update the track's vibe analysis status (CLAP embeddings)"""
         cursor = self.db.get_cursor()
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE "Track"
                 SET
                     "vibeAnalysisStatus" = %s,
                     "vibeAnalysisStatusUpdatedAt" = %s
                 WHERE id = %s
-            """, (status, datetime.now(UTC), track_id))
+            """,
+                (status, datetime.now(UTC), track_id),
+            )
             self.db.commit()
         except Exception as e:
             logger.error(f"Failed to update track vibe status: {e}")
@@ -504,9 +500,10 @@ class Worker:
             # Get track name for better failure visibility
             cursor.execute('SELECT title FROM "Track" WHERE id = %s', (track_id,))
             row = cursor.fetchone()
-            track_name = row['title'] if row else None
+            track_name = row["title"] if row else None
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE "Track"
                 SET
                     "vibeAnalysisStatus" = 'failed',
@@ -514,7 +511,9 @@ class Worker:
                     "vibeAnalysisRetryCount" = COALESCE("vibeAnalysisRetryCount", 0) + 1,
                     "vibeAnalysisStatusUpdatedAt" = %s
                 WHERE id = %s
-            """, (error[:500], datetime.now(UTC), track_id))
+            """,
+                (error[:500], datetime.now(UTC), track_id),
+            )
             self.db.commit()
             logger.error(f"Track {track_id} failed: {error}")
 
@@ -522,7 +521,7 @@ class Worker:
             try:
                 headers = {
                     "Content-Type": "application/json",
-                    "X-Internal-Secret": os.getenv("INTERNAL_API_SECRET", "")
+                    "X-Internal-Secret": os.getenv("INTERNAL_API_SECRET", ""),
                 }
                 requests.post(
                     f"{BACKEND_URL}/api/analysis/vibe/failure",
@@ -530,10 +529,10 @@ class Worker:
                         "trackId": track_id,
                         "trackName": track_name,
                         "errorMessage": error[:500],
-                        "errorCode": "VIBE_EMBEDDING_FAILED"
+                        "errorCode": "VIBE_EMBEDDING_FAILED",
                     },
                     headers=headers,
-                    timeout=5
+                    timeout=5,
                 )
             except Exception as report_err:
                 logger.warning(f"Failed to report failure to backend: {report_err}")
@@ -551,7 +550,8 @@ class Worker:
             # Convert numpy array to list for pgvector
             embedding_list = embedding.tolist()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO track_embeddings (track_id, embedding, model_version, analyzed_at)
                 VALUES (%s, %s::vector, %s, %s)
                 ON CONFLICT (track_id)
@@ -559,7 +559,9 @@ class Worker:
                     embedding = EXCLUDED.embedding,
                     model_version = EXCLUDED.model_version,
                     analyzed_at = EXCLUDED.analyzed_at
-            """, (track_id, embedding_list, MODEL_VERSION, datetime.now(UTC)))
+            """,
+                (track_id, embedding_list, MODEL_VERSION, datetime.now(UTC)),
+            )
 
             self.db.commit()
             return True
@@ -586,7 +588,7 @@ class TextEmbedHandler:
         self.analyzer = analyzer
         self.stop_event = stop_event
         self.redis_client = None
-        consumer_prefix = os.getenv('TEXT_EMBED_CONSUMER_PREFIX', os.getenv('HOSTNAME', 'clap'))
+        consumer_prefix = os.getenv("TEXT_EMBED_CONSUMER_PREFIX", os.getenv("HOSTNAME", "clap"))
         self.consumer_name = f"{consumer_prefix}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
         self._last_claim_check = 0.0
 
@@ -613,7 +615,7 @@ class TextEmbedHandler:
                     messages = self.redis_client.xreadgroup(
                         groupname=TEXT_EMBED_GROUP,
                         consumername=self.consumer_name,
-                        streams={TEXT_EMBED_REQUEST_STREAM: '>'},
+                        streams={TEXT_EMBED_REQUEST_STREAM: ">"},
                         count=1,
                         block=1000,
                     )
@@ -648,14 +650,14 @@ class TextEmbedHandler:
             self.redis_client.xgroup_create(
                 name=TEXT_EMBED_REQUEST_STREAM,
                 groupname=TEXT_EMBED_GROUP,
-                id='0',
+                id="0",
                 mkstream=True,
             )
             logger.info(
                 f"Created text embed consumer group {TEXT_EMBED_GROUP} on {TEXT_EMBED_REQUEST_STREAM}"
             )
         except redis.exceptions.ResponseError as e:
-            if 'BUSYGROUP' in str(e):
+            if "BUSYGROUP" in str(e):
                 logger.info(f"Using existing text embed consumer group {TEXT_EMBED_GROUP}")
                 return
             raise
@@ -674,12 +676,12 @@ class TextEmbedHandler:
                 groupname=TEXT_EMBED_GROUP,
                 consumername=self.consumer_name,
                 min_idle_time=TEXT_EMBED_CLAIM_IDLE_MS,
-                start_id='0-0',
+                start_id="0-0",
                 count=TEXT_EMBED_CLAIM_BATCH,
             )
         except redis.exceptions.ResponseError as e:
             # Older Redis versions may not support XAUTOCLAIM.
-            if 'unknown command' in str(e).lower():
+            if "unknown command" in str(e).lower():
                 return
             if self._is_no_group_error(e):
                 self._ensure_consumer_group()
@@ -725,9 +727,9 @@ class TextEmbedHandler:
         response_key = None
 
         try:
-            request_id = fields.get('requestId')
-            text = fields.get('text', '')
-            response_key = fields.get('responseKey')
+            request_id = fields.get("requestId")
+            text = fields.get("text", "")
+            response_key = fields.get("responseKey")
 
             if not request_id:
                 logger.warning(f"Text embed request missing requestId (message: {message_id})")
@@ -744,14 +746,14 @@ class TextEmbedHandler:
 
             # Prepare response
             response = {
-                'requestId': request_id,
-                'success': embedding is not None,
-                'embedding': embedding.tolist() if embedding is not None else None,
-                'modelVersion': MODEL_VERSION,
+                "requestId": request_id,
+                "success": embedding is not None,
+                "embedding": embedding.tolist() if embedding is not None else None,
+                "modelVersion": MODEL_VERSION,
             }
 
             if embedding is None:
-                response['error'] = 'Failed to generate text embedding'
+                response["error"] = "Failed to generate text embedding"
 
             self._publish_response_and_ack(message_id, response_key, response)
 
@@ -766,11 +768,11 @@ class TextEmbedHandler:
                         message_id,
                         response_key,
                         {
-                            'requestId': request_id,
-                            'success': False,
-                            'embedding': None,
-                            'modelVersion': MODEL_VERSION,
-                            'error': str(e),
+                            "requestId": request_id,
+                            "success": False,
+                            "embedding": None,
+                            "modelVersion": MODEL_VERSION,
+                            "error": str(e),
                         },
                     )
                 except Exception as ack_error:
@@ -803,12 +805,9 @@ class ControlHandler:
 
             while not self.stop_event.is_set():
                 try:
-                    message = self.pubsub.get_message(
-                        ignore_subscribe_messages=True,
-                        timeout=1.0
-                    )
+                    message = self.pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
 
-                    if message and message['type'] == 'message':
+                    if message and message["type"] == "message":
                         self._handle_message(message)
 
                 except Exception as e:
@@ -824,17 +823,19 @@ class ControlHandler:
     def _handle_message(self, message: dict[str, Any]):
         """Handle a control message"""
         try:
-            data = message['data']
+            data = message["data"]
             if isinstance(data, bytes):
-                data = data.decode('utf-8')
+                data = data.decode("utf-8")
 
             control = json.loads(data)
-            command = control.get('command')
+            command = control.get("command")
 
-            if command == 'set_workers':
-                new_count = control.get('count', NUM_WORKERS)
+            if command == "set_workers":
+                new_count = control.get("count", NUM_WORKERS)
                 logger.info(f"Received worker count change request: {NUM_WORKERS} -> {new_count}")
-                logger.info("Note: Restart the CLAP analyzer container to apply the new worker count")
+                logger.info(
+                    "Note: Restart the CLAP analyzer container to apply the new worker count"
+                )
             else:
                 logger.warning(f"Unknown control command: {command}")
 
@@ -858,14 +859,16 @@ def _check_for_completed_work(analyzer, idle_db, queue_client):
                 LEFT JOIN track_embeddings te ON t.id = te.track_id
                 WHERE te.track_id IS NULL AND t."filePath" IS NOT NULL
             """)
-            remaining = cursor.fetchone()['cnt']
+            remaining = cursor.fetchone()["cnt"]
         finally:
             cursor.close()
 
         queue_len = queue_client.llen(ANALYSIS_QUEUE)
         if remaining == 0 and queue_len == 0:
             analyzer.unload_model()
-            logger.info("All tracks have embeddings, model unloaded (will reload when work arrives)")
+            logger.info(
+                "All tracks have embeddings, model unloaded (will reload when work arrives)"
+            )
     except Exception as e:
         logger.debug(f"Idle check failed: {e}")
         idle_db.reconnect()
@@ -993,5 +996,5 @@ def main():
     logger.info("CLAP Analyzer service stopped cleanly")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

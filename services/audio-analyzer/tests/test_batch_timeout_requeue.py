@@ -161,8 +161,8 @@ def test_partition_unfinished_tracks_classifies_each_future_state(
         running: ("running", "/running.flac"),
     }
 
-    completed_unconsumed, never_started, attempted = (
-        module.partition_unfinished_tracks(futures_map, {"finalized"})
+    completed_unconsumed, never_started, attempted = module.partition_unfinished_tracks(
+        futures_map, {"finalized"}
     )
 
     assert completed_unconsumed == [("completed", "/completed.flac")]

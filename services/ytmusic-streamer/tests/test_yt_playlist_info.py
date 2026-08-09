@@ -45,9 +45,7 @@ async def test_playlist_info_enumerates_real_playlist(client):
     with patch("yt_dlp.YoutubeDL", _fake_youtube_dl(flat)):
         resp = await client.get(
             "/yt/playlist-info",
-            params={
-                "url": "https://www.youtube.com/playlist?list=PL-abcDEF12345"
-            },
+            params={"url": "https://www.youtube.com/playlist?list=PL-abcDEF12345"},
         )
 
     assert resp.status_code == 200
@@ -67,9 +65,7 @@ async def test_playlist_info_enumerates_real_playlist(client):
 async def test_playlist_info_rejects_radio_mix(client):
     resp = await client.get(
         "/yt/playlist-info",
-        params={
-            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ"
-        },
+        params={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ"},
     )
     assert resp.status_code == 422
     assert "mix" in resp.json()["error"].lower()
@@ -90,8 +86,6 @@ async def test_playlist_info_422_when_no_entries(client):
     with patch("yt_dlp.YoutubeDL", _fake_youtube_dl(flat)):
         resp = await client.get(
             "/yt/playlist-info",
-            params={
-                "url": "https://www.youtube.com/playlist?list=PL-emptyXYZ12"
-            },
+            params={"url": "https://www.youtube.com/playlist?list=PL-emptyXYZ12"},
         )
     assert resp.status_code == 422

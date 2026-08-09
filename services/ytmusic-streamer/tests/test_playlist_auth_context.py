@@ -28,9 +28,7 @@ async def test_playlist_uses_user_context_when_user_id_provided(client):
         ],
     }
 
-    with patch(
-        "app._run_ytmusic_with_auth_retry", return_value=playlist_payload
-    ) as auth_retry:
+    with patch("app._run_ytmusic_with_auth_retry", return_value=playlist_payload) as auth_retry:
         response = await client.get("/playlist/PLowned123", params={"user_id": "user-1"})
 
     assert response.status_code == 200

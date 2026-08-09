@@ -236,9 +236,7 @@ def build_full_proxy_response(
     async def stream_audio():
         async with build_stream_proxy_client(user_agent=user_agent) as client:
             try:
-                async with client.stream(
-                    "GET", stream_url, headers=request_headers
-                ) as response:
+                async with client.stream("GET", stream_url, headers=request_headers) as response:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         yield chunk
             except (httpx.HTTPError, httpx.StreamError, httpx.ReadError) as exc:

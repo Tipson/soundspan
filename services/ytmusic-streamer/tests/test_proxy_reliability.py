@@ -78,9 +78,7 @@ def _patch_client_factory(monkeypatch, app, fake_client):
     def factory(user_agent=None):
         return fake_client
 
-    monkeypatch.setattr(
-        "common.sidecar_runtime_utils.build_stream_proxy_client", factory
-    )
+    monkeypatch.setattr("common.sidecar_runtime_utils.build_stream_proxy_client", factory)
     # The legacy routes imported the factory directly. This patch keeps the
     # pre-refactor regression run bounded; shared-helper routes ignore it.
     monkeypatch.setattr(app, "build_stream_proxy_client", factory, raising=False)
@@ -99,9 +97,7 @@ async def test_range_response_omits_content_length(client, monkeypatch):
     _patch_stream_info(monkeypatch, app)
     _patch_client_factory(monkeypatch, app, fake_client)
 
-    response = await client.get(
-        f"/yt/proxy/{VIDEO_ID}", headers={"Range": "bytes=0-"}
-    )
+    response = await client.get(f"/yt/proxy/{VIDEO_ID}", headers={"Range": "bytes=0-"})
 
     assert response.status_code == 206
     assert response.content == b"".join(chunks)

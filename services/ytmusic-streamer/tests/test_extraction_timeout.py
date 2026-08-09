@@ -88,9 +88,7 @@ def test_ydl_opts_include_socket_timeout(monkeypatch):
     app._get_yt_stream_url_sync(VIDEO_ID, "HIGH")
 
     assert len(captured) == 2
-    assert all(
-        opts["socket_timeout"] == app.YTDLP_SOCKET_TIMEOUT for opts in captured
-    )
+    assert all(opts["socket_timeout"] == app.YTDLP_SOCKET_TIMEOUT for opts in captured)
 
 
 def test_download_sync_split():
@@ -104,7 +102,4 @@ def test_download_sync_split():
         app._yt_download_sync,
     )
 
-    assert all(
-        len(inspect.getsource(function).splitlines()) < 60
-        for function in split_functions
-    )
+    assert all(len(inspect.getsource(function).splitlines()) < 60 for function in split_functions)

@@ -32,12 +32,10 @@ def find_active_download_job(jobs: dict, video_id: str) -> dict | None:
     though the postprocessor is about to replace it.
     """
     for job in jobs.values():
-        if (
-            job.get("video_id") == video_id
-            and job.get("status") in ACTIVE_DOWNLOAD_STATUSES
-        ):
+        if job.get("video_id") == video_id and job.get("status") in ACTIVE_DOWNLOAD_STATUSES:
             return job
     return None
+
 
 # yt-dlp format selectors used by the /yt/ stream proxy and downloads,
 # keyed by the app's quality levels. /yt/info extracts with the same
@@ -163,9 +161,7 @@ def classify_youtube_url(url: str) -> dict:
         return {
             "kind": "channel",
             "channel": ucid.group(1),
-            "enumerate_url": (
-                f"https://www.youtube.com/channel/{ucid.group(1)}/videos"
-            ),
+            "enumerate_url": (f"https://www.youtube.com/channel/{ucid.group(1)}/videos"),
         }
     legacy = _CHANNEL_LEGACY_RE.search(text)
     if legacy:
@@ -219,9 +215,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
                 "videoId": video_id,
                 "title": str(entry.get("title") or ""),
                 "uploader": str(entry.get("uploader") or entry.get("channel") or ""),
-                "duration": int(duration)
-                if isinstance(duration, (int, float))
-                else None,
+                "duration": int(duration) if isinstance(duration, (int, float)) else None,
             }
         )
 
@@ -232,8 +226,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
     cap = max(0, max_entries)
     capped = entries[:cap]
     truncated = bool(
-        len(entries) > len(capped)
-        or (total_count is not None and total_count > len(capped))
+        len(entries) > len(capped) or (total_count is not None and total_count > len(capped))
     )
     return {
         "title": str(info.get("title") or ""),
@@ -245,9 +238,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
     }
 
 
-def bulk_album_metadata(
-    source: str | None, kind: str | None = None
-) -> dict | None:
+def bulk_album_metadata(source: str | None, kind: str | None = None) -> dict | None:
     """
     Audio tags to stamp on a bulk-download file so a *channel's* videos group
     under one artist/album instead of each video's own (often per-DJ) YouTube
@@ -276,9 +267,7 @@ def bulk_album_metadata(
     return {"artist": label, "album_artist": label, "album": label}
 
 
-def build_tag_rewrite_command(
-    filepath: str, tags: dict, tmp_path: str
-) -> list:
+def build_tag_rewrite_command(filepath: str, tags: dict, tmp_path: str) -> list:
     """
     Build the ffmpeg argv that rewrites `tags` onto `filepath`, stream-copying
     (no re-encode) into `tmp_path`. ffmpeg-written tags stay readable by the
@@ -320,9 +309,7 @@ def find_existing_download(output_dir: str, video_id: str) -> str | None:
         f"*{glob.escape('[' + video_id + ']')}.*",
     )
     matches = [
-        path
-        for path in glob.glob(pattern)
-        if os.path.splitext(path)[1].lower() in AUDIO_EXTENSIONS
+        path for path in glob.glob(pattern) if os.path.splitext(path)[1].lower() in AUDIO_EXTENSIONS
     ]
     return matches[0] if matches else None
 

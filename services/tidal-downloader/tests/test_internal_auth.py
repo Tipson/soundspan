@@ -20,9 +20,7 @@ def _client(headers: dict[str, str] | None = None) -> AsyncClient:
     from app import app
 
     transport = ASGITransport(app=app)
-    return AsyncClient(
-        transport=transport, base_url="http://test", headers=headers or {}
-    )
+    return AsyncClient(transport=transport, base_url="http://test", headers=headers or {})
 
 
 @pytest.mark.anyio

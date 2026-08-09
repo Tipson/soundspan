@@ -121,7 +121,12 @@ def log_timing(
                 start = time.perf_counter()
                 try:
                     result = await func(*args, **kwargs)
-                    logger.log(level, "%s completed in %.2fms", operation, (time.perf_counter() - start) * 1000.0)
+                    logger.log(
+                        level,
+                        "%s completed in %.2fms",
+                        operation,
+                        (time.perf_counter() - start) * 1000.0,
+                    )
                     return result
                 except Exception:
                     logger.exception(
@@ -138,7 +143,12 @@ def log_timing(
             start = time.perf_counter()
             try:
                 result = func(*args, **kwargs)
-                logger.log(level, "%s completed in %.2fms", operation, (time.perf_counter() - start) * 1000.0)
+                logger.log(
+                    level,
+                    "%s completed in %.2fms",
+                    operation,
+                    (time.perf_counter() - start) * 1000.0,
+                )
                 return result
             except Exception:
                 logger.exception(

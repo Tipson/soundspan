@@ -35,9 +35,7 @@ def stream_recorder(monkeypatch):
     monkeypatch.setattr(
         app,
         "_get_yt_stream_url_sync",
-        lambda video_id, quality="HIGH": (
-            calls.append(("yt", video_id, quality)) or stub
-        ),
+        lambda video_id, quality="HIGH": calls.append(("yt", video_id, quality)) or stub,
     )
     yield calls
 
@@ -63,9 +61,7 @@ async def test_stream_accepts_valid_video_id(client, stream_recorder):
 @pytest.mark.anyio
 async def test_stream_rejects_bad_quality(client, stream_recorder):
     """An unsupported stream quality is rejected before extraction."""
-    response = await client.get(
-        f"/stream/{VALID_ID}?user_id=__public__&quality=bogus"
-    )
+    response = await client.get(f"/stream/{VALID_ID}?user_id=__public__&quality=bogus")
     assert response.status_code == 400
     assert response.json()["error"] == "Invalid quality"
     assert stream_recorder == []
@@ -74,9 +70,7 @@ async def test_stream_rejects_bad_quality(client, stream_recorder):
 @pytest.mark.anyio
 async def test_stream_normalizes_lowercase_quality(client, stream_recorder):
     """A supported lowercase stream quality is normalized before use."""
-    response = await client.get(
-        f"/stream/{VALID_ID}?user_id=__public__&quality=lossless"
-    )
+    response = await client.get(f"/stream/{VALID_ID}?user_id=__public__&quality=lossless")
     assert response.status_code == 200
     assert stream_recorder[-1][2] == "LOSSLESS"
 
@@ -92,9 +86,7 @@ async def test_proxy_rejects_malformed_video_id(client, stream_recorder):
 @pytest.mark.anyio
 async def test_proxy_rejects_bad_quality(client, stream_recorder):
     """The music proxy rejects an unsupported quality before extraction."""
-    response = await client.get(
-        f"/proxy/{VALID_ID}?user_id=__public__&quality=ULTRA"
-    )
+    response = await client.get(f"/proxy/{VALID_ID}?user_id=__public__&quality=ULTRA")
     assert response.status_code == 400
     assert response.json()["error"] == "Invalid quality"
 

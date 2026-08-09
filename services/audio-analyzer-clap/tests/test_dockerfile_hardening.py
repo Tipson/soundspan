@@ -21,10 +21,7 @@ def test_model_integrity_check_retained() -> None:
     """The pinned CLAP model must retain its build-time integrity check."""
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
-    assert (
-        "fae3e9c087f2909c28a09dc31c8dfcdacbc42ba44c70e972b58c1bd1caf6dedd"
-        in dockerfile
-    )
+    assert "fae3e9c087f2909c28a09dc31c8dfcdacbc42ba44c70e972b58c1bd1caf6dedd" in dockerfile
     assert "sha256sum -c" in dockerfile
 
 
