@@ -141,9 +141,9 @@ Notes:
 
 Use a Python 3.11+ environment with the quality tools from
 `services/requirements-quality.txt` and each sidecar's test requirements
-installed. The CI quality job uses Python 3.12 and one shared environment to
-mirror local verification; runtime dependency conflicts are irrelevant to this
-static-analysis environment.
+installed. The CI quality job uses Python 3.14 because tiddl requires Python
+3.13 or newer, while mypy retains Python 3.12 semantics through `pyproject.toml`;
+the shared environment mirrors local verification.
 
 ```bash
 pip install \
