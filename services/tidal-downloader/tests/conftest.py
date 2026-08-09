@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 
 

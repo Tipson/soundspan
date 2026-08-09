@@ -7,7 +7,6 @@ import types
 
 import pytest
 
-
 MARKER = "sekrit-token-abc123"
 
 

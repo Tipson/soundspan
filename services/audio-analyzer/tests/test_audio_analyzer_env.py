@@ -9,7 +9,6 @@ from services.common.analyzer_env import (
     get_int_env,
 )
 
-
 THREAD_ENV_KEYS = [
     "OMP_NUM_THREADS",
     "OPENBLAS_NUM_THREADS",

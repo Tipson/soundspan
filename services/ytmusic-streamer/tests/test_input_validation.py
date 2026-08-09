@@ -6,7 +6,6 @@ import types
 
 import pytest
 
-
 VALID_ID = "dQw4w9WgXcQ"
 
 

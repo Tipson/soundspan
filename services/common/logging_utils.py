@@ -7,7 +7,8 @@ import functools
 import logging
 import os
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 R = TypeVar("R")
 
@@ -89,7 +90,7 @@ def log_exceptions(
                     logger.log(level, message, exc_info=True)
                     raise
 
-            return async_wrapper
+            return async_wrapper  # type: ignore[return-value]  # decorator preserves an async callable
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> R:
@@ -130,7 +131,7 @@ def log_timing(
                     )
                     raise
 
-            return async_wrapper
+            return async_wrapper  # type: ignore[return-value]  # decorator preserves an async callable
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> R:

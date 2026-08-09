@@ -5,10 +5,10 @@ from __future__ import annotations
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
-
 
 SERVICES_ROOT = Path(__file__).resolve().parents[2]
 if str(SERVICES_ROOT) not in sys.path:
@@ -30,7 +30,7 @@ def test_pacer_is_thread_safe_and_serializes():
 
     spacings = [
         later - earlier
-        for earlier, later in zip(completion_times, completion_times[1:])
+        for earlier, later in pairwise(completion_times)
     ]
     assert all(spacing >= 0.015 for spacing in spacings)
     assert completion_times[-1] - started_at >= 7 * 0.02 * 0.8

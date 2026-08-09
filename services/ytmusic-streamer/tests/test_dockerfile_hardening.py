@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 
-
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = SERVICE_ROOT / "Dockerfile"
 ENTRYPOINT_SCRIPT = SERVICE_ROOT / "docker-entrypoint.sh"

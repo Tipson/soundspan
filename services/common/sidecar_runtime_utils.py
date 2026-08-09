@@ -9,7 +9,6 @@ import random
 import re
 import threading
 import time
-from typing import Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -20,7 +19,7 @@ from starlette.requests import Request
 
 DEFAULT_STREAM_CONNECT_TIMEOUT = 30.0
 DEFAULT_STREAM_READ_TIMEOUT = 300.0
-_KNOWN_DEFAULT_SECRET = "soundspan-internal-secret-change-me"
+_KNOWN_DEFAULT_SECRET = "soundspan-internal-secret-change-me"  # noqa: S105 -- known insecure sentinel rejected at runtime
 
 # Prisma cuids (the only user_id the backend ever sends) are alphanumeric;
 # this also rejects any `/`, `.`, or `%` that could escape DATA_PATH.
@@ -49,7 +48,7 @@ class ThreadSafeRatePacer:
         """Wait for and reserve the next rate-limited work slot."""
         with self._lock:
             now = time.monotonic()
-            gap = random.uniform(self._min, self._max)
+            gap = random.uniform(self._min, self._max)  # noqa: S311 -- pacing jitter is not security-sensitive
             start_at = max(self._next_allowed, now)
             self._next_allowed = start_at + gap
             sleep_for = start_at - now
@@ -99,7 +98,7 @@ def register_error_handlers(app: FastAPI, logger: logging.Logger) -> None:
             request.method,
             request.url.path,
             exc,
-            exc_info=True,
+            exc_info=True,  # noqa: LOG014 -- registered handler always runs with an active exception
         )
         return JSONResponse(
             {"error": "Internal Server Error"},
@@ -159,12 +158,15 @@ def stream_proxy_timeout() -> httpx.Timeout:
     )
 
 
-def build_stream_proxy_client(user_agent: Optional[str] = None) -> httpx.AsyncClient:
+def build_stream_proxy_client(user_agent: str | None = None) -> httpx.AsyncClient:
     """Build an AsyncClient with sidecar stream timeout defaults."""
-    client_kwargs = {"timeout": stream_proxy_timeout(), "follow_redirects": True}
-    if user_agent is not None:
-        client_kwargs["headers"] = {"User-Agent": user_agent}
-    return httpx.AsyncClient(**client_kwargs)
+    if user_agent is None:
+        return httpx.AsyncClient(timeout=stream_proxy_timeout(), follow_redirects=True)
+    return httpx.AsyncClient(
+        timeout=stream_proxy_timeout(),
+        follow_redirects=True,
+        headers={"User-Agent": user_agent},
+    )
 
 
 async def build_range_proxy_response(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-
 VIDEO_ID = "dQw4w9WgXcQ"
 STREAM_INFO = {
     "url": "http://cdn/x",
@@ -76,7 +75,9 @@ def _patch_stream_info(monkeypatch, app):
 
 
 def _patch_client_factory(monkeypatch, app, fake_client):
-    factory = lambda user_agent=None: fake_client
+    def factory(user_agent=None):
+        return fake_client
+
     monkeypatch.setattr(
         "common.sidecar_runtime_utils.build_stream_proxy_client", factory
     )

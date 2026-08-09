@@ -294,7 +294,7 @@ def test_find_active_download_job_matches_each_active_status(status):
 
 
 def test_active_statuses_cover_the_full_non_terminal_lifecycle():
-    assert ACTIVE_DOWNLOAD_STATUSES == {"queued", "downloading", "processing"}
+    assert {"queued", "downloading", "processing"} == ACTIVE_DOWNLOAD_STATUSES
 
 
 @pytest.mark.parametrize("status", ["completed", "failed"])

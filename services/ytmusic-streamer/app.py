@@ -17,18 +17,20 @@ user-private operations and per-user cache segmentation for public search.
 import asyncio
 import json
 import os
+import random
 import re
 import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, Optional, Literal, cast
+from typing import Any, Literal, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
-from ytmusicapi import YTMusic, OAuthCredentials
+from ytmusicapi import OAuthCredentials, YTMusic
 
 SERVICES_ROOT = Path(__file__).resolve().parents[1]
 if str(SERVICES_ROOT) not in sys.path:
@@ -53,10 +55,12 @@ from yt_download import (
     bulk_album_metadata,
     classify_youtube_url,
     derive_proxy_audio_container,
-    extract_video_id as _extract_video_id,
     find_active_download_job,
     find_existing_download,
     resolve_download_filepath,
+)
+from yt_download import (
+    extract_video_id as _extract_video_id,
 )
 
 
@@ -83,7 +87,7 @@ def _stamp_audio_tags(filepath: str, tags: dict) -> None:
     tmp_path = f"{root}.tagtmp{ext}"
     cmd = build_tag_rewrite_command(filepath, tags, tmp_path)
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 -- argv comes from a code-owned ffmpeg command builder
             cmd, capture_output=True, text=True, timeout=120
         )
         if result.returncode != 0:
@@ -94,7 +98,7 @@ def _stamp_audio_tags(filepath: str, tags: dict) -> None:
             _safe_remove(tmp_path)
             return
         os.replace(tmp_path, filepath)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.warning(f"Failed to stamp audio tags on {filepath}: {e}")
         _safe_remove(tmp_path)
 
@@ -241,8 +245,6 @@ _USER_AGENT = (
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _ALLOWED_STREAM_QUALITIES = {"LOW", "MEDIUM", "HIGH", "LOSSLESS"}
 
-import random
-
 # ── Stream URL cache (in-memory, URLs expire after ~6h) ────────────
 # Keys are "{user_id}:{video_id}" to isolate per-user sessions
 _stream_cache: dict[str, dict] = {}
@@ -293,14 +295,14 @@ class DeviceCodePollRequest(BaseModel):
 class SearchRequest(BaseModel):
     """Payload for single-query YouTube Music search requests."""
     query: str
-    filter: Optional[Literal["songs", "albums", "artists", "videos"]] = None
+    filter: Literal["songs", "albums", "artists", "videos"] | None = None
     limit: int = 20
 
 
 class BatchSearchQuery(BaseModel):
     """A single query within a batch search request."""
     query: str
-    filter: Optional[Literal["songs", "albums", "artists", "videos"]] = None
+    filter: Literal["songs", "albums", "artists", "videos"] | None = None
     limit: int = 5  # Lower default for batch — we only need top results
 
 
@@ -343,7 +345,12 @@ def _sanitized_http_error(
     detail: str,
 ) -> HTTPException:
     """Log full exception detail; return a generic client-facing HTTPException."""
-    log.error("%s failed: %s", operation, exc, exc_info=True)
+    log.error(
+        "%s failed: %s",
+        operation,
+        exc,
+        exc_info=True,  # noqa: LOG014 -- callers invoke this helper from active exception handlers
+    )
     return HTTPException(status_code=status_code, detail=detail)
 
 def _oauth_file(user_id: str) -> Path:
@@ -428,7 +435,7 @@ def _parse_duration_text_value(value: Any) -> int:
     return 0
 
 
-def _normalize_native_search_item(item: dict) -> Optional[dict]:
+def _normalize_native_search_item(item: dict) -> dict | None:
     """
     Normalize search results into the connector shim shape used by the backend.
     This accepts both native `yt.search()` items and TV-parser candidates.
@@ -466,7 +473,7 @@ def _normalize_native_search_item(item: dict) -> Optional[dict]:
         primary_artist = "Unknown"
 
     album = item.get("album")
-    album_name: Optional[str] = None
+    album_name: str | None = None
     if isinstance(album, dict):
         name = str(album.get("name") or "").strip()
         album_name = name or None
@@ -505,7 +512,7 @@ def _normalize_native_search_item(item: dict) -> Optional[dict]:
 def _native_search(
     yt: YTMusic,
     query: str,
-    filter: Optional[str] = None,
+    filter: Literal["songs", "albums", "artists", "videos"] | None = None,
     limit: int = 20,
 ) -> list[dict]:
     """Execute yt.search() and normalize results to sidecar response shape."""
@@ -532,7 +539,7 @@ def _get_ytmusic(user_id: str) -> YTMusic:
     if oauth_path.exists():
         try:
             # Read the oauth JSON to check if it has custom client credentials
-            oauth_data = json.loads(oauth_path.read_text())
+            json.loads(oauth_path.read_text())
 
             # Build OAuthCredentials if client_id/client_secret are stored alongside
             oauth_creds = None
@@ -727,7 +734,12 @@ def _stream_extraction_http_error(
         "age" in error_str.lower() and "confirm" in error_str.lower()
     )
     if age_restricted:
-        log.error("%s failed: %s", error_label, error, exc_info=True)
+        log.error(
+            "%s failed: %s",
+            error_label,
+            error,
+            exc_info=True,  # noqa: LOG014 -- called while handling the extraction exception
+        )
         return HTTPException(
             status_code=451,
             detail={
@@ -741,7 +753,7 @@ def _stream_extraction_http_error(
     )
 
 
-def _best_audio_stream_url(info: dict) -> Optional[str]:
+def _best_audio_stream_url(info: dict) -> str | None:
     """Return the direct URL or the highest-bitrate audio-only format URL."""
     stream_url = info.get("url")
     if stream_url:
@@ -887,7 +899,7 @@ async def _extract_stream_info_bounded(func, *args) -> dict:
         ) from error
 
 
-def _tv_search(yt: YTMusic, query: str, filter: Optional[str] = None, limit: int = 20) -> list[dict]:
+def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 20) -> list[dict]:
     """
     WORKAROUND(#813) — Custom search parser for the TVHTML5 client.
 
@@ -1169,7 +1181,7 @@ def _clean_stream_cache():
 def _search_cache_key(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: str | None,
     limit: int,
     strategy: Literal["tv", "native"],
 ) -> str:
@@ -1180,10 +1192,10 @@ def _search_cache_key(
 def _get_cached_search(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: str | None,
     limit: int,
     strategy: Literal["tv", "native"],
-) -> Optional[list]:
+) -> list | None:
     """Return cached search results if still valid, else None."""
     key = _search_cache_key(user_id, query, filter_, limit, strategy)
     entry = _search_cache.get(key)
@@ -1198,7 +1210,7 @@ def _get_cached_search(
 def _set_cached_search(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: str | None,
     limit: int,
     strategy: Literal["tv", "native"],
     results: list,
@@ -1216,7 +1228,7 @@ def _set_cached_search(
 def _search_once(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: Literal["songs", "albums", "artists", "videos"] | None,
     limit: int,
     strategy: Literal["tv", "native"],
     use_unauth_client: bool = False,
@@ -1278,7 +1290,7 @@ def _search_once(
 def _search_with_mode_fallback(
     user_id: str,
     query: str,
-    filter_: Optional[str],
+    filter_: Literal["songs", "albums", "artists", "videos"] | None,
     limit: int,
     use_unauth_client: bool = False,
 ) -> tuple[list[dict], Literal["tv", "native"]]:
@@ -1386,11 +1398,10 @@ async def auth_status(user_id: str = Query(...)):
         _get_ytmusic(user_id)
         return {"authenticated": True}
     except Exception as e:
-        log.error(
+        log.exception(
             "Stored credentials failed to load for user %s: %s",
             user_id,
             e,
-            exc_info=True,
         )
         return {
             "authenticated": False,
@@ -1501,17 +1512,16 @@ async def auth_device_code_poll(req: DeviceCodePollRequest, user_id: str = Query
             client_id=req.client_id,
             client_secret=req.client_secret,
         )
-        token = oauth_creds.token_from_code(req.device_code)
+        token = cast(dict[str, Any], oauth_creds.token_from_code(req.device_code))
 
         # Check if we got an error (authorization_pending, slow_down, etc.)
         if "error" in token:
             error = token["error"]
             if error in ("authorization_pending", "slow_down"):
                 return {"status": "pending", "error": error}
-            else:
-                friendly = ERROR_MESSAGES.get(error, f"Authorization failed ({error}). Please try again.")
-                log.error(f"Device code poll error: {error}")
-                return {"status": "error", "error": friendly}
+            friendly = ERROR_MESSAGES.get(error, f"Authorization failed ({error}). Please try again.")
+            log.error(f"Device code poll error: {error}")
+            return {"status": "error", "error": friendly}
 
         # Success — we have a token. Save it for this user.
         DATA_PATH.mkdir(parents=True, exist_ok=True)
@@ -1616,7 +1626,9 @@ async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)):
 
         async with _batch_semaphore:
             # Random delay between requests within the batch
-            delay = random.uniform(BATCH_DELAY_MIN, BATCH_DELAY_MAX)
+            delay = random.uniform(  # noqa: S311 -- request pacing jitter is not security-sensitive
+                BATCH_DELAY_MIN, BATCH_DELAY_MAX
+            )
             await asyncio.sleep(delay)
             try:
                 items, _used_strategy = await asyncio.to_thread(
@@ -1852,7 +1864,7 @@ async def proxy_stream(
     video_id: str,
     user_id: str = Query(...),
     quality: str = "HIGH",
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]  # FastAPI injects Request despite the sentinel default
 ):
     """
     Proxy the audio stream from YouTube. The backend pipes this to the
@@ -1914,7 +1926,10 @@ async def library_songs(user_id: str = Query(...), limit: int = 100, order: str 
             _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_library_songs(limit={limit}, order={order})",
-            func=lambda yt: yt.get_library_songs(limit=limit, order=order),
+            func=lambda yt: yt.get_library_songs(
+                limit=limit,
+                order=cast(Literal["a_to_z", "z_to_a", "recently_added"], order),
+            ),
         )
         items = []
         for s in songs:
@@ -1950,7 +1965,10 @@ async def library_albums(user_id: str = Query(...), limit: int = 100, order: str
             _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_library_albums(limit={limit}, order={order})",
-            func=lambda yt: yt.get_library_albums(limit=limit, order=order),
+            func=lambda yt: yt.get_library_albums(
+                limit=limit,
+                order=cast(Literal["a_to_z", "z_to_a", "recently_added"], order),
+            ),
         )
         items = []
         for a in albums:
@@ -2211,7 +2229,7 @@ async def yt_playlist_info(url: str = Query(...)):
 async def yt_proxy_stream(
     video_id: str,
     quality: str = "HIGH",
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]  # FastAPI injects Request despite the sentinel default
 ):
     """
     Proxy audio stream from a regular YouTube video.
@@ -2261,10 +2279,10 @@ class YtDownloadRequest(BaseModel):
     quality: str = "HIGH"
     # Optional grouping label (e.g. the playlist/channel title) so the
     # downloads view can group a bulk run's jobs by where they came from.
-    source: Optional[str] = None
+    source: str | None = None
     # Bulk source type ("channel" | "playlist"). Only channels are collapsed to
     # a single artist on import; playlists keep each track's native metadata.
-    source_kind: Optional[str] = None
+    source_kind: str | None = None
 
 
 # ── Download job store (in-memory) ──────────────────────────────────
@@ -2310,12 +2328,12 @@ def _prune_yt_download_jobs():
 def _new_yt_download_job(
     video_id: str,
     status: str = "queued",
-    source: Optional[str] = None,
-    source_kind: Optional[str] = None,
+    source: str | None = None,
+    source_kind: str | None = None,
 ) -> dict:
     """Create and register a download job record."""
     _prune_yt_download_jobs()
-    job = {
+    job: dict[str, Any] = {
         "job_id": uuid.uuid4().hex,
         "video_id": video_id,
         "status": status,
@@ -2642,7 +2660,7 @@ async def startup():
 
 # ── Browse (unauthenticated) ────────────────────────────────────────
 
-def _get_browse_ytmusic(user_id: Optional[str] = None) -> YTMusic:
+def _get_browse_ytmusic(user_id: str | None = None) -> YTMusic:
     """Get a YTMusic instance for browse — authenticated if user has OAuth, else public."""
     if user_id and _oauth_file(user_id).exists():
         try:
@@ -2653,7 +2671,7 @@ def _get_browse_ytmusic(user_id: Optional[str] = None) -> YTMusic:
 
 
 @app.get("/charts")
-async def get_charts(country: str = "US", user_id: Optional[str] = Query(None)):
+async def get_charts(country: str = "US", user_id: str | None = Query(None)):
     """Get YT Music charts (top songs, trending, etc.).
 
     Always uses a public (unauthenticated) YTMusic instance because
@@ -2691,7 +2709,7 @@ async def get_charts(country: str = "US", user_id: Optional[str] = Query(None)):
 
 
 @app.get("/moods-and-genres")
-async def get_moods_and_genres(user_id: Optional[str] = Query(None)):
+async def get_moods_and_genres(user_id: str | None = Query(None)):
     """Get YT Music mood/genre categories.
 
     Always uses a public (unauthenticated) YTMusic instance because
@@ -2723,7 +2741,7 @@ async def get_moods_and_genres(user_id: Optional[str] = Query(None)):
 
 
 @app.get("/home")
-async def get_home(limit: int = Query(6, ge=1, le=20), user_id: Optional[str] = Query(None)):
+async def get_home(limit: int = Query(6, ge=1, le=20), user_id: str | None = Query(None)):
     """Get YT Music home page shelves (featured/curated content).
 
     Always uses a public (unauthenticated) YTMusic instance because
@@ -2807,7 +2825,7 @@ async def get_browse_album(browse_id: str):
 
 
 @app.get("/mood-playlists")
-async def get_mood_playlists(params: str = Query(..., min_length=1, max_length=512), user_id: Optional[str] = Query(None)):
+async def get_mood_playlists(params: str = Query(..., min_length=1, max_length=512), user_id: str | None = Query(None)):
     """Get playlists for a specific mood/genre category.
 
     Uses a custom browse implementation instead of ytmusicapi's
@@ -2862,14 +2880,14 @@ async def get_mood_playlists(params: str = Query(..., min_length=1, max_length=5
 async def get_playlist(
     playlist_id: str,
     limit: int = 100,
-    user_id: Optional[str] = Query(None),
+    user_id: str | None = Query(None),
 ):
     """Get a YT Music playlist with track details.
 
     When ``user_id`` is provided, prefers authenticated browse context and
     falls back to public browse if authenticated fetch fails.
     """
-    auth_error: Optional[Exception] = None
+    auth_error: Exception | None = None
     try:
         if user_id and user_id != "__public__":
             try:
@@ -2950,11 +2968,11 @@ def _fetch_mood_playlists(yt: YTMusic, params: str) -> list[dict]:
     silently skipped instead of taking down the whole request.
     """
     from ytmusicapi.navigation import (
-        nav,
-        SINGLE_COLUMN_TAB,
-        SECTION_LIST,
         CAROUSEL_CONTENTS,
         GRID_ITEMS,
+        SECTION_LIST,
+        SINGLE_COLUMN_TAB,
+        nav,
     )
     from ytmusicapi.parsers._utils import MTRIR
     from ytmusicapi.parsers.browsing import parse_playlist
@@ -2981,14 +2999,14 @@ def _fetch_mood_playlists(yt: YTMusic, params: str) -> list[dict]:
                 continue
             try:
                 playlists.append(parse_playlist(result[MTRIR]))
-            except Exception:
+            except Exception:  # noqa: S112 -- malformed third-party playlist items are intentionally skipped
                 # Skip items that lack required fields (e.g. music videos
                 # without a browse navigation endpoint)
                 continue
     return playlists
 
 
-def _best_thumbnail(thumbnails: list) -> Optional[str]:
+def _best_thumbnail(thumbnails: list) -> str | None:
     """Pick the best available thumbnail URL."""
     if not thumbnails:
         return None
@@ -3024,4 +3042,4 @@ async def shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8586)
+    uvicorn.run(app, host="0.0.0.0", port=8586)  # noqa: S104 -- container service must accept pod traffic

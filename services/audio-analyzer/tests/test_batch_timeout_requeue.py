@@ -1,15 +1,14 @@
 """Red-phase contracts for audio analyzer batch-timeout reliability."""
 
-from concurrent.futures import Future
 import importlib.util
-import json
-from pathlib import Path
 import sys
+from collections.abc import Iterator
+from concurrent.futures import Future
+from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
-
 
 ANALYZER_PATH = Path(__file__).resolve().parents[1] / "analyzer.py"
 

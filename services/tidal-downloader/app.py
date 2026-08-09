@@ -13,15 +13,15 @@ query-parameter support retained for one release.
 """
 
 import asyncio
-import json
 import logging
 import os
 import shutil
 import sys
 import time
 from base64 import b64decode
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, NamedTuple, Optional, Literal
+from typing import Any, Literal, NamedTuple
 from xml.etree.ElementTree import fromstring as xml_fromstring
 
 import httpx
@@ -41,14 +41,13 @@ from common.sidecar_runtime_utils import (
     register_error_handlers,
     require_internal_secret,
 )
+from tiddl.core.api import ApiError, TidalAPI, TidalClient
 
 # ── tiddl core imports ──────────────────────────────────────────────
 from tiddl.core.auth import AuthAPI, AuthClientError
-from tiddl.core.auth.client import AuthClient
-from tiddl.core.api import TidalAPI, TidalClient, ApiError
-from tiddl.core.utils import get_track_stream_data, parse_track_stream
+from tiddl.core.metadata import Cover, add_track_metadata
+from tiddl.core.utils import parse_track_stream
 from tiddl.core.utils.format import format_template
-from tiddl.core.metadata import add_track_metadata, Cover
 
 # ── Logging ─────────────────────────────────────────────────────────
 log = configure_service_logger("tidal-downloader")
@@ -162,7 +161,7 @@ def _build_browse_session(user_id: str, quality: str | None = None) -> tidalapi.
 
     session = tidalapi.Session(tidalapi.Config(quality=api_quality))
     session.load_oauth_session(
-        token_type="Bearer",
+        token_type="Bearer",  # noqa: S106 -- OAuth token scheme, not a credential
         access_token=creds["access_token"],
         refresh_token=creds.get("refresh_token"),
         expiry_time=None,
@@ -249,7 +248,7 @@ class UserAuthRestoreRequest(BaseModel):
 class BatchSearchQuery(BaseModel):
     """Single query descriptor for batch TIDAL search requests."""
     query: str
-    filter: Optional[str] = None
+    filter: str | None = None
     limit: int = 5
 
 
@@ -265,7 +264,7 @@ class AdminCredentials(NamedTuple):
 # Helpers
 # ════════════════════════════════════════════════════════════════════
 
-def _parse_bearer_token(authorization: Optional[str]) -> Optional[str]:
+def _parse_bearer_token(authorization: str | None) -> str | None:
     """Return a nonempty bearer token from an Authorization header."""
     if not authorization:
         return None
@@ -276,9 +275,9 @@ def _parse_bearer_token(authorization: Optional[str]) -> Optional[str]:
 
 
 def require_admin_credentials(
-    authorization: Optional[str] = Header(None),
-    x_tidal_user_id: Optional[str] = Header(None),
-    x_tidal_country_code: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
+    x_tidal_user_id: str | None = Header(None),
+    x_tidal_country_code: str | None = Header(None),
     access_token: str = Query(""),
     user_id: str = Query(""),
     country_code: str = Query("US"),
@@ -310,7 +309,12 @@ def _sanitized_http_error(
     detail: str,
 ) -> HTTPException:
     """Log full exception detail; return a generic client-facing HTTPException."""
-    log.error("%s failed: %s", operation, exc, exc_info=True)
+    log.error(
+        "%s failed: %s",
+        operation,
+        exc,
+        exc_info=True,  # noqa: LOG014 -- callers invoke this helper from active exception handlers
+    )
     return HTTPException(status_code=status_code, detail=detail)
 
 
@@ -447,7 +451,7 @@ def _get_user_api(user_id: str) -> TidalAPI:
     return api
 
 
-def _normalize_stream_quality(quality: Optional[str]) -> str:
+def _normalize_stream_quality(quality: str | None) -> str:
     """Normalize stream quality values to supported tiddl literals."""
     normalized = (quality or "HIGH").strip().upper()
     if normalized == "MAX":
@@ -457,8 +461,8 @@ def _normalize_stream_quality(quality: Optional[str]) -> str:
 
 def _clear_stream_cache(
     user_id: str,
-    track_id: Optional[int] = None,
-    quality: Optional[str] = None,
+    track_id: int | None = None,
+    quality: str | None = None,
 ):
     """Clear cached stream URLs for a user, optionally scoped by track/quality."""
     normalized_quality = (
@@ -613,7 +617,7 @@ def _parse_dash_mpd(manifest_b64: str):
         if len(raw) > _MAX_MANIFEST_BYTES:
             log.warning("DASH manifest exceeds size cap (%d bytes)", len(raw))
             return None
-        return xml_fromstring(raw.decode())
+        return xml_fromstring(raw.decode())  # noqa: S314 -- input is size-bounded and only queried, not expanded
     except Exception as exc:
         log.debug("Failed to parse DASH MPD manifest: %s", exc)
         return None
@@ -712,7 +716,7 @@ def _get_stream_url_sync(user_id: str, track_id: int, quality: str = "HIGH") -> 
         # and seeking works correctly.
         init_url = _extract_dash_init_url(stream.manifest)
         if init_url:
-            urls = [init_url] + urls
+            urls = [init_url, *urls]
             log.info(
                 "Prepended DASH init segment for track %s (%d total segments)",
                 track_id,
@@ -1109,7 +1113,7 @@ _ALBUM_PAGE_HARD_CAP = 1000
 
 def _get_album_tracks(api: TidalAPI, album_id: int) -> list[Any]:
     """Fetch downloadable album tracks with bounded offset pagination."""
-    assert album_id is not None
+    assert album_id is not None  # noqa: S101 -- internal typed invariant before paginated API calls
 
     tracks = []
     offset = 0
@@ -1176,7 +1180,7 @@ async def download_track(
     api = _build_api(creds.access_token, creds.user_id, creds.country_code)
 
     try:
-        result = await asyncio.to_thread(
+        return await asyncio.to_thread(
             _download_track_sync,
             api=api,
             track_id=req.track_id,
@@ -1184,7 +1188,6 @@ async def download_track(
             output_template=req.output_template,
             dest_base=MUSIC_PATH,
         )
-        return result
     except ApiError as e:
         raise _sanitized_http_error(
             f"TIDAL API download for track {req.track_id}",
@@ -1471,7 +1474,7 @@ async def user_stream_proxy(
     track_id: int,
     user_id: str = Query(...),
     quality: str = "HIGH",
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]  # FastAPI injects Request despite the sentinel default
 ):
     """
     Proxy the audio stream from TIDAL. The Node.js backend pipes this
@@ -1947,7 +1950,7 @@ async def user_browse_mix(
         session = _build_browse_session(user_id, quality)
         mix = await asyncio.to_thread(session.mix, mix_id)
         tracks = await asyncio.to_thread(mix.items)
-        result = {
+        return {
             "id": str(mix.id),
             "title": getattr(mix, "title", "") or "",
             "subTitle": getattr(mix, "sub_title", "") or "",
@@ -1955,7 +1958,6 @@ async def user_browse_mix(
             "trackCount": len(tracks) if tracks else 0,
             "tracks": [_serialize_track(t) for t in (tracks or [])],
         }
-        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -1965,4 +1967,4 @@ async def user_browse_mix(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8585)
+    uvicorn.run(app, host="0.0.0.0", port=8585)  # noqa: S104 -- container service must accept pod traffic

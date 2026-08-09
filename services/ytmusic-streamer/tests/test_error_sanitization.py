@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-
 MARKER = "sekrit-yt-abc123"
 LOGGER_NAME = "ytmusic-streamer"
 

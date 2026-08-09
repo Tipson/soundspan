@@ -11,7 +11,7 @@ the final output path from a yt-dlp info dict.
 import glob
 import os
 import re
-from typing import Any, Optional
+from typing import Any
 
 # Audio file extensions produced by the download postprocessors (plus raw
 # bestaudio containers in case postprocessing is skipped).
@@ -21,7 +21,7 @@ AUDIO_EXTENSIONS = {".mp3", ".opus", ".flac", ".m4a", ".ogg", ".webm"}
 ACTIVE_DOWNLOAD_STATUSES = {"queued", "downloading", "processing"}
 
 
-def find_active_download_job(jobs: dict, video_id: str) -> Optional[dict]:
+def find_active_download_job(jobs: dict, video_id: str) -> dict | None:
     """
     Return a non-terminal download job for video_id from the in-memory job
     store, or None. POST /yt/download reuses such a job instead of starting
@@ -70,7 +70,7 @@ _VIDEO_ID_PATTERNS = [
 ]
 
 
-def _match_video_id(url: str) -> Optional[str]:
+def _match_video_id(url: str) -> str | None:
     """Return the 11-char video ID for a single-video URL/bare ID, else None."""
     for pattern in _VIDEO_ID_PATTERNS:
         match = re.search(pattern, url)
@@ -193,7 +193,7 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
     yt-dlp's reported playlist_count exceeds what we kept after a fetch cap).
     Tolerant of malformed input (returns an empty summary).
     """
-    empty = {
+    empty: dict[str, Any] = {
         "title": "",
         "uploader": "",
         "totalCount": None,
@@ -246,8 +246,8 @@ def build_playlist_entries(info: Any, max_entries: int) -> dict:
 
 
 def bulk_album_metadata(
-    source: Optional[str], kind: Optional[str] = None
-) -> Optional[dict]:
+    source: str | None, kind: str | None = None
+) -> dict | None:
     """
     Audio tags to stamp on a bulk-download file so a *channel's* videos group
     under one artist/album instead of each video's own (often per-DJ) YouTube
@@ -306,7 +306,7 @@ def build_tag_rewrite_command(
     return cmd
 
 
-def find_existing_download(output_dir: str, video_id: str) -> Optional[str]:
+def find_existing_download(output_dir: str, video_id: str) -> str | None:
     """
     Return the path of an already-downloaded audio file for video_id in
     output_dir, or None. Files are written as "%(title)s [%(id)s].%(ext)s",
@@ -327,7 +327,7 @@ def find_existing_download(output_dir: str, video_id: str) -> Optional[str]:
     return matches[0] if matches else None
 
 
-def resolve_download_filepath(info: Any, audio_format: str) -> Optional[str]:
+def resolve_download_filepath(info: Any, audio_format: str) -> str | None:
     """
     Resolve the final output file from a yt-dlp info dict after a download.
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-
 VALID_ID = "dQw4w9WgXcQ"
 
 

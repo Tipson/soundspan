@@ -1,10 +1,9 @@
 """Shared environment parsing and thread-env configuration for analyzers."""
 
 import os
-from typing import Union
 
 
-def get_int_env(name: str, default: Union[int, str]) -> int:
+def get_int_env(name: str, default: int | str) -> int:
     """Read an integer env var with the same semantics as int(os.getenv(...))."""
     return int(os.getenv(name, str(default)))
 

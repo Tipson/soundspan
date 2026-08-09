@@ -20,19 +20,20 @@ Architecture:
 - Supervised main loop: Detects failed service threads and manages idle unloading
 """
 
-import os
-import sys
-import signal
-import json
-import time
 import gc
+import json
+import os
+import signal
+import sys
 import threading
-import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+import time
 import traceback
-import numpy as np
+import uuid
+from datetime import UTC, datetime
+from typing import Any
+
 import librosa
+import numpy as np
 import requests
 
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -47,18 +48,19 @@ for _root in _POTENTIAL_PROJECT_ROOTS:
             sys.path.insert(0, _root)
         break
 
-from services.common.logging_utils import configure_service_logger
 from services.common.analyzer_env import (
     configure_thread_env,
     get_blocking_socket_timeout,
     get_int_env,
 )
+from services.common.logging_utils import configure_service_logger
 
 # CPU thread limiting must be set before importing torch
 THREADS_PER_WORKER = get_int_env('THREADS_PER_WORKER', 1)
 configure_thread_env(THREADS_PER_WORKER)
 
 import torch
+
 torch.set_num_threads(THREADS_PER_WORKER)
 
 # Device detection - use GPU if available
@@ -69,10 +71,10 @@ else:
     DEVICE = torch.device('cpu')
     GPU_NAME = None
 
-import redis
 import psycopg2
-from psycopg2.extras import RealDictCursor
+import redis
 from pgvector.psycopg2 import register_vector
+from psycopg2.extras import RealDictCursor
 
 logger = configure_service_logger('clap-analyzer')
 
@@ -173,7 +175,7 @@ class CLAPAnalyzer:
             try:
                 import ctypes
                 ctypes.CDLL("libc.so.6").malloc_trim(0)
-            except Exception:
+            except Exception:  # noqa: S110 -- releasing libc pages is optional best-effort cleanup
                 pass
             logger.info("CLAP model unloaded")
 
@@ -183,7 +185,7 @@ class CLAPAnalyzer:
             logger.info("Reloading CLAP model (new work arrived)...")
             self.load_model()
 
-    def _load_audio_chunk(self, audio_path: str, duration_hint: Optional[float] = None) -> Tuple[Optional[np.ndarray], int]:
+    def _load_audio_chunk(self, audio_path: str, duration_hint: float | None = None) -> tuple[np.ndarray | None, int]:
         """
         Load audio from the middle of a file for efficient embedding.
 
@@ -222,7 +224,7 @@ class CLAPAnalyzer:
             traceback.print_exc()
             return None, 0
 
-    def get_audio_embedding(self, audio_path: str, duration: Optional[float] = None) -> Optional[np.ndarray]:
+    def get_audio_embedding(self, audio_path: str, duration: float | None = None) -> np.ndarray | None:
         """
         Generate a 512-dimensional embedding from an audio file.
 
@@ -275,7 +277,7 @@ class CLAPAnalyzer:
             traceback.print_exc()
             return None
 
-    def get_text_embedding(self, text: str) -> Optional[np.ndarray]:
+    def get_text_embedding(self, text: str) -> np.ndarray | None:
         """
         Generate a 512-dimensional embedding from a text query.
 
@@ -374,9 +376,9 @@ class DatabaseConnection:
 
     def close(self):
         if self.conn:
-            try:
+            try:  # noqa: SIM105 -- connection cleanup must remain best effort
                 self.conn.close()
-            except Exception:
+            except Exception:  # noqa: S110 -- connection cleanup must remain best effort
                 pass
             self.conn = None
 
@@ -411,9 +413,9 @@ class Worker:
 
             while not self.stop_event.is_set():
                 # Publish heartbeat for feature detection
-                try:
+                try:  # noqa: SIM105 -- heartbeat failure must not stop analysis
                     self.redis_client.set("clap:worker:heartbeat", str(int(time.time() * 1000)))
-                except Exception:
+                except Exception:  # noqa: S110 -- heartbeat failure must not stop analysis
                     pass  # Heartbeat is informational, don't crash on Redis failure
 
                 try:
@@ -487,7 +489,7 @@ class Worker:
                     "vibeAnalysisStatus" = %s,
                     "vibeAnalysisStatusUpdatedAt" = %s
                 WHERE id = %s
-            """, (status, datetime.now(timezone.utc), track_id))
+            """, (status, datetime.now(UTC), track_id))
             self.db.commit()
         except Exception as e:
             logger.error(f"Failed to update track vibe status: {e}")
@@ -512,7 +514,7 @@ class Worker:
                     "vibeAnalysisRetryCount" = COALESCE("vibeAnalysisRetryCount", 0) + 1,
                     "vibeAnalysisStatusUpdatedAt" = %s
                 WHERE id = %s
-            """, (error[:500], datetime.now(timezone.utc), track_id))
+            """, (error[:500], datetime.now(UTC), track_id))
             self.db.commit()
             logger.error(f"Track {track_id} failed: {error}")
 
@@ -557,7 +559,7 @@ class Worker:
                     embedding = EXCLUDED.embedding,
                     model_version = EXCLUDED.model_version,
                     analyzed_at = EXCLUDED.analyzed_at
-            """, (track_id, embedding_list, MODEL_VERSION, datetime.now(timezone.utc)))
+            """, (track_id, embedding_list, MODEL_VERSION, datetime.now(UTC)))
 
             self.db.commit()
             return True
@@ -717,7 +719,7 @@ class TextEmbedHandler:
             fallback.expire(response_key, TEXT_EMBED_RESPONSE_TTL_SECONDS)
             fallback.execute()
 
-    def _handle_message(self, message_id: str, fields: Dict[str, str]):
+    def _handle_message(self, message_id: str, fields: dict[str, str]):
         """Handle a single text embedding stream message."""
         request_id = None
         response_key = None
@@ -819,7 +821,7 @@ class ControlHandler:
                 self.pubsub.close()
             logger.info("ControlHandler stopped")
 
-    def _handle_message(self, message: Dict[str, Any]):
+    def _handle_message(self, message: dict[str, Any]):
         """Handle a control message"""
         try:
             data = message['data']

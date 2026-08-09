@@ -7,7 +7,6 @@ import time
 
 import pytest
 
-
 VIDEO_ID = "dQw4w9WgXcQ"
 
 
