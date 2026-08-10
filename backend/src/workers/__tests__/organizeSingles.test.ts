@@ -18,7 +18,9 @@ describe("organizeSingles worker", () => {
         const logger = {
             debug: jest.fn(),
             error: jest.fn(),
+            child: jest.fn(),
         };
+        logger.child.mockReturnValue(logger);
         const sessionLog = jest.fn();
         const prisma = {
             downloadJob: {
@@ -103,7 +105,7 @@ describe("organizeSingles worker", () => {
                 module.queueOrganizeSingles(),
             ).resolves.toBeUndefined();
             expect(logger.error).toHaveBeenCalledWith(
-                "[ORGANIZE] Organization failed:",
+                "Organization failed:",
                 "MUSIC_PATH is not set. Cannot organize downloads.",
             );
         } finally {
@@ -185,9 +187,7 @@ describe("organizeSingles worker", () => {
         const { module, logger } = loadOrganizeSingles();
         await module.queueOrganizeSingles();
 
-        expect(logger.debug).toHaveBeenCalledWith(
-            "[ORGANIZE] Organization complete",
-        );
+        expect(logger.debug).toHaveBeenCalledWith("Organization complete");
     });
 
     it("swallows legacy cleanup lookup failures and logs warning", async () => {
