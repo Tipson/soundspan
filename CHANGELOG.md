@@ -744,6 +744,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Account-management, 2FA, Subsonic-credential, admin queue-dashboard, and
+  playback-state sync routes now have route-level rate limiting; playback-state
+  uses a generous dedicated tier for its high-frequency cadence, and invite
+  codes use unbiased cryptographic random character selection.
 - Hardened external-metadata escaping for Deezer and Spotify, and replaced
   backtracking-prone normalization regexes with linear forms in Soulseek,
   search, and Lidarr.
