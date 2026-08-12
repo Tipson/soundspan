@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Mypy now runs in strict mode with enumerated, justified per-module exceptions;
+  tidal-downloader and ytmusic-streamer are fully strict, including their tests.
 - Consolidated environment configuration reads into the backend config module
   for 20 more production files; the config-boundary allowlist shrank from 39
   files to 19.
