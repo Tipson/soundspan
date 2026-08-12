@@ -734,6 +734,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Cover-image storage operations validate IDs and contain all filesystem paths
+  under the type-specific covers directory.
 - Account-management, 2FA, and Subsonic-credential routes now have dedicated
   route-level rate limiting, and invite codes use unbiased cryptographic random
   character selection.
