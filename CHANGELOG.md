@@ -333,6 +333,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Queue auto-advance no longer stalls at track boundaries: engine listeners
+  remain attached across playback state changes so end events cannot be dropped,
+  a one-shot watchdog advances tracks if an end event is ever lost, and
+  end-handling telemetry is now visible server-side.
 - Cover art (browse thumbnails, native library covers, podcast/audiobook covers)
   and segmented-streaming files no longer return 404 when the configured cache
   path contains a dot-segment directory such as `/music/.soundspan`.
