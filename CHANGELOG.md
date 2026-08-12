@@ -32,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed playback telemetry so log names match their emitters:
+  `player.howler_startup` → `player.engine_startup`;
+  `route.client.signal` / `[SegmentedStreaming.Trace]` →
+  `playback.client.signal` / `[Playback.Trace]` for client signals; and
+  `[SegmentedStreaming][Metric] client.signal` →
+  `[Playback.Metric] client.signal`, with client-ingestion errors moving from
+  the `[SegmentedStreaming]` scope to `[Playback]`. Genuinely segmented
+  manifest, segment, session, and DASH lifecycle telemetry keeps its existing
+  names.
 - Split the library routes into named, per-resource sub-routers while preserving
   the `/api/library` mount surface and registration order, completing #124.
 - Extracted the library route helpers into typed utility modules as the first
