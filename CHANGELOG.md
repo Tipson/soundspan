@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Consolidated component network calls behind the frontend API layer and added
+  a boundary ratchet that prevents new direct `fetch()` calls in frontend app,
+  component, and feature modules.
 - Mypy now runs in strict mode with enumerated, justified per-module exceptions;
   tidal-downloader and ytmusic-streamer are fully strict, including their tests.
 - Consolidated environment configuration reads into the backend config module
