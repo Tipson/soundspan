@@ -26,6 +26,9 @@ const prisma = {
     album: {
         findUnique: jest.fn(),
     },
+    track: {
+        findFirst: jest.fn(),
+    },
     cachedTrack: {
         aggregate: jest.fn(),
         upsert: jest.fn(),
@@ -44,6 +47,7 @@ import { prisma as prismaClient } from "../../utils/db";
 const mockUserSettingsFindUnique = prismaClient.userSettings
     .findUnique as jest.Mock;
 const mockAlbumFindUnique = prismaClient.album.findUnique as jest.Mock;
+const mockTrackFindFirst = prismaClient.track.findFirst as jest.Mock;
 const mockCachedTrackAggregate = prismaClient.cachedTrack
     .aggregate as jest.Mock;
 const mockCachedTrackUpsert = prismaClient.cachedTrack.upsert as jest.Mock;
@@ -117,6 +121,7 @@ describe("offline routes runtime", () => {
                 },
             ],
         });
+        mockTrackFindFirst.mockResolvedValue({ id: "t1" });
         mockCachedTrackAggregate.mockResolvedValue({
             _sum: { fileSizeMb: 100 },
             _count: 2,
@@ -138,6 +143,7 @@ describe("offline routes runtime", () => {
                 track: {
                     id: "t1",
                     title: "Track 1",
+                    removedAt: null,
                     album: {
                         id: "album-1",
                         title: "Album One",
@@ -157,6 +163,7 @@ describe("offline routes runtime", () => {
                 track: {
                     id: "t2",
                     title: "Track 2",
+                    removedAt: null,
                     album: {
                         id: "album-1",
                         title: "Album One",
@@ -187,6 +194,7 @@ describe("offline routes runtime", () => {
             where: { id: "album-1" },
             include: {
                 tracks: {
+                    where: { removedAt: null },
                     orderBy: [{ discNo: "asc" }, { trackNo: "asc" }],
                 },
                 artist: {
@@ -423,6 +431,11 @@ describe("offline routes runtime", () => {
 
         await postTrackComplete(req, res);
 
+        expect(mockTrackFindFirst).toHaveBeenCalledWith({
+            where: { id: "t1", removedAt: null },
+            select: { id: true },
+        });
+
         expect(mockCachedTrackUpsert).toHaveBeenCalledWith({
             where: {
                 userId_trackId_quality: {
@@ -448,6 +461,25 @@ describe("offline routes runtime", () => {
         expect(res.body).toEqual(
             expect.objectContaining({ id: "cached-1", trackId: "t1" }),
         );
+    });
+
+    it("returns 404 without caching a removed track", async () => {
+        mockTrackFindFirst.mockResolvedValueOnce(null);
+        const req = {
+            user: { id: "u1" },
+            params: { id: "removed-track" },
+            body: {
+                localPath: "/cache/removed.flac",
+                quality: "high",
+                fileSizeMb: 12,
+            },
+        } as any;
+        const res = createRes();
+
+        await postTrackComplete(req, res);
+
+        expect(res.statusCode).toBe(404);
+        expect(mockCachedTrackUpsert).not.toHaveBeenCalled();
     });
 
     it("returns 500 when a completed track upsert fails", async () => {
@@ -514,6 +546,38 @@ describe("offline routes runtime", () => {
                 ]),
             }),
         );
+    });
+
+    it("evicts and omits cached rows for removed tracks", async () => {
+        mockCachedTrackFindMany.mockResolvedValueOnce([
+            {
+                id: "cached-removed",
+                localPath: "/music/removed.flac",
+                quality: "original",
+                fileSizeMb: 20,
+                track: {
+                    id: "removed-track",
+                    title: "Removed",
+                    removedAt: new Date("2026-01-01T00:00:00.000Z"),
+                    album: {
+                        id: "album-1",
+                        title: "Album One",
+                        artist: { id: "artist-1", name: "Artist One" },
+                    },
+                },
+            },
+        ]);
+        const req = {
+            user: { id: "u1", username: "u1", role: "user" },
+        } as any;
+        const res = createRes();
+
+        await getAlbums(req, res);
+
+        expect(mockCachedTrackDeleteMany).toHaveBeenCalledWith({
+            where: { id: { in: ["cached-removed"] }, userId: "u1" },
+        });
+        expect(res.body).toEqual([]);
     });
 
     it("returns 500 when cached albums query fails", async () => {

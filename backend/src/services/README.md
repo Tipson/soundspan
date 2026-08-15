@@ -53,6 +53,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/itunes.ts` | Core |
 | `backend/src/services/lastfm.ts` | Core |
 | `backend/src/services/libraryRadioBuilder.ts` | Core |
+| `backend/src/services/libraryOrphanCleanup.ts` | Deletes catalog parents after their final track row is purged |
 | `backend/src/services/libraryTrackPreferences.ts` | Core |
 | `backend/src/services/lidarr.ts` | Core |
 | `backend/src/services/listenTogether.ts` | Core |
@@ -100,8 +101,10 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/tidalStreaming.ts` | Core |
 | `backend/src/services/trackMappingService.ts` | Core |
 | `backend/src/services/trackEmbeddings.ts` | Vibe embedding reads |
+| `backend/src/services/trackIdentityMatcher.ts` | Durable track move identity matching |
 | `backend/src/services/trackPreference.ts` | Core |
 | `backend/src/services/trackReconciliation.ts` | Core |
+| `backend/src/services/trackReplacement.ts` | Replacement analysis and transcode invalidation |
 | `backend/src/services/umapProjection.ts` | Core |
 | `backend/src/services/unifiedTrackResponse.ts` | Core |
 | `backend/src/services/vibeAnalysisCleanup.ts` | Core |

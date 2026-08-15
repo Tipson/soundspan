@@ -1,5 +1,6 @@
 import { addMonths, endOfWeek, startOfWeek, subDays } from "date-fns";
 import { prisma } from "../../utils/db";
+import { TRACK_VISIBLE_WHERE } from "../../utils/librarySorting";
 import { logger } from "../../utils/logger";
 import { discoverySeeding } from "./discoverySeeding";
 import {
@@ -330,6 +331,7 @@ export class DiscoveryRecommendationsService {
 
         const candidateTracks = await prisma.track.findMany({
             where: {
+                ...TRACK_VISIBLE_WHERE,
                 duration: { gt: 0 },
                 ...(recentTrackIds.length > 0
                     ? { id: { notIn: recentTrackIds } }
@@ -477,6 +479,7 @@ export class DiscoveryRecommendationsService {
         if (selected.length < targetCount) {
             const fallbackTracks = await prisma.track.findMany({
                 where: {
+                    ...TRACK_VISIBLE_WHERE,
                     duration: { gt: 0 },
                     id: { notIn: Array.from(selectedTrackIds) },
                     album: {
@@ -740,9 +743,7 @@ export class DiscoveryRecommendationsService {
 
         const libraryTracks = trackIds.length
             ? await prisma.track.findMany({
-                  where: {
-                      id: { in: trackIds },
-                  },
+                  where: { ...TRACK_VISIBLE_WHERE, id: { in: trackIds } },
                   include: {
                       album: {
                           include: {

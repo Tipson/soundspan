@@ -1,5 +1,7 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
+import { TRACK_VISIBLE_WHERE } from "../utils/librarySorting";
 import { normalizeArtistName } from "../utils/artistNormalization";
 import { lastFmService } from "./lastfm";
 import { moodBucketService } from "./moodBucketService";
@@ -236,6 +238,7 @@ async function findTracksByGenrePatterns(
 
     const tracks = await prisma.track.findMany({
         where: {
+            ...TRACK_VISIBLE_WHERE,
             OR: [
                 { lastfmTags: { hasSome: tagPatterns } },
                 { essentiaGenres: { hasSome: tagPatterns } },
@@ -271,6 +274,7 @@ async function findTracksByGenrePatterns(
     while (genreMatched.length + tracks.length < limit) {
         const albumTracks = await prisma.track.findMany({
             where: {
+                ...TRACK_VISIBLE_WHERE,
                 album: {
                     OR: [
                         { genres: { not: { equals: null } } },
@@ -357,6 +361,12 @@ export class ProgrammaticPlaylistService {
     private readonly MAX_TRACKS_PER_ARTIST = 2;
     private readonly MAX_RELAXED_TRACKS_PER_ARTIST = 4;
     private readonly ARTIST_SIMILAR_FETCH_LIMIT = 20;
+
+    private trackWhere(
+        where: Prisma.TrackWhereInput | undefined = {},
+    ): Prisma.TrackWhereInput {
+        return { ...(where ?? {}), ...TRACK_VISIBLE_WHERE };
+    }
 
     // Track count thresholds for mix generation
     private readonly MIN_TRACKS_DAILY = 8; // Minimum to generate a daily mix
@@ -457,7 +467,7 @@ export class ProgrammaticPlaylistService {
 
         const selectedIds = new Set(selectedTracks.map((track) => track.id));
         const fallbackTracks = (await prisma.track.findMany({
-            where: { id: { notIn: Array.from(selectedIds) } },
+            where: this.trackWhere({ id: { notIn: Array.from(selectedIds) } }),
             include: {
                 album: {
                     select: {
@@ -843,7 +853,7 @@ export class ProgrammaticPlaylistService {
     ): Promise<ProgrammaticMix | null> {
         // Get all decades
         const albums = await prisma.album.findMany({
-            where: { tracks: { some: {} } },
+            where: { tracks: { some: TRACK_VISIBLE_WHERE } },
             select: { year: true, originalYear: true, displayYear: true },
         });
 
@@ -865,9 +875,9 @@ export class ProgrammaticPlaylistService {
 
         // Get ALL tracks from this decade
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 album: getDecadeWhereClause(selectedDecade),
-            },
+            }),
             include: {
                 album: {
                     select: {
@@ -941,7 +951,10 @@ export class ProgrammaticPlaylistService {
 
         // Get ALL tracks from this genre
         const trackGenres = await prisma.trackGenre.findMany({
-            where: { genreId: selectedGenre.id },
+            where: {
+                genreId: selectedGenre.id,
+                track: { removedAt: null },
+            },
             include: {
                 track: {
                     include: {
@@ -1035,7 +1048,7 @@ export class ProgrammaticPlaylistService {
             return null;
         }
         const tracks = await prisma.track.findMany({
-            where: { id: { in: trackIds } },
+            where: this.trackWhere({ id: { in: trackIds } }),
             include: {
                 album: {
                     select: {
@@ -1074,7 +1087,9 @@ export class ProgrammaticPlaylistService {
                 selectedTracks.map((track) => track.id),
             );
             const fallbackTracks = await prisma.track.findMany({
-                where: { id: { notIn: Array.from(selectedIds) } },
+                where: this.trackWhere({
+                    id: { notIn: Array.from(selectedIds) },
+                }),
                 include: {
                     album: {
                         select: {
@@ -1140,10 +1155,11 @@ export class ProgrammaticPlaylistService {
             );
 
         const candidateTracks = await prisma.track.findMany({
-            where:
+            where: this.trackWhere(
                 overplayedIds.length > 0
                     ? { id: { notIn: overplayedIds } }
                     : undefined,
+            ),
             include: {
                 _count: {
                     select: {
@@ -1274,6 +1290,7 @@ export class ProgrammaticPlaylistService {
                     albums: {
                         include: {
                             tracks: {
+                                where: TRACK_VISIBLE_WHERE,
                                 include: {
                                     album: {
                                         select: {
@@ -1341,7 +1358,7 @@ export class ProgrammaticPlaylistService {
         today: string,
     ): Promise<ProgrammaticMix | null> {
         const totalAlbums = await prisma.album.count({
-            where: { tracks: { some: {} } },
+            where: { tracks: { some: TRACK_VISIBLE_WHERE } },
         });
 
         if (totalAlbums < 10) return null;
@@ -1350,9 +1367,10 @@ export class ProgrammaticPlaylistService {
         const seed = getSeededRandom(`random-${today}`) % totalAlbums;
 
         const randomAlbums = await prisma.album.findMany({
-            where: { tracks: { some: {} } },
+            where: { tracks: { some: TRACK_VISIBLE_WHERE } },
             include: {
                 tracks: {
+                    where: TRACK_VISIBLE_WHERE,
                     include: {
                         album: {
                             select: {
@@ -1466,7 +1484,7 @@ export class ProgrammaticPlaylistService {
         // Strategy 3: Audio analysis (high energy, high danceability)
         if (tracks.length < 15) {
             const audioTracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     OR: [
                         { danceability: { gte: 0.7 } },
@@ -1477,7 +1495,7 @@ export class ProgrammaticPlaylistService {
                             ],
                         },
                     ],
-                },
+                }),
                 include: {
                     album: {
                         select: {
@@ -1538,7 +1556,7 @@ export class ProgrammaticPlaylistService {
     ): Promise<ProgrammaticMix | null> {
         // Strategy 1: Enhanced mode - ML moodRelaxed prediction
         let tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 analysisMode: "enhanced",
                 analysisVersion: {
@@ -1549,7 +1567,7 @@ export class ProgrammaticPlaylistService {
                     { moodAggressive: { lte: 0.3 } },
                     { energy: { lte: 0.55 } },
                 ],
-            },
+            }),
             include: {
                 album: {
                     select: {
@@ -1569,7 +1587,7 @@ export class ProgrammaticPlaylistService {
         if (tracks.length < this.MIN_TRACKS_DAILY) {
             logger.debug(`[CHILL MIX] Falling back to Standard mode`);
             tracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     AND: [
                         // MUST be low-to-moderate energy
@@ -1585,7 +1603,7 @@ export class ProgrammaticPlaylistService {
                             ],
                         },
                     ],
-                },
+                }),
                 include: {
                     album: {
                         select: {
@@ -1688,7 +1706,7 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Enhanced mode - high arousal and energy
         const enhancedTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 analysisMode: "enhanced",
                 analysisVersion: {
@@ -1701,7 +1719,7 @@ export class ProgrammaticPlaylistService {
                     // Not too relaxed
                     { moodRelaxed: { lte: 0.4 } },
                 ],
-            },
+            }),
             include: {
                 album: {
                     select: {
@@ -1721,7 +1739,7 @@ export class ProgrammaticPlaylistService {
         if (tracks.length < 15) {
             logger.debug(`[WORKOUT MIX] Falling back to Standard mode`);
             const audioTracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     OR: [
                         {
@@ -1741,7 +1759,7 @@ export class ProgrammaticPlaylistService {
                             },
                         },
                     ],
-                },
+                }),
                 include: {
                     album: {
                         select: {
@@ -1913,11 +1931,11 @@ export class ProgrammaticPlaylistService {
         // Strategy 3: Audio analysis (high instrumentalness, moderate energy)
         if (tracks.length < 15) {
             const audioTracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     instrumentalness: { gte: 0.5 },
                     energy: { gte: 0.2, lte: 0.7 },
-                },
+                }),
                 include: {
                     album: {
                         select: {
@@ -1987,11 +2005,11 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Audio analysis
         const audioTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 energy: { gte: 0.7 },
                 bpm: { gte: 120 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -2066,7 +2084,7 @@ export class ProgrammaticPlaylistService {
     ): Promise<ProgrammaticMix | null> {
         // First try Enhanced mode (ML mood predictions)
         let tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 analysisMode: "enhanced",
                 analysisVersion: {
@@ -2082,7 +2100,7 @@ export class ProgrammaticPlaylistService {
                     // Slow-moderate tempo
                     { bpm: { lte: 110 } },
                 ],
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -2095,7 +2113,7 @@ export class ProgrammaticPlaylistService {
         if (tracks.length < this.MIN_TRACKS_DAILY) {
             logger.debug(`[LATE NIGHT MIX] Falling back to Standard mode`);
             tracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     AND: [
                         // MUST have low energy
@@ -2111,7 +2129,7 @@ export class ProgrammaticPlaylistService {
                             ],
                         },
                     ],
-                },
+                }),
                 include: { album: { select: { coverUrl: true } } },
                 take: 100,
             });
@@ -2173,7 +2191,7 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Enhanced mode - ML moodHappy prediction
         const enhancedTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 analysisMode: "enhanced",
                 analysisVersion: {
@@ -2181,7 +2199,7 @@ export class ProgrammaticPlaylistService {
                 },
                 moodHappy: { gte: 0.6 },
                 moodSad: { lte: 0.3 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -2193,11 +2211,11 @@ export class ProgrammaticPlaylistService {
         // Strategy 2: Standard mode fallback - valence/energy heuristics
         if (tracks.length < 15) {
             const standardTracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     valence: { gte: 0.6 },
                     energy: { gte: 0.5 },
-                },
+                }),
                 include: { album: { select: { coverUrl: true } } },
                 take: 100,
             });
@@ -2278,7 +2296,7 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Enhanced mode - ML moodSad prediction
         const enhancedTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 analysisMode: "enhanced",
                 analysisVersion: {
@@ -2286,7 +2304,7 @@ export class ProgrammaticPlaylistService {
                 },
                 moodSad: { gte: 0.5 },
                 moodHappy: { lte: 0.4 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 150,
         });
@@ -2300,11 +2318,11 @@ export class ProgrammaticPlaylistService {
             // Strategy 2: Standard mode fallback
             logger.debug(`[MELANCHOLY MIX] Falling back to Standard mode`);
             const audioTracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     valence: { lte: 0.35 },
                     energy: { lte: 0.6 },
-                },
+                }),
                 include: { album: { select: { coverUrl: true } } },
                 take: 150,
             });
@@ -2424,11 +2442,11 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Audio analysis
         const audioTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 danceability: { gte: 0.7 },
                 bpm: { gte: 110, lte: 140 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -2504,11 +2522,11 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Audio analysis
         const audioTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 acousticness: { gte: 0.6 },
                 energy: { gte: 0.3, lte: 0.6 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -2582,11 +2600,11 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Audio analysis
         const audioTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 instrumentalness: { gte: 0.7 },
                 energy: { gte: 0.3, lte: 0.6 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -2661,11 +2679,11 @@ export class ProgrammaticPlaylistService {
         mixDescription: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 lastfmTags: {
                     has: moodTag,
                 },
-            },
+            }),
             include: {
                 album: { select: { coverUrl: true } },
             },
@@ -2707,7 +2725,7 @@ export class ProgrammaticPlaylistService {
 
         // Strategy 1: Last.fm/mood tags
         const taggedTracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 OR: [
                     {
                         lastfmTags: {
@@ -2721,7 +2739,7 @@ export class ProgrammaticPlaylistService {
                     },
                     { moodTags: { hasSome: ["energetic", "upbeat", "happy"] } },
                 ],
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -2731,11 +2749,11 @@ export class ProgrammaticPlaylistService {
         // Strategy 2: Audio analysis (medium-high energy, good tempo)
         if (tracks.length < 15) {
             const audioTracks = await prisma.track.findMany({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     energy: { gte: 0.5, lte: 0.8 },
                     bpm: { gte: 100, lte: 130 },
-                },
+                }),
                 include: { album: { select: { coverUrl: true } } },
                 take: 100,
             });
@@ -2828,7 +2846,7 @@ export class ProgrammaticPlaylistService {
         today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 OR: [
                     {
                         analysisStatus: "completed",
@@ -2847,7 +2865,7 @@ export class ProgrammaticPlaylistService {
                         },
                     },
                 ],
-            },
+            }),
             include: {
                 album: { select: { coverUrl: true } },
             },
@@ -2882,7 +2900,7 @@ export class ProgrammaticPlaylistService {
         today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 OR: [
                     {
                         analysisStatus: "completed",
@@ -2900,7 +2918,7 @@ export class ProgrammaticPlaylistService {
                         },
                     },
                 ],
-            },
+            }),
             include: {
                 album: { select: { coverUrl: true } },
             },
@@ -2935,7 +2953,7 @@ export class ProgrammaticPlaylistService {
         today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 OR: [
                     {
                         analysisStatus: "completed",
@@ -2948,7 +2966,7 @@ export class ProgrammaticPlaylistService {
                         },
                     },
                 ],
-            },
+            }),
             include: {
                 album: { select: { coverUrl: true } },
             },
@@ -2996,7 +3014,10 @@ export class ProgrammaticPlaylistService {
         }
 
         const tracks = await prisma.track.findMany({
-            where: { analysisStatus: "completed", ...definition.where },
+            where: this.trackWhere({
+                analysisStatus: "completed",
+                ...definition.where,
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: definition.take,
         });
@@ -3178,7 +3199,7 @@ export class ProgrammaticPlaylistService {
     ): Promise<ProgrammaticMix | null> {
         // STRICT criteria: cozy, background-appropriate music only
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 AND: [
                     // MUST be low-to-moderate energy (exclude workout-level tracks)
@@ -3222,7 +3243,7 @@ export class ProgrammaticPlaylistService {
                         },
                     },
                 ],
-            },
+            }),
             include: {
                 album: {
                     select: {
@@ -3324,11 +3345,11 @@ export class ProgrammaticPlaylistService {
     ): Promise<ProgrammaticMix | null> {
         // Get tracks that haven't been played much
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 plays: {
                     none: {},
                 },
-            },
+            }),
             include: {
                 album: {
                     select: {
@@ -3343,6 +3364,7 @@ export class ProgrammaticPlaylistService {
         if (tracks.length < 15) {
             // Fallback: tracks with few plays
             const lowPlayTracks = await prisma.track.findMany({
+                where: this.trackWhere(),
                 include: {
                     album: { select: { coverUrl: true } },
                     _count: { select: { plays: true } },
@@ -3423,10 +3445,10 @@ export class ProgrammaticPlaylistService {
         ];
 
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 key: { not: null },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 200,
         });
@@ -3495,10 +3517,10 @@ export class ProgrammaticPlaylistService {
         today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 bpm: { not: null },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 200,
         });
@@ -3581,10 +3603,10 @@ export class ProgrammaticPlaylistService {
         today: string,
     ): Promise<ProgrammaticMix | null> {
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 instrumentalness: { gte: 0.75 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -3626,11 +3648,11 @@ export class ProgrammaticPlaylistService {
         if (dayOfWeek !== 1) return null;
 
         const tracks = await prisma.track.findMany({
-            where: {
+            where: this.trackWhere({
                 analysisStatus: "completed",
                 keyScale: "minor",
                 energy: { gte: 0.45 },
-            },
+            }),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });
@@ -3709,13 +3731,13 @@ export class ProgrammaticPlaylistService {
         let useEnhancedMode = false;
         if (usesMLMoods) {
             const enhancedCount = await prisma.track.count({
-                where: {
+                where: this.trackWhere({
                     analysisStatus: "completed",
                     analysisMode: "enhanced",
                     analysisVersion: {
                         startsWith: RELIABLE_ENHANCED_ANALYSIS_VERSION_PREFIX,
                     },
-                },
+                }),
             });
 
             // Only require enhanced mode if we have at least 15 enhanced tracks
@@ -3906,7 +3928,7 @@ export class ProgrammaticPlaylistService {
         }
 
         const tracks = await prisma.track.findMany({
-            where,
+            where: this.trackWhere(where),
             include: { album: { select: { coverUrl: true } } },
             take: 100,
         });

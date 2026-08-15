@@ -3,6 +3,7 @@ import * as fuzz from "fuzzball";
 import { logger } from "../utils/logger";
 import { requireAuthOrToken } from "../middleware/auth";
 import { prisma } from "../utils/db";
+import { TRACK_VISIBLE_WHERE } from "../utils/librarySorting";
 import { lastFmService } from "../services/lastfm";
 import { normalizeForMatching, calculateSimilarity } from "../utils/fuzzyMatch";
 import {
@@ -624,7 +625,7 @@ router.get("/tracks", async (req, res) => {
         // Get seed track
         const seedTrack = seedTrackId
             ? await prisma.track.findUnique({
-                  where: { id: seedTrackId as string },
+                  where: { ...TRACK_VISIBLE_WHERE, id: seedTrackId as string },
                   include: {
                       album: {
                           include: {
@@ -669,6 +670,7 @@ router.get("/tracks", async (req, res) => {
             if (seedTrack) {
                 sameArtistTracks = await prisma.track.findMany({
                     where: {
+                        ...TRACK_VISIBLE_WHERE,
                         id: { not: seedTrack.id },
                         album: {
                             artistId: seedTrack.album.artist.id,
@@ -682,6 +684,7 @@ router.get("/tracks", async (req, res) => {
             } else if (seedArtistName) {
                 sameArtistTracks = await prisma.track.findMany({
                     where: {
+                        ...TRACK_VISIBLE_WHERE,
                         album: {
                             artist: {
                                 OR: [
@@ -760,6 +763,7 @@ router.get("/tracks", async (req, res) => {
         if (artistOrClauses.length > 0) {
             candidateTracks = await prisma.track.findMany({
                 where: {
+                    ...TRACK_VISIBLE_WHERE,
                     album: {
                         artist: {
                             OR: artistOrClauses,
@@ -777,6 +781,7 @@ router.get("/tracks", async (req, res) => {
         if (candidateTracks.length === 0 && lfmTracks.length > 0) {
             candidateTracks = await prisma.track.findMany({
                 where: {
+                    ...TRACK_VISIBLE_WHERE,
                     title: {
                         in: lfmTracks.map((track) => track.title),
                         mode: "insensitive",
