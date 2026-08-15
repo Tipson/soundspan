@@ -1,7 +1,13 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { redisClient } from "../utils/redis";
-import { TRACK_VISIBLE_WHERE } from "../utils/librarySorting";
+import {
+    type LibraryOriginFilter,
+    trackBrowseWhere,
+    TRACK_VISIBLE_WHERE,
+} from "../utils/librarySorting";
+import { trackBrowseSql } from "../utils/libraryRadioPredicates";
 
 /**
  * Executes normalizeCacheQuery.
@@ -14,6 +20,13 @@ interface SearchOptions {
     query: string;
     limit?: number;
     offset?: number;
+    source?: LibraryOriginFilter;
+}
+
+interface SearchPeerResult {
+    id: string;
+    name: string;
+    online: boolean;
 }
 
 export interface ArtistSearchResult {
@@ -23,6 +36,8 @@ export interface ArtistSearchResult {
     heroUrl: string | null;
     summary?: string;
     rank: number;
+    source?: "local" | "federated";
+    peer?: SearchPeerResult | null;
 }
 
 export interface AlbumSearchResult {
@@ -33,6 +48,8 @@ export interface AlbumSearchResult {
     year: number | null;
     coverUrl: string | null;
     rank: number;
+    source?: "local" | "federated";
+    peer?: SearchPeerResult | null;
 }
 
 export interface TrackSearchResult {
@@ -44,6 +61,8 @@ export interface TrackSearchResult {
     artistName: string;
     duration: number;
     rank: number;
+    source?: "local" | "federated";
+    peer?: SearchPeerResult | null;
 }
 
 export interface PodcastSearchResult {
@@ -86,6 +105,21 @@ export interface SearchByTypeOptions {
     limit?: number;
     offset?: number;
     genre?: string;
+    source?: LibraryOriginFilter;
+}
+
+function visibleBrowseTracks(source: LibraryOriginFilter) {
+    return { ...TRACK_VISIBLE_WHERE, ...trackBrowseWhere(source) };
+}
+
+function trackSourceSql(source: LibraryOriginFilter): Prisma.Sql {
+    return trackBrowseSql("t", source);
+}
+
+function peerProjectionSql(alias: "a" | "t"): Prisma.Sql {
+    return Prisma.raw(
+        `CASE WHEN ${alias}."peerId" IS NOT NULL THEN json_build_object('id', fp.id, 'name', fp.name, 'online', COALESCE(fp."outboundStatus" = 'ACTIVE', false)) ELSE NULL END`,
+    );
 }
 
 export interface SearchResults {
@@ -123,29 +157,41 @@ export class SearchService {
         query,
         limit = 20,
         offset = 0,
+        source = "all",
     }: SearchOptions): Promise<ArtistSearchResult[]> {
+        const trackWhere = visibleBrowseTracks(source);
         const results = await prisma.artist.findMany({
             where: {
                 name: {
                     contains: query,
                     mode: "insensitive",
                 },
-                OR: [
-                    {
-                        albums: {
-                            some: {
-                                tracks: { some: TRACK_VISIBLE_WHERE },
-                            },
-                        },
-                    },
-                    { remoteTrackCount: { gt: 0 } },
-                ],
+                ...(source === "all"
+                    ? {
+                          OR: [
+                              {
+                                  albums: {
+                                      some: { tracks: { some: trackWhere } },
+                                  },
+                              },
+                              { remoteTrackCount: { gt: 0 } },
+                          ],
+                      }
+                    : {
+                          albums: {
+                              some: { tracks: { some: trackWhere } },
+                          },
+                      }),
             },
             select: {
                 id: true,
                 name: true,
                 mbid: true,
                 heroUrl: true,
+                peerId: true,
+                federationPeer: {
+                    select: { id: true, name: true, outboundStatus: true },
+                },
             },
             take: limit,
             skip: offset,
@@ -154,13 +200,27 @@ export class SearchService {
             },
         });
 
-        return results.map((r) => ({ ...r, rank: 0 }));
+        return results.map(({ federationPeer, peerId, ...result }) => ({
+            ...result,
+            rank: 0,
+            ...(peerId && federationPeer
+                ? {
+                      source: "federated" as const,
+                      peer: {
+                          id: federationPeer.id,
+                          name: federationPeer.name,
+                          online: federationPeer.outboundStatus === "ACTIVE",
+                      },
+                  }
+                : {}),
+        }));
     }
 
     async searchArtists({
         query,
         limit = 20,
         offset = 0,
+        source = "all",
     }: SearchOptions): Promise<ArtistSearchResult[]> {
         if (!query || query.trim().length === 0) {
             return [];
@@ -168,10 +228,12 @@ export class SearchService {
 
         const tsquery = this.queryToTsquery(query);
         if (!tsquery) {
-            return this.searchArtistsFallback({ query, limit, offset });
+            return this.searchArtistsFallback({ query, limit, offset, source });
         }
 
         try {
+            const sourceSql = trackSourceSql(source);
+            const peerSql = peerProjectionSql("a");
             const results = await prisma.$queryRaw<ArtistSearchResult[]>`
         SELECT
           a.id,
@@ -179,16 +241,19 @@ export class SearchService {
           a.mbid,
           a."heroUrl",
           a.summary,
+          CASE WHEN a."peerId" IS NOT NULL THEN 'federated' ELSE 'local' END AS source,
+          ${peerSql} AS peer,
           ts_rank(a."searchVector", to_tsquery('english', ${tsquery})) AS rank
         FROM "Artist" a
+        LEFT JOIN "FederationPeer" fp ON fp.id = a."peerId"
         WHERE a."searchVector" @@ to_tsquery('english', ${tsquery})
           AND (
             EXISTS (
               SELECT 1 FROM "Album" alb
               JOIN "Track" t ON t."albumId" = alb.id
-              WHERE alb."artistId" = a.id AND t."removedAt" IS NULL
+              WHERE alb."artistId" = a.id AND t."removedAt" IS NULL AND ${sourceSql}
             )
-            OR a."remoteTrackCount" > 0
+            OR (${source === "all"} AND a."remoteTrackCount" > 0)
           )
         ORDER BY rank DESC, a.name ASC
         LIMIT ${limit}
@@ -199,13 +264,18 @@ export class SearchService {
                 logger.debug(
                     `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
-                return this.searchArtistsFallback({ query, limit, offset });
+                return this.searchArtistsFallback({
+                    query,
+                    limit,
+                    offset,
+                    source,
+                });
             }
 
             return results;
         } catch (error) {
             logger.error("Artist search error:", error);
-            return this.searchArtistsFallback({ query, limit, offset });
+            return this.searchArtistsFallback({ query, limit, offset, source });
         }
     }
 
@@ -213,14 +283,18 @@ export class SearchService {
         query,
         limit = 20,
         offset = 0,
+        source = "all",
     }: SearchOptions): Promise<AlbumSearchResult[]> {
+        const trackWhere = visibleBrowseTracks(source);
         const results = await prisma.album.findMany({
             where: {
                 AND: [
                     {
                         OR: [
-                            { tracks: { none: {} } },
-                            { tracks: { some: TRACK_VISIBLE_WHERE } },
+                            ...(source === "peers"
+                                ? []
+                                : [{ tracks: { none: {} } }]),
+                            { tracks: { some: trackWhere } },
                         ],
                     },
                     {
@@ -254,6 +328,10 @@ export class SearchService {
                         name: true,
                     },
                 },
+                peerId: true,
+                federationPeer: {
+                    select: { id: true, name: true, outboundStatus: true },
+                },
             },
             take: limit,
             skip: offset,
@@ -270,6 +348,16 @@ export class SearchService {
             year: r.year,
             coverUrl: r.coverUrl,
             rank: 0,
+            ...(r.peerId && r.federationPeer
+                ? {
+                      source: "federated" as const,
+                      peer: {
+                          id: r.federationPeer.id,
+                          name: r.federationPeer.name,
+                          online: r.federationPeer.outboundStatus === "ACTIVE",
+                      },
+                  }
+                : {}),
         }));
     }
 
@@ -277,6 +365,7 @@ export class SearchService {
         query,
         limit = 20,
         offset = 0,
+        source = "all",
     }: SearchOptions): Promise<AlbumSearchResult[]> {
         if (!query || query.trim().length === 0) {
             return [];
@@ -284,13 +373,16 @@ export class SearchService {
 
         const tsquery = this.queryToTsquery(query);
         if (!tsquery) {
-            return this.searchAlbumsFallback({ query, limit, offset });
+            return this.searchAlbumsFallback({ query, limit, offset, source });
         }
 
         try {
+            const sourceSql = trackSourceSql(source);
+            const peerSql = peerProjectionSql("a");
+            const includeEmpty = source !== "peers";
             const results = await prisma.$queryRaw<AlbumSearchResult[]>`
         SELECT * FROM (
-          SELECT DISTINCT ON (id) id, title, "artistId", "artistName", year, "coverUrl", rank
+          SELECT DISTINCT ON (id) id, title, "artistId", "artistName", year, "coverUrl", source, peer, rank
           FROM (
             SELECT
               a.id,
@@ -299,13 +391,16 @@ export class SearchService {
               ar.name as "artistName",
               a.year,
               a."coverUrl",
+              CASE WHEN a."peerId" IS NOT NULL THEN 'federated' ELSE 'local' END AS source,
+              ${peerSql} AS peer,
               ts_rank(a."searchVector", to_tsquery('english', ${tsquery})) AS rank
             FROM "Album" a
             LEFT JOIN "Artist" ar ON a."artistId" = ar.id
+            LEFT JOIN "FederationPeer" fp ON fp.id = a."peerId"
             WHERE a."searchVector" @@ to_tsquery('english', ${tsquery})
               AND (
-                NOT EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id)
-                OR EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id AND t."removedAt" IS NULL)
+                (${includeEmpty} AND NOT EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id))
+                OR EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id AND t."removedAt" IS NULL AND ${sourceSql})
               )
 
             UNION ALL
@@ -317,13 +412,16 @@ export class SearchService {
               ar.name as "artistName",
               a.year,
               a."coverUrl",
+              CASE WHEN a."peerId" IS NOT NULL THEN 'federated' ELSE 'local' END AS source,
+              ${peerSql} AS peer,
               ts_rank(ar."searchVector", to_tsquery('english', ${tsquery})) AS rank
             FROM "Album" a
             INNER JOIN "Artist" ar ON a."artistId" = ar.id
+            LEFT JOIN "FederationPeer" fp ON fp.id = a."peerId"
             WHERE ar."searchVector" @@ to_tsquery('english', ${tsquery})
               AND (
-                NOT EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id)
-                OR EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id AND t."removedAt" IS NULL)
+                (${includeEmpty} AND NOT EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id))
+                OR EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id AND t."removedAt" IS NULL AND ${sourceSql})
               )
           ) combined
           ORDER BY id, rank DESC
@@ -337,13 +435,18 @@ export class SearchService {
                 logger.debug(
                     `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
-                return this.searchAlbumsFallback({ query, limit, offset });
+                return this.searchAlbumsFallback({
+                    query,
+                    limit,
+                    offset,
+                    source,
+                });
             }
 
             return results;
         } catch (error) {
             logger.error("Album search error:", error);
-            return this.searchAlbumsFallback({ query, limit, offset });
+            return this.searchAlbumsFallback({ query, limit, offset, source });
         }
     }
 
@@ -351,10 +454,12 @@ export class SearchService {
         query,
         limit = 20,
         offset = 0,
+        source = "all",
     }: SearchOptions): Promise<TrackSearchResult[]> {
         const results = await prisma.track.findMany({
             where: {
                 ...TRACK_VISIBLE_WHERE,
+                ...trackBrowseWhere(source),
                 title: {
                     contains: query,
                     mode: "insensitive",
@@ -376,6 +481,10 @@ export class SearchService {
                         },
                     },
                 },
+                origin: true,
+                federationPeer: {
+                    select: { id: true, name: true, outboundStatus: true },
+                },
             },
             take: limit,
             skip: offset,
@@ -393,6 +502,16 @@ export class SearchService {
             artistName: r.album.artist.name,
             duration: r.duration,
             rank: 0,
+            ...(r.origin === "FEDERATED" && r.federationPeer
+                ? {
+                      source: "federated" as const,
+                      peer: {
+                          id: r.federationPeer.id,
+                          name: r.federationPeer.name,
+                          online: r.federationPeer.outboundStatus === "ACTIVE",
+                      },
+                  }
+                : {}),
         }));
     }
 
@@ -400,6 +519,7 @@ export class SearchService {
         query,
         limit = 20,
         offset = 0,
+        source = "all",
     }: SearchOptions): Promise<TrackSearchResult[]> {
         if (!query || query.trim().length === 0) {
             return [];
@@ -407,10 +527,12 @@ export class SearchService {
 
         const tsquery = this.queryToTsquery(query);
         if (!tsquery) {
-            return this.searchTracksFallback({ query, limit, offset });
+            return this.searchTracksFallback({ query, limit, offset, source });
         }
 
         try {
+            const sourceSql = trackSourceSql(source);
+            const peerSql = peerProjectionSql("t");
             const results = await prisma.$queryRaw<TrackSearchResult[]>`
         SELECT
           t.id,
@@ -420,11 +542,15 @@ export class SearchService {
           a.title as "albumTitle",
           a."artistId",
           ar.name as "artistName",
+          CASE WHEN t.origin = ${"FEDERATED"}::"TrackOrigin" THEN 'federated' ELSE 'local' END AS source,
+          ${peerSql} AS peer,
           ts_rank(t."searchVector", to_tsquery('english', ${tsquery})) AS rank
         FROM "Track" t
         LEFT JOIN "Album" a ON t."albumId" = a.id
         LEFT JOIN "Artist" ar ON a."artistId" = ar.id
+        LEFT JOIN "FederationPeer" fp ON fp.id = t."peerId"
         WHERE t."removedAt" IS NULL
+          AND ${sourceSql}
           AND t."searchVector" @@ to_tsquery('english', ${tsquery})
         ORDER BY rank DESC, t.title ASC
         LIMIT ${limit}
@@ -435,13 +561,18 @@ export class SearchService {
                 logger.debug(
                     `[SEARCH] FTS returned 0 results for "${query}", falling back to ILIKE`,
                 );
-                return this.searchTracksFallback({ query, limit, offset });
+                return this.searchTracksFallback({
+                    query,
+                    limit,
+                    offset,
+                    source,
+                });
             }
 
             return results;
         } catch (error) {
             logger.error("Track search error:", error);
-            return this.searchTracksFallback({ query, limit, offset });
+            return this.searchTracksFallback({ query, limit, offset, source });
         }
     }
 
@@ -774,6 +905,7 @@ export class SearchService {
         query,
         limit = 10,
         genre,
+        source = "all",
     }: SearchOptions & { genre?: string }): Promise<SearchResults> {
         if (!query || query.trim().length === 0) {
             return {
@@ -787,7 +919,7 @@ export class SearchService {
         }
 
         // Check Redis cache first
-        const cacheKey = `search:all:${normalizeCacheQuery(query)}:${limit}:${genre || ""}`;
+        const cacheKey = `search:all:${normalizeCacheQuery(query)}:${limit}:${genre || ""}:${source}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
@@ -816,9 +948,9 @@ export class SearchService {
 
         const [artists, albums, tracks, podcasts, audiobooks, episodes] =
             await Promise.all([
-                this.searchArtists({ query, limit }),
-                this.searchAlbums({ query, limit }),
-                this.searchTracks({ query, limit }),
+                this.searchArtists({ query, limit, source }),
+                this.searchAlbums({ query, limit, source }),
+                this.searchTracks({ query, limit, source }),
                 this.searchPodcastsFTS({ query, limit }),
                 this.searchAudiobooksFTS({ query, limit }),
                 this.searchEpisodes({ query, limit }),
@@ -886,6 +1018,7 @@ export class SearchService {
         limit = 20,
         offset = 0,
         genre,
+        source = "all",
     }: SearchByTypeOptions): Promise<SearchResults> {
         const results: SearchResults = {
             artists: [],
@@ -901,7 +1034,7 @@ export class SearchService {
         }
 
         // Check cache
-        const cacheKey = `search:${type}:${normalizeCacheQuery(query)}:${limit}:${genre || ""}`;
+        const cacheKey = `search:${type}:${normalizeCacheQuery(query)}:${limit}:${genre || ""}:${source}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
@@ -921,6 +1054,7 @@ export class SearchService {
                     query,
                     limit,
                     offset,
+                    source,
                 });
                 break;
             case "albums":
@@ -928,10 +1062,16 @@ export class SearchService {
                     query,
                     limit,
                     offset,
+                    source,
                 });
                 break;
             case "tracks": {
-                let tracks = await this.searchTracks({ query, limit, offset });
+                let tracks = await this.searchTracks({
+                    query,
+                    limit,
+                    offset,
+                    source,
+                });
                 if (genre) {
                     tracks = await this.filterTracksByGenre(tracks, genre);
                 }

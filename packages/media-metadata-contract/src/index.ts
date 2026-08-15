@@ -63,6 +63,107 @@ export interface CanonicalMediaSearchResult {
     raw: Record<string, unknown>;
 }
 
+/** Media types currently understood by federation v1 consumers. */
+export type FederationMediaType =
+    | "artist"
+    | "album"
+    | "track"
+    | "podcast"
+    | "audiobook";
+
+/** Source discriminator emitted by unified track response serializers. */
+export type UnifiedTrackSource = "local" | "tidal" | "youtube" | "federated";
+
+/** Safe peer provenance attached to a federated unified track response. */
+export interface FederatedTrackPeer {
+    id: string;
+    name: string;
+    online: boolean;
+}
+
+/** Optional analyzer metadata carried by federation track envelopes. */
+export interface FederationTrackAudioFeatures {
+    bpm?: number | null;
+    beatsCount?: number | null;
+    key?: string | null;
+    keyScale?: string | null;
+    keyStrength?: number | null;
+    energy?: number | null;
+    loudness?: number | null;
+    dynamicRange?: number | null;
+    danceability?: number | null;
+    valence?: number | null;
+    arousal?: number | null;
+    instrumentalness?: number | null;
+    acousticness?: number | null;
+    speechiness?: number | null;
+    moodHappy?: number | null;
+    moodSad?: number | null;
+    moodRelaxed?: number | null;
+    moodAggressive?: number | null;
+    moodParty?: number | null;
+    moodAcoustic?: number | null;
+    moodElectronic?: number | null;
+    danceabilityMl?: number | null;
+    moodTags?: string[] | null;
+    essentiaGenres?: string[] | null;
+    lastfmTags?: string[] | null;
+}
+
+/** Track-specific attributes published by the additive federation v1 envelope. */
+export interface FederationTrackAttributes extends FederationTrackAudioFeatures {
+    title: string;
+    discNo: number;
+    trackNo: number;
+    duration: number;
+    mime: string | null;
+    fileSize: number;
+    recordingMbid: string | null;
+    isrc: string | null;
+    audioHash: string | null;
+    embedding?: number[];
+}
+
+/** Podcast catalog-listing attributes published by federation hosts. */
+export interface FederationPodcastAttributes {
+    feedUrl: string;
+    title: string;
+    author: string | null;
+    description: string | null;
+    imageUrl: string | null;
+    itunesId: string | null;
+}
+
+/** Audiobook mirror attributes published by federation hosts. */
+export interface FederationAudiobookAttributes {
+    title: string;
+    author: string | null;
+    narrator: string | null;
+    duration: number | null;
+    description: string | null;
+    asin: string | null;
+    isbn: string | null;
+    coverUrl: boolean;
+}
+
+/** Generic additive federation catalog envelope shared by hosts and consumers. */
+export interface FederationMediaItemEnvelope<
+    Attributes extends Record<string, unknown> = Record<string, unknown>,
+> {
+    id: string;
+    mediaType: FederationMediaType;
+    updatedAt: Date | string;
+    parentRef?: string;
+    attributes: Attributes;
+}
+
+/** Deleted catalog identity emitted by the federation delta feed. */
+export interface FederationCatalogTombstone {
+    entityType: FederationMediaType;
+    entityId: string;
+    deletedAt: Date | string;
+}
+
 const normalizeString = (value: unknown): string | undefined => {
     if (typeof value !== "string") {
         return undefined;

@@ -13,10 +13,14 @@
 
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
-import { TRACK_VISIBLE_WHERE } from "../utils/librarySorting";
+import {
+    LOCAL_TRACK_WHERE,
+    TRACK_VISIBLE_WHERE,
+} from "../utils/librarySorting";
 
 const BATCH_SIZE = 100;
 const BATCH_DELAY_MS = 50;
+const MAX_SCOPED_ARTISTS = 2_000_000;
 
 interface ArtistCounts {
     libraryAlbumCount: number;
@@ -42,19 +46,24 @@ export async function calculateArtistCounts(
             where: {
                 artistId,
                 location: "LIBRARY",
-                tracks: { some: TRACK_VISIBLE_WHERE },
+                tracks: {
+                    some: { ...TRACK_VISIBLE_WHERE, ...LOCAL_TRACK_WHERE },
+                },
             },
         }),
         prisma.album.count({
             where: {
                 artistId,
                 location: "DISCOVER",
-                tracks: { some: TRACK_VISIBLE_WHERE },
+                tracks: {
+                    some: { ...TRACK_VISIBLE_WHERE, ...LOCAL_TRACK_WHERE },
+                },
             },
         }),
         prisma.track.count({
             where: {
                 ...TRACK_VISIBLE_WHERE,
+                ...LOCAL_TRACK_WHERE,
                 album: { artistId },
             },
         }),
@@ -101,12 +110,17 @@ export async function updateArtistCounts(artistId: string): Promise<void> {
  * Update counts for multiple artists (batch operation)
  */
 export async function updateMultipleArtistCounts(
-    artistIds: string[],
+    artistIds: readonly string[],
 ): Promise<{ updated: number; errors: number }> {
+    if (artistIds.length > MAX_SCOPED_ARTISTS) {
+        throw new Error("Scoped artist count update exceeded the item bound");
+    }
     let updated = 0;
     let errors = 0;
 
-    for (const artistId of artistIds) {
+    for (let index = 0; index < MAX_SCOPED_ARTISTS; index += 1) {
+        const artistId = artistIds[index];
+        if (!artistId) break;
         try {
             await updateArtistCounts(artistId);
             updated++;
@@ -116,6 +130,25 @@ export async function updateMultipleArtistCounts(
     }
 
     return { updated, errors };
+}
+
+/** Recomputes only the supplied artists through fixed-size sequential batches. */
+export async function updateArtistCountsInBatches(
+    artistIds: readonly string[],
+): Promise<{ updated: number; failed: number }> {
+    if (artistIds.length > MAX_SCOPED_ARTISTS) {
+        throw new Error("Scoped artist count update exceeded the item bound");
+    }
+    const totals = { updated: 0, failed: 0 };
+    for (let offset = 0; offset < MAX_SCOPED_ARTISTS; offset += BATCH_SIZE) {
+        if (offset >= artistIds.length) break;
+        const { updated, errors: failed } = await updateMultipleArtistCounts(
+            artistIds.slice(offset, offset + BATCH_SIZE),
+        );
+        totals.updated += updated;
+        totals.failed += failed;
+    }
+    return totals;
 }
 
 /**
@@ -141,7 +174,7 @@ export async function updateArtistCountsByTrackId(
     trackId: string,
 ): Promise<void> {
     const track = await prisma.track.findUnique({
-        where: { id: trackId },
+        where: { id: trackId, ...LOCAL_TRACK_WHERE },
         select: {
             album: {
                 select: { artistId: true },

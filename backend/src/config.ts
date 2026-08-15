@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as fs from "fs";
 import { validateMusicConfig, MusicConfig } from "./utils/configValidator";
 import { logger } from "./utils/logger";
+import { validateEncryptionKey } from "./utils/encryption";
 import {
     isEnvFlagEnabled,
     parseEnvBool,
@@ -102,11 +103,28 @@ function addCriticalSecretIssue(
     });
 }
 
-const trackRemovalRetentionDaysSchema = z
+const nonnegativeIntegerEnvSchema = z
     .string()
     .regex(/^(0|[1-9]\d*)$/, "must be an integer greater than or equal to 0")
     .refine((value) => Number.isSafeInteger(Number(value)), {
         message: "must be a safe integer",
+    })
+    .optional();
+const positiveIntegerEnvSchema = z
+    .string()
+    .regex(/^[1-9]\d*$/, "must be a positive integer")
+    .refine((value) => Number.isSafeInteger(Number(value)), {
+        message: "must be a safe integer",
+    })
+    .optional();
+const federationTombstoneRetentionEnvSchema = z
+    .string()
+    .regex(/^[1-9]\d*$/, "must be an integer greater than or equal to 3")
+    .refine((value) => Number.isSafeInteger(Number(value)), {
+        message: "must be a safe integer",
+    })
+    .refine((value) => Number(value) >= 3, {
+        message: "must be an integer greater than or equal to 3",
     })
     .optional();
 
@@ -128,7 +146,10 @@ const envSchema = z
         PORT: z.string().optional(),
         NODE_ENV: z.enum(["development", "production", "test"]).optional(),
         MUSIC_PATH: z.string().min(1, "MUSIC_PATH is required"),
-        TRACK_REMOVAL_RETENTION_DAYS: trackRemovalRetentionDaysSchema,
+        TRACK_REMOVAL_RETENTION_DAYS: nonnegativeIntegerEnvSchema,
+        FEDERATION_TOMBSTONE_RETENTION_DAYS:
+            federationTombstoneRetentionEnvSchema,
+        FEDERATION_SYNC_INTERVAL_MINUTES: positiveIntegerEnvSchema,
     })
     .superRefine((env, context) => {
         const encryptionKey = resolveSettingsEncryptionKey(env);
@@ -148,6 +169,7 @@ const envSchema = z
 
 try {
     envSchema.parse(process.env);
+    validateEncryptionKey();
     logger.debug("Environment variables validated");
 } catch (error) {
     if (error instanceof z.ZodError) {
@@ -158,12 +180,22 @@ try {
         logger.error(
             "\n Please check your .env file and ensure all required variables are set.",
         );
-        process.exit(1);
+    } else {
+        logger.error(" Environment validation failed:", error);
     }
+    process.exit(1);
 }
 
 const trackRemovalRetentionDays = Number.parseInt(
     process.env.TRACK_REMOVAL_RETENTION_DAYS ?? "90",
+    10,
+);
+const federationTombstoneRetentionDays = Number.parseInt(
+    process.env.FEDERATION_TOMBSTONE_RETENTION_DAYS ?? "90",
+    10,
+);
+const federationSyncIntervalMinutes = Number.parseInt(
+    process.env.FEDERATION_SYNC_INTERVAL_MINUTES ?? "15",
     10,
 );
 
@@ -378,6 +410,14 @@ export const config = {
         discovery: parseEnvBool(process.env.DISCOVERY_ENABLED, true),
         // Made For You mixes / programmatic playlist generation
         autoPlaylists: parseEnvBool(process.env.AUTO_PLAYLISTS_ENABLED, true),
+        // Read-only instance federation API and host credential management.
+        federation: parseEnvBool(process.env.FEDERATION_ENABLED, false),
+    },
+
+    federation: {
+        // SystemSettings has no instance-name field today. Container/host name
+        // is the established deployment identity fallback for federation v1.
+        instanceName: process.env.HOSTNAME || "soundspan",
     },
 
     // Keep analyzer queues short enough that waiting work is not mistaken for
@@ -539,6 +579,8 @@ export const config = {
 
     workers: {
         trackRemovalRetentionDays,
+        federationTombstoneRetentionDays,
+        federationSyncIntervalMinutes,
         get moodBucketClaimTtlMs(): number {
             return positiveIntEnvOr(
                 process.env.MOOD_BUCKET_CLAIM_TTL_MS,

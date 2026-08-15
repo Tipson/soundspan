@@ -112,6 +112,40 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
         service = new ProgrammaticPlaylistService();
     });
 
+    it("excludes removed tracks from top-track seed aggregation", async () => {
+        (mockPrisma.play.groupBy as jest.Mock).mockImplementation(
+            async ({ where }) => {
+                const visible = Array.from({ length: 4 }, (_, index) => ({
+                    trackId: `visible-${index + 1}`,
+                    _count: { trackId: 4 - index },
+                }));
+                return where.track?.removedAt === null
+                    ? visible
+                    : [
+                          {
+                              trackId: "removed-1",
+                              _count: { trackId: 100 },
+                          },
+                          ...visible,
+                      ];
+            },
+        );
+
+        await expect(
+            service.generateTopTracksMix("user-1"),
+        ).resolves.toBeNull();
+        expect(mockPrisma.play.groupBy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    track: {
+                        removedAt: null,
+                        AND: expect.any(Array),
+                    },
+                }),
+            }),
+        );
+    });
+
     it("generateTopTracksMix enforces artist cap while keeping target size", async () => {
         const playStats = Array.from({ length: 30 }, (_, i) => ({
             trackId: `track-${i + 1}`,
@@ -390,6 +424,7 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
             expect.objectContaining({
                 where: {
                     removedAt: null,
+                    AND: expect.any(Array),
                     id: { notIn: ["overplayed-1", "overplayed-2"] },
                 },
                 orderBy: { id: "asc" },
@@ -421,7 +456,7 @@ describe("ProgrammaticPlaylistService priority diversity generators", () => {
 
         expect(mockPrisma.track.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { removedAt: null },
+                where: { removedAt: null, AND: expect.any(Array) },
                 orderBy: { id: "asc" },
                 take: 1000,
             }),

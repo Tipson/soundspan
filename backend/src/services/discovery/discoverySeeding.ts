@@ -8,7 +8,10 @@
  */
 
 import { prisma } from "../../utils/db";
-import { TRACK_VISIBLE_WHERE } from "../../utils/librarySorting";
+import {
+    TRACK_BROWSE_WHERE,
+    TRACK_VISIBLE_WHERE,
+} from "../../utils/librarySorting";
 import { logger } from "../../utils/logger";
 import { lidarrService } from "../lidarr";
 import { subWeeks } from "date-fns";
@@ -65,8 +68,9 @@ export class DiscoverySeeding {
         const tracks = await prisma.track.findMany({
             where: {
                 ...TRACK_VISIBLE_WHERE,
+                ...TRACK_BROWSE_WHERE,
                 id: { in: recentTrackIds },
-                album: { location: "LIBRARY" },
+                album: { location: { in: ["LIBRARY", "FEDERATED"] } },
             },
             include: { album: { include: { artist: true } } },
         });
@@ -101,7 +105,20 @@ export class DiscoverySeeding {
 
         const albums = await prisma.album.groupBy({
             by: ["artistId"],
-            where: { location: "LIBRARY" },
+            where: {
+                OR: [
+                    { location: "LIBRARY" },
+                    {
+                        location: "FEDERATED",
+                        tracks: {
+                            some: {
+                                ...TRACK_VISIBLE_WHERE,
+                                ...TRACK_BROWSE_WHERE,
+                            },
+                        },
+                    },
+                ],
+            },
             _count: { id: true },
             orderBy: { _count: { id: "desc" } },
             take: limit,

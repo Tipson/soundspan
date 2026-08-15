@@ -5,6 +5,7 @@ const mockValidateMusicConfig = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
+const mockValidateEncryptionKey = jest.fn();
 
 jest.mock("dotenv", () => ({
     __esModule: true,
@@ -24,6 +25,11 @@ jest.mock("../utils/logger", () => ({
         error: (...args: unknown[]) => mockLoggerError(...args),
         warn: (...args: unknown[]) => mockLoggerWarn(...args),
     },
+}));
+
+jest.mock("../utils/encryption", () => ({
+    validateEncryptionKey: (...args: unknown[]) =>
+        mockValidateEncryptionKey(...args),
 }));
 
 describe("config module", () => {
@@ -131,6 +137,9 @@ describe("config module", () => {
             "https://app.example",
             "http://localhost:5173",
         ]);
+        expect(config.features.federation).toBe(false);
+        expect(config.workers.federationTombstoneRetentionDays).toBe(90);
+        expect(config.workers.federationSyncIntervalMinutes).toBe(15);
     });
 
     it("constructs DATABASE_URL from percent-encoded PostgreSQL components", async () => {
@@ -566,6 +575,9 @@ describe("config module", () => {
             ENRICHMENT_CLAIM_TTL_MS: "900001",
             TRACK_RECONCILIATION_MAX_ROWS: "10001",
             TRACK_RECONCILIATION_TIMEOUT_MS: "600001",
+            FEDERATION_ENABLED: "true",
+            FEDERATION_TOMBSTONE_RETENTION_DAYS: "30",
+            FEDERATION_SYNC_INTERVAL_MINUTES: "7",
         });
 
         expect(config.appVersion).toBe("2.0.0-test");
@@ -585,7 +597,10 @@ describe("config module", () => {
             trackReconciliationMaxRows: 10_001,
             trackReconciliationTimeoutMs: 600_001,
             trackRemovalRetentionDays: 90,
+            federationTombstoneRetentionDays: 30,
+            federationSyncIntervalMinutes: 7,
         });
+        expect(config.features.federation).toBe(true);
     });
 
     it("preserves migrated value defaults and literal flag parsing", async () => {
@@ -619,6 +634,8 @@ describe("config module", () => {
             trackReconciliationMaxRows: 10_000,
             trackReconciliationTimeoutMs: 10 * 60 * 1000,
             trackRemovalRetentionDays: 90,
+            federationTombstoneRetentionDays: 90,
+            federationSyncIntervalMinutes: 15,
         });
     });
 
@@ -786,6 +803,59 @@ describe("config module", () => {
             AUDIOBOOKSHELF_API_KEY: "abs-token",
         });
         expect(keyOnly.config.audiobookshelf).toBeUndefined();
+    });
+
+    it("accepts the three-day federation tombstone floor and rejects lower values", async () => {
+        const minimum = await loadConfigModule({
+            FEDERATION_TOMBSTONE_RETENTION_DAYS: "3",
+        });
+        expect(minimum.config.workers.federationTombstoneRetentionDays).toBe(3);
+
+        const exitSpy = jest.spyOn(process, "exit").mockImplementation(((
+            code?: number,
+        ) => {
+            throw new Error(`process.exit:${code}`);
+        }) as never);
+        await expect(
+            loadConfigModule({ FEDERATION_TOMBSTONE_RETENTION_DAYS: "2" }),
+        ).rejects.toThrow("process.exit:1");
+        exitSpy.mockRestore();
+    });
+
+    it("logs and exits when post-schema encryption validation throws", async () => {
+        mockValidateEncryptionKey.mockImplementationOnce(() => {
+            throw new Error("encryption validation failed");
+        });
+        const exitSpy = jest.spyOn(process, "exit").mockImplementation(((
+            code?: number,
+        ) => {
+            throw new Error(`process.exit:${code}`);
+        }) as never);
+
+        await expect(loadConfigModule()).rejects.toThrow("process.exit:1");
+        expect(mockLoggerError).toHaveBeenCalledWith(
+            " Environment validation failed:",
+            expect.any(Error),
+        );
+
+        exitSpy.mockRestore();
+    });
+
+    it("requires a positive federation sync interval", async () => {
+        const one = await loadConfigModule({
+            FEDERATION_SYNC_INTERVAL_MINUTES: "1",
+        });
+        expect(one.config.workers.federationSyncIntervalMinutes).toBe(1);
+
+        const exitSpy = jest.spyOn(process, "exit").mockImplementation(((
+            code?: number,
+        ) => {
+            throw new Error(`process.exit:${code}`);
+        }) as never);
+        await expect(
+            loadConfigModule({ FEDERATION_SYNC_INTERVAL_MINUTES: "0" }),
+        ).rejects.toThrow("process.exit:1");
+        exitSpy.mockRestore();
     });
 
     it("logs validation errors and exits for invalid environment variables", async () => {

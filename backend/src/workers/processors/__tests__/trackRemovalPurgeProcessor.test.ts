@@ -6,9 +6,13 @@ describe("trackRemovalPurgeProcessor", () => {
     });
 
     function loadProcessor(
-        candidates: Array<{ id: string }>,
+        candidates: Array<{
+            id: string;
+            origin?: "LOCAL" | "FEDERATED";
+        }>,
         retentionDays = 90,
         deletedCount = candidates.length,
+        federationEnabled = false,
     ) {
         const logger = {
             debug: jest.fn(),
@@ -19,13 +23,28 @@ describe("trackRemovalPurgeProcessor", () => {
         };
         logger.child.mockReturnValue(logger);
 
-        const prisma = {
+        let prisma: any;
+        prisma = {
             track: {
-                findMany: jest.fn(async () => candidates),
+                findMany: jest.fn(
+                    async (args: { where?: { origin?: string } }) =>
+                        args.where?.origin === "LOCAL"
+                            ? candidates.filter(
+                                  (track) => track.origin !== "FEDERATED",
+                              )
+                            : candidates,
+                ),
                 deleteMany: jest.fn(async (_args: unknown) => ({
                     count: deletedCount,
                 })),
             },
+            federationTombstone: {
+                createMany: jest.fn(async () => ({ count: deletedCount })),
+                deleteMany: jest.fn(async () => ({ count: 0 })),
+            },
+            $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
+                callback(prisma),
+            ),
         };
         const schedulerQueue = { add: jest.fn(async () => ({})) };
         const cleanupOrphanedLibraryEntities = jest.fn(async () => ({
@@ -40,7 +59,13 @@ describe("trackRemovalPurgeProcessor", () => {
         jest.doMock("../../../utils/logger", () => ({ logger }));
         jest.doMock("../../../utils/db", () => ({ prisma }));
         jest.doMock("../../../config", () => ({
-            config: { workers: { trackRemovalRetentionDays: retentionDays } },
+            config: {
+                features: { federation: federationEnabled },
+                workers: {
+                    trackRemovalRetentionDays: retentionDays,
+                    federationTombstoneRetentionDays: 90,
+                },
+            },
         }));
         jest.doMock("../../queues", () => ({ schedulerQueue }));
         jest.doMock("../../../services/libraryOrphanCleanup", () => ({
@@ -83,6 +108,7 @@ describe("trackRemovalPurgeProcessor", () => {
 
         expect(prisma.track.findMany).toHaveBeenCalledWith({
             where: {
+                origin: "LOCAL",
                 removedAt: { lt: new Date("2026-05-16T12:00:00.000Z") },
             },
             orderBy: { id: "asc" },
@@ -92,11 +118,44 @@ describe("trackRemovalPurgeProcessor", () => {
         expect(prisma.track.deleteMany).toHaveBeenCalledWith({
             where: {
                 id: { in: ["track-old"] },
+                origin: "LOCAL",
                 removedAt: { lt: new Date("2026-05-16T12:00:00.000Z") },
             },
         });
         expect(cleanupOrphanedLibraryEntities).toHaveBeenCalledTimes(1);
         expect(backfillAllArtistCounts).toHaveBeenCalledTimes(1);
+    });
+
+    it("writes track tombstones and cleans expired tombstones on a federation terminal page", async () => {
+        jest.useFakeTimers().setSystemTime(
+            new Date("2026-08-15T12:00:00.000Z"),
+        );
+        const { module, prisma } = loadProcessor(
+            [{ id: "track-old" }],
+            90,
+            1,
+            true,
+        );
+
+        await module.processTrackRemovalPurge(buildJob());
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(prisma.federationTombstone.createMany).toHaveBeenCalledWith({
+            data: [{ entityType: "track", entityId: "track-old" }],
+        });
+        expect(prisma.federationTombstone.deleteMany).toHaveBeenCalledWith({
+            where: { deletedAt: { lt: new Date("2026-05-17T12:00:00.000Z") } },
+        });
+    });
+
+    it("writes no tombstones when federation is disabled", async () => {
+        const { module, prisma } = loadProcessor([{ id: "track-old" }]);
+
+        await module.processTrackRemovalPurge(buildJob());
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(prisma.federationTombstone.createMany).not.toHaveBeenCalled();
+        expect(prisma.federationTombstone.deleteMany).not.toHaveBeenCalled();
     });
 
     it("uses the current instant as the exclusive cutoff when retention is zero", async () => {
@@ -108,7 +167,7 @@ describe("trackRemovalPurgeProcessor", () => {
 
         expect(prisma.track.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { removedAt: { lt: now } },
+                where: { origin: "LOCAL", removedAt: { lt: now } },
             }),
         );
     });
@@ -136,6 +195,7 @@ describe("trackRemovalPurgeProcessor", () => {
                 id: {
                     in: expect.arrayContaining(["track-000", "track-099"]),
                 },
+                origin: "LOCAL",
                 removedAt: { lt: new Date("2026-05-16T12:00:00.000Z") },
             },
         });
@@ -176,6 +236,7 @@ describe("trackRemovalPurgeProcessor", () => {
 
         expect(prisma.track.findMany).toHaveBeenCalledWith({
             where: {
+                origin: "LOCAL",
                 removedAt: { lt: new Date(cutoffAt) },
                 id: { gt: "track-100" },
             },
@@ -267,5 +328,22 @@ describe("trackRemovalPurgeProcessor", () => {
         ).resolves.toEqual({ deleted: 0, continued: false });
         expect(cleanupOrphanedLibraryEntities).not.toHaveBeenCalled();
         expect(backfillAllArtistCounts).not.toHaveBeenCalled();
+    });
+
+    it("does not select federated tracks for local retention purge", async () => {
+        const { module, prisma, cleanupOrphanedLibraryEntities } =
+            loadProcessor([{ id: "track-federated", origin: "FEDERATED" }]);
+
+        await expect(
+            module.processTrackRemovalPurge(buildJob()),
+        ).resolves.toEqual({ deleted: 0, continued: false });
+
+        expect(prisma.track.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ origin: "LOCAL" }),
+            }),
+        );
+        expect(prisma.track.deleteMany).not.toHaveBeenCalled();
+        expect(cleanupOrphanedLibraryEntities).not.toHaveBeenCalled();
     });
 });

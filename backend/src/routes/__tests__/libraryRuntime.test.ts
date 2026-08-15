@@ -1,11 +1,14 @@
-import type { Request, Response } from "express";
+import express, { type Request, type Response } from "express";
 import fs from "fs";
+import request from "supertest";
 
 const mockStreamGetStreamFilePath = jest.fn();
 const mockStreamWithRangeSupport = jest.fn();
 const mockStreamDestroy = jest.fn();
 const mockParseFile = jest.fn();
 const mockLookup = jest.fn();
+const mockProxyFederatedTrackStream = jest.fn();
+const mockProxyFederatedCover = jest.fn();
 
 jest.mock("dns/promises", () => ({
     lookup: (...args: unknown[]) => mockLookup(...args),
@@ -89,6 +92,9 @@ jest.mock("../../utils/db", () => ({
         trackMapping: {
             findMany: jest.fn(),
         },
+        federationPeer: {
+            findUnique: jest.fn(),
+        },
         play: {
             findFirst: jest.fn(),
             create: jest.fn(),
@@ -162,6 +168,7 @@ jest.mock("../../utils/redis", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        features: { federation: true },
         audiobookshelf: undefined,
         music: {
             musicPath: "/music",
@@ -173,6 +180,15 @@ jest.mock("../../config", () => ({
             shareCeiling: 0.3,
         },
     },
+}));
+
+jest.mock("../../services/federationStreamProxy", () => ({
+    proxyFederatedTrackStream: (...args: unknown[]) =>
+        mockProxyFederatedTrackStream(...args),
+}));
+jest.mock("../../services/federationCoverProxy", () => ({
+    proxyFederatedCover: (...args: unknown[]) =>
+        mockProxyFederatedCover(...args),
 }));
 
 jest.mock("../../workers/queues", () => ({
@@ -400,6 +416,8 @@ const mockPlayFindMany = prisma.play.findMany as jest.Mock;
 const mockPlayGroupBy = prisma.play.groupBy as jest.Mock;
 const mockTrackMappingFindMany = (prisma as any).trackMapping
     .findMany as jest.Mock;
+const mockFederationPeerFindUnique = (prisma as any).federationPeer
+    .findUnique as jest.Mock;
 const mockUserSettingsFindUnique = prisma.userSettings.findUnique as jest.Mock;
 const mockArtistFindMany = prisma.artist.findMany as jest.Mock;
 const mockArtistFindUnique = prisma.artist.findUnique as jest.Mock;
@@ -1339,6 +1357,15 @@ describe("library stream runtime coverage", () => {
         });
         mockStreamWithRangeSupport.mockResolvedValue(undefined);
         mockStreamDestroy.mockImplementation(() => undefined);
+        mockProxyFederatedTrackStream.mockResolvedValue(undefined);
+        mockProxyFederatedCover.mockResolvedValue(true);
+        mockFederationPeerFindUnique.mockResolvedValue({
+            id: "peer-1",
+            name: "Peer One",
+            baseUrl: "https://peer.example",
+            outboundToken: "encrypted-token",
+            outboundStatus: "ACTIVE",
+        });
     });
 
     it("returns 401 when stream request has no authenticated user", async () => {
@@ -1619,6 +1646,120 @@ describe("library stream runtime coverage", () => {
 
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({ error: "Failed to stream track" });
+    });
+
+    it("proxies federated tracks and preserves local-user play logging", async () => {
+        mockTrackFindUnique.mockResolvedValueOnce(
+            createNativeTrack({
+                id: "fed-track-1",
+                origin: "FEDERATED",
+                peerId: "peer-1",
+                remoteId: "remote-track-1",
+                filePath: null,
+            }),
+        );
+        const req = {
+            params: { id: "fed-track-1" },
+            query: { quality: "original" },
+            headers: { range: "bytes=0-99" },
+            user: { id: "user-1" },
+        } as any;
+        const res = createRes();
+
+        await streamHandler(req, res);
+
+        expect(mockPlayCreate).toHaveBeenCalledWith({
+            data: { userId: "user-1", trackId: "fed-track-1" },
+        });
+        expect(mockProxyFederatedTrackStream).toHaveBeenCalledWith({
+            req,
+            res,
+            peer: {
+                id: "peer-1",
+                name: "Peer One",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "ACTIVE",
+            },
+            remoteId: "remote-track-1",
+            trackId: "fed-track-1",
+            sourceModified: new Date("2024-01-01T00:00:00.000Z"),
+            sourceMime: undefined,
+            quality: "original",
+        });
+        expect(mockAudioStreamingCtor).not.toHaveBeenCalled();
+    });
+
+    it.each(["OFFLINE", "REVOKED"])(
+        "returns typed 503 when the owning peer is %s",
+        async (status) => {
+            mockTrackFindUnique.mockResolvedValueOnce(
+                createNativeTrack({
+                    id: "fed-track-1",
+                    origin: "FEDERATED",
+                    peerId: "peer-1",
+                    remoteId: "remote-track-1",
+                    filePath: null,
+                }),
+            );
+            mockFederationPeerFindUnique.mockResolvedValueOnce({
+                id: "peer-1",
+                name: "Peer One",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                status,
+            });
+            const res = createRes();
+
+            await streamHandler(
+                {
+                    params: { id: "fed-track-1" },
+                    query: {},
+                    headers: {},
+                    user: { id: "user-1" },
+                } as any,
+                res,
+            );
+
+            expect(res.statusCode).toBe(503);
+            expect(res.body).toEqual({
+                error: "Federation peer is offline",
+                code: "PEER_OFFLINE",
+            });
+            expect(mockPlayCreate).not.toHaveBeenCalled();
+            expect(mockProxyFederatedTrackStream).not.toHaveBeenCalled();
+        },
+    );
+
+    it("terminates a post-headers proxy failure without a second response", async () => {
+        mockTrackFindUnique.mockResolvedValueOnce(
+            createNativeTrack({
+                id: "fed-track-1",
+                origin: "FEDERATED",
+                peerId: "peer-1",
+                remoteId: "remote-track-1",
+                filePath: null,
+            }),
+        );
+        const res = createRes();
+        res.headersSent = true;
+        res.writableEnded = false;
+        mockProxyFederatedTrackStream.mockRejectedValueOnce(
+            new Error("upstream reset after headers"),
+        );
+
+        await streamHandler(
+            {
+                params: { id: "fed-track-1" },
+                query: {},
+                headers: {},
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+
+        expect(res.end).toHaveBeenCalledTimes(1);
+        expect(res.status).not.toHaveBeenCalledWith(503);
     });
 });
 
@@ -2154,6 +2295,7 @@ describe("library catalog list runtime coverage", () => {
                         { libraryAlbumCount: { gt: 0 } },
                         { discoveryAlbumCount: { gt: 0 } },
                         { remoteTrackCount: { gt: 0 } },
+                        { peerId: { not: null } },
                     ],
                     name: { contains: "art", mode: "insensitive" },
                 }),
@@ -2799,11 +2941,99 @@ describe("library catalog list runtime coverage", () => {
                             OR: [
                                 {
                                     location: "LIBRARY",
-                                    tracks: { some: { removedAt: null } },
+                                    tracks: {
+                                        some: {
+                                            removedAt: null,
+                                            OR: [
+                                                { origin: "LOCAL" },
+                                                {
+                                                    origin: "FEDERATED",
+                                                    OR: [
+                                                        {
+                                                            dedupOfTrackId:
+                                                                null,
+                                                        },
+                                                        {
+                                                            federationPeer: {
+                                                                showDedupedCopies: true,
+                                                            },
+                                                        },
+                                                        {
+                                                            dedupOfTrack: {
+                                                                removedAt: {
+                                                                    not: null,
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
                                 },
                                 {
                                     rgMbid: { in: ["rg-1"] },
-                                    tracks: { some: { removedAt: null } },
+                                    tracks: {
+                                        some: {
+                                            removedAt: null,
+                                            OR: [
+                                                { origin: "LOCAL" },
+                                                {
+                                                    origin: "FEDERATED",
+                                                    OR: [
+                                                        {
+                                                            dedupOfTrackId:
+                                                                null,
+                                                        },
+                                                        {
+                                                            federationPeer: {
+                                                                showDedupedCopies: true,
+                                                            },
+                                                        },
+                                                        {
+                                                            dedupOfTrack: {
+                                                                removedAt: {
+                                                                    not: null,
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                                {
+                                    location: "FEDERATED",
+                                    tracks: {
+                                        some: {
+                                            removedAt: null,
+                                            OR: [
+                                                { origin: "LOCAL" },
+                                                {
+                                                    origin: "FEDERATED",
+                                                    OR: [
+                                                        {
+                                                            dedupOfTrackId:
+                                                                null,
+                                                        },
+                                                        {
+                                                            federationPeer: {
+                                                                showDedupedCopies: true,
+                                                            },
+                                                        },
+                                                        {
+                                                            dedupOfTrack: {
+                                                                removedAt: {
+                                                                    not: null,
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
                                 },
                             ],
                         },
@@ -2861,7 +3091,30 @@ describe("library catalog list runtime coverage", () => {
         expect(mockAlbumFindMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: {
-                    tracks: { some: { removedAt: null } },
+                    tracks: {
+                        some: {
+                            removedAt: null,
+                            OR: [
+                                { origin: "LOCAL" },
+                                {
+                                    origin: "FEDERATED",
+                                    OR: [
+                                        { dedupOfTrackId: null },
+                                        {
+                                            federationPeer: {
+                                                showDedupedCopies: true,
+                                            },
+                                        },
+                                        {
+                                            dedupOfTrack: {
+                                                removedAt: { not: null },
+                                            },
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    },
                     location: "DISCOVER",
                     artistId: "artist-discovery",
                 },
@@ -3048,7 +3301,29 @@ describe("library catalog list runtime coverage", () => {
 
         expect(mockTrackFindMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { albumId: "album-10", removedAt: null },
+                where: {
+                    albumId: "album-10",
+                    removedAt: null,
+                    OR: [
+                        { origin: "LOCAL" },
+                        {
+                            origin: "FEDERATED",
+                            OR: [
+                                { dedupOfTrackId: null },
+                                {
+                                    federationPeer: {
+                                        showDedupedCopies: true,
+                                    },
+                                },
+                                {
+                                    dedupOfTrack: {
+                                        removedAt: { not: null },
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
                 skip: 1,
                 take: 4,
                 orderBy: [{ discNo: "asc" }, { trackNo: "asc" }],
@@ -3548,9 +3823,12 @@ describe("library catalog list runtime coverage", () => {
         // Exactly one findMany — the fetch-all call, which carries no pivot
         // filter (the sampling query would pass `where: { random: ... }`).
         expect(mockTrackFindMany).toHaveBeenCalledTimes(1);
-        expect(mockTrackFindMany.mock.calls[0][0].where).toEqual({
-            removedAt: null,
-        });
+        expect(mockTrackFindMany.mock.calls[0][0].where).toEqual(
+            expect.objectContaining({
+                removedAt: null,
+                AND: expect.any(Array),
+            }),
+        );
         expect(mockShuffleArray).toHaveBeenCalled();
         expect(res.statusCode).toBe(200);
         expect(res.body.total).toBe(5);
@@ -3587,6 +3865,7 @@ describe("library catalog list runtime coverage", () => {
             expect.objectContaining({
                 where: {
                     removedAt: null,
+                    AND: expect.any(Array),
                     random: { gte: expect.any(Number) },
                 },
                 orderBy: { random: "asc" },
@@ -3602,6 +3881,7 @@ describe("library catalog list runtime coverage", () => {
             expect.objectContaining({
                 where: {
                     removedAt: null,
+                    AND: expect.any(Array),
                     id: { in: ["track-9", "track-8"] },
                 },
             }),
@@ -3651,6 +3931,7 @@ describe("library catalog list runtime coverage", () => {
             expect.objectContaining({
                 where: {
                     removedAt: null,
+                    AND: expect.any(Array),
                     random: { gte: expect.any(Number) },
                 },
                 orderBy: { random: "asc" },
@@ -3664,6 +3945,7 @@ describe("library catalog list runtime coverage", () => {
             expect.objectContaining({
                 where: {
                     removedAt: null,
+                    AND: expect.any(Array),
                     random: { lt: expect.any(Number) },
                 },
                 orderBy: { random: "asc" },
@@ -3867,6 +4149,64 @@ describe("library catalog list runtime coverage", () => {
                 entityId: "track-1",
             },
         });
+    });
+
+    it("likes and reads a FEDERATED track through the standard preference route", async () => {
+        const federatedTrack = {
+            id: "federated-track-1",
+            origin: "FEDERATED",
+        };
+        let likedEntry: { likedAt: Date } | null = null;
+        mockTrackFindUnique.mockImplementation(async ({ where }) =>
+            where.id === federatedTrack.id ? federatedTrack : null,
+        );
+        mockLikedTrackUpsert.mockImplementation(async ({ create }) => {
+            likedEntry = { likedAt: create.likedAt };
+            return { ...create, origin: federatedTrack.origin };
+        });
+        mockLikedTrackFindUnique.mockImplementation(async () => likedEntry);
+        mockDislikedEntityFindUnique.mockResolvedValue(null);
+        mockDislikedEntityDeleteMany.mockResolvedValue({ count: 0 });
+
+        const routeApp = express();
+        routeApp.use(express.json());
+        routeApp.use((req, _res, next) => {
+            req.user = { id: "user-1" } as never;
+            next();
+        });
+        routeApp.use("/api/library", router);
+
+        const postResponse = await request(routeApp)
+            .post("/api/library/tracks/federated-track-1/preference")
+            .send({ signal: "thumbs_up" });
+        expect(postResponse.status).toBe(200);
+        expect(postResponse.body).toEqual(
+            expect.objectContaining({
+                trackId: "federated-track-1",
+                signal: "thumbs_up",
+                state: "liked",
+            }),
+        );
+        expect(mockLikedTrackUpsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                create: expect.objectContaining({
+                    userId: "user-1",
+                    trackId: "federated-track-1",
+                }),
+            }),
+        );
+
+        const getResponse = await request(routeApp).get(
+            "/api/library/tracks/federated-track-1/preference",
+        );
+        expect(getResponse.status).toBe(200);
+        expect(getResponse.body).toEqual(
+            expect.objectContaining({
+                trackId: "federated-track-1",
+                signal: "thumbs_up",
+                state: "liked",
+            }),
+        );
     });
 
     it("updates album-wide track preferences in one batch request", async () => {
@@ -5098,6 +5438,78 @@ describe("library catalog list runtime coverage", () => {
         expect(errRes.statusCode).toBe(500);
     });
 
+    it("falls back to the owning peer when a federated album has no resolved cover", async () => {
+        mockDeezerGetAlbumCover.mockResolvedValueOnce(null);
+        mockAlbumFindUnique.mockResolvedValueOnce({
+            id: "fed-album-1",
+            title: "Federated Album",
+            rgMbid: "temp-federated",
+            coverUrl: null,
+            peerId: "peer-1",
+            remoteId: "remote-album-1",
+            federationPeer: {
+                id: "peer-1",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "ACTIVE",
+            },
+            artist: { name: "Remote Artist" },
+        });
+        const req = {
+            params: { id: "fed-album-1" },
+            query: {},
+            headers: {},
+        } as any;
+        const res = createRes();
+
+        await coverArtHandler(req, res);
+
+        expect(mockProxyFederatedCover).toHaveBeenCalledWith({
+            req,
+            res,
+            peer: {
+                id: "peer-1",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "ACTIVE",
+            },
+            remoteId: "remote-album-1",
+        });
+        expect(res.statusCode).toBe(200);
+    });
+
+    it("does not contact an offline peer for a missing federated cover", async () => {
+        mockDeezerGetAlbumCover.mockResolvedValueOnce(null);
+        mockAlbumFindUnique.mockResolvedValueOnce({
+            id: "fed-album-1",
+            title: "Federated Album",
+            rgMbid: "temp-federated",
+            coverUrl: null,
+            peerId: "peer-1",
+            remoteId: "remote-album-1",
+            federationPeer: {
+                id: "peer-1",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "OFFLINE",
+            },
+            artist: { name: "Remote Artist" },
+        });
+        const res = createRes();
+
+        await coverArtHandler(
+            {
+                params: { id: "fed-album-1" },
+                query: {},
+                headers: {},
+            } as any,
+            res,
+        );
+
+        expect(mockProxyFederatedCover).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(404);
+    });
+
     it("serves local native cover IDs from disk and falls back to Deezer when missing", async () => {
         const { config } = jest.requireMock("../../config") as {
             config: Record<string, unknown>;
@@ -6252,7 +6664,10 @@ describe("library catalog list runtime coverage", () => {
 
         expect(res.statusCode).toBe(200);
         expect(mockLikedTrackFindMany).toHaveBeenCalledWith({
-            where: { userId: "user-1" },
+            where: {
+                userId: "user-1",
+                track: { removedAt: null, AND: expect.any(Array) },
+            },
             select: { trackId: true },
             orderBy: { likedAt: "desc" },
             take: 5000,

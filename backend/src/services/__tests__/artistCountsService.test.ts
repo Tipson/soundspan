@@ -61,19 +61,20 @@ describe("artistCountsService", () => {
             where: {
                 artistId: "artist-1",
                 location: "LIBRARY",
-                tracks: { some: { removedAt: null } },
+                tracks: { some: { removedAt: null, origin: "LOCAL" } },
             },
         });
         expect(prisma.album.count).toHaveBeenNthCalledWith(2, {
             where: {
                 artistId: "artist-1",
                 location: "DISCOVER",
-                tracks: { some: { removedAt: null } },
+                tracks: { some: { removedAt: null, origin: "LOCAL" } },
             },
         });
         expect(prisma.track.count).toHaveBeenCalledWith({
             where: {
                 removedAt: null,
+                origin: "LOCAL",
                 album: { artistId: "artist-1" },
             },
         });
@@ -122,6 +123,22 @@ describe("artistCountsService", () => {
             updated: 1,
             errors: 1,
         });
+    });
+
+    it("updates a scoped artist set across bounded batches", async () => {
+        const { mod, prisma } = loadModule();
+        const artistIds = Array.from(
+            { length: 205 },
+            (_, index) => `artist-${index}`,
+        );
+        prisma.album.count.mockResolvedValue(0);
+        prisma.track.count.mockResolvedValue(0);
+        prisma.artist.update.mockResolvedValue({});
+
+        await expect(
+            mod.updateArtistCountsInBatches(artistIds),
+        ).resolves.toEqual({ updated: 205, failed: 0 });
+        expect(prisma.artist.update).toHaveBeenCalledTimes(205);
     });
 
     it("updates by album id and track id when related artist exists", async () => {

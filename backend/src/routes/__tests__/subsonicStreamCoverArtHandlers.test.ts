@@ -5,6 +5,16 @@ const mockGetStreamFilePath = jest.fn();
 const mockStreamFileWithRangeSupport = jest.fn();
 const mockDestroyStreamingService = jest.fn();
 const mockLookup = jest.fn();
+const mockProxyFederatedTrackStream = jest.fn();
+const mockProxyFederatedCover = jest.fn();
+const mockSubsonicLogger = {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    child: jest.fn(),
+};
+mockSubsonicLogger.child.mockReturnValue(mockSubsonicLogger);
 const mockAudioStreamingService = jest.fn().mockImplementation(() => ({
     getStreamFilePath: mockGetStreamFilePath,
     streamFileWithRangeSupport: mockStreamFileWithRangeSupport,
@@ -66,6 +76,13 @@ jest.mock("../../services/audioStreaming", () => ({
 jest.mock("../../services/lyrics", () => ({
     getLyrics: jest.fn(),
 }));
+jest.mock("../../services/federationStreamProxy", () => ({
+    proxyFederatedTrackStream: mockProxyFederatedTrackStream,
+}));
+jest.mock("../../services/federationCoverProxy", () => ({
+    proxyFederatedCover: mockProxyFederatedCover,
+}));
+jest.mock("../../utils/logger", () => ({ logger: mockSubsonicLogger }));
 
 jest.mock("../../config", () => ({
     config: {
@@ -103,7 +120,9 @@ function buildRes(): Response {
         setHeader: jest.fn(),
         status: jest.fn(),
         send: jest.fn(),
+        end: jest.fn(),
         headersSent: false,
+        writableEnded: false,
     };
     (res.status as jest.Mock).mockReturnValue(res);
     return res as Response;
@@ -147,6 +166,8 @@ beforeEach(() => {
     mockFetch.mockReset();
     mockLookup.mockReset();
     mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    mockProxyFederatedTrackStream.mockResolvedValue(undefined);
+    mockProxyFederatedCover.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -154,6 +175,130 @@ afterEach(() => {
 });
 
 describe("handleStream", () => {
+    it("proxies a federated Range request to its active peer", async () => {
+        const track = {
+            id: "federated-track",
+            origin: "FEDERATED",
+            remoteId: "remote-track",
+            mime: "audio/flac",
+            filePath: null,
+            fileModified: new Date("2026-08-15T12:00:00Z"),
+            federationPeer: {
+                id: "peer-1",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "ACTIVE",
+            },
+        };
+        mockTrackFindFirst.mockResolvedValue(track);
+        const req = buildReq({ id: "tr-federated-track" });
+        req.headers.range = "bytes=10-20";
+        const res = buildRes();
+
+        await handleStream(req, res);
+
+        expect(mockProxyFederatedTrackStream).toHaveBeenCalledWith({
+            req,
+            res,
+            peer: track.federationPeer,
+            remoteId: "remote-track",
+            trackId: "federated-track",
+            sourceModified: track.fileModified,
+            sourceMime: "audio/flac",
+            quality: "original",
+        });
+        expect(mockAudioServiceConstructor).not.toHaveBeenCalled();
+    });
+
+    it("logs a normalized warning when an active federated proxy fails", async () => {
+        const failure = new Error("transient peer failure");
+        mockTrackFindFirst.mockResolvedValue({
+            id: "federated-track",
+            origin: "FEDERATED",
+            remoteId: "remote-track",
+            mime: "audio/flac",
+            filePath: null,
+            fileModified: new Date("2026-08-15T12:00:00Z"),
+            federationPeer: {
+                id: "peer-1",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "ACTIVE",
+            },
+        });
+        mockProxyFederatedTrackStream.mockRejectedValueOnce(failure);
+
+        await handleStream(buildReq({ id: "tr-federated-track" }), buildRes());
+
+        expect(mockSubsonicLogger.warn).toHaveBeenCalledWith(
+            "Federated stream proxy failed",
+            { error: failure },
+        );
+        expect(mockSendError).toHaveBeenCalledWith(
+            expect.anything(),
+            SubsonicErrorCode.GENERIC,
+            "Federation peer is offline",
+            "json",
+            undefined,
+        );
+    });
+
+    it("ends a failed federated stream after headers without writing an error body", async () => {
+        mockTrackFindFirst.mockResolvedValue({
+            id: "federated-track",
+            origin: "FEDERATED",
+            remoteId: "remote-track",
+            mime: "audio/flac",
+            filePath: null,
+            fileModified: new Date("2026-08-15T12:00:00Z"),
+            federationPeer: {
+                id: "peer-1",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "ACTIVE",
+            },
+        });
+        mockProxyFederatedTrackStream.mockRejectedValueOnce(
+            new Error("mid-stream failure"),
+        );
+        const res = buildRes();
+        (res as Response & { headersSent: boolean }).headersSent = true;
+
+        await handleStream(buildReq({ id: "tr-federated-track" }), res);
+
+        expect(res.end).toHaveBeenCalledTimes(1);
+        expect(mockSendError).not.toHaveBeenCalled();
+        expect(mockSubsonicLogger.warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("maps an offline federated peer to a Subsonic generic error", async () => {
+        mockTrackFindFirst.mockResolvedValue({
+            id: "federated-track",
+            origin: "FEDERATED",
+            remoteId: "remote-track",
+            mime: "audio/flac",
+            filePath: null,
+            fileModified: new Date("2026-08-15T12:00:00Z"),
+            federationPeer: {
+                id: "peer-1",
+                baseUrl: "https://peer.example",
+                outboundToken: "encrypted-token",
+                outboundStatus: "OFFLINE",
+            },
+        });
+
+        await handleStream(buildReq({ id: "tr-federated-track" }), buildRes());
+
+        expect(mockSendError).toHaveBeenCalledWith(
+            expect.anything(),
+            SubsonicErrorCode.GENERIC,
+            "Federation peer is offline",
+            "json",
+            undefined,
+        );
+        expect(mockProxyFederatedTrackStream).not.toHaveBeenCalled();
+    });
+
     it("returns not found instead of streaming a removed library track", async () => {
         mockTrackFindFirst.mockImplementationOnce(
             async ({ where }: { where: { removedAt?: null } }) =>
@@ -188,20 +333,18 @@ describe("handleStream", () => {
             res,
         );
 
-        expect(mockTrackFindFirst).toHaveBeenCalledWith({
-            where: {
-                id: "bad-id",
-                removedAt: null,
-                album: {
-                    location: "LIBRARY",
-                },
-            },
-            select: {
-                id: true,
-                filePath: true,
-                fileModified: true,
-            },
-        });
+        expect(mockTrackFindFirst).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    id: "bad-id",
+                    removedAt: null,
+                    AND: expect.any(Array),
+                    album: {
+                        location: { in: ["LIBRARY", "FEDERATED"] },
+                    },
+                }),
+            }),
+        );
         expect(mockSendError).toHaveBeenCalledWith(
             expect.anything(),
             SubsonicErrorCode.NOT_FOUND,
@@ -348,6 +491,33 @@ describe("handleStream", () => {
 });
 
 describe("handleGetCoverArt", () => {
+    it("falls back to the owning peer for a federated album cover", async () => {
+        const peer = {
+            id: "peer-1",
+            baseUrl: "https://peer.example",
+            outboundToken: "encrypted-token",
+            outboundStatus: "ACTIVE",
+        };
+        mockAlbumFindFirst
+            .mockResolvedValueOnce({ coverUrl: null })
+            .mockResolvedValueOnce({
+                remoteId: "remote-album",
+                federationPeer: peer,
+            });
+        const req = buildReq({ id: "al-federated-album" });
+        const res = buildRes();
+
+        await handleGetCoverArt(req, res);
+
+        expect(mockProxyFederatedCover).toHaveBeenCalledWith({
+            req,
+            res,
+            peer,
+            remoteId: "remote-album",
+        });
+        expect(mockSendError).not.toHaveBeenCalled();
+    });
+
     it("returns early with subsonic error when cover id is missing", async () => {
         await handleGetCoverArt(buildReq({}), buildRes());
 

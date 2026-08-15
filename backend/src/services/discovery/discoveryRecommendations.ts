@@ -1,6 +1,9 @@
 import { addMonths, endOfWeek, startOfWeek, subDays } from "date-fns";
 import { prisma } from "../../utils/db";
-import { TRACK_VISIBLE_WHERE } from "../../utils/librarySorting";
+import {
+    TRACK_BROWSE_WHERE,
+    TRACK_VISIBLE_WHERE,
+} from "../../utils/librarySorting";
 import { logger } from "../../utils/logger";
 import { discoverySeeding } from "./discoverySeeding";
 import {
@@ -187,6 +190,10 @@ export class DiscoveryRecommendationsService {
                 where: {
                     userId,
                     playedAt: { gte: subDays(new Date(), 120) },
+                    track: {
+                        ...TRACK_VISIBLE_WHERE,
+                        ...TRACK_BROWSE_WHERE,
+                    },
                 },
                 select: {
                     track: {
@@ -332,12 +339,13 @@ export class DiscoveryRecommendationsService {
         const candidateTracks = await prisma.track.findMany({
             where: {
                 ...TRACK_VISIBLE_WHERE,
+                ...TRACK_BROWSE_WHERE,
                 duration: { gt: 0 },
                 ...(recentTrackIds.length > 0
                     ? { id: { notIn: recentTrackIds } }
                     : {}),
                 album: {
-                    location: "LIBRARY",
+                    location: { in: ["LIBRARY", "FEDERATED"] },
                     ...(prioritizedArtistIds.length > 0
                         ? { artistId: { in: prioritizedArtistIds } }
                         : {}),
@@ -427,7 +435,7 @@ export class DiscoveryRecommendationsService {
                 trackId: candidate.track.id,
                 title: candidate.track.title,
                 duration: candidate.track.duration,
-                filePath: candidate.track.filePath,
+                filePath: candidate.track.filePath ?? "",
                 albumId: candidate.track.albumId,
                 albumTitle: candidate.track.album.title,
                 albumMbid: candidate.track.album.rgMbid,
@@ -462,7 +470,7 @@ export class DiscoveryRecommendationsService {
                     trackId: candidate.track.id,
                     title: candidate.track.title,
                     duration: candidate.track.duration,
-                    filePath: candidate.track.filePath,
+                    filePath: candidate.track.filePath ?? "",
                     albumId: candidate.track.albumId,
                     albumTitle: candidate.track.album.title,
                     albumMbid: candidate.track.album.rgMbid,
@@ -480,10 +488,11 @@ export class DiscoveryRecommendationsService {
             const fallbackTracks = await prisma.track.findMany({
                 where: {
                     ...TRACK_VISIBLE_WHERE,
+                    ...TRACK_BROWSE_WHERE,
                     duration: { gt: 0 },
                     id: { notIn: Array.from(selectedTrackIds) },
                     album: {
-                        location: "LIBRARY",
+                        location: { in: ["LIBRARY", "FEDERATED"] },
                         ...(excludedAlbumMbids.length > 0
                             ? { rgMbid: { notIn: excludedAlbumMbids } }
                             : {}),
@@ -536,7 +545,7 @@ export class DiscoveryRecommendationsService {
                     trackId: track.id,
                     title: track.title,
                     duration: track.duration,
-                    filePath: track.filePath,
+                    filePath: track.filePath ?? "",
                     albumId: track.albumId,
                     albumTitle: track.album.title,
                     albumMbid: track.album.rgMbid,
@@ -577,7 +586,7 @@ export class DiscoveryRecommendationsService {
                         trackId: track.id,
                         title: track.title,
                         duration: track.duration,
-                        filePath: track.filePath,
+                        filePath: track.filePath ?? "",
                         albumId: track.albumId,
                         albumTitle: track.album.title,
                         albumMbid: track.album.rgMbid,
@@ -743,7 +752,11 @@ export class DiscoveryRecommendationsService {
 
         const libraryTracks = trackIds.length
             ? await prisma.track.findMany({
-                  where: { ...TRACK_VISIBLE_WHERE, id: { in: trackIds } },
+                  where: {
+                      ...TRACK_VISIBLE_WHERE,
+                      ...TRACK_BROWSE_WHERE,
+                      id: { in: trackIds },
+                  },
                   include: {
                       album: {
                           include: {

@@ -1,6 +1,9 @@
 import axios from "axios";
 import { prisma } from "../utils/db";
-import { TRACK_VISIBLE_WHERE } from "../utils/librarySorting";
+import {
+    TRACK_BROWSE_WHERE,
+    TRACK_VISIBLE_WHERE,
+} from "../utils/librarySorting";
 import { logger } from "../utils/logger";
 import { redisClient } from "../utils/redis";
 import { BRAND_USER_AGENT } from "../config/brand";
@@ -720,7 +723,11 @@ export async function getLyrics(
 
     // 2. Fetch the track info for the lookup
     const track = await prisma.track.findUnique({
-        where: { id: trackId, ...TRACK_VISIBLE_WHERE },
+        where: {
+            id: trackId,
+            ...TRACK_VISIBLE_WHERE,
+            AND: [TRACK_BROWSE_WHERE],
+        },
         include: {
             album: {
                 include: {
@@ -752,7 +759,7 @@ export async function getLyrics(
             : lookupContext?.duration;
 
     // 3. Try embedded lyrics from file tags (local files only)
-    if (track.filePath) {
+    if (track.origin === "LOCAL" && track.filePath) {
         const embedded = await withTimeout(
             () => extractEmbeddedLyrics(track.filePath as string),
             EMBEDDED_LOOKUP_TIMEOUT_MS,

@@ -4,6 +4,10 @@ import { runAnnQuery } from "../utils/annQuery";
 import { featureDetection } from "./featureDetection";
 import { logger } from "../utils/logger";
 import { separateArtistsPreservingOrder } from "../utils/separateArtists";
+import {
+    TRACK_BROWSE_SQL,
+    trackBrowseSql,
+} from "../utils/libraryRadioPredicates";
 
 export interface SimilarTrack {
     id: string;
@@ -149,7 +153,9 @@ async function findSimilarHybrid(
                 t.acousticness, t.instrumentalness, t.key, t."keyScale"
             FROM track_embeddings te
             JOIN "Track" t ON te.track_id = t.id
-            WHERE t."removedAt" IS NULL AND te.track_id = ${trackId}
+            WHERE t."removedAt" IS NULL
+              AND ${TRACK_BROWSE_SQL}
+              AND te.track_id = ${trackId}
         ),
         clap_candidates AS (
             SELECT
@@ -158,6 +164,7 @@ async function findSimilarHybrid(
             FROM track_embeddings te
             JOIN "Track" candidate_track ON te.track_id = candidate_track.id
             WHERE candidate_track."removedAt" IS NULL
+              AND ${trackBrowseSql("candidate_track")}
               AND te.track_id != ${trackId}
             ORDER BY te.embedding <=> (SELECT embedding FROM source)
             LIMIT ${candidateLimit}
@@ -192,6 +199,7 @@ async function findSimilarHybrid(
         JOIN "Artist" ar ON a."artistId" = ar.id
         CROSS JOIN source s
         WHERE t."removedAt" IS NULL
+          AND ${TRACK_BROWSE_SQL}
         ORDER BY similarity DESC
         LIMIT ${candidateLimit}
     `);
@@ -209,7 +217,9 @@ async function findSimilarClapOnly(
             SELECT te.embedding
             FROM track_embeddings te
             JOIN "Track" source_track ON te.track_id = source_track.id
-            WHERE source_track."removedAt" IS NULL AND te.track_id = ${trackId}
+            WHERE source_track."removedAt" IS NULL
+              AND ${trackBrowseSql("source_track")}
+              AND te.track_id = ${trackId}
         )
         SELECT
             t.id,
@@ -230,7 +240,9 @@ async function findSimilarClapOnly(
         JOIN "Track" t ON te.track_id = t.id
         JOIN "Album" a ON t."albumId" = a.id
         JOIN "Artist" ar ON a."artistId" = ar.id
-        WHERE t."removedAt" IS NULL AND te.track_id != ${trackId}
+        WHERE t."removedAt" IS NULL
+          AND ${TRACK_BROWSE_SQL}
+          AND te.track_id != ${trackId}
         ORDER BY distance
         LIMIT ${candidateLimit}
     `);
@@ -246,8 +258,10 @@ async function findSimilarFeaturesOnly(
     const results = await prisma.$queryRaw<SimilarTrack[]>`
         WITH source AS (
             SELECT energy, valence, bpm, danceability, acousticness, instrumentalness, key, "keyScale"
-            FROM "Track"
-            WHERE "removedAt" IS NULL AND id = ${trackId}
+            FROM "Track" source_track
+            WHERE source_track."removedAt" IS NULL
+              AND ${trackBrowseSql("source_track")}
+              AND source_track.id = ${trackId}
         )
         SELECT
             t.id,
@@ -277,6 +291,7 @@ async function findSimilarFeaturesOnly(
         JOIN "Artist" ar ON a."artistId" = ar.id
         CROSS JOIN source s
         WHERE t."removedAt" IS NULL
+            AND ${TRACK_BROWSE_SQL}
             AND t.id != ${trackId}
             AND t.energy IS NOT NULL
         ORDER BY similarity DESC

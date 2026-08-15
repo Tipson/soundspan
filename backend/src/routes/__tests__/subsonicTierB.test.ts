@@ -987,7 +987,12 @@ describe("subsonic Tier B handlers", () => {
                             where: {
                                 OR: [
                                     { trackId: null },
-                                    { track: { removedAt: null } },
+                                    {
+                                        track: {
+                                            removedAt: null,
+                                            AND: expect.any(Array),
+                                        },
+                                    },
                                 ],
                             },
                         },
@@ -1002,7 +1007,10 @@ describe("subsonic Tier B handlers", () => {
             where: {
                 playlistId: { in: ["playlist-1"] },
                 trackId: { not: null },
-                track: { removedAt: null },
+                track: expect.objectContaining({
+                    removedAt: null,
+                    AND: expect.any(Array),
+                }),
             },
             select: {
                 playlistId: true,
@@ -1052,7 +1060,7 @@ describe("subsonic Tier B handlers", () => {
         );
     });
 
-    it("returns playlist payload for a valid playlist id", async () => {
+    it("returns playlist payload with a federated entry", async () => {
         mockPlaylistFindFirst.mockResolvedValue({
             id: "playlist-1",
             name: "Morning",
@@ -1061,14 +1069,14 @@ describe("subsonic Tier B handlers", () => {
             items: [
                 {
                     track: {
-                        id: "track-1",
+                        id: "federated-track-1",
                         title: "Song One",
                         trackNo: 1,
                         discNo: 1,
                         duration: 120,
                         fileSize: 4000,
                         mime: "audio/mpeg",
-                        filePath: "Artist/Album/01 - Song One.mp3",
+                        filePath: null,
                         album: {
                             id: "album-1",
                             title: "Album One",
@@ -1098,7 +1106,11 @@ describe("subsonic Tier B handlers", () => {
                     duration: 120,
                     public: true,
                     owner: "alice",
-                    entry: [expect.objectContaining({ id: "tr-track-1" })],
+                    entry: [
+                        expect.objectContaining({
+                            id: "tr-federated-track-1",
+                        }),
+                    ],
                 }),
             }),
             "json",
@@ -1747,8 +1759,13 @@ describe("subsonic Tier B handlers", () => {
                 where: {
                     albums: {
                         some: {
-                            location: "LIBRARY",
-                            tracks: { some: { removedAt: null } },
+                            location: { in: ["LIBRARY", "FEDERATED"] },
+                            tracks: {
+                                some: expect.objectContaining({
+                                    removedAt: null,
+                                    AND: expect.any(Array),
+                                }),
+                            },
                         },
                     },
                 },

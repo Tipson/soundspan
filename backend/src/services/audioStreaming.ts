@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import { promises as fsPromises } from "fs";
 import { pipeline } from "node:stream/promises";
+import { Transform, type Readable } from "node:stream";
 import { Request, Response } from "express";
 import { logger } from "../utils/logger";
 import * as path from "path";
@@ -27,6 +28,11 @@ ffmpeg.setFfmpegPath(ffmpegBinaryPath);
 
 const transcodeQueue = new PQueue({ concurrency: config.transcodeConcurrency });
 const inflightTranscodes = new Map<string, Promise<string>>();
+const inflightFederatedStreams = new Map<
+    string,
+    Promise<StreamFileInfo | FederatedStreamSource>
+>();
+const BYTES_PER_GIBIBYTE = 1024 * 1024 * 1024;
 
 // Quality settings
 export const QUALITY_SETTINGS = {
@@ -41,6 +47,37 @@ export type Quality = keyof typeof QUALITY_SETTINGS;
 interface StreamFileInfo {
     filePath: string;
     mimeType: string;
+}
+
+/** Complete peer response metadata needed to decide cache fill or passthrough. */
+export interface FederatedStreamSource {
+    stream: Readable;
+    mimeType: string;
+    status: number;
+    contentLength: number | null;
+    headers?: Record<string, unknown>;
+}
+
+/** Signals that an unknown-length federated cache fill crossed its byte ceiling. */
+export class FederatedCacheCapacityError extends Error {
+    constructor() {
+        super("Federated cache fill exceeded remaining capacity");
+        this.name = "FederatedCacheCapacityError";
+    }
+}
+
+function createByteLimitGuard(maxBytes: number): Transform {
+    let writtenBytes = 0;
+    return new Transform({
+        transform(chunk: Buffer, _encoding, callback) {
+            writtenBytes += chunk.byteLength;
+            if (writtenBytes > maxBytes) {
+                callback(new FederatedCacheCapacityError());
+                return;
+            }
+            callback(null, chunk);
+        },
+    });
 }
 
 /**
@@ -171,6 +208,133 @@ export class AudioStreamingService {
             filePath: transcodedPath,
             mimeType: "audio/mpeg",
         };
+    }
+
+    /** Returns a complete peer stream cache hit without source staleness checks. */
+    async getCachedFederatedStreamFilePath(
+        trackId: string,
+        quality: Quality,
+        mimeType: string,
+    ): Promise<StreamFileInfo | null> {
+        const cached = await prisma.transcodedFile.findFirst({
+            where: { trackId, quality },
+        });
+        if (!cached) return null;
+        const fullPath = path.join(this.transcodeCachePath, cached.cachePath);
+        if (!fs.existsSync(fullPath)) {
+            await prisma.transcodedFile.delete({ where: { id: cached.id } });
+            return null;
+        }
+        await prisma.transcodedFile.update({
+            where: { id: cached.id },
+            data: { lastAccessed: new Date() },
+        });
+        return { filePath: fullPath, mimeType };
+    }
+
+    /** Caches one complete status-200 peer stream or returns it for passthrough. */
+    async cacheFederatedStream(
+        trackId: string,
+        quality: Quality,
+        sourceModified: Date,
+        fallbackMimeType: string,
+        loadStream: () => Promise<FederatedStreamSource>,
+    ): Promise<StreamFileInfo | FederatedStreamSource> {
+        const cached = await this.getCachedFederatedStreamFilePath(
+            trackId,
+            quality,
+            fallbackMimeType,
+        );
+        if (cached) return cached;
+        const key = `${trackId}-${quality}`;
+        const existingFill = inflightFederatedStreams.get(key);
+        if (existingFill) {
+            logger.debug(
+                `[STREAM] Joining in-flight federated cache fill for ${key}`,
+            );
+            return existingFill.then(async (result) => {
+                if (!("stream" in result)) return result;
+                return loadStream();
+            });
+        }
+        return coalesceInFlightByKey(
+            inflightFederatedStreams,
+            key,
+            () =>
+                this.doCacheFederatedStream(
+                    trackId,
+                    quality,
+                    sourceModified,
+                    loadStream,
+                ),
+            {
+                onCoalescedWait: () =>
+                    logger.debug(
+                        `[STREAM] Joining in-flight federated cache fill for ${key}`,
+                    ),
+            },
+        );
+    }
+
+    private async doCacheFederatedStream(
+        trackId: string,
+        quality: Quality,
+        sourceModified: Date,
+        loadStream: () => Promise<FederatedStreamSource>,
+    ): Promise<StreamFileInfo | FederatedStreamSource> {
+        const remainingBytes = await this.ensureFederatedCacheCapacity();
+        const cacheFileName = this.federatedCacheFileName(trackId, quality);
+        const cachePath = path.join(this.transcodeCachePath, cacheFileName);
+        const tempPath = `${cachePath}.tmp-${crypto.randomUUID()}`;
+        const source = await loadStream();
+        if (source.status !== 200) return source;
+        if (
+            source.contentLength !== null &&
+            source.contentLength > remainingBytes
+        ) {
+            return source;
+        }
+        try {
+            await pipeline(
+                source.stream,
+                createByteLimitGuard(remainingBytes),
+                fs.createWriteStream(tempPath),
+            );
+            await fs.promises.rename(tempPath, cachePath);
+            await this.persistTranscode(
+                trackId,
+                quality,
+                cacheFileName,
+                cachePath,
+                sourceModified,
+            );
+            return { filePath: cachePath, mimeType: source.mimeType };
+        } catch (error) {
+            await fs.promises.unlink(tempPath).catch(() => undefined);
+            await fs.promises.unlink(cachePath).catch(() => undefined);
+            throw error;
+        }
+    }
+
+    private async ensureFederatedCacheCapacity(): Promise<number> {
+        let currentSizeGb = await this.getCacheSize();
+        if (currentSizeGb > this.transcodeCacheMaxGb * 0.9) {
+            await this.evictCache(this.transcodeCacheMaxGb * 0.8);
+            currentSizeGb = await this.getCacheSize();
+        }
+        const maxBytes = Math.floor(
+            this.transcodeCacheMaxGb * BYTES_PER_GIBIBYTE,
+        );
+        const currentBytes = Math.ceil(currentSizeGb * BYTES_PER_GIBIBYTE);
+        return Math.max(0, maxBytes - currentBytes);
+    }
+
+    private federatedCacheFileName(trackId: string, quality: Quality): string {
+        const hash = crypto
+            .createHash("md5")
+            .update(`federated-${trackId}-${quality}`)
+            .digest("hex");
+        return `${hash}.audio`;
     }
 
     /**
@@ -536,7 +700,7 @@ export class AudioStreamingService {
     }
 
     /**
-     * Stream file with proper HTTP Range support (fixes Firefox FLAC issue #42/#17)
+     * Stream a file with Range support and an optional response pacing transform.
      * Manually handles Range requests to ensure compatibility with Firefox's strict
      * Content-Range header validation for large FLAC files.
      */
@@ -545,6 +709,7 @@ export class AudioStreamingService {
         res: Response,
         filePath: string,
         mimeType: string,
+        pacing?: Transform,
     ): Promise<void> {
         try {
             // Get file stats for size
@@ -612,7 +777,8 @@ export class AudioStreamingService {
             // stream.on("error") handler and res.on("close") teardown that raw
             // pipe() required (and which leaked backpressure/abort handling).
             try {
-                await pipeline(stream, res);
+                if (pacing) await pipeline(stream, pacing, res);
+                else await pipeline(stream, res);
             } catch (err) {
                 // A client closing the connection mid-stream (seek, skip,
                 // navigate away) surfaces as ERR_STREAM_PREMATURE_CLOSE; that's

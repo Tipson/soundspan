@@ -38,6 +38,7 @@ import {
     normalizeTidalTrack,
     normalizeYtMusicTrack,
 } from "../../services/unifiedTrackResponse";
+import { proxyFederatedTrackStream } from "../../services/federationStreamProxy";
 import {
     AUDIO_INFO_CACHE_TTL_MS,
     audioInfoCache,
@@ -59,8 +60,11 @@ import {
 import {
     ALBUM_SORT_MAP,
     ARTIST_SORT_MAP,
+    TRACK_BROWSE_WHERE,
     TRACK_SORT_MAP,
     TRACK_VISIBLE_WHERE,
+    parseLibraryOrigin,
+    trackBrowseWhere,
 } from "../../utils/librarySorting";
 import {
     PersistedTrackDeletionPath,
@@ -126,6 +130,13 @@ export const tracksDeletionRouter = Router();
  *           default: 0
  *         description: Offset for pagination
  *       - in: query
+ *         name: origin
+ *         schema:
+ *           type: string
+ *           enum: [all, local, peers]
+ *           default: all
+ *         description: Filter tracks by local or federated origin
+ *       - in: query
  *         name: sortBy
  *         schema:
  *           type: string
@@ -163,14 +174,21 @@ export async function handleGetTracks(req: Request, res: Response) {
         limit: limitParam = "100",
         offset: offsetParam = "0",
         sortBy = "name",
+        origin: originParam,
     } = req.query;
+    const origin = parseLibraryOrigin(originParam);
+    if (!origin) {
+        return sendRouteError(res, 400, "Invalid library origin filter");
+    }
     const limit = Math.min(
         parseInt(limitParam as string, 10) || 100,
         MAX_LIMIT,
     );
     const offset = parseInt(offsetParam as string, 10) || 0;
 
-    let orderBy: any;
+    let orderBy:
+        | Prisma.TrackOrderByWithRelationInput
+        | Prisma.TrackOrderByWithRelationInput[];
     if (albumId) {
         orderBy = [{ discNo: "asc" as const }, { trackNo: "asc" as const }];
     } else {
@@ -179,7 +197,10 @@ export async function handleGetTracks(req: Request, res: Response) {
         };
     }
 
-    const where: any = { ...TRACK_VISIBLE_WHERE };
+    const where: Prisma.TrackWhereInput = {
+        ...TRACK_VISIBLE_WHERE,
+        ...trackBrowseWhere(origin),
+    };
     if (albumId) {
         where.albumId = albumId as string;
     }
@@ -201,14 +222,25 @@ export async function handleGetTracks(req: Request, res: Response) {
                         },
                     },
                 },
+                federationPeer: {
+                    select: { id: true, name: true, outboundStatus: true },
+                },
             },
         }),
         prisma.track.count({ where }),
     ]);
 
     // Add coverArt field to albums
-    const tracks = tracksData.map((track) => ({
+    const tracks = tracksData.map(({ federationPeer, ...track }) => ({
         ...track,
+        source: track.origin === "FEDERATED" ? "federated" : "local",
+        peer: federationPeer
+            ? {
+                  id: federationPeer.id,
+                  name: federationPeer.name,
+                  online: federationPeer.outboundStatus === "ACTIVE",
+              }
+            : undefined,
         album: {
             ...track.album,
             coverArt: track.album.coverUrl,
@@ -496,6 +528,13 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
                       id: { in: localTrackIds },
                   },
                   include: {
+                      federationPeer: {
+                          select: {
+                              id: true,
+                              name: true,
+                              outboundStatus: true,
+                          },
+                      },
                       album: {
                           include: {
                               artist: { select: { id: true, name: true } },
@@ -746,7 +785,7 @@ export async function handleGetShuffledTracks(req: Request, res: Response) {
 
     // Get total count of tracks
     const totalTracks = await prisma.track.count({
-        where: TRACK_VISIBLE_WHERE,
+        where: { ...TRACK_VISIBLE_WHERE, ...TRACK_BROWSE_WHERE },
     });
 
     if (totalTracks === 0) {
@@ -759,7 +798,7 @@ export async function handleGetShuffledTracks(req: Request, res: Response) {
     if (totalTracks <= limit) {
         // Fetch all tracks and shuffle
         tracksData = await prisma.track.findMany({
-            where: TRACK_VISIBLE_WHERE,
+            where: { ...TRACK_VISIBLE_WHERE, ...TRACK_BROWSE_WHERE },
             include: {
                 album: {
                     include: {
@@ -786,6 +825,7 @@ export async function handleGetShuffledTracks(req: Request, res: Response) {
         const randomIds = await prisma.track.findMany({
             where: {
                 ...TRACK_VISIBLE_WHERE,
+                ...TRACK_BROWSE_WHERE,
                 random: { gte: pivot },
             },
             orderBy: { random: "asc" },
@@ -798,6 +838,7 @@ export async function handleGetShuffledTracks(req: Request, res: Response) {
             const topUpIds = await prisma.track.findMany({
                 where: {
                     ...TRACK_VISIBLE_WHERE,
+                    ...TRACK_BROWSE_WHERE,
                     random: { lt: pivot },
                 },
                 orderBy: { random: "asc" },
@@ -811,6 +852,7 @@ export async function handleGetShuffledTracks(req: Request, res: Response) {
         tracksData = await prisma.track.findMany({
             where: {
                 ...TRACK_VISIBLE_WHERE,
+                ...TRACK_BROWSE_WHERE,
                 id: { in: randomIds.map((r) => r.id) },
             },
             include: {
@@ -896,6 +938,74 @@ tracksBrowseRouter.get(
 /**
  * Handles GET /api/library/tracks/:id/stream.
  */
+async function streamFederatedTrack(
+    req: Request<{ id: string }>,
+    res: Response,
+    peer: {
+        id: string;
+        name: string;
+        baseUrl: string;
+        outboundToken: string;
+        outboundStatus: string | null;
+    },
+    remoteId: string,
+    trackId: string,
+    sourceModified: Date,
+    sourceMime: string | null,
+    requestedQuality: string,
+): Promise<Response | void> {
+    const quality = normalizeStreamingQuality(requestedQuality) ?? "medium";
+    try {
+        await proxyFederatedTrackStream({
+            req,
+            res,
+            peer,
+            remoteId,
+            trackId,
+            sourceModified,
+            sourceMime,
+            quality,
+        });
+        return undefined;
+    } catch (error: unknown) {
+        logger.warn("Federated stream proxy failed", { error });
+        if (res.headersSent) {
+            if (!res.writableEnded) res.end();
+            return undefined;
+        }
+        return sendRouteError(res, 503, "Federation peer is offline", {
+            code: "PEER_OFFLINE",
+        });
+    }
+}
+
+async function loadActiveFederationStreamPeer(peerId: string | null) {
+    if (!peerId) return null;
+    const peer = await prisma.federationPeer.findUnique({
+        where: { id: peerId },
+        select: {
+            id: true,
+            name: true,
+            baseUrl: true,
+            outboundToken: true,
+            outboundStatus: true,
+        },
+    });
+    if (
+        !peer ||
+        peer.outboundStatus !== "ACTIVE" ||
+        !peer.baseUrl ||
+        !peer.outboundToken
+    ) {
+        return null;
+    }
+    return {
+        ...peer,
+        baseUrl: peer.baseUrl,
+        outboundToken: peer.outboundToken,
+    };
+}
+
 export async function handleStreamTrack(
     req: Request<{ id: string }>,
     res: Response,
@@ -917,6 +1027,17 @@ export async function handleStreamTrack(
         if (!track) {
             logger.debug("[STREAM] Track not found");
             return sendRouteError(res, 404, "Track not found");
+        }
+
+        const isFederatedTrack =
+            config.features.federation && track.origin === "FEDERATED";
+        const federationPeer = isFederatedTrack
+            ? await loadActiveFederationStreamPeer(track.peerId)
+            : null;
+        if (isFederatedTrack && (!federationPeer || !track.remoteId)) {
+            return sendRouteError(res, 503, "Federation peer is offline", {
+                code: "PEER_OFFLINE",
+            });
         }
 
         // Log play start - only if this is a new playback session
@@ -960,6 +1081,19 @@ export async function handleStreamTrack(
                 quality || "default"
             }, using=${requestedQuality}, format=${ext}`,
         );
+
+        if (isFederatedTrack && federationPeer && track.remoteId) {
+            return streamFederatedTrack(
+                req,
+                res,
+                federationPeer,
+                track.remoteId,
+                track.id,
+                track.fileModified,
+                track.mime,
+                requestedQuality,
+            );
+        }
 
         // === NATIVE FILE STREAMING ===
         // Check if track has native file path
