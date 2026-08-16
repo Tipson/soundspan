@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restructured the Spotify import service into focused matching, preview, lifecycle, playlist-building, job-management, and pending-track modules without changing its public contract or import behavior. (#485)
 - Restructured the authentication routes into per-concern modules without changing the `/api/auth` contract.
 - Restructured the Subsonic-compatible routes into per-domain modules without changing the `/rest` contract.
+- Restructured the Discover Weekly service into focused generation, recommendation, batch-lifecycle, persistence, and cleanup modules without changing its public contract.
 - Documentation drift sweep: corrected environment/deployment/API references across the docs tree and refreshed the route, feature, and test indexes.
 - Audiobook detail loads now serve validated sections and metadata from the local cache instead of fetching Audiobookshelf live. Sections are computed during sync when expanded Audiobookshelf data is available and backfilled lazily on first view for books synced before this change or from minified library listings. The retained `numChapters` column is superseded and no longer refreshed.
 
