@@ -2,7 +2,28 @@ import crypto from "crypto";
 import express from "express";
 import request, { type Response } from "supertest";
 
-jest.mock("../../config", () => ({ config: { port: 3006 } }));
+jest.mock("../../config", () => ({
+    config: {
+        port: 3006,
+        redisUrl: "redis://localhost:6379",
+        localLoginEnabled: true,
+        oidc: {
+            enabled: false,
+            issuerUrl: "",
+            clientId: "",
+            clientSecret: "",
+            redirectUri: "",
+            scopes: "openid profile email",
+            autoProvision: false,
+            manageRoles: false,
+            groupsClaim: "groups",
+            adminGroup: "",
+            emailClaim: "email",
+            nameClaim: "name",
+            providerName: "SSO",
+        },
+    },
+}));
 
 const mockLogger = {
     debug: jest.fn(),
@@ -42,6 +63,7 @@ const prisma = {
         findUnique: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
+        count: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
         delete: jest.fn(),
@@ -49,6 +71,8 @@ const prisma = {
     userSettings: {
         create: jest.fn(),
     },
+    $executeRaw: jest.fn(),
+    $transaction: jest.fn(),
 };
 
 jest.mock("../../utils/db", () => ({
@@ -253,8 +277,11 @@ describe("auth routes runtime", () => {
         });
         prisma.user.update.mockResolvedValue({});
         prisma.user.updateMany.mockResolvedValue({ count: 1 });
+        prisma.user.count.mockResolvedValue(1);
         prisma.user.delete.mockResolvedValue({});
         prisma.userSettings.create.mockResolvedValue({});
+        prisma.$executeRaw.mockResolvedValue(0);
+        prisma.$transaction.mockImplementation(async (run) => run(prisma));
 
         mockBcryptCompare.mockResolvedValue(true);
         mockBcryptHash.mockResolvedValue("new-hash");
@@ -321,6 +348,17 @@ describe("auth routes runtime", () => {
                     .set("X-Forwarded-For", "198.51.100.10")
                     .send({ refreshToken: "invalid-refresh-token" }),
             401,
+        );
+    });
+
+    it("throttles repeated invalid registration attempts", async () => {
+        await expectFailedRequestsAreThrottled(
+            async () =>
+                request(routeApp)
+                    .post("/register")
+                    .set("X-Forwarded-For", "198.51.100.77")
+                    .send({ username: "" }),
+            400,
         );
     });
 
@@ -713,13 +751,24 @@ describe("auth routes runtime", () => {
 
     it("handles admin user list/create/delete flows", async () => {
         prisma.user.findMany.mockResolvedValueOnce([
-            { id: "u1", username: "alice", role: "admin" },
+            {
+                id: "u1",
+                username: "alice",
+                role: "admin",
+                passwordHash: "hash-1",
+                externalIdentities: [],
+            },
         ]);
         const listReq = { user: { id: "admin-1" } } as any;
         const listRes = createRes();
         await listUsers(listReq, listRes);
         expect(listRes.statusCode).toBe(200);
         expect(listRes.body).toHaveLength(1);
+        expect(listRes.body[0]).toMatchObject({
+            hasPassword: true,
+            linkedProviders: [],
+        });
+        expect(listRes.body[0]).not.toHaveProperty("passwordHash");
 
         const missingFieldsReq = {
             body: { username: "", password: "" },

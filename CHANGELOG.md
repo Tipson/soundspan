@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added OIDC/SSO login with explicit `(provider, sub)` account links,
+  local-password confirmation for email-hinted links, invite-gated account
+  provisioning by default, and `OIDC_WEB_BASE_URL` support for same-site web/API
+  origins on sibling subdomains or different ports.
+- Added revocable `ssap_` app passwords for OpenSubsonic password and token
+  authentication. Each secret is encrypted at rest and shown once.
+- Added `LOCAL_LOGIN_ENABLED` so operators can hide local login after they
+  verify OIDC. Startup rejects configurations that disable every login method.
+- Added administrator visibility for SSO-linked and OIDC-only users.
 - Added opt-in federated library sharing, disabled by default with
   `FEDERATION_ENABLED=false`:
   - Host instances expose a read-only `/api/federation/v1` manifest, catalog,
@@ -73,6 +82,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Hardened OIDC and app-password credential mutations with interactive-auth
+  checks, race-safe PostgreSQL advisory locks, secure `__Host-` flow cookies,
+  and complete bounded app-password authentication scans.
+- Administrator role editing now warns when OIDC role management can overwrite
+  a linked user's manual role change at their next SSO login.
 - Discover Weekly now rotates play-weighted seed artists deterministically each
   user-week and decays scores for artists featured in up to three of the prior
   six weeks.
@@ -107,6 +121,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- OIDC browser flows now bind callback and one-time hand-off tokens to the
+  initiating browser, count redirect responses against rate limits, serialize
+  role demotion and identity unlink guards, enforce one identity per provider
+  for each user, and preserve the original ten-minute expiry across link and
+  invite retries.
 - Federation pairing now denies reciprocal library sharing by default. The
   consumer sends callback credentials and upgrades to `BOTH` only when an
   administrator explicitly selects bidirectional sharing.

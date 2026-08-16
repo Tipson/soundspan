@@ -94,11 +94,33 @@ Experimental feature note:
 | `ALLOWED_ORIGINS` | `backend` | Optional | unset (production denies cross-origin; development allows all) | Allowed CORS origins (comma-separated), e.g. `https://app.example.com`. When unset, production denies cross-origin browser requests (deny-by-default; same-origin and no-`Origin` requests unaffected). |
 | `CORS_ALLOW_ALL` | `backend` | Optional | `false` | Set `true` to restore the legacy permissive CORS behavior (reflect any origin with credentials) when no `ALLOWED_ORIGINS` allowlist is configured. Prefer `ALLOWED_ORIGINS`. See `docs/UPGRADING.md`. |
 | `LIDARR_WEBHOOK_ALLOW_UNAUTHENTICATED` | `backend` | Optional | `false` | Set `true` to let `POST /api/webhooks/lidarr` accept requests when no webhook secret is configured in System Settings (legacy fail-open behavior). Default rejects with 401 (fail closed). See `docs/UPGRADING.md`. |
-| `SECURE_COOKIES` | `backend` | Optional | `true` when `NODE_ENV=production`, else `false` | Session cookie `secure` flag. Set `false` explicitly for a production-mode deploy served over plain HTTP (e.g. LAN without TLS), or logins will not persist. |
+| `SECURE_COOKIES` | `backend` | Optional | `true` when `NODE_ENV=production`, else `false` | Session and OIDC flow-cookie `secure` flag. Set `true` whenever the browser uses HTTPS, including TLS-terminating proxies and tunnels. OIDC then uses the hardened `__Host-soundspan_oidc_flow` cookie. Set `false` for plain HTTP, which uses the less-hardened unprefixed cookie. |
 | `TRUST_PROXY_HOPS` | `backend` | Optional | unset (trust all hops) | Express `trust proxy` depth. Set to your real reverse-proxy count (usually `1`) for spoof-resistant client-IP resolution in rate limiting; unset preserves the legacy trust-all behavior. |
 | `DOCS_PUBLIC` | `backend` | Optional | `false` | Allows public API docs in production when `true`. |
 | `ADMIN_RESET_PASSWORD` | `backend` | Optional | unset | One-time startup password reset for admin account. |
 | `JWT_SECRET` | `backend` | Optional | falls back to `SESSION_SECRET` | Explicit JWT signing secret override. |
+
+## Authentication Variables
+
+| Variable | Used In Container(s) | Required | Default | What It Does |
+| --- | --- | --- | --- | --- |
+| `LOCAL_LOGIN_ENABLED` | `backend`, `soundspan` (AIO) | Optional | `true` | Shows and accepts local username/password login. Startup rejects `false` when `OIDC_ENABLED=false` to prevent total lockout. |
+| `OIDC_ENABLED` | `backend`, `soundspan` (AIO) | Optional | `false` | Enables OpenID Connect login, account linking, and the public OIDC callback. |
+| `OIDC_ISSUER_URL` | `backend`, `soundspan` (AIO) | Required when `OIDC_ENABLED=true` | empty | OIDC issuer URL used for provider discovery. The value must be a valid HTTP(S) URL. |
+| `OIDC_CLIENT_ID` | `backend`, `soundspan` (AIO) | Required when `OIDC_ENABLED=true` | empty | Confidential OIDC client identifier registered at the identity provider. |
+| `OIDC_CLIENT_SECRET` | `backend`, `soundspan` (AIO) | Required when `OIDC_ENABLED=true` | empty | Confidential OIDC client secret. Keep it in a secret store. The Helm chart reads it from `secrets.oidcClientSecret` or the `OIDC_CLIENT_SECRET` key in `secrets.existingSecret`. |
+| `OIDC_REDIRECT_URI` | `backend`, `soundspan` (AIO) | Required when `OIDC_ENABLED=true` | empty | Exact public callback URL registered at the provider. Use `https://<host>/api/auth/oidc/callback`. The value must be a valid HTTP(S) URL. |
+| `OIDC_WEB_BASE_URL` | `backend`, `soundspan` (AIO) | Optional | empty | Canonical web origin for browser-facing `/login` and `/settings` redirects. Set it when the callback uses a sibling API subdomain or a different port. It requires `OIDC_ENABLED=true` and accepts an HTTP(S) origin only. A trailing slash is stripped. Paths, queries, and fragments stop startup. |
+| `OIDC_SCOPES` | `backend`, `soundspan` (AIO) | Optional | `openid profile email` | Space-separated scopes requested from the provider. Add the provider's groups scope when OIDC role management needs it. |
+| `OIDC_AUTO_PROVISION` | `backend`, `soundspan` (AIO) | Optional | `false` | Creates an account directly for an unknown OIDC identity. Keep this off for public identity providers. When false, unknown identities must redeem a soundspan invite code. |
+| `OIDC_MANAGE_ROLES` | `backend`, `soundspan` (AIO) | Optional | `false` | Makes the IdP groups claim authoritative for linked-user roles. Startup requires `OIDC_ENABLED=true` and a non-empty `OIDC_ADMIN_GROUP` when this is true. |
+| `OIDC_GROUPS_CLAIM` | `backend`, `soundspan` (AIO) | Optional | `groups` | Claim that supplies an array of group-name strings when OIDC role management is enabled. |
+| `OIDC_ADMIN_GROUP` | `backend`, `soundspan` (AIO) | Required when `OIDC_MANAGE_ROLES=true` | empty | Group name that maps a linked user to the `admin` role. Startup fails when role management is enabled and this value is empty. |
+| `OIDC_EMAIL_CLAIM` | `backend`, `soundspan` (AIO) | Optional | `email` | Claim used as the email hint for account linking and verified-email storage. Email never becomes the external identity key. |
+| `OIDC_NAME_CLAIM` | `backend`, `soundspan` (AIO) | Optional | `name` | Claim used as cached display metadata and as a username fallback during provisioning. |
+| `OIDC_PROVIDER_NAME` | `backend`, `soundspan` (AIO) | Optional | `SSO` | Provider label shown on the login and account-linking interfaces. |
+
+See the [`OIDC_SSO.md` topology matrix](OIDC_SSO.md#deployment-topology) for provider setup, `OIDC_WEB_BASE_URL` examples, cookie constraints, account linking, role management, and recovery guidance.
 
 ## Distributed Runtime and Scheduler Controls
 
@@ -283,7 +305,7 @@ Used primarily with `docker-compose.local.yml` (host-run backend/frontend; conta
 
 | Topic | Recommendation |
 | --- | --- |
-| Secrets | Always set `SESSION_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, and `INTERNAL_API_SECRET` explicitly in production. |
+| Secrets | Always set `SESSION_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, and `INTERNAL_API_SECRET` explicitly in production. Also set `OIDC_CLIENT_SECRET` when OIDC is enabled. |
 | API routing mode | Keep `NEXT_PUBLIC_API_PATH_MODE=auto` unless you intentionally need direct browser calls (`direct`). |
 | Frontend build-time vars | In prebuilt frontend images, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_PATH_MODE`, and `NEXT_PUBLIC_LISTEN_TOGETHER_ALLOW_POLLING` require an image rebuild to change browser behavior. |
 | HA behavior | Keep Listen Together Redis/state/lock flags enabled for multi-replica correctness. |

@@ -1,4 +1,11 @@
-import { Router } from "express";
+import {
+    Router,
+    type CookieOptions,
+    type Request,
+    type RequestHandler,
+    type Response,
+} from "express";
+import type { InviteCode, Prisma } from "@prisma/client";
 import { logger } from "../utils/logger";
 import bcrypt from "bcrypt";
 import { prisma } from "../utils/db";
@@ -15,10 +22,46 @@ import {
     verifyAuthToken,
 } from "../middleware/auth";
 import { encrypt, decrypt } from "../utils/encryption";
+import {
+    generateAppPasswordSecret,
+    MAX_ACTIVE_APP_PASSWORDS,
+} from "../utils/appPasswords";
 import { BRAND_NAME } from "../config/brand";
 import { timingSafeCompare } from "../utils/timingSafe";
 import { runDummyBcrypt } from "../utils/dummyCredential";
-import { apiLimiter, authLimiter } from "../middleware/rateLimiter";
+import {
+    apiLimiter,
+    authLimiter,
+    oidcFlowLimiter,
+} from "../middleware/rateLimiter";
+import { config } from "../config";
+import {
+    buildAuthorizationRequest,
+    getOidcProviderId,
+    handleCallback,
+    type OidcClaims,
+} from "../services/oidcAuth";
+import {
+    provisionOidcUser,
+    resolveOidcAccount,
+    syncOidcRole,
+    type LoginUser,
+    type OidcAccountResolution,
+} from "../services/oidcAccountResolution";
+import {
+    InviteCodeExhaustedError,
+    InviteCodeValidationError,
+    claimInviteCode,
+    loadUsableInviteCode,
+    recordInviteCodeUsage,
+} from "../services/inviteCodes";
+import { putOnce, takeOnce } from "../utils/redisKv";
+import { sendRouteError } from "./routeErrorResponse";
+import {
+    acquireRoleGuardLock,
+    acquireUserScopedLock,
+    USER_LOCK_NAMESPACES,
+} from "../utils/advisoryLocks";
 
 async function verifyTotpToken(
     secret: string,
@@ -47,6 +90,7 @@ const router = Router();
 const loginSchema = z.object({
     username: z.string().min(1),
     password: z.string().min(1),
+    token: z.string().min(1).optional(),
 });
 
 const inviteCodeSchema = z.object({
@@ -111,9 +155,1286 @@ const subsonicPasswordSchema = z.object({
     password: z.string().min(8).max(128),
 });
 
+const appPasswordSchema = z
+    .object({
+        displayName: z.string().trim().min(1).max(64),
+    })
+    .strict();
+
 // Use shared encryption module for 2FA secrets
 const encrypt2FASecret = encrypt;
 const decrypt2FASecret = decrypt;
+
+interface SecondFactorUser {
+    id: string;
+    twoFactorEnabled: boolean;
+    twoFactorSecret: string | null;
+    twoFactorRecoveryCodes: string | null;
+}
+
+type SecondFactorResult =
+    | { kind: "ok" }
+    | { kind: "required" }
+    | { kind: "invalid"; message: string };
+
+async function verifyRecoveryCode(
+    user: SecondFactorUser,
+    token: string,
+): Promise<boolean> {
+    if (!user.twoFactorRecoveryCodes) return false;
+    const hashes = decrypt2FASecret(user.twoFactorRecoveryCodes).split(",");
+    const providedHash = crypto
+        .createHash("sha256")
+        .update(token.toUpperCase())
+        .digest("hex");
+    let matchIndex = -1;
+    for (let index = 0; index < hashes.length; index += 1) {
+        if (timingSafeCompare(hashes[index], providedHash)) matchIndex = index;
+    }
+    if (matchIndex === -1) return false;
+    hashes.splice(matchIndex, 1);
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            twoFactorRecoveryCodes: encrypt2FASecret(hashes.join(",")),
+        },
+    });
+    return true;
+}
+
+async function verifyLoginSecondFactor(
+    user: SecondFactorUser,
+    token?: string,
+): Promise<SecondFactorResult> {
+    if (!user.twoFactorEnabled || !user.twoFactorSecret) return { kind: "ok" };
+    if (!token) return { kind: "required" };
+    if (/^[A-F0-9]{8}$/i.test(token)) {
+        const valid = await verifyRecoveryCode(user, token);
+        return valid
+            ? { kind: "ok" }
+            : { kind: "invalid", message: "Invalid recovery code" };
+    }
+    const secret = decrypt2FASecret(user.twoFactorSecret);
+    const valid = await verifyTotpToken(secret, token);
+    return valid
+        ? { kind: "ok" }
+        : { kind: "invalid", message: "Invalid 2FA token" };
+}
+
+function sendLoginSuccess(res: Response, user: LoginUser): Response {
+    return res.json({
+        token: generateToken(user),
+        refreshToken: generateRefreshToken(user),
+        user: {
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            role: user.role,
+        },
+    });
+}
+
+const OIDC_PENDING_TTL_SECONDS = 600;
+const OIDC_EXCHANGE_TTL_SECONDS = 60;
+const OIDC_FLOW_COOKIE_BASE_NAME = "soundspan_oidc_flow";
+const MAX_COOKIE_HEADER_LENGTH = 4096;
+const MAX_COOKIE_COUNT = 64;
+const oidcLog = logger.child("OIDCAuth");
+const credentialLog = logger.child("AuthCredentials");
+const opaqueValueSchema = z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[A-Za-z0-9_-]+$/);
+const bindingHashSchema = z.string().regex(/^[a-f0-9]{64}$/);
+const pendingOidcSchema = z
+    .object({
+        nonce: z.string().min(1),
+        codeVerifier: z.string().min(1),
+        returnTo: z
+            .string()
+            .refine((value) => normalizeReturnTo(value) === value),
+        mode: z.literal("link").optional(),
+        userId: z.string().min(1).optional(),
+        bindingHash: bindingHashSchema,
+    })
+    .refine(
+        (pending) =>
+            pending.mode === "link"
+                ? pending.userId !== undefined
+                : pending.userId === undefined,
+        { path: ["userId"] },
+    );
+const linkEntrySchema = z.object({
+    provider: z.string().min(1),
+    providerSubject: z.string().min(1),
+    email: z.string().email().nullable(),
+    displayName: z.string().nullable(),
+    userId: z.string().min(1),
+    groups: z.array(z.string()).default([]),
+    bindingHash: bindingHashSchema,
+    expiresAt: z.number().int().positive(),
+});
+const inviteEntrySchema = z.object({
+    provider: z.string().min(1),
+    providerSubject: z.string().min(1),
+    email: z.string().email().nullable(),
+    displayName: z.string().nullable(),
+    preferredUsername: z.string().nullable().optional(),
+    bindingHash: bindingHashSchema,
+    expiresAt: z.number().int().positive(),
+});
+const exchangeEntrySchema = z.object({
+    userId: z.string().min(1),
+    bindingHash: bindingHashSchema,
+});
+const exchangeBodySchema = z.object({ code: opaqueValueSchema });
+const linkStartBodySchema = z
+    .object({ responseMode: z.literal("json").optional() })
+    .strict();
+const confirmLinkBodySchema = z.object({
+    linkToken: opaqueValueSchema,
+    password: z.string().min(1),
+    twoFactorToken: z.string().min(1).optional(),
+});
+const redeemInviteBodySchema = z.object({
+    inviteToken: opaqueValueSchema,
+    inviteCode: z.string().min(1),
+});
+const resourceIdParamsSchema = z
+    .object({
+        id: z
+            .string()
+            .min(1)
+            .max(64)
+            .regex(/^[a-z0-9]+$/),
+    })
+    .strict();
+const callbackQuerySchema = z
+    .object({
+        state: opaqueValueSchema,
+        code: z.string().optional(),
+        iss: z.string().optional(),
+        error: z.string().optional(),
+        error_description: z.string().optional(),
+        error_uri: z.string().optional(),
+    })
+    .loose();
+
+function normalizeReturnTo(value: unknown): string {
+    if (typeof value !== "string") return "/";
+    if (!value.startsWith("/") || value.startsWith("//")) return "/";
+    if (value.includes("\\")) return "/";
+    try {
+        const parsed = new URL(value, "https://soundspan.invalid");
+        return parsed.origin === "https://soundspan.invalid" ? value : "/";
+    } catch {
+        return "/";
+    }
+}
+
+function randomOpaqueValue(): string {
+    return crypto.randomBytes(32).toString("base64url");
+}
+
+function hashOpaqueValue(value: string): string {
+    return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function flowCookieOptions(): CookieOptions {
+    return {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: config.secureCookies,
+        path: "/",
+    };
+}
+
+function flowCookieName(): string {
+    return config.secureCookies
+        ? `__Host-${OIDC_FLOW_COOKIE_BASE_NAME}`
+        : OIDC_FLOW_COOKIE_BASE_NAME;
+}
+
+function setFlowBindingCookie(res: Response, binding: string): void {
+    res.cookie(flowCookieName(), binding, {
+        ...flowCookieOptions(),
+        maxAge: OIDC_PENDING_TTL_SECONDS * 1000,
+    });
+}
+
+function clearFlowBindingCookie(res: Response): void {
+    res.clearCookie(flowCookieName(), flowCookieOptions());
+}
+
+function readFlowBindingCookie(req: Request): string | null {
+    const header = req.headers.cookie;
+    if (!header || header.length > MAX_COOKIE_HEADER_LENGTH) return null;
+    const cookies = header.split(";").slice(0, MAX_COOKIE_COUNT);
+    for (const cookie of cookies) {
+        const [name, value] = cookie.trim().split("=", 2);
+        if (name === flowCookieName() && value) return value;
+    }
+    return null;
+}
+
+function hasMatchingFlowBinding(req: Request, bindingHash: string): boolean {
+    const binding = readFlowBindingCookie(req);
+    if (!binding) return false;
+    return timingSafeCompare(hashOpaqueValue(binding), bindingHash);
+}
+
+async function storeOpaqueEntry(
+    prefix: "link" | "invite" | "exchange",
+    entry: unknown,
+    ttlSeconds: number,
+): Promise<string> {
+    const token = randomOpaqueValue();
+    const stored = await putOnce(`oidc:${prefix}:${token}`, entry, ttlSeconds);
+    if (!stored) throw new Error("Failed to allocate one-time OIDC state");
+    return token;
+}
+
+async function takeParsed<T>(
+    key: string,
+    schema: z.ZodType<T>,
+): Promise<T | null> {
+    const value = await takeOnce(key);
+    if (value === null) return null;
+    const parsed = schema.safeParse(value);
+    return parsed.success ? parsed.data : null;
+}
+
+function appendCallbackValue(url: URL, key: string, value: unknown): void {
+    if (typeof value === "string") url.searchParams.set(key, value);
+}
+
+function buildCurrentCallbackUrl(query: z.infer<typeof callbackQuerySchema>) {
+    const url = new URL(config.oidc.redirectUri);
+    appendCallbackValue(url, "state", query.state);
+    appendCallbackValue(url, "code", query.code);
+    appendCallbackValue(url, "iss", query.iss);
+    appendCallbackValue(url, "error", query.error);
+    appendCallbackValue(url, "error_description", query.error_description);
+    appendCallbackValue(url, "error_uri", query.error_uri);
+    return url.toString();
+}
+
+async function regenerateSession(req: Request): Promise<void> {
+    if (!req.session?.regenerate) return;
+    await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((error) => {
+            if (error) reject(error);
+            else resolve();
+        });
+    });
+}
+
+function loginRedirect(parameter: string, value: string, returnTo?: string) {
+    const suffix = returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : "";
+    return webRedirectTarget(
+        `/login?${parameter}=${encodeURIComponent(value)}${suffix}`,
+    );
+}
+
+function webRedirectTarget(path: string): string {
+    return config.oidc.webBaseUrl ? `${config.oidc.webBaseUrl}${path}` : path;
+}
+
+function redirectResponse(res: Response, url: string): Response {
+    res.redirect(url);
+    return res;
+}
+
+interface OidcFlowBinding {
+    returnTo: string;
+    mode?: "link";
+    userId?: string;
+}
+
+async function startOidcFlow(
+    res: Response,
+    binding: OidcFlowBinding,
+    responseMode: "redirect" | "json" = "redirect",
+): Promise<Response> {
+    const authorization = await buildAuthorizationRequest();
+    const flowBinding = randomOpaqueValue();
+    const pending = {
+        nonce: authorization.nonce,
+        codeVerifier: authorization.codeVerifier,
+        bindingHash: hashOpaqueValue(flowBinding),
+        ...binding,
+    };
+    const stored = await putOnce(
+        `oidc:pending:${authorization.state}`,
+        pending,
+        OIDC_PENDING_TTL_SECONDS,
+    );
+    if (!stored) throw new Error("Failed to store OIDC pending state");
+    setFlowBindingCookie(res, flowBinding);
+    if (responseMode === "json") {
+        return res.json({ redirectUrl: authorization.redirectUrl });
+    }
+    return redirectResponse(res, authorization.redirectUrl);
+}
+
+async function redirectForResolution(
+    res: Response,
+    resolution: OidcAccountResolution,
+    returnTo: string,
+    bindingHash: string,
+): Promise<Response> {
+    if (resolution.kind === "alreadyLinked") {
+        return redirectResponse(
+            res,
+            webRedirectTarget("/login?ssoError=account_already_linked"),
+        );
+    }
+    if (resolution.kind === "authenticated") {
+        const code = await storeOpaqueEntry(
+            "exchange",
+            { userId: resolution.user.id, bindingHash },
+            OIDC_EXCHANGE_TTL_SECONDS,
+        );
+        return redirectResponse(res, loginRedirect("ssoCode", code, returnTo));
+    }
+    const prefix = resolution.kind;
+    const expiresAt = Date.now() + OIDC_PENDING_TTL_SECONDS * 1000;
+    const token = await storeOpaqueEntry(
+        prefix,
+        { ...resolution.entry, bindingHash, expiresAt },
+        OIDC_PENDING_TTL_SECONDS,
+    );
+    const parameter = resolution.kind === "link" ? "ssoLink" : "ssoInvite";
+    return redirectResponse(res, loginRedirect(parameter, token, returnTo));
+}
+
+async function oidcLoginHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    if (!config.oidc.enabled) {
+        return sendRouteError(res, 404, "OIDC is not enabled");
+    }
+    try {
+        return await startOidcFlow(res, {
+            returnTo: normalizeReturnTo(req.query.returnTo),
+        });
+    } catch (error) {
+        oidcLog.error("OIDC login failed", { error });
+        return redirectResponse(
+            res,
+            webRedirectTarget("/login?ssoError=oidc_failed"),
+        );
+    }
+}
+
+async function oidcLinkStartHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    if (!config.oidc.enabled) {
+        return sendRouteError(res, 404, "OIDC is not enabled");
+    }
+    const parsed = linkStartBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) return sendRouteError(res, 400, "Invalid request");
+    const responseMode = parsed.data.responseMode ?? "redirect";
+    try {
+        return await startOidcFlow(
+            res,
+            {
+                returnTo: "/settings",
+                mode: "link",
+                userId: req.user!.id,
+            },
+            responseMode,
+        );
+    } catch (error) {
+        oidcLog.error("OIDC link start failed", { error });
+        if (responseMode === "json") {
+            return sendRouteError(res, 500, "Failed to start OIDC link");
+        }
+        return redirectResponse(
+            res,
+            webRedirectTarget("/settings?ssoError=oidc_failed"),
+        );
+    }
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    return "code" in error && error.code === code;
+}
+
+async function createManualOidcLink(
+    userId: string,
+    claims: OidcClaims,
+): Promise<boolean> {
+    const provider = getOidcProviderId();
+    const existing = await prisma.externalIdentity.findUnique({
+        where: {
+            provider_providerSubject: {
+                provider,
+                providerSubject: claims.sub,
+            },
+        },
+        select: { id: true },
+    });
+    if (existing) return false;
+    try {
+        await prisma.externalIdentity.create({
+            data: {
+                userId,
+                provider,
+                providerSubject: claims.sub,
+                email: claims.email,
+                displayName: claims.name,
+            },
+        });
+        return true;
+    } catch (error) {
+        if (hasErrorCode(error, "P2002")) return false;
+        throw error;
+    }
+}
+
+async function completeManualOidcLink(
+    res: Response,
+    userId: string,
+    claims: OidcClaims,
+): Promise<Response> {
+    const linked = await createManualOidcLink(userId, claims);
+    if (linked) clearFlowBindingCookie(res);
+    const target = linked
+        ? "/settings?ssoLinked=1"
+        : "/settings?ssoError=identity_already_linked";
+    return redirectResponse(res, webRedirectTarget(target));
+}
+
+async function oidcCallbackHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    if (!config.oidc.enabled) {
+        return sendRouteError(res, 404, "OIDC is not enabled");
+    }
+    const queryResult = callbackQuerySchema.safeParse(req.query);
+    if (!queryResult.success) return rejectInvalidOidcState(res);
+    const pending = await takeParsed(
+        `oidc:pending:${queryResult.data.state}`,
+        pendingOidcSchema,
+    );
+    if (!pending) return rejectInvalidOidcState(res);
+    if (!hasMatchingFlowBinding(req, pending.bindingHash)) {
+        return rejectInvalidOidcState(res);
+    }
+    try {
+        const claims = await handleCallback(
+            buildCurrentCallbackUrl(queryResult.data),
+            { state: queryResult.data.state, ...pending },
+        );
+        await regenerateSession(req);
+        if (pending.mode === "link" && pending.userId) {
+            return await completeManualOidcLink(res, pending.userId, claims);
+        }
+        const resolution = await resolveOidcAccount(claims);
+        return redirectForResolution(
+            res,
+            resolution,
+            pending.returnTo,
+            pending.bindingHash,
+        );
+    } catch (error) {
+        oidcLog.error("OIDC callback failed", { error });
+        const failureTarget =
+            pending.mode === "link"
+                ? "/settings?ssoError=oidc_failed"
+                : "/login?ssoError=oidc_failed";
+        return redirectResponse(res, webRedirectTarget(failureTarget));
+    }
+}
+
+async function listAppPasswordsHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    try {
+        const appPasswords = await prisma.appPassword.findMany({
+            where: { userId: req.user!.id, revokedAt: null },
+            select: {
+                id: true,
+                displayName: true,
+                createdAt: true,
+                lastUsedAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        return res.json({ appPasswords });
+    } catch (error) {
+        credentialLog.error("List app passwords failed", { error });
+        return sendRouteError(res, 500, "Failed to list app passwords");
+    }
+}
+
+async function createAppPasswordHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    const parsed = appPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return sendRouteError(
+            res,
+            400,
+            "Display name must be between 1 and 64 characters",
+        );
+    }
+    try {
+        const result = await prisma.$transaction((tx) =>
+            createAppPasswordInTransaction(
+                tx,
+                req.user!.id,
+                parsed.data.displayName,
+            ),
+        );
+        if (result.kind === "capReached") {
+            return sendRouteError(
+                res,
+                400,
+                `A maximum of ${MAX_ACTIVE_APP_PASSWORDS} active app passwords is allowed`,
+            );
+        }
+        return res.status(201).json({ appPassword: result.appPassword });
+    } catch (error) {
+        credentialLog.error("Create app password failed", { error });
+        return sendRouteError(res, 500, "Failed to create app password");
+    }
+}
+
+type AppPasswordCreationResult =
+    | { kind: "capReached" }
+    | {
+          kind: "created";
+          appPassword: {
+              id: string;
+              displayName: string;
+              createdAt: Date;
+              lastUsedAt: Date | null;
+              secret: string;
+          };
+      };
+
+async function createAppPasswordInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    displayName: string,
+): Promise<AppPasswordCreationResult> {
+    await acquireUserScopedLock(
+        tx,
+        USER_LOCK_NAMESPACES.appPasswordCreate,
+        userId,
+    );
+    const activeCount = await tx.appPassword.count({
+        where: { userId, revokedAt: null },
+    });
+    if (activeCount >= MAX_ACTIVE_APP_PASSWORDS) return { kind: "capReached" };
+    const secret = generateAppPasswordSecret();
+    const appPassword = await tx.appPassword.create({
+        data: { userId, displayName, encryptedSecret: encrypt(secret) },
+        select: {
+            id: true,
+            displayName: true,
+            createdAt: true,
+            lastUsedAt: true,
+        },
+    });
+    return { kind: "created", appPassword: { ...appPassword, secret } };
+}
+
+async function revokeAppPasswordHandler(
+    req: Request<{ id: string }>,
+    res: Response,
+): Promise<Response> {
+    const params = resourceIdParamsSchema.safeParse(req.params);
+    if (!params.success) {
+        return sendRouteError(res, 404, "App password not found");
+    }
+    try {
+        const revoked = await prisma.appPassword.updateMany({
+            where: {
+                id: params.data.id,
+                userId: req.user!.id,
+                revokedAt: null,
+            },
+            data: { revokedAt: new Date() },
+        });
+        if (revoked.count === 0) {
+            return sendRouteError(res, 404, "App password not found");
+        }
+        return res.json({ message: "App password revoked" });
+    } catch (error) {
+        credentialLog.error("Revoke app password failed", { error });
+        return sendRouteError(res, 500, "Failed to revoke app password");
+    }
+}
+
+type UnlinkIdentityResult = "notFound" | "lastCredential" | "unlinked";
+
+async function unlinkIdentityInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    identityId: string,
+): Promise<UnlinkIdentityResult> {
+    await acquireUserScopedLock(
+        tx,
+        USER_LOCK_NAMESPACES.identityUnlink,
+        userId,
+    );
+    const identity = await tx.externalIdentity.findFirst({
+        where: { id: identityId, userId },
+        select: { id: true },
+    });
+    if (!identity) return "notFound";
+    const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { passwordHash: true },
+    });
+    if (!user) return "notFound";
+    const identityCount = await tx.externalIdentity.count({
+        where: { userId },
+    });
+    if (user.passwordHash === null && identityCount <= 1) {
+        return "lastCredential";
+    }
+    await tx.externalIdentity.delete({ where: { id: identity.id } });
+    return "unlinked";
+}
+
+async function listIdentitiesHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    try {
+        const rows = await prisma.externalIdentity.findMany({
+            where: { userId: req.user!.id },
+            select: {
+                id: true,
+                provider: true,
+                providerSubject: true,
+                email: true,
+                displayName: true,
+                createdAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        const identities = rows.map(({ providerSubject, ...identity }) => ({
+            ...identity,
+            subjectHint: `${providerSubject.slice(0, 8)}…`,
+        }));
+        return res.json({ identities });
+    } catch (error) {
+        credentialLog.error("List external identities failed", { error });
+        return sendRouteError(res, 500, "Failed to list identities");
+    }
+}
+
+async function unlinkIdentityHandler(
+    req: Request<{ id: string }>,
+    res: Response,
+): Promise<Response> {
+    const params = resourceIdParamsSchema.safeParse(req.params);
+    if (!params.success) return sendRouteError(res, 404, "Identity not found");
+    try {
+        const result = await prisma.$transaction((tx) =>
+            unlinkIdentityInTransaction(tx, req.user!.id, params.data.id),
+        );
+        if (result === "notFound") {
+            return sendRouteError(res, 404, "Identity not found");
+        }
+        if (result === "lastCredential") {
+            return sendRouteError(
+                res,
+                400,
+                "Cannot unlink the last sign-in method",
+            );
+        }
+        return res.json({ message: "Identity unlinked" });
+    } catch (error) {
+        if (hasErrorCode(error, "P2025")) {
+            return sendRouteError(res, 404, "Identity not found");
+        }
+        credentialLog.error("Unlink external identity failed", { error });
+        return sendRouteError(res, 500, "Failed to unlink identity");
+    }
+}
+
+function rejectInvalidOidcState(res: Response): Response {
+    oidcLog.warn("Rejected OIDC callback with invalid state");
+    return redirectResponse(
+        res,
+        webRedirectTarget("/login?ssoError=invalid_state"),
+    );
+}
+
+function queryStrippedLimiter(limiter: RequestHandler): RequestHandler {
+    return (req, res, next): void => {
+        const originalDescriptor = Object.getOwnPropertyDescriptor(
+            req,
+            "originalUrl",
+        );
+        const fullOriginalUrl = req.originalUrl;
+        const pathOnly = req.path;
+        const restore = (): void => {
+            if (originalDescriptor) {
+                Object.defineProperty(req, "originalUrl", originalDescriptor);
+            } else {
+                Reflect.deleteProperty(req, "originalUrl");
+                req.originalUrl = fullOriginalUrl;
+            }
+        };
+        // express-rate-limit can include originalUrl in debug output; hide the
+        // OIDC callback query only while its middleware is executing.
+        Object.defineProperty(req, "originalUrl", {
+            configurable: true,
+            value: pathOnly,
+        });
+        limiter(req, res, (error?: unknown) => {
+            restore();
+            next(error);
+        });
+    };
+}
+
+async function oidcExchangeHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    const parsed = exchangeBodySchema.safeParse(req.body);
+    if (!parsed.success) return sendRouteError(res, 400, "Invalid request");
+    const exchange = await takeParsed(
+        `oidc:exchange:${parsed.data.code}`,
+        exchangeEntrySchema,
+    );
+    if (!exchange || !hasMatchingFlowBinding(req, exchange.bindingHash)) {
+        return sendRouteError(res, 401, "Invalid or expired OIDC code");
+    }
+    const user = await prisma.user.findUnique({
+        where: { id: exchange.userId },
+        select: {
+            id: true,
+            username: true,
+            displayName: true,
+            role: true,
+            tokenVersion: true,
+        },
+    });
+    if (!user) {
+        return sendRouteError(res, 401, "Invalid or expired OIDC code");
+    }
+    clearFlowBindingCookie(res);
+    return sendLoginSuccess(res, user);
+}
+
+async function restoreLinkForRetry(
+    token: string,
+    entry: z.infer<typeof linkEntrySchema>,
+): Promise<void> {
+    const ttlSeconds = remainingEntryTtlSeconds(entry.expiresAt);
+    if (ttlSeconds === null) return;
+    const restored = await putOnce(`oidc:link:${token}`, entry, ttlSeconds);
+    if (!restored) throw new Error("Failed to restore OIDC link state");
+}
+
+function remainingEntryTtlSeconds(expiresAt: number): number | null {
+    const remainingMilliseconds = expiresAt - Date.now();
+    if (remainingMilliseconds <= 0) return null;
+    return Math.max(1, Math.floor(remainingMilliseconds / 1000));
+}
+
+async function oidcConfirmLinkHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    const parsed = confirmLinkBodySchema.safeParse(req.body);
+    if (!parsed.success) return sendRouteError(res, 400, "Invalid request");
+    const entry = await takeParsed(
+        `oidc:link:${parsed.data.linkToken}`,
+        linkEntrySchema,
+    );
+    if (!entry || !hasMatchingFlowBinding(req, entry.bindingHash)) {
+        await runDummyBcrypt();
+        return sendRouteError(res, 401, "Invalid or expired link");
+    }
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: entry.userId },
+        });
+        if (!user) {
+            await runDummyBcrypt();
+            return sendRouteError(res, 401, "Invalid credentials");
+        }
+        if (!user.passwordHash) {
+            await runDummyBcrypt();
+            return sendRouteError(res, 401, "Invalid credentials");
+        }
+        const valid = await bcrypt.compare(
+            parsed.data.password,
+            user.passwordHash,
+        );
+        if (!valid) {
+            await restoreLinkForRetry(parsed.data.linkToken, entry);
+            return sendRouteError(res, 401, "Invalid credentials");
+        }
+        const secondFactor = await verifyLoginSecondFactor(
+            user,
+            parsed.data.twoFactorToken,
+        );
+        if (secondFactor.kind === "required") {
+            await restoreLinkForRetry(parsed.data.linkToken, entry);
+            return res.json({
+                requires2FA: true,
+                message: "2FA token required",
+            });
+        }
+        if (secondFactor.kind === "invalid") {
+            await restoreLinkForRetry(parsed.data.linkToken, entry);
+            return sendRouteError(res, 401, secondFactor.message);
+        }
+        return completeOidcLink(res, user, entry);
+    } catch (error) {
+        oidcLog.error("OIDC link confirmation failed", { error });
+        return sendRouteError(res, 500, "Failed to link OIDC account");
+    }
+}
+
+async function completeOidcLink(
+    res: Response,
+    user: LoginUser,
+    entry: z.infer<typeof linkEntrySchema>,
+): Promise<Response> {
+    await prisma.externalIdentity.create({
+        data: {
+            userId: user.id,
+            provider: entry.provider,
+            providerSubject: entry.providerSubject,
+            email: entry.email,
+            displayName: entry.displayName,
+        },
+    });
+    const syncedUser = await syncOidcRole(user, entry.groups);
+    clearFlowBindingCookie(res);
+    return sendLoginSuccess(res, syncedUser);
+}
+
+async function restoreInviteForRetry(
+    token: string,
+    entry: z.infer<typeof inviteEntrySchema>,
+): Promise<void> {
+    const ttlSeconds = remainingEntryTtlSeconds(entry.expiresAt);
+    if (ttlSeconds === null) return;
+    const restored = await putOnce(`oidc:invite:${token}`, entry, ttlSeconds);
+    if (!restored) throw new Error("Failed to restore OIDC invite state");
+}
+
+function claimsFromInvite(
+    entry: z.infer<typeof inviteEntrySchema>,
+): OidcClaims {
+    return {
+        sub: entry.providerSubject,
+        email: entry.email,
+        emailVerified: entry.email !== null,
+        name: entry.displayName,
+        preferredUsername: entry.preferredUsername ?? null,
+        groups: [],
+    };
+}
+
+async function oidcRedeemInviteHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    const parsed = redeemInviteBodySchema.safeParse(req.body);
+    if (!parsed.success) return sendRouteError(res, 400, "Invalid request");
+    const entry = await takeParsed(
+        `oidc:invite:${parsed.data.inviteToken}`,
+        inviteEntrySchema,
+    );
+    if (!entry || !hasMatchingFlowBinding(req, entry.bindingHash)) {
+        return sendRouteError(res, 401, "Invalid or expired invite");
+    }
+    try {
+        const invite = await loadUsableInviteCode(parsed.data.inviteCode);
+        const user = await provisionOidcUser(
+            claimsFromInvite(entry),
+            entry.provider,
+            invite,
+        );
+        clearFlowBindingCookie(res);
+        return sendLoginSuccess(res, user);
+    } catch (error) {
+        if (
+            error instanceof InviteCodeValidationError ||
+            error instanceof InviteCodeExhaustedError
+        ) {
+            await restoreInviteForRetry(parsed.data.inviteToken, entry);
+            return sendRouteError(res, 400, error.message);
+        }
+        oidcLog.error("OIDC invite redemption failed", { error });
+        return sendRouteError(res, 500, "Failed to redeem OIDC invite");
+    }
+}
+
+/**
+ * @openapi
+ * /api/auth/config:
+ *   get:
+ *     summary: Get public authentication capabilities
+ *     tags: [Authentication]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Authentication capabilities
+ */
+router.get("/config", (_req, res) =>
+    res.json({
+        localLoginEnabled: config.localLoginEnabled,
+        oidcEnabled: config.oidc.enabled,
+        oidcProviderName: config.oidc.providerName,
+    }),
+);
+
+/**
+ * @openapi
+ * /api/auth/oidc/login:
+ *   get:
+ *     summary: Start OIDC login
+ *     tags: [Authentication]
+ *     security: []
+ *     responses:
+ *       302:
+ *         description: Redirect to the OIDC provider
+ *       404:
+ *         description: OIDC is disabled
+ */
+router.get("/oidc/login", oidcFlowLimiter, oidcLoginHandler);
+
+/**
+ * @openapi
+ * /api/auth/oidc/link/start:
+ *   post:
+ *     summary: Start linking an OIDC identity to the current user
+ *     tags: [Authentication]
+ *     security:
+ *       - sessionAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               responseMode:
+ *                 type: string
+ *                 enum: [json]
+ *     responses:
+ *       200:
+ *         description: OIDC provider URL for an authenticated SPA navigation
+ *       302:
+ *         description: Redirect to the OIDC provider
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Not authenticated
+ *       403:
+ *         description: Interactive session authentication required
+ *       404:
+ *         description: OIDC is disabled
+ */
+router.post(
+    "/oidc/link/start",
+    authLimiter,
+    requireAuth,
+    requireInteractiveSession,
+    oidcLinkStartHandler,
+);
+
+/**
+ * @openapi
+ * /api/auth/oidc/callback:
+ *   get:
+ *     summary: Complete OIDC login
+ *     tags: [Authentication]
+ *     security: []
+ *     responses:
+ *       302:
+ *         description: Redirect to the SPA login hand-off
+ */
+router.get(
+    "/oidc/callback",
+    queryStrippedLimiter(oidcFlowLimiter),
+    oidcCallbackHandler,
+);
+
+/**
+ * @openapi
+ * /api/auth/oidc/exchange:
+ *   post:
+ *     summary: Exchange a one-time OIDC code for login tokens
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [code]
+ *             properties:
+ *               code:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 256
+ *                 pattern: '^[A-Za-z0-9_-]+$'
+ *     responses:
+ *       200:
+ *         description: Login tokens and user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginTokenResponse'
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Invalid or expired code
+ */
+router.post("/oidc/exchange", authLimiter, oidcExchangeHandler);
+
+/**
+ * @openapi
+ * /api/auth/oidc/confirm-link:
+ *   post:
+ *     summary: Confirm an OIDC account link with local credentials
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [linkToken, password]
+ *             properties:
+ *               linkToken:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 256
+ *                 pattern: '^[A-Za-z0-9_-]+$'
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 1
+ *               twoFactorToken:
+ *                 type: string
+ *                 minLength: 1
+ *     responses:
+ *       200:
+ *         description: Login response or 2FA challenge
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/LoginTokenResponse'
+ *                 - $ref: '#/components/schemas/LoginTwoFactorChallenge'
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Invalid credentials or link
+ *       500:
+ *         description: Failed to link OIDC account
+ */
+router.post("/oidc/confirm-link", authLimiter, oidcConfirmLinkHandler);
+
+/**
+ * @openapi
+ * /api/auth/oidc/redeem-invite:
+ *   post:
+ *     summary: Redeem an invite for OIDC account provisioning
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [inviteToken, inviteCode]
+ *             properties:
+ *               inviteToken:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 256
+ *                 pattern: '^[A-Za-z0-9_-]+$'
+ *               inviteCode:
+ *                 type: string
+ *                 minLength: 1
+ *     responses:
+ *       200:
+ *         description: Login tokens and provisioned user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginTokenResponse'
+ *       400:
+ *         description: Invalid invite code
+ *       401:
+ *         description: Invalid or expired invite
+ *       500:
+ *         description: Failed to redeem OIDC invite
+ */
+router.post("/oidc/redeem-invite", authLimiter, oidcRedeemInviteHandler);
+
+/**
+ * @openapi
+ * /api/auth/app-passwords:
+ *   get:
+ *     summary: List active app passwords for the current user
+ *     tags: [Authentication]
+ *     security:
+ *       - sessionAuth: []
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Active app-password metadata without secrets
+ *       401:
+ *         description: Not authenticated
+ */
+router.get("/app-passwords", apiLimiter, requireAuth, listAppPasswordsHandler);
+
+/**
+ * @openapi
+ * /api/auth/app-passwords:
+ *   post:
+ *     summary: Create an app password for the current user
+ *     tags: [Authentication]
+ *     security:
+ *       - sessionAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [displayName]
+ *             properties:
+ *               displayName:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 64
+ *     responses:
+ *       201:
+ *         description: App password with its one-time plaintext secret
+ *       400:
+ *         description: Invalid request or active app-password cap reached
+ *       401:
+ *         description: Not authenticated
+ *       403:
+ *         description: Interactive session authentication required
+ */
+router.post(
+    "/app-passwords",
+    authLimiter,
+    requireAuth,
+    requireInteractiveSession,
+    createAppPasswordHandler,
+);
+
+/**
+ * @openapi
+ * /api/auth/app-passwords/{id}:
+ *   delete:
+ *     summary: Revoke an owned app password
+ *     tags: [Authentication]
+ *     security:
+ *       - sessionAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: App password revoked
+ *       401:
+ *         description: Not authenticated
+ *       403:
+ *         description: Interactive session authentication required
+ *       404:
+ *         description: App password not found
+ */
+router.delete(
+    "/app-passwords/:id",
+    authLimiter,
+    requireAuth,
+    requireInteractiveSession,
+    revokeAppPasswordHandler,
+);
+
+/**
+ * @openapi
+ * /api/auth/identities:
+ *   get:
+ *     summary: List external identities for the current user
+ *     tags: [Authentication]
+ *     security:
+ *       - sessionAuth: []
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: External identity metadata with truncated subject hints
+ *       401:
+ *         description: Not authenticated
+ */
+router.get("/identities", apiLimiter, requireAuth, listIdentitiesHandler);
+
+/**
+ * @openapi
+ * /api/auth/identities/{id}:
+ *   delete:
+ *     summary: Unlink an owned external identity
+ *     tags: [Authentication]
+ *     security:
+ *       - sessionAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Identity unlinked
+ *       400:
+ *         description: Unlink would leave the account without a sign-in method
+ *       401:
+ *         description: Not authenticated
+ *       403:
+ *         description: Interactive session authentication required
+ *       404:
+ *         description: Identity not found
+ */
+router.delete(
+    "/identities/:id",
+    authLimiter,
+    requireAuth,
+    requireInteractiveSession,
+    unlinkIdentityHandler,
+);
 
 /**
  * @openapi
@@ -153,111 +1474,40 @@ const decrypt2FASecret = decrypt;
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// POST /auth/login
-router.post("/login", async (req, res) => {
+async function findLocalLoginUser(username: string) {
+    return (
+        (await prisma.user.findUnique({ where: { username } })) ??
+        (await prisma.user.findUnique({ where: { email: username } }))
+    );
+}
+
+async function localLoginHandler(
+    req: Request,
+    res: Response,
+): Promise<Response> {
+    if (!config.localLoginEnabled) {
+        return sendRouteError(res, 403, "Local login is disabled");
+    }
     try {
-        logger.debug(`[AUTH] Login attempt for user: ${req.body?.username}`);
-        const { username, password } = loginSchema.parse(req.body);
-        const { token } = req.body; // 2FA token if provided
-
-        // Look up by username first, then by email
-        const user =
-            (await prisma.user.findUnique({ where: { username } })) ??
-            (await prisma.user.findUnique({ where: { email: username } }));
-        if (!user) {
-            // Run dummy bcrypt to equalize response timing with the valid-user
-            // path, preventing username enumeration via timing side-channel.
+        const { username, password, token } = loginSchema.parse(req.body);
+        const user = await findLocalLoginUser(username);
+        if (!user || !user.passwordHash) {
             await runDummyBcrypt();
-            logger.debug(`[AUTH] User not found: ${username}`);
-            return res.status(401).json({ error: "Invalid credentials" });
+            return sendRouteError(res, 401, "Invalid credentials");
         }
-
-        logger.debug(`[AUTH] Verifying password for user: ${username}`);
         const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) {
-            logger.debug(`[AUTH] Invalid password for user: ${username}`);
-            return res.status(401).json({ error: "Invalid credentials" });
+        if (!valid) return sendRouteError(res, 401, "Invalid credentials");
+        const secondFactor = await verifyLoginSecondFactor(user, token);
+        if (secondFactor.kind === "required") {
+            return res.json({
+                requires2FA: true,
+                message: "2FA token required",
+            });
         }
-        logger.debug(`[AUTH] Password verified for user: ${username}`);
-
-        // Check if 2FA is enabled
-        if (user.twoFactorEnabled && user.twoFactorSecret) {
-            if (!token) {
-                return res.status(200).json({
-                    requires2FA: true,
-                    message: "2FA token required",
-                });
-            }
-
-            // Check if it's a recovery code
-            const isRecoveryCode = /^[A-F0-9]{8}$/i.test(token);
-
-            if (isRecoveryCode && user.twoFactorRecoveryCodes) {
-                const encryptedCodes = user.twoFactorRecoveryCodes;
-                const decryptedCodes = decrypt2FASecret(encryptedCodes);
-                const hashedCodes = decryptedCodes.split(",");
-
-                const providedHash = crypto
-                    .createHash("sha256")
-                    .update(token.toUpperCase())
-                    .digest("hex");
-
-                // Iterate all codes with constant-time comparison to avoid
-                // timing leaks that reveal which code position matched.
-                let codeIndex = -1;
-                for (let i = 0; i < hashedCodes.length; i++) {
-                    if (timingSafeCompare(hashedCodes[i], providedHash)) {
-                        codeIndex = i;
-                    }
-                }
-                if (codeIndex === -1) {
-                    return res
-                        .status(401)
-                        .json({ error: "Invalid recovery code" });
-                }
-
-                hashedCodes.splice(codeIndex, 1);
-                await prisma.user.update({
-                    where: { id: user.id },
-                    data: {
-                        twoFactorRecoveryCodes: encrypt2FASecret(
-                            hashedCodes.join(","),
-                        ),
-                    },
-                });
-            } else {
-                // Verify TOTP token
-                const secret = decrypt2FASecret(user.twoFactorSecret);
-                const verified = await verifyTotpToken(secret, token);
-
-                if (!verified) {
-                    return res.status(401).json({ error: "Invalid 2FA token" });
-                }
-            }
+        if (secondFactor.kind === "invalid") {
+            return sendRouteError(res, 401, secondFactor.message);
         }
-
-        // Generate JWT tokens
-        const jwtToken = generateToken({
-            id: user.id,
-            username: user.username,
-            role: user.role,
-            tokenVersion: user.tokenVersion,
-        });
-        const refreshToken = generateRefreshToken({
-            id: user.id,
-            tokenVersion: user.tokenVersion,
-        });
-
-        res.json({
-            token: jwtToken,
-            refreshToken: refreshToken,
-            user: {
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                role: user.role,
-            },
-        });
+        return sendLoginSuccess(res, user);
     } catch (err) {
         if (err instanceof z.ZodError) {
             return res
@@ -265,9 +1515,12 @@ router.post("/login", async (req, res) => {
                 .json({ error: "Invalid request", details: err.issues });
         }
         logger.error("Login error:", err);
-        res.status(500).json({ error: "Internal error" });
+        return res.status(500).json({ error: "Internal error" });
     }
-});
+}
+
+// POST /auth/login
+router.post("/login", localLoginHandler);
 
 /**
  * @openapi
@@ -468,6 +1721,12 @@ router.post("/change-password", authLimiter, requireAuth, async (req, res) => {
             return res.status(404).json({ error: "User not found" });
         }
 
+        if (!user.passwordHash) {
+            return res
+                .status(401)
+                .json({ error: "Current password is incorrect" });
+        }
+
         const valid = await bcrypt.compare(currentPassword, user.passwordHash);
         if (!valid) {
             return res
@@ -561,6 +1820,36 @@ router.post("/change-email", apiLimiter, requireAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: List of all users
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 required: [id, username, role, createdAt, hasPassword, linkedProviders]
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   username:
+ *                     type: string
+ *                   email:
+ *                     type: string
+ *                     format: email
+ *                     nullable: true
+ *                   role:
+ *                     type: string
+ *                     enum: [user, admin]
+ *                   onboardingComplete:
+ *                     type: boolean
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *                   hasPassword:
+ *                     type: boolean
+ *                   linkedProviders:
+ *                     type: array
+ *                     items:
+ *                       type: string
  *       401:
  *         description: Not authenticated
  *       403:
@@ -582,17 +1871,121 @@ router.get(
                     role: true,
                     onboardingComplete: true,
                     createdAt: true,
+                    passwordHash: true,
+                    externalIdentities: { select: { provider: true } },
                 },
                 orderBy: { createdAt: "asc" },
             });
 
-            res.json(users);
+            const summaries = users.map(
+                ({ passwordHash, externalIdentities, ...user }) => ({
+                    ...user,
+                    hasPassword: passwordHash !== null,
+                    linkedProviders: externalIdentities.map(
+                        (identity) => identity.provider,
+                    ),
+                }),
+            );
+            res.json(summaries);
         } catch (error) {
             logger.error("Get users error:", error);
             res.status(500).json({ error: "Failed to get users" });
         }
     },
 );
+
+const adminUserUpdateSchema = z.object({
+    username: z
+        .string()
+        .min(3)
+        .max(32)
+        .regex(
+            /^[a-zA-Z0-9_]+$/,
+            "Username must be alphanumeric (underscores allowed)",
+        )
+        .optional(),
+    email: z.string().email().optional().nullable(),
+    password: z.string().min(6).max(128).optional(),
+    role: z.enum(["user", "admin"]).optional(),
+});
+
+type AdminUserUpdateData = {
+    username?: string;
+    email?: string | null;
+    passwordHash?: string;
+    tokenVersion?: { increment: number };
+    subsonicPassword?: null;
+    role?: "user" | "admin";
+};
+
+const adminUserSelect = {
+    id: true,
+    username: true,
+    email: true,
+    role: true,
+    createdAt: true,
+} as const;
+
+type GuardedUserUpdateResult =
+    | { kind: "lastAdmin" }
+    | { kind: "notFound" }
+    | { kind: "updated"; user: unknown };
+
+async function buildAdminUserUpdateData(
+    data: z.infer<typeof adminUserUpdateSchema>,
+): Promise<AdminUserUpdateData> {
+    const updateData: AdminUserUpdateData = {};
+    if (data.username) updateData.username = data.username;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.role) updateData.role = data.role;
+    if (data.password) {
+        updateData.passwordHash = await bcrypt.hash(data.password, 10);
+        updateData.tokenVersion = { increment: 1 };
+        updateData.subsonicPassword = null;
+    }
+    return updateData;
+}
+
+async function updateUserWithRoleGuard(
+    userId: string,
+    updateData: AdminUserUpdateData,
+): Promise<GuardedUserUpdateResult> {
+    return prisma.$transaction(async (tx) => {
+        await acquireRoleGuardLock(tx);
+        const target = await tx.user.findUnique({
+            where: { id: userId },
+            select: { role: true },
+        });
+        if (!target) return { kind: "notFound" };
+        if (target.role === "admin") {
+            const otherAdmins = await tx.user.count({
+                where: { role: "admin", id: { not: userId } },
+            });
+            if (otherAdmins === 0) return { kind: "lastAdmin" };
+        }
+        const user = await tx.user.update({
+            where: { id: userId },
+            data: updateData,
+            select: adminUserSelect,
+        });
+        return { kind: "updated", user };
+    });
+}
+
+async function persistAdminUserUpdate(
+    userId: string,
+    updateData: AdminUserUpdateData,
+): Promise<GuardedUserUpdateResult> {
+    if (updateData.role === "user") {
+        return updateUserWithRoleGuard(userId, updateData);
+    }
+    const user = await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        select: adminUserSelect,
+    });
+    return { kind: "updated", user };
+}
 
 /**
  * @openapi
@@ -707,7 +2100,7 @@ router.post(
  * @openapi
  * /api/auth/users/{id}:
  *   patch:
- *     summary: Update a user's username, email, or password (admin only)
+ *     summary: Update a user's username, email, password, or role (admin only)
  *     tags: [Authentication]
  *     security:
  *       - sessionAuth: []
@@ -734,6 +2127,9 @@ router.post(
  *               password:
  *                 type: string
  *                 format: password
+ *               role:
+ *                 type: string
+ *                 enum: [user, admin]
  *     responses:
  *       200:
  *         description: User updated successfully
@@ -755,21 +2151,7 @@ router.patch<{ id: string }>(
     async (req, res) => {
         try {
             const { id } = req.params;
-            const updateSchema = z.object({
-                username: z
-                    .string()
-                    .min(3)
-                    .max(32)
-                    .regex(
-                        /^[a-zA-Z0-9_]+$/,
-                        "Username must be alphanumeric (underscores allowed)",
-                    )
-                    .optional(),
-                email: z.string().email().optional().nullable(),
-                password: z.string().min(6).max(128).optional(),
-            });
-
-            const data = updateSchema.parse(req.body);
+            const data = adminUserUpdateSchema.parse(req.body);
 
             // Check the target user exists
             const targetUser = await prisma.user.findUnique({ where: { id } });
@@ -801,33 +2183,20 @@ router.patch<{ id: string }>(
                 }
             }
 
-            // Build update payload
-            const updateData: Record<string, unknown> = {};
-            if (data.username) updateData.username = data.username;
-            if (data.email !== undefined) updateData.email = data.email;
-            if (data.password) {
-                updateData.passwordHash = await bcrypt.hash(data.password, 10);
-                updateData.tokenVersion = { increment: 1 };
-                updateData.subsonicPassword = null;
-            }
-
+            const updateData = await buildAdminUserUpdateData(data);
             if (Object.keys(updateData).length === 0) {
                 return res.status(400).json({ error: "No fields to update" });
             }
-
-            const updated = await prisma.user.update({
-                where: { id },
-                data: updateData,
-                select: {
-                    id: true,
-                    username: true,
-                    email: true,
-                    role: true,
-                    createdAt: true,
-                },
-            });
-
-            res.json(updated);
+            const result = await persistAdminUserUpdate(id, updateData);
+            if (result.kind === "notFound") {
+                return res.status(404).json({ error: "User not found" });
+            }
+            if (result.kind === "lastAdmin") {
+                return res
+                    .status(400)
+                    .json({ error: "Cannot demote the last admin" });
+            }
+            return res.json(result.user);
         } catch (err) {
             if (err instanceof z.ZodError) {
                 const firstError = err.issues[0];
@@ -841,6 +2210,29 @@ router.patch<{ id: string }>(
         }
     },
 );
+
+type DeleteUserResult = "deleted" | "lastAdmin" | "notFound";
+
+async function deleteUserWithRoleGuard(
+    userId: string,
+): Promise<DeleteUserResult> {
+    return prisma.$transaction(async (tx) => {
+        await acquireRoleGuardLock(tx);
+        const target = await tx.user.findUnique({
+            where: { id: userId },
+            select: { role: true },
+        });
+        if (!target) return "notFound";
+        if (target.role === "admin") {
+            const otherAdmins = await tx.user.count({
+                where: { role: "admin", id: { not: userId } },
+            });
+            if (otherAdmins === 0) return "lastAdmin";
+        }
+        await tx.user.delete({ where: { id: userId } });
+        return "deleted";
+    });
+}
 
 /**
  * @openapi
@@ -887,18 +2279,23 @@ router.delete<{ id: string }>(
                     .json({ error: "Cannot delete your own account" });
             }
 
-            // Delete user (cascade will handle related data)
-            await prisma.user.delete({
-                where: { id },
-            });
-
-            res.json({ message: "User deleted successfully" });
-        } catch (error: any) {
-            logger.error("Delete user error:", error);
-            if (error.code === "P2025") {
+            const result = await deleteUserWithRoleGuard(id);
+            if (result === "notFound") {
                 return res.status(404).json({ error: "User not found" });
             }
-            res.status(500).json({ error: "Failed to delete user" });
+            if (result === "lastAdmin") {
+                return res
+                    .status(400)
+                    .json({ error: "Cannot delete the last admin" });
+            }
+
+            return res.json({ message: "User deleted successfully" });
+        } catch (error: unknown) {
+            logger.error("Delete user error:", error);
+            if (hasErrorCode(error, "P2025")) {
+                return res.status(404).json({ error: "User not found" });
+            }
+            return res.status(500).json({ error: "Failed to delete user" });
         }
     },
 );
@@ -1153,130 +2550,65 @@ router.delete<{ id: string }>(
  *       400:
  *         description: Invalid request, invite code, or username/email already taken
  */
-// Thrown inside the registration transaction when the invite code has no
-// remaining uses at consume time, so the whole transaction rolls back (no user
-// is created) and the handler can return a clean 400.
-class InviteCodeExhaustedError extends Error {}
+type RegisterInput = z.infer<typeof registerSchema>;
 
-// POST /auth/register - Public registration with invite code
-router.post("/register", async (req, res) => {
-    try {
-        const data = registerSchema.parse(req.body);
+async function findRegistrationConflict(
+    data: RegisterInput,
+): Promise<string | null> {
+    const existingUser = await prisma.user.findUnique({
+        where: { username: data.username },
+    });
+    if (existingUser) return "Username already taken";
+    const existingEmail = await prisma.user.findFirst({
+        where: { email: data.email },
+    });
+    return existingEmail ? "Email already in use" : null;
+}
 
-        // Validate invite code
-        const invite = await prisma.inviteCode.findUnique({
-            where: { code: data.inviteCode.toUpperCase() },
-        });
-
-        if (!invite) {
-            return res.status(400).json({ error: "Invalid invite code" });
-        }
-        if (invite.revoked) {
-            return res
-                .status(400)
-                .json({ error: "This invite code has been revoked" });
-        }
-        if (invite.useCount >= invite.maxUses) {
-            return res
-                .status(400)
-                .json({ error: "This invite code has been fully used" });
-        }
-        if (invite.expiresAt && invite.expiresAt < new Date()) {
-            return res
-                .status(400)
-                .json({ error: "This invite code has expired" });
-        }
-
-        // Check username uniqueness
-        const existingUser = await prisma.user.findUnique({
-            where: { username: data.username },
-        });
-        if (existingUser) {
-            return res.status(400).json({ error: "Username already taken" });
-        }
-
-        // Check email uniqueness
-        const existingEmail = await prisma.user.findFirst({
-            where: { email: data.email },
-        });
-        if (existingEmail) {
-            return res.status(400).json({ error: "Email already in use" });
-        }
-
-        // Create user, settings, and usage record in a transaction
-        const passwordHash = await bcrypt.hash(data.password, 10);
-
-        const result = await prisma.$transaction(async (tx) => {
-            // Atomically consume one use of the invite code — only if uses remain
-            // and it isn't revoked. This closes the TOCTOU between the useCount
-            // check above (read before the transaction) and the increment below:
-            // two concurrent registrations on a single-use code can no longer
-            // both pass. If nothing was consumed, abort so no user is created.
-            const consumed = await tx.inviteCode.updateMany({
-                where: {
-                    id: invite.id,
-                    revoked: false,
-                    useCount: { lt: invite.maxUses },
-                },
-                data: { useCount: { increment: 1 } },
-            });
-            if (consumed.count === 0) {
-                throw new InviteCodeExhaustedError();
-            }
-
-            const user = await tx.user.create({
-                data: {
-                    username: data.username,
-                    displayName: data.displayName,
-                    email: data.email,
-                    passwordHash,
-                    role: "user",
-                    onboardingComplete: true,
-                },
-            });
-
-            await tx.userSettings.create({
-                data: {
-                    userId: user.id,
-                    playbackQuality: "original",
-                    wifiOnly: false,
-                    offlineEnabled: false,
-                    maxCacheSizeMb: 10240,
-                },
-            });
-
-            await tx.inviteCodeUsage.create({
-                data: {
-                    inviteCodeId: invite.id,
-                    usedBy: user.id,
-                },
-            });
-
-            return user;
-        });
-
-        // Generate JWT tokens
-        const jwtToken = generateToken({
-            id: result.id,
-            username: result.username,
-            role: result.role,
-            tokenVersion: result.tokenVersion,
-        });
-        const refreshToken = generateRefreshToken({
-            id: result.id,
-            tokenVersion: result.tokenVersion,
-        });
-
-        res.json({
-            token: jwtToken,
-            refreshToken,
-            user: {
-                id: result.id,
-                username: result.username,
-                displayName: result.displayName,
-                role: result.role,
+async function createLocalRegisteredUser(
+    data: RegisterInput,
+    invite: InviteCode,
+    passwordHash: string,
+): Promise<LoginUser> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        await claimInviteCode(tx, invite);
+        const user = await tx.user.create({
+            data: {
+                username: data.username,
+                displayName: data.displayName,
+                email: data.email,
+                passwordHash,
+                role: "user",
+                onboardingComplete: true,
             },
         });
+        await tx.userSettings.create({
+            data: {
+                userId: user.id,
+                playbackQuality: "original",
+                wifiOnly: false,
+                offlineEnabled: false,
+                maxCacheSizeMb: 10240,
+            },
+        });
+        await recordInviteCodeUsage(tx, invite, user.id);
+        return user;
+    });
+}
+
+async function registerHandler(req: Request, res: Response): Promise<Response> {
+    try {
+        const data = registerSchema.parse(req.body);
+        const invite = await loadUsableInviteCode(data.inviteCode);
+        const conflict = await findRegistrationConflict(data);
+        if (conflict) return sendRouteError(res, 400, conflict);
+        const passwordHash = await bcrypt.hash(data.password, 10);
+        const user = await createLocalRegisteredUser(
+            data,
+            invite,
+            passwordHash,
+        );
+        return sendLoginSuccess(res, user);
     } catch (err) {
         if (err instanceof z.ZodError) {
             const firstError = err.issues[0];
@@ -1285,15 +2617,19 @@ router.post("/register", async (req, res) => {
                 details: err.issues,
             });
         }
-        if (err instanceof InviteCodeExhaustedError) {
-            return res
-                .status(400)
-                .json({ error: "This invite code has been fully used" });
+        if (
+            err instanceof InviteCodeValidationError ||
+            err instanceof InviteCodeExhaustedError
+        ) {
+            return sendRouteError(res, 400, err.message);
         }
         logger.error("Registration error:", err);
-        res.status(500).json({ error: "Registration failed" });
+        return res.status(500).json({ error: "Registration failed" });
     }
-});
+}
+
+// POST /auth/register - Public registration with invite code
+router.post("/register", authLimiter, registerHandler);
 
 /**
  * @openapi
@@ -1524,6 +2860,10 @@ router.post(
 
             if (!user) {
                 return res.status(404).json({ error: "User not found" });
+            }
+
+            if (!user.passwordHash) {
+                return res.status(401).json({ error: "Invalid password" });
             }
 
             // Verify password
