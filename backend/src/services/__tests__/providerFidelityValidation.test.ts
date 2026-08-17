@@ -264,6 +264,15 @@ describe("provider fidelity CLI arguments", () => {
         );
     });
 
+    it("requires a baseline URL when VIBE_PROVIDER_URL is unset", () => {
+        expect(() =>
+            parseProviderFidelityArgs(
+                ["--candidate-url", "http://candidate"],
+                undefined,
+            ),
+        ).toThrow("--baseline-url or VIBE_PROVIDER_URL is required");
+    });
+
     it.each([
         [
             ["--candidate-url", "http://candidate", "--sample", "1"],
@@ -289,8 +298,8 @@ describe("provider fidelity CLI arguments", () => {
             "--k must be less than --sample",
         ],
     ])("rejects invalid numeric bounds", (argv, message) => {
-        expect(() => parseProviderFidelityArgs(argv, undefined)).toThrow(
-            message,
-        );
+        expect(() =>
+            parseProviderFidelityArgs(argv, "http://baseline"),
+        ).toThrow(message);
     });
 });
