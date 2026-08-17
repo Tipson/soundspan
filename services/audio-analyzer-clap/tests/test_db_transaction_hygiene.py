@@ -254,10 +254,19 @@ def test_worker_update_succeeds_under_autocommit_and_rolls_back_failure(
     worker._update_track_status("track-1", "processing")
 
     update_cursor = conn.cursors[-1]
-    assert 'UPDATE "Track"' in update_cursor.executions[0][0]
+    update_query = update_cursor.executions[0][0]
+    assert 'UPDATE "Track"' in update_query
+    # Non-completed statuses must not clear fields owned by other writers.
+    assert '"vibeAnalysisError" = NULL' not in update_query
+    assert '"vibeAnalysisStartedAt" = NULL' not in update_query
     assert update_cursor.executions[0][1][0] == "processing"
     assert update_cursor.executions[0][1][2] == "track-1"
-    assert conn.commit_calls == 1
+
+    worker._update_track_status("track-1", "completed")
+    completed_query = conn.cursors[-1].executions[0][0]
+    assert '"vibeAnalysisError" = NULL' in completed_query
+    assert '"vibeAnalysisStartedAt" = NULL' in completed_query
+    assert conn.commit_calls == 2
     assert conn.rollback_calls == 0
     assert conn.in_transaction is False
     assert update_cursor.closed is True
@@ -265,7 +274,7 @@ def test_worker_update_succeeds_under_autocommit_and_rolls_back_failure(
     conn.execute_error = 'UPDATE "Track"'
     worker._update_track_status("track-1", "failed")
 
-    assert conn.commit_calls == 1
+    assert conn.commit_calls == 2
     assert conn.rollback_calls == 1
     assert conn.in_transaction is False
     assert conn.cursors[-1].closed is True

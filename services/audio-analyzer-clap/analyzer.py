@@ -575,6 +575,7 @@ class Worker:
 
         if success:
             self._update_track_status(track_id, "completed")
+            self._report_success(track_id)
             logger.info(f"Worker {self.worker_id} completed track: {track_id}")
         else:
             self._mark_failed(track_id, "Failed to store embedding")
@@ -613,18 +614,33 @@ class Worker:
         except Exception as error:
             logger.warning(f"Failed to release vibe queue reservation: {error}")
 
+    _COMPLETED_STATUS_SQL = """
+        UPDATE "Track"
+        SET
+            "vibeAnalysisStatus" = %s,
+            "vibeAnalysisError" = NULL,
+            "vibeAnalysisStartedAt" = NULL,
+            "vibeAnalysisStatusUpdatedAt" = %s
+        WHERE id = %s
+    """
+    _STATUS_ONLY_SQL = """
+        UPDATE "Track"
+        SET
+            "vibeAnalysisStatus" = %s,
+            "vibeAnalysisStatusUpdatedAt" = %s
+        WHERE id = %s
+    """
+
     def _update_track_status(self, track_id: str, status: str):
         """Update the track's vibe analysis status (CLAP embeddings)"""
+        # Stale error/start fields are cleared only on completion; other
+        # statuses own those fields elsewhere (claim sets startedAt,
+        # failure sets the error text).
+        update_sql = self._COMPLETED_STATUS_SQL if status == "completed" else self._STATUS_ONLY_SQL
         cursor = self.db.get_cursor()
         try:
             cursor.execute(
-                """
-                UPDATE "Track"
-                SET
-                    "vibeAnalysisStatus" = %s,
-                    "vibeAnalysisStatusUpdatedAt" = %s
-                WHERE id = %s
-            """,
+                update_sql,
                 (status, datetime.now(UTC), track_id),
             )
             self.db.commit()
@@ -633,6 +649,23 @@ class Worker:
             self.db.rollback()
         finally:
             cursor.close()
+
+    @staticmethod
+    def _report_success(track_id: str) -> None:
+        """Report a stored vibe embedding to the backend failure ledger."""
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "X-Internal-Secret": os.getenv("INTERNAL_API_SECRET", ""),
+            }
+            requests.post(
+                f"{BACKEND_URL}/api/analysis/vibe/success",
+                json={"trackId": track_id},
+                headers=headers,
+                timeout=5,
+            )
+        except Exception as report_err:
+            logger.warning(f"Failed to report success to backend: {report_err}")
 
     def _mark_failed(self, track_id: str, error: str):
         """Mark track as failed and record in enrichment failures"""
