@@ -7,11 +7,16 @@ import { logger } from "../utils/logger";
 import { enrichmentFailureService } from "./enrichmentFailureService";
 import { upsertTrackEmbedding } from "./trackEmbeddings";
 import { embedAudio, VibeProviderError } from "./vibeProvider";
+import type { EmbeddingVectorSpace } from "./vibeProvider";
+import { vibeEmbeddingTargetGateWhere } from "./vibeEmbeddingEligibility";
 
 const VIBE_QUEUE = "audio:clap:queue";
 const MAX_ERROR_LENGTH = 500;
 const INVALID_PAYLOAD_ERROR = "Invalid vibe embedding job payload";
-const jobLog = logger.child("VibeEmbedJobs");
+const jobLog =
+    typeof (logger as { child?: unknown }).child === "function"
+        ? logger.child("VibeEmbedJobs")
+        : logger;
 const trackIdSchema = z.string().min(1);
 
 function isSyntacticallyContainedPath(filePath: string): boolean {
@@ -56,17 +61,28 @@ interface FailureServicePort {
 }
 
 interface VibeEmbedJobDependencies {
+    targetSpaceId: string;
+    targetSpaceDim: number;
     prisma: VibeEmbedPrismaPort;
-    embedAudio(trackRef: string): Promise<number[]>;
+    embedAudio(
+        trackRef: string,
+        targetSpace: EmbeddingVectorSpace,
+    ): Promise<number[]>;
     upsertTrackEmbedding(
         trackId: string,
         embedding: readonly number[],
+        spaceId: string,
     ): Promise<void>;
     failureService: FailureServicePort;
     releaseReservation(trackId: string): Promise<void>;
     recordOutcome(outcome: VibeEmbedJobOutcome): void;
     describeFailure(error: unknown): string;
     now(): Date;
+}
+
+/** Worker-resolved registry target carried through claim, validation, and write. */
+export interface VibeEmbedJobTargetSpace extends EmbeddingVectorSpace {
+    status: "active" | "migrating";
 }
 
 function parseJob(rawJob: string): ParsedVibeEmbedJob {
@@ -118,13 +134,7 @@ async function claimTrack(
 ): Promise<boolean> {
     const timestamp = dependencies.now();
     const result = await dependencies.prisma.track.updateMany({
-        where: {
-            ...activeTrackWhere(trackId),
-            OR: [
-                { vibeAnalysisStatus: null },
-                { vibeAnalysisStatus: "pending" },
-            ],
-        },
+        where: claimTrackWhere(dependencies, trackId),
         data: {
             vibeAnalysisStatus: "processing",
             vibeAnalysisStartedAt: timestamp,
@@ -133,6 +143,25 @@ async function claimTrack(
     });
     await releaseReservation(dependencies, trackId);
     return result.count === 1;
+}
+
+function claimTrackWhere(
+    dependencies: VibeEmbedJobDependencies,
+    trackId: string,
+) {
+    return {
+        ...activeTrackWhere(trackId),
+        ...vibeEmbeddingTargetGateWhere(dependencies.targetSpaceId),
+    };
+}
+
+function failureStatusWhere() {
+    return [
+        { vibeAnalysisStatus: null },
+        { vibeAnalysisStatus: "pending" },
+        { vibeAnalysisStatus: "processing" },
+        { vibeAnalysisStatus: "completed" },
+    ];
 }
 
 function failureMessage(
@@ -147,16 +176,12 @@ async function markFailedWithMessage(
     track: TrackSnapshot,
     errorMessage: string,
 ): Promise<boolean> {
-    // Guarded like claimTrack so a stray or duplicate job can never demote a
-    // track another consumer already completed or failed.
+    // The claim may begin from completed when its target-space vector is
+    // absent, while processing covers failures after the claim succeeds.
     const updated = await dependencies.prisma.track.updateMany({
         where: {
             ...activeTrackWhere(track.id),
-            OR: [
-                { vibeAnalysisStatus: null },
-                { vibeAnalysisStatus: "pending" },
-                { vibeAnalysisStatus: "processing" },
-            ],
+            OR: failureStatusWhere(),
         },
         data: {
             vibeAnalysisStatus: "failed",
@@ -241,13 +266,22 @@ async function processValidJob(
     }
 
     try {
-        const vector = await dependencies.embedAudio(job.filePath);
+        const vector = await dependencies.embedAudio(job.filePath, {
+            id: dependencies.targetSpaceId,
+            dim: dependencies.targetSpaceDim,
+        });
         const stillActive = await findActiveTrack(
             dependencies.prisma,
             track.id,
         );
         if (!stillActive) return finish(dependencies, "track_missing");
-        await dependencies.upsertTrackEmbedding(track.id, vector);
+        // Status fields are intentionally shared across spaces because one
+        // provider target is filled at a time in this worker process.
+        await dependencies.upsertTrackEmbedding(
+            track.id,
+            vector,
+            dependencies.targetSpaceId,
+        );
         await markCompleted(dependencies, track.id);
         return finish(dependencies, "stored");
     } catch (error) {
@@ -306,16 +340,23 @@ function describeVibeEmbedFailure(error: unknown): string {
     }
 }
 
-/** Processes one queued audio-embedding job through the configured provider. */
-export const processVibeEmbedJob = createVibeEmbedJobProcessor({
-    prisma,
-    embedAudio,
-    upsertTrackEmbedding,
-    failureService: enrichmentFailureService,
-    releaseReservation: async (trackId) => {
-        await redisClient.del(`${VIBE_QUEUE}:reserved:${trackId}`);
-    },
-    recordOutcome: recordVibeEmbedJobOutcome,
-    describeFailure: describeVibeEmbedFailure,
-    now: () => new Date(),
-});
+/** Process one queued audio-embedding job for an explicit provider space. */
+export async function processVibeEmbedJob(
+    rawJob: string,
+    targetSpace: VibeEmbedJobTargetSpace,
+): Promise<VibeEmbedJobOutcome> {
+    return createVibeEmbedJobProcessor({
+        targetSpaceId: targetSpace.id,
+        targetSpaceDim: targetSpace.dim,
+        prisma,
+        embedAudio,
+        upsertTrackEmbedding,
+        failureService: enrichmentFailureService,
+        releaseReservation: async (trackId) => {
+            await redisClient.del(`${VIBE_QUEUE}:reserved:${trackId}`);
+        },
+        recordOutcome: recordVibeEmbedJobOutcome,
+        describeFailure: describeVibeEmbedFailure,
+        now: () => new Date(),
+    })(rawJob);
+}
