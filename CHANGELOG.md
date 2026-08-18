@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Federation now tolerates fields from newer peers and only sends fields that
   each peer advertises it understands.
 
+### Fixed
+
+- Fixed the 2.3.2 audio-analyzer images failing to start because new loudness
+  modules were missing from both the standalone and all-in-one images.
+
 ## [2.3.2] - 2026-08-18
 
 ### Added
