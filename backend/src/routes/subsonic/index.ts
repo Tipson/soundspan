@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { mergeSubsonicBodyParamsIntoQuery } from "../../middleware/subsonicRequestParams";
 import { config } from "../../config";
 import {
     requireSubsonicAuth,
@@ -11,6 +12,8 @@ import {
 } from "../../utils/subsonicResponse";
 import {
     handleGetOpenSubsonicExtensions,
+    handleGetPodcasts,
+    handleGetNewestPodcasts,
     handleGetLicense,
     handleGetScanStatus,
     handlePing,
@@ -79,6 +82,8 @@ import { getRequestContext } from "./shared";
 const router = Router();
 const SUBSONIC_TRACE_LOGS = config.subsonicTraceLogs;
 
+router.use(mergeSubsonicBodyParamsIntoQuery);
+
 if (SUBSONIC_TRACE_LOGS) {
     router.use((req, res, next) => {
         const startMs = Date.now();
@@ -122,6 +127,68 @@ if (SUBSONIC_TRACE_LOGS) {
 
 router.use(subsonicRateLimiter);
 router.use(requireSubsonicAuth);
+
+const SUBSONIC_FORM_POST_READ_ENDPOINTS = new Set([
+    "getLicense",
+    "getPodcasts",
+    "getNewestPodcasts",
+    "getOpenSubsonicExtensions",
+    "tokenInfo",
+    "getMusicFolders",
+    "getMusicDirectory",
+    "getIndexes",
+    "getArtists",
+    "getArtist",
+    "getArtistInfo2",
+    "getAlbum",
+    "getAlbumInfo2",
+    "getSong",
+    "getTopSongs",
+    "getSimilarSongs",
+    "getSimilarSongs2",
+    "getAlbumList",
+    "getAlbumList2",
+    "getGenres",
+    "getSongsByGenre",
+    "getRandomSongs",
+    "stream",
+    "download",
+    "getCoverArt",
+    "getLyrics",
+    "getLyricsBySongId",
+    "search",
+    "search2",
+    "search3",
+    "getPlaylists",
+    "getPlaylist",
+    "getPlayQueue",
+    "getPlayQueueByIndex",
+    "getBookmarks",
+    "getNowPlaying",
+    "getUser",
+    "getAvatar",
+    "getStarred",
+    "getStarred2",
+    "getScanStatus",
+]);
+
+// Clients such as Music Assistant send form-encoded POST requests for read
+// endpoints. Reuse the existing GET handlers after authentication, but only
+// for an explicit read-only allowlist so unknown or mutating POST endpoints
+// retain their normal routing semantics.
+router.use((req, _res, next) => {
+    const endpoint = req.path
+        .replace(/^\/(?:rest\/)?/, "")
+        .replace(/\.view$/, "");
+    if (
+        req.method === "POST" &&
+        SUBSONIC_FORM_POST_READ_ENDPOINTS.has(endpoint)
+    ) {
+        req.method = "GET";
+    }
+    next();
+});
+
 function endpointAliases(endpoint: string): string[] {
     return [
         `/${endpoint}`,
@@ -134,6 +201,8 @@ function endpointAliases(endpoint: string): string[] {
 router.get(endpointAliases("ping"), handlePing);
 router.post(endpointAliases("ping"), handlePing);
 router.get(endpointAliases("getLicense"), handleGetLicense);
+router.get(endpointAliases("getPodcasts"), handleGetPodcasts);
+router.get(endpointAliases("getNewestPodcasts"), handleGetNewestPodcasts);
 router.get(
     endpointAliases("getOpenSubsonicExtensions"),
     handleGetOpenSubsonicExtensions,
