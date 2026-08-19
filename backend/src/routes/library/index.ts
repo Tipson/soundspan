@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { requireAuthOrToken } from "../../middleware/auth";
-import { apiLimiter } from "../../middleware/rateLimiter";
+import {
+    coverArtLimiter,
+    libraryMetadataLimiter,
+    streamingLimiter,
+} from "../../middleware/rateLimiter";
 import { maintenanceRouter } from "./maintenance";
 import {
     artistsListRouter,
@@ -30,23 +34,15 @@ import { radioPlaylistRouter } from "./radioPlaylists";
 
 const router = Router();
 
-// All routes require auth (session or API key)
-router.use(requireAuthOrToken);
+router.use(
+    ["/cover-art", "/album-cover", "/cover-art-colors"],
+    coverArtLimiter,
+);
+router.use("/tracks/:trackId/stream", streamingLimiter);
+router.use(libraryMetadataLimiter);
 
-// Apply API rate limiter to routes that need it
-// Skip rate limiting for high-traffic endpoints (cover-art, streaming)
-router.use((req, res, next) => {
-    // Skip rate limiting for cover-art endpoint (handled by imageLimiter separately)
-    if (req.path.startsWith("/cover-art")) {
-        return next();
-    }
-    // Skip rate limiting for streaming endpoints - audio must not be interrupted
-    if (req.path.includes("/stream")) {
-        return next();
-    }
-    // Apply API rate limiter to all other routes
-    return apiLimiter(req, res, next);
-});
+// All routes require auth (session or API key) after abuse controls run.
+router.use(requireAuthOrToken);
 
 router.use(maintenanceRouter);
 router.use(artistsListRouter);

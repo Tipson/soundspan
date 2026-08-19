@@ -10,7 +10,11 @@ import { audiobookshelfService } from "../services/audiobookshelf";
 import { audiobookCacheService } from "../services/audiobookCache";
 import { prisma } from "../utils/db";
 import { requireAuthOrToken } from "../middleware/auth";
-import { imageLimiter, apiLimiter } from "../middleware/rateLimiter";
+import {
+    apiLimiter,
+    coverArtLimiter,
+    streamingLimiter,
+} from "../middleware/rateLimiter";
 import { safeResolvePath } from "../utils/safeResolvePath";
 import { buildSafeAudiobookCoverUrl } from "../services/audiobookCoverProxy";
 import {
@@ -143,8 +147,8 @@ function sectionsArePlayable(cachedSections: AudiobookSections): boolean {
  */
 router.get(
     "/continue-listening",
-    requireAuthOrToken,
     apiLimiter,
+    requireAuthOrToken,
     async (req, res) => {
         try {
             // Check if Audiobookshelf is enabled
@@ -214,7 +218,7 @@ router.get(
  * Manually trigger audiobook sync from Audiobookshelf
  * Fetches all audiobooks and caches metadata + cover images locally
  */
-router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
+router.post("/sync", apiLimiter, requireAuthOrToken, async (req, res) => {
     try {
         const { getSystemSettings } = await import("../utils/systemSettings");
         const { notificationService } =
@@ -275,73 +279,69 @@ router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
  *       401:
  *         description: Not authenticated
  */
-/**
- * GET /audiobooks/debug-series
- * Debug endpoint to see raw series data from Audiobookshelf
- */
-// Debug endpoint for series data
-router.get("/debug-series", requireAuthOrToken, async (req, res) => {
-    logger.debug("[Audiobooks] Debug series endpoint called");
-    try {
-        const { getSystemSettings } = await import("../utils/systemSettings");
-        const settings = await getSystemSettings();
+router.get(
+    "/debug-series",
+    apiLimiter,
+    requireAuthOrToken,
+    async (req, res) => {
+        logger.debug("[Audiobooks] Debug series endpoint called");
+        try {
+            const { getSystemSettings } =
+                await import("../utils/systemSettings");
+            const settings = await getSystemSettings();
 
-        if (!settings?.audiobookshelfEnabled) {
-            return res
-                .status(400)
-                .json({ error: "Audiobookshelf not enabled" });
+            if (!settings?.audiobookshelfEnabled) {
+                return res
+                    .status(400)
+                    .json({ error: "Audiobookshelf not enabled" });
+            }
+
+            const rawBooks = await audiobookshelfService.getAllAudiobooks();
+            logger.debug(
+                `[Audiobooks] Got ${rawBooks.length} books from Audiobookshelf`,
+            );
+
+            const booksWithSeries = rawBooks.filter((book: any) => {
+                const metadata = book.media?.metadata || book;
+                return metadata.series || metadata.seriesName;
+            });
+
+            logger.debug(
+                `[Audiobooks] Books with series data: ${booksWithSeries.length}`,
+            );
+
+            const allSeriesInfo = rawBooks.slice(0, 20).map((book: any) => {
+                const metadata = book.media?.metadata || book;
+                return {
+                    title: metadata.title || book.title,
+                    rawSeries: metadata.series,
+                    seriesName: metadata.seriesName,
+                    seriesSequence: metadata.seriesSequence,
+                    bookSeries: book.series,
+                };
+            });
+
+            let fullSample = null;
+            if (booksWithSeries.length > 0) {
+                const sampleBook = booksWithSeries[0];
+                fullSample = {
+                    id: sampleBook.id,
+                    media: sampleBook.media,
+                };
+            }
+
+            res.json({
+                totalBooks: rawBooks.length,
+                booksWithSeriesCount: booksWithSeries.length,
+                sampleSeriesData: allSeriesInfo,
+                fullSampleWithSeries: fullSample,
+            });
+        } catch (error: any) {
+            logger.error("[Audiobooks] Debug series error:", error);
+            res.status(500).json({ error: "Internal server error" });
         }
-
-        // Get raw data from Audiobookshelf
-        const rawBooks = await audiobookshelfService.getAllAudiobooks();
-        logger.debug(
-            `[Audiobooks] Got ${rawBooks.length} books from Audiobookshelf`,
-        );
-
-        // Find books with series data
-        const booksWithSeries = rawBooks.filter((book: any) => {
-            const metadata = book.media?.metadata || book;
-            return metadata.series || metadata.seriesName;
-        });
-
-        logger.debug(
-            `[Audiobooks] Books with series data: ${booksWithSeries.length}`,
-        );
-
-        // Extract series info from all books (first 20)
-        const allSeriesInfo = rawBooks.slice(0, 20).map((book: any) => {
-            const metadata = book.media?.metadata || book;
-            return {
-                title: metadata.title || book.title,
-                rawSeries: metadata.series,
-                seriesName: metadata.seriesName,
-                seriesSequence: metadata.seriesSequence,
-                // Also check if there's series in the top-level book object
-                bookSeries: book.series,
-            };
-        });
-
-        // Get a full sample of one book with series (if any)
-        let fullSample = null;
-        if (booksWithSeries.length > 0) {
-            const sampleBook = booksWithSeries[0];
-            fullSample = {
-                id: sampleBook.id,
-                media: sampleBook.media,
-            };
-        }
-
-        res.json({
-            totalBooks: rawBooks.length,
-            booksWithSeriesCount: booksWithSeries.length,
-            sampleSeriesData: allSeriesInfo,
-            fullSampleWithSeries: fullSample,
-        });
-    } catch (error: any) {
-        logger.error("[Audiobooks] Debug series error:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
+    },
+);
 
 /**
  * @openapi
@@ -370,7 +370,7 @@ router.get("/debug-series", requireAuthOrToken, async (req, res) => {
  * GET /audiobooks/search
  * Search audiobooks
  */
-router.get("/search", requireAuthOrToken, apiLimiter, async (req, res) => {
+router.get("/search", apiLimiter, requireAuthOrToken, async (req, res) => {
     try {
         const { getSystemSettings } = await import("../utils/systemSettings");
         const settings = await getSystemSettings();
@@ -446,7 +446,7 @@ router.get("/search", requireAuthOrToken, apiLimiter, async (req, res) => {
  * GET /audiobooks
  * Get all audiobooks from cached database (instant, no API calls)
  */
-router.get("/", requireAuthOrToken, apiLimiter, async (req, res) => {
+router.get("/", apiLimiter, requireAuthOrToken, async (req, res) => {
     logger.debug("[Audiobooks] GET / - fetching audiobooks list");
     try {
         // Check if Audiobookshelf is enabled first
@@ -550,8 +550,8 @@ router.get("/", requireAuthOrToken, apiLimiter, async (req, res) => {
  */
 router.get<{ seriesName: string }>(
     "/series/:seriesName",
-    requireAuthOrToken,
     apiLimiter,
+    requireAuthOrToken,
     async (req, res) => {
         try {
             // Check if Audiobookshelf is enabled
@@ -672,7 +672,7 @@ router.get<{ seriesName: string }>(
 /**
  * GET /audiobooks/:id/cover
  * Serve cached cover image from local disk, or proxy from Audiobookshelf if not cached
- * Uses the high-volume imageLimiter (matches library/browse image routes)
+ * Uses the high-volume coverArtLimiter shared with local library covers.
  */
 type AudiobookCoverRow = Awaited<ReturnType<typeof loadAudiobookCover>>;
 
@@ -861,8 +861,8 @@ export async function handleAudiobookCover(
 
 router.get<{ id: string }>(
     "/:id/cover",
+    coverArtLimiter,
     requireAuthOrToken,
-    imageLimiter,
     handleAudiobookCover,
 );
 
@@ -929,8 +929,8 @@ router.get<{ id: string }>(
  */
 router.get<{ id: string }>(
     "/:id",
-    requireAuthOrToken,
     apiLimiter,
+    requireAuthOrToken,
     async (req, res) => {
         try {
             const { getSystemSettings } =
@@ -1152,6 +1152,7 @@ async function tryFederatedAudiobookStream(
 
 router.get<{ id: string }>(
     "/:id/stream",
+    streamingLimiter,
     requireAuthOrToken,
     async (req, res) => {
         try {
@@ -1295,8 +1296,8 @@ router.get<{ id: string }>(
  */
 router.post<{ id: string }>(
     "/:id/progress",
-    requireAuthOrToken,
     apiLimiter,
+    requireAuthOrToken,
     async (req, res) => {
         try {
             const { getSystemSettings } =
@@ -1490,8 +1491,8 @@ router.post<{ id: string }>(
  */
 router.delete<{ id: string }>(
     "/:id/progress",
-    requireAuthOrToken,
     apiLimiter,
+    requireAuthOrToken,
     async (req, res) => {
         try {
             const { getSystemSettings } =

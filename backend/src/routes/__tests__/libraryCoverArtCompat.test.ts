@@ -15,8 +15,12 @@ jest.mock("../../middleware/auth", () => ({
 }));
 
 jest.mock("../../middleware/rateLimiter", () => ({
-    imageLimiter: (_req: Request, _res: Response, next: () => void) => next(),
-    apiLimiter: (_req: Request, _res: Response, next: () => void) => next(),
+    coverArtLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    libraryMetadataLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
+    streamingLimiter: (_req: Request, _res: Response, next: () => void) =>
+        next(),
 }));
 
 jest.mock("../../utils/logger", () => {
@@ -263,14 +267,18 @@ const mockBackfillAllImages = backfillAllImages as jest.Mock;
 const mockGetEffectiveYear = getEffectiveYear as jest.Mock;
 const mockGetDecadeFromYear = getDecadeFromYear as jest.Mock;
 
-function getGetHandler(path: string, stackIndex = 1) {
+function getGetHandler(path: string, stackIndex?: number) {
     const layer = flattenLibraryRouteLayers(router).find(
         (entry: any) => entry.route?.path === path && entry.route?.methods?.get,
     );
     if (!layer) {
         throw new Error(`Route not found: ${path}`);
     }
-    return layer.route.stack[stackIndex].handle;
+    const handlerLayer =
+        stackIndex === undefined
+            ? layer.route.stack.at(-1)
+            : layer.route.stack[stackIndex];
+    return handlerLayer.handle;
 }
 
 function getPostHandler(path: string, stackIndex = 0) {
