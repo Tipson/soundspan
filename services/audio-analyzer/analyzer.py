@@ -20,11 +20,13 @@ for _root in _POTENTIAL_PROJECT_ROOTS:
 
 from audio_paths import resolve_music_path
 from loudness import (
+    ALBUM_LOUDNESS_LOCK_SQL,
     ALBUM_LOUDNESS_ROLLUP_SQL,
     LOUDNESS_MEASURE_TIMEOUT_SECONDS,
     measure_loudness,
 )
 from loudness_backfill import (
+    RedisLoudnessBackfillBookkeeping,
     partition_analysis_jobs,
     process_loudness_backfill_jobs,
 )
@@ -1249,10 +1251,8 @@ class AnalysisWorker:
 
     def __init__(self):
         """Initialize Redis/DB clients and runtime state for batch processing."""
-        self.redis = redis.from_url(
-            REDIS_URL,
-            socket_timeout=REDIS_SOCKET_TIMEOUT,
-        )
+        self.redis = redis.from_url(REDIS_URL, socket_timeout=REDIS_SOCKET_TIMEOUT)
+        self.loudness_backfill_bookkeeping = RedisLoudnessBackfillBookkeeping(self.redis)
         self.db = DatabaseConnection(DATABASE_URL)
         self.running = False
         self.executor = None
@@ -1921,6 +1921,7 @@ class AnalysisWorker:
             resolve_path=_resolve_music_path,
             max_file_size_mb=MAX_FILE_SIZE_MB,
             timeout_seconds=LOUDNESS_MEASURE_TIMEOUT_SECONDS,
+            bookkeeping=self.loudness_backfill_bookkeeping,
         )
         return True
 
@@ -2118,10 +2119,8 @@ class AnalysisWorker:
                 _SAVE_ANALYSIS_RESULTS_SQL,
                 _analysis_result_values(track_id, features),
             )
-
-            if features.get("loudnessLufs") is not None:
-                cursor.execute(ALBUM_LOUDNESS_ROLLUP_SQL, (track_id,))
-
+            cursor.execute(ALBUM_LOUDNESS_LOCK_SQL, (track_id,))
+            cursor.execute(ALBUM_LOUDNESS_ROLLUP_SQL, (track_id,))
             # Successful analysis should clear stale unresolved audio failures
             # for this track so UI failure counts remain accurate across reruns.
             cursor.execute(_RESOLVE_AUDIO_FAILURES_SQL, (track_id,))

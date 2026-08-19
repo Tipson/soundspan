@@ -1,4 +1,4 @@
-"""Behavioral coverage for loudness result persistence and album rollups."""
+"""Orchestration coverage for analyzer loudness persistence."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from types import ModuleType
 from typing import Any
 
 from conftest import FakeDatabaseConnection
+from loudness import ALBUM_LOUDNESS_LOCK_SQL, ALBUM_LOUDNESS_ROLLUP_SQL
 
 
 def analysis_features(loudness_lufs: float | None = -18.4) -> dict[str, Any]:
@@ -32,7 +33,7 @@ def analysis_features(loudness_lufs: float | None = -18.4) -> dict[str, Any]:
     }
 
 
-def build_worker(module: ModuleType, database: FakeDatabaseConnection) -> object:
+def build_worker(module: ModuleType, database: object) -> object:
     """Build a worker without external client initialization."""
     worker = object.__new__(module.AnalysisWorker)
     worker.db = database
@@ -43,49 +44,26 @@ def test_save_sql_placeholder_count_matches_result_tuple_arity(
     loaded_analyzer: ModuleType,
 ) -> None:
     """Keep SQL placeholders and positional result values in lockstep."""
-    values = loaded_analyzer._analysis_result_values(
-        "track-1",
-        analysis_features(),
-    )
+    values = loaded_analyzer._analysis_result_values("track-1", analysis_features())
 
     assert loaded_analyzer._SAVE_ANALYSIS_RESULTS_SQL.count("%s") == len(values)
 
 
-def test_measured_track_save_recomputes_album_measurements_in_same_transaction(
+def test_save_serializes_album_rollup_before_resolving_failures(
     loaded_analyzer: ModuleType,
 ) -> None:
-    """Update album loudness and peak after the measured track save."""
+    """Take the shared advisory lock before the aggregate statement."""
     database = FakeDatabaseConnection()
     worker = build_worker(loaded_analyzer, database)
 
     worker._save_results("track-1", "/music/track.flac", analysis_features())
 
-    assert len(database.cursor.executions) == 3
-    rollup_sql, rollup_params = database.cursor.executions[1]
-    assert 'UPDATE "Album" AS album' in rollup_sql
-    assert '"albumTruePeakDb" = aggregate."albumTruePeakDb"' in rollup_sql
-    assert 'sibling."loudnessLufs" IS NOT NULL' in rollup_sql
-    assert "sibling.duration > 0" in rollup_sql
-    assert "SUM(sibling.duration)" in rollup_sql
-    assert 'POWER(10.0, sibling."loudnessLufs" / 10.0)' in rollup_sql
-    assert 'MAX(sibling."truePeakDb") AS "albumTruePeakDb"' in rollup_sql
-    assert "NULLIF" in rollup_sql
-    assert rollup_params == ("track-1",)
+    statements = [sql for sql, _params in database.cursor.executions]
+    assert statements == [
+        loaded_analyzer._SAVE_ANALYSIS_RESULTS_SQL,
+        ALBUM_LOUDNESS_LOCK_SQL,
+        ALBUM_LOUDNESS_ROLLUP_SQL,
+        loaded_analyzer._RESOLVE_AUDIO_FAILURES_SQL,
+    ]
     assert database.commit_calls == 1
-
-
-def test_unmeasured_track_save_does_not_recompute_album_loudness(
-    loaded_analyzer: ModuleType,
-) -> None:
-    """Avoid album work when optional loudness measurement failed."""
-    database = FakeDatabaseConnection()
-    worker = build_worker(loaded_analyzer, database)
-
-    worker._save_results(
-        "track-1",
-        "/music/track.flac",
-        analysis_features(loudness_lufs=None),
-    )
-
-    assert len(database.cursor.executions) == 2
-    assert all('UPDATE "Album"' not in sql for sql, _ in database.cursor.executions)
+    assert database.rollback_calls == 0

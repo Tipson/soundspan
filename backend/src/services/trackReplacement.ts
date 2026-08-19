@@ -5,23 +5,26 @@ import { config } from "../config";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { invalidateVibeAnalysis } from "./vibeInvalidation";
+import { recomputeAlbumLoudness } from "./albumLoudness";
 
 const replacementLogger = logger.child("TrackReplacement");
 
 type ReplacementTransaction = Pick<
     Prisma.TransactionClient,
-    "track" | "trackEmbedding" | "transcodedFile"
+    "$executeRaw" | "$queryRaw" | "track" | "trackEmbedding" | "transcodedFile"
 >;
 
 type TrackUpdateData = Prisma.TrackUpdateManyMutationInput;
 
-function replacementResetData(now: Date) {
+function replacementResetData() {
     return {
         analysisStatus: "pending",
         analyzedAt: null,
         analysisError: null,
         analysisRetryCount: 0,
         analysisStartedAt: null,
+        loudnessLufs: null,
+        truePeakDb: null,
     } satisfies TrackUpdateData;
 }
 
@@ -35,6 +38,13 @@ export async function applyTrackReplacement(
     trackId: string,
     trackData: TrackUpdateData = {},
 ): Promise<string[]> {
+    const existingTrack = await transaction.track.findUnique({
+        where: { id: trackId },
+        select: { albumId: true },
+    });
+    if (existingTrack === null) {
+        throw new Error("Track replacement requires an existing track");
+    }
     const cachedFiles = await transaction.transcodedFile.findMany({
         where: { trackId },
         select: { cachePath: true },
@@ -44,13 +54,24 @@ export async function applyTrackReplacement(
         transaction,
         { id: trackId },
         invalidatedAt,
-        { ...trackData, ...replacementResetData(invalidatedAt) },
+        { ...trackData, ...replacementResetData() },
     );
     if (updated !== 1) {
         throw new Error("Track replacement requires exactly one track");
     }
     await transaction.trackEmbedding.deleteMany({ where: { trackId } });
     await transaction.transcodedFile.deleteMany({ where: { trackId } });
+    const replacedTrack = await transaction.track.findUnique({
+        where: { id: trackId },
+        select: { albumId: true },
+    });
+    if (replacedTrack === null) {
+        throw new Error("Replaced track disappeared before album invalidation");
+    }
+    await recomputeAlbumLoudness(transaction, [
+        existingTrack.albumId,
+        replacedTrack.albumId,
+    ]);
     return cachedFiles.map((file) => file.cachePath);
 }
 
