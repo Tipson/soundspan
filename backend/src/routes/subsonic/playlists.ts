@@ -1,5 +1,10 @@
+import type { Prisma } from "@prisma/client";
 import { type Request, type Response } from "express";
 import { prisma } from "../../utils/db";
+import {
+    PlaylistMutationLockNotFoundError,
+    requirePlaylistMutationLock,
+} from "../../services/playlistMutationLock";
 import { standardPlaylistListWhere } from "../../services/radioPlaylistIdentity";
 import { parseSubsonicId, toSubsonicId } from "../../utils/subsonicIds";
 import {
@@ -19,6 +24,11 @@ import {
     SONG_LOUDNESS_ALBUM_SELECT,
     SONG_LOUDNESS_TRACK_SELECT,
 } from "./shared";
+
+type PlaylistMutationResult = "ok" | "trackNotFound";
+
+const PLAYLIST_TRANSACTION_MAX_WAIT_MS = 2_000;
+const PLAYLIST_TRANSACTION_TIMEOUT_MS = 15_000;
 
 async function getPlaylistDurations(
     playlists: Array<{ id: string; _count: { items: number } }>,
@@ -282,6 +292,61 @@ export async function handleGetPlaylist(
     }
 }
 
+async function replaceLockedPlaylistItems(
+    tx: Prisma.TransactionClient,
+    playlistId: string,
+    userId: string,
+    name: string,
+    trackIds: string[],
+): Promise<void> {
+    await requirePlaylistMutationLock(tx, playlistId, userId);
+    if (name) {
+        await tx.playlist.update({
+            where: { id: playlistId },
+            data: { name },
+        });
+    }
+    if (trackIds.length > 0) {
+        await tx.playlistItem.deleteMany({ where: { playlistId } });
+        await tx.playlistItem.createMany({
+            data: trackIds.map((trackId, sort) => ({
+                playlistId,
+                trackId,
+                sort,
+            })),
+            skipDuplicates: true,
+        });
+    }
+}
+
+function sendPlaylistMutationNotAuthorized(
+    res: Response,
+    format: ReturnType<typeof getRequestContext>["format"],
+    callback: string | undefined,
+): void {
+    sendSubsonicError(
+        res,
+        SubsonicErrorCode.NOT_AUTHORIZED,
+        "Not authorized to modify this playlist",
+        format,
+        callback,
+    );
+}
+
+function sendPlaylistTrackNotFound(
+    res: Response,
+    format: ReturnType<typeof getRequestContext>["format"],
+    callback: string | undefined,
+): void {
+    sendSubsonicError(
+        res,
+        SubsonicErrorCode.NOT_FOUND,
+        "Song not found",
+        format,
+        callback,
+    );
+}
+
 /**
  * Executes handleCreatePlaylist.
  */
@@ -324,67 +389,21 @@ export async function handleCreatePlaylist(
     try {
         const tracksExist = await ensureLibraryTracksExist(trackIds);
         if (!tracksExist) {
-            sendSubsonicError(
-                res,
-                SubsonicErrorCode.NOT_FOUND,
-                "Song not found",
-                format,
-                callback,
-            );
+            sendPlaylistTrackNotFound(res, format, callback);
             return;
         }
 
         if (rawPlaylistId) {
             const playlistId = parseSubsonicId(rawPlaylistId, "playlist").id;
-            const existing = await prisma.playlist.findFirst({
-                where: {
-                    id: playlistId,
-                    userId: req.user!.id,
-                },
-                select: {
-                    id: true,
-                },
-            });
-
-            if (!existing) {
-                sendSubsonicError(
-                    res,
-                    SubsonicErrorCode.NOT_AUTHORIZED,
-                    "Not authorized to modify this playlist",
-                    format,
-                    callback,
-                );
-                return;
-            }
-
-            if (rawName) {
-                await prisma.playlist.update({
-                    where: {
-                        id: playlistId,
-                    },
-                    data: {
-                        name: rawName,
-                    },
-                });
-            }
-
-            if (trackIds.length > 0) {
-                await prisma.playlistItem.deleteMany({
-                    where: {
-                        playlistId,
-                    },
-                });
-
-                await prisma.playlistItem.createMany({
-                    data: trackIds.map((trackId, index) => ({
-                        playlistId,
-                        trackId,
-                        sort: index,
-                    })),
-                    skipDuplicates: true,
-                });
-            }
-
+            await prisma.$transaction((tx) =>
+                replaceLockedPlaylistItems(
+                    tx,
+                    playlistId,
+                    req.user!.id,
+                    rawName,
+                    trackIds,
+                ),
+            );
             sendSubsonicSuccess(res, {}, format, callback);
             return;
         }
@@ -408,7 +427,11 @@ export async function handleCreatePlaylist(
         }
 
         sendSubsonicSuccess(res, {}, format, callback);
-    } catch {
+    } catch (error) {
+        if (error instanceof PlaylistMutationLockNotFoundError) {
+            sendPlaylistMutationNotAuthorized(res, format, callback);
+            return;
+        }
         sendSubsonicError(
             res,
             SubsonicErrorCode.GENERIC,
@@ -417,6 +440,133 @@ export async function handleCreatePlaylist(
             callback,
         );
     }
+}
+
+function parseRemovalIndexes(rawIndexes: string[]): number[] {
+    return Array.from(
+        new Set(
+            rawIndexes
+                .map((value) => Number.parseInt(value, 10))
+                .filter((value) => Number.isInteger(value) && value >= 0),
+        ),
+    );
+}
+
+async function removeLockedPlaylistIndexes(
+    tx: Prisma.TransactionClient,
+    playlistId: string,
+    rawIndexes: string[],
+): Promise<boolean> {
+    if (rawIndexes.length === 0) return false;
+    const currentItems = await tx.playlistItem.findMany({
+        where: { playlistId },
+        orderBy: { sort: "asc" },
+        select: { id: true },
+    });
+    const itemIds = parseRemovalIndexes(rawIndexes)
+        .filter((index) => index < currentItems.length)
+        .map((index) => currentItems[index].id);
+    if (itemIds.length === 0) return false;
+    await tx.playlistItem.deleteMany({
+        where: { id: { in: itemIds } },
+    });
+    return true;
+}
+
+async function appendLockedPlaylistTracks(
+    tx: Prisma.TransactionClient,
+    playlistId: string,
+    trackIds: string[],
+): Promise<boolean> {
+    if (trackIds.length === 0) return false;
+    const [existingItems, maximum] = await Promise.all([
+        tx.playlistItem.findMany({
+            where: { playlistId },
+            select: { trackId: true },
+        }),
+        tx.playlistItem.aggregate({
+            where: { playlistId },
+            _max: { sort: true },
+        }),
+    ]);
+    const existingTrackIds = new Set(existingItems.map((item) => item.trackId));
+    const additions = trackIds.filter(
+        (trackId) => !existingTrackIds.has(trackId),
+    );
+    if (additions.length === 0) return false;
+    const startSort = (maximum._max.sort ?? -1) + 1;
+    await tx.playlistItem.createMany({
+        data: additions.map((trackId, index) => ({
+            playlistId,
+            trackId,
+            sort: startSort + index,
+        })),
+        skipDuplicates: true,
+    });
+    return true;
+}
+
+async function reindexLockedPlaylistItems(
+    tx: Prisma.TransactionClient,
+    playlistId: string,
+): Promise<void> {
+    // One set-based statement over the complete item set: a partial
+    // (capped) reindex could leave sort gaps on oversized playlists.
+    await tx.$executeRaw`
+        WITH ranked AS (
+            SELECT
+                item.id,
+                (ROW_NUMBER() OVER (
+                    ORDER BY item.sort ASC, item.id ASC
+                ) - 1)::integer AS "nextSort"
+            FROM "PlaylistItem" item
+            WHERE item."playlistId" = ${playlistId}
+        )
+        UPDATE "PlaylistItem" item
+        SET sort = ranked."nextSort"
+        FROM ranked
+        WHERE item.id = ranked.id
+    `;
+}
+
+async function updateLockedPlaylist(
+    tx: Prisma.TransactionClient,
+    playlistId: string,
+    userId: string,
+    name: string,
+    rawIndexes: string[],
+    rawSongIdsToAdd: string[],
+): Promise<PlaylistMutationResult> {
+    await requirePlaylistMutationLock(tx, playlistId, userId);
+    let trackIdsToAdd: string[];
+    try {
+        trackIdsToAdd = parseTrackIdsFromQueryValues(rawSongIdsToAdd);
+    } catch {
+        return "trackNotFound";
+    }
+    if (!(await ensureLibraryTracksExist(trackIdsToAdd, tx))) {
+        return "trackNotFound";
+    }
+    if (name) {
+        await tx.playlist.update({
+            where: { id: playlistId },
+            data: { name },
+        });
+    }
+    const removedItems = await removeLockedPlaylistIndexes(
+        tx,
+        playlistId,
+        rawIndexes,
+    );
+    const appendedItems = await appendLockedPlaylistTracks(
+        tx,
+        playlistId,
+        trackIdsToAdd,
+    );
+    if (removedItems || appendedItems) {
+        await reindexLockedPlaylistItems(tx, playlistId);
+    }
+    return "ok";
 }
 
 /**
@@ -458,171 +608,31 @@ export async function handleUpdatePlaylist(
     }
 
     try {
-        const playlist = await prisma.playlist.findFirst({
-            where: {
-                id: playlistId,
-                userId: req.user!.id,
+        const result = await prisma.$transaction(
+            (tx) =>
+                updateLockedPlaylist(
+                    tx,
+                    playlistId,
+                    req.user!.id,
+                    rawName,
+                    rawSongIndexesToRemove,
+                    rawSongIdsToAdd,
+                ),
+            {
+                maxWait: PLAYLIST_TRANSACTION_MAX_WAIT_MS,
+                timeout: PLAYLIST_TRANSACTION_TIMEOUT_MS,
             },
-            select: {
-                id: true,
-            },
-        });
-
-        if (!playlist) {
-            sendSubsonicError(
-                res,
-                SubsonicErrorCode.NOT_AUTHORIZED,
-                "Not authorized to modify this playlist",
-                format,
-                callback,
-            );
+        );
+        if (result === "trackNotFound") {
+            sendPlaylistTrackNotFound(res, format, callback);
             return;
         }
-
-        if (rawName) {
-            await prisma.playlist.update({
-                where: {
-                    id: playlistId,
-                },
-                data: {
-                    name: rawName,
-                },
-            });
-        }
-
-        if (rawSongIndexesToRemove.length > 0) {
-            const indexesToRemove = Array.from(
-                new Set(
-                    rawSongIndexesToRemove
-                        .map((value) => Number.parseInt(value, 10))
-                        .filter(
-                            (value) => Number.isInteger(value) && value >= 0,
-                        ),
-                ),
-            );
-
-            const currentItems = await prisma.playlistItem.findMany({
-                where: {
-                    playlistId,
-                },
-                orderBy: {
-                    sort: "asc",
-                },
-                select: {
-                    id: true,
-                },
-            });
-
-            const itemIdsToDelete = indexesToRemove
-                .filter((index) => index < currentItems.length)
-                .map((index) => currentItems[index].id);
-
-            if (itemIdsToDelete.length > 0) {
-                await prisma.playlistItem.deleteMany({
-                    where: {
-                        id: {
-                            in: itemIdsToDelete,
-                        },
-                    },
-                });
-            }
-        }
-
-        if (rawSongIdsToAdd.length > 0) {
-            let trackIdsToAdd: string[] = [];
-            try {
-                trackIdsToAdd = parseTrackIdsFromQueryValues(rawSongIdsToAdd);
-            } catch {
-                sendSubsonicError(
-                    res,
-                    SubsonicErrorCode.NOT_FOUND,
-                    "Song not found",
-                    format,
-                    callback,
-                );
-                return;
-            }
-
-            const tracksExist = await ensureLibraryTracksExist(trackIdsToAdd);
-            if (!tracksExist) {
-                sendSubsonicError(
-                    res,
-                    SubsonicErrorCode.NOT_FOUND,
-                    "Song not found",
-                    format,
-                    callback,
-                );
-                return;
-            }
-
-            const [existingItems, maxSortResult] = await Promise.all([
-                prisma.playlistItem.findMany({
-                    where: {
-                        playlistId,
-                    },
-                    select: {
-                        trackId: true,
-                    },
-                }),
-                prisma.playlistItem.aggregate({
-                    where: {
-                        playlistId,
-                    },
-                    _max: {
-                        sort: true,
-                    },
-                }),
-            ]);
-
-            const existingTrackIds = new Set(
-                existingItems.map((item) => item.trackId),
-            );
-            const filteredTrackIds = trackIdsToAdd.filter(
-                (trackId) => !existingTrackIds.has(trackId),
-            );
-
-            if (filteredTrackIds.length > 0) {
-                const startSort = (maxSortResult._max.sort ?? -1) + 1;
-                await prisma.playlistItem.createMany({
-                    data: filteredTrackIds.map((trackId, index) => ({
-                        playlistId,
-                        trackId,
-                        sort: startSort + index,
-                    })),
-                    skipDuplicates: true,
-                });
-            }
-        }
-
-        const itemsToReindex = await prisma.playlistItem.findMany({
-            where: {
-                playlistId,
-            },
-            orderBy: {
-                sort: "asc",
-            },
-            select: {
-                id: true,
-            },
-        });
-
-        if (itemsToReindex.length > 0) {
-            await prisma.$transaction(
-                itemsToReindex.map((item, index) =>
-                    prisma.playlistItem.update({
-                        where: {
-                            id: item.id,
-                        },
-                        data: {
-                            sort: index,
-                        },
-                    }),
-                ),
-            );
-        }
-
         sendSubsonicSuccess(res, {}, format, callback);
-    } catch {
+    } catch (error) {
+        if (error instanceof PlaylistMutationLockNotFoundError) {
+            sendPlaylistMutationNotAuthorized(res, format, callback);
+            return;
+        }
         sendSubsonicError(
             res,
             SubsonicErrorCode.GENERIC,
