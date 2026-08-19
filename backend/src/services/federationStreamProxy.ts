@@ -14,6 +14,12 @@ import {
     type FederatedStreamSource,
     type Quality,
 } from "./audioStreaming";
+import {
+    recordFederationStreamProxy,
+    recordFederationStreamProxyCache,
+    type FederationStreamOutcome,
+} from "../metrics";
+import { safeFederationErrorMessage } from "./federationPeerHealth";
 
 const log = logger.child("FederationStreamProxy");
 const PASSTHROUGH_HEADERS = [
@@ -64,13 +70,31 @@ function parseContentLength(headers: Record<string, unknown>): number | null {
     return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
-async function markPeerOffline(peerId: string): Promise<void> {
-    const result = await prisma.federationPeer.updateMany({
-        where: { id: peerId, outboundStatus: "ACTIVE" },
-        data: { outboundStatus: "OFFLINE" },
-    });
-    if (result.count === 1) {
-        log.info(`peerId=${peerId} status=OFFLINE previous=ACTIVE`);
+async function markPeerOffline(peerId: string, error: unknown): Promise<void> {
+    const lastError = safeFederationErrorMessage(error);
+    const lastErrorAt = new Date();
+    try {
+        const result = await prisma.federationPeer.updateMany({
+            where: { id: peerId, outboundStatus: "ACTIVE" },
+            data: {
+                outboundStatus: "OFFLINE",
+                lastError,
+                lastErrorAt,
+            },
+        });
+        if (result.count === 1) {
+            log.info(`peerId=${peerId} status=OFFLINE previous=ACTIVE`);
+            return;
+        }
+        await prisma.federationPeer.updateMany({
+            where: { id: peerId, outboundStatus: { not: "REVOKED" } },
+            data: { lastError, lastErrorAt },
+        });
+    } catch (cause) {
+        log.warn("Failed to persist federation peer stream diagnostic", {
+            peerId,
+            cause,
+        });
     }
 }
 
@@ -194,6 +218,7 @@ async function serveFederatedStream(
         fallbackMime,
     );
     if (cached) {
+        recordFederationStreamProxyCache(input.peer.id, "hit");
         await service.streamFileWithRangeSupport(
             input.req,
             input.res,
@@ -202,6 +227,7 @@ async function serveFederatedStream(
         );
         return;
     }
+    recordFederationStreamProxyCache(input.peer.id, "miss");
     if (typeof input.req.headers.range === "string") {
         await proxyRangeMiss(input, signal, state);
         return;
@@ -225,6 +251,22 @@ async function serveFederatedStream(
     );
 }
 
+function proxyOutcome(
+    error: unknown,
+    disconnected: boolean,
+    statusCode: number,
+): FederationStreamOutcome {
+    if (disconnected) return "aborted";
+    if (error instanceof FederationHttpError) {
+        if (error.status !== null && error.status >= 500) return "http_5xx";
+        if (error.status !== null && error.status >= 400) return "http_4xx";
+        return error.transient ? "timeout" : "error";
+    }
+    if (statusCode >= 500) return "http_5xx";
+    if (statusCode >= 400) return "http_4xx";
+    return error ? "error" : "ok";
+}
+
 /** Proxies one federated audio response with backpressure and abort propagation. */
 export async function proxyFederatedTrackStream(input: {
     req: Request;
@@ -238,8 +280,10 @@ export async function proxyFederatedTrackStream(input: {
 }): Promise<void> {
     const streamInput: FederationStreamInput = input;
     const controller = new AbortController();
+    const startedAt = process.hrtime.bigint();
     const state: ProxyStreamState = { upstream: null };
     let disconnected = false;
+    let outcome: FederationStreamOutcome = "ok";
     const service = new AudioStreamingService(
         config.music.musicPath,
         config.music.transcodeCachePath,
@@ -261,12 +305,22 @@ export async function proxyFederatedTrackStream(input: {
             state,
         );
     } catch (error) {
+        outcome = proxyOutcome(error, disconnected, input.res.statusCode);
         if (disconnected) return;
         if (error instanceof FederationHttpError && error.transient) {
-            await markPeerOffline(input.peer.id);
+            await markPeerOffline(input.peer.id, error);
         }
         throw error;
     } finally {
+        outcome =
+            proxyOutcome(null, disconnected, input.res.statusCode) === "ok"
+                ? outcome
+                : proxyOutcome(null, disconnected, input.res.statusCode);
+        recordFederationStreamProxy(
+            input.peer.id,
+            outcome,
+            Number(process.hrtime.bigint() - startedAt) / 1_000_000_000,
+        );
         input.req.off("aborted", onDisconnect);
         input.res.off("close", onDisconnect);
         state.upstream?.destroy();

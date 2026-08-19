@@ -9,11 +9,22 @@ const streamFileWithRangeSupport = jest.fn();
 const destroyStreamingService = jest.fn();
 const logDebug = jest.fn();
 const logInfo = jest.fn();
+const logWarn = jest.fn();
+const recordFederationStreamProxy = jest.fn();
+const recordFederationStreamProxyCache = jest.fn();
 const prisma = {
     federationPeer: { updateMany: jest.fn() },
 };
 
 jest.mock("../../utils/db", () => ({ prisma }));
+jest.mock("../../metrics", () => ({
+    recordFederationStreamProxy,
+    recordFederationStreamProxyCache,
+}));
+jest.mock("../federationPeerHealth", () => ({
+    safeFederationErrorMessage: (error: unknown) =>
+        error instanceof Error ? error.message : String(error),
+}));
 jest.mock("../federationClient", () => ({
     createFederationClient,
     FederationHttpError: class FederationHttpError extends Error {
@@ -43,6 +54,7 @@ jest.mock("../../utils/logger", () => ({
         child: jest.fn(() => ({
             debug: logDebug,
             info: logInfo,
+            warn: logWarn,
         })),
     },
 }));
@@ -157,6 +169,15 @@ describe("federated stream proxy", () => {
             });
             expect(body).toBe("audio");
             expect(cacheFederatedStream).not.toHaveBeenCalled();
+            expect(recordFederationStreamProxyCache).toHaveBeenCalledWith(
+                "peer-1",
+                "miss",
+            );
+            expect(recordFederationStreamProxy).toHaveBeenCalledWith(
+                "peer-1",
+                status >= 400 ? "http_4xx" : "ok",
+                expect.any(Number),
+            );
             expect(JSON.stringify(res.headers)).not.toContain("must-not-leak");
         },
     );
@@ -207,8 +228,69 @@ describe("federated stream proxy", () => {
         ).rejects.toThrow("peer error");
         expect(prisma.federationPeer.updateMany).toHaveBeenCalledWith({
             where: { id: "peer-1", outboundStatus: "ACTIVE" },
-            data: { outboundStatus: "OFFLINE" },
+            data: {
+                outboundStatus: "OFFLINE",
+                lastError: "peer error",
+                lastErrorAt: expect.any(Date),
+            },
         });
+        expect(recordFederationStreamProxy).toHaveBeenCalledWith(
+            "peer-1",
+            "http_5xx",
+            expect.any(Number),
+        );
+    });
+
+    it("preserves the upstream error when diagnostic persistence fails", async () => {
+        const { FederationHttpError } = jest.requireMock("../federationClient");
+        getStream.mockRejectedValueOnce(new FederationHttpError(503, true));
+        prisma.federationPeer.updateMany
+            .mockResolvedValueOnce({ count: 0 })
+            .mockRejectedValueOnce(new Error("postgres unavailable"));
+
+        await expect(
+            proxyFederatedTrackStream({
+                req: createRequest() as never,
+                res: createResponse() as never,
+                peer,
+                remoteId: "remote-track-1",
+                trackId: "fed-track-1",
+                sourceModified: new Date("2026-08-15T12:00:00.000Z"),
+                sourceMime: "audio/flac",
+                quality: "original",
+            }),
+        ).rejects.toThrow("peer error");
+        expect(logWarn).toHaveBeenCalledWith(
+            "Failed to persist federation peer stream diagnostic",
+            expect.objectContaining({ peerId: "peer-1" }),
+        );
+    });
+
+    it("preserves the upstream error when the offline status write fails", async () => {
+        const { FederationHttpError } = jest.requireMock("../federationClient");
+        const upstreamError = new FederationHttpError(503, true);
+        getStream.mockRejectedValueOnce(upstreamError);
+        prisma.federationPeer.updateMany.mockRejectedValueOnce(
+            new Error("postgres unavailable"),
+        );
+
+        await expect(
+            proxyFederatedTrackStream({
+                req: createRequest() as never,
+                res: createResponse() as never,
+                peer,
+                remoteId: "remote-track-1",
+                trackId: "fed-track-1",
+                sourceModified: new Date("2026-08-15T12:00:00.000Z"),
+                sourceMime: "audio/flac",
+                quality: "original",
+            }),
+        ).rejects.toBe(upstreamError);
+        expect(prisma.federationPeer.updateMany).toHaveBeenCalledTimes(1);
+        expect(logWarn).toHaveBeenCalledWith(
+            "Failed to persist federation peer stream diagnostic",
+            expect.objectContaining({ peerId: "peer-1" }),
+        );
     });
 
     it("fills a non-Range miss and serves the completed cached file", async () => {
