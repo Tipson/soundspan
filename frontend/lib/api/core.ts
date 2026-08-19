@@ -5,17 +5,21 @@ const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 const PLAYBACK_DEVICE_ID_KEY = "soundspan_playback_device_id";
 const DEFAULT_API_TIMEOUT_MS = 15_000;
-const AUTH_REFRESH_TIMEOUT_MS = 10_000;
+const AUTH_REFRESH_TIMEOUT_MS = 30_000;
 export const IMPORT_PREVIEW_TIMEOUT_MS = 60_000;
 const DEFAULT_TIMEOUT_RETRY_BACKOFF_MS = 350;
 const MAX_TIMEOUT_RETRIES = 1;
 const PROACTIVE_REFRESH_LIFETIME_RATIO = 0.8;
+const INITIAL_PROACTIVE_REFRESH_BACKOFF_MS = 60_000;
+const MAX_PROACTIVE_REFRESH_BACKOFF_MS = 10 * 60_000;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 interface ApiError extends Error {
     status?: number;
     data?: Record<string, unknown>;
 }
+
+type TokenRefreshResult = "ok" | "rejected" | "unavailable";
 
 /** Narrow an unknown failure to an API error with the requested HTTP status. */
 export function hasApiErrorStatus(
@@ -82,9 +86,11 @@ export abstract class ApiClientCore {
     protected token: string | null = null;
     protected tokenInitialized: boolean = false;
     private readonly inFlightGetRequests = new Map<string, Promise<unknown>>();
-    private refreshPromise: Promise<boolean> | null = null;
+    private refreshPromise: Promise<TokenRefreshResult> | null = null;
+    private sessionGeneration = 0;
     private proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     private proactiveRefreshAtMs: number | null = null;
+    private proactiveRefreshBackoffMs = INITIAL_PROACTIVE_REFRESH_BACKOFF_MS;
 
     private readonly handleVisibilityChange = (): void => {
         if (
@@ -163,7 +169,17 @@ export abstract class ApiClientCore {
 
     // Store JWT token and optionally refresh token
     setToken(token: string, refreshToken?: string) {
+        this.sessionGeneration += 1;
+        this.refreshPromise = null;
+        this.storeTokensForCurrentSession(token, refreshToken);
+    }
+
+    private storeTokensForCurrentSession(
+        token: string,
+        refreshToken?: string,
+    ): void {
         this.token = token;
+        this.proactiveRefreshBackoffMs = INITIAL_PROACTIVE_REFRESH_BACKOFF_MS;
         if (typeof window !== "undefined") {
             localStorage.setItem(AUTH_TOKEN_KEY, token);
             if (refreshToken) {
@@ -183,12 +199,36 @@ export abstract class ApiClientCore {
 
     // Clear both JWT tokens
     clearToken() {
+        this.sessionGeneration += 1;
+        this.refreshPromise = null;
         this.token = null;
+        this.proactiveRefreshBackoffMs = INITIAL_PROACTIVE_REFRESH_BACKOFF_MS;
         this.clearProactiveRefreshSchedule();
         if (typeof window !== "undefined") {
             localStorage.removeItem(AUTH_TOKEN_KEY);
             localStorage.removeItem(REFRESH_TOKEN_KEY);
         }
+    }
+
+    private expireSession(
+        status: number,
+        data: Record<string, unknown>,
+    ): ApiError {
+        this.clearToken();
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("auth:session-expired"));
+        }
+        return this.createAuthError(status, data);
+    }
+
+    private createAuthError(
+        status: number,
+        data: Record<string, unknown>,
+    ): ApiError {
+        const authError = new Error("Not authenticated") as ApiError;
+        authError.status = status;
+        authError.data = data;
+        return authError;
     }
 
     private decodeTokenExpiryMs(token: string): number | null {
@@ -259,6 +299,57 @@ export abstract class ApiClientCore {
         this.proactiveRefreshAtMs = null;
     }
 
+    private parseRetryAfterMs(response: Response): number | null {
+        const retryAfter = response.headers.get("Retry-After")?.trim();
+        if (!retryAfter) {
+            return null;
+        }
+
+        const seconds = Number(retryAfter);
+        if (Number.isFinite(seconds) && seconds >= 0) {
+            return seconds * 1000;
+        }
+
+        const retryAtMs = Date.parse(retryAfter);
+        return Number.isFinite(retryAtMs)
+            ? Math.max(0, retryAtMs - Date.now())
+            : null;
+    }
+
+    private scheduleProactiveRefreshRetry(retryAfterMs: number | null): void {
+        this.cancelProactiveRefreshTimer();
+        const retryDelayMs = Math.min(
+            MAX_PROACTIVE_REFRESH_BACKOFF_MS,
+            Math.max(this.proactiveRefreshBackoffMs, retryAfterMs ?? 0),
+        );
+        this.proactiveRefreshAtMs = Date.now() + retryDelayMs;
+        this.proactiveRefreshTimer = setTimeout(() => {
+            this.proactiveRefreshTimer = null;
+            void this.refreshAccessToken();
+        }, retryDelayMs);
+        this.proactiveRefreshBackoffMs = Math.min(
+            retryDelayMs * 2,
+            MAX_PROACTIVE_REFRESH_BACKOFF_MS,
+        );
+    }
+
+    private isCurrentSession(generation: number): boolean {
+        return generation === this.sessionGeneration;
+    }
+
+    private unavailableRefresh(
+        generation: number,
+        response?: Response,
+    ): TokenRefreshResult {
+        if (!this.isCurrentSession(generation)) {
+            return "unavailable";
+        }
+        const retryAfterMs =
+            response?.status === 429 ? this.parseRetryAfterMs(response) : null;
+        this.scheduleProactiveRefreshRetry(retryAfterMs);
+        return "unavailable";
+    }
+
     // Get the base URL dynamically to support switching between localhost and IP
     protected getBaseUrl(): string {
         if (this.baseUrl) {
@@ -289,66 +380,98 @@ export abstract class ApiClientCore {
 
     /**
      * Refresh the access token using the refresh token
-     * @returns true if refresh succeeded, false otherwise
+     * @returns `ok` on rotation, `rejected` for invalid refresh credentials,
+     * or `unavailable` when refresh could not be completed temporarily.
      */
-    private async performTokenRefresh(): Promise<boolean> {
+    private rejectRefreshForCurrentSession(): TokenRefreshResult {
+        this.clearToken();
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("auth:session-expired"));
+        }
+        return "rejected";
+    }
+
+    private async applyRefreshResponse(
+        response: Response,
+        generation: number,
+    ): Promise<TokenRefreshResult> {
+        if (!this.isCurrentSession(generation)) {
+            return "unavailable";
+        }
+        if (!response.ok) {
+            return response.status === 401 || response.status === 403
+                ? this.rejectRefreshForCurrentSession()
+                : this.unavailableRefresh(generation, response);
+        }
+
+        const data: unknown = await response.json();
+        if (!this.isCurrentSession(generation)) {
+            return "unavailable";
+        }
+        if (!data || typeof data !== "object") {
+            return this.unavailableRefresh(generation, response);
+        }
+
+        const tokens = data as Record<string, unknown>;
+        if (typeof tokens.token !== "string") {
+            return this.unavailableRefresh(generation, response);
+        }
+        const refreshToken =
+            typeof tokens.refreshToken === "string"
+                ? tokens.refreshToken
+                : undefined;
+        this.storeTokensForCurrentSession(tokens.token, refreshToken);
+        return "ok";
+    }
+
+    private async performTokenRefresh(
+        generation: number,
+    ): Promise<TokenRefreshResult> {
         const refreshToken = this.getRefreshToken();
         if (!refreshToken) {
-            return false;
+            if (this.isCurrentSession(generation)) {
+                this.clearProactiveRefreshSchedule();
+            }
+            return "unavailable";
         }
 
-        try {
-            let response: Response | null = null;
-            for (let attempt = 0; attempt <= MAX_TIMEOUT_RETRIES; attempt++) {
-                try {
-                    response = await this.fetchWithTimeout(
-                        `${this.getBaseUrl()}/api/auth/refresh`,
-                        {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ refreshToken }),
-                            credentials: "include",
-                        },
-                        AUTH_REFRESH_TIMEOUT_MS,
-                    );
-                    break;
-                } catch (error) {
-                    if (
-                        this.isTimeoutError(error) &&
-                        attempt < MAX_TIMEOUT_RETRIES
-                    ) {
-                        await this.delay(DEFAULT_TIMEOUT_RETRY_BACKOFF_MS);
-                        continue;
-                    }
-                    throw error;
+        for (let attempt = 0; attempt <= MAX_TIMEOUT_RETRIES; attempt++) {
+            try {
+                const response = await this.fetchWithTimeout(
+                    `${this.getBaseUrl()}/api/auth/refresh`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ refreshToken }),
+                        credentials: "include",
+                        priority: "high",
+                    },
+                    AUTH_REFRESH_TIMEOUT_MS,
+                );
+                return await this.applyRefreshResponse(response, generation);
+            } catch (error) {
+                if (!this.isCurrentSession(generation)) {
+                    return "unavailable";
                 }
+                if (
+                    this.isTimeoutError(error) &&
+                    attempt < MAX_TIMEOUT_RETRIES
+                ) {
+                    await this.delay(DEFAULT_TIMEOUT_RETRY_BACKOFF_MS);
+                    if (!this.isCurrentSession(generation)) {
+                        return "unavailable";
+                    }
+                    continue;
+                }
+                sharedFrontendLogger.error(
+                    "[API] Token refresh failed:",
+                    error,
+                );
+                return this.unavailableRefresh(generation);
             }
-
-            if (!response) {
-                return false;
-            }
-
-            if (!response.ok) {
-                // Refresh token invalid or expired - clear tokens
-                this.clearToken();
-                return false;
-            }
-
-            const data = await response.json();
-
-            // Store new tokens
-            if (data.token) {
-                this.setToken(data.token, data.refreshToken);
-                return true;
-            }
-
-            this.clearToken();
-            return false;
-        } catch (error) {
-            sharedFrontendLogger.error("[API] Token refresh failed:", error);
-            this.clearToken();
-            return false;
         }
+
+        return this.unavailableRefresh(generation);
     }
 
     /**
@@ -357,17 +480,20 @@ export abstract class ApiClientCore {
      * simultaneous 401s trigger exactly one POST /api/auth/refresh (mirrors the
      * inFlightGetRequests dedup pattern). The shared promise is always cleared
      * in `finally`, on both success and failure.
-     * @returns true if refresh succeeded, false otherwise
+     * @returns the shared tri-state refresh outcome.
      */
-    private async refreshAccessToken(): Promise<boolean> {
+    private async refreshAccessToken(): Promise<TokenRefreshResult> {
         if (this.refreshPromise) {
             return this.refreshPromise;
         }
-        this.refreshPromise = this.performTokenRefresh();
+        const refreshPromise = this.performTokenRefresh(this.sessionGeneration);
+        this.refreshPromise = refreshPromise;
         try {
-            return await this.refreshPromise;
+            return await refreshPromise;
         } finally {
-            this.refreshPromise = null;
+            if (this.refreshPromise === refreshPromise) {
+                this.refreshPromise = null;
+            }
         }
     }
 
@@ -449,6 +575,7 @@ export abstract class ApiClientCore {
             silent404?: boolean;
             _retryCount?: number;
             _timeoutRetryCount?: number;
+            _authSessionGeneration?: number;
             timeoutMs?: number;
         } = {},
     ): Promise<T> {
@@ -456,6 +583,7 @@ export abstract class ApiClientCore {
             silent404,
             _retryCount = 0,
             _timeoutRetryCount = 0,
+            _authSessionGeneration = this.sessionGeneration,
             timeoutMs = DEFAULT_API_TIMEOUT_MS,
             ...fetchOptions
         } = options;
@@ -511,9 +639,13 @@ export abstract class ApiClientCore {
                     _timeoutRetryCount < MAX_TIMEOUT_RETRIES
                 ) {
                     await this.delay(DEFAULT_TIMEOUT_RETRY_BACKOFF_MS);
+                    if (!this.isCurrentSession(_authSessionGeneration)) {
+                        throw error;
+                    }
                     return this.request<T>(endpoint, {
                         ...options,
                         _timeoutRetryCount: _timeoutRetryCount + 1,
+                        _authSessionGeneration,
                     });
                 }
                 throw error;
@@ -534,44 +666,47 @@ export abstract class ApiClientCore {
 
                 const isAuthRequired =
                     response.status === 401 && error.code === "AUTH_REQUIRED";
+                const requestError = new Error(
+                    error.error || "An error occurred",
+                );
+                (requestError as ApiError).status = response.status;
+                (requestError as ApiError).data = error;
 
-                // Handle marked session-auth failures with token refresh (retry once)
+                // Handle marked session-auth failures with bounded token refresh.
                 if (
                     isAuthRequired &&
-                    _retryCount === 0 &&
+                    _retryCount < 2 &&
                     endpoint !== "/auth/refresh"
                 ) {
-                    const refreshed = await this.refreshAccessToken();
+                    if (!this.isCurrentSession(_authSessionGeneration)) {
+                        throw requestError;
+                    }
+                    const refreshResult = await this.refreshAccessToken();
 
-                    if (refreshed) {
+                    if (refreshResult === "ok") {
+                        if (!this.isCurrentSession(_authSessionGeneration)) {
+                            throw requestError;
+                        }
                         // Retry the request with new token
                         return this.request<T>(endpoint, {
                             ...options,
-                            _retryCount: 1, // Prevent infinite loops
+                            _retryCount: _retryCount + 1,
+                            _authSessionGeneration,
                         });
                     }
-                }
 
-                if (
-                    isAuthRequired ||
-                    (response.status === 401 && endpoint === "/auth/refresh")
-                ) {
-                    // Token is invalid and refresh failed — clear stale credentials
-                    // and notify the app so the auth context can redirect to login.
-                    this.clearToken();
-                    if (typeof window !== "undefined") {
-                        window.dispatchEvent(new Event("auth:session-expired"));
+                    if (refreshResult === "unavailable") {
+                        throw requestError;
                     }
-                    const err = new Error("Not authenticated");
-                    (err as ApiError).status = response.status;
-                    (err as ApiError).data = error;
-                    throw err;
+
+                    throw this.createAuthError(response.status, error);
                 }
 
-                const err = new Error(error.error || "An error occurred");
-                (err as ApiError).status = response.status;
-                (err as ApiError).data = error;
-                throw err;
+                if (response.status === 401 && endpoint === "/auth/refresh") {
+                    throw this.expireSession(response.status, error);
+                }
+
+                throw requestError;
             }
 
             const data = await response.json();

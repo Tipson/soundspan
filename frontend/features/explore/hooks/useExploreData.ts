@@ -93,8 +93,14 @@ export interface UseExploreDataReturn {
     showYtMusicExplore: boolean;
     /** Whether TIDAL Explore content is enabled. */
     showTidalExplore: boolean;
+    /** True when at least one enabled Explore query failed. */
+    hasDegradedResults: boolean;
+    /** Stable signature identifying the enabled Explore queries in error. */
+    degradedFailureSignature: string;
     /** Trigger a mixes refresh. */
     handleRefreshMixes: () => Promise<void>;
+    /** Retry every enabled Explore query that is currently in error. */
+    retryAll: () => Promise<void>;
 }
 
 /**
@@ -128,47 +134,111 @@ export function useExploreData(options?: {
     }, [queryClient]);
 
     // ── For You queries ──────────────────────────────────────────────────
-    const { data: likedData } = useLikedPlaylistQuery(4);
-    const { data: discoverData } = useDiscoverWeeklySummaryQuery(discovery);
-    const { data: mixesData, isLoading: isLoadingMixes } =
-        useMixesQuery(autoPlaylists);
+    const likedQuery = useLikedPlaylistQuery(4);
+    const discoverQuery = useDiscoverWeeklySummaryQuery(discovery);
+    const mixesQuery = useMixesQuery(autoPlaylists);
+    const recommendedQuery = useRecommendationsQuery(10, discovery);
+    const { data: likedData } = likedQuery;
+    const { data: discoverData } = discoverQuery;
+    const { data: mixesData, isLoading: isLoadingMixes } = mixesQuery;
     const { data: recommendedData, isLoading: isLoadingRecommended } =
-        useRecommendationsQuery(10, discovery);
+        recommendedQuery;
     const { mutateAsync: refreshMixes, isPending: isRefreshingMixes } =
         useRefreshMixesMutation();
 
     // ── Trending queries ─────────────────────────────────────────────────
-    const { data: shelvesData } = useYtMusicHomeShelvesQuery({
+    const shelvesQuery = useYtMusicHomeShelvesQuery({
         enabled: showYtMusicExplore,
     });
-    const { data: chartsData } = useYtMusicChartsQuery({
+    const chartsQuery = useYtMusicChartsQuery({
         enabled: showYtMusicExplore,
     });
-    const { data: popularData } = usePopularArtistsQuery(20);
+    const popularQuery = usePopularArtistsQuery(20);
+    const { data: shelvesData } = shelvesQuery;
+    const { data: chartsData } = chartsQuery;
+    const { data: popularData } = popularQuery;
 
     // ── Moods & Genres queries ───────────────────────────────────────────
-    const { data: categoriesData, isLoading: isLoadingCategories } =
-        useYtMusicCategoriesQuery({ enabled: showYtMusicExplore });
-    const { data: ytMusicMixesData } = useYtMusicMixesQuery({
+    const categoriesQuery = useYtMusicCategoriesQuery({
         enabled: showYtMusicExplore,
     });
+    const ytMusicMixesQuery = useYtMusicMixesQuery({
+        enabled: showYtMusicExplore,
+    });
+    const { data: categoriesData, isLoading: isLoadingCategories } =
+        categoriesQuery;
+    const { data: ytMusicMixesData } = ytMusicMixesQuery;
 
     // ── TIDAL Browse queries ─────────────────────────────────────────────
-    const { data: tidalHomeData } = useTidalHomeShelvesQuery({
+    const tidalHomeQuery = useTidalHomeShelvesQuery({
         enabled: showTidalExplore,
     });
-    const { data: tidalExploreData } = useTidalExploreShelvesQuery({
+    const tidalExploreQuery = useTidalExploreShelvesQuery({
         enabled: showTidalExplore,
     });
-    const { data: tidalGenresData } = useTidalGenresQuery({
+    const tidalGenresQuery = useTidalGenresQuery({
         enabled: showTidalExplore,
     });
-    const { data: tidalMoodsData } = useTidalMoodsQuery({
+    const tidalMoodsQuery = useTidalMoodsQuery({
         enabled: showTidalExplore,
     });
-    const { data: tidalMixesData } = useTidalMixesQuery({
+    const tidalMixesQuery = useTidalMixesQuery({
         enabled: showTidalExplore,
     });
+    const { data: tidalHomeData } = tidalHomeQuery;
+    const { data: tidalExploreData } = tidalExploreQuery;
+    const { data: tidalGenresData } = tidalGenresQuery;
+    const { data: tidalMoodsData } = tidalMoodsQuery;
+    const { data: tidalMixesData } = tidalMixesQuery;
+
+    const failedQueries = [
+        { key: "liked", enabled: true, query: likedQuery },
+        { key: "discoverWeekly", enabled: discovery, query: discoverQuery },
+        { key: "mixes", enabled: autoPlaylists, query: mixesQuery },
+        { key: "recommendations", enabled: discovery, query: recommendedQuery },
+        { key: "ytHome", enabled: showYtMusicExplore, query: shelvesQuery },
+        { key: "ytCharts", enabled: showYtMusicExplore, query: chartsQuery },
+        { key: "popularArtists", enabled: true, query: popularQuery },
+        {
+            key: "ytCategories",
+            enabled: showYtMusicExplore,
+            query: categoriesQuery,
+        },
+        {
+            key: "ytMixes",
+            enabled: showYtMusicExplore,
+            query: ytMusicMixesQuery,
+        },
+        { key: "tidalHome", enabled: showTidalExplore, query: tidalHomeQuery },
+        {
+            key: "tidalExplore",
+            enabled: showTidalExplore,
+            query: tidalExploreQuery,
+        },
+        {
+            key: "tidalGenres",
+            enabled: showTidalExplore,
+            query: tidalGenresQuery,
+        },
+        {
+            key: "tidalMoods",
+            enabled: showTidalExplore,
+            query: tidalMoodsQuery,
+        },
+        {
+            key: "tidalMixes",
+            enabled: showTidalExplore,
+            query: tidalMixesQuery,
+        },
+    ].filter(({ enabled, query }) => enabled && query.isError);
+    const hasDegradedResults = failedQueries.length > 0;
+    const degradedFailureSignature = failedQueries
+        .map(({ key }) => key)
+        .sort()
+        .join("|");
+    const retryAll = async (): Promise<void> => {
+        await Promise.all(failedQueries.map(({ query }) => query.refetch()));
+    };
 
     // ── Loading states ───────────────────────────────────────────────────
     const hasPrimaryData =
@@ -235,6 +305,9 @@ export function useExploreData(options?: {
         isMoodsLoading,
         showYtMusicExplore,
         showTidalExplore,
+        hasDegradedResults,
+        degradedFailureSignature,
         handleRefreshMixes,
+        retryAll,
     };
 }
