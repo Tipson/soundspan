@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { Request, Router } from "express";
 import { logger } from "../utils/logger";
 import { z } from "zod";
@@ -18,13 +19,19 @@ import {
     type UserProviderProfile,
 } from "../services/listenTogetherResolution";
 import { TRACK_VISIBLE_WHERE } from "../utils/librarySorting";
+import { standardPlaylistListWhere } from "../services/radioPlaylistIdentity";
+import {
+    PLAYLIST_REORDER_MAX_ITEMS,
+    removeLockedPlaylistItem,
+    requirePlaylistMutationLock,
+    reorderLockedPlaylistItems,
+} from "../services/playlistMutationLock";
 
 const router = Router();
 
 const PLAYLISTS_MAX_LIMIT = 1000;
 const PLAYLISTS_DEFAULT_LIMIT = 500;
 const PLAYLIST_PREVIEW_ITEMS = 12;
-const PLAYLIST_REORDER_MAX_ITEMS = 1000;
 const PLAYLIST_DETAIL_MAX_ITEMS = 1000;
 const PLAYLIST_DETAIL_QUERY_ITEMS = PLAYLIST_DETAIL_MAX_ITEMS + 1;
 const pendingRetryPath = "/:id/pending/:trackId/retry";
@@ -423,6 +430,106 @@ const addTrackSchema = z
         }
     });
 
+type AddTrackData = z.infer<typeof addTrackSchema>;
+
+type PlaylistItemReference = {
+    trackId: string | null;
+    trackTidalId: string | null;
+    trackYtMusicId: string | null;
+};
+
+type AddItemResult = { duplicated: boolean; item: UnifiedPlaylistItemRecord };
+
+async function resolvePlaylistItemReference(
+    data: AddTrackData,
+): Promise<PlaylistItemReference | null> {
+    if (data.trackId) {
+        const track = await prisma.track.findUnique({
+            where: { id: data.trackId, removedAt: null },
+        });
+        if (!track) return null;
+        return {
+            trackId: data.trackId,
+            trackTidalId: null,
+            trackYtMusicId: null,
+        };
+    }
+
+    const ensured = await trackMappingService.ensureRemoteTrack({
+        provider: data.tidalTrackId !== undefined ? "tidal" : "youtube",
+        tidalId: data.tidalTrackId,
+        videoId: data.youtubeVideoId,
+        title: data.title as string,
+        artist: data.artist as string,
+        album: data.album as string,
+        duration: data.duration as number,
+        isrc: data.isrc,
+        quality: data.quality,
+        explicit: data.explicit,
+        thumbnailUrl: data.thumbnailUrl,
+    });
+    return ensured.provider === "tidal"
+        ? {
+              trackId: null,
+              trackTidalId: ensured.id,
+              trackYtMusicId: null,
+          }
+        : {
+              trackId: null,
+              trackTidalId: null,
+              trackYtMusicId: ensured.id,
+          };
+}
+
+function getPlaylistItemReferenceWhere(
+    playlistId: string,
+    reference: PlaylistItemReference,
+): Prisma.PlaylistItemWhereInput {
+    if (reference.trackId) {
+        return { playlistId, trackId: reference.trackId };
+    }
+    if (reference.trackTidalId) {
+        return { playlistId, trackTidalId: reference.trackTidalId };
+    }
+    if (!reference.trackYtMusicId) throw new Error("Missing track reference");
+    return { playlistId, trackYtMusicId: reference.trackYtMusicId };
+}
+
+async function addLockedPlaylistItem(
+    tx: Prisma.TransactionClient,
+    playlistId: string,
+    userId: string,
+    reference: PlaylistItemReference,
+): Promise<AddItemResult> {
+    await requirePlaylistMutationLock(tx, playlistId, userId);
+    const existing = (await tx.playlistItem.findFirst({
+        where: getPlaylistItemReferenceWhere(playlistId, reference),
+        include: playlistItemInclude,
+    })) as UnifiedPlaylistItemRecord | null;
+    if (existing) return { duplicated: true, item: existing };
+
+    const maximum = await tx.playlistItem.aggregate({
+        where: { playlistId },
+        _max: { sort: true },
+    });
+    const item = await tx.playlistItem.create({
+        data: {
+            playlistId,
+            ...reference,
+            sort: (maximum._max.sort ?? 0) + 1,
+        },
+        include: playlistItemInclude,
+    });
+    await tx.playlist.update({
+        where: { id: playlistId },
+        data: { updatedAt: new Date() },
+    });
+    return {
+        duplicated: false,
+        item: item as UnifiedPlaylistItemRecord,
+    };
+}
+
 function unavailablePlaybackForReason(reason: string): {
     isPlayable: boolean;
     reason: string;
@@ -656,9 +763,7 @@ router.get("/", async (req, res) => {
         );
 
         const playlists = await prisma.playlist.findMany({
-            where: {
-                OR: [{ userId }, { isPublic: true }],
-            },
+            where: standardPlaylistListWhere(userId),
             orderBy: { createdAt: "desc" },
             take: limit,
             skip: offset,
@@ -1314,115 +1419,31 @@ router.post("/:id/items", async (req, res) => {
         }
         const addTrackData = parsedBody.data;
 
-        // Check ownership
         const playlist = await prisma.playlist.findUnique({
             where: { id: req.params.id },
-            include: {
-                items: {
-                    orderBy: { sort: "desc" },
-                    take: 1,
-                },
-            },
         });
-
         if (!playlist) {
             return res.status(404).json({ error: "Playlist not found" });
         }
-
         if (playlist.userId !== userId) {
             return res.status(403).json({ error: "Access denied" });
         }
 
-        let createTrackId: string | null = null;
-        let createTrackTidalId: string | null = null;
-        let createTrackYtMusicId: string | null = null;
-        let existingItem: UnifiedPlaylistItemRecord | null = null;
-
-        if (addTrackData.trackId) {
-            const track = await prisma.track.findUnique({
-                where: { id: addTrackData.trackId, removedAt: null },
-            });
-
-            if (!track) {
-                return res.status(404).json({ error: "Track not found" });
-            }
-
-            existingItem = (await prisma.playlistItem.findFirst({
-                where: {
-                    playlistId: req.params.id,
-                    trackId: addTrackData.trackId,
-                },
-                include: playlistItemInclude,
-            })) as UnifiedPlaylistItemRecord | null;
-            createTrackId = addTrackData.trackId;
-        } else {
-            const remoteProvider =
-                addTrackData.tidalTrackId !== undefined ? "tidal" : "youtube";
-            const ensuredRemoteTrack =
-                await trackMappingService.ensureRemoteTrack({
-                    provider: remoteProvider,
-                    tidalId: addTrackData.tidalTrackId,
-                    videoId: addTrackData.youtubeVideoId,
-                    title: addTrackData.title as string,
-                    artist: addTrackData.artist as string,
-                    album: addTrackData.album as string,
-                    duration: addTrackData.duration as number,
-                    isrc: addTrackData.isrc,
-                    quality: addTrackData.quality,
-                    explicit: addTrackData.explicit,
-                    thumbnailUrl: addTrackData.thumbnailUrl,
-                });
-
-            if (ensuredRemoteTrack.provider === "tidal") {
-                createTrackTidalId = ensuredRemoteTrack.id;
-                existingItem = (await prisma.playlistItem.findFirst({
-                    where: {
-                        playlistId: req.params.id,
-                        trackTidalId: createTrackTidalId,
-                    },
-                    include: playlistItemInclude,
-                })) as UnifiedPlaylistItemRecord | null;
-            } else {
-                createTrackYtMusicId = ensuredRemoteTrack.id;
-                existingItem = (await prisma.playlistItem.findFirst({
-                    where: {
-                        playlistId: req.params.id,
-                        trackYtMusicId: createTrackYtMusicId,
-                    },
-                    include: playlistItemInclude,
-                })) as UnifiedPlaylistItemRecord | null;
-            }
+        const reference = await resolvePlaylistItemReference(addTrackData);
+        if (!reference) {
+            return res.status(404).json({ error: "Track not found" });
         }
-
-        if (existingItem) {
+        const result = await prisma.$transaction((tx) =>
+            addLockedPlaylistItem(tx, req.params.id, userId, reference),
+        );
+        if (result.duplicated) {
             return res.status(200).json({
                 message: "Track already in playlist",
                 duplicated: true,
-                item: formatUnifiedTrackItem(existingItem),
+                item: formatUnifiedTrackItem(result.item),
             });
         }
-
-        // Get next sort position
-        const maxSort = playlist.items[0]?.sort || 0;
-
-        const [item] = await prisma.$transaction([
-            prisma.playlistItem.create({
-                data: {
-                    playlistId: req.params.id,
-                    trackId: createTrackId,
-                    trackTidalId: createTrackTidalId,
-                    trackYtMusicId: createTrackYtMusicId,
-                    sort: maxSort + 1,
-                },
-                include: playlistItemInclude,
-            }),
-            prisma.playlist.update({
-                where: { id: req.params.id },
-                data: { updatedAt: new Date() },
-            }),
-        ]);
-
-        res.json(formatUnifiedTrackItem(item as UnifiedPlaylistItemRecord));
+        res.json(formatUnifiedTrackItem(result.item));
     } catch (error) {
         if (error instanceof z.ZodError) {
             return res
@@ -1517,17 +1538,9 @@ router.delete("/:id/items/:trackId", async (req, res) => {
             return res.status(404).json({ error: "Playlist item not found" });
         }
 
-        await prisma.$transaction([
-            prisma.playlistItem.delete({
-                where: {
-                    id: targetItemId,
-                },
-            }),
-            prisma.playlist.update({
-                where: { id: req.params.id },
-                data: { updatedAt: new Date() },
-            }),
-        ]);
+        await prisma.$transaction((tx) =>
+            removeLockedPlaylistItem(tx, req.params.id, userId, targetItemId),
+        );
 
         res.json({ message: "Track removed from playlist" });
     } catch (error) {
@@ -1619,31 +1632,15 @@ router.put("/:id/items/reorder", async (req, res) => {
                 .json({ error: invalidReorder.message });
         }
 
-        // This bulk transaction is bounded by PLAYLIST_REORDER_MAX_ITEMS.
-        const updates = selection.ids.map((id, index) =>
-            selection.byItemId
-                ? prisma.playlistItem.update({
-                      where: { id },
-                      data: { sort: index },
-                  })
-                : prisma.playlistItem.update({
-                      where: {
-                          playlistId_trackId: {
-                              playlistId: req.params.id,
-                              trackId: id,
-                          },
-                      },
-                      data: { sort: index },
-                  }),
+        await prisma.$transaction((tx) =>
+            reorderLockedPlaylistItems(
+                tx,
+                req.params.id,
+                userId,
+                selection.ids,
+                selection.byItemId,
+            ),
         );
-
-        await prisma.$transaction([
-            ...updates,
-            prisma.playlist.update({
-                where: { id: req.params.id },
-                data: { updatedAt: new Date() },
-            }),
-        ]);
 
         res.json({ message: "Playlist reordered" });
     } catch (error) {
