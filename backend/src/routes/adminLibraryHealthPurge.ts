@@ -1,8 +1,10 @@
 import type { Request, Response } from "express";
+import { z } from "zod";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { schedulerQueue } from "../workers/queues";
 import { TRACK_REMOVAL_PURGE_JOB_NAME } from "../workers/processors/trackRemovalPurgeProcessor";
+import { readLibraryHealthPurgeMarker } from "../services/libraryHealthDashboard/purgeMarker";
 import { sendInternalRouteError } from "./routeErrorResponse";
 
 const log = logger.child("AdminLibraryHealthPurge");
@@ -57,7 +59,31 @@ async function enqueuePurgeAt(cutoff: Date): Promise<void> {
 
 const PURGE_STATES_IN_FLIGHT = new Set(["waiting", "delayed", "active"]);
 const FAILED_SCAN_LIMIT = 50;
+const IN_FLIGHT_SCAN_LIMIT = 500;
 const FAILURE_REASON_LIMIT = 200;
+const CONTINUATION_JOB_ID_PREFIX = "scheduler:track-removal-purge:";
+const continuationCountSchema = z
+    .number()
+    .int()
+    .nonnegative()
+    .max(Number.MAX_SAFE_INTEGER);
+const continuationDataSchema = z
+    .strictObject({
+        startAfterId: z.string().trim().min(1).max(128).optional(),
+        cutoffAt: z.iso.datetime({ offset: true }),
+        deletedSoFar: continuationCountSchema,
+        sweepRunId: z.string().trim().min(1).max(256),
+        initialTotal: continuationCountSchema,
+        processedSoFar: continuationCountSchema,
+        remaining: continuationCountSchema,
+        pageNumber: continuationCountSchema.min(1),
+    })
+    .refine(
+        (data) =>
+            data.remaining ===
+            Math.max(0, data.initialTotal - data.processedSoFar),
+        { path: ["remaining"] },
+    );
 
 function boundedFailureReason(reason: string | undefined): string {
     if (!reason) return "Purge job failed";
@@ -83,18 +109,36 @@ async function findLatestPurgeFailure(): Promise<string | null> {
     return null;
 }
 
+function isPurgeContinuation(job: {
+    id?: string | number;
+    name?: string;
+    data?: unknown;
+}): boolean {
+    return (
+        job.name === TRACK_REMOVAL_PURGE_JOB_NAME &&
+        typeof job.id === "string" &&
+        job.id.startsWith(CONTINUATION_JOB_ID_PREFIX) &&
+        job.id !== PURGE_NOW_JOB_ID &&
+        continuationDataSchema.safeParse(job.data).success
+    );
+}
+
 async function isPurgeInFlight(): Promise<boolean> {
     const purgeNowJob = await schedulerQueue.getJob(PURGE_NOW_JOB_ID);
     if (purgeNowJob) {
         const state = await purgeNowJob.getState();
         if (PURGE_STATES_IN_FLIGHT.has(state)) return true;
     }
-    const active = await schedulerQueue.getJobs(
-        ["active"],
-        0,
-        FAILED_SCAN_LIMIT,
+    // The marker is the primary signal. This bounded queue fallback covers
+    // marker loss during Redis flaps, with residual risk beyond 500 jobs.
+    const [active, waitingOrDelayed] = await Promise.all([
+        schedulerQueue.getJobs(["active"], 0, IN_FLIGHT_SCAN_LIMIT),
+        schedulerQueue.getJobs(["waiting", "delayed"], 0, IN_FLIGHT_SCAN_LIMIT),
+    ]);
+    return (
+        active.some((job) => job?.name === TRACK_REMOVAL_PURGE_JOB_NAME) ||
+        waitingOrDelayed.some(isPurgeContinuation)
     );
-    return active.some((job) => job?.name === TRACK_REMOVAL_PURGE_JOB_NAME);
 }
 
 /**
@@ -106,9 +150,10 @@ export async function handlePurgeRemovedStatus(
     res: Response,
 ): Promise<Response> {
     try {
+        const markedRemaining = await readLibraryHealthPurgeMarker();
         const [remaining, purging, lastFailure] = await Promise.all([
-            countRemovedLocalTracks(),
-            isPurgeInFlight(),
+            markedRemaining ?? countRemovedLocalTracks(),
+            markedRemaining === null ? isPurgeInFlight() : true,
             findLatestPurgeFailure(),
         ]);
         return res.json({ remaining, purging, lastFailure });

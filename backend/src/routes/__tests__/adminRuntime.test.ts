@@ -32,6 +32,11 @@ jest.mock("../../utils/db", () => ({
     },
 }));
 
+const mockRedisEval = jest.fn();
+jest.mock("../../utils/redis", () => ({
+    redisClient: { eval: mockRedisEval },
+}));
+
 jest.mock("../../workers/queues", () => ({
     schedulerQueue: {
         add: jest.fn(),
@@ -126,6 +131,7 @@ describe("admin library health routes", () => {
         mockSchedulerGetJob.mockResolvedValue(undefined);
         mockSchedulerGetJobs.mockResolvedValue([]);
         mockSchedulerGetFailed.mockResolvedValue([]);
+        mockRedisEval.mockResolvedValue("-1");
     });
 
     afterEach(() => {
@@ -245,6 +251,16 @@ describe("admin library health routes", () => {
         );
     });
 
+    it("leaves purge-now run id ownership to the processor", async () => {
+        const res = createRes();
+
+        await purgeRemovedTracksHandler({} as any, res);
+
+        expect(mockSchedulerAdd.mock.calls[0]?.[1]).not.toHaveProperty(
+            "sweepRunId",
+        );
+    });
+
     it.each(["failed", "waiting"])(
         "replaces a %s purge-now job with a freshly pinned sweep",
         async (state) => {
@@ -337,6 +353,22 @@ describe("admin library health routes", () => {
             });
         });
 
+        it("reports the stable purge marker before inspecting the queue", async () => {
+            mockRedisEval.mockResolvedValueOnce("17");
+            const res = createRes();
+
+            await purgeStatusHandler({} as any, res);
+
+            expect(res.body).toEqual({
+                remaining: 17,
+                purging: true,
+                lastFailure: null,
+            });
+            expect(mockRemovedTrackCount).not.toHaveBeenCalled();
+            expect(mockSchedulerGetJob).not.toHaveBeenCalled();
+            expect(mockSchedulerGetJobs).not.toHaveBeenCalled();
+        });
+
         it("reports a waiting purge-now singleton as in flight", async () => {
             mockSchedulerGetJob.mockResolvedValue({
                 getState: jest.fn().mockResolvedValue("waiting"),
@@ -356,21 +388,54 @@ describe("admin library health routes", () => {
         it("ignores a delayed scheduled purge", async () => {
             mockSchedulerGetJobs.mockImplementation(async (states: string[]) =>
                 states.includes("delayed")
-                    ? [{ name: "track-removal-purge", state: "delayed" }]
+                    ? [
+                          {
+                              id: "repeat:daily-purge",
+                              name: "track-removal-purge",
+                              data: { mode: "repeat" },
+                          },
+                      ]
                     : [],
             );
             const res = createRes();
 
             await purgeStatusHandler({} as any, res);
 
-            expect(mockSchedulerGetJobs).toHaveBeenCalledWith(
-                ["active"],
-                0,
-                50,
-            );
             expect(res.body).toEqual({
                 remaining: 3,
                 purging: false,
+                lastFailure: null,
+            });
+        });
+
+        it("reports a waiting continuation page as in flight", async () => {
+            mockSchedulerGetJobs.mockImplementation(async (states: string[]) =>
+                states.includes("waiting")
+                    ? [
+                          {
+                              id: "scheduler:track-removal-purge:2026-08-18T12:00:00.000Z:track-100",
+                              name: "track-removal-purge",
+                              data: {
+                                  startAfterId: "track-100",
+                                  cutoffAt: "2026-08-18T12:00:00.000Z",
+                                  deletedSoFar: 100,
+                                  sweepRunId: "purge-root",
+                                  initialTotal: 117,
+                                  processedSoFar: 100,
+                                  remaining: 17,
+                                  pageNumber: 1,
+                              },
+                          },
+                      ]
+                    : [],
+            );
+            const res = createRes();
+
+            await purgeStatusHandler({} as any, res);
+
+            expect(res.body).toEqual({
+                remaining: 3,
+                purging: true,
                 lastFailure: null,
             });
         });
@@ -386,7 +451,7 @@ describe("admin library health routes", () => {
             expect(mockSchedulerGetJobs).toHaveBeenCalledWith(
                 ["active"],
                 0,
-                50,
+                500,
             );
             expect(res.body).toEqual({
                 remaining: 3,
