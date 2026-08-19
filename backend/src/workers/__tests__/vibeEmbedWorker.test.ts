@@ -23,10 +23,12 @@ const flushPromises = async (): Promise<void> => {
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
-    const promise = new Promise<T>((done) => {
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((done, fail) => {
         resolve = done;
+        reject = fail;
     });
-    return { promise, resolve };
+    return { promise, reject, resolve };
 }
 
 describe("vibe embed worker", () => {
@@ -38,6 +40,7 @@ describe("vibe embed worker", () => {
         const pop = jest.fn<Promise<string | null>, [string, number]>();
         const processJob = jest.fn(async () => "stored" as const);
         const requeue = jest.fn(async () => undefined);
+        const closePop = jest.fn(async () => undefined);
         const refreshCoverage = jest.fn(async () => ({
             embedded: 8,
             pending: 2,
@@ -80,6 +83,7 @@ describe("vibe embed worker", () => {
             audioAnalysisEnabled: overrides?.audioAnalysisEnabled ?? true,
             concurrency: overrides?.concurrency ?? 1,
             pop,
+            closePop,
             processJob,
             requeue,
             probeProvider,
@@ -98,6 +102,7 @@ describe("vibe embed worker", () => {
         return {
             worker,
             pop,
+            closePop,
             processJob,
             requeue,
             probeProvider,
@@ -279,6 +284,39 @@ describe("vibe embed worker", () => {
         await stopping;
         expect(stopped).toBe(true);
         expect(harness.requeue).not.toHaveBeenCalled();
+        expect(harness.closePop).toHaveBeenCalledTimes(1);
+    });
+
+    it("interrupts a hanging pop before awaiting loop shutdown", async () => {
+        const hangingPop = deferred<string | null>();
+        const shutdownError = new Error("blocking connection destroyed");
+        const harness = createHarness({
+            providerUrl: "http://provider:8090",
+        });
+        harness.pop.mockReturnValueOnce(hangingPop.promise);
+        harness.closePop.mockImplementationOnce(async () => {
+            hangingPop.reject(shutdownError);
+        });
+
+        await harness.worker.start();
+        await flushPromises();
+
+        let timeout: NodeJS.Timeout | null = null;
+        const deadline = new Promise<"timed-out">((resolve) => {
+            timeout = setTimeout(() => resolve("timed-out"), 100);
+        });
+        const outcome = await Promise.race([
+            harness.worker.stop().then(() => "stopped" as const),
+            deadline,
+        ]);
+        if (timeout) clearTimeout(timeout);
+
+        expect(outcome).toBe("stopped");
+        expect(harness.closePop).toHaveBeenCalledTimes(1);
+        expect(harness.logger.warn).not.toHaveBeenCalledWith(
+            "Vibe embedding queue pop failed",
+            shutdownError,
+        );
     });
 
     it("awaits each bounded BLPOP timeout instead of busy-spinning", async () => {

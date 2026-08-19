@@ -105,6 +105,7 @@ import psycopg2
 import redis
 from database_connection import DatabaseConnection
 from psycopg2.extras import Json
+from reconciliation_claims import claim_reconciliation_tracks
 
 # Essentia imports (will fail gracefully if not installed for testing)
 ESSENTIA_AVAILABLE = False
@@ -1679,40 +1680,21 @@ class AnalysisWorker:
         finally:
             cursor.close()
 
-    def _run_db_reconciliation(self) -> bool:
-        """
-        Check database for pending tracks that may have been missed by Redis queue.
-        Handles edge cases: manual DB edits, crash recovery, queue loss.
-        Sends rows directly through the consumer claim path so queue waiting time
-        is never recorded as processing time.
+    def _select_and_claim_reconciliation_tracks(self, cursor) -> list[tuple[str, str]]:
+        """Delegate the atomic reconciliation claim to the database boundary."""
+        return claim_reconciliation_tracks(cursor, MAX_RETRIES, BATCH_SIZE)
 
-        Returns True if pending work was found, False if nothing to do.
-        """
+    def _run_db_reconciliation(self) -> bool:
+        """Claim and process pending rows that may have missed the Redis queue."""
         cursor = self.db.get_cursor()
         try:
-            cursor.execute(
-                """
-                SELECT id, "filePath"
-                FROM "Track"
-                WHERE "analysisStatus" = 'pending'
-                AND COALESCE("analysisRetryCount", 0) < %s
-                ORDER BY "fileModified" DESC
-                LIMIT %s
-            """,
-                (MAX_RETRIES, BATCH_SIZE),
-            )
-
-            tracks = cursor.fetchall()
-            if not tracks:
-                # Explicitly close the read transaction so this connection
-                # does not remain idle-in-transaction between reconciliation polls.
-                self.db.commit()
-                return False
-
+            pending_tracks = self._select_and_claim_reconciliation_tracks(cursor)
             self.db.commit()
-            pending_tracks = [(track["id"], track["filePath"]) for track in tracks]
+            if not pending_tracks:
+                return False
             logger.info(f"DB reconciliation found {len(pending_tracks)} pending tracks")
-            self._process_tracks_parallel(pending_tracks)
+            self._release_queue_reservations(pending_tracks)
+            self._process_claimed_tracks_parallel(pending_tracks)
             return True
         except Exception as e:
             logger.error(f"DB reconciliation failed: {e}")
@@ -2056,6 +2038,13 @@ class AnalysisWorker:
         queued_tracks = tracks
         tracks = self._claim_tracks_for_processing(tracks)
         self._release_queue_reservations(queued_tracks)
+        if not tracks:
+            return
+
+        self._process_claimed_tracks_parallel(tracks)
+
+    def _process_claimed_tracks_parallel(self, tracks: list[tuple[str, str]]):
+        """Process a batch whose pending rows were already claimed."""
         if not tracks:
             return
 
