@@ -1,17 +1,22 @@
 "use client";
 
-import { useEffect, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api } from "@/lib/api";
 import {
     DEFAULT_LOUDNESS_TARGET_LUFS,
-    LOUDNESS_MODES,
     isAlbumOrderedQueue,
+    LOUDNESS_MODES,
     resolveLoudnessGain,
     type LoudnessMode,
 } from "@/lib/audio-engine/loudnessGainPolicy";
 import { useAudioState } from "@/lib/audio-state-context";
 import { isEpisodeQueueItem } from "@/lib/queue-item";
 import { USER_SETTINGS_UPDATED_EVENT } from "@/lib/userSettingsEvents";
+import {
+    startGainTransition,
+    type GainTransitionHandle,
+} from "./gainTransition";
+import { createLoudnessPrefsLoader } from "./loudnessPrefsLoader";
 
 function parseLoudnessMode(value: unknown): LoudnessMode | null {
     return LOUDNESS_MODES.includes(value as LoudnessMode)
@@ -29,11 +34,29 @@ interface LoudnessPrefs {
     targetLufs: number;
 }
 
+/** Bounded retry backoff for the preference snapshot. */
+const PREFS_RETRY_DELAYS_MS = [2_000, 5_000, 15_000] as const;
+
+function extractLoudnessMode(settings: unknown): LoudnessMode {
+    const stored = (settings as { loudnessMode?: unknown }).loudnessMode;
+    return parseLoudnessMode(stored) ?? "auto";
+}
+
+function extractTargetLufs(features: unknown): number | null {
+    const target = (features as { loudnessTargetLufs?: unknown })
+        .loudnessTargetLufs;
+    return typeof target === "number" && Number.isFinite(target)
+        ? target
+        : null;
+}
+
 /**
  * Reads the user's loudness mode and the server target directly from the
  * API (deliberately not through react-query or the features context: this
  * hook mounts inside the playback orchestrator, whose component harness
- * provides neither). Refreshes when the settings page announces a save.
+ * provides neither). The snapshot loads through a serialized,
+ * generation-fenced loader with bounded retries, and refreshes when the
+ * settings page announces a save.
  */
 function useLoudnessPrefs(): LoudnessPrefs {
     // Mode stays "off" until the stored preference loads, so gain is never
@@ -44,51 +67,96 @@ function useLoudnessPrefs(): LoudnessPrefs {
     });
 
     useEffect(() => {
-        let cancelled = false;
-        const load = () => {
-            Promise.resolve()
-                .then(() => api.getSettings?.())
-                .then((settings) => {
-                    if (cancelled || !settings) return;
-                    const stored = (settings as { loudnessMode?: unknown })
-                        .loudnessMode;
-                    const mode = parseLoudnessMode(stored) ?? "auto";
-                    setPrefs((prev) =>
-                        prev.mode === mode ? prev : { ...prev, mode },
-                    );
-                })
-                .catch(() => undefined);
-            Promise.resolve()
-                .then(() => api.getFeatures?.())
-                .then((features) => {
-                    if (cancelled || !features) return;
-                    const target = (
-                        features as { loudnessTargetLufs?: unknown }
-                    ).loudnessTargetLufs;
-                    if (typeof target !== "number" || !Number.isFinite(target))
-                        return;
-                    setPrefs((prev) =>
-                        prev.targetLufs === target
-                            ? prev
-                            : { ...prev, targetLufs: target },
-                    );
-                })
-                .catch(() => undefined);
-        };
-        load();
+        const loader = createLoudnessPrefsLoader({
+            fetchSettings: () =>
+                Promise.resolve().then(() => api.getSettings?.()),
+            fetchFeatures: () =>
+                Promise.resolve().then(() => api.getFeatures?.()),
+            extractMode: extractLoudnessMode,
+            extractTarget: extractTargetLufs,
+            retryDelaysMs: PREFS_RETRY_DELAYS_MS,
+            onSnapshot: ({ mode, targetLufs }) => {
+                setPrefs((prev) => {
+                    const next = {
+                        mode: (mode as LoudnessMode | null) ?? prev.mode,
+                        targetLufs: targetLufs ?? prev.targetLufs,
+                    };
+                    return next.mode === prev.mode &&
+                        next.targetLufs === prev.targetLufs
+                        ? prev
+                        : next;
+                });
+            },
+        });
+        loader.start();
         if (typeof window === "undefined") {
-            return () => {
-                cancelled = true;
-            };
+            return loader.dispose;
         }
-        window.addEventListener(USER_SETTINGS_UPDATED_EVENT, load);
+        window.addEventListener(USER_SETTINGS_UPDATED_EVENT, loader.reload);
         return () => {
-            cancelled = true;
-            window.removeEventListener(USER_SETTINGS_UPDATED_EVENT, load);
+            loader.dispose();
+            window.removeEventListener(
+                USER_SETTINGS_UPDATED_EVENT,
+                loader.reload,
+            );
         };
     }, []);
 
     return prefs;
+}
+
+type AudioStateSlice = Pick<
+    ReturnType<typeof useAudioState>,
+    "currentTrack" | "playbackType" | "queue" | "isShuffle"
+>;
+
+interface GainSyncInput extends AudioStateSlice {
+    prefs: LoudnessPrefs;
+    loudnessGainFactorRef: MutableRefObject<number>;
+    applyCurrentOutputState: () => void;
+    transitionRef: MutableRefObject<GainTransitionHandle | null>;
+    lastTrackIdRef: MutableRefObject<string | null>;
+}
+
+/**
+ * Recomputes the gain decision and applies it: immediately when the track
+ * changed (the content changes anyway), through a short ramp for a
+ * mid-track mode/target/queue-context change so the volume never jumps.
+ */
+function syncLoudnessGain(input: GainSyncInput): void {
+    // A queue containing podcast episodes is never an album context.
+    const trackItems = input.queue.filter((item) => !isEpisodeQueueItem(item));
+    const isTrack = input.playbackType === "track";
+    const decision = resolveLoudnessGain({
+        mode: input.prefs.mode,
+        targetLufs: input.prefs.targetLufs,
+        isAlbumContext:
+            trackItems.length === input.queue.length &&
+            isAlbumOrderedQueue(trackItems, input.isShuffle),
+        track: isTrack ? input.currentTrack : null,
+    });
+    const trackId = isTrack ? (input.currentTrack?.id ?? null) : null;
+    const trackChanged = trackId !== input.lastTrackIdRef.current;
+    input.lastTrackIdRef.current = trackId;
+
+    input.transitionRef.current?.cancel();
+    input.transitionRef.current = null;
+    const previous = input.loudnessGainFactorRef.current;
+    if (previous === decision.gainFactor) return;
+
+    if (trackChanged || typeof window === "undefined") {
+        input.loudnessGainFactorRef.current = decision.gainFactor;
+        input.applyCurrentOutputState();
+        return;
+    }
+    input.transitionRef.current = startGainTransition({
+        from: previous,
+        to: decision.gainFactor,
+        setGain: (value) => {
+            input.loudnessGainFactorRef.current = value;
+        },
+        applyOutputState: input.applyCurrentOutputState,
+    });
 }
 
 /**
@@ -105,26 +173,24 @@ export function useLoudnessNormalization({
     applyCurrentOutputState,
 }: UseLoudnessNormalizationOptions): void {
     const { currentTrack, playbackType, queue, isShuffle } = useAudioState();
-    const { mode, targetLufs } = useLoudnessPrefs();
+    const prefs = useLoudnessPrefs();
+    const transitionRef = useRef<GainTransitionHandle | null>(null);
+    const lastTrackIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        // A queue containing podcast episodes is never an album context.
-        const trackItems = queue.filter((item) => !isEpisodeQueueItem(item));
-        const isAlbumContext =
-            trackItems.length === queue.length &&
-            isAlbumOrderedQueue(trackItems, isShuffle);
-        const decision = resolveLoudnessGain({
-            mode,
-            targetLufs,
-            isAlbumContext,
-            track: playbackType === "track" ? currentTrack : null,
+        syncLoudnessGain({
+            prefs,
+            currentTrack,
+            playbackType,
+            queue,
+            isShuffle,
+            loudnessGainFactorRef,
+            applyCurrentOutputState,
+            transitionRef,
+            lastTrackIdRef,
         });
-        if (loudnessGainFactorRef.current === decision.gainFactor) return;
-        loudnessGainFactorRef.current = decision.gainFactor;
-        applyCurrentOutputState();
     }, [
-        mode,
-        targetLufs,
+        prefs,
         currentTrack,
         playbackType,
         queue,
@@ -132,4 +198,11 @@ export function useLoudnessNormalization({
         loudnessGainFactorRef,
         applyCurrentOutputState,
     ]);
+
+    useEffect(
+        () => () => {
+            transitionRef.current?.cancel();
+        },
+        [],
+    );
 }
