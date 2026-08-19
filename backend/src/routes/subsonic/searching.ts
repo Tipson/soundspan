@@ -14,6 +14,8 @@ import {
     isUnsupportedMusicFolderId,
     LIBRARY_ALBUM_WHERE,
     LIBRARY_TRACK_WHERE,
+    combineSongEnrichmentForAlbum,
+    loadSongEnrichmentByTrackId,
     normalizeSearchQuery,
     parseOffsetParam,
     parseSearchCountParam,
@@ -149,6 +151,7 @@ export async function handleSearch3(
                     tracks: {
                         where: LIBRARY_TRACK_WHERE,
                         select: {
+                            id: true,
                             duration: true,
                         },
                     },
@@ -236,6 +239,15 @@ export async function handleSearch3(
                 skip: songOffset,
             }),
         ]);
+        const playedAtByTrackId = await loadSongEnrichmentByTrackId(
+            req.user!.id,
+            [
+                ...tracks.map((track) => track.id),
+                ...albums.flatMap((album) =>
+                    album.tracks.map((track) => track.id),
+                ),
+            ],
+        );
 
         sendSubsonicSuccess(
             res,
@@ -250,23 +262,34 @@ export async function handleSearch3(
                         }),
                     ),
                     album: albums.map((album) =>
-                        formatAlbumForSubsonic({
-                            id: album.id,
-                            title: album.title,
-                            year: album.year,
-                            lastSynced: album.lastSynced,
-                            coverUrl: album.coverUrl,
-                            genres: album.genres,
-                            userGenres: album.userGenres,
-                            artist: album.artist,
-                            songCount: album._count.tracks,
-                            duration: album.tracks.reduce(
-                                (sum, track) => sum + (track.duration ?? 0),
-                                0,
+                        formatAlbumForSubsonic(
+                            {
+                                id: album.id,
+                                title: album.title,
+                                year: album.year,
+                                lastSynced: album.lastSynced,
+                                coverUrl: album.coverUrl,
+                                genres: album.genres,
+                                userGenres: album.userGenres,
+                                artist: album.artist,
+                                songCount: album._count.tracks,
+                                duration: album.tracks.reduce(
+                                    (sum, track) => sum + (track.duration ?? 0),
+                                    0,
+                                ),
+                            },
+                            combineSongEnrichmentForAlbum(
+                                album.tracks.map((track) => track.id),
+                                playedAtByTrackId,
                             ),
-                        }),
+                        ),
                     ),
-                    song: tracks.map((track) => formatSongForSubsonic(track)),
+                    song: tracks.map((track) =>
+                        formatSongForSubsonic(
+                            track,
+                            playedAtByTrackId.get(track.id),
+                        ),
+                    ),
                 },
             },
             format,
@@ -400,6 +423,7 @@ async function handleSearchLike(
                     tracks: {
                         where: LIBRARY_TRACK_WHERE,
                         select: {
+                            id: true,
                             duration: true,
                         },
                     },
@@ -487,6 +511,15 @@ async function handleSearchLike(
                 skip: songOffset,
             }),
         ]);
+        const playedAtByTrackId = await loadSongEnrichmentByTrackId(
+            req.user!.id,
+            [
+                ...tracks.map((track) => track.id),
+                ...albums.flatMap((album) =>
+                    album.tracks.map((track) => track.id),
+                ),
+            ],
+        );
 
         const searchResultPayload = {
             artist: artists.map((artist) =>
@@ -498,23 +531,31 @@ async function handleSearchLike(
                 }),
             ),
             album: albums.map((album) =>
-                formatAlbumForSubsonic({
-                    id: album.id,
-                    title: album.title,
-                    year: album.year,
-                    lastSynced: album.lastSynced,
-                    coverUrl: album.coverUrl,
-                    genres: album.genres,
-                    userGenres: album.userGenres,
-                    artist: album.artist,
-                    songCount: album._count.tracks,
-                    duration: album.tracks.reduce(
-                        (sum, track) => sum + (track.duration ?? 0),
-                        0,
+                formatAlbumForSubsonic(
+                    {
+                        id: album.id,
+                        title: album.title,
+                        year: album.year,
+                        lastSynced: album.lastSynced,
+                        coverUrl: album.coverUrl,
+                        genres: album.genres,
+                        userGenres: album.userGenres,
+                        artist: album.artist,
+                        songCount: album._count.tracks,
+                        duration: album.tracks.reduce(
+                            (sum, track) => sum + (track.duration ?? 0),
+                            0,
+                        ),
+                    },
+                    combineSongEnrichmentForAlbum(
+                        album.tracks.map((track) => track.id),
+                        playedAtByTrackId,
                     ),
-                }),
+                ),
             ),
-            song: tracks.map((track) => formatSongForSubsonic(track)),
+            song: tracks.map((track) =>
+                formatSongForSubsonic(track, playedAtByTrackId.get(track.id)),
+            ),
         };
 
         const payload: Record<string, unknown> = {};

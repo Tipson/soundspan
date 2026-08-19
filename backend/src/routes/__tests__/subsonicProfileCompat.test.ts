@@ -26,8 +26,8 @@ jest.mock("../../utils/db", () => ({
         track: {
             findMany: jest.fn(),
         },
-        likedTrack: {
-            createMany: jest.fn(),
+        trackRating: {
+            upsert: jest.fn(),
             deleteMany: jest.fn(),
         },
     },
@@ -92,8 +92,13 @@ function buildRes(): Response {
 describe("subsonic profile compatibility handlers", () => {
     const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
     const mockTrackFindMany = prisma.track.findMany as jest.Mock;
-    const mockLikedTrackCreateMany = prisma.likedTrack.createMany as jest.Mock;
-    const mockLikedTrackDeleteMany = prisma.likedTrack.deleteMany as jest.Mock;
+    const mockTrackRating = (
+        prisma as unknown as {
+            trackRating: { upsert: jest.Mock; deleteMany: jest.Mock };
+        }
+    ).trackRating;
+    const mockTrackRatingUpsert = mockTrackRating.upsert;
+    const mockTrackRatingDeleteMany = mockTrackRating.deleteMany;
     const mockSendSuccess = sendSubsonicSuccess as jest.Mock;
     const mockSendError = sendSubsonicError as jest.Mock;
 
@@ -136,27 +141,23 @@ describe("subsonic profile compatibility handlers", () => {
         );
     });
 
-    it("maps non-zero setRating to likedTrack create semantics", async () => {
-        mockLikedTrackCreateMany.mockResolvedValue({
-            count: 1,
-        });
+    it("persists the exact non-zero user rating independently", async () => {
+        mockTrackRatingUpsert.mockResolvedValue({});
 
         await handleSetRating(
             buildReq({
                 id: "tr-track-1",
-                rating: "5",
+                rating: "3",
             }),
             buildRes(),
         );
 
-        expect(mockLikedTrackCreateMany).toHaveBeenCalledWith({
-            data: [
-                {
-                    userId: "user-1",
-                    trackId: "track-1",
-                },
-            ],
-            skipDuplicates: true,
+        expect(mockTrackRatingUpsert).toHaveBeenCalledWith({
+            where: {
+                userId_trackId: { userId: "user-1", trackId: "track-1" },
+            },
+            create: { userId: "user-1", trackId: "track-1", rating: 3 },
+            update: { rating: 3 },
         });
         expect(mockSendSuccess).toHaveBeenCalledWith(
             expect.anything(),
@@ -166,8 +167,8 @@ describe("subsonic profile compatibility handlers", () => {
         );
     });
 
-    it("maps zero setRating to likedTrack deletion semantics", async () => {
-        mockLikedTrackDeleteMany.mockResolvedValue({
+    it("deletes a numeric rating without changing star state", async () => {
+        mockTrackRatingDeleteMany.mockResolvedValue({
             count: 1,
         });
 
@@ -179,7 +180,7 @@ describe("subsonic profile compatibility handlers", () => {
             buildRes(),
         );
 
-        expect(mockLikedTrackDeleteMany).toHaveBeenCalledWith({
+        expect(mockTrackRatingDeleteMany).toHaveBeenCalledWith({
             where: {
                 userId: "user-1",
                 trackId: "track-1",
@@ -193,21 +194,41 @@ describe("subsonic profile compatibility handlers", () => {
         );
     });
 
-    it("rejects invalid setRating values", async () => {
-        await handleSetRating(
-            buildReq({
-                id: "tr-track-1",
-                rating: "10",
-            }),
-            buildRes(),
-        );
+    it.each(["3.9", "3junk", "3e2", "6", "-1"])(
+        "rejects malformed setRating value %s",
+        async (rating) => {
+            await handleSetRating(
+                buildReq({ id: "tr-track-1", rating }),
+                buildRes(),
+            );
 
-        expect(mockSendError).toHaveBeenCalledWith(
-            expect.anything(),
-            10,
-            "Required parameter 'rating' is invalid",
-            "json",
-            undefined,
-        );
-    });
+            expect(mockTrackRatingUpsert).not.toHaveBeenCalled();
+            expect(mockTrackRatingDeleteMany).not.toHaveBeenCalled();
+            expect(mockSendError).toHaveBeenCalledWith(
+                expect.anything(),
+                10,
+                "Required parameter 'rating' is invalid",
+                "json",
+                undefined,
+            );
+        },
+    );
+
+    it.each(["0", "1", "2", "3", "4", "5"])(
+        "accepts exact setRating value %s",
+        async (rating) => {
+            await handleSetRating(
+                buildReq({ id: "tr-track-1", rating }),
+                buildRes(),
+            );
+
+            expect(mockSendError).not.toHaveBeenCalled();
+            expect(mockSendSuccess).toHaveBeenCalledWith(
+                expect.anything(),
+                {},
+                "json",
+                undefined,
+            );
+        },
+    );
 });

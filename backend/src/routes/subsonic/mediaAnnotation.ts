@@ -19,6 +19,7 @@ import {
     parseTrackIdsFromQueryValues,
     SUBSONIC_ALBUM_LOCATION_WHERE,
 } from "./shared";
+import { setSongUserRating } from "./songEnrichment";
 
 async function resolveStarMutationTrackIds(input: {
     songTrackIds: string[];
@@ -202,8 +203,7 @@ export async function handleSetRating(
         return;
     }
 
-    const rating = Number.parseInt(rawRating, 10);
-    if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
+    if (!/^[0-5]$/.test(rawRating)) {
         sendSubsonicError(
             res,
             SubsonicErrorCode.MISSING_PARAMETER,
@@ -213,6 +213,7 @@ export async function handleSetRating(
         );
         return;
     }
+    const rating = Number(rawRating);
 
     const trackId = parseEntityIdOrNotFound(
         req,
@@ -240,24 +241,7 @@ export async function handleSetRating(
             return;
         }
 
-        if (rating === 0) {
-            await prisma.likedTrack.deleteMany({
-                where: {
-                    userId: req.user!.id,
-                    trackId,
-                },
-            });
-        } else {
-            await prisma.likedTrack.createMany({
-                data: [
-                    {
-                        userId: req.user!.id,
-                        trackId,
-                    },
-                ],
-                skipDuplicates: true,
-            });
-        }
+        await setSongUserRating(req.user!.id, trackId, rating);
 
         sendSubsonicSuccess(res, {}, format, callback);
     } catch {

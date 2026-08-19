@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import * as path from "path";
 import { Readable } from "node:stream";
 
 const mockLogger = {
@@ -13,6 +14,7 @@ const mockFsMkdirSync = jest.fn();
 const mockFsCreateReadStream = jest.fn();
 const mockFsCreateWriteStream = jest.fn();
 const mockFsStat = jest.fn();
+const mockFsReaddir = jest.fn();
 const mockPipeline = jest.fn();
 const mockFsUnlink = jest.fn();
 const mockFsRename = jest.fn();
@@ -106,6 +108,7 @@ const mockFfmpeg = jest.fn((sourcePath: string) => {
         audioBitrate: jest.fn().mockReturnThis(),
         audioCodec: jest.fn().mockReturnThis(),
         format: jest.fn().mockReturnThis(),
+        inputOptions: jest.fn().mockReturnThis(),
         kill: jest.fn().mockReturnThis(),
         on: jest.fn((event: string, handler: (...args: any[]) => any) => {
             handlers[event] = handler;
@@ -140,6 +143,7 @@ jest.mock("fs", () => ({
     unlink: mockFsUnlinkCallback,
     promises: {
         stat: mockFsStat,
+        readdir: mockFsReaddir,
         unlink: mockFsUnlink,
         rename: mockFsRename,
     },
@@ -228,7 +232,12 @@ jest.mock("fluent-ffmpeg", () => ({
     }),
 }));
 
-import { AudioStreamingService, QUALITY_SETTINGS } from "../audioStreaming";
+import {
+    AudioStreamingService,
+    QUALITY_SETTINGS,
+    resetOffsetSweepStateForTests,
+    waitForOffsetSweepForTests,
+} from "../audioStreaming";
 import { AppError, ErrorCategory, ErrorCode } from "../../utils/errors";
 
 const configuredFfmpegPath = mockSetFfmpegPath.mock.calls[0]?.[0];
@@ -308,7 +317,9 @@ describe("AudioStreamingService", () => {
         expect(configuredFfmpegPath).toBe("/usr/bin/ffmpeg");
     });
 
-    beforeEach(() => {
+    beforeEach(async () => {
+        await waitForOffsetSweepForTests();
+        resetOffsetSweepStateForTests();
         jest.clearAllMocks();
 
         ffmpegControl.mode = "success";
@@ -330,6 +341,7 @@ describe("AudioStreamingService", () => {
         mockFsCreateReadStream.mockReturnValue(createMockReadStream());
         mockFsCreateWriteStream.mockReturnValue({});
         mockFsStat.mockResolvedValue({ size: 1024 });
+        mockFsReaddir.mockResolvedValue([]);
         mockFsUnlink.mockResolvedValue(undefined);
         mockFsRename.mockResolvedValue(undefined);
         mockFsUnlinkCallback.mockImplementation(
@@ -353,7 +365,8 @@ describe("AudioStreamingService", () => {
         mockConfig.allowedOrigins = [];
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        await waitForOffsetSweepForTests();
         for (const service of createdServices) {
             service.destroy();
         }
@@ -364,6 +377,289 @@ describe("AudioStreamingService", () => {
     });
 
     describe("getStreamFilePath", () => {
+        it("sweeps stale offset files from the transcode volume", async () => {
+            mockFsReaddir.mockResolvedValueOnce([
+                { name: "stale.mp3", isFile: () => true },
+            ]);
+            mockFsStat.mockResolvedValueOnce({
+                size: 1024,
+                mtimeMs: Date.now() - 2 * 60 * 60 * 1000,
+            });
+
+            createService();
+            await waitForOffsetSweepForTests();
+
+            expect(mockFsUnlink).toHaveBeenCalledWith(
+                "/cache/offset-tmp/stale.mp3",
+            );
+            expect(mockFsMkdirSync).toHaveBeenCalledWith("/cache/offset-tmp", {
+                recursive: true,
+            });
+        });
+
+        it("does not start a second offset sweep within the interval", async () => {
+            createService();
+            await waitForOffsetSweepForTests();
+
+            createService();
+            await waitForOffsetSweepForTests();
+
+            expect(mockFsReaddir).toHaveBeenCalledTimes(1);
+        });
+
+        it("does not enumerate the offset directory twice while a sweep is in flight", async () => {
+            const now = Date.now();
+            const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(now);
+            let releaseReaddir: (() => void) | undefined;
+            mockFsReaddir.mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        releaseReaddir = () => resolve([]);
+                    }),
+            );
+
+            createService();
+            const firstSweep = waitForOffsetSweepForTests();
+            let secondSweep = Promise.resolve();
+            try {
+                dateNowSpy.mockReturnValue(now + 16 * 60 * 1000);
+                createService();
+                secondSweep = waitForOffsetSweepForTests();
+
+                expect(mockFsReaddir).toHaveBeenCalledTimes(1);
+            } finally {
+                if (!releaseReaddir) throw new Error("readdir did not start");
+                releaseReaddir();
+                await Promise.all([firstSweep, secondSweep]);
+                dateNowSpy.mockRestore();
+            }
+        });
+
+        it("attempts to remove at most 1000 entries during one sweep", async () => {
+            mockFsReaddir.mockResolvedValueOnce(
+                Array.from({ length: 1001 }, (_, index) => ({
+                    name: `stale-${index}.mp3`,
+                    isFile: () => true,
+                })),
+            );
+            mockFsStat.mockResolvedValue({
+                size: 1024,
+                mtimeMs: Date.now() - 2 * 60 * 60 * 1000,
+            });
+
+            createService();
+            await waitForOffsetSweepForTests();
+
+            expect(mockFsStat).toHaveBeenCalledTimes(1000);
+            expect(mockFsUnlink).toHaveBeenCalledTimes(1000);
+        });
+
+        it.each(["readdir", "stat", "unlink"] as const)(
+            "absorbs rejected %s operations during an offset sweep",
+            async (operation) => {
+                if (operation === "readdir") {
+                    mockFsReaddir.mockRejectedValueOnce(
+                        new Error("readdir failed"),
+                    );
+                } else {
+                    mockFsReaddir.mockResolvedValueOnce([
+                        { name: "stale.mp3", isFile: () => true },
+                    ]);
+                    if (operation === "stat") {
+                        mockFsStat.mockRejectedValueOnce(
+                            new Error("stat failed"),
+                        );
+                    } else {
+                        mockFsStat.mockResolvedValueOnce({
+                            size: 1024,
+                            mtimeMs: Date.now() - 2 * 60 * 60 * 1000,
+                        });
+                        mockFsUnlink.mockRejectedValueOnce(
+                            new Error("unlink failed"),
+                        );
+                    }
+                }
+
+                expect(() => createService()).not.toThrow();
+                await expect(
+                    waitForOffsetSweepForTests(),
+                ).resolves.toBeUndefined();
+            },
+        );
+
+        it("skips an active offset file even when its mtime is stale", async () => {
+            const now = Date.now();
+            const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(now);
+            const service = createService();
+            await waitForOffsetSweepForTests();
+            ffmpegControl.mode = "pending";
+
+            const transcode = service.getStreamFilePath(
+                "track-active-offset",
+                "low",
+                new Date("2025-01-01T00:00:00.000Z"),
+                "/music/source.flac",
+                42,
+            );
+            await waitForFfmpegCommandCount(1);
+            const activePath = ffmpegControl.outputPath;
+            if (!activePath) throw new Error("offset output path was not set");
+            mockFsReaddir.mockResolvedValueOnce([
+                { name: path.basename(activePath), isFile: () => true },
+            ]);
+            mockFsStat.mockResolvedValueOnce({
+                size: 1024,
+                mtimeMs: now - 2 * 60 * 60 * 1000,
+            });
+            dateNowSpy.mockReturnValue(now + 16 * 60 * 1000);
+
+            createService();
+            await waitForOffsetSweepForTests();
+
+            expect(mockFsUnlink).not.toHaveBeenCalledWith(activePath);
+            ffmpegControl.commands[0].__handlers.end();
+            const result = await transcode;
+            await result.cleanup?.();
+            dateNowSpy.mockRestore();
+        });
+
+        it("transcodes a time offset to an uncached temporary file", async () => {
+            const service = createService();
+
+            const result = await service.getStreamFilePath(
+                "track-offset",
+                "low",
+                new Date("2025-01-01T00:00:00.000Z"),
+                "/music/source.flac",
+                42,
+            );
+
+            expect(mockPrisma.transcodedFile.findFirst).not.toHaveBeenCalled();
+            expect(mockPrisma.transcodedFile.findMany).not.toHaveBeenCalled();
+            expect(mockPrisma.transcodedFile.upsert).not.toHaveBeenCalled();
+            expect(mockParseFile).not.toHaveBeenCalled();
+            expect(ffmpegControl.lastCommand.inputOptions).toHaveBeenCalledWith(
+                "-ss",
+                "42",
+            );
+            expect(ffmpegControl.lastCommand.save).toHaveBeenCalledWith(
+                expect.stringMatching(
+                    /^\/cache\/offset-tmp\/soundspan-offset-.*\.mp3$/,
+                ),
+            );
+            expect(result).toEqual({
+                filePath: expect.stringMatching(
+                    /^\/cache\/offset-tmp\/soundspan-offset-.*\.mp3$/,
+                ),
+                mimeType: "audio/mpeg",
+                cleanup: expect.any(Function),
+            });
+        });
+
+        it("shares the bounded transcode queue with offset transcodes", async () => {
+            const service = createService();
+            ffmpegControl.mode = "pending";
+
+            const transcodes = [1, 2, 3, 4].map((index) =>
+                service.getStreamFilePath(
+                    `track-offset-${index}`,
+                    "low",
+                    new Date("2025-01-01T00:00:00.000Z"),
+                    `/music/source-${index}.flac`,
+                    index,
+                ),
+            );
+
+            await waitForFfmpegCommandCount(3);
+            expect(mockFfmpeg).toHaveBeenCalledTimes(3);
+
+            ffmpegControl.commands[0].__handlers.end();
+            await waitForFfmpegCommandCount(4);
+            expect(mockFfmpeg).toHaveBeenCalledTimes(4);
+
+            ffmpegControl.commands.slice(1).forEach((command) => {
+                command.__handlers.end();
+            });
+            const results = await Promise.all(transcodes);
+            await Promise.all(results.map((result) => result.cleanup?.()));
+        });
+
+        it("kills and removes an offset transcode when its request aborts", async () => {
+            const service = createService();
+            const controller = new AbortController();
+            ffmpegControl.mode = "pending";
+
+            const transcode = service.getStreamFilePath(
+                "track-offset-abort",
+                "low",
+                new Date("2025-01-01T00:00:00.000Z"),
+                "/music/source.flac",
+                42,
+                controller.signal,
+            );
+            await waitForFfmpegCommandCount(1);
+
+            controller.abort();
+
+            await expect(transcode).rejects.toMatchObject({
+                code: ErrorCode.TRANSCODE_FAILED,
+                message: expect.stringContaining("cancelled"),
+            });
+            expect(ffmpegControl.commands[0].kill).toHaveBeenCalledWith(
+                "SIGKILL",
+            );
+            expect(mockFsUnlinkCallback).toHaveBeenCalledWith(
+                expect.stringMatching(
+                    /^\/cache\/offset-tmp\/soundspan-offset-.*\.mp3$/,
+                ),
+                expect.any(Function),
+            );
+        });
+
+        it("releases offset ownership after a failed transcode", async () => {
+            const now = Date.now();
+            const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(now);
+            const service = createService();
+            await waitForOffsetSweepForTests();
+            ffmpegControl.mode = "error";
+            ffmpegControl.errorMessage = "encoding failed";
+
+            try {
+                await expect(
+                    service.getStreamFilePath(
+                        "track-offset-failure",
+                        "low",
+                        new Date("2025-01-01T00:00:00.000Z"),
+                        "/music/source.flac",
+                        42,
+                    ),
+                ).rejects.toMatchObject({ code: ErrorCode.TRANSCODE_FAILED });
+                const temporaryPath = ffmpegControl.outputPath;
+                if (!temporaryPath) {
+                    throw new Error("offset output path was not set");
+                }
+                mockFsUnlink.mockClear();
+                mockFsReaddir.mockResolvedValueOnce([
+                    {
+                        name: path.basename(temporaryPath),
+                        isFile: () => true,
+                    },
+                ]);
+                mockFsStat.mockResolvedValueOnce({
+                    size: 1024,
+                    mtimeMs: now - 2 * 60 * 60 * 1000,
+                });
+                dateNowSpy.mockReturnValue(now + 16 * 60 * 1000);
+
+                createService();
+                await waitForOffsetSweepForTests();
+
+                expect(mockFsUnlink).toHaveBeenCalledWith(temporaryPath);
+            } finally {
+                dateNowSpy.mockRestore();
+            }
+        });
+
         it("returns source path and mime type when original quality is requested", async () => {
             const service = createService();
 

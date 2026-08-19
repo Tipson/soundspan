@@ -13,6 +13,7 @@ jest.mock("../../utils/subsonicResponse", () => ({
     sendSubsonicSuccess: jest.fn(),
     SubsonicErrorCode: {
         GENERIC: 0,
+        MISSING_PARAMETER: 10,
         NOT_FOUND: 70,
     },
 }));
@@ -25,6 +26,15 @@ jest.mock("../../utils/db", () => ({
         },
         track: {
             findMany: jest.fn(),
+        },
+        play: {
+            groupBy: jest.fn(),
+        },
+        likedTrack: {
+            findMany: jest.fn().mockResolvedValue([]),
+        },
+        trackRating: {
+            findMany: jest.fn().mockResolvedValue([]),
         },
     },
 }));
@@ -87,6 +97,7 @@ describe("subsonic runtime focused handlers", () => {
     const mockPlaybackFindUnique = prisma.playbackState.findUnique as jest.Mock;
     const mockPlaybackUpsert = prisma.playbackState.upsert as jest.Mock;
     const mockTrackFindMany = prisma.track.findMany as jest.Mock;
+    const mockPlayGroupBy = prisma.play.groupBy as jest.Mock;
     const mockScanGetActive = scanQueue.getActive as jest.Mock;
     const mockScanGetWaiting = scanQueue.getWaiting as jest.Mock;
     const mockScanGetDelayed = scanQueue.getDelayed as jest.Mock;
@@ -129,6 +140,7 @@ describe("subsonic runtime focused handlers", () => {
             },
         ]);
         mockPlaybackUpsert.mockResolvedValue({});
+        mockPlayGroupBy.mockResolvedValue([]);
         mockScanGetActive.mockResolvedValue([]);
         mockScanGetWaiting.mockResolvedValue([]);
         mockScanGetDelayed.mockResolvedValue([]);
@@ -154,9 +166,9 @@ describe("subsonic runtime focused handlers", () => {
         expect(mockSendSuccess).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({
-                playQueue: expect.objectContaining({
-                    current: 0,
-                    position: 12400,
+                playQueueByIndex: expect.objectContaining({
+                    currentIndex: 0,
+                    position: 0,
                     username: "alice",
                     changed: "2026-01-01T00:00:00.000Z",
                     entry: expect.arrayContaining([
@@ -235,7 +247,7 @@ describe("subsonic runtime focused handlers", () => {
             buildReq({
                 index: "3",
                 id: ["tr-track-1", "tr-track-2"],
-                current: "1",
+                currentIndex: "1",
                 position: "10000",
             }),
             buildRes(),
@@ -296,7 +308,7 @@ describe("subsonic runtime focused handlers", () => {
             buildReq({
                 index: "3",
                 id: ["tr-track-1"],
-                current: "0",
+                currentIndex: "0",
                 position: "2000",
             }),
             buildRes(),
@@ -329,7 +341,7 @@ describe("subsonic runtime focused handlers", () => {
         );
     });
 
-    it("returns empty play queue when no playback state exists", async () => {
+    it("returns an empty classic queue when no playback state exists", async () => {
         mockPlaybackFindUnique.mockResolvedValueOnce(null);
 
         await handleGetPlayQueue(buildReq({ index: "1" }), buildRes());
@@ -337,15 +349,17 @@ describe("subsonic runtime focused handlers", () => {
         expect(mockTrackFindMany).not.toHaveBeenCalled();
         expect(mockSendSuccess).toHaveBeenCalledWith(
             expect.anything(),
-            expect.objectContaining({
-                playQueue: expect.objectContaining({
-                    current: 0,
+            {
+                playQueue: {
                     position: 0,
                     username: "alice",
-                    changed: undefined,
+                    changed: expect.stringMatching(
+                        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+                    ),
+                    changedBy: "soundspan",
                     entry: [],
-                }),
-            }),
+                },
+            },
             "json",
             undefined,
         );
@@ -374,7 +388,7 @@ describe("subsonic runtime focused handlers", () => {
         expect(mockSendSuccess).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({
-                playQueue: expect.objectContaining({
+                playQueueByIndex: expect.objectContaining({
                     entry: [],
                 }),
             }),
@@ -603,8 +617,7 @@ describe("subsonic runtime focused handlers", () => {
             expect.anything(),
             expect.objectContaining({
                 playQueue: expect.objectContaining({
-                    current: 0,
-                    position: 12400,
+                    position: 0,
                     changed: "2026-01-01T00:00:00.000Z",
                     entry: [],
                 }),
@@ -614,7 +627,7 @@ describe("subsonic runtime focused handlers", () => {
         );
     });
 
-    it("clamps save-play-queue indices and normalizes negative position", async () => {
+    it("preserves duplicate queue entries and normalizes negative position", async () => {
         mockTrackFindMany
             .mockResolvedValueOnce([{ id: "track-1" }, { id: "track-2" }])
             .mockResolvedValueOnce([
@@ -652,10 +665,10 @@ describe("subsonic runtime focused handlers", () => {
                 },
             ]);
 
-        await handleSavePlayQueue(
+        await handleSavePlayQueueByIndex(
             buildReq({
                 id: ["tr-track-1", "tr-track-1", "tr-track-2"],
-                current: "10",
+                currentIndex: "2",
                 position: "-250",
             }),
             buildRes(),

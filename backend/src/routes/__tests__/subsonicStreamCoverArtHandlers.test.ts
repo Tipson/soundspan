@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 const mockGetStreamFilePath = jest.fn();
 const mockStreamFileWithRangeSupport = jest.fn();
 const mockDestroyStreamingService = jest.fn();
+const mockCleanupStreamFile = jest.fn();
 const mockLookup = jest.fn();
 const mockProxyFederatedTrackStream = jest.fn();
 const mockProxyFederatedCover = jest.fn();
@@ -100,6 +101,7 @@ import {
     sendSubsonicSuccess,
     SubsonicErrorCode,
 } from "../../utils/subsonicResponse";
+import { AppError, ErrorCategory, ErrorCode } from "../../utils/errors";
 import { AudioStreamingService } from "../../services/audioStreaming";
 import { handleGetCoverArt, handleStream } from "../subsonic";
 
@@ -107,6 +109,8 @@ function buildReq(query: Record<string, unknown>): Request {
     return {
         query,
         headers: {},
+        once: jest.fn(),
+        off: jest.fn(),
         user: {
             id: "user-1",
             username: "alice",
@@ -123,6 +127,8 @@ function buildRes(): Response {
         end: jest.fn(),
         headersSent: false,
         writableEnded: false,
+        once: jest.fn(),
+        off: jest.fn(),
     };
     (res.status as jest.Mock).mockReturnValue(res);
     return res as Response;
@@ -158,6 +164,7 @@ beforeEach(() => {
     mockGetStreamFilePath.mockReset();
     mockStreamFileWithRangeSupport.mockReset();
     mockDestroyStreamingService.mockReset();
+    mockCleanupStreamFile.mockReset();
     mockAudioServiceConstructor.mockClear();
     mockTrackFindFirst.mockReset();
     mockAlbumFindFirst.mockReset();
@@ -175,6 +182,171 @@ afterEach(() => {
 });
 
 describe("handleStream", () => {
+    it("passes a positive integer timeOffset to an uncached transcode tier", async () => {
+        mockTrackFindFirst.mockResolvedValue({
+            id: "track-1",
+            origin: "LOCAL",
+            remoteId: null,
+            mime: "audio/flac",
+            filePath: "Artist/Track.flac",
+            fileModified: new Date("2024-02-02T00:00:00Z"),
+            federationPeer: null,
+        });
+        jest.spyOn(fs, "existsSync").mockReturnValue(true);
+        mockGetStreamFilePath.mockResolvedValue({
+            filePath: "/tmp/offset-track.mp3",
+            mimeType: "audio/mpeg",
+            cleanup: mockCleanupStreamFile,
+        });
+        mockStreamFileWithRangeSupport.mockResolvedValue(undefined);
+
+        const req = buildReq({
+            id: "tr-track-1",
+            maxBitRate: "128",
+            timeOffset: "42",
+        });
+        const res = buildRes();
+
+        await handleStream(req, res);
+
+        expect(mockGetStreamFilePath).toHaveBeenCalledWith(
+            "track-1",
+            "low",
+            expect.any(Date),
+            expect.stringContaining("/music"),
+            42,
+            expect.any(AbortSignal),
+        );
+        expect(mockStreamFileWithRangeSupport).toHaveBeenCalledWith(
+            req,
+            res,
+            "/tmp/offset-track.mp3",
+            "audio/mpeg",
+        );
+        expect(mockCleanupStreamFile).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ["request abort", "request", "aborted"],
+        ["response close", "response", "close"],
+        ["response failure", "response", "error"],
+    ])("cancels an offset transcode on %s", async (_label, target, event) => {
+        mockTrackFindFirst.mockResolvedValue({
+            id: "track-1",
+            origin: "LOCAL",
+            remoteId: null,
+            mime: "audio/flac",
+            filePath: "Artist/Track.flac",
+            fileModified: new Date("2024-02-02T00:00:00Z"),
+            federationPeer: null,
+        });
+        jest.spyOn(fs, "existsSync").mockReturnValue(true);
+        let markStarted!: () => void;
+        const started = new Promise<void>((resolve) => {
+            markStarted = resolve;
+        });
+        let transcodeSignal: AbortSignal | undefined;
+        mockGetStreamFilePath.mockImplementation(
+            (...args: unknown[]) =>
+                new Promise((_resolve, reject) => {
+                    transcodeSignal = args[5] as AbortSignal;
+                    transcodeSignal.addEventListener(
+                        "abort",
+                        () => reject(new Error("cancelled")),
+                        { once: true },
+                    );
+                    markStarted();
+                }),
+        );
+        const req = buildReq({
+            id: "tr-track-1",
+            maxBitRate: "128",
+            timeOffset: "42",
+        });
+        const res = buildRes();
+
+        const handling = handleStream(req, res);
+        await started;
+        const emitter = target === "request" ? req : res;
+        const listener = (emitter.once as jest.Mock).mock.calls.find(
+            ([registeredEvent]) => registeredEvent === event,
+        )?.[1] as (() => void) | undefined;
+        expect(listener).toBeDefined();
+
+        listener?.();
+        await handling;
+
+        expect(transcodeSignal?.aborted).toBe(true);
+        expect(mockDestroyStreamingService).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores timeOffset when original quality is selected", async () => {
+        mockTrackFindFirst.mockResolvedValue({
+            id: "track-1",
+            origin: "LOCAL",
+            remoteId: null,
+            mime: "audio/flac",
+            filePath: "Artist/Track.flac",
+            fileModified: new Date("2024-02-02T00:00:00Z"),
+            federationPeer: null,
+        });
+        jest.spyOn(fs, "existsSync").mockReturnValue(true);
+        mockGetStreamFilePath.mockResolvedValue({
+            filePath: "/music/Artist/Track.flac",
+            mimeType: "audio/flac",
+        });
+        mockStreamFileWithRangeSupport.mockResolvedValue(undefined);
+
+        await handleStream(
+            buildReq({ id: "tr-track-1", timeOffset: "42" }),
+            buildRes(),
+        );
+
+        expect(mockGetStreamFilePath).toHaveBeenCalledWith(
+            "track-1",
+            "original",
+            expect.any(Date),
+            expect.stringContaining("/music"),
+        );
+    });
+
+    it.each(["-1", "1.5", "invalid"])(
+        "normalizes invalid timeOffset %s to zero",
+        async (timeOffset) => {
+            mockTrackFindFirst.mockResolvedValue({
+                id: "track-1",
+                origin: "LOCAL",
+                remoteId: null,
+                mime: "audio/flac",
+                filePath: "Artist/Track.flac",
+                fileModified: new Date("2024-02-02T00:00:00Z"),
+                federationPeer: null,
+            });
+            jest.spyOn(fs, "existsSync").mockReturnValue(true);
+            mockGetStreamFilePath.mockResolvedValue({
+                filePath: "/var/soundspan/transcode/track.mp3",
+                mimeType: "audio/mpeg",
+            });
+            mockStreamFileWithRangeSupport.mockResolvedValue(undefined);
+
+            await handleStream(
+                buildReq({
+                    id: "tr-track-1",
+                    maxBitRate: "128",
+                    timeOffset,
+                }),
+                buildRes(),
+            );
+
+            expect(mockGetStreamFilePath).toHaveBeenCalledWith(
+                "track-1",
+                "low",
+                expect.any(Date),
+                expect.stringContaining("/music"),
+            );
+        },
+    );
+
     it("proxies a federated Range request to its active peer", async () => {
         const track = {
             id: "federated-track",
@@ -388,7 +560,13 @@ describe("handleStream", () => {
         });
         jest.spyOn(fs, "existsSync").mockReturnValue(true);
         mockGetStreamFilePath
-            .mockRejectedValueOnce({ code: "FFMPEG_NOT_FOUND" })
+            .mockRejectedValueOnce(
+                new AppError(
+                    ErrorCode.FFMPEG_NOT_FOUND,
+                    ErrorCategory.FATAL,
+                    "FFmpeg not available",
+                ),
+            )
             .mockResolvedValueOnce({
                 filePath: "/music/Artist/Track.flac",
                 mimeType: "audio/flac",
