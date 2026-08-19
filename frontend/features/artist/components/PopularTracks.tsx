@@ -14,6 +14,7 @@ import type { TrackRowItem, TrackRowSlots, RowState } from "@/components/track";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
+import { resolvePreferenceTrackId } from "@/lib/trackRef";
 
 /** Default number of popular tracks shown in collapsed state. */
 export const POPULAR_COLLAPSED_COUNT = 5;
@@ -109,6 +110,11 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                 !isTidalTrack &&
                 !isYtMusic;
 
+            const preferenceTrackId = resolvePreferenceTrackId({
+                ...track,
+                hasLocalFile,
+            });
+
             return {
                 titleBadges: (
                     <>
@@ -145,11 +151,14 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                             </span>
                         )}
                         <TrackPreferenceButtons
-                            trackId={track.id}
+                            trackId={preferenceTrackId}
                             mode="both"
                             buttonSizeClassName="h-8 w-8"
                             iconSizeClassName="h-4 w-4"
-                            metadata={buildPreferenceMetadata(track)}
+                            metadata={buildPreferenceMetadata({
+                                ...track,
+                                id: preferenceTrackId,
+                            })}
                         />
                         {isPlayable && (
                             <TrackOverflowMenu

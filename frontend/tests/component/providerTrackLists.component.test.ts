@@ -251,9 +251,12 @@ test("artist PopularTracks limits visible items and renders provider states", as
             album: { id: "unknown", title: "Unknown Album", coverArt: null },
         },
         {
-            id: "p-preview",
-            title: "Preview Only",
+            id: "p-local-enriched",
+            title: "Local Provider Match",
             duration: 180,
+            filePath: "/music/local-provider-match.flac",
+            streamSource: "tidal",
+            tidalTrackId: 99,
             album: { id: "", title: "Unknown Album", coverArt: null },
         },
         {
@@ -312,6 +315,18 @@ test("artist PopularTracks limits visible items and renders provider states", as
     assert.match(html, /YT/);
     assert.match(html, /IN QUEUE/);
     assert.match(html, /#12/);
+
+    // Remote provider tracks must use canonical IDs for preference actions.
+    assert.match(html, /data-track-id="yt:yt-id"/);
+    assert.match(html, /data-track-id="tidal:101"/);
+
+    // Provider-enriched persisted tracks keep their original local ID.
+    assert.match(html, /data-track-id="p-local-enriched"/);
+    assert.doesNotMatch(html, /data-track-id="tidal:99"/);
+
+    // Non-provider tracks keep their original discovery IDs.
+    assert.match(html, /data-track-id="p-loading"/);
+
     assert.doesNotMatch(html, /Hidden Sixth/);
 });
 
