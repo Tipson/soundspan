@@ -3,6 +3,7 @@ import {
     copyFileSync,
     mkdirSync,
     mkdtempSync,
+    readdirSync,
     rmSync,
     writeFileSync,
 } from "node:fs";
@@ -16,8 +17,55 @@ const template = path.join(
     repoRoot,
     "docs/maintainers/RELEASE_NOTES_TEMPLATE.md",
 );
+const fixtureTag = "2.3.3";
 
-function runGenerator(changelogContent, additionalArgs = []) {
+function sanitizedGitEnvironment() {
+    const environment = { ...process.env };
+
+    for (const key of Object.keys(environment)) {
+        if (/^GIT_/.test(key)) {
+            delete environment[key];
+        }
+    }
+
+    environment.GIT_CONFIG_GLOBAL = "/dev/null";
+    environment.GIT_CONFIG_SYSTEM = "/dev/null";
+    return environment;
+}
+
+function runGit(fixtureRoot, args) {
+    const result = spawnSync("git", args, {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: sanitizedGitEnvironment(),
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.error?.message);
+}
+
+function initializeGitFixture(fixtureRoot) {
+    runGit(fixtureRoot, ["init", "--initial-branch=main"]);
+    runGit(fixtureRoot, ["add", "CHANGELOG.md", "docs/maintainers"]);
+    runGit(fixtureRoot, [
+        "-c",
+        "user.name=Soundspan Release Test",
+        "-c",
+        "user.email=release-test@soundspan.invalid",
+        "-c",
+        "commit.gpgSign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "Create release notes fixture",
+    ]);
+    runGit(fixtureRoot, ["-c", "tag.gpgSign=false", "tag", fixtureTag]);
+}
+
+function runGenerator(
+    changelogContent,
+    { version = "9.9.9", additionalArgs = [] } = {},
+) {
     const fixtureRoot = mkdtempSync(
         path.join(repoRoot, ".release-notes-test-"),
     );
@@ -34,20 +82,23 @@ function runGenerator(changelogContent, additionalArgs = []) {
             template,
             path.join(fixtureTemplateDirectory, "RELEASE_NOTES_TEMPLATE.md"),
         );
+        initializeGitFixture(fixtureRoot);
 
+        const versionArgs = version === null ? [] : ["--version", version];
         return spawnSync(
             process.execPath,
             [
                 generator,
-                "--version",
-                "9.9.9",
+                ...versionArgs,
                 "--from",
-                "HEAD",
-                "--to",
-                "HEAD",
+                fixtureTag,
                 ...additionalArgs,
             ],
-            { cwd: fixtureRoot, encoding: "utf8" },
+            {
+                cwd: fixtureRoot,
+                encoding: "utf8",
+                env: sanitizedGitEnvironment(),
+            },
         );
     } finally {
         rmSync(fixtureRoot, { recursive: true, force: true });
@@ -58,6 +109,34 @@ const minimalChangelog = `# Changelog
 
 ## [9.9.9] - 2026-08-13
 `;
+
+test("ignores ambient Git repository environment", () => {
+    const decoyRoot = mkdtempSync(path.join(repoRoot, ".release-notes-decoy-"));
+    const previousGitDirectory = process.env.GIT_DIR;
+    const previousGitWorkTree = process.env.GIT_WORK_TREE;
+
+    try {
+        process.env.GIT_DIR = decoyRoot;
+        process.env.GIT_WORK_TREE = decoyRoot;
+
+        const result = runGenerator(minimalChangelog);
+
+        assert.equal(result.status, 0, result.stderr);
+        assert.deepEqual(readdirSync(decoyRoot), []);
+    } finally {
+        if (previousGitDirectory === undefined) {
+            delete process.env.GIT_DIR;
+        } else {
+            process.env.GIT_DIR = previousGitDirectory;
+        }
+        if (previousGitWorkTree === undefined) {
+            delete process.env.GIT_WORK_TREE;
+        } else {
+            process.env.GIT_WORK_TREE = previousGitWorkTree;
+        }
+        rmSync(decoyRoot, { recursive: true, force: true });
+    }
+});
 
 test("always renders the standing upgrade warning and upgrade path", () => {
     const result = runGenerator(minimalChangelog);
@@ -74,12 +153,14 @@ test("always renders the standing upgrade warning and upgrade path", () => {
 });
 
 test("renders upgrade notes in argument order under Before you upgrade", () => {
-    const result = runGenerator(minimalChangelog, [
-        "--upgrade-note",
-        "Run the database backup first.",
-        "--upgrade-note",
-        "Restart the worker after deployment.",
-    ]);
+    const result = runGenerator(minimalChangelog, {
+        additionalArgs: [
+            "--upgrade-note",
+            "Run the database backup first.",
+            "--upgrade-note",
+            "Restart the worker after deployment.",
+        ],
+    });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(
@@ -109,6 +190,82 @@ test("renders the standing sections in release-note order", () => {
     assert.match(
         result.stdout,
         /## Upgrading from an earlier version[\s\S]*## Full Changelog/,
+    );
+});
+
+test("uses exact immutable links for a stable release version", () => {
+    const result = runGenerator(minimalChangelog);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+        result.stdout.includes(
+            "- Compare changes: [2.3.3...9.9.9](https://github.com/soundspan/soundspan/compare/2.3.3...9.9.9)",
+        ),
+    );
+    assert.ok(
+        result.stdout.includes(
+            "- Full changelog: https://github.com/soundspan/soundspan/blob/9.9.9/CHANGELOG.md",
+        ),
+    );
+});
+
+test("uses exact immutable links for a prerelease version", () => {
+    const prereleaseChangelog = `# Changelog
+
+## [9.9.9-rc.1] - 2026-08-13
+`;
+    const result = runGenerator(prereleaseChangelog, {
+        version: "9.9.9-rc.1",
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+        result.stdout.includes(
+            "- Compare changes: [2.3.3...9.9.9-rc.1](https://github.com/soundspan/soundspan/compare/2.3.3...9.9.9-rc.1)",
+        ),
+    );
+    assert.ok(
+        result.stdout.includes(
+            "- Full changelog: https://github.com/soundspan/soundspan/blob/9.9.9-rc.1/CHANGELOG.md",
+        ),
+    );
+});
+
+test("uses an explicit --to override only for the comparison", () => {
+    const result = runGenerator(minimalChangelog, {
+        additionalArgs: ["--to", "HEAD"],
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+        result.stdout.includes(
+            "- Compare changes: [2.3.3...HEAD](https://github.com/soundspan/soundspan/compare/2.3.3...HEAD)",
+        ),
+    );
+    assert.ok(
+        result.stdout.includes(
+            "- Full changelog: https://github.com/soundspan/soundspan/blob/9.9.9/CHANGELOG.md",
+        ),
+    );
+});
+
+test("rejects a v-prefixed release version", () => {
+    const result = runGenerator(minimalChangelog, { version: "v9.9.9" });
+
+    assert.equal(result.status, 1, result.stdout);
+    assert.equal(
+        result.stderr.trim(),
+        'Invalid version "v9.9.9". Use semantic versions without a "v" prefix (for example 1.0.1).',
+    );
+});
+
+test("reports the hard error without a mutable-HEAD fallback warning", () => {
+    const result = runGenerator(minimalChangelog, { version: null });
+
+    assert.equal(result.status, 1, result.stdout);
+    assert.equal(
+        result.stderr.trim(),
+        "Release version is required (for example 1.0.1).",
     );
 });
 
