@@ -9,13 +9,8 @@ import {
     CarouselItem,
 } from "@/components/ui/HorizontalCarousel";
 import { memo } from "react";
-
-interface PopularArtist {
-    id?: string;
-    name: string;
-    image?: string;
-    listeners?: number;
-}
+import { getArtistRouteParam } from "@/utils/artistRoute";
+import type { PopularArtist } from "@/features/home/types";
 
 interface PopularArtistsGridProps {
     artists: PopularArtist[];
@@ -37,11 +32,16 @@ const PopularArtistCard = memo(function PopularArtistCard({
     index,
 }: PopularArtistCardProps) {
     const imageUrl = getProxiedImageUrl(artist.image);
+    const artistRouteId =
+        getArtistRouteParam(
+            { mbid: artist.mbid, name: artist.name },
+            { preferLibraryId: false },
+        ) || encodeURIComponent(artist.name);
 
     return (
         <CarouselItem>
             <Link
-                href={`/search?q=${encodeURIComponent(artist.name)}`}
+                href={`/artist/${artistRouteId}`}
                 data-tv-card
                 data-tv-card-index={index}
                 tabIndex={0}
