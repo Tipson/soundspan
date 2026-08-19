@@ -3,30 +3,39 @@
 import { useCallback, useState } from "react";
 import { api, type LibraryHealthSummary } from "@/lib/api";
 import { formatKbps } from "../format";
-import { usePanelLoader } from "../hooks/usePanelLoader";
+import { useInsightPanelLoader } from "../hooks/useInsightPanelLoader";
 import { InsightPanel } from "./InsightPanel";
 
 const FLOOR_CHOICES = [128, 192, 256, 320] as const;
 
 interface QualityPanelProps {
     quality: LibraryHealthSummary["quality"];
+    refreshToken: number;
 }
 
 /** Lossy albums whose derived average bitrate sits below a chosen floor. */
-export function QualityPanel({ quality }: Readonly<QualityPanelProps>) {
+export function QualityPanel({
+    quality,
+    refreshToken,
+}: Readonly<QualityPanelProps>) {
     const [floor, setFloor] = useState(quality.floorKbps);
     const fetchPage = useCallback(
         () => api.getLibraryHealthQuality(floor, { limit: 50 }),
         [floor],
     );
-    const page = usePanelLoader(fetchPage, "Failed to load quality outliers");
+    const page = useInsightPanelLoader(
+        fetchPage,
+        "Failed to load quality outliers",
+        refreshToken,
+    );
 
     return (
         <InsightPanel
             title="Quality outliers"
             subtitle={`${quality.albumsBelowFloor} lossy albums below ${quality.floorKbps} kbps`}
             isTruncated={quality.isTruncated}
-            onFirstExpand={page.load}
+            onFirstExpand={page.onFirstExpand}
+            onRetry={page.load}
             isLoading={page.isLoading}
             error={page.error}
         >
@@ -46,15 +55,8 @@ export function QualityPanel({ quality }: Readonly<QualityPanelProps>) {
                         {choice} kbps
                     </button>
                 ))}
-                <button
-                    type="button"
-                    onClick={page.load}
-                    className="px-2 py-1 text-xs rounded-full border border-white/10 text-gray-400"
-                >
-                    Apply
-                </button>
             </div>
-            {page.data && (
+            {page.data && page.data.floorKbps === floor && (
                 <ul className="space-y-1">
                     {page.data.items.map((album) => (
                         <li

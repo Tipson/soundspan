@@ -3,12 +3,11 @@
 import { useCallback, useState } from "react";
 import {
     api,
-    type LibraryHealthAlbumGapItem,
     type LibraryHealthGapKind,
     type LibraryHealthSummary,
-    type LibraryHealthTrackGapItem,
 } from "@/lib/api";
-import { usePanelLoader } from "../hooks/usePanelLoader";
+import { gapItemLine } from "../format";
+import { useInsightPanelLoader } from "../hooks/useInsightPanelLoader";
 import { InsightPanel } from "./InsightPanel";
 
 const GAP_TABS: Array<{ kind: LibraryHealthGapKind; label: string }> = [
@@ -18,37 +17,27 @@ const GAP_TABS: Array<{ kind: LibraryHealthGapKind; label: string }> = [
     { kind: "missing-lyrics", label: "Lyrics" },
 ];
 
-function isAlbumItem(
-    item: LibraryHealthAlbumGapItem | LibraryHealthTrackGapItem,
-): item is LibraryHealthAlbumGapItem {
-    return "artist" in item;
-}
-
-function gapItemLine(
-    item: LibraryHealthAlbumGapItem | LibraryHealthTrackGapItem,
-): { primary: string; secondary: string } {
-    if (isAlbumItem(item)) {
-        return { primary: item.title, secondary: item.artist.name };
-    }
-    return {
-        primary: item.title,
-        secondary: `${item.album.artist.name} — ${item.album.title}`,
-    };
-}
-
 interface MetadataGapsPanelProps {
     gaps: LibraryHealthSummary["metadataGaps"];
+    refreshToken: number;
 }
 
 /** Metadata-gap counts with a tabbed drill-down into each category. */
-export function MetadataGapsPanel({ gaps }: Readonly<MetadataGapsPanelProps>) {
+export function MetadataGapsPanel({
+    gaps,
+    refreshToken,
+}: Readonly<MetadataGapsPanelProps>) {
     const [activeKind, setActiveKind] =
         useState<LibraryHealthGapKind>("missing-art");
     const fetchPage = useCallback(
         () => api.getLibraryHealthGaps(activeKind, { limit: 50 }),
         [activeKind],
     );
-    const page = usePanelLoader(fetchPage, "Failed to load metadata gaps");
+    const page = useInsightPanelLoader(
+        fetchPage,
+        "Failed to load metadata gaps",
+        refreshToken,
+    );
 
     const totalGaps =
         gaps.missingArt.albums +
@@ -56,15 +45,12 @@ export function MetadataGapsPanel({ gaps }: Readonly<MetadataGapsPanelProps>) {
         gaps.missingGenres +
         gaps.missingLyrics;
 
-    const selectTab = (kind: LibraryHealthGapKind) => {
-        setActiveKind(kind);
-    };
-
     return (
         <InsightPanel
             title="Metadata gaps"
             subtitle={`${gaps.missingArt.albums} albums without art · ${gaps.missingMbid.albums} albums without MBIDs · ${gaps.missingGenres} tracks without genres · ${gaps.missingLyrics} tracks without lyrics`}
-            onFirstExpand={page.load}
+            onFirstExpand={page.onFirstExpand}
+            onRetry={page.load}
             isLoading={page.isLoading}
             error={page.error}
         >
@@ -73,7 +59,7 @@ export function MetadataGapsPanel({ gaps }: Readonly<MetadataGapsPanelProps>) {
                     <button
                         key={tab.kind}
                         type="button"
-                        onClick={() => selectTab(tab.kind)}
+                        onClick={() => setActiveKind(tab.kind)}
                         className={`px-2 py-1 text-xs rounded-full border ${
                             tab.kind === activeKind
                                 ? "border-brand text-white bg-white/10"
@@ -83,13 +69,6 @@ export function MetadataGapsPanel({ gaps }: Readonly<MetadataGapsPanelProps>) {
                         {tab.label}
                     </button>
                 ))}
-                <button
-                    type="button"
-                    onClick={page.load}
-                    className="px-2 py-1 text-xs rounded-full border border-white/10 text-gray-400"
-                >
-                    Load
-                </button>
             </div>
             {page.data && page.data.kind === activeKind ? (
                 <ul className="space-y-1">
@@ -107,6 +86,11 @@ export function MetadataGapsPanel({ gaps }: Readonly<MetadataGapsPanelProps>) {
                             </li>
                         );
                     })}
+                    {page.data.items.length === 0 && (
+                        <li className="text-xs text-gray-500">
+                            Nothing is missing in this category.
+                        </li>
+                    )}
                     {page.data.total > page.data.items.length && (
                         <li className="text-xs text-gray-500 pt-1">
                             Showing {page.data.items.length} of{" "}
@@ -114,11 +98,7 @@ export function MetadataGapsPanel({ gaps }: Readonly<MetadataGapsPanelProps>) {
                         </li>
                     )}
                 </ul>
-            ) : (
-                <p className="text-xs text-gray-500">
-                    Pick a category and press Load to list affected items.
-                </p>
-            )}
+            ) : null}
             <p className="text-xs text-gray-500 mt-3">
                 Fix these from Cache &amp; Automation: metadata enrichment fills
                 art, MBIDs, and genres, and lyrics are fetched during
