@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Vibe-map builds now stay within their worker memory limit during database materialization, coordinate across backend replicas, and back off after failures instead of restarting on every browser poll.
 - Federation catalog parsing now bounds forward-compatible unknown-key warning samples, preventing oversized peer envelopes from crashing or creating unbounded warning state.
 - Volume leveling no longer steps audibly: mid-track gain changes (switching
   the mode, saving a new target, or a queue-context change) ramp over a short

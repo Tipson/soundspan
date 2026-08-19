@@ -1,116 +1,75 @@
-type LoadUmapWorkerOptions = {
-    embeddings?: number[][];
-    nNeighbors?: number;
-    fitResult?: number[][];
-    fitError?: unknown;
-};
+import { jest } from "@jest/globals";
+import type { PrismaClient } from "@prisma/client";
+import { runUmapMaterialization } from "../umapMaterialization";
+import type { UmapWorkerMessage } from "../umapWorkerProtocol";
 
-describe("umapWorker", () => {
-    const defaultEmbeddings = [
-        [0.1, 0.2, 0.3],
-        [0.4, 0.5, 0.6],
-    ];
-    const defaultProjection = [
-        [1, 2],
-        [3, 4],
-    ];
-
-    afterEach(() => {
-        jest.resetModules();
-        jest.restoreAllMocks();
-    });
-
-    function loadUmapWorker(options: LoadUmapWorkerOptions = {}) {
-        const postMessage = jest.fn();
-        const fit = jest.fn(() => {
-            if (options.fitError) {
-                throw options.fitError;
-            }
-
-            return options.fitResult ?? defaultProjection;
-        });
-        const UMAP = jest.fn(() => ({ fit }));
-
-        jest.doMock("worker_threads", () => ({
-            parentPort: { postMessage },
-            workerData: {
-                embeddings: options.embeddings ?? defaultEmbeddings,
-                nNeighbors: options.nNeighbors ?? 15,
+describe("UMAP worker orchestration", () => {
+    it("publishes undersized rows without fitting and disconnects", async () => {
+        const rows = [
+            {
+                track_id: "track-1",
+                title: "Track 1",
+                artistName: "Artist",
+                artistId: "artist-1",
+                albumId: "album-1",
+                coverUrl: null,
+                loudnessLufs: null,
+                truePeakDb: null,
+                albumLoudnessLufs: null,
+                albumTruePeakDb: null,
+                energy: 0.5,
+                valence: 0.5,
+                moodHappy: null,
+                moodSad: null,
+                moodRelaxed: null,
+                moodAggressive: null,
+                moodParty: null,
+                moodAcoustic: null,
+                moodElectronic: null,
+                embedding: "[1,2,3]",
             },
-        }));
-
-        jest.doMock("umap-js", () => ({ UMAP }));
-
-        const exitSpy = jest.spyOn(process, "exit").mockImplementation(((
-            code?: string | number | null | undefined,
-        ): never => {
-            throw new Error(`process.exit:${code}`);
-        }) as typeof process.exit);
-
-        let moduleError: unknown;
-
-        jest.isolateModules(() => {
-            try {
-                require("../umapWorker");
-            } catch (error) {
-                moduleError = error;
-            }
-        });
-
-        return {
-            postMessage,
-            fit,
-            UMAP,
-            exitSpy,
-            moduleError,
-        };
-    }
-
-    it.each([2, 15, 50])(
-        "creates UMAP with the expected parameters for nNeighbors=%i",
-        (nNeighbors) => {
-            const { UMAP } = loadUmapWorker({ nNeighbors });
-
-            expect(UMAP).toHaveBeenCalledWith({
-                nComponents: 2,
-                nNeighbors,
-                minDist: 0.1,
-                spread: 1.0,
-            });
-        },
-    );
-
-    it("calls fit with embeddings from workerData", () => {
-        const embeddings = [
-            [9, 8, 7],
-            [6, 5, 4],
         ];
-        const { fit } = loadUmapWorker({ embeddings });
+        const database = {
+            $queryRaw: jest.fn(async () => rows),
+            $disconnect: jest.fn(async () => undefined),
+        } as unknown as PrismaClient;
+        const publish = jest.fn<(message: UmapWorkerMessage) => void>();
 
-        expect(fit).toHaveBeenCalledWith(embeddings);
+        await runUmapMaterialization(
+            { spaceId: "space-1", sampleSize: 10 },
+            publish,
+            () => database,
+        );
+
+        expect(publish).toHaveBeenNthCalledWith(1, {
+            type: "materialized",
+            rowCount: 1,
+        });
+        const { embedding: _embedding, ...expectedRow } = rows[0];
+        expect(publish).toHaveBeenNthCalledWith(2, {
+            type: "result",
+            rows: [expectedRow],
+            projection: null,
+        });
+        expect(database.$disconnect).toHaveBeenCalledTimes(1);
     });
 
-    it("posts the projection result back through parentPort", () => {
-        const fitResult = [
-            [0.11, 0.22],
-            [0.33, 0.44],
-        ];
-        const { postMessage, exitSpy } = loadUmapWorker({ fitResult });
+    it("disconnects when materialization fails", async () => {
+        const failure = new Error("query failed");
+        const database = {
+            $queryRaw: jest.fn(async () => {
+                throw failure;
+            }),
+            $disconnect: jest.fn(async () => undefined),
+        } as unknown as PrismaClient;
 
-        expect(postMessage).toHaveBeenCalledTimes(1);
-        expect(postMessage).toHaveBeenCalledWith(fitResult);
-        expect(exitSpy).not.toHaveBeenCalled();
-    });
-
-    it("posts the error message and exits with code 1 when fitting fails", () => {
-        const { postMessage, exitSpy, moduleError } = loadUmapWorker({
-            fitError: new Error("fit failed"),
-        });
-
-        expect(postMessage).toHaveBeenCalledTimes(1);
-        expect(postMessage).toHaveBeenCalledWith({ error: "fit failed" });
-        expect(exitSpy).toHaveBeenCalledWith(1);
-        expect(moduleError).toBeInstanceOf(Error);
-        expect((moduleError as Error).message).toBe("process.exit:1");
+        await expect(
+            runUmapMaterialization(
+                { spaceId: "space-1", sampleSize: 10 },
+                jest.fn(),
+                () => database,
+            ),
+        ).rejects.toBe(failure);
+        expect(database.$disconnect).toHaveBeenCalledTimes(1);
     });
 });
