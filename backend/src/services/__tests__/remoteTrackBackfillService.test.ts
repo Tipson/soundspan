@@ -1,4 +1,11 @@
 const mockPrisma = {
+    album: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        createMany: jest.fn(),
+        update: jest.fn(),
+    },
     trackTidal: {
         findMany: jest.fn(),
         update: jest.fn(),
@@ -38,6 +45,12 @@ jest.mock("../albumResolutionService", () => ({
         mockResolveAlbum(...args),
 }));
 
+const mockResolveExternalAlbum = jest.fn();
+jest.mock("../trackAlbumResolution", () => ({
+    resolveAlbumForExternalTrack: (...args: unknown[]) =>
+        mockResolveExternalAlbum(...args),
+}));
+
 const mockBackfillCounts = jest
     .fn()
     .mockResolvedValue({ processed: 0, errors: 0 });
@@ -51,9 +64,22 @@ import {
     isRemoteBackfillInProgress,
 } from "../remoteTrackBackfillService";
 
+const { resolveAlbumForRemoteTrack: resolveActualAlbum } = jest.requireActual<
+    typeof import("../albumResolutionService")
+>("../albumResolutionService");
+
 describe("remoteTrackBackfillService", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockResolveExternalAlbum.mockResolvedValue({
+            status: "resolved",
+            resolution: {
+                albumTitle: "OK Computer",
+                rgMbid: "rg-ok-computer",
+                artistName: "Radiohead",
+                source: "musicbrainz-recording",
+            },
+        });
     });
 
     afterEach(() => {
@@ -261,6 +287,7 @@ describe("remoteTrackBackfillService", () => {
                 .mockResolvedValueOnce([
                     {
                         id: "tt-3",
+                        title: "Track D",
                         artist: "Artist D",
                         album: "Album D",
                         artistId: "existing-artist",
@@ -285,6 +312,7 @@ describe("remoteTrackBackfillService", () => {
                 "Album D",
                 "existing-artist",
                 "tidal",
+                { artistName: "Artist D", trackTitle: "Track D" },
             );
             expect(result.tidalProcessed).toBe(1);
         });
@@ -326,6 +354,32 @@ describe("remoteTrackBackfillService", () => {
 
             expect(result.tidalProcessed).toBe(1);
             expect(result.errors).toBe(1);
+        });
+
+        it("counts album persistence failures without clearing albumId", async () => {
+            mockPrisma.trackTidal.findMany.mockResolvedValueOnce([
+                {
+                    id: "tt-prisma-fail",
+                    title: "Paranoid Android",
+                    artist: "Radiohead",
+                    album: "Unknown Album",
+                    artistId: "artist-1",
+                },
+            ]);
+            mockPrisma.trackYtMusic.findMany.mockResolvedValue([]);
+            mockPrisma.album.findFirst.mockRejectedValueOnce(
+                new Error("prisma album lookup failed"),
+            );
+            mockResolveAlbum.mockImplementationOnce(resolveActualAlbum);
+
+            const result = await backfillRemoteArtistAlbumLinks();
+
+            expect(result).toEqual({
+                tidalProcessed: 0,
+                ytMusicProcessed: 0,
+                errors: 1,
+            });
+            expect(mockPrisma.trackTidal.update).not.toHaveBeenCalled();
         });
 
         it("breaks out of loop when entire batch fails", async () => {

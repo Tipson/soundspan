@@ -165,6 +165,7 @@ const EXPECTED_PUBLIC_METHODS: readonly string[] = [
     "getTopPodcasts",
     "getTrack",
     "getTrackAnalysis",
+    "getTrackAlbum",
     "getTrackPreference",
     "getTrackPreview",
     "getTracks",
@@ -310,5 +311,5 @@ test("api facade exposes every pinned public method", () => {
 });
 
 test("api facade public surface count is pinned", () => {
-    assert.equal(EXPECTED_PUBLIC_METHODS.length, 290);
+    assert.equal(EXPECTED_PUBLIC_METHODS.length, 291);
 });
