@@ -16,10 +16,12 @@ export const PROVIDER_SPACE_HEALTH_TIMEOUT_MS = 5_000;
 /** Deadline for provider text inference. */
 export const PROVIDER_TEXT_TIMEOUT_MS = 30_000;
 /** Deadline for provider audio inference. */
-export const PROVIDER_AUDIO_TIMEOUT_MS = 120_000;
+export const PROVIDER_AUDIO_TIMEOUT_MS = 115_000;
 
 const UNIT_NORM_TOLERANCE = 1e-3;
 const MAX_PROVIDER_VECTOR_DIMENSION = 8_192;
+const MAX_RETRY_AFTER_MS = 5 * 60_000;
+const MIN_RETRY_AFTER_MS = 1_000;
 const textInputSchema = z.string().min(1).max(2_048);
 const trackRefSchema = z.string().min(1);
 const vectorResponseSchema = z.strictObject({
@@ -50,6 +52,7 @@ type VibeProviderErrorCode =
     | "auth"
     | "contract"
     | "provider_5xx"
+    | "backpressure"
     | "request_rejected"
     | "space_mismatch";
 
@@ -108,6 +111,36 @@ export class VibeProviderServerError extends VibeProviderError {
         super("provider_5xx", message);
         this.name = "VibeProviderServerError";
     }
+}
+
+/** Raised when the provider rejects work because local inference is saturated. */
+export class VibeProviderBackpressureError extends VibeProviderError {
+    constructor(
+        public readonly status = 429,
+        message = "Vibe provider inference queue is full",
+        public readonly retryAfterMs?: number,
+    ) {
+        super("backpressure", message);
+        this.name = "VibeProviderBackpressureError";
+    }
+}
+
+function boundedRetryAfterMs(value: string | null): number | undefined {
+    if (value === null) return undefined;
+    const trimmed = value.trim();
+    let delayMs: number;
+    if (/^\d+$/.test(trimmed)) {
+        delayMs = Number(trimmed) * 1_000;
+    } else {
+        const retryAtMs = Date.parse(trimmed);
+        if (!Number.isFinite(retryAtMs)) return undefined;
+        delayMs = retryAtMs - Date.now();
+    }
+    if (!Number.isFinite(delayMs)) return undefined;
+    return Math.min(
+        MAX_RETRY_AFTER_MS,
+        Math.max(MIN_RETRY_AFTER_MS, Math.ceil(delayMs)),
+    );
 }
 
 /** Raised when the provider rejects a validly transported request. */
@@ -195,9 +228,20 @@ async function parseJson(response: Response): Promise<unknown> {
     }
 }
 
-function throwForStatus(status: number, body: unknown): never {
+function throwForStatus(
+    status: number,
+    body: unknown,
+    retryAfter: string | null,
+): never {
     const parsedError = errorResponseSchema.safeParse(body);
     const message = parsedError.success ? parsedError.data.error : undefined;
+    if (status === 408) throw new VibeProviderTimeoutError();
+    if (status === 429)
+        throw new VibeProviderBackpressureError(
+            status,
+            message,
+            boundedRetryAfterMs(retryAfter),
+        );
     if (status === 401) throw new VibeProviderAuthError(message);
     if (status >= 500) throw new VibeProviderServerError(status, message);
     throw new VibeProviderRequestError(status, message);
@@ -228,7 +272,11 @@ async function requestJsonAt(
         });
         if (!response.ok) {
             const body = await parseErrorBody(response);
-            throwForStatus(response.status, body);
+            throwForStatus(
+                response.status,
+                body,
+                response.headers.get("retry-after"),
+            );
         }
         return await parseJson(response);
     } catch (error) {

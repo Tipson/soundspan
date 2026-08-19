@@ -11,7 +11,11 @@ import {
     VibeEmbeddingGenerationMismatchError,
     type VibeEmbeddingWriteClaim,
 } from "./trackEmbeddings";
-import { embedAudio, VibeProviderError } from "./vibeProvider";
+import {
+    embedAudio,
+    VibeProviderBackpressureError,
+    VibeProviderError,
+} from "./vibeProvider";
 import type { EmbeddingVectorSpace } from "./vibeProvider";
 import { vibeEmbeddingTargetGateWhere } from "./vibeEmbeddingEligibility";
 
@@ -19,6 +23,8 @@ const VIBE_QUEUE = "audio:clap:queue";
 const MAX_ERROR_LENGTH = 500;
 const INVALID_PAYLOAD_ERROR = "Invalid vibe embedding job payload";
 export const MAX_VIBE_ANALYSIS_RETRIES = 3;
+const VIBE_RETRY_KEY_PREFIX = "soundspan:vibe-retry-after:v1:";
+const VIBE_RETRY_BACKOFF_MS = [30_000, 120_000, 300_000] as const;
 const jobLog =
     typeof (logger as { child?: unknown }).child === "function"
         ? logger.child("VibeEmbedJobs")
@@ -53,6 +59,8 @@ type TrackSnapshot = {
 type ParsedVibeEmbedJob =
     | { kind: "valid"; job: VibeEmbedJob }
     | { kind: "invalid"; trackId: string | null };
+type VibeRetryCandidate = { id: string };
+type VibeRetryStateReader = (keys: string[]) => Promise<Array<string | null>>;
 
 interface VibeEmbedPrismaPort {
     track: {
@@ -92,6 +100,8 @@ interface VibeEmbedJobDependencies {
     recordOutcome(outcome: VibeEmbedJobOutcome): void;
     describeFailure(error: unknown): string;
     isTransientFailure(error: unknown): boolean;
+    isRetryEligible(trackId: string): Promise<boolean>;
+    scheduleRetry(trackId: string, notBefore: Date): Promise<void>;
     now(): Date;
 }
 
@@ -305,6 +315,7 @@ async function resetTransientFailure(
     ) {
         return false;
     }
+    const updatedAt = dependencies.now();
     const updated = await dependencies.prisma.track.updateMany({
         where: {
             ...activeTrackWhere(track.id),
@@ -317,10 +328,63 @@ async function resetTransientFailure(
             vibeAnalysisError: failureMessage(dependencies, error),
             vibeAnalysisRetryCount: { increment: 1 },
             vibeAnalysisStartedAt: null,
-            vibeAnalysisStatusUpdatedAt: dependencies.now(),
+            vibeAnalysisStatusUpdatedAt: updatedAt,
         },
     });
-    return updated.count === 1;
+    if (updated.count !== 1) return false;
+    const retryDelayMs = retryDelayForFailure(error, retryCount);
+    await dependencies.scheduleRetry(
+        track.id,
+        new Date(updatedAt.getTime() + retryDelayMs),
+    );
+    return true;
+}
+
+function retryDelayForFailure(error: unknown, retryCount: number): number {
+    const baseline =
+        VIBE_RETRY_BACKOFF_MS[
+            Math.min(retryCount, VIBE_RETRY_BACKOFF_MS.length - 1)
+        ];
+    if (
+        error instanceof VibeProviderBackpressureError &&
+        error.retryAfterMs !== undefined
+    ) {
+        return Math.min(
+            VIBE_RETRY_BACKOFF_MS[2],
+            Math.max(baseline, error.retryAfterMs),
+        );
+    }
+    return baseline;
+}
+
+function retryStateAllowsEnqueue(
+    stored: string | null,
+    nowMs: number,
+): boolean {
+    if (stored === null) return true;
+    const notBeforeMs = Number(stored);
+    return !Number.isFinite(notBeforeMs) || notBeforeMs <= nowMs;
+}
+
+/** Batch-read retry state and return only candidates whose not-before elapsed. */
+export async function filterVibeRetryEligibleCandidates<
+    Candidate extends VibeRetryCandidate,
+>(
+    candidates: Candidate[],
+    readRetryStates: VibeRetryStateReader,
+    nowMs: number = Date.now(),
+): Promise<Candidate[]> {
+    if (candidates.length === 0) return [];
+    const keys = candidates.map(
+        (candidate) => `${VIBE_RETRY_KEY_PREFIX}${candidate.id}`,
+    );
+    const states = await readRetryStates(keys);
+    if (states.length !== candidates.length) {
+        throw new Error("Vibe retry state batch read was incomplete");
+    }
+    return candidates.filter((_candidate, index) =>
+        retryStateAllowsEnqueue(states[index] ?? null, nowMs),
+    );
 }
 
 async function handleGenerationFailure(
@@ -381,6 +445,13 @@ async function processValidJob(
     job: VibeEmbedJob,
     dependencies: VibeEmbedJobDependencies,
 ): Promise<VibeEmbedJobOutcome> {
+    if (!(await dependencies.isRetryEligible(job.trackId))) {
+        await releaseReservation(dependencies, job.trackId);
+        jobLog.debug("Skipped vibe embedding job before retry not-before", {
+            trackId: job.trackId,
+        });
+        return finish(dependencies, "stale_claim");
+    }
     const track = await findActiveTrack(dependencies.prisma, job.trackId);
     if (!track) {
         await releaseReservation(dependencies, job.trackId);
@@ -488,6 +559,8 @@ function describeVibeEmbedFailure(error: unknown): string {
             return "Vibe provider returned an invalid response";
         case "provider_5xx":
             return "Vibe provider reported an internal failure";
+        case "backpressure":
+            return "Vibe provider inference queue is full";
         case "request_rejected":
             return "Vibe provider rejected the audio reference";
         case "space_mismatch":
@@ -501,7 +574,8 @@ export function isTransientVibeProviderFailure(error: unknown): boolean {
         error instanceof VibeProviderError &&
         (error.code === "timeout" ||
             error.code === "unreachable" ||
-            error.code === "provider_5xx")
+            error.code === "provider_5xx" ||
+            error.code === "backpressure")
     );
 }
 
@@ -523,6 +597,20 @@ export async function processVibeEmbedJob(
         recordOutcome: recordVibeEmbedJobOutcome,
         describeFailure: describeVibeEmbedFailure,
         isTransientFailure: isTransientVibeProviderFailure,
+        isRetryEligible: async (trackId) => {
+            const stored = await redisClient.get(
+                `${VIBE_RETRY_KEY_PREFIX}${trackId}`,
+            );
+            return retryStateAllowsEnqueue(stored, Date.now());
+        },
+        scheduleRetry: async (trackId, notBefore) => {
+            const ttlMs = Math.max(1, notBefore.getTime() - Date.now());
+            await redisClient.set(
+                `${VIBE_RETRY_KEY_PREFIX}${trackId}`,
+                String(notBefore.getTime()),
+                { PX: ttlMs },
+            );
+        },
         now: () => new Date(),
     })(rawJob);
 }

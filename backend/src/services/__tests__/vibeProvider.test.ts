@@ -21,7 +21,9 @@ import {
     embedAudio,
     embedText,
     fetchProviderSpace,
+    PROVIDER_AUDIO_TIMEOUT_MS,
     VibeProviderAuthError,
+    VibeProviderBackpressureError,
     VibeProviderContractError,
     VibeProviderServerError,
     VibeProviderSpaceMismatchError,
@@ -31,10 +33,14 @@ import {
 
 const mockFetch = jest.fn();
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(
+    body: unknown,
+    status = 200,
+    headers: Record<string, string> = {},
+): Response {
     return new Response(JSON.stringify(body), {
         status,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...headers },
     });
 }
 
@@ -258,6 +264,77 @@ describe("vibe provider client", () => {
             message: "Vibe provider returned 502",
         });
         expectMetric("text", "error");
+    });
+
+    it.each([
+        [
+            408,
+            { error: "Inference deadline exceeded" },
+            VibeProviderTimeoutError,
+        ],
+        [
+            429,
+            { error: "Inference queue is full" },
+            VibeProviderBackpressureError,
+        ],
+        [503, { error: "Inference cancelled" }, VibeProviderServerError],
+    ])(
+        "classifies retryable provider response %i",
+        async (status, body, expectedError) => {
+            mockFetch.mockResolvedValueOnce(jsonResponse(body, status));
+
+            await expect(embedText("quiet focus")).rejects.toBeInstanceOf(
+                expectedError,
+            );
+            expectMetric("text", status === 408 ? "timeout" : "error");
+        },
+    );
+
+    it.each([
+        ["120", 120_000],
+        ["9999", 300_000],
+    ])(
+        "honors and caps Retry-After %s for backpressure",
+        async (retryAfter, expectedMs) => {
+            mockFetch.mockResolvedValueOnce(
+                jsonResponse({ error: "Inference queue is full" }, 429, {
+                    "retry-after": retryAfter,
+                }),
+            );
+
+            await expect(embedText("quiet focus")).rejects.toMatchObject({
+                name: "VibeProviderBackpressureError",
+                retryAfterMs: expectedMs,
+            });
+        },
+    );
+
+    it("keeps the audio client deadline above the sidecar budget", () => {
+        expect(PROVIDER_AUDIO_TIMEOUT_MS).toBe(115_000);
+    });
+
+    it("aborts audio inference after the aligned client deadline", async () => {
+        jest.useFakeTimers();
+        mockFetch.mockImplementationOnce(
+            (_url: string, init: RequestInit) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init.signal?.addEventListener("abort", () => {
+                        reject(new DOMException("aborted", "AbortError"));
+                    });
+                }),
+        );
+
+        const request = embedAudio("track.flac", {
+            id: "space-active",
+            dim: 2,
+        });
+        const rejection = expect(request).rejects.toBeInstanceOf(
+            VibeProviderTimeoutError,
+        );
+        await jest.advanceTimersByTimeAsync(PROVIDER_AUDIO_TIMEOUT_MS);
+
+        await rejection;
+        expectMetric("audio", "timeout");
     });
 
     it("keeps a non-JSON success body classified as a contract failure", async () => {
