@@ -1,6 +1,11 @@
 # YouTube Music Streamer — FastAPI sidecar for soundspan
-# Streams audio from YouTube Music via ytmusicapi + yt-dlp (no files saved to disk)
+# Streams audio from YouTube Music via ytmusicapi + yt-dlp with a bounded transient spool
+FROM denoland/deno:bin-2.9.5@sha256:0d1262facd139e815217c001945eb822c7a78584cf660142c34a6b53effec1aa AS deno
+
 FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
+
+# yt-dlp uses Deno for YouTube's JavaScript challenge solving.
+COPY --from=deno /deno /usr/local/bin/deno
 
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -25,11 +30,15 @@ WORKDIR /app
 COPY services/ytmusic-streamer/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 # Step 2: yt-dlp + ytmusicapi are DELIBERATELY EXEMPT from hash-locking (roadmap
-# F38/F50) so a YouTube breakage can be fixed with a same-day floor bump. Their
-# only transitive (requests) is already pinned by the lock above, so just these
-# two dists float. Installed loose, without --require-hashes.
+# F38/F50) so a YouTube breakage can be fixed with a same-day floor bump.
+# Constraints pin every already-locked dist, so this step can only add yt-dlp,
+# ytmusicapi, and yt-dlp-ejs. pip check fails the build on any unsatisfied or
+# conflicting requirement.
 COPY services/ytmusic-streamer/requirements-exempt.txt ./requirements-exempt.txt
-RUN pip install --no-cache-dir -r requirements-exempt.txt
+RUN sed -n 's/^\([A-Za-z0-9._-]\+==[^ \\]\+\).*$/\1/p' requirements.lock > /tmp/lock-constraints.txt \
+    && pip install --no-cache-dir -c /tmp/lock-constraints.txt -r requirements-exempt.txt \
+    && pip check \
+    && rm /tmp/lock-constraints.txt
 
 # Copy the entrypoint and its split sidecar modules.
 COPY services/ytmusic-streamer/*.py ./

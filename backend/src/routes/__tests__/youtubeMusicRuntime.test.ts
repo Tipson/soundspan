@@ -1022,6 +1022,9 @@ describe("youtube music route runtime behavior", () => {
         const authErrorRes = createRes();
         await streamHandler(reqBase, authErrorRes);
         expect(authErrorRes.statusCode).toBe(401);
+        expect(authErrorRes.body).toEqual({
+            error: "YouTube Music authentication expired or invalid. Please reconnect your account.",
+        });
 
         ytMusicService.getStreamProxy.mockRejectedValueOnce(
             new Error("proxy failed"),
@@ -1031,6 +1034,59 @@ describe("youtube music route runtime behavior", () => {
         expect(errorRes.statusCode).toBe(500);
         expect(errorRes.body).toEqual({ error: "Failed to stream audio" });
     });
+
+    it.each([
+        { status: 404, body: { error: "Stream not found" } },
+        {
+            status: 451,
+            body: {
+                error: "age_restricted",
+                message:
+                    "This content requires age verification and cannot be streamed via YouTube Music.",
+            },
+        },
+        {
+            status: 503,
+            body: { error: "YouTube Music streaming is busy" },
+        },
+        {
+            status: 504,
+            body: { error: "YouTube Music stream timed out" },
+        },
+    ])(
+        "maps sidecar $status from authenticated and public stream proxies",
+        async ({ status, body }) => {
+            const authenticatedReq = {
+                user: { id: "user-1" },
+                params: { videoId: "vid-auth" },
+                query: { quality: "high" },
+                headers: {},
+            } as any;
+            ytMusicService.getStreamProxy.mockRejectedValueOnce({
+                response: { status },
+            });
+            const authenticatedRes = createRes();
+
+            await streamHandler(authenticatedReq, authenticatedRes);
+
+            const publicReq = {
+                params: { videoId: "vid-public" },
+                query: { quality: "high" },
+                headers: {},
+            } as any;
+            ytMusicService.getStreamProxy.mockRejectedValueOnce({
+                response: { status },
+            });
+            const publicRes = createRes();
+
+            await publicStreamHandler(publicReq, publicRes);
+
+            expect(authenticatedRes.statusCode).toBe(status);
+            expect(authenticatedRes.body).toEqual(body);
+            expect(publicRes.statusCode).toBe(status);
+            expect(publicRes.body).toEqual(body);
+        },
+    );
 
     it("destroys the authenticated upstream stream when the client disconnects", async () => {
         const data = {
