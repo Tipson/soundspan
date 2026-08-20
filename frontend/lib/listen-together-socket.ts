@@ -7,12 +7,15 @@
 
 import { io, type Socket } from "socket.io-client";
 import { api } from "./api";
+import { frontendLogger } from "./logger";
 import type {
     CanonicalMediaProviderIdentity,
     CanonicalMediaSource,
     RemoteMediaSource,
     ResolvedMediaSource,
 } from "@soundspan/media-metadata-contract";
+
+const log = frontendLogger.child("ListenTogetherSocket");
 
 // ---------------------------------------------------------------------------
 // Server → Client event types
@@ -127,11 +130,42 @@ export interface PlayAtEvent {
 export interface MemberEvent {
     userId: string;
     username: string;
+    /** Originating group; absent on older servers. */
+    groupId?: string;
+}
+
+/** Presence-only update that does not carry playback state. */
+export interface MemberPresenceEvent {
+    userId: string;
+    isConnected: boolean;
+    /** Originating group; absent on older servers. */
+    groupId?: string;
+}
+
+/** Apply a presence-only event to an existing client snapshot. */
+export function applyGroupMemberPresence(
+    snapshot: GroupSnapshot | null,
+    event: MemberPresenceEvent,
+): GroupSnapshot | null {
+    if (!snapshot) return null;
+    return {
+        ...snapshot,
+        members: snapshot.members.map((member) =>
+            member.userId === event.userId
+                ? { ...member, isConnected: event.isConnected }
+                : member,
+        ),
+    };
 }
 
 export interface MemberLeftEvent extends MemberEvent {
     newHostUserId?: string;
     newHostUsername?: string;
+}
+
+/** Direct signal that this socket's authoritative membership was revoked. */
+export interface MembershipRevokedEvent {
+    groupId: string;
 }
 
 export interface GroupEndedEvent {
@@ -143,6 +177,26 @@ export interface SocketRouteProbeResult {
     reason?: string;
     status?: number;
     sample?: string;
+}
+
+/** Format a socket-route probe failure for the Listen Together UI. */
+export function formatListenTogetherSocketRouteError(
+    result: SocketRouteProbeResult,
+): string {
+    switch (result.reason) {
+        case "frontend-route":
+            return "Listen Together is blocked: /socket.io/listen-together is not reaching the backend Socket.IO service. Verify frontend socket proxy routing or direct backend path routing.";
+        case "http-error":
+            return `Listen Together socket probe failed with HTTP ${result.status ?? "error"}. Ensure /socket.io/listen-together reaches backend Socket.IO and websocket upgrades are enabled.`;
+        case "timeout":
+            return "Listen Together socket probe timed out. Verify your proxy/tunnel forwards /socket.io/listen-together correctly.";
+        case "network-error":
+            return "Listen Together socket probe could not reach the server. Check public URL, proxy/tunnel routing, and backend reachability.";
+        case "unexpected-response":
+            return "Listen Together socket probe received an unexpected response. /socket.io/listen-together must terminate on the backend Socket.IO service.";
+        default:
+            return "Listen Together websocket routing is not configured correctly. Ensure /socket.io/listen-together reaches backend Socket.IO.";
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -157,13 +211,16 @@ export interface ListenTogetherSocketCallbacks {
     onWaiting: (data: WaitingEvent) => void;
     onPlayAt: (data: PlayAtEvent) => void;
     onMemberJoined: (data: MemberEvent) => void;
+    onMemberPresence?: (data: MemberPresenceEvent) => void;
     onMemberLeft: (data: MemberLeftEvent) => void;
+    onMembershipRevoked?: (data: MembershipRevokedEvent) => void;
     onGroupEnded: (data: GroupEndedEvent) => void;
     onConnect: () => void;
     onReconnect?: (attempt: number) => void;
     onReconnectAttempt?: (attempt: number) => void;
     onReconnectError?: (error: Error) => void;
     onReconnectFailed?: () => void;
+    onRejoinFailed?: (error: Error) => void;
     onDisconnect: (reason: string) => void;
     onError: (error: Error) => void;
 }
@@ -194,6 +251,7 @@ const TRANSIENT_CONFLICT_MAX_RETRIES = 3;
 const TRANSIENT_CONFLICT_BASE_DELAY_MS = 60;
 const TRANSIENT_CONFLICT_MAX_DELAY_MS = 300;
 const TRANSIENT_CONFLICT_JITTER_FACTOR = 0.35;
+const LISTEN_TOGETHER_ACK_TIMEOUT_MS = 5_000;
 
 interface ListenTogetherAckResponse {
     ok?: boolean;
@@ -230,6 +288,11 @@ interface ListenTogetherSocketDependencies {
         intervalMs: number,
     ) => ReturnType<typeof setInterval>;
     clearInterval: (handle: ReturnType<typeof setInterval>) => void;
+    setTimeout: (
+        callback: () => void,
+        timeoutMs: number,
+    ) => ReturnType<typeof setTimeout>;
+    clearTimeout: (handle: ReturnType<typeof setTimeout>) => void;
 }
 
 const DEFAULT_SOCKET_DEPENDENCIES: ListenTogetherSocketDependencies = {
@@ -239,6 +302,9 @@ const DEFAULT_SOCKET_DEPENDENCIES: ListenTogetherSocketDependencies = {
     setInterval: (callback, intervalMs) =>
         globalThis.setInterval(callback, intervalMs),
     clearInterval: (handle) => globalThis.clearInterval(handle),
+    setTimeout: (callback, timeoutMs) =>
+        globalThis.setTimeout(callback, timeoutMs),
+    clearTimeout: (handle) => globalThis.clearTimeout(handle),
 };
 
 let serverClockOffsetSamplesMs: number[] = [];
@@ -359,7 +425,19 @@ export class ListenTogetherSocket {
             this.callbacks?.onConnect();
             // Re-join group on reconnect
             if (this.currentGroupId) {
-                this.joinGroup(this.currentGroupId);
+                const groupId = this.currentGroupId;
+                void this.joinGroup(groupId).catch((error: unknown) => {
+                    const normalizedError =
+                        error instanceof Error
+                            ? error
+                            : new Error("Listen Together rejoin failed");
+                    log.warn("Reconnect rejoin failed", {
+                        groupId,
+                        error: normalizedError,
+                    });
+                    this.callbacks?.onRejoinFailed?.(normalizedError);
+                    this.callbacks?.onError(normalizedError);
+                });
             }
         });
 
@@ -417,9 +495,22 @@ export class ListenTogetherSocket {
             this.callbacks?.onMemberJoined(data);
         });
 
+        this.socket.on("group:member-presence", (data: MemberPresenceEvent) => {
+            this.callbacks?.onMemberPresence?.(data);
+        });
+
         this.socket.on("group:member-left", (data: MemberLeftEvent) => {
             this.callbacks?.onMemberLeft(data);
         });
+
+        this.socket.on(
+            "group:membership-revoked",
+            (data: MembershipRevokedEvent) => {
+                if (data.groupId !== this.currentGroupId) return;
+                this.currentGroupId = null;
+                this.callbacks?.onMembershipRevoked?.(data);
+            },
+        );
 
         this.socket.on("group:ended", (data: GroupEndedEvent) => {
             this.currentGroupId = null;
@@ -608,7 +699,11 @@ export class ListenTogetherSocket {
 
     joinGroup(groupId: string): Promise<void> {
         this.currentGroupId = groupId;
-        return this.emit("join-group", { groupId });
+        return this.emit(
+            "join-group",
+            { groupId },
+            TRANSIENT_CONFLICT_RETRY_POLICY,
+        );
     }
 
     leaveGroup(): Promise<void> {
@@ -826,7 +921,17 @@ export class ListenTogetherSocket {
                 return;
             }
 
+            let settled = false;
+            let timeout: ReturnType<typeof setTimeout> | null = null;
+            const clearAckTimeout = () => {
+                if (timeout === null) return;
+                this.dependencies.clearTimeout(timeout);
+                timeout = null;
+            };
             const onAck = (res: ListenTogetherAckResponse) => {
+                if (settled) return;
+                settled = true;
+                clearAckTimeout();
                 resolve(res ?? {});
             };
 
@@ -835,6 +940,17 @@ export class ListenTogetherSocket {
             } else {
                 this.socket.emit(event, data, onAck);
             }
+            if (settled) return;
+            timeout = this.dependencies.setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                clearAckTimeout();
+                reject(
+                    new Error(
+                        `Listen Together acknowledgement timed out for ${event}`,
+                    ),
+                );
+            }, LISTEN_TOGETHER_ACK_TIMEOUT_MS);
         });
     }
 

@@ -10,7 +10,22 @@
 
 import type {} from "@soundspan/media-metadata-contract";
 import type { SyncQueueItem } from "./listenTogetherQueueItem";
+import type {
+    ManagerCallbacks,
+    StatePublicationOptions,
+} from "./listenTogetherCallbacks";
 import { logger } from "../utils/logger";
+import {
+    compensateSnapshotPosition,
+    applyExactCommittedMembership,
+    advanceSnapshotWatermark,
+    mergeSnapshotMembers,
+    reconcileHostFlags,
+    selectHostSuccessor,
+    shouldApplyIncomingPlayback,
+    snapshotMembers,
+    type PersistedGroupMember,
+} from "./listenTogetherSnapshot";
 
 const log = logger.child("ListenTogetherManager");
 
@@ -19,6 +34,10 @@ const log = logger.child("ListenTogetherManager");
 // ---------------------------------------------------------------------------
 
 export type { SyncQueueItem } from "./listenTogetherQueueItem";
+export type {
+    ManagerCallbacks,
+    StatePublicationOptions,
+} from "./listenTogetherCallbacks";
 
 export interface GroupMember {
     userId: string;
@@ -31,6 +50,8 @@ export interface GroupMember {
     lastSeen: number; // Date.now()
 }
 
+export type { PersistedGroupMember } from "./listenTogetherSnapshot";
+
 export interface GroupPlayback {
     queue: SyncQueueItem[];
     currentIndex: number;
@@ -39,6 +60,8 @@ export interface GroupPlayback {
     positionMs: number;
     /** Date.now() when `positionMs` was last written. */
     lastPositionUpdate: number;
+    /** Producer clock from the most recently applied or published snapshot. */
+    lastAppliedSnapshotServerTime: number;
     stateVersion: number;
 }
 
@@ -66,6 +89,8 @@ export interface GroupState {
     createdAt: Date;
     /** True when in-memory state has diverged from DB and needs persisting. */
     dirty: boolean;
+    /** True when playback came from a live or shared authoritative snapshot. */
+    playbackAuthoritative: boolean;
 }
 
 /** Serialisable snapshot broadcast to clients. */
@@ -196,28 +221,6 @@ function currentTrackId(pb: GroupPlayback): string | null {
     return pb.queue[pb.currentIndex]?.id ?? null;
 }
 
-/**
- * Determine whether incoming playback payload should overwrite local playback.
- *
- * Rules:
- * - higher stateVersion always wins
- * - lower stateVersion is stale
- * - equal stateVersion uses serverTime as tie-breaker to prevent time rewind
- */
-function shouldApplyIncomingPlayback(
-    existing: GroupState | undefined,
-    incomingStateVersion: number,
-    incomingServerTime: number,
-): boolean {
-    if (!existing) return true;
-
-    const currentStateVersion = existing.playback.stateVersion;
-    if (incomingStateVersion > currentStateVersion) return true;
-    if (incomingStateVersion < currentStateVersion) return false;
-
-    return incomingServerTime >= existing.playback.lastPositionUpdate;
-}
-
 /** Hard cap on queue size to keep Socket.IO snapshots within 1 MB. */
 export const MAX_QUEUE_SIZE = 500;
 
@@ -233,42 +236,6 @@ const STALE_MEMBER_MS = 60_000;
 // ---------------------------------------------------------------------------
 // GroupManager singleton
 // ---------------------------------------------------------------------------
-
-/**
- * Callback interface so the manager can notify the socket layer without
- * depending on Socket.IO directly.
- */
-export interface ManagerCallbacks {
-    onGroupState(groupId: string, snapshot: GroupSnapshot): void;
-    onPlaybackDelta(groupId: string, delta: PlaybackDelta): void;
-    onQueueDelta(groupId: string, delta: QueueDelta): void;
-    onWaiting(
-        groupId: string,
-        data: { trackId: string | null; currentIndex: number },
-    ): void;
-    onPlayAt(
-        groupId: string,
-        data: { positionMs: number; serverTime: number; stateVersion: number },
-    ): void;
-    onMemberJoined(
-        groupId: string,
-        member: { userId: string; username: string },
-    ): void;
-    onMemberLeft(
-        groupId: string,
-        data: {
-            userId: string;
-            username: string;
-            newHostUserId?: string;
-            newHostUsername?: string;
-        },
-    ): void;
-    onGroupEnded(groupId: string, reason: string): void;
-    onBoundaryWatchdog?(
-        groupId: string,
-        data: { currentIndex: number; stateVersion: number },
-    ): void;
-}
 
 class GroupManager {
     private groups = new Map<string, GroupState>();
@@ -297,12 +264,7 @@ class GroupManager {
             currentTimeMs: number;
             stateVersion: number;
             createdAt: Date;
-            members: Array<{
-                userId: string;
-                username: string;
-                isHost: boolean;
-                joinedAt: Date;
-            }>;
+            members: PersistedGroupMember[];
         },
     ): GroupState {
         const queue =
@@ -344,6 +306,7 @@ class GroupManager {
                 isPlaying: false, // Always start paused after hydration (no one is connected yet)
                 positionMs: opts.currentTimeMs,
                 lastPositionUpdate: now,
+                lastAppliedSnapshotServerTime: 0,
                 stateVersion: opts.stateVersion,
             },
             members,
@@ -354,6 +317,7 @@ class GroupManager {
             lastActivity: now,
             createdAt: opts.createdAt,
             dirty: false,
+            playbackAuthoritative: false,
         };
 
         this.groups.set(id, group);
@@ -420,6 +384,7 @@ class GroupManager {
                 isPlaying: initialIsPlaying,
                 positionMs: initialPositionMs,
                 lastPositionUpdate: now,
+                lastAppliedSnapshotServerTime: 0,
                 stateVersion: 0,
             },
             members,
@@ -430,6 +395,7 @@ class GroupManager {
             lastActivity: now,
             createdAt: opts.createdAt,
             dirty: false,
+            playbackAuthoritative: true,
         };
 
         this.groups.set(id, group);
@@ -491,7 +457,7 @@ class GroupManager {
 
         // Broadcast presence transition so member connection dots update in real time.
         if (!wasConnected && member.socketIds.size > 0) {
-            this.broadcastState(group);
+            this.publishPresence(group, userId, true);
         }
     }
 
@@ -506,7 +472,7 @@ class GroupManager {
 
         // Broadcast presence transition so member connection dots update in real time.
         if (wasConnected && member.socketIds.size === 0) {
-            this.broadcastState(group);
+            this.publishPresence(group, userId, false);
 
             // In waiting state, disconnected members should not block the gate.
             if (group.syncState === "waiting") {
@@ -540,6 +506,7 @@ class GroupManager {
         groupId: string,
         userId: string,
         username: string,
+        isHost: boolean = false,
     ): GroupSnapshot {
         const group = this.requireGroup(groupId);
 
@@ -547,20 +514,25 @@ class GroupManager {
         const existing = group.members.get(userId);
         if (existing) {
             existing.lastSeen = Date.now();
+            if (isHost) group.hostUserId = userId;
+            reconcileHostFlags(group.members, group.hostUserId);
             this.broadcastState(group);
             return this.snapshot(group);
         }
 
+        if (isHost) group.hostUserId = userId;
+
         group.members.set(userId, {
             userId,
             username,
-            isHost: false,
+            isHost,
             joinedAt: new Date(),
             socketIds: new Set(),
             isReady: false,
             unavailableIndices: new Set(),
             lastSeen: Date.now(),
         });
+        reconcileHostFlags(group.members, group.hostUserId);
 
         group.lastActivity = Date.now();
         group.dirty = true;
@@ -569,6 +541,21 @@ class GroupManager {
         this.callbacks?.onMemberJoined(groupId, { userId, username });
         this.broadcastState(group);
         return this.snapshot(group);
+    }
+
+    /** Apply exact committed membership and return sockets that lost membership. */
+    applyCommittedMembership(
+        groupId: string,
+        members: GroupSnapshot["members"],
+        hostUserId: string,
+    ): string[] {
+        const group = this.requireGroup(groupId);
+        return applyExactCommittedMembership(
+            group,
+            members,
+            hostUserId,
+            Date.now(),
+        );
     }
 
     removeMember(
@@ -599,21 +586,7 @@ class GroupManager {
 
         if (wasHost) {
             // Transfer host: alphabetical by username, then by join order
-            const candidates = Array.from(group.members.values()).sort(
-                (a, b) => {
-                    const nameComp = a.username.localeCompare(
-                        b.username,
-                        undefined,
-                        {
-                            sensitivity: "accent",
-                        },
-                    );
-                    if (nameComp !== 0) return nameComp;
-                    return a.joinedAt.getTime() - b.joinedAt.getTime();
-                },
-            );
-
-            const nextHost = candidates[0];
+            const nextHost = selectHostSuccessor(group.members.values());
             if (nextHost) {
                 // Demote all, promote new host
                 for (const m of group.members.values()) m.isHost = false;
@@ -991,6 +964,11 @@ class GroupManager {
 
     snapshot(group: GroupState): GroupSnapshot {
         const pb = group.playback;
+        const serverTime = Date.now();
+        pb.lastAppliedSnapshotServerTime = advanceSnapshotWatermark(
+            pb.lastAppliedSnapshotServerTime,
+            serverTime,
+        );
         return {
             id: group.id,
             name: group.name,
@@ -1008,28 +986,24 @@ class GroupManager {
                 currentIndex: pb.currentIndex,
                 isPlaying: pb.isPlaying,
                 positionMs: computePosition(pb),
-                serverTime: Date.now(),
+                serverTime,
                 stateVersion: pb.stateVersion,
                 trackId: currentTrackId(pb),
             },
-            members: Array.from(group.members.values())
-                .sort((a, b) => {
-                    if (a.isHost !== b.isHost) return a.isHost ? -1 : 1;
-                    return a.joinedAt.getTime() - b.joinedAt.getTime();
-                })
-                .map((m) => ({
-                    userId: m.userId,
-                    username: m.username,
-                    isHost: m.isHost,
-                    joinedAt: m.joinedAt.toISOString(),
-                    isConnected: m.socketIds.size > 0,
-                })),
+            members: snapshotMembers(group.members),
         };
     }
 
     snapshotById(groupId: string): GroupSnapshot | undefined {
         const group = this.groups.get(groupId);
         if (!group) return undefined;
+        return this.snapshot(group);
+    }
+
+    /** Return a snapshot only when playback is safe to publish to peers. */
+    snapshotForPublication(groupId: string): GroupSnapshot | undefined {
+        const group = this.groups.get(groupId);
+        if (!group?.playbackAuthoritative) return undefined;
         return this.snapshot(group);
     }
 
@@ -1097,35 +1071,33 @@ class GroupManager {
             }
         }
 
-        const members = new Map<string, GroupMember>();
-        for (const member of snapshot.members ?? []) {
-            const existingMember = existing?.members.get(member.userId);
-            members.set(member.userId, {
-                userId: member.userId,
-                username: member.username,
-                isHost: Boolean(member.isHost),
-                joinedAt: new Date(member.joinedAt),
-                // Preserve local socket presence for users connected to this pod.
-                socketIds: existingMember?.socketIds ?? new Set<string>(),
-                isReady: readyUserIds.has(member.userId),
-                unavailableIndices: new Set(),
-                lastSeen: now,
-            });
-        }
+        const members = mergeSnapshotMembers(
+            snapshot.members ?? [],
+            existing?.members,
+            readyUserIds,
+            now,
+        );
+        reconcileHostFlags(members, snapshot.hostUserId);
 
         const existingPlayback = existing?.playback;
+        const lastAppliedSnapshotServerTime = advanceSnapshotWatermark(
+            existingPlayback?.lastAppliedSnapshotServerTime ?? 0,
+            incomingServerTime,
+        );
         const playback: GroupPlayback =
             applyIncomingPlayback || !existingPlayback
                 ? {
                       queue: incomingQueue,
                       currentIndex: incomingIndex,
                       isPlaying: incomingIsPlaying,
-                      positionMs: incomingPositionMs,
-                      // Preserve server-relative elapsed playback behavior.
-                      lastPositionUpdate:
-                          incomingIsPlaying && incomingServerTime > 0
-                              ? incomingServerTime
-                              : now,
+                      positionMs: compensateSnapshotPosition(
+                          incomingPositionMs,
+                          incomingServerTime,
+                          now,
+                          incomingIsPlaying,
+                      ),
+                      lastPositionUpdate: now,
+                      lastAppliedSnapshotServerTime,
                       stateVersion: incomingStateVersion,
                   }
                 : {
@@ -1134,6 +1106,7 @@ class GroupManager {
                       isPlaying: existingPlayback.isPlaying,
                       positionMs: existingPlayback.positionMs,
                       lastPositionUpdate: existingPlayback.lastPositionUpdate,
+                      lastAppliedSnapshotServerTime,
                       stateVersion: existingPlayback.stateVersion,
                   };
 
@@ -1165,6 +1138,7 @@ class GroupManager {
             lastActivity: now,
             createdAt: existing?.createdAt ?? new Date(),
             dirty: false,
+            playbackAuthoritative: true,
         };
 
         this.groups.set(snapshot.id, group);
@@ -1265,8 +1239,28 @@ class GroupManager {
         };
     }
 
-    private broadcastState(group: GroupState): void {
-        this.callbacks?.onGroupState(group.id, this.snapshot(group));
+    private broadcastState(
+        group: GroupState,
+        options?: StatePublicationOptions,
+    ): void {
+        const snapshot = this.snapshot(group);
+        if (options) {
+            this.callbacks?.onGroupState(group.id, snapshot, options);
+            return;
+        }
+        this.callbacks?.onGroupState(group.id, snapshot);
+    }
+
+    private publishPresence(
+        group: GroupState,
+        userId: string,
+        isConnected: boolean,
+    ): void {
+        if (group.playbackAuthoritative) {
+            this.broadcastState(group, { synchronize: false });
+            return;
+        }
+        this.callbacks?.onMemberPresence(group.id, { userId, isConnected });
     }
 
     private checkReadyGate(group: GroupState): boolean {

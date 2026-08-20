@@ -20,9 +20,20 @@ import {
     MAX_QUEUE_SIZE,
     type SyncQueueItem,
     type GroupSnapshot,
+    type PersistedGroupMember,
     GroupError,
 } from "./listenTogetherManager";
 import { listenTogetherStateStore } from "./listenTogetherStateStore";
+import { withGroupMutationLock } from "./listenTogetherMutationLock";
+import { selectHostSuccessor } from "./listenTogetherSnapshot";
+import { flushGroupPublications } from "./listenTogetherCallbacks";
+import {
+    captureGroupPublicationBase,
+    applyCommittedReconnect,
+    publishCommittedDeparture,
+    publishCommittedEnd,
+    publishCommittedJoin,
+} from "./listenTogetherMembershipPublication";
 import {
     normalizeCanonicalMediaProviderIdentity,
     toLegacyStreamFields,
@@ -80,6 +91,12 @@ export interface QueueTrackInput {
     duration?: number;
     thumbnailUrl?: string;
     isrc?: string;
+}
+
+interface CommittedJoin {
+    hostUserId: string;
+    memberships: PersistedGroupMember[];
+    membershipTransitioned: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +378,16 @@ function queueToJson(
         : (queue as unknown as Prisma.InputJsonValue);
 }
 
+async function withPublicationLock<T>(
+    groupId: string,
+    operationName: string,
+    operation: () => Promise<T>,
+): Promise<T> {
+    return withGroupMutationLock(groupId, operationName, operation, {
+        afterOperation: () => flushGroupPublications(groupId),
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Public API — cold path
 // ---------------------------------------------------------------------------
@@ -492,27 +519,93 @@ export async function joinGroup(
         userId,
         username,
     );
-
     const now = new Date();
+    return withPublicationLock(dbGroup.id, "join-group", async () => {
+        const captured = await captureGroupPublicationBase(dbGroup.id);
+        const committed = await commitGroupJoin(
+            dbGroup.id,
+            userId,
+            memberPresentationName,
+            now,
+            captured?.hostUserId ?? groupManager.get(dbGroup.id)?.hostUserId,
+        );
+        const member = {
+            userId,
+            username: memberPresentationName,
+            isHost: userId === committed.hostUserId,
+            joinedAt: now,
+        };
+        const snapshot = await publishCommittedJoin(
+            dbGroup.id,
+            captured,
+            member,
+            committed.hostUserId,
+            committed.memberships,
+            committed.membershipTransitioned,
+        );
+        if (snapshot) {
+            return snapshot;
+        }
 
-    // Upsert membership in DB
-    await prisma.syncGroupMember.upsert({
-        where: { syncGroupId_userId: { syncGroupId: dbGroup.id, userId } },
-        update: { leftAt: null, joinedAt: now, isHost: false },
-        create: { syncGroupId: dbGroup.id, userId, isHost: false },
+        // No playback base was publishable. Hydrate only for this caller's
+        // response; publishCommittedJoin already emitted membership-only.
+        await ensureGroupInMemory(dbGroup.id);
+        const responseSnapshot = groupManager.snapshotById(dbGroup.id);
+        if (!responseSnapshot) {
+            throw new Error(`Joined group ${dbGroup.id} has no response state`);
+        }
+        return responseSnapshot;
     });
+}
 
-    // Ensure group is in memory (may not be if server restarted)
-    await ensureGroupInMemory(dbGroup.id);
-
-    // Add to in-memory
-    const snapshot = groupManager.addMember(
-        dbGroup.id,
-        userId,
-        memberPresentationName,
-    );
-    await listenTogetherStateStore.setSnapshot(dbGroup.id, snapshot);
-    return snapshot;
+async function commitGroupJoin(
+    groupId: string,
+    userId: string,
+    username: string,
+    joinedAt: Date,
+    capturedHostUserId?: string,
+): Promise<CommittedJoin> {
+    return prisma.$transaction(async (tx) => {
+        const group = await tx.syncGroup.findUnique({
+            where: { id: groupId },
+            select: { isActive: true, hostUserId: true },
+        });
+        if (!group?.isActive) {
+            throw new GroupError("NOT_FOUND", "Group not found");
+        }
+        const existingMembership = await tx.syncGroupMember.findUnique({
+            where: { syncGroupId_userId: { syncGroupId: groupId, userId } },
+            select: { leftAt: true },
+        });
+        const membershipTransitioned = existingMembership?.leftAt !== null;
+        if (membershipTransitioned) {
+            await tx.syncGroupMember.upsert({
+                where: {
+                    syncGroupId_userId: { syncGroupId: groupId, userId },
+                },
+                update: { leftAt: null, joinedAt, isHost: false },
+                create: { syncGroupId: groupId, userId, isHost: false },
+            });
+        }
+        const hostUserId = group.hostUserId ?? capturedHostUserId;
+        if (!hostUserId) {
+            throw new Error(`Active group ${groupId} has no host`);
+        }
+        const loadedMemberships = await loadPersistedMemberships(tx, groupId);
+        if (!loadedMemberships.some((member) => member.userId === userId)) {
+            loadedMemberships.push({
+                userId,
+                username,
+                isHost: false,
+                joinedAt,
+            });
+        }
+        const memberships = loadedMemberships.map((member) => ({
+            ...member,
+            isHost: member.userId === hostUserId,
+        }));
+        return { hostUserId, memberships, membershipTransitioned };
+    });
 }
 
 /**
@@ -523,9 +616,25 @@ export async function joinGroupById(
     username: string,
     groupId: string,
 ): Promise<GroupSnapshot> {
+    return withPublicationLock(groupId, "join-group-by-id", () =>
+        joinGroupByIdLocked(userId, username, groupId),
+    );
+}
+
+async function joinGroupByIdLocked(
+    userId: string,
+    username: string,
+    groupId: string,
+): Promise<GroupSnapshot> {
+    const captured = await captureGroupPublicationBase(groupId);
     // Verify membership in DB
     const membership = await prisma.syncGroupMember.findFirst({
         where: { syncGroupId: groupId, userId, leftAt: null },
+        select: {
+            syncGroupId: true,
+            joinedAt: true,
+            syncGroup: { select: { hostUserId: true } },
+        },
     });
     if (!membership)
         throw new GroupError("NOT_MEMBER", "Not a member of this group");
@@ -534,20 +643,165 @@ export async function joinGroupById(
         username,
     );
 
-    // Ensure in memory
-    await ensureGroupInMemory(groupId);
-
-    const group = groupManager.get(groupId);
-    if (!group) throw new GroupError("NOT_FOUND", "Group not found");
-
-    // Make sure the member exists in-memory
-    if (!group.members.has(userId)) {
-        groupManager.addMember(groupId, userId, memberPresentationName);
+    const authoritativeHostUserId = membership.syncGroup.hostUserId;
+    const member = {
+        userId,
+        username: memberPresentationName,
+        isHost: userId === authoritativeHostUserId,
+        joinedAt:
+            membership.joinedAt instanceof Date
+                ? membership.joinedAt
+                : new Date(),
+    };
+    if (captured) {
+        return applyCommittedReconnect(
+            captured,
+            member,
+            authoritativeHostUserId,
+        );
     }
 
-    const snapshot = groupManager.snapshot(group);
-    await listenTogetherStateStore.setSnapshot(groupId, snapshot);
-    return snapshot;
+    // No playback base was publishable. Hydrate only for this caller's response.
+    await ensureGroupInMemory(groupId);
+    const responseSnapshot = groupManager.snapshotById(groupId);
+    if (!responseSnapshot) {
+        throw new GroupError("NOT_FOUND", "Group not found");
+    }
+    return responseSnapshot;
+}
+
+type PersistedHostCandidate = PersistedGroupMember;
+
+type CommittedDeparture =
+    | {
+          status: "active";
+          hostUserId: string;
+          memberships: PersistedGroupMember[];
+          newHostUserId?: string;
+          newHostUsername?: string;
+      }
+    | { status: "ended" | "already-ended" };
+
+async function loadPersistedMemberships(
+    tx: Prisma.TransactionClient,
+    groupId: string,
+): Promise<PersistedHostCandidate[]> {
+    const memberships = await tx.syncGroupMember.findMany({
+        where: { syncGroupId: groupId, leftAt: null },
+        select: {
+            userId: true,
+            joinedAt: true,
+            user: { select: { username: true, displayName: true } },
+        },
+    });
+    return (memberships ?? []).map((membership) => ({
+        userId: membership.userId,
+        username:
+            membership.user.displayName?.trim() || membership.user.username,
+        isHost: false,
+        joinedAt: membership.joinedAt,
+    }));
+}
+
+async function persistHostTransfer(
+    tx: Prisma.TransactionClient,
+    groupId: string,
+    candidates: PersistedHostCandidate[],
+): Promise<CommittedDeparture> {
+    const successor = selectHostSuccessor(candidates);
+    if (!successor) {
+        throw new Error(`Active group ${groupId} has no host successor`);
+    }
+    await tx.syncGroup.update({
+        where: { id: groupId },
+        data: { hostUserId: successor.userId },
+    });
+    await tx.syncGroupMember.updateMany({
+        where: { syncGroupId: groupId, leftAt: null },
+        data: { isHost: false },
+    });
+    await tx.syncGroupMember.updateMany({
+        where: {
+            syncGroupId: groupId,
+            userId: successor.userId,
+            leftAt: null,
+        },
+        data: { isHost: true },
+    });
+    return {
+        status: "active",
+        hostUserId: successor.userId,
+        memberships: candidates.map((candidate) => ({
+            ...candidate,
+            isHost: candidate.userId === successor.userId,
+        })),
+        newHostUserId: successor.userId,
+        newHostUsername: successor.username,
+    };
+}
+
+async function commitGroupDeparture(
+    userId: string,
+    groupId: string,
+): Promise<CommittedDeparture> {
+    const now = new Date();
+    return prisma.$transaction(async (tx) => {
+        await tx.syncGroupMember.updateMany({
+            where: { syncGroupId: groupId, userId, leftAt: null },
+            data: { leftAt: now, isHost: false },
+        });
+        const group = await tx.syncGroup.findUnique({
+            where: { id: groupId },
+            select: { hostUserId: true, isActive: true },
+        });
+        if (!group?.isActive) return { status: "already-ended" };
+
+        const candidates = await loadPersistedMemberships(tx, groupId);
+        if (candidates.length === 0) {
+            await tx.syncGroup.update({
+                where: { id: groupId },
+                data: {
+                    isActive: false,
+                    endedAt: now,
+                    isPlaying: false,
+                    stateUpdatedAt: now,
+                },
+            });
+            return { status: "ended" };
+        }
+        if (group.hostUserId !== userId) {
+            return {
+                status: "active",
+                hostUserId: group.hostUserId,
+                memberships: candidates.map((candidate) => ({
+                    ...candidate,
+                    isHost: candidate.userId === group.hostUserId,
+                })),
+            };
+        }
+        return persistHostTransfer(tx, groupId, candidates);
+    });
+}
+
+async function applyCommittedDeparture(
+    userId: string,
+    groupId: string,
+    committed: CommittedDeparture,
+    captured: GroupSnapshot | null,
+): Promise<LeaveResult> {
+    if (committed.status !== "active") {
+        const reason =
+            committed.status === "ended" ? "All members left" : "Group ended";
+        await publishCommittedEnd(groupId, captured, reason);
+        return { ended: true };
+    }
+
+    await publishCommittedDeparture(groupId, userId, captured, committed);
+    return {
+        ended: false,
+        newHostUserId: committed.newHostUserId,
+        newHostUsername: committed.newHostUsername,
+    };
 }
 
 /**
@@ -557,50 +811,11 @@ export async function leaveGroup(
     userId: string,
     groupId: string,
 ): Promise<LeaveResult> {
-    // Remove from in-memory first
-    const result = groupManager.has(groupId)
-        ? groupManager.removeMember(groupId, userId)
-        : { ended: false };
-
-    // Update DB
-    const now = new Date();
-    await prisma.syncGroupMember.updateMany({
-        where: { syncGroupId: groupId, userId, leftAt: null },
-        data: { leftAt: now, isHost: false },
+    return withPublicationLock(groupId, "leave-group", async () => {
+        const captured = await captureGroupPublicationBase(groupId);
+        const committed = await commitGroupDeparture(userId, groupId);
+        return applyCommittedDeparture(userId, groupId, committed, captured);
     });
-
-    if (result.ended) {
-        await endGroupInDb(groupId);
-        groupManager.remove(groupId);
-        await listenTogetherStateStore.deleteSnapshot(groupId);
-    } else if (result.newHostUserId) {
-        // Update host in DB
-        await prisma.$transaction([
-            prisma.syncGroup.update({
-                where: { id: groupId },
-                data: { hostUserId: result.newHostUserId },
-            }),
-            prisma.syncGroupMember.updateMany({
-                where: { syncGroupId: groupId, leftAt: null },
-                data: { isHost: false },
-            }),
-            prisma.syncGroupMember.updateMany({
-                where: {
-                    syncGroupId: groupId,
-                    userId: result.newHostUserId,
-                    leftAt: null,
-                },
-                data: { isHost: true },
-            }),
-        ]);
-    }
-
-    const snapshot = groupManager.snapshotById(groupId);
-    if (snapshot) {
-        await listenTogetherStateStore.setSnapshot(groupId, snapshot);
-    }
-
-    return result;
 }
 
 /**
@@ -608,10 +823,8 @@ export async function leaveGroup(
  * host authorization is enforced from the DB for multi-pod/post-restart cases.
  */
 export async function endGroup(userId: string, groupId: string): Promise<void> {
-    // Will throw if not host
-    if (groupManager.has(groupId)) {
-        groupManager.endGroup(groupId, userId);
-    } else {
+    await withPublicationLock(groupId, "end-group", async () => {
+        const captured = await captureGroupPublicationBase(groupId);
         const group = await prisma.syncGroup.findUnique({
             where: { id: groupId },
             select: { hostUserId: true, isActive: true },
@@ -625,11 +838,9 @@ export async function endGroup(userId: string, groupId: string): Promise<void> {
                 "Only the host can end the group",
             );
         }
-    }
-
-    await endGroupInDb(groupId);
-    groupManager.remove(groupId);
-    await listenTogetherStateStore.deleteSnapshot(groupId);
+        await endGroupInDb(groupId);
+        await publishCommittedEnd(groupId, captured, "Host ended the group");
+    });
 }
 
 /**
@@ -777,7 +988,6 @@ async function persistDirtyGroups(): Promise<void> {
                     currentTime: currentPos / 1000, // DB stores seconds
                     stateVersion: pb.stateVersion,
                     stateUpdatedAt: new Date(),
-                    hostUserId: group.hostUserId,
                 },
             });
 
@@ -813,7 +1023,6 @@ export async function persistAllGroups(): Promise<void> {
                     currentTime: currentPos / 1000,
                     stateVersion: pb.stateVersion,
                     stateUpdatedAt: new Date(),
-                    hostUserId: group.hostUserId,
                 },
             });
         } catch (err) {

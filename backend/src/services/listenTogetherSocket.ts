@@ -9,7 +9,6 @@
 
 import type { Server as HttpServer } from "http";
 import { Server, type Namespace, type Socket } from "socket.io";
-import { randomUUID } from "crypto";
 import { verifyAccessToken } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
@@ -30,6 +29,7 @@ import {
     type GroupSnapshot,
     type PlaybackDelta,
     type QueueDelta,
+    type StatePublicationOptions,
 } from "./listenTogetherManager";
 import {
     joinGroupById,
@@ -39,6 +39,21 @@ import {
 } from "./listenTogether";
 import { resolveQueueForUser } from "./listenTogetherResolution";
 import { trackMappingService } from "./trackMappingService";
+import {
+    shutdownGroupMutationLock,
+    withGroupMutationLock as withSharedGroupMutationLock,
+} from "./listenTogetherMutationLock";
+import {
+    configureGroupPublicationBroadcaster,
+    enqueueGroupEndedBroadcast,
+    enqueueGroupEndedPublication,
+    enqueueGroupMembershipPublication,
+    enqueueGroupPresenceBroadcast,
+    enqueueGroupSnapshotBroadcast,
+    enqueueGroupSnapshotPublication,
+    flushGroupPublications,
+    resetGroupPublications,
+} from "./listenTogetherCallbacks";
 
 const log = logger.child("ListenTogetherSocket");
 
@@ -111,7 +126,6 @@ const pendingDisconnectCleanupTimers = new Map<
     ReturnType<typeof setTimeout>
 >();
 const recentDisconnectAtMs = new Map<string, number>();
-const pendingGroupSnapshotWrites = new Map<string, Promise<void>>();
 const listenTogetherObservabilityCounters = {
     reconnectSamples: 0,
     reconnectBreaches: 0,
@@ -122,16 +136,7 @@ const listenTogetherObservabilityCounters = {
 };
 let redisAdapterPubClient: any = null;
 let redisAdapterSubClient: any = null;
-const mutationLockNodeId = randomUUID();
-let mutationLockRedisClient: ReturnType<typeof createIORedisClient> | null =
-    null;
 let unsubscribeSocialPresenceUpdates: (() => void) | null = null;
-
-if (LISTEN_TOGETHER_MUTATION_LOCK_ENABLED) {
-    mutationLockRedisClient = createIORedisClient(
-        "listen-together-mutation-locks",
-    );
-}
 
 function logListenTogetherObservability(reason: string): void {
     logger.info(
@@ -178,35 +183,6 @@ function buildTransientConflictAck(
     };
 }
 
-function enqueueGroupSnapshotWrite(
-    groupId: string,
-    write: () => Promise<void>,
-): Promise<void> {
-    const previous =
-        pendingGroupSnapshotWrites.get(groupId) ?? Promise.resolve();
-    let queued: Promise<void>;
-    queued = previous
-        .then(
-            () => undefined,
-            () => undefined,
-        )
-        .then(write)
-        .catch(() => undefined)
-        .finally(() => {
-            if (pendingGroupSnapshotWrites.get(groupId) === queued) {
-                pendingGroupSnapshotWrites.delete(groupId);
-            }
-        });
-    pendingGroupSnapshotWrites.set(groupId, queued);
-    return queued;
-}
-
-async function flushGroupSnapshotWrites(groupId: string): Promise<void> {
-    const pending = pendingGroupSnapshotWrites.get(groupId);
-    if (!pending) return;
-    await pending;
-}
-
 function queuePersistAndPublishSnapshot(
     groupId: string,
     snapshot?: GroupSnapshot,
@@ -216,23 +192,7 @@ function queuePersistAndPublishSnapshot(
         return Promise.resolve();
     }
 
-    return enqueueGroupSnapshotWrite(groupId, async () => {
-        await listenTogetherStateStore.setSnapshot(groupId, resolvedSnapshot);
-        await listenTogetherClusterSync.publishSnapshot(
-            groupId,
-            resolvedSnapshot,
-        );
-    });
-}
-
-function queueEndedSnapshotSync(groupId: string): Promise<void> {
-    const snapshot = groupManager.snapshotById(groupId);
-    return enqueueGroupSnapshotWrite(groupId, async () => {
-        await listenTogetherStateStore.deleteSnapshot(groupId);
-        if (snapshot) {
-            await listenTogetherClusterSync.publishSnapshot(groupId, snapshot);
-        }
-    });
+    return enqueueGroupSnapshotPublication(groupId, resolvedSnapshot);
 }
 
 async function emitAvailabilityForGroup(
@@ -316,77 +276,22 @@ async function withGroupMutationLock<T>(
     operationName: string,
     operation: () => Promise<T>,
 ): Promise<T> {
-    if (!LISTEN_TOGETHER_MUTATION_LOCK_ENABLED || !mutationLockRedisClient) {
-        try {
-            return await operation();
-        } finally {
-            await flushGroupSnapshotWrites(groupId);
-        }
-    }
-
-    const lockKey = `${LISTEN_TOGETHER_MUTATION_LOCK_PREFIX}:${groupId}`;
-    const lockToken = `${mutationLockNodeId}:${Date.now()}:${Math.random()}`;
-    const ttlSeconds = Math.max(
-        1,
-        Math.ceil(LISTEN_TOGETHER_MUTATION_LOCK_TTL_MS / 1000),
-    );
-
-    try {
-        const acquired = await mutationLockRedisClient.set(
-            lockKey,
-            lockToken,
-            "EX",
-            ttlSeconds,
-            "NX",
-        );
-
-        if (acquired !== "OK") {
-            throw new GroupError(
-                "CONFLICT",
-                "Another group update is in progress. Please retry.",
+    return withSharedGroupMutationLock(groupId, operationName, operation, {
+        beforeOperation: async () => {
+            const authoritativeSnapshot =
+                await listenTogetherStateStore.getSnapshot(groupId);
+            if (authoritativeSnapshot) {
+                groupManager.applyExternalSnapshot(authoritativeSnapshot);
+            }
+        },
+        afterOperation: () => flushGroupPublications(groupId),
+        onAcquireFailure: () => {
+            listenTogetherObservabilityCounters.mutationLockAcquireFailures += 1;
+            maybeLogListenTogetherObservability(
+                "mutation-lock-acquire-failure",
             );
-        }
-    } catch (err) {
-        if (err instanceof GroupError) {
-            throw err;
-        }
-
-        logger.error(
-            `[ListenTogether/MutationLock] Failed to acquire lock for ${operationName} (${groupId})`,
-            err,
-        );
-        listenTogetherObservabilityCounters.mutationLockAcquireFailures += 1;
-        maybeLogListenTogetherObservability("mutation-lock-acquire-failure");
-        throw new GroupError(
-            "CONFLICT",
-            "Group coordination temporarily unavailable. Please retry.",
-        );
-    }
-
-    try {
-        const authoritativeSnapshot =
-            await listenTogetherStateStore.getSnapshot(groupId);
-        if (authoritativeSnapshot) {
-            groupManager.applyExternalSnapshot(authoritativeSnapshot);
-        }
-
-        return await operation();
-    } finally {
-        await flushGroupSnapshotWrites(groupId);
-        try {
-            await mutationLockRedisClient.eval(
-                "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-                1,
-                lockKey,
-                lockToken,
-            );
-        } catch (err) {
-            logger.warn(
-                `[ListenTogether/MutationLock] Failed to release lock for ${operationName} (${groupId})`,
-                err,
-            );
-        }
-    }
+        },
+    });
 }
 
 function disconnectCleanupKey(groupId: string, userId: string): string {
@@ -473,6 +378,28 @@ function scheduleDisconnectCleanup(
 
     recentDisconnectAtMs.set(key, Date.now());
     pendingDisconnectCleanupTimers.set(key, timer);
+}
+
+async function revokeGroupSockets(
+    ns: Namespace,
+    groupId: string,
+    socketIds: string[],
+): Promise<void> {
+    await Promise.all(
+        socketIds.map(async (socketId) => {
+            const socket = ns.sockets.get(socketId) as
+                | AuthenticatedSocket
+                | undefined;
+            if (!socket || socket.data.groupId !== groupId) return;
+            clearDisconnectCleanup(groupId, socket.data.userId);
+            recentDisconnectAtMs.delete(
+                disconnectCleanupKey(groupId, socket.data.userId),
+            );
+            socket.emit("group:membership-revoked", { groupId });
+            socket.data.groupId = null;
+            await socket.leave(groupId);
+        }),
+    );
 }
 
 /**
@@ -584,9 +511,33 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
 
     if (listenTogetherClusterSync.isEnabled()) {
         listenTogetherClusterSync
-            .start((snapshot) => {
-                groupManager.applyExternalSnapshot(snapshot);
-            })
+            .start(
+                (snapshot) => {
+                    groupManager.applyExternalSnapshot(snapshot);
+                },
+                (groupId) => {
+                    groupManager.remove(groupId);
+                },
+                (groupId, membership) => {
+                    if (!groupManager.has(groupId)) return;
+                    const revokedSocketIds =
+                        groupManager.applyCommittedMembership(
+                            groupId,
+                            membership.members,
+                            membership.hostUserId,
+                        );
+                    void revokeGroupSockets(
+                        ns,
+                        groupId,
+                        revokedSocketIds,
+                    ).catch((error) => {
+                        log.error(
+                            `Failed to revoke committed departure sockets for ${groupId}`,
+                            error,
+                        );
+                    });
+                },
+            )
             .catch((err) => {
                 logger.error(
                     "[ListenTogether/StateSync] Failed to start cluster sync; proceeding with pod-local state",
@@ -674,12 +625,45 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
         }
     });
 
+    configureGroupPublicationBroadcaster({
+        emitSnapshot(groupId, snapshot) {
+            ns.to(groupId).emit("group:state", snapshot);
+            void emitAvailabilityForGroup(ns, groupId, snapshot);
+        },
+        emitEnded(groupId, reason) {
+            ns.to(groupId).emit("group:ended", { reason });
+        },
+        // Member events carry their originating groupId so a client that
+        // switched groups on the same socket can discard stale deliveries.
+        emitMemberJoined(groupId, member) {
+            ns.to(groupId).emit("group:member-joined", { ...member, groupId });
+        },
+        emitMemberPresence(groupId, member) {
+            ns.to(groupId).emit("group:member-presence", {
+                ...member,
+                groupId,
+            });
+        },
+        emitMemberLeft(groupId, member) {
+            ns.to(groupId).emit("group:member-left", { ...member, groupId });
+        },
+        revokeSockets(groupId, socketIds) {
+            return revokeGroupSockets(ns, groupId, socketIds);
+        },
+    });
+
     // Wire up manager callbacks → Socket.IO broadcasts
     const callbacks: ManagerCallbacks = {
-        onGroupState(groupId: string, snapshot: GroupSnapshot) {
-            ns.to(groupId).emit("group:state", snapshot);
-            void queuePersistAndPublishSnapshot(groupId, snapshot);
-            void emitAvailabilityForGroup(ns, groupId, snapshot);
+        onGroupState(
+            groupId: string,
+            snapshot: GroupSnapshot,
+            options?: StatePublicationOptions,
+        ) {
+            if (options?.synchronize !== false) {
+                void enqueueGroupSnapshotPublication(groupId, snapshot);
+            } else {
+                void enqueueGroupSnapshotBroadcast(groupId, snapshot);
+            }
         },
         onPlaybackDelta(groupId: string, delta: PlaybackDelta) {
             ns.to(groupId).emit("group:playback-delta", delta);
@@ -699,16 +683,30 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
             void queuePersistAndPublishSnapshot(groupId);
         },
         onMemberJoined(groupId: string, member) {
-            ns.to(groupId).emit("group:member-joined", member);
-            void queuePersistAndPublishSnapshot(groupId);
+            void enqueueGroupMembershipPublication(groupId, {
+                type: "joined",
+                member,
+            });
+        },
+        onMemberPresence(groupId: string, member) {
+            void enqueueGroupPresenceBroadcast(groupId, member);
         },
         onMemberLeft(groupId: string, data) {
-            ns.to(groupId).emit("group:member-left", data);
-            void queuePersistAndPublishSnapshot(groupId);
+            void enqueueGroupMembershipPublication(groupId, {
+                type: "left",
+                member: data,
+            });
         },
-        onGroupEnded(groupId: string, reason: string) {
-            ns.to(groupId).emit("group:ended", { reason });
-            void queueEndedSnapshotSync(groupId);
+        onGroupEnded(
+            groupId: string,
+            reason: string,
+            options?: StatePublicationOptions,
+        ) {
+            if (options?.synchronize !== false) {
+                void enqueueGroupEndedPublication(groupId, reason);
+            } else {
+                void enqueueGroupEndedBroadcast(groupId, reason);
+            }
         },
         onBoundaryWatchdog(groupId: string, data) {
             void withGroupMutationLock(
@@ -786,6 +784,18 @@ export function setupListenTogetherSocket(httpServer: HttpServer): Server {
                         err instanceof GroupError
                             ? err.message
                             : "Failed to join group";
+                    if (err instanceof GroupError && err.code === "CONFLICT") {
+                        recordGroupConflict(
+                            typeof data?.groupId === "string"
+                                ? data.groupId
+                                : null,
+                            userId,
+                            "join-group",
+                            message,
+                        );
+                        sendAck(ack, buildTransientConflictAck(message));
+                        return;
+                    }
                     sendAck(ack, { error: message });
                     logger.error(`[ListenTogether/WS] join-group error:`, err);
                 }
@@ -1344,7 +1354,7 @@ export function shutdownListenTogetherSocket(): void {
     }
     pendingDisconnectCleanupTimers.clear();
     recentDisconnectAtMs.clear();
-    pendingGroupSnapshotWrites.clear();
+    resetGroupPublications();
 
     if (io) {
         io.close();
@@ -1363,10 +1373,7 @@ export function shutdownListenTogetherSocket(): void {
         redisAdapterPubClient = null;
     }
 
-    if (mutationLockRedisClient) {
-        mutationLockRedisClient.disconnect();
-        mutationLockRedisClient = null;
-    }
+    shutdownGroupMutationLock();
 
     if (unsubscribeSocialPresenceUpdates) {
         unsubscribeSocialPresenceUpdates();

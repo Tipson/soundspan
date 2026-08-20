@@ -23,6 +23,7 @@ describe("listenTogetherClusterSync", () => {
         onWaiting: jest.fn(),
         onPlayAt: jest.fn(),
         onMemberJoined: jest.fn(),
+        onMemberPresence: jest.fn(),
         onMemberLeft: jest.fn(),
         onGroupEnded: jest.fn(),
     });
@@ -154,6 +155,11 @@ describe("listenTogetherClusterSync", () => {
             playback: {},
             members: [],
         });
+        await listenTogetherClusterSync.publishMembership("g1", {
+            hostUserId: "host",
+            members: [],
+        });
+        await listenTogetherClusterSync.publishEnded("g1");
 
         expect(createIORedisClient).not.toHaveBeenCalled();
         expect(handler).not.toHaveBeenCalled();
@@ -173,6 +179,11 @@ describe("listenTogetherClusterSync", () => {
         await listenTogetherClusterSync.start(handler);
         await listenTogetherClusterSync.start(jest.fn());
         await listenTogetherClusterSync.publishSnapshot("g1", snapshot);
+        await listenTogetherClusterSync.publishMembership("g1", {
+            hostUserId: "host",
+            members: [],
+        });
+        await listenTogetherClusterSync.publishEnded("g1");
 
         expect(createIORedisClient).toHaveBeenCalledTimes(1);
         expect(subClient.subscribe).toHaveBeenCalledWith(
@@ -181,6 +192,14 @@ describe("listenTogetherClusterSync", () => {
         expect(pubClient.publish).toHaveBeenCalledWith(
             "listen-together:state-sync",
             expect.stringContaining('"groupId":"g1"'),
+        );
+        expect(pubClient.publish).toHaveBeenCalledWith(
+            "listen-together:state-sync",
+            expect.stringContaining('"type":"group-membership"'),
+        );
+        expect(pubClient.publish).toHaveBeenCalledWith(
+            "listen-together:state-sync",
+            expect.stringContaining('"type":"group-ended"'),
         );
         expect(logger.info).toHaveBeenCalledWith(
             expect.stringContaining("Enabled on channel"),
@@ -244,6 +263,91 @@ describe("listenTogetherClusterSync", () => {
         expect(handler).toHaveBeenCalledWith(validSnapshot);
     });
 
+    it("dispatches ended events from other nodes", async () => {
+        const { listenTogetherClusterSync, emitMessage } = loadClusterSync();
+        const snapshotHandler = jest.fn();
+        const endedHandler = jest.fn();
+        await listenTogetherClusterSync.start(snapshotHandler, endedHandler);
+
+        emitMessage(
+            "listen-together:state-sync",
+            JSON.stringify({
+                type: "group-ended",
+                groupId: "g-ended",
+                originNodeId: "node-2",
+                ts: Date.now(),
+            }),
+        );
+
+        expect(endedHandler).toHaveBeenCalledWith("g-ended");
+        expect(snapshotHandler).not.toHaveBeenCalled();
+    });
+
+    it("applies a peer membership transfer without replacing playback", async () => {
+        groupManager.setCallbacks(createCallbacks());
+        groupManager.create("g-membership-peer", {
+            name: "Peer Group",
+            joinCode: "PEER01",
+            groupType: "host-follower",
+            visibility: "private",
+            hostUserId: "old-host",
+            hostUsername: "Old Host",
+            queue: [track("kept")],
+            currentTimeMs: 12_000,
+            createdAt: new Date("2026-08-20T12:00:00.000Z"),
+        });
+        groupManager.addMember("g-membership-peer", "new-host", "New Host");
+        const playbackBefore = groupManager.get("g-membership-peer")!.playback;
+        const queueBefore = playbackBefore.queue;
+        const versionBefore = playbackBefore.stateVersion;
+        const { listenTogetherClusterSync, emitMessage } = loadClusterSync();
+        const membershipHandler = jest.fn((groupId, membership) =>
+            groupManager.applyCommittedMembership(
+                groupId,
+                membership.members,
+                membership.hostUserId,
+            ),
+        );
+        await listenTogetherClusterSync.start(
+            jest.fn(),
+            jest.fn(),
+            membershipHandler,
+        );
+
+        emitMessage(
+            "listen-together:state-sync",
+            JSON.stringify({
+                type: "group-membership",
+                groupId: "g-membership-peer",
+                originNodeId: "node-2",
+                membership: {
+                    hostUserId: "new-host",
+                    members: [
+                        {
+                            userId: "new-host",
+                            username: "New Host",
+                            isHost: true,
+                            joinedAt: "2026-08-20T12:01:00.000Z",
+                            isConnected: false,
+                        },
+                    ],
+                },
+                ts: Date.now(),
+            }),
+        );
+
+        expect(membershipHandler).toHaveBeenCalledTimes(1);
+        expect(groupManager.get("g-membership-peer")!.playback.queue).toBe(
+            queueBefore,
+        );
+        expect(
+            groupManager.get("g-membership-peer")!.playback.stateVersion,
+        ).toBe(versionBefore);
+        expect(() =>
+            groupManager.play("g-membership-peer", "new-host"),
+        ).not.toThrow();
+    });
+
     it("unsubscribes and disconnects clients on stop", async () => {
         const { listenTogetherClusterSync, subClient, pubClient } =
             loadClusterSync();
@@ -259,18 +363,20 @@ describe("listenTogetherClusterSync", () => {
         expect(pubClient.disconnect).toHaveBeenCalledTimes(1);
     });
 
-    it("logs a warning when publishSnapshot fails", async () => {
+    it("logs and propagates publishSnapshot failures for queued retry", async () => {
         const { listenTogetherClusterSync, pubClient, logger } =
             loadClusterSync();
         const handler = jest.fn();
         await listenTogetherClusterSync.start(handler);
 
         pubClient.publish.mockRejectedValueOnce(new Error("publish failed"));
-        await listenTogetherClusterSync.publishSnapshot("g1", {
-            id: "g1",
-            playback: {},
-            members: [],
-        });
+        await expect(
+            listenTogetherClusterSync.publishSnapshot("g1", {
+                id: "g1",
+                playback: {},
+                members: [],
+            }),
+        ).rejects.toThrow("publish failed");
 
         expect(logger.warn).toHaveBeenCalledWith(
             "[ListenTogether/StateSync] Failed to publish snapshot for group g1",

@@ -636,9 +636,11 @@ const providerApiState: { group: MockGroupSnapshot | null } = {
 };
 const providerSocketState = {
     callbacks: null as ListenTogetherSocketCallbacks | null,
+    joinGroupCalls: [] as string[],
     seekCalls: [] as number[],
     seekStateVersions: [] as Array<number | undefined>,
     reportReadyCalls: 0,
+    disconnectCalls: 0,
 };
 const providerEngineState = {
     currentTime: 0,
@@ -742,8 +744,11 @@ const providerSocket: ProviderSocketStub = {
     },
     disconnect: () => {
         providerSocket.isConnected = false;
+        providerSocketState.disconnectCalls += 1;
     },
-    joinGroup: async () => undefined,
+    joinGroup: async (groupId: string) => {
+        providerSocketState.joinGroupCalls.push(groupId);
+    },
     reportReady: async () => {
         providerSocketState.reportReadyCalls += 1;
     },
@@ -957,9 +962,11 @@ function resetProviderHarness(isHost: boolean, currentIndex: number): void {
     providerSocket.isConnected = false;
     providerSocket.probeRoute = async () => ({ ok: true });
     providerSocketState.callbacks = null;
+    providerSocketState.joinGroupCalls = [];
     providerSocketState.seekCalls = [];
     providerSocketState.seekStateVersions = [];
     providerSocketState.reportReadyCalls = 0;
+    providerSocketState.disconnectCalls = 0;
     providerEngineState.currentTime = 0;
     providerEngineState.duration = 180;
     providerEngineState.playing = false;
@@ -1080,6 +1087,98 @@ async function mountListenTogetherProvider(
         },
     };
 }
+
+test("membership revocation fully clears the active client session", async (t) => {
+    const guest = await mountListenTogetherProvider(false, 0);
+    t.after(guest.unmount);
+    await guest.act(async () => {
+        await waitFor(
+            () =>
+                getListenTogetherSessionSnapshot()?.groupId ===
+                "group-provider",
+            "provider session snapshot was not persisted",
+        );
+    });
+    const onMembershipRevoked = guest.callbacks().onMembershipRevoked;
+    assert.ok(onMembershipRevoked);
+
+    await guest.act(() => onMembershipRevoked({ groupId: "group-provider" }));
+
+    assert.equal(guest.latest().activeGroup, null);
+    assert.equal(guest.latest().isInGroup, false);
+    assert.equal(guest.latest().isConnected, false);
+    assert.equal(guest.latest().hasConnectedOnce, false);
+    assert.equal(getListenTogetherSessionSnapshot(), null);
+    assert.equal(providerSocketState.disconnectCalls, 1);
+});
+
+test("self member-left falls back to cleanup while another departure does not", async (t) => {
+    const guest = await mountListenTogetherProvider(false, 0);
+    t.after(guest.unmount);
+
+    await guest.act(() =>
+        guest.callbacks().onMemberLeft({
+            userId: "host-id",
+            username: "Host",
+        }),
+    );
+    assert.equal(guest.latest().activeGroup?.id, "group-provider");
+    assert.equal(providerSocketState.disconnectCalls, 0);
+
+    await guest.act(() =>
+        guest.callbacks().onMemberLeft({
+            userId: "guest-id",
+            username: "Guest",
+        }),
+    );
+
+    assert.equal(guest.latest().activeGroup, null);
+    assert.equal(getListenTogetherSessionSnapshot(), null);
+    assert.equal(providerSocketState.disconnectCalls, 1);
+});
+
+test("member events from a previous group on the same socket are discarded", async (t) => {
+    const guest = await mountListenTogetherProvider(false, 0);
+    t.after(guest.unmount);
+
+    // A stale self-departure from an earlier group must not tear down the
+    // current session (the socket is reused across group switches).
+    await guest.act(() =>
+        guest.callbacks().onMemberLeft({
+            userId: "guest-id",
+            username: "Guest",
+            groupId: "group-previous",
+        }),
+    );
+    assert.equal(guest.latest().activeGroup?.id, "group-provider");
+    assert.equal(providerSocketState.disconnectCalls, 0);
+
+    // A stale join from another group must not toast or mutate members.
+    await guest.act(() =>
+        guest.callbacks().onMemberJoined({
+            userId: "stranger",
+            username: "Stranger",
+            groupId: "group-previous",
+        }),
+    );
+    assert.equal(
+        guest
+            .latest()
+            .activeGroup?.members.some((m) => m.userId === "stranger"),
+        false,
+    );
+
+    // A matching groupId still performs the self-departure cleanup.
+    await guest.act(() =>
+        guest.callbacks().onMemberLeft({
+            userId: "guest-id",
+            username: "Guest",
+            groupId: "group-provider",
+        }),
+    );
+    assert.equal(guest.latest().activeGroup, null);
+    assert.equal(providerSocketState.disconnectCalls, 1);
+});
 
 test("ready-gated play-at resumes hosts without seeking and followers with a compensated seek", async (t) => {
     t.mock.method(Date, "now", () => 100_000);
@@ -1353,6 +1452,19 @@ test("reconnect recovery restores host position and compensates follower positio
     assert.equal(providerControlCalls.seek.length, seeksBeforeReload + 1);
     assert.equal(providerControlCalls.seek.at(-1), 25);
     assert.equal(providerEngineState.currentTime, 25);
+});
+
+test("rejoin exhaustion requests one bounded group resync", async (t) => {
+    const guest = await mountListenTogetherProvider(false, 0);
+    t.after(guest.unmount);
+    providerSocketState.joinGroupCalls = [];
+
+    await guest.act(async () => {
+        guest.callbacks().onRejoinFailed?.(new Error("rejoin exhausted"));
+        await flushMicrotasks();
+    });
+
+    assert.deepEqual(providerSocketState.joinGroupCalls, ["group-provider"]);
 });
 
 test("host playback-delta echoes preserve local position while followers seek", async (t) => {

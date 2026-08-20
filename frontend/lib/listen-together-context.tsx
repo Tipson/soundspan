@@ -36,6 +36,8 @@ import { isEpisodeQueueItem, type QueueItem } from "@/lib/queue-item";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { createRuntimeAudioEngine } from "@/lib/audio-engine";
 import {
+    applyGroupMemberPresence,
+    formatListenTogetherSocketRouteError,
     getServerClockOffsetMs,
     listenTogetherSocket,
     type GroupSnapshot,
@@ -47,11 +49,11 @@ import {
     type WaitingEvent,
     type PlayAtEvent,
     type SyncQueueItem,
-    type SocketRouteProbeResult,
 } from "@/lib/listen-together-socket";
 import {
     canIssueListenTogetherHostPlaybackCommand,
     computeCompensatedTargetMs,
+    isStaleGroupEvent,
     resolveFollowerSeekTarget,
     resolveReconnectSeekTarget,
 } from "@/lib/listenTogetherPlaybackSync";
@@ -59,7 +61,7 @@ import {
     enqueueLatestListenTogetherHostTrackOperation,
     getListenTogetherOptimisticTrackSelectionPolicy,
     getListenTogetherSessionSnapshot,
-    requestListenTogetherGroupResync,
+    scheduleListenTogetherGroupResync,
     setListenTogetherMembershipPending,
     setListenTogetherSessionSnapshot,
 } from "@/lib/listen-together-session";
@@ -232,23 +234,6 @@ function extractQueueTrackInputs(
     return { queueTracks, currentTrackId };
 }
 
-function formatSocketRouteError(result: SocketRouteProbeResult): string {
-    switch (result.reason) {
-        case "frontend-route":
-            return "Listen Together is blocked: /socket.io/listen-together is not reaching the backend Socket.IO service. Verify frontend socket proxy routing or direct backend path routing.";
-        case "http-error":
-            return `Listen Together socket probe failed with HTTP ${result.status ?? "error"}. Ensure /socket.io/listen-together reaches backend Socket.IO and websocket upgrades are enabled.`;
-        case "timeout":
-            return "Listen Together socket probe timed out. Verify your proxy/tunnel forwards /socket.io/listen-together correctly.";
-        case "network-error":
-            return "Listen Together socket probe could not reach the server. Check public URL, proxy/tunnel routing, and backend reachability.";
-        case "unexpected-response":
-            return "Listen Together socket probe received an unexpected response. /socket.io/listen-together must terminate on the backend Socket.IO service.";
-        default:
-            return "Listen Together websocket routing is not configured correctly. Ensure /socket.io/listen-together reaches backend Socket.IO.";
-    }
-}
-
 export type ListenTogetherMembershipPendingOperation = "create" | "join" | null;
 
 /**
@@ -387,6 +372,51 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
         availabilitySwapLoadListenerRef.current = null;
     }, []);
 
+    const clearActiveSessionTimers = useCallback(() => {
+        clearReadyReportLoadListener();
+        clearAvailabilitySwapLoadListener();
+        if (readyReportTimerRef.current) {
+            clearTimeout(readyReportTimerRef.current);
+            readyReportTimerRef.current = null;
+        }
+        if (disconnectGraceTimerRef.current) {
+            clearTimeout(disconnectGraceTimerRef.current);
+            disconnectGraceTimerRef.current = null;
+        }
+    }, [clearAvailabilitySwapLoadListener, clearReadyReportLoadListener]);
+
+    const clearActiveMembership = useCallback(() => {
+        clearActiveSessionTimers();
+        activeGroupRef.current = null;
+        setActiveGroup(null);
+        setTrackAvailability(new Map());
+        trackAvailabilityRef.current = new Map();
+        trackAvailabilityStateVersionRef.current = null;
+        setListenTogetherSessionSnapshot(null);
+        setListenTogetherMembershipPending(false);
+        hasEverConnectedRef.current = false;
+        setHasConnectedOnce(false);
+        setIsConnected(false);
+        setReconnectAttempt(0);
+        lastAppliedVersionRef.current = 0;
+        pendingHostTrackIndexRef.current = null;
+        hostMustAdoptGroupPositionRef.current = false;
+        awaitingInitialStateRef.current = true;
+        pendingReconnectAudioRecoveryRef.current = false;
+        isApplyingRemoteRef.current = false;
+        lastLoadedTrackIdRef.current = null;
+        listenTogetherSocket.disconnect();
+    }, [clearActiveSessionTimers]);
+
+    const handleMembershipRevoked = useCallback(
+        (revokedGroupId: string) => {
+            if (activeGroupRef.current?.id !== revokedGroupId) return;
+            clearActiveMembership();
+            toast.info("You left the Listen Together group");
+        },
+        [clearActiveMembership],
+    );
+
     // Keep refs in sync
     useEffect(() => {
         activeGroupRef.current = activeGroup;
@@ -413,12 +443,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
     }, []);
     useEffect(() => {
         return () => {
-            clearReadyReportLoadListener();
-            clearAvailabilitySwapLoadListener();
-            if (readyReportTimerRef.current) {
-                clearTimeout(readyReportTimerRef.current);
-                readyReportTimerRef.current = null;
-            }
+            clearActiveSessionTimers();
             if (routeRecheckTimerRef.current) {
                 clearTimeout(routeRecheckTimerRef.current);
                 routeRecheckTimerRef.current = null;
@@ -427,12 +452,8 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 clearTimeout(reconnectAudioRecoveryTimeoutRef.current);
                 reconnectAudioRecoveryTimeoutRef.current = null;
             }
-            if (disconnectGraceTimerRef.current) {
-                clearTimeout(disconnectGraceTimerRef.current);
-                disconnectGraceTimerRef.current = null;
-            }
         };
-    }, [clearAvailabilitySwapLoadListener, clearReadyReportLoadListener]);
+    }, [clearActiveSessionTimers]);
 
     useEffect(() => {
         return () => {
@@ -450,7 +471,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 return true;
             }
 
-            const message = formatSocketRouteError(probeResult);
+            const message = formatListenTogetherSocketRouteError(probeResult);
             setSocketRouteStatus("failed");
             setSocketRouteError(message);
             return false;
@@ -1057,19 +1078,9 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                         if (recoveryTriggered) return;
                         recoveryTriggered = true;
                         sharedFrontendLogger.warn(reason, details);
-                        void requestListenTogetherGroupResync(
+                        scheduleListenTogetherGroupResync(
                             activeGroupRef.current?.id,
-                        ).catch((recoveryError) => {
-                            sharedFrontendLogger.warn(
-                                "[ListenTogether] ready report recovery resync failed",
-                                {
-                                    error:
-                                        recoveryError instanceof Error
-                                            ? recoveryError.message
-                                            : String(recoveryError),
-                                },
-                            );
-                        });
+                        );
                     };
 
                     const tryReportReady = () => {
@@ -1316,10 +1327,9 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                     });
                 },
                 onMemberJoined: (data) => {
-                    if (data.userId !== user?.id) {
+                    if (isStaleGroupEvent(data, groupId)) return;
+                    if (data.userId !== user?.id)
                         toast.info(`${data.username} joined`);
-                    }
-                    // Refresh group state
                     setActiveGroup((prev) => {
                         if (!prev) return prev;
                         const exists = prev.members.some(
@@ -1343,10 +1353,19 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                         return next;
                     });
                 },
+                onMemberPresence: (data) => {
+                    if (isStaleGroupEvent(data, groupId)) return;
+                    setActiveGroup((prev) =>
+                        applyGroupMemberPresence(prev, data),
+                    );
+                },
                 onMemberLeft: (data) => {
-                    if (data.userId !== user?.id) {
-                        toast.info(`${data.username} left`);
+                    if (isStaleGroupEvent(data, groupId)) return;
+                    if (data.userId === user?.id) {
+                        handleMembershipRevoked(data.groupId ?? groupId);
+                        return;
                     }
+                    toast.info(`${data.username} left`);
                     setActiveGroup((prev) => {
                         if (!prev) return prev;
                         const updated = {
@@ -1356,7 +1375,6 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                             ),
                             hostUserId: data.newHostUserId ?? prev.hostUserId,
                         };
-                        // Update host flag
                         if (data.newHostUserId) {
                             updated.members = updated.members.map((m) => ({
                                 ...m,
@@ -1370,24 +1388,12 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                         return updated;
                     });
                 },
+                onMembershipRevoked: (data) => {
+                    handleMembershipRevoked(data.groupId);
+                },
                 onGroupEnded: (_data) => {
-                    if (disconnectGraceTimerRef.current) {
-                        clearTimeout(disconnectGraceTimerRef.current);
-                        disconnectGraceTimerRef.current = null;
-                    }
-                    activeGroupRef.current = null;
-                    setActiveGroup(null);
-                    setTrackAvailability(new Map());
-                    trackAvailabilityStateVersionRef.current = null;
-                    hasEverConnectedRef.current = false;
-                    setHasConnectedOnce(false);
-                    lastAppliedVersionRef.current = 0;
-                    pendingHostTrackIndexRef.current = null;
-                    hostMustAdoptGroupPositionRef.current = false;
-                    clearReadyReportLoadListener();
-                    setListenTogetherMembershipPending(false);
+                    clearActiveMembership();
                     toast.info("Listen Together session ended");
-                    listenTogetherSocket.disconnect();
                 },
                 onConnect: () => {
                     if (disconnectGraceTimerRef.current) {
@@ -1444,6 +1450,11 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                     );
                     void validateSocketRoute(true);
                 },
+                onRejoinFailed: () => {
+                    scheduleListenTogetherGroupResync(
+                        activeGroupRef.current?.id,
+                    );
+                },
                 onDisconnect: (_reason) => {
                     // Defer the visual disconnect; if Socket.IO reconnects within
                     // the grace window the indicator stays green.
@@ -1482,7 +1493,9 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
             applyQueueDelta,
             canCurrentUserControlHostPlayback,
             clearAvailabilitySwapLoadListener,
+            clearActiveMembership,
             clearReadyReportLoadListener,
+            handleMembershipRevoked,
             recoverAudioAfterReconnect,
             scheduleRouteRecheck,
             user?.id,
@@ -1522,7 +1535,9 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                     setSocketRouteError(null);
                 } else {
                     setSocketRouteStatus("failed");
-                    setSocketRouteError(formatSocketRouteError(probeResult));
+                    setSocketRouteError(
+                        formatListenTogetherSocketRouteError(probeResult),
+                    );
                 }
 
                 const routeOk = probeResult.ok;
@@ -1853,23 +1868,8 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
         if (!group) return;
 
         setError(null);
-        setListenTogetherMembershipPending(false);
-        if (disconnectGraceTimerRef.current) {
-            clearTimeout(disconnectGraceTimerRef.current);
-            disconnectGraceTimerRef.current = null;
-        }
         // Optimistic cleanup first so UI remains responsive even if backend is slow.
-        listenTogetherSocket.disconnect();
-        activeGroupRef.current = null;
-        setActiveGroup(null);
-        setTrackAvailability(new Map());
-        trackAvailabilityStateVersionRef.current = null;
-        hasEverConnectedRef.current = false;
-        setHasConnectedOnce(false);
-        lastAppliedVersionRef.current = 0;
-        pendingHostTrackIndexRef.current = null;
-        hostMustAdoptGroupPositionRef.current = false;
-        clearReadyReportLoadListener();
+        clearActiveMembership();
 
         try {
             await api.leaveListenGroup(group.id);
@@ -1880,7 +1880,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
             setError(message);
             toast.error(`Leave request failed in background: ${message}`);
         }
-    }, [clearReadyReportLoadListener]);
+    }, [clearActiveMembership]);
 
     const clearError = useCallback(() => setError(null), []);
 

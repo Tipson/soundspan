@@ -92,9 +92,11 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/libraryTrackPreferences.ts` | Core |
 | `backend/src/services/lidarr.ts` | Core |
 | `backend/src/services/listenTogether.ts` | Core |
+| `backend/src/services/listenTogetherCallbacks.ts` | Socket-facing manager callback contracts |
 | `backend/src/services/listenTogetherClusterSync.ts` | Core |
 | `backend/src/services/listenTogetherManager.ts` | Core |
 | `backend/src/services/listenTogetherResolution.ts` | Core |
+| `backend/src/services/listenTogetherSnapshot.ts` | Snapshot membership and playback adoption helpers |
 | `backend/src/services/listenTogetherSocket.ts` | Core |
 | `backend/src/services/listenTogetherStateStore.ts` | Core |
 | `backend/src/services/lyrics.ts` | Core |
