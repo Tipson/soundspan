@@ -595,7 +595,7 @@ type MockTrack = {
     title: string;
     duration: number;
     artist: { id: string; name: string };
-    album: { id: string; title: string; coverArt?: string };
+    album: { id: string; title: string; coverArt: string | null };
     mediaSource?: "local" | "tidal" | "youtube";
     streamSource?: "tidal" | "youtube" | "youtube-direct";
     youtubeVideoId?: string;
@@ -637,17 +637,20 @@ const providerApiState: { group: MockGroupSnapshot | null } = {
 const providerSocketState = {
     callbacks: null as ListenTogetherSocketCallbacks | null,
     seekCalls: [] as number[],
+    seekStateVersions: [] as Array<number | undefined>,
     reportReadyCalls: 0,
 };
 const providerEngineState = {
     currentTime: 0,
     duration: 180,
     playing: false,
+    reloadCalls: 0,
     listeners: new Map<string, Set<() => void>>(),
 };
 const providerControlCalls = {
     seek: [] as number[],
     resume: 0,
+    resumeOptions: [] as unknown[],
     pause: 0,
 };
 const providerAudioState = {
@@ -692,7 +695,9 @@ const providerPlaybackEngine = {
     getCurrentTime: () => providerEngineState.currentTime,
     getDuration: () => providerEngineState.duration,
     isPlaying: () => providerEngineState.playing,
-    reload: () => undefined,
+    reload: () => {
+        providerEngineState.reloadCalls += 1;
+    },
 };
 
 const providerControls = {
@@ -700,8 +705,9 @@ const providerControls = {
         providerControlCalls.seek.push(positionSec);
         providerEngineState.currentTime = positionSec;
     },
-    resume: () => {
+    resume: (options?: unknown) => {
         providerControlCalls.resume += 1;
+        providerControlCalls.resumeOptions.push(options);
         providerEngineState.playing = true;
     },
     pause: () => {
@@ -743,8 +749,9 @@ const providerSocket: ProviderSocketStub = {
     },
     play: async () => undefined,
     pause: async () => undefined,
-    seek: async (positionMs: number) => {
+    seek: async (positionMs: number, stateVersion?: number) => {
         providerSocketState.seekCalls.push(positionMs);
+        providerSocketState.seekStateVersions.push(stateVersion);
     },
     next: async () => undefined,
     previous: async () => undefined,
@@ -815,7 +822,10 @@ function installProviderBoundaryStubs(): void {
     if (providerBoundaryStubsInstalled) return;
     providerBoundaryStubsInstalled = true;
     const socket = listenTogetherSocket as unknown as typeof providerSocket;
-    socket.probeRoute = providerSocket.probeRoute;
+    // Delegate dynamically so tests can swap the probe stub mid-test.
+    socket.probeRoute = (
+        ...args: Parameters<typeof providerSocket.probeRoute>
+    ) => providerSocket.probeRoute(...args);
     socket.connect = providerSocket.connect;
     socket.disconnect = providerSocket.disconnect;
     socket.joinGroup = providerSocket.joinGroup;
@@ -894,7 +904,7 @@ function makeTrack(id: string): MockTrack {
         title: `Track ${id}`,
         duration: 180,
         artist: { id: "artist-id", name: "Artist" },
-        album: { id: "album-id", title: "Album" },
+        album: { id: "album-id", title: "Album", coverArt: null },
         mediaSource: "youtube",
         streamSource: "youtube",
         youtubeVideoId: `video-${id}`,
@@ -945,15 +955,19 @@ function resetProviderHarness(isHost: boolean, currentIndex: number): void {
     providerAuthState.userId = isHost ? "host-id" : "guest-id";
     providerApiState.group = group;
     providerSocket.isConnected = false;
+    providerSocket.probeRoute = async () => ({ ok: true });
     providerSocketState.callbacks = null;
     providerSocketState.seekCalls = [];
+    providerSocketState.seekStateVersions = [];
     providerSocketState.reportReadyCalls = 0;
     providerEngineState.currentTime = 0;
     providerEngineState.duration = 180;
     providerEngineState.playing = false;
+    providerEngineState.reloadCalls = 0;
     providerEngineState.listeners.clear();
     providerControlCalls.seek = [];
     providerControlCalls.resume = 0;
+    providerControlCalls.resumeOptions = [];
     providerControlCalls.pause = 0;
     providerAudioState.queue = group.playback.queue;
     providerAudioState.currentIndex = currentIndex;
@@ -962,6 +976,11 @@ function resetProviderHarness(isHost: boolean, currentIndex: number): void {
     providerAudioState.playbackType = "track";
     providerAudioStateCalls.currentIndex = [];
     providerAudioStateCalls.currentTrack = [];
+}
+
+function getProviderGroup(): MockGroupSnapshot {
+    assert.ok(providerApiState.group, "provider group fixture is missing");
+    return providerApiState.group;
 }
 
 function restoreBrowserGlobals(): void {
@@ -985,10 +1004,21 @@ type ListenTogetherApi = ReturnType<
 async function mountListenTogetherProvider(
     isHost: boolean,
     currentIndex: number,
+    options?: { connect?: boolean },
 ) {
+    const connect = options?.connect ?? true;
     installProviderBoundaryStubs();
     resetProviderHarness(isHost, currentIndex);
     restoreBrowserGlobals();
+    if (!connect) {
+        // Mount with a failing route probe: the group is retained but no
+        // socket connection is made (recheckSocketRoute makes the first one).
+        providerSocket.probeRoute = async () => ({
+            ok: false,
+            reason: "probe-failed",
+            status: 502,
+        });
+    }
     const { ListenTogetherProvider, useListenTogether } =
         await import("../../lib/listen-together-context");
     const { createRoot } = await import("react-dom/client");
@@ -1011,16 +1041,18 @@ async function mountListenTogetherProvider(
             ),
         );
     });
-    await React.act(async () => {
-        await waitFor(
-            () => providerSocketState.callbacks !== null,
-            "provider socket callbacks were not registered",
-        );
-    });
-    providerSocket.isConnected = true;
-    await React.act(async () => {
-        providerSocketState.callbacks?.onConnect();
-    });
+    if (connect) {
+        await React.act(async () => {
+            await waitFor(
+                () => providerSocketState.callbacks !== null,
+                "provider socket callbacks were not registered",
+            );
+        });
+        providerSocket.isConnected = true;
+        await React.act(async () => {
+            providerSocketState.callbacks?.onConnect();
+        });
+    }
 
     return {
         latest: () => {
@@ -1049,43 +1081,320 @@ async function mountListenTogetherProvider(
     };
 }
 
-test("host play-at echoes do not restart an optimistic track, while guests still synchronize", async () => {
+test("ready-gated play-at resumes hosts without seeking and followers with a compensated seek", async (t) => {
+    t.mock.method(Date, "now", () => 100_000);
     const host = await mountListenTogetherProvider(true, 0);
+    await host.act(() => host.callbacks().onGroupState(getProviderGroup()));
     await host.act(() => host.latest().syncSetTrack(1));
-    providerEngineState.playing = true;
-    providerEngineState.currentTime = 2.5;
+    const waitingHostSnapshot = {
+        ...makeGroup(true, 1),
+        syncState: "waiting" as const,
+        playback: {
+            ...makeGroup(true, 1).playback,
+            isPlaying: false,
+            stateVersion: 2,
+        },
+    };
+    await host.act(() => host.callbacks().onGroupState(waitingHostSnapshot));
+    assert.equal(providerEngineState.playing, false);
+
+    providerControlCalls.seek = [];
+    providerControlCalls.resume = 0;
+    providerControlCalls.resumeOptions = [];
+
+    await host.act(() =>
+        host.callbacks().onPlayAt({
+            positionMs: 0,
+            serverTime: 98_000,
+            stateVersion: 3,
+        }),
+    );
+
+    assert.deepEqual(providerControlCalls.seek, []);
+    assert.equal(providerControlCalls.resume, 1);
+    assert.deepEqual(providerControlCalls.resumeOptions, [
+        { suppressListenTogetherBroadcast: true },
+    ]);
+    assert.equal(providerEngineState.playing, true);
+    await host.unmount();
+
+    const guest = await mountListenTogetherProvider(false, 1);
+    await guest.act(() => guest.callbacks().onGroupState(getProviderGroup()));
+    const waitingGuestSnapshot = {
+        ...makeGroup(false, 1),
+        syncState: "waiting" as const,
+        playback: {
+            ...makeGroup(false, 1).playback,
+            isPlaying: false,
+            stateVersion: 2,
+        },
+    };
+    await guest.act(() => guest.callbacks().onGroupState(waitingGuestSnapshot));
+    assert.equal(providerEngineState.playing, false);
+    providerControlCalls.seek = [];
+    providerControlCalls.resume = 0;
+
+    await guest.act(() =>
+        guest.callbacks().onPlayAt({
+            positionMs: 0,
+            serverTime: 98_000,
+            stateVersion: 3,
+        }),
+    );
+
+    assert.deepEqual(providerControlCalls.seek, [2]);
+    assert.equal(providerControlCalls.resume, 1);
+    assert.equal(providerEngineState.currentTime, 2);
+    await guest.unmount();
+});
+
+test("play-at leaves an already-playing optimistic host selection alone", async (t) => {
+    t.mock.method(Date, "now", () => 100_000);
+    const host = await mountListenTogetherProvider(true, 0);
+    t.after(host.unmount);
+    await host.act(() => host.callbacks().onGroupState(getProviderGroup()));
+    await host.act(() => host.latest().syncSetTrack(1));
     providerControlCalls.seek = [];
     providerControlCalls.resume = 0;
 
     await host.act(() =>
         host.callbacks().onPlayAt({
             positionMs: 0,
-            serverTime: Date.now() + 1_000,
+            serverTime: 98_000,
             stateVersion: 2,
         }),
     );
 
     assert.deepEqual(providerControlCalls.seek, []);
     assert.equal(providerControlCalls.resume, 0);
-    assert.equal(providerEngineState.currentTime, 2.5);
-    await host.unmount();
+    assert.equal(providerEngineState.playing, true);
+});
 
-    const guest = await mountListenTogetherProvider(false, 1);
-    providerEngineState.playing = false;
-    providerEngineState.currentTime = 2.5;
+test("initial host hydration adopts group position once before ignoring delta echoes", async (t) => {
+    t.mock.method(Date, "now", () => 100_000);
+    const host = await mountListenTogetherProvider(true, 0);
+    t.after(host.unmount);
+    const hydrated = {
+        ...makeGroup(true, 0),
+        playback: {
+            ...makeGroup(true, 0).playback,
+            positionMs: 20_000,
+            serverTime: 95_000,
+        },
+    };
 
-    await guest.act(() =>
-        guest.callbacks().onPlayAt({
-            positionMs: 0,
-            serverTime: Date.now() + 1_000,
+    await host.act(() => host.callbacks().onGroupState(hydrated));
+
+    assert.deepEqual(providerControlCalls.seek, [25]);
+    providerEngineState.currentTime = 33;
+    await host.act(() =>
+        host.callbacks().onPlaybackDelta({
+            isPlaying: true,
+            positionMs: 50_000,
+            serverTime: 100_000,
             stateVersion: 2,
+            currentIndex: 0,
+            trackId: "remote-0",
         }),
     );
 
-    assert.deepEqual(providerControlCalls.seek, [0]);
-    assert.equal(providerControlCalls.resume, 1);
-    assert.equal(providerEngineState.currentTime, 0);
-    await guest.unmount();
+    assert.deepEqual(providerControlCalls.seek, [25]);
+    assert.equal(providerEngineState.currentTime, 33);
+});
+
+test("host hydration seeks even when the target sits inside the drift threshold", async (t) => {
+    t.mock.method(Date, "now", () => 100_000);
+    const host = await mountListenTogetherProvider(true, 0);
+    t.after(host.unmount);
+    const nearZero = {
+        ...makeGroup(true, 0),
+        playback: {
+            ...makeGroup(true, 0).playback,
+            positionMs: 1_200,
+            serverTime: 100_000,
+        },
+    };
+
+    await host.act(() => host.callbacks().onGroupState(nearZero));
+
+    // Engine sits at 0 and the 1.2s target is inside the 1.5s follower
+    // threshold; an adopting host must still take the group position or its
+    // zeroed local timeline becomes authoritative on the next heartbeat.
+    assert.deepEqual(providerControlCalls.seek, [1.2]);
+});
+
+test("re-check after a failed mount probe still hydrates the host position", async (t) => {
+    t.mock.method(Date, "now", () => 100_000);
+    const host = await mountListenTogetherProvider(true, 0, { connect: false });
+    t.after(host.unmount);
+    assert.equal(providerSocketState.callbacks, null);
+
+    providerSocket.probeRoute = async () => ({ ok: true });
+    await host.act(async () => {
+        assert.equal(await host.latest().recheckSocketRoute(), true);
+    });
+    providerSocket.isConnected = true;
+    await host.act(() => host.callbacks().onConnect());
+    const hydrated = {
+        ...makeGroup(true, 0),
+        playback: {
+            ...makeGroup(true, 0).playback,
+            positionMs: 20_000,
+            serverTime: 95_000,
+        },
+    };
+    await host.act(() => host.callbacks().onGroupState(hydrated));
+
+    // This re-check made the session's FIRST connection: the restored host
+    // must adopt the compensated group position, not stay at 0.
+    assert.deepEqual(providerControlCalls.seek, [25]);
+});
+
+test("live-session re-check reconnect never adopts the server position onto the host", async (t) => {
+    t.mock.method(Date, "now", () => 100_000);
+    // Start with a session that has NEVER connected, so a stale pre-await
+    // adoption decision would read "adopt". The first connection then happens
+    // DURING the deferred probe; the post-probe connectSocket must see it.
+    const host = await mountListenTogetherProvider(true, 0, { connect: false });
+    t.after(host.unmount);
+
+    let releaseProbe: (() => void) | null = null;
+    providerSocket.probeRoute = async () => {
+        await new Promise<void>((resolve) => {
+            releaseProbe = resolve;
+        });
+        return { ok: true };
+    };
+    await host.act(async () => {
+        const pending = host.latest().recheckSocketRoute();
+        await waitFor(() => releaseProbe !== null, "probe never started");
+
+        // While the probe is pending: a racing path completes the session's
+        // first connection lifecycle, then the socket drops again.
+        providerSocket.probeRoute = async () => ({ ok: true });
+        assert.equal(await host.latest().recheckSocketRoute(), true);
+        providerSocket.isConnected = true;
+        host.callbacks().onConnect();
+        providerSocket.isConnected = false;
+
+        providerEngineState.currentTime = 42;
+        providerEngineState.playing = true;
+        providerControlCalls.seek = [];
+
+        releaseProbe?.();
+        assert.equal(await pending, true);
+    });
+    const staleSnapshot = {
+        ...makeGroup(true, 0),
+        playback: {
+            ...makeGroup(true, 0).playback,
+            positionMs: 20_000,
+            serverTime: 95_000,
+            stateVersion: 5,
+        },
+    };
+    await host.act(() => host.callbacks().onGroupState(staleSnapshot));
+
+    // The deferred re-check's connectSocket ran AFTER the first connection:
+    // it must read the ref at call time and not re-arm adoption, keeping the
+    // host's live local timeline authoritative over the stale snapshot.
+    assert.deepEqual(providerControlCalls.seek, []);
+    assert.equal(providerEngineState.currentTime, 42);
+});
+
+test("reconnect recovery restores host position and compensates follower position", async (t) => {
+    t.mock.method(Date, "now", () => 100_000);
+    const reconnectSnapshot = {
+        ...makeGroup(true, 0),
+        playback: {
+            ...makeGroup(true, 0).playback,
+            positionMs: 20_000,
+            serverTime: 95_000,
+            stateVersion: 2,
+        },
+    };
+    const host = await mountListenTogetherProvider(true, 0);
+    await host.act(() => host.callbacks().onGroupState(getProviderGroup()));
+    providerControlCalls.seek = [];
+    providerControlCalls.resume = 0;
+    providerControlCalls.resumeOptions = [];
+    providerEngineState.currentTime = 42;
+    providerEngineState.playing = true;
+
+    await host.act(() => {
+        host.callbacks().onReconnect?.(1);
+        host.callbacks().onConnect();
+        host.callbacks().onGroupState(reconnectSnapshot);
+    });
+
+    assert.equal(providerEngineState.reloadCalls, 1);
+    assert.equal(providerEngineState.currentTime, 42);
+    await host.act(() => emitProviderEngineLoad());
+    assert.deepEqual(providerControlCalls.seek, [42]);
+    assert.deepEqual(providerControlCalls.resumeOptions, [
+        { suppressListenTogetherBroadcast: true },
+    ]);
+    await host.unmount();
+
+    const guest = await mountListenTogetherProvider(false, 0);
+    t.after(guest.unmount);
+    await guest.act(() => guest.callbacks().onGroupState(getProviderGroup()));
+    providerEngineState.currentTime = 42;
+    providerEngineState.playing = true;
+    await guest.act(() => {
+        guest.callbacks().onReconnect?.(1);
+        guest.callbacks().onConnect();
+        guest.callbacks().onGroupState(reconnectSnapshot);
+    });
+    const seeksBeforeReload = providerControlCalls.seek.length;
+
+    assert.equal(providerEngineState.reloadCalls, 1);
+    await guest.act(() => emitProviderEngineLoad());
+    assert.equal(providerControlCalls.seek.length, seeksBeforeReload + 1);
+    assert.equal(providerControlCalls.seek.at(-1), 25);
+    assert.equal(providerEngineState.currentTime, 25);
+});
+
+test("host playback-delta echoes preserve local position while followers seek", async (t) => {
+    const host = await mountListenTogetherProvider(true, 0);
+    providerEngineState.playing = true;
+    providerEngineState.currentTime = 10;
+    providerControlCalls.seek = [];
+
+    await host.act(() =>
+        host.callbacks().onPlaybackDelta({
+            isPlaying: true,
+            positionMs: 15_000,
+            serverTime: Date.now() + 1_000,
+            stateVersion: 2,
+            currentIndex: 0,
+            trackId: "remote-0",
+        }),
+    );
+
+    assert.deepEqual(providerControlCalls.seek, []);
+    assert.equal(providerEngineState.currentTime, 10);
+    await host.unmount();
+
+    const guest = await mountListenTogetherProvider(false, 0);
+    t.after(guest.unmount);
+    providerEngineState.playing = true;
+    providerEngineState.currentTime = 10;
+    providerControlCalls.seek = [];
+
+    await guest.act(() =>
+        guest.callbacks().onPlaybackDelta({
+            isPlaying: true,
+            positionMs: 15_000,
+            serverTime: Date.now() + 1_000,
+            stateVersion: 2,
+            currentIndex: 0,
+            trackId: "remote-0",
+        }),
+    );
+
+    assert.deepEqual(providerControlCalls.seek, [15]);
+    assert.equal(providerEngineState.currentTime, 15);
 });
 
 test("tripped followers suppress heartbeat restarts until a track-changing delta arrives", async (t) => {
@@ -1187,6 +1496,7 @@ test("remote-apply guards clear without animation frames so host heartbeats cont
     t.mock.timers.tick(5_000);
 
     assert.deepEqual(providerSocketState.seekCalls, [12_500]);
+    assert.deepEqual(providerSocketState.seekStateVersions, [2]);
 });
 
 test("availability remaps update queue identity idempotently and preserve swap position", async (t) => {
