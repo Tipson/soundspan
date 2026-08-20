@@ -93,6 +93,7 @@ jest.mock("../../utils/db", () => ({
             deleteMany: jest.fn(),
             upsert: jest.fn(),
         },
+        $transaction: jest.fn(),
     },
 }));
 
@@ -127,6 +128,7 @@ const mockTrackFindFirst = prisma.track.findFirst as jest.Mock;
 const mockTrackUpdate = prisma.track.update as jest.Mock;
 const mockOwnedAlbumDeleteMany = prisma.ownedAlbum.deleteMany as jest.Mock;
 const mockOwnedAlbumUpsert = prisma.ownedAlbum.upsert as jest.Mock;
+const mockPrismaTransaction = prisma.$transaction as jest.Mock;
 const mockRedisDel = redisClient.del as jest.Mock;
 
 function getHandler(
@@ -176,6 +178,10 @@ describe("enrichment metadata compatibility", () => {
         mockArtistFindFirst.mockResolvedValue(null);
         mockAlbumFindFirst.mockResolvedValue(null);
         mockTrackFindFirst.mockResolvedValue({ id: "track-1" });
+        mockPrismaTransaction.mockImplementation(
+            async (callback: (transaction: typeof prisma) => unknown) =>
+                callback(prisma),
+        );
     });
 
     it("stores track metadata as non-destructive user overrides", async () => {
@@ -369,7 +375,7 @@ describe("enrichment metadata compatibility", () => {
         expect(res.statusCode).toBe(200);
     });
 
-    it("updates OwnedAlbum mapping when album release-group MBID is corrected", async () => {
+    it("preserves ownership through cascade without creating it during an MBID correction", async () => {
         const originalRgMbid = "11111111-1111-4111-8111-111111111111";
         const updatedRgMbid = "22222222-2222-4222-8222-222222222222";
         mockAlbumFindUnique.mockResolvedValue({
@@ -377,8 +383,6 @@ describe("enrichment metadata compatibility", () => {
             rgMbid: originalRgMbid,
             location: "LIBRARY",
         });
-        mockOwnedAlbumDeleteMany.mockResolvedValue({ count: 1 });
-        mockOwnedAlbumUpsert.mockResolvedValue({});
         mockAlbumUpdate.mockResolvedValue({
             id: "album-1",
             rgMbid: updatedRgMbid,
@@ -399,30 +403,16 @@ describe("enrichment metadata compatibility", () => {
 
         expect(mockAlbumFindUnique).toHaveBeenCalledWith({
             where: { id: "album-1" },
-            select: { artistId: true, rgMbid: true, location: true },
+            select: { rgMbid: true },
         });
-        expect(mockOwnedAlbumDeleteMany).toHaveBeenCalledWith({
-            where: { artistId: "artist-1", rgMbid: originalRgMbid },
-        });
-        expect(mockOwnedAlbumUpsert).toHaveBeenCalledWith({
-            where: {
-                artistId_rgMbid: {
-                    artistId: "artist-1",
-                    rgMbid: updatedRgMbid,
-                },
-            },
-            create: {
-                artistId: "artist-1",
-                rgMbid: updatedRgMbid,
-                source: "metadata_edit",
-            },
-            update: {},
-        });
+        expect(mockOwnedAlbumDeleteMany).not.toHaveBeenCalled();
+        expect(mockOwnedAlbumUpsert).not.toHaveBeenCalled();
         expect(mockAlbumUpdate).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({ rgMbid: updatedRgMbid }),
             }),
         );
+        expect(mockPrismaTransaction).toHaveBeenCalledTimes(1);
         expect(res.statusCode).toBe(200);
     });
 
@@ -517,7 +507,7 @@ describe("enrichment metadata compatibility", () => {
 
         expect(mockAlbumFindUnique).toHaveBeenCalledWith({
             where: { id: "album-1" },
-            select: { artistId: true, rgMbid: true, location: true },
+            select: { rgMbid: true },
         });
         expect(mockAlbumFindFirst).not.toHaveBeenCalled();
         expect(mockOwnedAlbumDeleteMany).not.toHaveBeenCalled();

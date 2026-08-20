@@ -51,6 +51,7 @@ const mockPrisma = {
     },
     ownedAlbum: {
         create: jest.fn(),
+        findUnique: jest.fn(),
         upsert: jest.fn(),
     },
     libraryHealthRecord: {
@@ -58,6 +59,7 @@ const mockPrisma = {
         deleteMany: jest.fn(),
     },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(async () => []),
 };
 
 const mockLogger = {
@@ -84,7 +86,7 @@ const mockCreateMapping = jest.fn();
 const mockRecomputeAlbumLoudness = jest.fn();
 const mockConfig = {
     music: { transcodeCachePath: "/cache/transcodes" },
-    workers: { trackRemovalRetentionDays: 90 },
+    workers: { trackRemovalRetentionDays: 90, providerTrackRetentionDays: 30 },
     features: { federation: false },
 };
 
@@ -172,6 +174,8 @@ const { MusicScannerService } =
     require("../musicScanner") as typeof import("../musicScanner");
 const { isLossyAudioCodec } =
     require("../libraryHealthDashboard/qualityOutliers") as typeof import("../libraryHealthDashboard/qualityOutliers");
+const { albumOrphanRetentionGuardWhere, artistOrphanRetentionGuardWhere } =
+    require("../providerTrackRetention") as typeof import("../providerTrackRetention");
 
 interface TestIdentityTrack {
     id: string;
@@ -1282,7 +1286,8 @@ describe("MusicScannerService.scanLibrary", () => {
 
         await scanner.scanLibrary("/music");
 
-        expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+        // Fast path plus one bounded transaction per orphan entity phase.
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
         expect(mockRecomputeAlbumLoudness).not.toHaveBeenCalled();
         expect(mockPrisma.libraryHealthRecord.deleteMany).toHaveBeenCalledWith({
             where: { trackId: "track-1" },
@@ -1838,7 +1843,7 @@ describe("MusicScannerService.scanLibrary", () => {
         expect(result.tracksUpdated).toBe(1);
     });
 
-    it("soft-removes ambiguous identical moves when lower tiers cannot disambiguate them", async () => {
+    it("promotes a shared album once before soft-removing ambiguous moves", async () => {
         const scanner = new MusicScannerService();
         const shared = {
             audioHash: "sha256:" + "66".repeat(32),
@@ -1874,7 +1879,9 @@ describe("MusicScannerService.scanLibrary", () => {
 
         const result = await scanner.scanLibrary("/music");
 
-        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+        // Promotion, soft-remove, and one transaction per orphan entity phase.
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(4);
+        expect(mockPrisma.ownedAlbum.upsert).toHaveBeenCalledTimes(1);
         expect(mockPrisma.track.updateMany).toHaveBeenCalledWith({
             where: {
                 id: { in: ["track-old-1", "track-old-2"] },
@@ -1895,6 +1902,38 @@ describe("MusicScannerService.scanLibrary", () => {
                 tracksRemoved: 2,
             }),
         );
+    });
+
+    it("shares an in-flight album promotion and retries after failure", async () => {
+        const scanner = new MusicScannerService() as any;
+        const promotions = new Map<string, Promise<void>>();
+        const album = {
+            id: "album-1",
+            artistId: "artist-1",
+            rgMbid: "rg-album-1",
+            location: "DISCOVER",
+        };
+        let rejectPromotion: ((error: Error) => void) | undefined;
+        mockPrisma.$transaction.mockImplementationOnce(
+            () =>
+                new Promise<void>((_resolve, reject) => {
+                    rejectPromotion = reject;
+                }),
+        );
+
+        const first = scanner.promoteNativeAlbumOnce(album, promotions);
+        const concurrent = scanner.promoteNativeAlbumOnce(album, promotions);
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+        rejectPromotion?.(new Error("promotion failed"));
+        await expect(first).rejects.toThrow("promotion failed");
+        await expect(concurrent).rejects.toThrow("promotion failed");
+        expect(promotions.has(album.id)).toBe(false);
+
+        await expect(
+            scanner.promoteNativeAlbumOnce(album, promotions),
+        ).resolves.toBeUndefined();
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
     });
 
     it("marks missing tracks as unhealthy without deleting library context", async () => {
@@ -1989,26 +2028,31 @@ describe("MusicScannerService.scanLibrary", () => {
                 detail: null,
             },
         });
-        expect(mockPrisma.album.findMany).toHaveBeenCalledWith({
+        const orphanAlbumQuery = mockPrisma.album.findMany.mock.calls.find(
+            ([args]: [{ where?: { tracksTidal?: unknown } }]) =>
+                args?.where?.tracksTidal,
+        )?.[0];
+        const orphanCutoff = orphanAlbumQuery?.where?.tracksTidal?.none?.NOT
+            ?.createdAt?.lt as Date;
+        expect(orphanCutoff).toBeInstanceOf(Date);
+        expect(orphanAlbumQuery).toEqual({
             where: {
                 peerId: null,
                 tracks: { none: {} },
-                tracksTidal: { none: {} },
-                tracksYtMusic: { none: {} },
+                ...albumOrphanRetentionGuardWhere(orphanCutoff),
             },
             orderBy: { id: "asc" },
-            take: 10_000,
+            take: 100,
             select: { id: true },
         });
         expect(mockPrisma.artist.findMany).toHaveBeenCalledWith({
             where: {
                 peerId: null,
                 albums: { none: {} },
-                tracksTidal: { none: {} },
-                tracksYtMusic: { none: {} },
+                ...artistOrphanRetentionGuardWhere(orphanCutoff),
             },
             orderBy: { id: "asc" },
-            take: 10_000,
+            take: 100,
             select: { id: true },
         });
         expect(mockPrisma.album.deleteMany).not.toHaveBeenCalled();
@@ -2026,13 +2070,17 @@ describe("MusicScannerService.scanLibrary", () => {
 
         await scanner.scanLibrary("/music");
 
-        expect(mockPrisma.album.deleteMany).toHaveBeenCalledWith({
+        const guardedAlbumDelete =
+            mockPrisma.album.deleteMany.mock.calls[0]?.[0];
+        const deleteCutoff = guardedAlbumDelete?.where?.tracksTidal?.none?.NOT
+            ?.createdAt?.lt as Date;
+        expect(deleteCutoff).toBeInstanceOf(Date);
+        expect(guardedAlbumDelete).toEqual({
             where: {
                 id: { in: ["album-1"] },
                 peerId: null,
                 tracks: { none: {} },
-                tracksTidal: { none: {} },
-                tracksYtMusic: { none: {} },
+                ...albumOrphanRetentionGuardWhere(deleteCutoff),
             },
         });
         expect(mockPrisma.artist.deleteMany).toHaveBeenCalledWith({
@@ -2040,8 +2088,7 @@ describe("MusicScannerService.scanLibrary", () => {
                 id: { in: ["artist-1"] },
                 peerId: null,
                 albums: { none: {} },
-                tracksTidal: { none: {} },
-                tracksYtMusic: { none: {} },
+                ...artistOrphanRetentionGuardWhere(deleteCutoff),
             },
         });
     });

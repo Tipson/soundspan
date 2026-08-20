@@ -30,6 +30,12 @@ import {
     type VibeProviderEndpoint,
     type VibeProviderOutcome,
 } from "./providerMetrics";
+import {
+    createProviderTrackGcMetrics,
+    type ProviderTrackGcBacklogMetrics,
+    type ProviderTrackGcOutcome,
+    type ProviderTrackGcProvider,
+} from "./providerTrackGcMetrics";
 import type {
     FederationEmbeddingExportOutcome,
     FederationEmbeddingPageOutcome,
@@ -65,6 +71,7 @@ const httpMetrics = createHttpRequestMetrics(metricsRegistry);
 const domainMetrics = createDomainMetrics(metricsRegistry);
 const libraryHealthMetrics = createLibraryHealthMetrics(metricsRegistry);
 const providerMetrics = createProviderMetrics(metricsRegistry);
+const providerTrackGcMetrics = createProviderTrackGcMetrics(metricsRegistry);
 createLoudnessMetrics(metricsRegistry, prisma, {
     getBackfillOutcomes: async () => {
         const { redisClient } = await import("../utils/redis");
@@ -201,6 +208,16 @@ export function recordVibeProviderRequest(
     durationSeconds: number,
 ): void {
     providerMetrics.record(endpoint, outcome, durationSeconds);
+}
+
+/** Records one completed provider-track garbage collection pass. */
+export function recordProviderTrackGcPass(
+    outcome: ProviderTrackGcOutcome,
+    durationSeconds: number,
+    deleted: Readonly<Record<ProviderTrackGcProvider, number>>,
+    health?: ProviderTrackGcBacklogMetrics,
+): void {
+    providerTrackGcMetrics.record(outcome, durationSeconds, deleted, health);
 }
 
 /** Records one final backend-driven audio embedding job outcome. */

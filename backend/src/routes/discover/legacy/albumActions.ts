@@ -1,5 +1,15 @@
 import type { Request, Response } from "express";
+import type { Prisma } from "@prisma/client";
 import { lidarrService } from "../../../services/lidarr";
+import {
+    DISCOVERY_LIKED_OWNERSHIP_SOURCE,
+    promoteAlbumOwnership,
+} from "../../../services/albumOwnershipPromotion";
+import {
+    DiscoveryCatalogResolutionError,
+    resolveDiscoveryCatalogAlbum,
+    retryDiscoveryLinkDrift,
+} from "../../../services/discoveryCatalogAlbum";
 import { prisma } from "../../../utils/db";
 import { logger } from "../../../utils/logger";
 import {
@@ -8,6 +18,173 @@ import {
 } from "../../routeErrorResponse";
 
 // Deprecated legacy discovery code is frozen: no fixes; removal is planned.
+
+type LegacyDiscoveryAlbum = NonNullable<
+    Awaited<ReturnType<typeof prisma.discoveryAlbum.findFirst>>
+> & { catalogAlbumId?: string | null };
+
+class DiscoveryCatalogAlbumMissingError extends Error {}
+
+async function updateDiscoveryPlays(
+    transaction: Prisma.TransactionClient,
+    discoveryAlbumId: string,
+    userId: string,
+    from: "DISCOVERY" | "DISCOVERY_KEPT",
+    to: "DISCOVERY" | "DISCOVERY_KEPT",
+): Promise<void> {
+    const tracks = await transaction.discoveryTrack.findMany({
+        where: { discoveryAlbumId },
+        select: { trackId: true },
+    });
+    const trackIds = tracks.flatMap((track) =>
+        track.trackId === null ? [] : [track.trackId],
+    );
+    if (trackIds.length === 0) return;
+    await transaction.play.updateMany({
+        where: { userId, trackId: { in: trackIds }, source: from },
+        data: { source: to },
+    });
+}
+
+async function commitLegacyLike(userId: string, albumId: string) {
+    try {
+        return await retryDiscoveryLinkDrift(() =>
+            prisma.$transaction(async (transaction) => {
+                const discoveryAlbum =
+                    await transaction.discoveryAlbum.findFirst({
+                        where: { userId, rgMbid: albumId, status: "ACTIVE" },
+                    });
+                if (!discoveryAlbum) return null;
+                const resolution = await resolveDiscoveryCatalogAlbum(
+                    transaction,
+                    discoveryAlbum,
+                    { expectedStatuses: ["ACTIVE"] },
+                );
+                const dbAlbum = resolution?.catalogAlbum;
+                if (!dbAlbum) {
+                    throw new DiscoveryCatalogAlbumMissingError();
+                }
+                const liked = await transaction.discoveryAlbum.updateMany({
+                    where: { id: discoveryAlbum.id, status: "ACTIVE" },
+                    data: {
+                        status: "LIKED",
+                        likedAt: new Date(),
+                    },
+                });
+                if (liked.count !== 1) {
+                    throw new DiscoveryCatalogResolutionError(
+                        "Discovery like claim failed after row locking",
+                    );
+                }
+                await promoteAlbumOwnership(
+                    transaction,
+                    dbAlbum,
+                    DISCOVERY_LIKED_OWNERSHIP_SOURCE,
+                );
+                await updateDiscoveryPlays(
+                    transaction,
+                    discoveryAlbum.id,
+                    userId,
+                    "DISCOVERY",
+                    "DISCOVERY_KEPT",
+                );
+                return { discoveryAlbum, dbAlbum };
+            }),
+        );
+    } catch (error: unknown) {
+        if (
+            error instanceof DiscoveryCatalogAlbumMissingError ||
+            error instanceof DiscoveryCatalogResolutionError
+        ) {
+            return null;
+        }
+        throw error;
+    }
+}
+
+async function removeLegacyDiscoveryTag(
+    discoveryAlbum: LegacyDiscoveryAlbum,
+): Promise<void> {
+    try {
+        if (
+            discoveryAlbum.artistMbid &&
+            !discoveryAlbum.artistMbid.startsWith("temp-")
+        ) {
+            await lidarrService.removeDiscoveryTagByMbid(
+                discoveryAlbum.artistMbid,
+            );
+            return;
+        }
+        const artists = await lidarrService.getArtists();
+        const artist = artists.find(
+            (candidate) =>
+                candidate.artistName.toLowerCase() ===
+                discoveryAlbum.artistName.toLowerCase(),
+        );
+        if (!artist) return;
+        const tagId = await lidarrService.getOrCreateDiscoveryTag();
+        if (tagId && artist.tags?.includes(tagId)) {
+            await lidarrService.removeTagsFromArtist(artist.id, [tagId]);
+        }
+    } catch (error: unknown) {
+        logger.debug(
+            `Failed to remove discovery tag for ${discoveryAlbum.artistName}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+}
+
+async function commitLegacyUnlike(
+    userId: string,
+    albumId: string,
+): Promise<boolean> {
+    try {
+        return await retryDiscoveryLinkDrift(() =>
+            prisma.$transaction(async (transaction) => {
+                const discoveryAlbum =
+                    await transaction.discoveryAlbum.findFirst({
+                        where: { userId, rgMbid: albumId, status: "LIKED" },
+                    });
+                if (!discoveryAlbum) return false;
+                const resolution = await resolveDiscoveryCatalogAlbum(
+                    transaction,
+                    discoveryAlbum,
+                    { expectedStatuses: ["LIKED"] },
+                );
+                if (!resolution) return false;
+                const unliked = await transaction.discoveryAlbum.updateMany({
+                    where: { id: discoveryAlbum.id, status: "LIKED" },
+                    data: { status: "ACTIVE", likedAt: null },
+                });
+                if (unliked.count !== 1) {
+                    throw new DiscoveryCatalogResolutionError(
+                        "Discovery unlike claim failed after row locking",
+                    );
+                }
+                const dbAlbum = resolution.catalogAlbum;
+                if (dbAlbum) {
+                    await transaction.ownedAlbum.deleteMany({
+                        where: {
+                            artistId: dbAlbum.artistId,
+                            rgMbid: dbAlbum.rgMbid,
+                            source: DISCOVERY_LIKED_OWNERSHIP_SOURCE,
+                        },
+                    });
+                }
+                await updateDiscoveryPlays(
+                    transaction,
+                    discoveryAlbum.id,
+                    userId,
+                    "DISCOVERY_KEPT",
+                    "DISCOVERY",
+                );
+                return true;
+            }),
+        );
+    } catch (error: unknown) {
+        if (error instanceof DiscoveryCatalogResolutionError) return false;
+        throw error;
+    }
+}
 
 /** Handles frozen legacy discovery album likes. */
 export async function handleLegacyLike(
@@ -22,122 +199,18 @@ export async function handleLegacyLike(
             return sendRouteError(res, 400, "albumId required");
         }
 
-        // Find the discovery album
-        const discoveryAlbum = await prisma.discoveryAlbum.findFirst({
-            where: {
-                userId,
-                rgMbid: albumId,
-                status: "ACTIVE",
-            },
-        });
-
-        if (!discoveryAlbum) {
+        const committed = await commitLegacyLike(userId, albumId);
+        if (!committed) {
             return res
                 .status(404)
                 .json({ error: "Album not in active discovery" });
         }
-
-        // Mark as liked (entire album will be kept)
-        await prisma.discoveryAlbum.update({
-            where: { id: discoveryAlbum.id },
-            data: {
-                status: "LIKED",
-                likedAt: new Date(),
-            },
-        });
-
-        // Remove discovery tag from the artist in Lidarr
-        // This prevents the artist from being deleted during cleanup
+        const { discoveryAlbum, dbAlbum } = committed;
         logger.debug(
             `   Removing discovery tag from artist: ${discoveryAlbum.artistName}`,
         );
-
-        // If artistMbid is a temp ID, we need to search Lidarr by artist name instead
-        if (
-            discoveryAlbum.artistMbid &&
-            !discoveryAlbum.artistMbid.startsWith("temp-")
-        ) {
-            await lidarrService.removeDiscoveryTagByMbid(
-                discoveryAlbum.artistMbid,
-            );
-        } else {
-            // Search Lidarr for the artist by name and remove tag
-            try {
-                const lidarrArtists = await lidarrService.getArtists();
-                const lidarrArtist = lidarrArtists.find(
-                    (a) =>
-                        a.artistName.toLowerCase() ===
-                        discoveryAlbum.artistName.toLowerCase(),
-                );
-
-                if (lidarrArtist) {
-                    const tagId = await lidarrService.getOrCreateDiscoveryTag();
-                    if (tagId && lidarrArtist.tags?.includes(tagId)) {
-                        await lidarrService.removeTagsFromArtist(
-                            lidarrArtist.id,
-                            [tagId],
-                        );
-                        logger.debug(
-                            `   Removed discovery tag from ${lidarrArtist.artistName} (found by name)`,
-                        );
-                    }
-                } else {
-                    logger.debug(
-                        `   Artist ${discoveryAlbum.artistName} not found in Lidarr (may have been removed)`,
-                    );
-                }
-            } catch (e: any) {
-                logger.debug(`   Failed to remove discovery tag: ${e.message}`);
-            }
-        }
-
-        // Find the actual Album record and create OwnedAlbum so it appears in library immediately
-        // Match by artist name + album title since rgMbid may differ between DiscoveryAlbum and scanned Album
-        const dbAlbum = await prisma.album.findFirst({
-            where: {
-                OR: [
-                    { rgMbid: albumId },
-                    {
-                        title: {
-                            equals: discoveryAlbum.albumTitle,
-                            mode: "insensitive",
-                        },
-                        artist: {
-                            name: {
-                                equals: discoveryAlbum.artistName,
-                                mode: "insensitive",
-                            },
-                        },
-                    },
-                ],
-            },
-            include: { artist: true },
-        });
-
+        await removeLegacyDiscoveryTag(discoveryAlbum);
         if (dbAlbum) {
-            // Update album location to LIBRARY so it appears in owned view
-            await prisma.album.update({
-                where: { id: dbAlbum.id },
-                data: { location: "LIBRARY" },
-            });
-
-            // Create OwnedAlbum record if doesn't exist (makes it appear in "Owned" filter)
-            await prisma.ownedAlbum.upsert({
-                where: {
-                    artistId_rgMbid: {
-                        artistId: dbAlbum.artistId,
-                        rgMbid: dbAlbum.rgMbid,
-                    },
-                },
-                create: {
-                    artistId: dbAlbum.artistId,
-                    rgMbid: dbAlbum.rgMbid,
-                    source: "discovery_liked",
-                },
-                update: {
-                    source: "discovery_liked",
-                },
-            });
             logger.debug(
                 ` Added liked album to library: ${dbAlbum.artist.name} - ${dbAlbum.title} (matched from discovery)`,
             );
@@ -145,30 +218,6 @@ export async function handleLegacyLike(
             logger.debug(
                 `   [WARN] Could not find scanned album for: ${discoveryAlbum.artistName} - ${discoveryAlbum.albumTitle}`,
             );
-        }
-
-        // Retroactively mark all plays from this album as DISCOVERY_KEPT
-        // Note: This requires getting tracks from the album first
-        const tracks = await prisma.discoveryTrack.findMany({
-            where: { discoveryAlbumId: discoveryAlbum.id },
-            select: { trackId: true },
-        });
-
-        const trackIds = tracks
-            .map((t) => t.trackId)
-            .filter((id): id is string => id !== null);
-
-        if (trackIds.length > 0) {
-            await prisma.play.updateMany({
-                where: {
-                    userId,
-                    trackId: { in: trackIds },
-                    source: "DISCOVERY",
-                },
-                data: {
-                    source: "DISCOVERY_KEPT",
-                },
-            });
         }
 
         res.json({ success: true });
@@ -191,58 +240,9 @@ export async function handleLegacyUnlike(
             return sendRouteError(res, 400, "albumId required");
         }
 
-        const discoveryAlbum = await prisma.discoveryAlbum.findFirst({
-            where: {
-                userId,
-                rgMbid: albumId,
-                status: "LIKED",
-            },
-        });
-
-        if (!discoveryAlbum) {
+        if (!(await commitLegacyUnlike(userId, albumId))) {
             return sendRouteError(res, 404, "Album not liked");
         }
-
-        // Revert status back to ACTIVE
-        await prisma.discoveryAlbum.update({
-            where: { id: discoveryAlbum.id },
-            data: {
-                status: "ACTIVE",
-                likedAt: null,
-            },
-        });
-
-        // Remove OwnedAlbum record if it was from discovery_liked
-        await prisma.ownedAlbum.deleteMany({
-            where: {
-                rgMbid: albumId,
-                source: "discovery_liked",
-            },
-        });
-
-        // Revert plays back to DISCOVERY source
-        const tracks = await prisma.discoveryTrack.findMany({
-            where: { discoveryAlbumId: discoveryAlbum.id },
-            select: { trackId: true },
-        });
-
-        const trackIds = tracks
-            .map((t) => t.trackId)
-            .filter((id): id is string => id !== null);
-
-        if (trackIds.length > 0) {
-            await prisma.play.updateMany({
-                where: {
-                    userId,
-                    trackId: { in: trackIds },
-                    source: "DISCOVERY_KEPT",
-                },
-                data: {
-                    source: "DISCOVERY",
-                },
-            });
-        }
-
         res.json({ success: true });
     } catch (error) {
         logger.error("Unlike discovery album error:", error);

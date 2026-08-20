@@ -4,6 +4,23 @@ import fs from "fs";
 import path from "path";
 import { config } from "../../../config";
 import { lidarrService } from "../../../services/lidarr";
+import { deleteDiscoveryAlbumCatalogEntry } from "../../../services/discoveryAlbumCatalogCleanup";
+import {
+    DISCOVERY_LIKED_OWNERSHIP_SOURCE,
+    promoteAlbumOwnership,
+} from "../../../services/albumOwnershipPromotion";
+import {
+    DiscoveryCatalogResolutionError,
+    resolveDiscoveryCatalogAlbum,
+    retryDiscoveryLinkDrift,
+} from "../../../services/discoveryCatalogAlbum";
+import { cleanupOrphanedLibraryEntities } from "../../../services/libraryOrphanCleanup";
+import {
+    discoveryAlbumOrphanRetentionGuardWhere,
+    discoveryAlbumTracksOrphanRetentionGuardWhere,
+    findUnlinkedLikedDiscoveryRgMbids,
+    providerTrackRetentionCutoff,
+} from "../../../services/providerTrackRetention";
 import { prisma } from "../../../utils/db";
 import { TRACK_VISIBLE_WHERE } from "../../../utils/librarySorting";
 import { logger } from "../../../utils/logger";
@@ -13,6 +30,55 @@ import { scanQueue } from "../../../workers/queues";
 import { sendClearPlaylistFailure } from "../shared";
 
 // Deprecated legacy discovery code is frozen: no fixes; removal is planned.
+
+interface LegacyCleanupAlbum {
+    id: string;
+    catalogAlbumId?: string | null;
+    albumTitle: string;
+    artistName: string;
+    rgMbid: string;
+}
+
+async function deleteLegacyCatalogAlbum(
+    album: LegacyCleanupAlbum,
+): ReturnType<typeof deleteDiscoveryAlbumCatalogEntry> {
+    return deleteDiscoveryAlbumCatalogEntry(album);
+}
+
+async function moveLegacyLikedAlbum(album: LegacyCleanupAlbum) {
+    return retryDiscoveryLinkDrift(() =>
+        prisma.$transaction(async (transaction) => {
+            const resolution = await resolveDiscoveryCatalogAlbum(
+                transaction,
+                album,
+                { expectedStatuses: ["LIKED"] },
+            );
+            if (!resolution) {
+                throw new DiscoveryCatalogResolutionError(
+                    "Discovery album disappeared during legacy promotion",
+                );
+            }
+            const catalogAlbum = resolution.catalogAlbum;
+            if (catalogAlbum) {
+                await promoteAlbumOwnership(
+                    transaction,
+                    catalogAlbum,
+                    DISCOVERY_LIKED_OWNERSHIP_SOURCE,
+                );
+            }
+            const moved = await transaction.discoveryAlbum.updateMany({
+                where: { id: album.id, status: "LIKED" },
+                data: { status: "MOVED" },
+            });
+            if (moved.count !== 1) {
+                throw new DiscoveryCatalogResolutionError(
+                    "Legacy discovery move claim failed after row locking",
+                );
+            }
+            return catalogAlbum;
+        }),
+    );
+}
 
 /** Handles frozen legacy discovery playlist cleanup. */
 export async function handleLegacyClear(
@@ -62,38 +128,9 @@ export async function handleLegacyClear(
 
             for (const album of likedAlbums) {
                 try {
-                    // Find the album in the database by matching artist + title
-                    const dbAlbum = await prisma.album.findFirst({
-                        where: {
-                            title: album.albumTitle,
-                            artist: { name: album.artistName },
-                        },
-                        include: { artist: true },
-                    });
+                    const dbAlbum = await moveLegacyLikedAlbum(album);
 
                     if (dbAlbum) {
-                        // Update album location to LIBRARY
-                        await prisma.album.update({
-                            where: { id: dbAlbum.id },
-                            data: { location: "LIBRARY" },
-                        });
-
-                        // Create OwnedAlbum record if doesn't exist
-                        await prisma.ownedAlbum.upsert({
-                            where: {
-                                artistId_rgMbid: {
-                                    artistId: dbAlbum.artistId,
-                                    rgMbid: dbAlbum.rgMbid,
-                                },
-                            },
-                            create: {
-                                artistId: dbAlbum.artistId,
-                                rgMbid: dbAlbum.rgMbid,
-                                source: "discover_liked",
-                            },
-                            update: {}, // No update needed if exists
-                        });
-
                         // If Lidarr is enabled, move the album files to main library
                         if (
                             settings.lidarrEnabled &&
@@ -164,12 +201,6 @@ export async function handleLegacyClear(
 
                         likedMoved++;
                     }
-
-                    // Mark as MOVED in discovery database
-                    await prisma.discoveryAlbum.update({
-                        where: { id: album.id },
-                        data: { status: "MOVED" },
-                    });
                 } catch (error: any) {
                     logger.error(
                         `  ✗ Failed to move ${album.albumTitle}: ${error.message}`,
@@ -186,6 +217,16 @@ export async function handleLegacyClear(
 
             for (const album of activeAlbums) {
                 try {
+                    const catalogResult = await deleteLegacyCatalogAlbum(album);
+                    if (catalogResult === "retained") {
+                        logger.debug(
+                            `  Preserved retained album: ${album.artistName} - ${album.albumTitle}`,
+                        );
+                        continue;
+                    }
+
+                    // Catalog deletion commits first. Remote and local files
+                    // are best-effort so retries can converge links and state.
                     // Remove from Lidarr if enabled
                     if (
                         settings.lidarrEnabled &&
@@ -296,8 +337,8 @@ export async function handleLegacyClear(
                             }
                         } catch (lidarrError: any) {
                             if (lidarrError.response?.status !== 404) {
-                                logger.debug(
-                                    `  Lidarr delete failed for ${album.albumTitle}: ${lidarrError.message}`,
+                                logger.warn(
+                                    `  Lidarr delete failed for discoveryAlbum=${album.id}, rgMbid=${album.rgMbid}, lidarrAlbumId=${album.lidarrAlbumId}: ${lidarrError.message}`,
                                 );
                             }
                         }
@@ -338,42 +379,14 @@ export async function handleLegacyClear(
                             }
                         }
                     } catch (fsError: any) {
-                        logger.debug(
-                            `    Filesystem delete failed for ${album.albumTitle}: ${fsError.message}`,
+                        logger.warn(
+                            `    Filesystem delete failed for discoveryAlbum=${album.id}, rgMbid=${album.rgMbid}, album=${album.albumTitle}: ${fsError.message}`,
                         );
                     }
 
-                    // Delete DiscoveryTrack records first (foreign key to Track)
+                    // Delete discovery links only after catalog deletion succeeds.
                     await prisma.discoveryTrack.deleteMany({
                         where: { discoveryAlbumId: album.id },
-                    });
-
-                    // Remove from local database
-                    const dbAlbum = await prisma.album.findFirst({
-                        where: {
-                            title: album.albumTitle,
-                            artist: { name: album.artistName },
-                            location: "DISCOVER",
-                        },
-                        include: { tracks: true },
-                    });
-
-                    if (dbAlbum) {
-                        // Delete tracks first
-                        await prisma.track.deleteMany({
-                            where: { albumId: dbAlbum.id },
-                        });
-
-                        // Delete album
-                        await prisma.album.delete({
-                            where: { id: dbAlbum.id },
-                        });
-                    }
-
-                    // Mark as DELETED in discovery database
-                    await prisma.discoveryAlbum.update({
-                        where: { id: album.id },
-                        data: { status: "DELETED" },
                     });
 
                     activeDeleted++;
@@ -710,18 +723,26 @@ export async function handleLegacyClear(
         // These are Album/Track records with location="DISCOVER" that weren't linked to a DiscoveryAlbum
         // This can happen if downloads failed or playlist build failed
         logger.debug(`\n Cleaning up orphaned discovery records...`);
+        const retentionCutoff = providerTrackRetentionCutoff(
+            new Date(),
+            config.workers.providerTrackRetentionDays,
+        );
+        const unlinkedLikedRgMbids =
+            await findUnlinkedLikedDiscoveryRgMbids(prisma);
+        const retentionWhere = discoveryAlbumOrphanRetentionGuardWhere(
+            retentionCutoff,
+            unlinkedLikedRgMbids,
+        );
 
         // Find all DISCOVER albums that don't have a corresponding DiscoveryAlbum record
         const orphanedAlbums = await prisma.album.findMany({
             where: {
                 location: "DISCOVER",
-                tracksTidal: { none: {} },
-                tracksYtMusic: { none: {} },
+                ...retentionWhere,
             },
             include: { artist: true, tracks: true },
         });
 
-        let orphanedAlbumsDeleted = 0;
         for (const orphanAlbum of orphanedAlbums) {
             // Check if there's a DiscoveryAlbum record for this
             // Include MOVED status because liked albums are marked MOVED during clear
@@ -748,68 +769,25 @@ export async function handleLegacyClear(
             if (!hasDiscoveryRecord && !hasOwnedRecord) {
                 // Delete tracks first
                 await prisma.track.deleteMany({
-                    where: { albumId: orphanAlbum.id },
+                    where: discoveryAlbumTracksOrphanRetentionGuardWhere(
+                        orphanAlbum.id,
+                        retentionCutoff,
+                        unlinkedLikedRgMbids,
+                    ),
                 });
-                // Delete album
-                const deletedAlbum = await prisma.album.deleteMany({
-                    where: {
-                        id: orphanAlbum.id,
-                        location: "DISCOVER",
-                        tracksTidal: { none: {} },
-                        tracksYtMusic: { none: {} },
-                    },
-                });
-                if (deletedAlbum.count > 0) {
-                    orphanedAlbumsDeleted += deletedAlbum.count;
-                    logger.debug(
-                        `    Deleted orphaned album: ${orphanAlbum.artist.name} - ${orphanAlbum.title}`,
-                    );
-                }
+                logger.debug(
+                    `    Removed tracks from orphaned album: ${orphanAlbum.artist.name} - ${orphanAlbum.title}`,
+                );
             }
         }
+
+        const orphanedParents = await cleanupOrphanedLibraryEntities();
+        const orphanedAlbumsDeleted = orphanedParents.albumsDeleted;
 
         if (orphanedAlbumsDeleted > 0) {
             logger.debug(
                 `  Cleaned up ${orphanedAlbumsDeleted} orphaned discovery albums`,
             );
-        }
-
-        // Clean up orphaned artists (artists with no albums)
-        const orphanedArtists = await prisma.artist.findMany({
-            where: {
-                albums: { none: {} },
-                tracksTidal: { none: {} },
-                tracksYtMusic: { none: {} },
-            },
-        });
-
-        if (orphanedArtists.length > 0) {
-            const orphanIds = orphanedArtists.map((a) => a.id);
-
-            // Delete artist relations first (SimilarArtist records)
-            // Note: SimilarArtist uses fromArtistId/toArtistId field names
-            await prisma.similarArtist.deleteMany({
-                where: {
-                    OR: [
-                        { fromArtistId: { in: orphanIds } },
-                        { toArtistId: { in: orphanIds } },
-                    ],
-                },
-            });
-
-            const deletedArtists = await prisma.artist.deleteMany({
-                where: {
-                    id: { in: orphanIds },
-                    albums: { none: {} },
-                    tracksTidal: { none: {} },
-                    tracksYtMusic: { none: {} },
-                },
-            });
-            if (deletedArtists.count > 0) {
-                logger.debug(
-                    `  Cleaned up ${deletedArtists.count} orphaned artists`,
-                );
-            }
         }
 
         // Clean up orphaned DiscoveryTrack records (tracks whose album was deleted)

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { config } from "../../config";
 import { backfillAllArtistCounts } from "../../services/artistCountsService";
 import { cleanupOrphanedLibraryEntities } from "../../services/libraryOrphanCleanup";
+import { collectProviderTracks } from "../../services/providerTrackGc";
 import {
     clearLibraryHealthPurgeMarker,
     refreshLibraryHealthPurgeMarker,
@@ -337,6 +338,7 @@ async function finishPurge(
     sweepDeleted: number,
     sweepRunId: string,
 ): Promise<void> {
+    await collectProviderTracks();
     if (sweepDeleted > 0) {
         await refreshCatalogAfterPurge(sweepDeleted);
     }

@@ -103,6 +103,7 @@ describe("trackRemovalPurgeProcessor", () => {
                 features: { federation: federationEnabled },
                 workers: {
                     trackRemovalRetentionDays: retentionDays,
+                    providerTrackRetentionDays: 30,
                     federationTombstoneRetentionDays: 90,
                 },
             },
@@ -115,6 +116,14 @@ describe("trackRemovalPurgeProcessor", () => {
         jest.doMock("../../../services/artistCountsService", () => ({
             backfillAllArtistCounts,
         }));
+        const collectProviderTracks = jest.fn(async () => ({
+            selected: { tidal: 0, youtube: 0 },
+            deleted: { tidal: 0, youtube: 0 },
+            orphanedParents: { albums: 0, artists: 0 },
+        }));
+        jest.doMock("../../../services/providerTrackGc", () => ({
+            collectProviderTracks,
+        }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const module = require("../trackRemovalPurgeProcessor");
@@ -126,6 +135,7 @@ describe("trackRemovalPurgeProcessor", () => {
             redisClient,
             cleanupOrphanedLibraryEntities,
             backfillAllArtistCounts,
+            collectProviderTracks,
             randomUUID,
         };
     }
@@ -355,7 +365,7 @@ describe("trackRemovalPurgeProcessor", () => {
         jest.useFakeTimers().setSystemTime(
             new Date("2026-08-15T12:00:00.000Z"),
         );
-        const { module, prisma } = loadProcessor(
+        const { module, prisma, collectProviderTracks } = loadProcessor(
             [{ id: "track-old" }],
             90,
             1,
@@ -371,6 +381,7 @@ describe("trackRemovalPurgeProcessor", () => {
         expect(prisma.federationTombstone.deleteMany).toHaveBeenCalledWith({
             where: { deletedAt: { lt: new Date("2026-05-17T12:00:00.000Z") } },
         });
+        expect(collectProviderTracks).toHaveBeenCalledTimes(1);
     });
 
     it("writes no tombstones when federation is disabled", async () => {
@@ -409,6 +420,7 @@ describe("trackRemovalPurgeProcessor", () => {
             schedulerQueue,
             cleanupOrphanedLibraryEntities,
             backfillAllArtistCounts,
+            collectProviderTracks,
         } = loadProcessor(candidates, 90, 100);
 
         await expect(
@@ -450,6 +462,7 @@ describe("trackRemovalPurgeProcessor", () => {
         );
         expect(cleanupOrphanedLibraryEntities).not.toHaveBeenCalled();
         expect(backfillAllArtistCounts).not.toHaveBeenCalled();
+        expect(collectProviderTracks).not.toHaveBeenCalled();
     });
 
     it("propagates the processor-minted root run id to its continuation", async () => {

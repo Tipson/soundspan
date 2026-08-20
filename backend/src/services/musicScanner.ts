@@ -30,6 +30,7 @@ import { rebindMovedTrack } from "./trackRebinding";
 import { recomputeAlbumLoudness } from "./albumLoudness";
 import { persistScannedTrack } from "./scannedTrackPersistence";
 import { deriveAudioFormatLabel } from "./audioFormatLabel";
+import { promoteAlbumOwnership } from "./albumOwnershipPromotion";
 
 const scanLogger = logger.child("MusicScannerService");
 const TRACK_IDENTITY_SELECT = {
@@ -170,6 +171,51 @@ export class MusicScannerService {
         if (coverCachePath) {
             this.coverArtExtractor = new CoverArtExtractor(coverCachePath);
         }
+    }
+
+    private async promoteNativeAlbum(album: {
+        id: string;
+        artistId: string;
+        rgMbid: string;
+        location: string;
+    }): Promise<void> {
+        if (album.location === "LIBRARY") {
+            const ownership = await prisma.ownedAlbum.findUnique({
+                where: {
+                    artistId_rgMbid: {
+                        artistId: album.artistId,
+                        rgMbid: album.rgMbid,
+                    },
+                },
+                select: { source: true },
+            });
+            if (ownership?.source === "native_scan") return;
+        }
+        await prisma.$transaction((transaction) =>
+            promoteAlbumOwnership(transaction, album, "native_scan"),
+        );
+    }
+
+    private promoteNativeAlbumOnce(
+        album: {
+            id: string;
+            artistId: string;
+            rgMbid: string;
+            location: string;
+        },
+        albumPromotions: Map<string, Promise<void>>,
+    ): Promise<void> {
+        const currentPromotion = albumPromotions.get(album.id);
+        if (currentPromotion) return currentPromotion;
+        let promotion: Promise<void>;
+        promotion = this.promoteNativeAlbum(album).catch((error: unknown) => {
+            if (albumPromotions.get(album.id) === promotion) {
+                albumPromotions.delete(album.id);
+            }
+            throw error;
+        });
+        albumPromotions.set(album.id, promotion);
+        return promotion;
     }
 
     private async markTrackHealthIssue(
@@ -408,6 +454,7 @@ export class MusicScannerService {
             errors: [],
         };
         const newTrackPaths = new Set<string>();
+        const albumPromotions = new Map<string, Promise<void>>();
 
         for (const audioFile of audioFiles) {
             await this.scanQueue.add(async () => {
@@ -473,6 +520,7 @@ export class MusicScannerService {
                         existingTrack?.duration ?? null,
                         contentChangeDetected,
                         Boolean(removedTrack),
+                        albumPromotions,
                     );
                     if (!existingTrack) newTrackPaths.add(relativePath);
                 } catch (err: any) {
@@ -1003,6 +1051,7 @@ export class MusicScannerService {
         previousDuration: number | null = null,
         contentChangeDetected = false,
         revival = false,
+        albumPromotions: Map<string, Promise<void>> = new Map(),
     ): Promise<void> {
         // Extract metadata in two stages. The cheap header-only parse yields
         // a duration for most formats (FLAC STREAMINFO, MP3 Xing, MP4 atoms).
@@ -1330,15 +1379,28 @@ export class MusicScannerService {
             const rgMbid = albumMbid || `temp-${Date.now()}-${Math.random()}`;
 
             try {
-                album = await prisma.album.create({
-                    data: {
-                        title: albumTitle,
-                        artistId: artist.id,
-                        rgMbid,
-                        year,
-                        primaryType: "Album",
-                        location: isDiscoveryAlbum ? "DISCOVER" : "LIBRARY",
-                    },
+                album = await prisma.$transaction(async (transaction) => {
+                    const created = await transaction.album.create({
+                        data: {
+                            title: albumTitle,
+                            artistId: artist.id,
+                            rgMbid,
+                            year,
+                            primaryType: "Album",
+                            location: isDiscoveryAlbum ? "DISCOVER" : "LIBRARY",
+                        },
+                    });
+                    if (!isDiscoveryAlbum) {
+                        await transaction.ownedAlbum.create({
+                            data: {
+                                artistId: artist.id,
+                                rgMbid,
+                                source: "native_scan",
+                            },
+                        });
+                        albumPromotions.set(created.id, Promise.resolve());
+                    }
+                    return created;
                 });
             } catch (error: any) {
                 // Handle concurrent scanner workers (queue concurrency is 10)
@@ -1428,28 +1490,12 @@ export class MusicScannerService {
                 logger.info(
                     `[Scanner] Promoting album "${album.title}" (${album.id}) from ${album.location} to LIBRARY after local scan`,
                 );
-                album = await prisma.album.update({
-                    where: { id: album.id },
-                    data: { location: "LIBRARY" },
-                });
             }
-
-            await prisma.ownedAlbum.upsert({
-                where: {
-                    artistId_rgMbid: {
-                        artistId: artist.id,
-                        rgMbid: album.rgMbid,
-                    },
-                },
-                update: {
-                    source: "native_scan",
-                },
-                create: {
-                    rgMbid: album.rgMbid,
-                    artistId: artist.id,
-                    source: "native_scan",
-                },
-            });
+            await this.promoteNativeAlbumOnce(
+                { ...album, artistId: artist.id },
+                albumPromotions,
+            );
+            album = { ...album, location: "LIBRARY" };
         }
 
         const hashFields: {

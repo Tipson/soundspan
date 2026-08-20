@@ -1,10 +1,23 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { config } from "../config";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
+import {
+    albumOrphanRetentionGuardWhere,
+    artistOrphanRetentionGuardWhere,
+    providerTrackRetentionCutoff,
+} from "./providerTrackRetention";
 
 const cleanupLogger = logger.child("LibraryOrphanCleanup");
-const ORPHAN_CLEANUP_BATCH_SIZE = 10_000;
+/** Keeps each deletion transaction near the provider GC's 100-row write cost. */
+export const ORPHAN_CLEANUP_BATCH_SIZE = 100;
+const ORPHAN_CLEANUP_MAX_ROWS_PER_PHASE = 10_000;
+const ORPHAN_CLEANUP_MAX_BATCHES =
+    ORPHAN_CLEANUP_MAX_ROWS_PER_PHASE / ORPHAN_CLEANUP_BATCH_SIZE;
+const ORPHAN_CLEANUP_TRANSACTION_OPTIONS = {
+    maxWait: 2_000,
+    timeout: 15_000,
+} as const;
 
 /** Counts of catalog parents deleted after their last track was purged. */
 export interface LibraryOrphanCleanupResult {
@@ -12,38 +25,50 @@ export interface LibraryOrphanCleanupResult {
     artistsDeleted: number;
 }
 
-/** Deletes albums without track rows, then artists without album rows. */
-type CleanupClient = Prisma.TransactionClient | typeof prisma;
+type CleanupClient = Prisma.TransactionClient;
+type OrphanCandidate = Readonly<{ id: string }>;
 
-async function deleteOrphanedAlbums(
+function cursorWhere(afterId: string | undefined) {
+    return afterId ? { id: { gt: afterId } } : {};
+}
+
+async function selectOrphanedAlbums(
     client: CleanupClient,
-    writeTombstones: boolean,
-): Promise<number> {
-    const orphanedAlbums = await client.album.findMany({
+    cutoff: Date,
+    afterId: string | undefined,
+): Promise<OrphanCandidate[]> {
+    return client.album.findMany({
         where: {
+            ...cursorWhere(afterId),
             peerId: null,
             tracks: { none: {} },
-            tracksTidal: { none: {} },
-            tracksYtMusic: { none: {} },
+            ...albumOrphanRetentionGuardWhere(cutoff),
         },
         orderBy: { id: "asc" },
         take: ORPHAN_CLEANUP_BATCH_SIZE,
         select: { id: true },
     });
-    if (orphanedAlbums.length === 0) return 0;
+}
+
+async function deleteOrphanedAlbums(
+    client: CleanupClient,
+    candidates: readonly OrphanCandidate[],
+    writeTombstones: boolean,
+    cutoff: Date,
+): Promise<number> {
+    if (candidates.length === 0) return 0;
     const result = await client.album.deleteMany({
         where: {
-            id: { in: orphanedAlbums.map((album) => album.id) },
+            id: { in: candidates.map((album) => album.id) },
             peerId: null,
             tracks: { none: {} },
-            tracksTidal: { none: {} },
-            tracksYtMusic: { none: {} },
+            ...albumOrphanRetentionGuardWhere(cutoff),
         },
     });
     if (writeTombstones && result.count > 0) {
         const deletedAlbums = await resolveDeletedAlbums(
             client,
-            orphanedAlbums,
+            candidates,
             result.count,
         );
         if (deletedAlbums.length !== result.count) {
@@ -63,9 +88,9 @@ async function deleteOrphanedAlbums(
 
 async function resolveDeletedAlbums(
     client: CleanupClient,
-    selected: readonly { id: string }[],
+    selected: readonly OrphanCandidate[],
     deletedCount: number,
-): Promise<Array<{ id: string }>> {
+): Promise<OrphanCandidate[]> {
     if (deletedCount === selected.length) return [...selected];
     const remaining = await client.album.findMany({
         where: { id: { in: selected.map((album) => album.id) } },
@@ -76,35 +101,51 @@ async function resolveDeletedAlbums(
     return selected.filter((album) => !remainingIds.has(album.id));
 }
 
-async function deleteOrphanedArtists(
+async function selectOrphanedArtists(
     client: CleanupClient,
-    writeTombstones: boolean,
-): Promise<number> {
-    const orphanedArtists = await client.artist.findMany({
+    cutoff: Date,
+    afterId: string | undefined,
+): Promise<OrphanCandidate[]> {
+    return client.artist.findMany({
         where: {
+            ...cursorWhere(afterId),
             peerId: null,
             albums: { none: {} },
-            tracksTidal: { none: {} },
-            tracksYtMusic: { none: {} },
+            ...artistOrphanRetentionGuardWhere(cutoff),
         },
         orderBy: { id: "asc" },
         take: ORPHAN_CLEANUP_BATCH_SIZE,
         select: { id: true },
     });
-    if (orphanedArtists.length === 0) return 0;
+}
+
+async function deleteOrphanedArtists(
+    client: CleanupClient,
+    candidates: readonly OrphanCandidate[],
+    writeTombstones: boolean,
+    cutoff: Date,
+): Promise<number> {
+    if (candidates.length === 0) return 0;
+    const artistIds = candidates.map((artist) => artist.id);
+    await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "Album"
+        WHERE "artistId" IN (${Prisma.join(artistIds)})
+        ORDER BY "id"
+        FOR UPDATE
+    `);
     const result = await client.artist.deleteMany({
         where: {
-            id: { in: orphanedArtists.map((artist) => artist.id) },
+            id: { in: artistIds },
             peerId: null,
             albums: { none: {} },
-            tracksTidal: { none: {} },
-            tracksYtMusic: { none: {} },
+            ...artistOrphanRetentionGuardWhere(cutoff),
         },
     });
     if (writeTombstones && result.count > 0) {
         const deletedArtists = await resolveDeletedArtists(
             client,
-            orphanedArtists,
+            candidates,
             result.count,
         );
         if (deletedArtists.length !== result.count) {
@@ -124,9 +165,9 @@ async function deleteOrphanedArtists(
 
 async function resolveDeletedArtists(
     client: CleanupClient,
-    selected: readonly { id: string }[],
+    selected: readonly OrphanCandidate[],
     deletedCount: number,
-): Promise<Array<{ id: string }>> {
+): Promise<OrphanCandidate[]> {
     if (deletedCount === selected.length) return [...selected];
     const remaining = await client.artist.findMany({
         where: { id: { in: selected.map((artist) => artist.id) } },
@@ -137,27 +178,98 @@ async function resolveDeletedArtists(
     return selected.filter((artist) => !remainingIds.has(artist.id));
 }
 
-async function cleanupWithClient(
-    client: CleanupClient,
+async function cleanupAlbumBatches(
     writeTombstones: boolean,
-): Promise<LibraryOrphanCleanupResult> {
-    const albumsDeleted = await deleteOrphanedAlbums(client, writeTombstones);
-    const artistsDeleted = await deleteOrphanedArtists(client, writeTombstones);
-    return { albumsDeleted, artistsDeleted };
+    cutoff: Date,
+): Promise<number> {
+    let afterId: string | undefined;
+    let deletedTotal = 0;
+    for (let index = 0; index < ORPHAN_CLEANUP_MAX_BATCHES; index += 1) {
+        let selectedCount = ORPHAN_CLEANUP_BATCH_SIZE;
+        let nextAfterId = afterId;
+        try {
+            deletedTotal += await prisma.$transaction(async (transaction) => {
+                const candidates = await selectOrphanedAlbums(
+                    transaction,
+                    cutoff,
+                    afterId,
+                );
+                selectedCount = candidates.length;
+                nextAfterId = candidates.at(-1)?.id ?? afterId;
+                return deleteOrphanedAlbums(
+                    transaction,
+                    candidates,
+                    writeTombstones,
+                    cutoff,
+                );
+            }, ORPHAN_CLEANUP_TRANSACTION_OPTIONS);
+        } catch (error) {
+            cleanupLogger.error("Album orphan cleanup batch failed", {
+                error,
+                batch: index + 1,
+                afterId,
+            });
+        }
+        afterId = nextAfterId;
+        if (selectedCount < ORPHAN_CLEANUP_BATCH_SIZE) break;
+    }
+    return deletedTotal;
 }
 
-/** Deletes albums without track rows, then artists without album rows. */
-export async function cleanupOrphanedLibraryEntities(): Promise<LibraryOrphanCleanupResult> {
-    const result = config.features.federation
-        ? await prisma.$transaction((transaction) =>
-              cleanupWithClient(transaction, true),
-          )
-        : await cleanupWithClient(prisma, false);
+async function cleanupArtistBatches(
+    writeTombstones: boolean,
+    cutoff: Date,
+): Promise<number> {
+    let afterId: string | undefined;
+    let deletedTotal = 0;
+    for (let index = 0; index < ORPHAN_CLEANUP_MAX_BATCHES; index += 1) {
+        let selectedCount = ORPHAN_CLEANUP_BATCH_SIZE;
+        let nextAfterId = afterId;
+        try {
+            deletedTotal += await prisma.$transaction(async (transaction) => {
+                const candidates = await selectOrphanedArtists(
+                    transaction,
+                    cutoff,
+                    afterId,
+                );
+                selectedCount = candidates.length;
+                nextAfterId = candidates.at(-1)?.id ?? afterId;
+                return deleteOrphanedArtists(
+                    transaction,
+                    candidates,
+                    writeTombstones,
+                    cutoff,
+                );
+            }, ORPHAN_CLEANUP_TRANSACTION_OPTIONS);
+        } catch (error) {
+            cleanupLogger.error("Artist orphan cleanup batch failed", {
+                error,
+                batch: index + 1,
+                afterId,
+            });
+        }
+        afterId = nextAfterId;
+        if (selectedCount < ORPHAN_CLEANUP_BATCH_SIZE) break;
+    }
+    return deletedTotal;
+}
 
-    if (result.albumsDeleted > 0 || result.artistsDeleted > 0) {
+/** Deletes parents without local tracks or provider tracks retained by policy. */
+export async function cleanupOrphanedLibraryEntities(
+    now: Date = new Date(),
+): Promise<LibraryOrphanCleanupResult> {
+    const cutoff = providerTrackRetentionCutoff(
+        now,
+        config.workers.providerTrackRetentionDays,
+    );
+    const writeTombstones = config.features.federation;
+    const albumsDeleted = await cleanupAlbumBatches(writeTombstones, cutoff);
+    const artistsDeleted = await cleanupArtistBatches(writeTombstones, cutoff);
+
+    if (albumsDeleted > 0 || artistsDeleted > 0) {
         cleanupLogger.info(
-            `Deleted ${result.albumsDeleted} orphaned albums and ${result.artistsDeleted} orphaned artists`,
+            `Deleted ${albumsDeleted} orphaned albums and ${artistsDeleted} orphaned artists`,
         );
     }
-    return result;
+    return { albumsDeleted, artistsDeleted };
 }

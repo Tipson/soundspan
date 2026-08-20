@@ -122,6 +122,13 @@ const prisma = {
     },
 };
 
+// Assigned after initialization so the callback can close over `prisma`
+// without tripping TS7022 (self-referential initializer).
+(prisma as { $transaction?: jest.Mock }).$transaction = jest.fn(
+    async (callback: (transaction: unknown) => Promise<unknown>) =>
+        callback(prisma),
+);
+
 jest.mock("../../utils/db", () => ({
     prisma,
 }));
@@ -1675,7 +1682,7 @@ describe("enrichment route runtime behavior", () => {
 
         expect(mockAlbumFindUnique).toHaveBeenCalledWith({
             where: { id: "album-1" },
-            select: { artistId: true, rgMbid: true, location: true },
+            select: { rgMbid: true },
         });
         expect(mockOwnedAlbumDeleteMany).not.toHaveBeenCalled();
         expect(mockOwnedAlbumUpsert).not.toHaveBeenCalled();

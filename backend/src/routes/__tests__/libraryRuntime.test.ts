@@ -4678,11 +4678,13 @@ describe("library catalog list runtime coverage", () => {
         });
         mockAlbumFindUnique.mockResolvedValueOnce({
             id: "album-delete-fail",
+            rgMbid: "rg-album-delete-fail",
             title: "Album Delete Fail",
             artist: { name: "Failing Artist" },
             tracks: [],
         });
         mockAlbumDelete.mockRejectedValueOnce(new Error("album-db-down"));
+        const unlinkSpy = jest.spyOn(fs, "unlinkSync");
 
         const failureRes = createRes();
         await invokeWithErrorHandler(
@@ -4692,6 +4694,8 @@ describe("library catalog list runtime coverage", () => {
         );
 
         expect(failureRes.statusCode).toBe(500);
+        expect(unlinkSpy).not.toHaveBeenCalled();
+        unlinkSpy.mockRestore();
     });
 
     it("applies delete-policy gates and not-found/success behavior for track, album, and artist deletion", async () => {
@@ -4754,6 +4758,7 @@ describe("library catalog list runtime coverage", () => {
 
         mockAlbumFindUnique.mockResolvedValueOnce({
             id: "album-2",
+            rgMbid: "rg-album-2",
             title: "Album Two",
             artist: { name: "Artist Two" },
             tracks: [],
@@ -4766,6 +4771,9 @@ describe("library catalog list runtime coverage", () => {
         );
         expect(mockAlbumDelete).toHaveBeenCalledWith({
             where: { id: "album-2" },
+        });
+        expect(mockOwnedAlbumDeleteMany).toHaveBeenCalledWith({
+            where: { rgMbid: "rg-album-2" },
         });
         expect(deleteAlbumResOk.statusCode).toBe(200);
         expect(deleteAlbumResOk.body).toEqual({
@@ -5040,6 +5048,55 @@ describe("library catalog list runtime coverage", () => {
         rmSpy.mockRestore();
     });
 
+    it("locks an artist's albums in id order before deleting the artist", async () => {
+        mockGetSystemSettings.mockResolvedValueOnce({
+            libraryDeletionEnabled: true,
+        });
+        mockArtistFindUnique.mockResolvedValueOnce({
+            id: "artist-lock-order",
+            name: "Lock Order Artist",
+            mbid: "temp-lock-order",
+            albums: [],
+        });
+        const operations: string[] = [];
+        const lockAlbums = jest.fn(
+            async (_query: { strings: readonly string[] }) => {
+                operations.push("lock-albums");
+                return [];
+            },
+        );
+        const deleteArtist = jest.fn(async () => {
+            operations.push("delete-artist");
+            return { id: "artist-lock-order" };
+        });
+        mockPrismaTransaction.mockImplementationOnce(async (callback: any) =>
+            callback({
+                $queryRaw: lockAlbums,
+                artist: { delete: deleteArtist },
+            }),
+        );
+        const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(false);
+
+        const res = createRes();
+        await deleteArtistHandler(
+            { params: { id: "artist-lock-order" } } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(operations).toEqual(["lock-albums", "delete-artist"]);
+        const query = lockAlbums.mock.calls[0][0];
+        expect(query.strings.join("")).toContain('WHERE "artistId" = ');
+        expect(query.strings.join("")).toContain(
+            'ORDER BY "id"\n            FOR UPDATE',
+        );
+        expect(deleteArtist).toHaveBeenCalledWith({
+            where: { id: "artist-lock-order" },
+        });
+
+        existsSpy.mockRestore();
+    });
+
     it("contains artist file and recursive folder deletion for malicious persisted paths", async () => {
         mockGetSystemSettings.mockResolvedValueOnce({
             libraryDeletionEnabled: true,
@@ -5298,6 +5355,7 @@ describe("library catalog list runtime coverage", () => {
         });
         mockAlbumFindUnique.mockResolvedValueOnce({
             id: "album-del",
+            rgMbid: "rg-album-del",
             title: "Deletion Album",
             artist: { name: "Delete Artist" },
             tracks: [{ filePath: "Delete Artist/Deletion Album/track.flac" }],
@@ -5318,6 +5376,12 @@ describe("library catalog list runtime coverage", () => {
         expect(mockAlbumDelete).toHaveBeenCalledWith({
             where: { id: "album-del" },
         });
+        expect(mockOwnedAlbumDeleteMany).toHaveBeenCalledWith({
+            where: { rgMbid: "rg-album-del" },
+        });
+        expect(mockAlbumDelete.mock.invocationCallOrder[0]).toBeLessThan(
+            unlinkSpy.mock.invocationCallOrder[0],
+        );
         expect(unlinkSpy).toHaveBeenCalledWith(
             "/music/Delete Artist/Deletion Album/track.flac",
         );
@@ -5345,6 +5409,7 @@ describe("library catalog list runtime coverage", () => {
         });
         mockAlbumFindUnique.mockResolvedValueOnce({
             id: "album-contained",
+            rgMbid: "rg-album-contained",
             title: "..",
             artist: { name: ".." },
             tracks: [

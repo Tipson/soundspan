@@ -1,7 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { Client } from "pg";
-import { cleanupOrphanedLibraryEntities } from "../src/services/libraryOrphanCleanup";
+import { config } from "../src/config";
+import {
+    cleanupOrphanedLibraryEntities,
+    ORPHAN_CLEANUP_BATCH_SIZE,
+} from "../src/services/libraryOrphanCleanup";
 import { prisma } from "../src/utils/db";
+import { runDataIntegrityCheck } from "../src/workers/dataIntegrity";
 import {
     applyScaleMigrations,
     createScaleDatabase,
@@ -21,6 +26,9 @@ const ids = {
     racedAlbum: "orphan-cleanup-raced-album",
     racedAlbumArtist: "orphan-cleanup-raced-album-artist",
     racedArtist: "orphan-cleanup-raced-artist",
+    overriddenAlbum: "orphan-cleanup-overridden-album",
+    overriddenAlbumArtist: "orphan-cleanup-overridden-album-artist",
+    overriddenArtist: "orphan-cleanup-overridden-artist",
 } as const;
 
 async function createArtist(id: string): Promise<void> {
@@ -52,12 +60,23 @@ async function seedCatalog(): Promise<void> {
         ids.providerArtist,
         ids.racedAlbumArtist,
         ids.racedArtist,
+        ids.overriddenAlbumArtist,
+        ids.overriddenArtist,
     ]) {
         await createArtist(artistId);
     }
     await createAlbum(ids.emptyAlbum, ids.emptyArtist);
     await createAlbum(ids.providerAlbum, ids.providerArtist);
     await createAlbum(ids.racedAlbum, ids.racedAlbumArtist);
+    await createAlbum(ids.overriddenAlbum, ids.overriddenAlbumArtist);
+    await prisma.album.update({
+        where: { id: ids.overriddenAlbum },
+        data: { hasUserOverrides: true },
+    });
+    await prisma.artist.update({
+        where: { id: ids.overriddenArtist },
+        data: { hasUserOverrides: true },
+    });
     await prisma.trackTidal.create({
         data: {
             tidalId: 646001,
@@ -141,7 +160,6 @@ describeWithPostgres("library orphan cleanup PostgreSQL behavior", () => {
     });
 
     afterAll(async () => {
-        jest.restoreAllMocks();
         await prisma.$disconnect();
         await database?.end();
         if (admin && databaseName) {
@@ -149,43 +167,69 @@ describeWithPostgres("library orphan cleanup PostgreSQL behavior", () => {
         }
     });
 
-    it("preserves provider-backed and raced entities while deleting true orphans", async () => {
-        const findAlbums = prisma.album.findMany.bind(
-            prisma.album,
-        ) as unknown as (
-            args: Prisma.AlbumFindManyArgs,
-        ) => Promise<Array<{ id: string }>>;
-        const findArtists = prisma.artist.findMany.bind(
-            prisma.artist,
-        ) as unknown as (
-            args: Prisma.ArtistFindManyArgs,
-        ) => Promise<Array<{ id: string }>>;
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
 
-        jest.spyOn(prisma.album, "findMany").mockImplementationOnce((async (
-            args?: Prisma.AlbumFindManyArgs,
-        ) => {
-            const candidates = await findAlbums(args ?? {});
-            await insertRacedAlbumLink(database);
-            return candidates;
-        }) as never);
-        jest.spyOn(prisma.artist, "findMany").mockImplementationOnce((async (
-            args?: Prisma.ArtistFindManyArgs,
-        ) => {
-            const candidates = await findArtists(args ?? {});
-            await insertRacedArtistLink(database);
-            return candidates;
-        }) as never);
+    it("preserves provider-backed and raced entities while deleting true orphans", async () => {
+        // Cleanup now runs one transaction per batch, so the race injection
+        // wraps EVERY transaction and fires once per entity type overall:
+        // the first album selection and the first artist selection each get
+        // a competing link inserted between selection and guarded deletion.
+        const runTransaction = prisma.$transaction.bind(prisma);
+        let albumRaceInjected = false;
+        let artistRaceInjected = false;
+        jest.spyOn(prisma, "$transaction").mockImplementation((async (
+            callback: (
+                transaction: Prisma.TransactionClient,
+            ) => Promise<unknown>,
+        ) =>
+            runTransaction(async (transaction) => {
+                const findAlbums = transaction.album.findMany.bind(
+                    transaction.album,
+                );
+                const findArtists = transaction.artist.findMany.bind(
+                    transaction.artist,
+                );
+                jest.spyOn(transaction.album, "findMany").mockImplementation(
+                    (async (args?: Prisma.AlbumFindManyArgs) => {
+                        const candidates = await findAlbums(args ?? {});
+                        if (!albumRaceInjected && candidates.length > 0) {
+                            albumRaceInjected = true;
+                            await insertRacedAlbumLink(database);
+                        }
+                        return candidates;
+                    }) as never,
+                );
+                jest.spyOn(transaction.artist, "findMany").mockImplementation(
+                    (async (args?: Prisma.ArtistFindManyArgs) => {
+                        const candidates = await findArtists(args ?? {});
+                        if (!artistRaceInjected && candidates.length > 0) {
+                            artistRaceInjected = true;
+                            await insertRacedArtistLink(database);
+                        }
+                        return candidates;
+                    }) as never,
+                );
+                return callback(transaction);
+            })) as never);
 
         await expect(cleanupOrphanedLibraryEntities()).resolves.toEqual({
             albumsDeleted: 1,
             artistsDeleted: 1,
         });
         await expect(entityIds()).resolves.toEqual({
-            albums: [ids.providerAlbum, ids.racedAlbum].sort(),
+            albums: [
+                ids.overriddenAlbum,
+                ids.providerAlbum,
+                ids.racedAlbum,
+            ].sort(),
             artists: [
                 ids.providerArtist,
                 ids.racedAlbumArtist,
                 ids.racedArtist,
+                ids.overriddenAlbumArtist,
+                ids.overriddenArtist,
             ].sort(),
         });
 
@@ -204,5 +248,105 @@ describeWithPostgres("library orphan cleanup PostgreSQL behavior", () => {
                 select: { artistId: true },
             }),
         ).resolves.toEqual({ artistId: ids.racedArtist });
+    });
+
+    it("writes tombstones when data integrity delegates parent deletion", async () => {
+        const albumId = "data-integrity-tombstone-album";
+        const artistId = "data-integrity-tombstone-artist";
+        await createArtist(artistId);
+        await createAlbum(albumId, artistId);
+        const federationWasEnabled = config.features.federation;
+        config.features.federation = true;
+
+        try {
+            await runDataIntegrityCheck();
+        } finally {
+            config.features.federation = federationWasEnabled;
+        }
+
+        await expect(
+            prisma.federationTombstone.findMany({
+                where: { entityId: { in: [albumId, artistId] } },
+                orderBy: { entityType: "asc" },
+                select: { entityType: true, entityId: true },
+            }),
+        ).resolves.toEqual([
+            { entityType: "album", entityId: albumId },
+            { entityType: "artist", entityId: artistId },
+        ]);
+    });
+
+    it("cleans and tombstones orphans across batch boundaries", async () => {
+        const entityCount = ORPHAN_CLEANUP_BATCH_SIZE + 1;
+        const artistIds = Array.from(
+            { length: entityCount },
+            (_, index) => `00-batch-artist-${String(index).padStart(3, "0")}`,
+        );
+        const albumIds = Array.from(
+            { length: entityCount },
+            (_, index) => `00-batch-album-${String(index).padStart(3, "0")}`,
+        );
+        await prisma.artist.createMany({
+            data: artistIds.map((id) => ({
+                id,
+                mbid: `${id}-mbid`,
+                name: id,
+                normalizedName: id,
+            })),
+        });
+        await prisma.album.createMany({
+            data: albumIds.map((id, index) => ({
+                id,
+                rgMbid: `${id}-rg-mbid`,
+                artistId: artistIds[index],
+                title: id,
+                primaryType: "Album",
+            })),
+        });
+        const federationWasEnabled = config.features.federation;
+        config.features.federation = true;
+        const runTransaction = prisma.$transaction.bind(prisma);
+        const tombstoneCountsAfterCommit: number[] = [];
+        jest.spyOn(prisma, "$transaction").mockImplementation((async (
+            callback: (
+                transaction: Prisma.TransactionClient,
+            ) => Promise<unknown>,
+            options: { maxWait: number; timeout: number },
+        ) => {
+            const result = await runTransaction(callback, options);
+            tombstoneCountsAfterCommit.push(
+                await prisma.federationTombstone.count({
+                    where: { entityId: { in: [...albumIds, ...artistIds] } },
+                }),
+            );
+            return result;
+        }) as never);
+
+        try {
+            await expect(cleanupOrphanedLibraryEntities()).resolves.toEqual({
+                albumsDeleted: entityCount,
+                artistsDeleted: entityCount,
+            });
+        } finally {
+            config.features.federation = federationWasEnabled;
+        }
+
+        await expect(
+            prisma.federationTombstone.count({
+                where: { entityId: { in: [...albumIds, ...artistIds] } },
+            }),
+        ).resolves.toBe(entityCount * 2);
+        await expect(
+            prisma.album.count({ where: { id: { in: albumIds } } }),
+        ).resolves.toBe(0);
+        await expect(
+            prisma.artist.count({ where: { id: { in: artistIds } } }),
+        ).resolves.toBe(0);
+        expect(tombstoneCountsAfterCommit).toEqual([
+            ORPHAN_CLEANUP_BATCH_SIZE,
+            entityCount,
+            entityCount + ORPHAN_CLEANUP_BATCH_SIZE,
+            entityCount * 2,
+        ]);
     });
 });

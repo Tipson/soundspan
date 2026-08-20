@@ -14,6 +14,15 @@ import { logger } from "../utils/logger";
 import { prisma } from "../utils/db";
 import { Prisma } from "@prisma/client";
 import { resolveDownloadJobMetadata } from "../utils/downloadJobMetadata";
+import { config } from "../config";
+import { cleanupOrphanedLibraryEntities } from "../services/libraryOrphanCleanup";
+import { DISCOVERY_LIKED_OWNERSHIP_SOURCE } from "../services/albumOwnershipPromotion";
+import {
+    albumOrphanRetentionGuardWhere,
+    artistOrphanRetentionGuardWhere,
+    discoveryAlbumTracksOrphanRetentionGuardWhere,
+    providerTrackRetentionCutoff,
+} from "../services/providerTrackRetention";
 
 const DATA_INTEGRITY_PRISMA_RETRY_ATTEMPTS = 3;
 
@@ -46,14 +55,21 @@ function isRetryableDataIntegrityPrismaError(error: unknown): boolean {
     );
 }
 
-async function withDataIntegrityPrismaRetry<T>(
+/** Runs a data-integrity database operation with bounded transient retries. */
+export async function withDataIntegrityPrismaRetry<T>(
     operationName: string,
     operation: () => Promise<T>,
 ): Promise<T> {
-    for (let attempt = 1; ; attempt += 1) {
+    let lastError: unknown;
+    for (
+        let attempt = 1;
+        attempt <= DATA_INTEGRITY_PRISMA_RETRY_ATTEMPTS;
+        attempt += 1
+    ) {
         try {
             return await operation();
         } catch (error) {
+            lastError = error;
             if (
                 !isRetryableDataIntegrityPrismaError(error) ||
                 attempt === DATA_INTEGRITY_PRISMA_RETRY_ATTEMPTS
@@ -69,6 +85,7 @@ async function withDataIntegrityPrismaRetry<T>(
             await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
         }
     }
+    throw lastError ?? new Error(`${operationName} retry attempts exhausted`);
 }
 
 interface IntegrityReport {
@@ -86,6 +103,13 @@ interface IntegrityReport {
  */
 export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
     logger.debug("\nRunning data integrity check...");
+    const now = new Date();
+    const cutoff = providerTrackRetentionCutoff(
+        now,
+        config.workers.providerTrackRetentionDays,
+    );
+    const albumRetentionWhere = albumOrphanRetentionGuardWhere(cutoff);
+    const artistRetentionWhere = artistOrphanRetentionGuardWhere(cutoff);
 
     const report: IntegrityReport = {
         expiredExclusions: 0,
@@ -138,8 +162,7 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
             prisma.album.findMany({
                 where: {
                     location: "DISCOVER",
-                    tracksTidal: { none: {} },
-                    tracksYtMusic: { none: {} },
+                    ...albumRetentionWhere,
                 },
                 include: { artist: true },
             }),
@@ -188,28 +211,15 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 "runDataIntegrityCheck.track.deleteMany.orphanedAlbumTracks",
                 () =>
                     prisma.track.deleteMany({
-                        where: { albumId: album.id },
+                        where: discoveryAlbumTracksOrphanRetentionGuardWhere(
+                            album.id,
+                            cutoff,
+                        ),
                     }),
             );
-            // Delete album
-            const deletedAlbum = await withDataIntegrityPrismaRetry(
-                "runDataIntegrityCheck.album.delete.orphanedAlbum",
-                () =>
-                    prisma.album.deleteMany({
-                        where: {
-                            id: album.id,
-                            location: "DISCOVER",
-                            tracksTidal: { none: {} },
-                            tracksYtMusic: { none: {} },
-                        },
-                    }),
+            logger.debug(
+                `     Removed tracks from orphaned album: ${album.artist.name} - ${album.title}`,
             );
-            if (deletedAlbum.count > 0) {
-                report.orphanedAlbums += deletedAlbum.count;
-                logger.debug(
-                    `     Removed orphaned album: ${album.artist.name} - ${album.title}`,
-                );
-            }
         }
     }
 
@@ -295,7 +305,12 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                 prisma.ownedAlbum.findFirst({
                     where: {
                         artistId: album.artistId,
-                        source: { in: ["native_scan", "discovery_liked"] },
+                        source: {
+                            in: [
+                                "native_scan",
+                                DISCOVERY_LIKED_OWNERSHIP_SOURCE,
+                            ],
+                        },
                     },
                 }),
         );
@@ -361,77 +376,14 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
         logger.debug(`     Fixed ${mislocatedAlbumsFixed} mislocated albums`);
     }
 
-    // 5. Clean up albums with NO tracks (files were deleted from filesystem)
-    // These are "ghost" albums that still appear in the database but have no actual content
-    const emptyAlbums = await withDataIntegrityPrismaRetry(
-        "runDataIntegrityCheck.album.findMany.empty",
-        () =>
-            prisma.album.findMany({
-                where: {
-                    tracks: { none: {} },
-                    tracksTidal: { none: {} },
-                    tracksYtMusic: { none: {} },
-                },
-                include: { artist: true },
-            }),
-    );
-
-    for (const album of emptyAlbums) {
-        // Delete the album record
-        const deletedAlbum = await withDataIntegrityPrismaRetry(
-            "runDataIntegrityCheck.album.delete.empty",
-            () =>
-                prisma.album.deleteMany({
-                    where: {
-                        id: album.id,
-                        tracks: { none: {} },
-                        tracksTidal: { none: {} },
-                        tracksYtMusic: { none: {} },
-                    },
-                }),
-        );
-
-        if (deletedAlbum.count === 0) continue;
-
-        // Also delete any associated OwnedAlbum records
-        await withDataIntegrityPrismaRetry(
-            "runDataIntegrityCheck.ownedAlbum.deleteMany.empty",
-            () =>
-                prisma.ownedAlbum.deleteMany({
-                    where: { rgMbid: album.rgMbid },
-                }),
-        );
-
-        report.orphanedAlbums += deletedAlbum.count;
-        logger.debug(
-            `     Removed empty album (no tracks): ${album.artist.name} - ${album.title}`,
-        );
-    }
-
-    // 6. Clean up orphaned OwnedAlbum records (no matching Album record)
-    // This happens when files are deleted but Lidarr records remain
-    const orphanedOwnedAlbums = await withDataIntegrityPrismaRetry(
-        "runDataIntegrityCheck.$executeRaw.orphanedOwnedAlbums",
-        () => prisma.$executeRaw`
-            DELETE FROM "OwnedAlbum" oa
-            WHERE NOT EXISTS (
-                SELECT 1 FROM "Album" a WHERE a."rgMbid" = oa."rgMbid"
-            )
-        `,
-    );
-    if (orphanedOwnedAlbums > 0) {
-        logger.debug(
-            `     Removed ${orphanedOwnedAlbums} orphaned OwnedAlbum records`,
-        );
-    }
-
-    // 7. Consolidate duplicate artists (same name, one with temp MBID, one with real)
+    // 5. Consolidate duplicate artists (same name, one with temp MBID, one with real)
     const tempArtists = await withDataIntegrityPrismaRetry(
         "runDataIntegrityCheck.artist.findMany.temp",
         () =>
             prisma.artist.findMany({
                 where: {
                     mbid: { startsWith: "temp-" },
+                    ...artistRetentionWhere,
                 },
                 include: { albums: true },
             }),
@@ -461,29 +413,6 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
                     }),
             );
 
-            // Delete SimilarArtist relations
-            await withDataIntegrityPrismaRetry(
-                "runDataIntegrityCheck.similarArtist.deleteMany.consolidateArtist",
-                () =>
-                    prisma.similarArtist.deleteMany({
-                        where: {
-                            OR: [
-                                { fromArtistId: tempArtist.id },
-                                { toArtistId: tempArtist.id },
-                            ],
-                        },
-                    }),
-            );
-
-            // Delete temp artist
-            await withDataIntegrityPrismaRetry(
-                "runDataIntegrityCheck.artist.delete.tempArtist",
-                () =>
-                    prisma.artist.delete({
-                        where: { id: tempArtist.id },
-                    }),
-            );
-
             report.consolidatedArtists++;
             logger.debug(
                 `     Consolidated "${tempArtist.name}" (temp) into real artist`,
@@ -491,60 +420,12 @@ export async function runDataIntegrityCheck(): Promise<IntegrityReport> {
         }
     }
 
-    // 8. Clean up orphaned artists (no albums)
-    const orphanedArtists = await withDataIntegrityPrismaRetry(
-        "runDataIntegrityCheck.artist.findMany.orphaned",
-        () =>
-            prisma.artist.findMany({
-                where: {
-                    albums: { none: {} },
-                    tracksTidal: { none: {} },
-                    tracksYtMusic: { none: {} },
-                },
-            }),
-    );
+    // 6. Delete catalog parents through the tombstone-aware shared transaction.
+    const orphanedParents = await cleanupOrphanedLibraryEntities(now);
+    report.orphanedAlbums = orphanedParents.albumsDeleted;
+    report.orphanedArtists = orphanedParents.artistsDeleted;
 
-    if (orphanedArtists.length > 0) {
-        // Delete SimilarArtist relations first
-        await withDataIntegrityPrismaRetry(
-            "runDataIntegrityCheck.similarArtist.deleteMany.orphaned",
-            () =>
-                prisma.similarArtist.deleteMany({
-                    where: {
-                        OR: [
-                            {
-                                fromArtistId: {
-                                    in: orphanedArtists.map((a) => a.id),
-                                },
-                            },
-                            {
-                                toArtistId: {
-                                    in: orphanedArtists.map((a) => a.id),
-                                },
-                            },
-                        ],
-                    },
-                }),
-        );
-
-        // Delete orphaned artists
-        const deletedArtists = await withDataIntegrityPrismaRetry(
-            "runDataIntegrityCheck.artist.deleteMany.orphaned",
-            () =>
-                prisma.artist.deleteMany({
-                    where: {
-                        id: { in: orphanedArtists.map((a) => a.id) },
-                        albums: { none: {} },
-                        tracksTidal: { none: {} },
-                        tracksYtMusic: { none: {} },
-                    },
-                }),
-        );
-
-        report.orphanedArtists = deletedArtists.count;
-    }
-
-    // 9. Clean up old DownloadJob records (older than 30 days, completed/failed)
+    // 7. Clean up old DownloadJob records (older than 30 days, completed/failed)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 

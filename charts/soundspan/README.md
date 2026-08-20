@@ -407,6 +407,7 @@ config:
     federation: false     # scoped peer credentials and /api/federation host API
   federationTombstoneRetentionDays: 90
   federationSyncIntervalMinutes: 15
+  providerTrackRetentionDays: 30
 ```
 
 When a flag is `false`, the backend does not mount the corresponding API
@@ -642,6 +643,7 @@ When `deploymentMode=individual` and `backendWorker.enabled=true`, the chart inj
 | `AUTO_PLAYLISTS_ENABLED` | `config.features.autoPlaylists` | No | `true` |
 | `FEDERATION_ENABLED` | `config.features.federation` | No | `false` |
 | `FEDERATION_TOMBSTONE_RETENTION_DAYS` | `config.federationTombstoneRetentionDays` | No | `90` |
+| `PROVIDER_TRACK_RETENTION_DAYS` | `config.providerTrackRetentionDays` | No | `30` |
 | `FEDERATION_SYNC_INTERVAL_MINUTES` | `config.federationSyncIntervalMinutes` | No | `15` |
 | `LIDARR_ENABLED` | `config.lidarrEnabled` | No | `false` |
 | `LIDARR_URL` | `config.lidarrUrl` | If Lidarr enabled | none |
