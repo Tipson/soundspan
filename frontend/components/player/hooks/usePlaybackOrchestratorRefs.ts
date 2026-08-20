@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { Track } from "@/lib/audio-state-context";
 import { HeartbeatMonitor } from "@/lib/audio";
 import { createConsecutiveErrorBreaker } from "@/lib/audio-engine/consecutiveErrorBreaker";
+import { createPlaybackProgressConfirmationState } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { TRACK_END_WATCHDOG_TIMEOUT_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import {
@@ -76,8 +77,10 @@ export function usePlaybackOrchestratorRefs({
     const lastPreloadedTrackIdRef = useRef<string | null>(null);
     const pendingTrackErrorSkipRef = useRef<NodeJS.Timeout | null>(null);
     const pendingTrackErrorTrackIdRef = useRef<string | null>(null);
-    const trackErrorAdvanceFromTrackIdRef = useRef<string | null>(null);
     const consecutiveErrorBreakerRef = useRef(createConsecutiveErrorBreaker());
+    const playbackProgressConfirmationRef = useRef(
+        createPlaybackProgressConfirmationState(),
+    );
     // Snapshot of whether the audio engine was playing at the moment the page
     // went hidden (visibilitychange → "hidden"). Used by foreground recovery
     // to decide if playback should be retried on return to visible.
@@ -222,8 +225,8 @@ export function usePlaybackOrchestratorRefs({
         lastPreloadedTrackIdRef,
         pendingTrackErrorSkipRef,
         pendingTrackErrorTrackIdRef,
-        trackErrorAdvanceFromTrackIdRef,
         consecutiveErrorBreakerRef,
+        playbackProgressConfirmationRef,
         wasPlayingWhenHiddenRef,
         currentTrackRef,
         currentTimeSnapshotRef,

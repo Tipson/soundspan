@@ -18,6 +18,7 @@ import {
 } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { isLikelyTransientStreamError } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
+import { rearmPlaybackProgressConfirmationOnError } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { toast } from "sonner";
 import {
@@ -26,11 +27,17 @@ import {
 } from "@/lib/audio-engine/playbackRecoveryPolicy";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import type { usePlaybackRecoveryHelpers } from "./usePlaybackRecoveryHelpers";
+import {
+    isPlaybackAutoRestartSuppressed,
+    setPlaybackAutoRestartSuppressed,
+    type PlaybackAdvanceOrigin,
+    writePlaybackAdvanceOrigin,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 interface UseTrackRecoveryOptions {
     refs: PlaybackOrchestratorRefs;
     playbackRecoveryHelpers: ReturnType<typeof usePlaybackRecoveryHelpers>;
-    next: () => void;
+    next: (origin: PlaybackAdvanceOrigin) => void;
     setCurrentTime: (time: number) => void;
     setIsBuffering: (isBuffering: boolean) => void;
 }
@@ -64,9 +71,9 @@ export function useTrackRecovery({
         pendingTrackErrorSkipRef,
         pendingTrackErrorTrackIdRef,
         consecutiveErrorBreakerRef,
+        playbackProgressConfirmationRef,
         queueLengthRef,
         lastTrackIdRef,
-        trackErrorAdvanceFromTrackIdRef,
         advancePlayIntentAtMsRef,
         transientTrackRecoveryTrackIdRef,
         transientTrackRecoveryWindowStartedAtRef,
@@ -254,21 +261,42 @@ export function useTrackRecovery({
         [setIsBuffering],
     );
 
+    const stopAutomaticPlaybackRestarts = useCallback((): void => {
+        setPlaybackAutoRestartSuppressed(true);
+        isLoadingRef.current = false;
+        playbackStateMachine.forceTransition("READY");
+        setIsBuffering(false);
+    }, [isLoadingRef, setIsBuffering]);
+
     const scheduleTrackErrorSkip = useCallback(
-        (failedTrackId: string | null) => {
+        (failedTrackId: string | null): boolean => {
             if (
                 pendingTrackErrorSkipRef.current &&
                 pendingTrackErrorTrackIdRef.current === failedTrackId
             ) {
-                return;
+                return false;
+            }
+            if (isPlaybackAutoRestartSuppressed()) {
+                stopAutomaticPlaybackRestarts();
+                return true;
             }
 
             // Record the error in the circuit breaker. If it trips (3 consecutive
             // errors without a successful play), halt auto-advance to prevent
             // infinite rapid error loops.
+            // Error-driven repeat-one and unchanged-track LT recovery must prove
+            // progress again. Non-error LT resyncs leave the breaker unchanged,
+            // so they need no second confirmation; podcast seek-reload does not
+            // participate in the track breaker.
+            playbackProgressConfirmationRef.current =
+                rearmPlaybackProgressConfirmationOnError(
+                    playbackProgressConfirmationRef.current,
+                    failedTrackId,
+                );
             const justTripped =
                 consecutiveErrorBreakerRef.current.recordError();
             if (consecutiveErrorBreakerRef.current.isTripped()) {
+                stopAutomaticPlaybackRestarts();
                 if (justTripped) {
                     sharedFrontendLogger.warn(
                         "[AudioPlaybackOrchestrator] Consecutive error circuit breaker tripped — stopping auto-advance",
@@ -282,7 +310,7 @@ export function useTrackRecovery({
                         { duration: 6000 },
                     );
                 }
-                return;
+                return true;
             }
 
             clearPendingTrackErrorSkip();
@@ -300,6 +328,8 @@ export function useTrackRecovery({
 
                 const ltSession = getListenTogetherSessionSnapshot();
                 if (ltSession?.groupId) {
+                    writePlaybackAdvanceOrigin("error", failedTrackId);
+                    advancePlayIntentAtMsRef.current = Date.now();
                     if (ltSession.isHost && queueLengthRef.current > 1) {
                         enqueueLatestListenTogetherHostTrackOperation({
                             action: "next",
@@ -317,26 +347,26 @@ export function useTrackRecovery({
 
                 lastTrackIdRef.current = null;
                 isLoadingRef.current = false;
-                trackErrorAdvanceFromTrackIdRef.current = failedTrackId;
                 advancePlayIntentAtMsRef.current = Date.now();
-                next();
+                next("error");
             }, TRACK_ERROR_SKIP_DELAY_MS);
+            return false;
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.
-        [clearPendingTrackErrorSkip, next],
+        [clearPendingTrackErrorSkip, next, stopAutomaticPlaybackRestarts],
     );
 
     const attemptTransientTrackRecovery = useCallback(
         (failedTrackId: string | null, error: unknown): boolean => {
             if (playbackTypeRef.current !== "track") return false;
             if (!failedTrackId) return false;
+            if (!lastPlayingStateRef.current) return false;
+            if (!isLikelyTransientStreamError(error)) return false;
             if (
                 requestListenTogetherFollowerRecovery("transient_track_error")
             ) {
                 return true;
             }
-            if (!lastPlayingStateRef.current) return false;
-            if (!isLikelyTransientStreamError(error)) return false;
 
             const now = Date.now();
             const isNewTrack =
