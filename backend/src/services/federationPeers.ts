@@ -278,8 +278,11 @@ function normalizeConsumerBaseUrl(value: string): string {
     return resolveBaseUrl(value, config.federation.allowPrivatePeers).origin;
 }
 
-function outboundClientOptions() {
-    return { allowPrivatePeers: config.federation.allowPrivatePeers };
+export function outboundClientOptions() {
+    return {
+        allowPrivatePeers: config.federation.allowPrivatePeers,
+        allowProxy: config.federation.allowProxy,
+    };
 }
 
 function consumerScopes(embeddingsAvailable: boolean): FederationScope[] {
