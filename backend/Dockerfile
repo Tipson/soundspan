@@ -7,7 +7,7 @@
 # =============================================================================
 
 # Stage 1: Full dependencies for build
-FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS deps
+FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS deps
 
 WORKDIR /app
 
@@ -44,13 +44,13 @@ FROM build AS worker-deps
 RUN npm prune --omit=dev && npm cache clean --force
 
 # Stage 4: Slim worker runtime (compiled JS + prod deps)
-FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS worker-runtime
+FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS worker-runtime
 
 WORKDIR /app
 
 # ffmpeg is required by durable track identity (#457): scanner and audio-hash
 # backfill stream hashing run in the worker process.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     tini \
     openssl \
     ffmpeg \
@@ -87,12 +87,12 @@ RUN PRISMA_VERSION=$(node -p "require('./node_modules/prisma/package.json').vers
     npm cache clean --force
 
 # Stage 5: API runtime (compiled JS + migrations entrypoint; default backend target)
-FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS api-runtime
+FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS api-runtime
 
 WORKDIR /app
 
 # ffmpeg is required by API runtime (transcoding/audio paths).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     tini \
     openssl \
     ffmpeg \

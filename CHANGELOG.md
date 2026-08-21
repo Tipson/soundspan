@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+### Security
+
+- Refreshed every pinned base-image digest (`node:24-bookworm-slim`, `python:3.11-slim`, `python:3.12-slim`, `python:3.14-slim`, and the `denoland/deno:bin-2.9.5` binary stage) and added `apt-get upgrade` to every shipped image stage so published images always carry current Debian security updates even when the upstream base snapshot lags the security archive. The four Python sidecar images also uninstall pip after their hash-locked installs — pip is build-time tooling only, and its vendored dependencies were the images' last fixable scan findings. Together these clear the fixable HIGH-severity findings reported by Trivy image scanning; the handful of HIGH findings inside npm's own bundled dependencies remain until npm ships fixed bundles and are tracked in #671.
+
 ## [2.4.0] - 2026-08-21
 
 ### Added

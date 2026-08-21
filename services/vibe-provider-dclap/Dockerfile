@@ -1,5 +1,5 @@
 # DCLAP student ONNX provider for CPU-first vibe embeddings
-FROM python:3.12-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36
+FROM python:3.12-slim@sha256:876416ecde9aca2bcc90e1fb0c7a9500bbf749f5788b70f82d4c5a5c2357f8b4
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
@@ -16,7 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     DCLAP_MODEL_PATH=/app/models \
     DCLAP_TOKENIZER_PATH=/app/tokenizer
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     ffmpeg \
     libgomp1 \
@@ -29,6 +29,11 @@ WORKDIR /app
 # with the uv command recorded in requirements.lock.README.
 COPY services/vibe-provider-dclap/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
+
+# pip is build-time tooling only; removing it from the runtime image drops
+# its vendored dependencies (msgpack, setuptools metadata) from the scan
+# surface alongside the other removed network tools.
+RUN python3 -m pip uninstall -y pip
 
 RUN mkdir -p /app/models /app/tokenizer /app/licenses/dclap
 

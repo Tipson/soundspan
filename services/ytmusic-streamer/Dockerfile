@@ -1,8 +1,8 @@
 # YouTube Music Streamer — FastAPI sidecar for soundspan
 # Streams audio from YouTube Music via ytmusicapi + yt-dlp with a bounded transient spool
-FROM denoland/deno:bin-2.9.5@sha256:0d1262facd139e815217c001945eb822c7a78584cf660142c34a6b53effec1aa AS deno
+FROM denoland/deno:bin-2.9.5@sha256:f099136c4b96de8ff4eb27be0cda24886cf9a60bf0636281577a5118f9dc39b5 AS deno
 
-FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
+FROM python:3.14-slim@sha256:d6e0850f13fda0e2305d4c3c1c2f7930fe1042d34ddd958e49bba6ef685d0bb2
 
 # yt-dlp uses Deno for YouTube's JavaScript challenge solving.
 COPY --from=deno /deno /usr/local/bin/deno
@@ -15,7 +15,7 @@ ENV TZ=UTC
 # ffmpeg: required by yt-dlp for stream extraction
 # curl: healthcheck probe
 # tini: PID 1 signal handling (K8s SIGTERM)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     tini \
@@ -39,6 +39,11 @@ RUN sed -n 's/^\([A-Za-z0-9._-]\+==[^ \\]\+\).*$/\1/p' requirements.lock > /tmp/
     && pip install --no-cache-dir -c /tmp/lock-constraints.txt -r requirements-exempt.txt \
     && pip check \
     && rm /tmp/lock-constraints.txt
+
+# pip is build-time tooling only; removing it from the runtime image drops
+# its vendored dependencies (msgpack, setuptools metadata) from the scan
+# surface alongside the other removed network tools.
+RUN python3 -m pip uninstall -y pip
 
 # Copy the entrypoint and its split sidecar modules.
 COPY services/ytmusic-streamer/*.py ./
