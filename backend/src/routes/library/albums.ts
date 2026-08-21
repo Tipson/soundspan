@@ -298,90 +298,125 @@ albumsBrowseRouter.get("/albums", handleGetAlbums);
  *         description: Not authenticated
  */
 // GET /library/albums/:id
-/**
- * Handles GET /api/library/albums/:id.
- */
-export async function handleGetAlbum(
-    req: Request<{ id: string }>,
-    res: Response,
-) {
-    const idParam = req.params.id;
-    const includeTracks = parseBooleanQueryParam(req.query.includeTracks, true);
-    const browseTrackWhere = {
-        ...TRACK_VISIBLE_WHERE,
-        ...trackBrowseWhere("all"),
+function buildRemoteAlbumTrackWheres(userId: string | undefined) {
+    const likedTidal: Prisma.TrackTidalWhereInput = userId
+        ? { likedBy: { some: { userId } } }
+        : { id: { in: [] } };
+    const likedYt: Prisma.TrackYtMusicWhereInput = userId
+        ? { likedBy: { some: { userId } } }
+        : { id: { in: [] } };
+    return {
+        likedTidal,
+        likedYt,
+        includedTidal: {
+            ...likedTidal,
+            albumEntity: { is: { location: "REMOTE" as const } },
+        },
+        includedYt: {
+            ...likedYt,
+            albumEntity: { is: { location: "REMOTE" as const } },
+        },
     };
+}
 
-    // Find album by ID or rgMbid (for discovery albums) in single query.
-    // Tracks can be excluded for lightweight progressive hydration.
-    const albumWithTracks = includeTracks
-        ? await prisma.album.findFirst({
-              where: {
-                  OR: [{ id: idParam }, { rgMbid: idParam }],
-                  tracks: { some: browseTrackWhere },
-              },
-              include: {
-                  artist: {
-                      select: { id: true, mbid: true, name: true },
-                  },
-                  federationPeer: {
-                      select: { id: true, name: true, outboundStatus: true },
-                  },
-                  tracks: {
-                      where: browseTrackWhere,
-                      include: {
-                          federationPeer: {
-                              select: {
-                                  id: true,
-                                  name: true,
-                                  outboundStatus: true,
-                              },
-                          },
-                      },
-                      orderBy: [
-                          { discNo: Prisma.SortOrder.asc },
-                          { trackNo: Prisma.SortOrder.asc },
-                      ],
-                  },
-              },
-          })
-        : null;
-    const albumWithoutTracks = includeTracks
-        ? null
-        : await prisma.album.findFirst({
-              where: {
-                  OR: [{ id: idParam }, { rgMbid: idParam }],
-                  tracks: { some: browseTrackWhere },
-              },
-              include: {
-                  artist: {
-                      select: { id: true, mbid: true, name: true },
-                  },
-                  federationPeer: {
-                      select: { id: true, name: true, outboundStatus: true },
-                  },
-              },
-          });
-    const album = albumWithTracks ?? albumWithoutTracks;
+function buildAlbumDetailWhere(
+    id: string,
+    browseTrackWhere: Prisma.TrackWhereInput,
+    likedTidal: Prisma.TrackTidalWhereInput,
+    likedYt: Prisma.TrackYtMusicWhereInput,
+): Prisma.AlbumWhereInput {
+    return {
+        AND: [
+            { OR: [{ id }, { rgMbid: id }] },
+            {
+                OR: [
+                    { tracks: { some: browseTrackWhere } },
+                    {
+                        location: "REMOTE",
+                        tracksTidal: { some: likedTidal },
+                    },
+                    {
+                        location: "REMOTE",
+                        tracksYtMusic: { some: likedYt },
+                    },
+                ],
+            },
+        ],
+    };
+}
 
-    if (!album) {
-        return sendRouteError(res, 404, "Album not found");
-    }
-
-    // Check ownership with O(1) indexed lookup (separate query is faster than fetching all ownedAlbums)
-    const owned = await prisma.ownedAlbum.findUnique({
-        where: {
-            artistId_rgMbid: {
-                artistId: album.artistId,
-                rgMbid: album.rgMbid,
+async function findAlbumWithTracks(
+    where: Prisma.AlbumWhereInput,
+    browseTrackWhere: Prisma.TrackWhereInput,
+    tidalTrackWhere: Prisma.TrackTidalWhereInput,
+    ytTrackWhere: Prisma.TrackYtMusicWhereInput,
+) {
+    return prisma.album.findFirst({
+        where,
+        include: {
+            artist: { select: { id: true, mbid: true, name: true } },
+            federationPeer: {
+                select: { id: true, name: true, outboundStatus: true },
+            },
+            tracks: {
+                where: browseTrackWhere,
+                include: {
+                    federationPeer: {
+                        select: {
+                            id: true,
+                            name: true,
+                            outboundStatus: true,
+                        },
+                    },
+                },
+                orderBy: [
+                    { discNo: Prisma.SortOrder.asc },
+                    { trackNo: Prisma.SortOrder.asc },
+                ],
+            },
+            tracksTidal: {
+                where: tidalTrackWhere,
+                include: {
+                    mappings: {
+                        where: { stale: false },
+                        select: { id: true, trackId: true },
+                    },
+                },
+                orderBy: { title: Prisma.SortOrder.asc },
+            },
+            tracksYtMusic: {
+                where: ytTrackWhere,
+                include: {
+                    mappings: {
+                        where: { stale: false },
+                        select: { id: true, trackId: true },
+                    },
+                },
+                orderBy: { title: Prisma.SortOrder.asc },
             },
         },
     });
-    const isOwned = !!owned;
+}
 
-    const artistData = album.artist;
-    const persistedTracks = albumWithTracks?.tracks ?? [];
-    const tracks = persistedTracks.map(({ federationPeer, ...track }) => ({
+async function findAlbumWithoutTracks(where: Prisma.AlbumWhereInput) {
+    return prisma.album.findFirst({
+        where,
+        include: {
+            artist: { select: { id: true, mbid: true, name: true } },
+            federationPeer: {
+                select: { id: true, name: true, outboundStatus: true },
+            },
+        },
+    });
+}
+
+type AlbumWithTracks = NonNullable<
+    Awaited<ReturnType<typeof findAlbumWithTracks>>
+>;
+type AlbumDetailRequest = Request<{ id: string }>;
+
+function formatLocalAlbumTracks(album: AlbumWithTracks) {
+    return album.tracks.map(({ federationPeer, ...track }) => ({
         ...track,
         ...(track.origin === "FEDERATED" && federationPeer
             ? {
@@ -394,11 +429,167 @@ export async function handleGetAlbum(
               }
             : {}),
     }));
-    const { federationPeer, ...albumFields } = album;
+}
 
+function formatTidalAlbumTracks(album: AlbumWithTracks) {
+    return album.tracksTidal.map((track) => ({
+        id: `tidal:${track.tidalId}`,
+        title: track.title,
+        duration: track.duration,
+        trackNo: null,
+        artist: {
+            id: track.artistId ?? album.artist.id,
+            name: track.artist || album.artist.name,
+        },
+        album: {
+            id: album.id,
+            title: track.album || album.title,
+            coverArt: album.coverUrl,
+            artist: album.artist,
+        },
+        source: "tidal" as const,
+        streamSource: "tidal" as const,
+        tidalTrackId: track.tidalId,
+        provider: {
+            tidalTrackId: track.tidalId,
+            youtubeVideoId: null,
+        },
+    }));
+}
+
+function formatYtAlbumTracks(album: AlbumWithTracks) {
+    return album.tracksYtMusic.map((track) => ({
+        id: `yt:${track.videoId}`,
+        title: track.title,
+        duration: track.duration,
+        trackNo: null,
+        artist: {
+            id: track.artistId ?? album.artist.id,
+            name: track.artist || album.artist.name,
+        },
+        album: {
+            id: album.id,
+            title: track.album || album.title,
+            coverArt: track.thumbnailUrl ?? album.coverUrl,
+            artist: album.artist,
+        },
+        source: "youtube" as const,
+        streamSource: "youtube" as const,
+        youtubeVideoId: track.videoId,
+        thumbnailUrl: track.thumbnailUrl ?? undefined,
+        provider: {
+            tidalTrackId: null,
+            youtubeVideoId: track.videoId,
+        },
+    }));
+}
+
+type ProviderTrack =
+    | AlbumWithTracks["tracksTidal"][number]
+    | AlbumWithTracks["tracksYtMusic"][number];
+
+function canonicalMappingKeys(track: ProviderTrack): string[] {
+    return (track.mappings ?? []).flatMap((mapping) => [
+        `mapping:${mapping.id}`,
+        ...(mapping.trackId ? [`track:${mapping.trackId}`] : []),
+    ]);
+}
+
+function formatRemoteAlbumTracks(album: AlbumWithTracks) {
+    const tidalMappingKeys = new Set(
+        album.tracksTidal.flatMap(canonicalMappingKeys),
+    );
+    // Prefer TIDAL when an active mapping proves both provider rows represent
+    // one canonical recording. Unmapped provider rows remain independently playable.
+    const uniqueYtTracks = album.tracksYtMusic.filter((track) =>
+        canonicalMappingKeys(track).every((key) => !tidalMappingKeys.has(key)),
+    );
+    return [
+        ...formatTidalAlbumTracks(album),
+        ...formatYtAlbumTracks({ ...album, tracksYtMusic: uniqueYtTracks }),
+    ];
+}
+
+function formatAlbumTracks(album: AlbumWithTracks | null) {
+    if (!album) return [];
+    const localTracks = formatLocalAlbumTracks(album);
+    if (album.location !== "REMOTE") return localTracks;
+    return [...localTracks, ...formatRemoteAlbumTracks(album)];
+}
+
+function formatAlbumSource(location: string) {
+    if (location === "FEDERATED") return "federated" as const;
+    if (location === "REMOTE") return "remote" as const;
+    return "local" as const;
+}
+
+function publicAlbumFields(
+    albumWithTracks: AlbumWithTracks | null,
+    albumWithoutTracks: Awaited<ReturnType<typeof findAlbumWithoutTracks>>,
+) {
+    if (albumWithTracks) {
+        const {
+            federationPeer,
+            tracks: _tracks,
+            tracksTidal: _tracksTidal,
+            tracksYtMusic: _tracksYtMusic,
+            ...albumFields
+        } = albumWithTracks;
+        return { federationPeer, albumFields };
+    }
+    if (!albumWithoutTracks) return null;
+    const { federationPeer, ...albumFields } = albumWithoutTracks;
+    return { federationPeer, albumFields };
+}
+
+/**
+ * Handles GET /api/library/albums/:id.
+ */
+export async function handleGetAlbum(req: AlbumDetailRequest, res: Response) {
+    const idParam = req.params.id;
+    const includeTracks = parseBooleanQueryParam(req.query.includeTracks, true);
+    const browseTrackWhere = {
+        ...TRACK_VISIBLE_WHERE,
+        ...trackBrowseWhere("all"),
+    };
+    const remoteWheres = buildRemoteAlbumTrackWheres(req.user?.id);
+    const albumWhere = buildAlbumDetailWhere(
+        idParam,
+        browseTrackWhere,
+        remoteWheres.likedTidal,
+        remoteWheres.likedYt,
+    );
+    const albumWithTracks = includeTracks
+        ? await findAlbumWithTracks(
+              albumWhere,
+              browseTrackWhere,
+              remoteWheres.includedTidal,
+              remoteWheres.includedYt,
+          )
+        : null;
+    const albumWithoutTracks = includeTracks
+        ? null
+        : await findAlbumWithoutTracks(albumWhere);
+    const album = albumWithTracks ?? albumWithoutTracks;
+    if (!album) {
+        return sendRouteError(res, 404, "Album not found");
+    }
+    const owned = await prisma.ownedAlbum.findUnique({
+        where: {
+            artistId_rgMbid: {
+                artistId: album.artistId,
+                rgMbid: album.rgMbid,
+            },
+        },
+    });
+    const publicFields = publicAlbumFields(albumWithTracks, albumWithoutTracks);
+    if (!publicFields) {
+        return sendRouteError(res, 404, "Album not found");
+    }
+    const { federationPeer, albumFields } = publicFields;
     res.json({
         ...albumFields,
-        source: album.location === "FEDERATED" ? "federated" : "local",
+        source: formatAlbumSource(album.location),
         peer: federationPeer
             ? {
                   id: federationPeer.id,
@@ -406,9 +597,9 @@ export async function handleGetAlbum(
                   online: federationPeer.outboundStatus === "ACTIVE",
               }
             : undefined,
-        artist: artistData,
-        tracks,
-        owned: isOwned,
+        artist: album.artist,
+        tracks: formatAlbumTracks(albumWithTracks),
+        owned: !!owned,
         coverArt: album.coverUrl,
     });
 }
@@ -447,10 +638,38 @@ albumsBrowseRouter.get("/albums/:id", asyncHandler(handleGetAlbum));
  *         description: Invalid preference signal
  *       404:
  *         description: Album not found
+ *       422:
+ *         description: Album contains no local tracks
  *       401:
  *         description: Not authenticated
  */
 // POST /library/albums/:id/preference
+async function findAlbumLocalTrackIds(
+    requestedAlbumId: string,
+): Promise<{ albumId: string; trackIds: string[] } | null> {
+    const album = await prisma.album.findFirst({
+        where: {
+            OR: [{ id: requestedAlbumId }, { rgMbid: requestedAlbumId }],
+        },
+        select: { id: true },
+    });
+    if (!album) return null;
+    const tracks = await prisma.track.findMany({
+        where: { albumId: album.id, ...TRACK_VISIBLE_WHERE },
+        select: { id: true },
+    });
+    return {
+        albumId: album.id,
+        trackIds: Array.from(
+            new Set(
+                tracks
+                    .map((track) => track.id)
+                    .filter((trackId) => trackId.length > 0),
+            ),
+        ),
+    };
+}
+
 /**
  * Handles POST /api/library/albums/:id/preference.
  */
@@ -463,7 +682,6 @@ export async function handleSetAlbumPreference(
         return sendRouteError(res, 401, "Authentication required");
     }
 
-    const requestedAlbumId = req.params.id;
     const signal = normalizeTrackPreferenceSignal(
         req.body?.signal ?? req.body?.score ?? req.body?.action,
     );
@@ -474,45 +692,28 @@ export async function handleSetAlbumPreference(
         });
     }
 
-    const album = await prisma.album.findFirst({
-        where: {
-            OR: [{ id: requestedAlbumId }, { rgMbid: requestedAlbumId }],
-        },
-        select: {
-            id: true,
-        },
-    });
+    const album = await findAlbumLocalTrackIds(req.params.id);
     if (!album) {
         return sendRouteError(res, 404, "Album not found");
     }
-
-    const albumTracks = await prisma.track.findMany({
-        where: { albumId: album.id, ...TRACK_VISIBLE_WHERE },
-        select: { id: true },
-    });
-    const trackIds = Array.from(
-        new Set(
-            albumTracks
-                .map((track) => track.id)
-                .filter(
-                    (trackId): trackId is string =>
-                        typeof trackId === "string" && trackId.length > 0,
-                ),
-        ),
-    );
+    if (album.trackIds.length === 0) {
+        return sendRouteError(
+            res,
+            422,
+            "Album preferences require at least one local track",
+        );
+    }
     const now = new Date();
 
-    if (trackIds.length > 0) {
-        await prisma.$transaction(async (tx) => {
-            await applyTrackPreferenceSignalToTrackIds(
-                tx,
-                userId,
-                trackIds,
-                signal,
-                now,
-            );
-        });
-    }
+    await prisma.$transaction(async (tx) => {
+        await applyTrackPreferenceSignalToTrackIds(
+            tx,
+            userId,
+            album.trackIds,
+            signal,
+            now,
+        );
+    });
 
     const preference = resolveTrackPreference({
         likedAt: signal === "thumbs_up" ? now : null,
@@ -520,7 +721,11 @@ export async function handleSetAlbumPreference(
     });
 
     res.json(
-        formatAlbumPreferenceResponse(album.id, trackIds.length, preference),
+        formatAlbumPreferenceResponse(
+            album.albumId,
+            album.trackIds.length,
+            preference,
+        ),
     );
 }
 
