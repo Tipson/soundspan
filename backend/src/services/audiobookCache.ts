@@ -89,30 +89,7 @@ export class AudiobookCacheService {
                 `[AUDIOBOOK] Found ${audiobooks.length} audiobooks in Audiobookshelf`,
             );
 
-            for (const book of audiobooks) {
-                try {
-                    await this.syncAudiobook(book);
-                    result.synced++;
-                    // Extract title and author from nested structure for logging
-                    const metadata = book.media?.metadata || book;
-                    const title =
-                        metadata.title || book.title || "Unknown Title";
-                    const author =
-                        metadata.authorName ||
-                        metadata.author ||
-                        book.author ||
-                        "Unknown Author";
-                    logger.debug(`  Synced: ${title} by ${author}`);
-                } catch (error: any) {
-                    result.failed++;
-                    const metadata = book.media?.metadata || book;
-                    const title =
-                        metadata.title || book.title || "Unknown Title";
-                    const errorMsg = `Failed to sync ${title}: ${error.message}`;
-                    result.errors.push(errorMsg);
-                    logger.error(` ${errorMsg}`);
-                }
-            }
+            await this.syncBooks(audiobooks, result, { logEachBook: true });
 
             logger.debug("\nSync Summary:");
             logger.debug(`  Synced: ${result.synced}`);
@@ -128,6 +105,89 @@ export class AudiobookCacheService {
         } catch (error: any) {
             logger.error(" Audiobook sync failed:", error);
             throw error;
+        }
+    }
+
+    /**
+     * Sync audiobooks that exist in Audiobookshelf but are not cached locally.
+     * This fetches the full item listing because Audiobookshelf has no delta API.
+     * It is lighter than syncAll because cached books skip upserts and cover work.
+     */
+    async syncMissing(): Promise<SyncResult> {
+        const result: SyncResult = {
+            synced: 0,
+            failed: 0,
+            skipped: 0,
+            errors: [],
+        };
+
+        try {
+            const audiobooks = await audiobookshelfService.getAllAudiobooks();
+
+            if (audiobooks.length === 0) {
+                return result;
+            }
+
+            const cachedAudiobooks = await prisma.audiobook.findMany({
+                where: { peerId: null },
+                select: { id: true },
+            });
+            const cachedIds = new Set(
+                cachedAudiobooks.map((audiobook) => audiobook.id),
+            );
+            const missingAudiobooks = audiobooks.filter(
+                (audiobook) => !cachedIds.has(audiobook.id),
+            );
+
+            result.skipped = audiobooks.length - missingAudiobooks.length;
+
+            if (missingAudiobooks.length === 0) {
+                return result;
+            }
+
+            await this.ensureCoverCacheDir();
+
+            await this.syncBooks(missingAudiobooks, result, {
+                logEachBook: false,
+            });
+
+            logger.debug(
+                `[AUDIOBOOK] Incremental sync complete: ${result.synced} new, ${result.skipped} already cached, ${result.failed} failed`,
+            );
+
+            return result;
+        } catch (error: any) {
+            logger.error(" Audiobook incremental sync failed:", error);
+            throw error;
+        }
+    }
+
+    private async syncBooks(
+        books: any[],
+        result: SyncResult,
+        options: { logEachBook: boolean },
+    ): Promise<void> {
+        for (const book of books) {
+            const metadata = book.media?.metadata || book;
+            const title = metadata.title || book.title || "Unknown Title";
+            const author =
+                metadata.authorName ||
+                metadata.author ||
+                book.author ||
+                "Unknown Author";
+
+            try {
+                await this.syncAudiobook(book);
+                result.synced++;
+                if (options.logEachBook) {
+                    logger.debug(`  Synced: ${title} by ${author}`);
+                }
+            } catch (error: any) {
+                result.failed++;
+                const errorMsg = `Failed to sync ${title}: ${error.message}`;
+                result.errors.push(errorMsg);
+                logger.error(` ${errorMsg}`, error);
+            }
         }
     }
 
