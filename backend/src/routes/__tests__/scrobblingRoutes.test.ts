@@ -10,8 +10,20 @@ const setEnabled = jest.fn();
 class InvalidListenBrainzTokenError extends Error {}
 class LastFmServerConfigurationError extends Error {}
 class LastFmAuthStateError extends Error {
+    constructor(message = "No pending Last.fm authorization was found") {
+        super(message);
+    }
+}
+class LastFmCredentialsRejectedError extends Error {
     constructor() {
-        super("No pending Last.fm authorization was found");
+        super(
+            "The server's Last.fm API key or shared secret was rejected by Last.fm",
+        );
+    }
+}
+class ScrobbleProviderRequestError extends Error {
+    constructor(public readonly service: "Last.fm" | "ListenBrainz") {
+        super(`${service} request failed`);
     }
 }
 
@@ -32,6 +44,8 @@ jest.mock("../../services/scrobbleConnections", () => ({
     InvalidListenBrainzTokenError,
     LastFmServerConfigurationError,
     LastFmAuthStateError,
+    LastFmCredentialsRejectedError,
+    ScrobbleProviderRequestError,
 }));
 
 import router from "../scrobbling";
@@ -90,7 +104,14 @@ describe("scrobbling routes", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         status.mockResolvedValue({
-            lastfm: { connected: true, enabled: true, username: "listener" },
+            lastfm: {
+                connected: true,
+                enabled: true,
+                username: "listener",
+                serverConfigured: true,
+                apiKeyConfigured: true,
+                sharedSecretConfigured: true,
+            },
             listenbrainz: { connected: true, enabled: false },
         });
         saveToken.mockResolvedValue(undefined);
@@ -113,11 +134,18 @@ describe("scrobbling routes", () => {
 
         expect(response.statusCode).toBe(200);
         expect(response.body).toEqual({
-            lastfm: { connected: true, enabled: true, username: "listener" },
+            lastfm: {
+                connected: true,
+                enabled: true,
+                username: "listener",
+                serverConfigured: true,
+                apiKeyConfigured: true,
+                sharedSecretConfigured: true,
+            },
             listenbrainz: { connected: true, enabled: false },
         });
         expect(JSON.stringify(response.body)).not.toMatch(
-            /token|credential|secret|signature/i,
+            /encryptedCredential|encryptedPendingToken|"(?:token|apiKey|sharedSecret|signature)":/i,
         );
     });
 
@@ -170,6 +198,60 @@ describe("scrobbling routes", () => {
         expect(response.statusCode).toBe(409);
         expect(response.body).toEqual({
             error: "No pending Last.fm authorization was found",
+        });
+    });
+
+    it("returns 409 when Last.fm credentials are rejected", async () => {
+        startAuth.mockRejectedValue(new LastFmCredentialsRejectedError());
+
+        const response = await invoke("/lastfm/start-auth", "post");
+
+        expect(response.statusCode).toBe(409);
+        expect(response.body).toEqual({
+            error: "The server's Last.fm API key or shared secret was rejected by Last.fm",
+        });
+    });
+
+    it("returns 409 with approval guidance for an unauthorized Last.fm token", async () => {
+        completeAuth.mockRejectedValue(
+            new LastFmAuthStateError(
+                "Approve access in the Last.fm tab, then try again",
+            ),
+        );
+
+        const response = await invoke("/lastfm/complete-auth", "post");
+
+        expect(response.statusCode).toBe(409);
+        expect(response.body).toEqual({
+            error: "Approve access in the Last.fm tab, then try again",
+        });
+    });
+
+    it("returns 502 when Last.fm does not respond", async () => {
+        startAuth.mockRejectedValue(
+            new ScrobbleProviderRequestError("Last.fm"),
+        );
+
+        const response = await invoke("/lastfm/start-auth", "post");
+
+        expect(response.statusCode).toBe(502);
+        expect(response.body).toEqual({
+            error: "Last.fm did not respond. Try again in a moment.",
+        });
+    });
+
+    it("returns 502 when ListenBrainz does not respond", async () => {
+        saveToken.mockRejectedValue(
+            new ScrobbleProviderRequestError("ListenBrainz"),
+        );
+
+        const response = await invoke("/listenbrainz", "put", {
+            token: "user-token",
+        });
+
+        expect(response.statusCode).toBe(502);
+        expect(response.body).toEqual({
+            error: "ListenBrainz did not respond. Try again in a moment.",
         });
     });
 });

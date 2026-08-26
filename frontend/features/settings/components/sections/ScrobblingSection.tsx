@@ -11,6 +11,7 @@ import {
 } from "../ui";
 import { api } from "@/lib/api";
 import type { ScrobblingStatus } from "@/lib/api/scrobbling";
+import { lastFmDescription } from "@/features/settings/lastFmScrobblingCopy";
 import { queryKeys } from "@/lib/queryKeys";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 
@@ -229,15 +230,6 @@ function LastFmConnectFlow({ onChanged }: { onChanged: () => void }) {
             </button>
         </div>
     );
-}
-
-function lastFmDescription(status: ScrobblingStatus["lastfm"]): string {
-    if (!status.serverConfigured) {
-        return status.connected
-            ? "This server no longer has a Last.fm API key configured; existing scrobbling may fail. You can still disconnect."
-            : "This server has no Last.fm API key configured, so Last.fm scrobbling is unavailable. Ask your server admin to set LASTFM_API_KEY and LASTFM_SHARED_SECRET.";
-    }
-    return "Sign in with your Last.fm account to scrobble plays";
 }
 
 function LastFmRow({
