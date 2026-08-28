@@ -22,6 +22,8 @@ const state = {
         artist: string;
         duration: number;
     } | null>,
+    tidalMatchCalls: 0,
+    ytMatchCalls: 0,
 };
 
 mock.module("lucide-react", {
@@ -82,8 +84,14 @@ mock.module("@/lib/api", {
                 authenticated: false,
                 credentialsConfigured: false,
             }),
-            matchTidalBatch: async () => ({ matches: state.tidalMatches }),
-            matchYtMusicBatch: async () => ({ matches: [] }),
+            matchTidalBatch: async () => {
+                state.tidalMatchCalls += 1;
+                return { matches: state.tidalMatches };
+            },
+            matchYtMusicBatch: async () => {
+                state.ytMatchCalls += 1;
+                return { matches: [] };
+            },
         },
     },
 });
@@ -173,6 +181,8 @@ beforeEach(() => {
     state.routed.length = 0;
     state.tidalAvailable = true;
     state.tidalMatches = [];
+    state.tidalMatchCalls = 0;
+    state.ytMatchCalls = 0;
 });
 
 async function render(element: React.ReactElement): Promise<{
@@ -198,6 +208,100 @@ async function render(element: React.ReactElement): Promise<{
         },
     };
 }
+
+test("direct YouTube Music discover rows play with their exact provider id without fuzzy matching", async () => {
+    const { DiscoverTracksList } =
+        await import("../../features/search/components/DiscoverTracksList");
+    const { container, unmount } = await render(
+        React.createElement(DiscoverTracksList, {
+            tracks: [
+                {
+                    type: "track" as const,
+                    id: "video-exact-1",
+                    name: "Exact Catalog Song",
+                    artist: "Catalog Artist",
+                    album: "Catalog Album",
+                    duration: 203,
+                    providerTrackId: "video-exact-1",
+                    streamSource: "youtube" as const,
+                    youtubeVideoId: "video-exact-1",
+                },
+            ],
+        }),
+    );
+
+    assert.match(container.innerHTML, /YT/);
+    assert.equal(state.tidalMatchCalls, 0);
+    assert.equal(state.ytMatchCalls, 0);
+
+    const row = container.querySelector('[role="button"]');
+    assert.ok(row, "row not found");
+    await React.act(async () => {
+        (row as HTMLElement).click();
+    });
+
+    assert.equal(state.played.length, 1);
+    const played = state.played[0].tracks[0] as {
+        streamSource: string;
+        youtubeVideoId: string;
+        duration: number;
+    };
+    assert.equal(played.streamSource, "youtube");
+    assert.equal(played.youtubeVideoId, "video-exact-1");
+    assert.equal(played.duration, 203);
+    unmount();
+});
+
+test("metadata-only rows keep their original match key beside direct provider rows", async () => {
+    state.tidalMatches = [
+        {
+            id: 84,
+            title: "Metadata Song",
+            artist: "Metadata Artist",
+            duration: 198,
+        },
+    ];
+    const { DiscoverTracksList } =
+        await import("../../features/search/components/DiscoverTracksList");
+    const { container, unmount } = await render(
+        React.createElement(DiscoverTracksList, {
+            tracks: [
+                {
+                    type: "track" as const,
+                    id: "direct-video",
+                    name: "Direct Song",
+                    artist: "Direct Artist",
+                    streamSource: "youtube" as const,
+                    youtubeVideoId: "direct-video",
+                },
+                {
+                    type: "track" as const,
+                    name: "Metadata Song",
+                    artist: "Metadata Artist",
+                },
+            ],
+        }),
+    );
+
+    assert.equal(state.tidalMatchCalls, 1);
+    const rows = container.querySelectorAll('[role="button"]');
+    assert.equal(rows.length, 2);
+    await React.act(async () => {
+        (rows[1] as HTMLElement).click();
+    });
+
+    assert.equal(state.routed.length, 0);
+    assert.equal(state.played.length, 1);
+    const played = state.played[0].tracks[0] as {
+        streamSource: string;
+        tidalTrackId: number;
+        title: string;
+    };
+    assert.equal(played.streamSource, "tidal");
+    assert.equal(played.tidalTrackId, 84);
+    assert.equal(played.title, "Metadata Song");
+    unmount();
+});
 
 test("matched discover rows play in place with a provider badge", async () => {
     state.tidalMatches = [

@@ -10,6 +10,10 @@ Start-here guide for `frontend/features/search`.
 - `npm --prefix backend test -- --runInBand src/routes/__tests__/searchRuntime.test.ts src/routes/__tests__/browseRuntime.test.ts`
 - `npm --prefix backend test -- --runInBand src/services/__tests__/searchService.test.ts`
 
+External song results retain Last.fm metadata and merge exact YouTube Music
+provider identities when that integration is enabled. Rows with a provider
+identity play directly; only metadata-only rows use provider fuzzy matching.
+
 ## Directory Contents
 
 | Path | Kind |

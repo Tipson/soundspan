@@ -112,6 +112,12 @@ export interface DiscoverResult {
     genres?: string[];
     trackCount?: number;
     listeners?: number;
+    /** Exact remote-provider identity when the catalog result is playable. */
+    providerTrackId?: string;
+    streamSource?: "tidal" | "youtube";
+    tidalTrackId?: number;
+    youtubeVideoId?: string;
+    duration?: number | null;
 }
 
 export interface AliasInfo {

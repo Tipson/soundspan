@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import type { CanonicalMediaSearchResult } from "@soundspan/media-metadata-contract";
 import { logger } from "../utils/logger";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
@@ -12,8 +13,36 @@ import axios from "axios";
 import { redisClient } from "../utils/redis";
 import { z } from "zod";
 import { LIBRARY_ORIGIN_VALUES } from "../utils/librarySorting";
+import { ytMusicService } from "../services/youtubeMusic";
+import { getSystemSettings } from "../utils/systemSettings";
+import { ytMusicSearchLimiter } from "../middleware/rateLimiter";
+import { normalizeForExactKey } from "../utils/artistNormalization";
 
 const router = Router();
+
+interface DiscoverTrackResult {
+    type: "track";
+    id?: string;
+    name: string;
+    artist?: string;
+    album?: string | null;
+    image?: string | null;
+    providerTrackId?: string;
+    streamSource?: "youtube";
+    youtubeVideoId?: string;
+    duration?: number | null;
+    [key: string]: unknown;
+}
+
+const discoverMusicSearchLimiter: RequestHandler = (req, res, next) => {
+    const requestedType =
+        typeof req.query.type === "string" ? req.query.type : "music";
+    if (requestedType !== "music" && requestedType !== "all") {
+        next();
+        return;
+    }
+    ytMusicSearchLimiter(req, res, next);
+};
 
 const searchQuerySchema = z.object({
     q: z.string().max(500).default(""),
@@ -49,6 +78,137 @@ function normalizeDiscoverArtistTags(value: unknown): string[] {
     return value
         .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
         .filter((tag): tag is string => tag.length > 0);
+}
+
+function normalizeDiscoverTrackIdentity(value: unknown): string {
+    return typeof value === "string" ? normalizeForExactKey(value) : "";
+}
+
+function discoverTrackIdentity(track: DiscoverTrackResult): string | null {
+    const artist = normalizeDiscoverTrackIdentity(track.artist);
+    const title = normalizeDiscoverTrackIdentity(track.name);
+    return artist && title ? `${artist}::${title}` : null;
+}
+
+function discoverTrackAlbumsMatch(
+    first: DiscoverTrackResult,
+    second: DiscoverTrackResult,
+): boolean {
+    const firstAlbum = normalizeDiscoverTrackIdentity(first.album);
+    const secondAlbum = normalizeDiscoverTrackIdentity(second.album);
+    return !firstAlbum || !secondAlbum || firstAlbum === secondAlbum;
+}
+
+function mapYtMusicDiscoverTrack(
+    result: CanonicalMediaSearchResult,
+): DiscoverTrackResult | null {
+    const providerTrackId = result.providerTrackId.trim();
+    const title = result.title.trim();
+    const artist = result.artistName.trim();
+    if (
+        result.provider !== "ytmusic" ||
+        result.source !== "youtube" ||
+        !providerTrackId ||
+        !title ||
+        !artist
+    ) {
+        return null;
+    }
+
+    return {
+        type: "track",
+        id: providerTrackId,
+        name: title,
+        artist,
+        album: result.albumTitle,
+        image: result.thumbnailUrl,
+        providerTrackId,
+        streamSource: "youtube",
+        youtubeVideoId: providerTrackId,
+        duration: result.durationSec,
+    };
+}
+
+async function searchYtMusicDiscoverTracks(
+    query: string,
+    limit: number,
+): Promise<DiscoverTrackResult[]> {
+    const response = await ytMusicService.searchCanonical(
+        "__public__",
+        query,
+        "songs",
+    );
+    return response.results
+        .slice(0, limit)
+        .map(mapYtMusicDiscoverTrack)
+        .filter((track): track is DiscoverTrackResult => track !== null);
+}
+
+function mergeDiscoverTracks(
+    lastFmTracks: DiscoverTrackResult[],
+    ytMusicTracks: DiscoverTrackResult[],
+): DiscoverTrackResult[] {
+    const merged = [...lastFmTracks];
+    const indexesByIdentity = new Map<string, number[]>();
+    const seenProviderIds = new Set<string>();
+
+    merged.forEach((track, index) => {
+        const identity = discoverTrackIdentity(track);
+        if (identity) {
+            const indexes = indexesByIdentity.get(identity) || [];
+            indexes.push(index);
+            indexesByIdentity.set(identity, indexes);
+        }
+        if (typeof track.youtubeVideoId === "string") {
+            seenProviderIds.add(track.youtubeVideoId);
+        }
+    });
+
+    for (const ytTrack of ytMusicTracks) {
+        const providerId = ytTrack.youtubeVideoId;
+        if (
+            typeof providerId !== "string" ||
+            !providerId ||
+            seenProviderIds.has(providerId)
+        ) {
+            continue;
+        }
+        seenProviderIds.add(providerId);
+
+        const identity = discoverTrackIdentity(ytTrack);
+        const existingIndex = identity
+            ? indexesByIdentity
+                  .get(identity)
+                  ?.find((index) =>
+                      discoverTrackAlbumsMatch(merged[index], ytTrack),
+                  )
+            : undefined;
+        if (existingIndex !== undefined) {
+            const existing = merged[existingIndex];
+            if (existing.youtubeVideoId) {
+                continue;
+            }
+            merged[existingIndex] = {
+                ...existing,
+                album: existing.album || ytTrack.album,
+                image: existing.image || ytTrack.image,
+                providerTrackId: ytTrack.providerTrackId,
+                streamSource: "youtube",
+                youtubeVideoId: providerId,
+                duration: ytTrack.duration,
+            };
+            continue;
+        }
+
+        if (identity) {
+            const indexes = indexesByIdentity.get(identity) || [];
+            indexes.push(merged.length);
+            indexesByIdentity.set(identity, indexes);
+        }
+        merged.push(ytTrack);
+    }
+
+    return merged;
 }
 
 async function getLocalSimilarArtistsFromGraph(
@@ -431,6 +591,7 @@ router.get("/genres", async (req, res) => {
  * /api/search/discover:
  *   get:
  *     summary: Search for new content to discover (not in your library)
+ *     description: Searches Last.fm metadata and the enabled public YouTube Music catalog, merging exact provider identities into playable track results.
  *     tags: [Search]
  *     security:
  *       - apiKeyAuth: []
@@ -480,7 +641,7 @@ router.get("/genres", async (req, res) => {
  *       401:
  *         description: Not authenticated
  */
-router.get("/discover", async (req, res) => {
+router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
     try {
         const { q = "", type = "music", limit = "20" } = req.query;
 
@@ -494,8 +655,21 @@ router.get("/discover", async (req, res) => {
             return res.json({ results: [], aliasInfo: null });
         }
 
+        let ytMusicEnabled = false;
+        if (type === "music" || type === "all") {
+            try {
+                const settings = await getSystemSettings();
+                ytMusicEnabled = Boolean(settings?.ytMusicEnabled);
+            } catch (settingsError) {
+                logger.warn(
+                    "[SEARCH DISCOVER] YouTube Music settings check failed:",
+                    settingsError,
+                );
+            }
+        }
+
         // Cache TTL: 15 min (900s) -- external API data rarely changes
-        const cacheKey = `search:discover:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
+        const cacheKey = `search:discover:v2:yt${ytMusicEnabled ? "1" : "0"}:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
@@ -553,6 +727,12 @@ router.get("/discover", async (req, res) => {
                 searchQuery,
                 searchLimit,
             );
+            if (ytMusicEnabled) {
+                promiseMap.ytMusicTracks = searchYtMusicDiscoverTracks(
+                    searchQuery,
+                    searchLimit,
+                );
+            }
         }
 
         if (type === "podcasts" || type === "all") {
@@ -588,11 +768,15 @@ router.get("/discover", async (req, res) => {
             keys.map((k) => promiseMap[k]),
         );
         const resolved: Record<string, any[]> = {};
+        let ytMusicSearchFailed = false;
         keys.forEach((k, i) => {
             const result = settled[i];
             if (result.status === "fulfilled") {
                 resolved[k] = result.value;
             } else {
+                if (k === "ytMusicTracks") {
+                    ytMusicSearchFailed = true;
+                }
                 logger.error(
                     `[SEARCH DISCOVER] ${k} search failed:`,
                     result.reason,
@@ -612,11 +796,15 @@ router.get("/discover", async (req, res) => {
             );
             results.push(...filteredArtists);
         }
-        if (resolved.tracks) {
-            logger.debug(
-                `[SEARCH DISCOVER] Found ${resolved.tracks.length} track results`,
+        if (resolved.tracks || resolved.ytMusicTracks) {
+            const mergedTracks = mergeDiscoverTracks(
+                resolved.tracks || [],
+                resolved.ytMusicTracks || [],
             );
-            results.push(...resolved.tracks);
+            logger.debug(
+                `[SEARCH DISCOVER] Found ${mergedTracks.length} merged track results`,
+            );
+            results.push(...mergedTracks);
         }
         if (resolved.podcasts) {
             results.push(...resolved.podcasts);
@@ -624,10 +812,12 @@ router.get("/discover", async (req, res) => {
 
         const payload = { results, aliasInfo };
 
-        try {
-            await redisClient.setEx(cacheKey, 900, JSON.stringify(payload));
-        } catch (err) {
-            logger.warn("[SEARCH DISCOVER] Redis write error:", err);
+        if (!ytMusicSearchFailed) {
+            try {
+                await redisClient.setEx(cacheKey, 900, JSON.stringify(payload));
+            } catch (err) {
+                logger.warn("[SEARCH DISCOVER] Redis write error:", err);
+            }
         }
 
         res.json(payload);

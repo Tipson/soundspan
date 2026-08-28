@@ -51,7 +51,7 @@ function toPlaybackTrack(
         title: track.name,
         artist: { name: track.artist ?? "" },
         album: { title: track.album ?? "" },
-        duration: match.duration ?? 0,
+        duration: match.duration ?? track.duration ?? 0,
         streamSource: match.source,
         ...(match.source === "tidal"
             ? { tidalTrackId: match.tidalTrackId }
@@ -59,10 +59,30 @@ function toPlaybackTrack(
     };
 }
 
+function getDirectProviderMatch(
+    track: DiscoverResult,
+): SearchProviderMatch | null {
+    if (track.streamSource === "youtube" && track.youtubeVideoId) {
+        return {
+            source: "youtube",
+            youtubeVideoId: track.youtubeVideoId,
+            duration: track.duration ?? undefined,
+        };
+    }
+    if (track.streamSource === "tidal" && track.tidalTrackId) {
+        return {
+            source: "tidal",
+            tidalTrackId: track.tidalTrackId,
+            duration: track.duration ?? undefined,
+        };
+    }
+    return null;
+}
+
 /**
- * Renders external (Last.fm) track search results. Rows matched against an
- * enabled streaming provider play in place; unmatched rows link to the
- * artist page as before.
+ * Renders external catalog track results. Rows with exact provider identities
+ * play directly, metadata-only rows use provider matching, and unmatched rows
+ * link to the artist page.
  */
 export function DiscoverTracksList({
     tracks,
@@ -76,19 +96,36 @@ export function DiscoverTracksList({
         [tracks, limit],
     );
 
+    const directMatches = useMemo(() => {
+        const direct = new Map<string, SearchProviderMatch>();
+        visibleTracks.forEach((track, index) => {
+            const match = getDirectProviderMatch(track);
+            if (match) direct.set(rowKey(track, index), match);
+        });
+        return direct;
+    }, [visibleTracks]);
+
     const matchTargets = useMemo(
         (): SearchMatchTarget[] =>
-            visibleTracks
-                .filter((track) => track.artist)
-                .map((track, index) => ({
-                    key: rowKey(track, index),
-                    artist: track.artist!,
-                    title: track.name,
-                    album: track.album ?? undefined,
-                })),
+            visibleTracks.flatMap((track, index) => {
+                if (!track.artist || getDirectProviderMatch(track)) return [];
+                return [
+                    {
+                        key: rowKey(track, index),
+                        artist: track.artist,
+                        title: track.name,
+                        album: track.album ?? undefined,
+                    },
+                ];
+            }),
         [visibleTracks],
     );
-    const { matches } = useSearchTrackMatches(matchTargets);
+    const { matches: resolvedMatches } = useSearchTrackMatches(matchTargets);
+    const matches = useMemo(() => {
+        const merged = new Map(resolvedMatches);
+        directMatches.forEach((match, key) => merged.set(key, match));
+        return merged;
+    }, [directMatches, resolvedMatches]);
 
     const handleRowClick = useCallback(
         (track: DiscoverResult, key: string) => {
@@ -114,6 +151,15 @@ export function DiscoverTracksList({
                 const key = rowKey(track, index);
                 const match = matches.get(key);
                 const isPlayable = Boolean(match);
+                const actionTrack = match
+                    ? toPlaybackTrack(track, key, match)
+                    : {
+                          id: key,
+                          title: track.name,
+                          artist: { name: track.artist ?? "" },
+                          album: { title: track.album ?? "" },
+                          duration: track.duration ?? 0,
+                      };
 
                 return (
                     <div
@@ -175,14 +221,7 @@ export function DiscoverTracksList({
                             onKeyDown={(e) => e.stopPropagation()}
                         >
                             <TrackOverflowMenu
-                                track={{
-                                    id: key,
-                                    title: track.name,
-                                    artist: { name: track.artist ?? "" },
-                                    album: { title: track.album ?? "" },
-                                    duration: match?.duration ?? 0,
-                                    streamSource: match?.source,
-                                }}
+                                track={actionTrack}
                                 showPlayNext={isPlayable}
                                 showAddToQueue={isPlayable}
                                 showAddToPlaylist={isPlayable}

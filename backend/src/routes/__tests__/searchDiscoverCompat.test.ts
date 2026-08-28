@@ -39,6 +39,16 @@ jest.mock("../../services/lastfm", () => ({
     },
 }));
 
+jest.mock("../../services/youtubeMusic", () => ({
+    ytMusicService: {
+        searchCanonical: jest.fn(),
+    },
+}));
+
+jest.mock("../../utils/systemSettings", () => ({
+    getSystemSettings: jest.fn(),
+}));
+
 jest.mock("../../services/search", () => ({
     searchService: {
         searchAll: jest.fn(),
@@ -51,6 +61,8 @@ import router from "../search";
 import { prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { lastFmService } from "../../services/lastfm";
+import { ytMusicService } from "../../services/youtubeMusic";
+import { getSystemSettings } from "../../utils/systemSettings";
 
 const mockArtistFindMany = prisma.artist.findMany as jest.Mock;
 const mockRedisGet = redisClient.get as jest.Mock;
@@ -58,6 +70,8 @@ const mockRedisSetEx = redisClient.setEx as jest.Mock;
 const mockGetArtistCorrection = lastFmService.getArtistCorrection as jest.Mock;
 const mockSearchArtists = lastFmService.searchArtists as jest.Mock;
 const mockSearchTracks = lastFmService.searchTracks as jest.Mock;
+const mockYtMusicSearch = ytMusicService.searchCanonical as jest.Mock;
+const mockGetSystemSettings = getSystemSettings as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
@@ -94,6 +108,13 @@ describe("search discover compatibility", () => {
         mockRedisSetEx.mockResolvedValue("OK");
         mockGetArtistCorrection.mockResolvedValue(null);
         mockSearchTracks.mockResolvedValue([]);
+        mockYtMusicSearch.mockResolvedValue({
+            query: "",
+            filter: "songs",
+            total: 0,
+            results: [],
+        });
+        mockGetSystemSettings.mockResolvedValue({ ytMusicEnabled: true });
         mockArtistFindMany.mockResolvedValue([]);
     });
 

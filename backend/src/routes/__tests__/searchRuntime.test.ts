@@ -45,6 +45,16 @@ jest.mock("../../services/lastfm", () => ({
     },
 }));
 
+jest.mock("../../services/youtubeMusic", () => ({
+    ytMusicService: {
+        searchCanonical: jest.fn(),
+    },
+}));
+
+jest.mock("../../utils/systemSettings", () => ({
+    getSystemSettings: jest.fn(),
+}));
+
 jest.mock("axios", () => ({
     __esModule: true,
     default: {
@@ -65,7 +75,9 @@ import router from "../search";
 import { prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { lastFmService } from "../../services/lastfm";
+import { ytMusicService } from "../../services/youtubeMusic";
 import { searchService } from "../../services/search";
+import { getSystemSettings } from "../../utils/systemSettings";
 
 const mockArtistFindMany = prisma.artist.findMany as jest.Mock;
 const mockArtistFindFirst = prisma.artist.findFirst as jest.Mock;
@@ -76,6 +88,8 @@ const mockRedisSetEx = redisClient.setEx as jest.Mock;
 const mockGetArtistCorrection = lastFmService.getArtistCorrection as jest.Mock;
 const mockSearchArtists = lastFmService.searchArtists as jest.Mock;
 const mockSearchTracks = lastFmService.searchTracks as jest.Mock;
+const mockYtMusicSearch = ytMusicService.searchCanonical as jest.Mock;
+const mockGetSystemSettings = getSystemSettings as jest.Mock;
 const mockGetSimilarArtists = lastFmService.getSimilarArtists as jest.Mock;
 const mockEnrichSimilarArtists =
     lastFmService.enrichSimilarArtists as jest.Mock;
@@ -126,6 +140,13 @@ describe("search route runtime behavior", () => {
         mockGetArtistCorrection.mockResolvedValue(null);
         mockSearchArtists.mockResolvedValue([]);
         mockSearchTracks.mockResolvedValue([]);
+        mockYtMusicSearch.mockResolvedValue({
+            query: "",
+            filter: "songs",
+            total: 0,
+            results: [],
+        });
+        mockGetSystemSettings.mockResolvedValue({ ytMusicEnabled: true });
         mockGetSimilarArtists.mockResolvedValue([]);
         mockEnrichSimilarArtists.mockResolvedValue([]);
         mockSearchAll.mockResolvedValue({
@@ -479,6 +500,7 @@ describe("search route runtime behavior", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(cached);
         expect(mockSearchArtists).not.toHaveBeenCalled();
+        expect(mockYtMusicSearch).not.toHaveBeenCalled();
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 
@@ -525,6 +547,11 @@ describe("search route runtime behavior", () => {
 
         expect(mockSearchArtists).toHaveBeenCalledWith("Radiohead", 50);
         expect(mockSearchTracks).toHaveBeenCalledWith("Radiohead", 50);
+        expect(mockYtMusicSearch).toHaveBeenCalledWith(
+            "__public__",
+            "Radiohead",
+            "songs",
+        );
         expect(mockAxiosGet).toHaveBeenCalledWith(
             "https://itunes.apple.com/search",
             expect.objectContaining({
@@ -556,10 +583,253 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:all:rh:50",
+            "search:discover:v2:yt1:all:rh:50",
             900,
             expect.any(String),
         );
+    });
+
+    it("merges exact YouTube Music identities into Last.fm tracks and deduplicates provider results", async () => {
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-paranoid-android",
+                name: "Paranoid-Android",
+                artist: "Rádïóhead",
+                album: "OK Computer",
+                listeners: 123,
+                image: null,
+            },
+        ]);
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "radiohead",
+            filter: "songs",
+            total: 4,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-paranoid",
+                    title: "  paranoid android  ",
+                    artistName: "RADIOHEAD",
+                    albumTitle: "OK Computer",
+                    durationSec: 387,
+                    thumbnailUrl: "paranoid.jpg",
+                    raw: {},
+                },
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-paranoid-live",
+                    title: "Paranoid Android",
+                    artistName: "Radiohead",
+                    albumTitle: "I Might Be Wrong: Live Recordings",
+                    durationSec: 401,
+                    thumbnailUrl: "paranoid-live.jpg",
+                    raw: {},
+                },
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-karma",
+                    title: "Karma Police",
+                    artistName: "Radiohead",
+                    albumTitle: "OK Computer",
+                    durationSec: 264,
+                    thumbnailUrl: "karma.jpg",
+                    raw: {},
+                },
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-karma",
+                    title: "Karma Police (duplicate provider row)",
+                    artistName: "Radiohead",
+                    albumTitle: null,
+                    durationSec: 264,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+        });
+
+        const req = {
+            query: { q: "radiohead", type: "music", limit: "20" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual([
+            {
+                type: "track",
+                id: "lastfm-paranoid-android",
+                name: "Paranoid-Android",
+                artist: "Rádïóhead",
+                album: "OK Computer",
+                listeners: 123,
+                image: "paranoid.jpg",
+                providerTrackId: "video-paranoid",
+                streamSource: "youtube",
+                youtubeVideoId: "video-paranoid",
+                duration: 387,
+            },
+            {
+                type: "track",
+                id: "video-paranoid-live",
+                name: "Paranoid Android",
+                artist: "Radiohead",
+                album: "I Might Be Wrong: Live Recordings",
+                image: "paranoid-live.jpg",
+                providerTrackId: "video-paranoid-live",
+                streamSource: "youtube",
+                youtubeVideoId: "video-paranoid-live",
+                duration: 401,
+            },
+            {
+                type: "track",
+                id: "video-karma",
+                name: "Karma Police",
+                artist: "Radiohead",
+                album: "OK Computer",
+                image: "karma.jpg",
+                providerTrackId: "video-karma",
+                streamSource: "youtube",
+                youtubeVideoId: "video-karma",
+                duration: 264,
+            },
+        ]);
+    });
+
+    it("returns directly playable YouTube Music tracks when Last.fm has no catalog results", async () => {
+        mockSearchTracks.mockResolvedValueOnce([]);
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "rare song",
+            filter: "songs",
+            total: 1,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "rare-video-id",
+                    title: "Rare Song",
+                    artistName: "Rare Artist",
+                    albumTitle: null,
+                    durationSec: null,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+        });
+
+        const req = {
+            query: { q: "rare song", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual([
+            expect.objectContaining({
+                type: "track",
+                id: "rare-video-id",
+                providerTrackId: "rare-video-id",
+                youtubeVideoId: "rare-video-id",
+                streamSource: "youtube",
+            }),
+        ]);
+    });
+
+    it("does not query YouTube Music when the integration is disabled", async () => {
+        mockGetSystemSettings.mockResolvedValueOnce({
+            ytMusicEnabled: false,
+        });
+        mockRedisGet.mockImplementationOnce(async (key: string) =>
+            key.includes(":yt1:")
+                ? JSON.stringify({
+                      results: [
+                          {
+                              type: "track",
+                              id: "stale-video",
+                              name: "Stale enabled result",
+                              streamSource: "youtube",
+                              youtubeVideoId: "stale-video",
+                          },
+                      ],
+                      aliasInfo: null,
+                  })
+                : null,
+        );
+
+        const req = {
+            query: { q: "radiohead", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(mockYtMusicSearch).not.toHaveBeenCalled();
+        expect(mockRedisGet).toHaveBeenCalledWith(
+            "search:discover:v2:yt0:music:radiohead:5",
+        );
+        expect(res.body.results).toEqual([]);
+    });
+
+    it("preserves Last.fm results when the YouTube Music settings check fails", async () => {
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("settings unavailable"),
+        );
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-only",
+                name: "Last.fm Result",
+                artist: "Metadata Artist",
+            },
+        ]);
+
+        const req = {
+            query: { q: "metadata", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(mockYtMusicSearch).not.toHaveBeenCalled();
+        expect(res.body.results).toEqual([
+            expect.objectContaining({ id: "lastfm-only" }),
+        ]);
+    });
+
+    it("preserves Last.fm results when the public YouTube Music search fails", async () => {
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-fallback",
+                name: "Metadata Fallback",
+                artist: "Metadata Artist",
+            },
+        ]);
+        mockYtMusicSearch.mockRejectedValueOnce(
+            new Error("sidecar unavailable"),
+        );
+
+        const req = {
+            query: { q: "metadata", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual([
+            expect.objectContaining({ id: "lastfm-fallback" }),
+        ]);
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 
     it("handles discover partial failures and redis write errors", async () => {
