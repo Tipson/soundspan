@@ -36,6 +36,7 @@ _search_cache: dict[str, JsonObject] = {}
 _search_cache_lock = threading.Lock()
 SEARCH_CACHE_TTL = env_int("YTMUSIC_SEARCH_CACHE_TTL", "300")  # 5 minutes
 SEARCH_CACHE_MAX = env_int("YTMUSIC_SEARCH_CACHE_MAX", "1024")
+_PLAYABLE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def _parse_duration_text_value(value: Any) -> int:
@@ -189,17 +190,44 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
         raise  # let caller handle
 
     items: JsonList = []
+    seen_video_ids: set[str] = set()
+
+    def _as_object(value: Any) -> JsonObject:
+        """Return one provider value as an object or an empty object."""
+        return value if isinstance(value, dict) else {}
+
+    def _as_list(value: Any) -> list[Any]:
+        """Return one provider value as a list or an empty list."""
+        return value if isinstance(value, list) else []
+
+    def _nested_object(value: Any, *keys: str) -> JsonObject:
+        """Safely descend through provider-owned object fields."""
+        current = value
+        for key in keys:
+            current = _as_object(current).get(key)
+        return _as_object(current)
 
     def _extract_text(obj: Any) -> str:
-        """Pull text from simpleText, runs, or accessibilityData."""
+        """Pull text from classic renderer text or view-model content."""
         if not obj:
             return ""
         if isinstance(obj, str):
             return obj
-        if "simpleText" in obj:
-            return str(obj["simpleText"])
-        if "runs" in obj:
-            return "".join(r.get("text", "") for r in obj["runs"])
+        if not isinstance(obj, dict):
+            return ""
+        content = obj.get("content")
+        if isinstance(content, str):
+            return content
+        simple_text = obj.get("simpleText")
+        if isinstance(simple_text, str):
+            return simple_text
+        runs = obj.get("runs")
+        if isinstance(runs, list):
+            return "".join(
+                text
+                for run in runs
+                if isinstance(run, dict) and isinstance((text := run.get("text")), str)
+            )
         return ""
 
     def _parse_duration_text(text: str) -> int:
@@ -247,11 +275,130 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
             )
         )
 
+    def _append_item(item: JsonObject) -> None:
+        """Append one playable result while preserving first-seen order."""
+        video_id = str(item.get("videoId") or "")
+        if _PLAYABLE_VIDEO_ID_PATTERN.fullmatch(video_id) is None or video_id in seen_video_ids:
+            return
+        seen_video_ids.add(video_id)
+        items.append(item)
+
     def _walk_renderers(node: Any, depth: int = 0) -> None:
         """Recursively walk the TV response tree and extract results."""
         if depth > 15 or len(items) >= limit:
             return
         if isinstance(node, dict):
+            # ── lockupViewModel (current TVHTML5 search) ──
+            if "lockupViewModel" in node:
+                r = node["lockupViewModel"]
+                if not isinstance(r, dict):
+                    return
+
+                content_type = str(r.get("contentType") or "")
+                if content_type not in {
+                    "LOCKUP_CONTENT_TYPE_MUSIC",
+                    "LOCKUP_CONTENT_TYPE_VIDEO",
+                }:
+                    return
+
+                watch_endpoint = _nested_object(
+                    r,
+                    "rendererContext",
+                    "commandContext",
+                    "onTap",
+                    "innertubeCommand",
+                    "watchEndpoint",
+                )
+                watch_video_id = str(watch_endpoint.get("videoId") or "")
+                content_id = str(r.get("contentId") or "")
+                if _PLAYABLE_VIDEO_ID_PATTERN.fullmatch(watch_video_id):
+                    video_id = watch_video_id
+                elif _PLAYABLE_VIDEO_ID_PATTERN.fullmatch(content_id):
+                    video_id = content_id
+                else:
+                    video_id = ""
+
+                if video_id:
+                    metadata = _nested_object(r, "metadata", "lockupMetadataViewModel")
+                    title_text = _extract_text(metadata.get("title")) or "Unknown"
+                    rows = _as_list(
+                        _nested_object(
+                            metadata,
+                            "metadata",
+                            "contentMetadataViewModel",
+                        ).get("metadataRows")
+                    )
+                    artist_name = ""
+                    album_name = None
+                    if rows:
+                        first_row_parts = _as_list(_as_object(rows[0]).get("metadataParts"))
+                        primary_values = [
+                            value
+                            for part_value in first_row_parts
+                            if (value := _extract_text(_as_object(part_value).get("text")))
+                            and not _is_metadata_noise(value)
+                        ]
+                        if primary_values:
+                            artist_name = primary_values[0]
+                            if len(primary_values) > 1:
+                                album_name = primary_values[1]
+
+                    if not artist_name and " - " in title_text:
+                        artist_name = title_text.split(" - ", 1)[0].strip()
+                    if not artist_name:
+                        artist_name = "Unknown"
+
+                    thumbnail_view = _nested_object(r, "contentImage", "thumbnailViewModel")
+                    thumbnails = _as_list(_nested_object(thumbnail_view, "image").get("sources"))
+                    duration_text = ""
+                    duration_seconds = 0
+                    for overlay_value in _as_list(thumbnail_view.get("overlays")):
+                        badges = _as_list(
+                            _nested_object(
+                                overlay_value,
+                                "thumbnailBottomOverlayViewModel",
+                            ).get("badges")
+                        )
+                        for badge_value in badges:
+                            badge_view = _nested_object(badge_value, "thumbnailBadgeViewModel")
+                            candidate_text = _extract_text(badge_view.get("text"))
+                            candidate_seconds = _parse_duration_text(candidate_text)
+                            accessibility_label = _nested_object(
+                                badge_view,
+                                "rendererContext",
+                                "accessibilityContext",
+                            ).get("label", "")
+                            if not isinstance(accessibility_label, str):
+                                accessibility_label = ""
+                            candidate_seconds = max(
+                                candidate_seconds,
+                                _parse_duration_label(accessibility_label),
+                            )
+                            if candidate_seconds > 0:
+                                duration_text = candidate_text
+                                duration_seconds = candidate_seconds
+                                break
+                        if duration_seconds > 0:
+                            break
+
+                    _append_item(
+                        {
+                            "type": "video"
+                            if content_type == "LOCKUP_CONTENT_TYPE_VIDEO"
+                            else "song",
+                            "videoId": video_id,
+                            "title": title_text,
+                            "artist": artist_name,
+                            "artists": [artist_name] if artist_name != "Unknown" else [],
+                            "album": album_name,
+                            "duration": duration_text,
+                            "duration_seconds": duration_seconds,
+                            "thumbnails": thumbnails,
+                            "isExplicit": False,
+                        }
+                    )
+                return
+
             # ── compactVideoRenderer (common in TVHTML5 search) ──
             if "compactVideoRenderer" in node:
                 r = node["compactVideoRenderer"]
@@ -262,7 +409,7 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
                     byline = _extract_text(r.get("shortBylineText") or r.get("longBylineText"))
                     duration_text = _extract_text(r.get("lengthText"))
                     thumbs = r.get("thumbnail", {}).get("thumbnails", [])
-                    items.append(
+                    _append_item(
                         {
                             "type": "song",
                             "videoId": vid,
@@ -354,7 +501,7 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
                     if not artist_name:
                         artist_name = "Unknown"
 
-                    items.append(
+                    _append_item(
                         {
                             "type": "song",
                             "videoId": vid,
@@ -388,7 +535,7 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
                 if vid:
                     title_text = _extract_text(r.get("title"))
                     subtitle = _extract_text(r.get("subtitle"))
-                    items.append(
+                    _append_item(
                         {
                             "type": "song",
                             "videoId": vid,

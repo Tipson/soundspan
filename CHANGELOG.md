@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Public YouTube Music search recognizes the current TVHTML5 lockup response shape, including playable IDs, artist and album metadata, artwork, duration, and duplicate suppression.
 - Remote YouTube preference IDs are bounded to the provider-safe URL alphabet before database work begins, and concurrent YouTube Music browse calls use isolated transports instead of sharing one cached `requests.Session`.
 - Concurrent remote-track preference requests preserve the latest user action in both the database and shared browser cache even when an older like finishes or fails later, including requests with equal timestamps or a wall-clock rollback.
 - Browser media requests no longer put access tokens in image or audio URLs; the same-origin proxy promotes an API-scoped cookie only for exact read-only media routes and preserves audio Range responses.
