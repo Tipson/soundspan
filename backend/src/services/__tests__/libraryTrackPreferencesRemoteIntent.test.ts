@@ -29,6 +29,7 @@ import {
     applyRemoteTrackPreferenceSignal,
     cancelRemoteTrackPreferenceIntent,
     loadRemoteTrackPreference,
+    parseRemoteTrackPreferenceReference,
     reserveRemoteTrackPreferenceIntent,
     type RemoteTrackPreferenceReference,
 } from "../libraryTrackPreferences";
@@ -40,6 +41,21 @@ const REFERENCE: RemoteTrackPreferenceReference = {
 };
 const REMOTE_TRACK_ID = "yt:intent-video";
 const YOUTUBE_ROW_ID = "yt-intent-row";
+
+describe("remote YouTube preference identity validation", () => {
+    it.each([
+        ["a real YouTube id", "dQw4w9WgXcQ"],
+        ["an existing synthetic contract id", "quick-1"],
+        ["the bounded compatibility maximum", "A_-".repeat(21) + "Z"],
+    ])("accepts %s", (_scenario, externalId) => {
+        expect(parseRemoteTrackPreferenceReference(`yt:${externalId}`)).toEqual(
+            {
+                provider: "youtube",
+                externalId,
+            },
+        );
+    });
+});
 
 type IntentRow = {
     token: string;

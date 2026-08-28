@@ -186,6 +186,49 @@ class PausedAudioCache extends MemoryAudioCache {
     }
 }
 
+class DelayedFailingAudioCache extends MemoryAudioCache {
+    readonly putStarted: Promise<void>;
+    deleteCalls = 0;
+    deleteBeforePutSettled = false;
+    private signalPutStarted!: () => void;
+    private releasePut!: () => void;
+    private readonly putRelease: Promise<void>;
+    private putSettled = false;
+
+    constructor() {
+        super();
+        this.putStarted = new Promise((resolve) => {
+            this.signalPutStarted = resolve;
+        });
+        this.putRelease = new Promise((resolve) => {
+            this.releasePut = resolve;
+        });
+    }
+
+    override put(_url: string, _response: Response): Promise<void> {
+        const operation = (async () => {
+            this.signalPutStarted();
+            await this.putRelease;
+            this.putSettled = true;
+            throw new Error("device cache write failed");
+        })();
+        // The test observes manager ordering, not Node's process-level
+        // unhandled-rejection policy.
+        void operation.catch(() => undefined);
+        return operation;
+    }
+
+    override async delete(url: string): Promise<void> {
+        this.deleteCalls += 1;
+        if (!this.putSettled) this.deleteBeforePutSettled = true;
+        await super.delete(url);
+    }
+
+    failPut(): void {
+        this.releasePut();
+    }
+}
+
 class PausedConditionalMetadataStore extends MemoryMetadataStore {
     readonly updateStarted: Promise<void>;
     private signalUpdateStarted!: () => void;
@@ -315,6 +358,44 @@ test("foreground download publishes ready metadata only after a complete atomic 
         new Uint8Array(await cached.arrayBuffer()),
         Uint8Array.from([0, 1, 2, 3, 4, 5]),
     );
+});
+
+test("a progress failure drains the cache write before deleting its partial entry", async () => {
+    const audioCache = new DelayedFailingAudioCache();
+    const deps = createDependencies({
+        audioCache,
+        fetch: async () =>
+            new Response(
+                new ReadableStream<Uint8Array>({
+                    start(controller) {
+                        controller.error(new Error("progress stream failed"));
+                    },
+                }),
+                { status: 200 },
+            ),
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const rejectedDownload = assert.rejects(
+        manager.download({
+            ownerId: "user-1",
+            track: TRACK,
+            quality: "auto",
+            sourceUrl: "/api/library/tracks/track-1/stream",
+        }),
+        /progress stream failed/,
+    );
+
+    await audioCache.putStarted;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    try {
+        assert.equal(audioCache.deleteCalls, 0);
+    } finally {
+        audioCache.failPut();
+    }
+
+    await rejectedDownload;
+    assert.equal(audioCache.deleteBeforePutSettled, false);
+    assert.equal(audioCache.deleteCalls, 1);
 });
 
 test("a foreground transfer without Content-Length records measured bytes without a bogus zero header", async () => {

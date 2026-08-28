@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
@@ -100,6 +101,152 @@ def test_public_tv_setup_failure_closes_the_owned_session() -> None:
     owned_session.close.assert_called_once_with()
 
 
+def test_busy_cached_public_client_uses_an_isolated_transient_transport() -> None:
+    """Concurrent work must start on its own Session instead of waiting or sharing."""
+    import ytmusic_client
+
+    cached_session = MagicMock(name="cached-session")
+    cached_client = MagicMock(name="cached-client")
+    setattr(
+        cached_client,
+        ytmusic_client._SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE,
+        cached_session,
+    )
+    ytmusic_client._public_ytmusic_instances["native"] = cached_client
+    transient_session = MagicMock(name="transient-session")
+    transient_client = MagicMock(name="transient-client")
+    setattr(
+        transient_client,
+        ytmusic_client._SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE,
+        transient_session,
+    )
+    cached_call_entered = threading.Event()
+    release_cached_call = threading.Event()
+    transient_call_entered = threading.Event()
+
+    def use_cached_client(yt: object) -> str:
+        assert yt is cached_client
+        cached_call_entered.set()
+        assert release_cached_call.wait(timeout=5)
+        return "cached"
+
+    def use_transient_client(yt: object) -> str:
+        assert yt is transient_client
+        transient_call_entered.set()
+        return "transient"
+
+    with (
+        patch.object(
+            ytmusic_client,
+            "_create_public_ytmusic",
+            return_value=transient_client,
+        ) as create_public,
+        ThreadPoolExecutor(max_workers=2) as executor,
+    ):
+        cached_future = executor.submit(
+            ytmusic_client._run_public_ytmusic,
+            "native",
+            use_cached_client,
+        )
+        assert cached_call_entered.wait(timeout=5)
+        transient_future = executor.submit(
+            ytmusic_client._run_public_ytmusic,
+            "native",
+            use_transient_client,
+        )
+        try:
+            assert transient_call_entered.wait(timeout=5)
+            assert transient_future.result(timeout=5) == "transient"
+            transient_session.close.assert_called_once_with()
+            cached_session.close.assert_not_called()
+        finally:
+            release_cached_call.set()
+        assert cached_future.result(timeout=5) == "cached"
+
+    create_public.assert_called_once_with(
+        "native",
+        ytmusic_client.YTMUSIC_REQUEST_TIMEOUT_SECONDS,
+    )
+    cached_session.close.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_cancelled_contender_keeps_its_isolated_transport_until_worker_exit() -> None:
+    """Cancelling to_thread must not close or queue its active isolated Session."""
+    import ytmusic_client
+
+    cached_client = MagicMock(name="cached-client")
+    cached_session = MagicMock(name="cached-session")
+    setattr(
+        cached_client,
+        ytmusic_client._SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE,
+        cached_session,
+    )
+    ytmusic_client._public_ytmusic_instances["native"] = cached_client
+    isolated_client = MagicMock(name="isolated-client")
+    isolated_session = MagicMock(name="isolated-session")
+    setattr(
+        isolated_client,
+        ytmusic_client._SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE,
+        isolated_session,
+    )
+    cached_call_entered = threading.Event()
+    release_cached_call = threading.Event()
+    isolated_call_entered = threading.Event()
+    release_isolated_call = threading.Event()
+    isolated_session_closed = threading.Event()
+    isolated_session.close.side_effect = isolated_session_closed.set
+
+    def hold_cached(yt: object) -> str:
+        assert yt is cached_client
+        cached_call_entered.set()
+        assert release_cached_call.wait(timeout=5)
+        return "cached"
+
+    def hold_isolated(yt: object) -> str:
+        assert yt is isolated_client
+        isolated_call_entered.set()
+        assert release_isolated_call.wait(timeout=5)
+        return "isolated"
+
+    with patch.object(
+        ytmusic_client,
+        "_create_public_ytmusic",
+        return_value=isolated_client,
+    ):
+        cached_task = asyncio.create_task(
+            asyncio.to_thread(
+                ytmusic_client._run_public_ytmusic,
+                "native",
+                hold_cached,
+            )
+        )
+        assert await asyncio.to_thread(cached_call_entered.wait, 5)
+        isolated_task = asyncio.create_task(
+            asyncio.to_thread(
+                ytmusic_client._run_public_ytmusic,
+                "native",
+                hold_isolated,
+            )
+        )
+        assert await asyncio.to_thread(isolated_call_entered.wait, 5)
+
+        try:
+            isolated_task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await isolated_task
+            isolated_session.close.assert_not_called()
+            cached_session.close.assert_not_called()
+        finally:
+            release_isolated_call.set()
+            release_cached_call.set()
+        assert await asyncio.to_thread(isolated_session_closed.wait, 5)
+        assert await cached_task == "cached"
+
+    isolated_session.close.assert_called_once_with()
+    cached_session.close.assert_not_called()
+
+
 def test_public_client_invalidation_closes_the_detached_owned_session() -> None:
     """Removing a cached client must release its attached connection pool once."""
     import ytmusic_client
@@ -162,7 +309,7 @@ def test_public_client_invalidation_waits_for_an_active_call_to_finish() -> None
 
 
 def test_late_public_failure_cannot_retire_a_replacement_client() -> None:
-    """Concurrent stale failures must compare-and-remove the client they used."""
+    """A late isolated failure must not retire the cached replacement."""
     import ytmusic_client
 
     stale_client = MagicMock(name="stale-client")
@@ -171,6 +318,13 @@ def test_late_public_failure_cannot_retire_a_replacement_client() -> None:
         stale_client,
         ytmusic_client._SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE,
         stale_session,
+    )
+    transient_client = MagicMock(name="transient-client")
+    transient_session = MagicMock(name="transient-session")
+    setattr(
+        transient_client,
+        ytmusic_client._SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE,
+        transient_session,
     )
     replacement_client = MagicMock(name="replacement-client")
     replacement_session = MagicMock(name="replacement-session")
@@ -181,7 +335,9 @@ def test_late_public_failure_cannot_retire_a_replacement_client() -> None:
     )
     ytmusic_client._public_ytmusic_instances["native"] = stale_client
 
-    stale_attempts_entered = threading.Barrier(2)
+    stale_attempt_entered = threading.Event()
+    release_stale_failure = threading.Event()
+    transient_attempt_entered = threading.Event()
     replacement_published = threading.Event()
 
     def run_role(role: str) -> str:
@@ -191,11 +347,15 @@ def test_late_public_failure_cannot_retire_a_replacement_client() -> None:
             nonlocal attempt
             attempt += 1
             if attempt == 1:
-                assert yt is stale_client
-                stale_attempts_entered.wait(timeout=5)
-                if role == "B":
+                if role == "A":
+                    assert yt is stale_client
+                    stale_attempt_entered.set()
+                    assert release_stale_failure.wait(timeout=5)
+                else:
+                    assert yt is transient_client
+                    transient_attempt_entered.set()
                     assert replacement_published.wait(timeout=5)
-                    stale_session.close.assert_not_called()
+                    transient_session.close.assert_not_called()
                 raise ValueError(f"stale failure {role}")
 
             assert yt is replacement_client
@@ -215,21 +375,31 @@ def test_late_public_failure_cannot_retire_a_replacement_client() -> None:
         patch.object(
             ytmusic_client,
             "_create_public_ytmusic",
-            return_value=replacement_client,
+            side_effect=[transient_client, replacement_client],
         ) as create_public,
         ThreadPoolExecutor(max_workers=2) as executor,
     ):
         future_a = executor.submit(run_role, "A")
+        assert stale_attempt_entered.wait(timeout=5)
         future_b = executor.submit(run_role, "B")
+        assert transient_attempt_entered.wait(timeout=5)
+        release_stale_failure.set()
         assert future_a.result(timeout=5) == "recovered-A"
         assert future_b.result(timeout=5) == "recovered-B"
 
     assert ytmusic_client._public_ytmusic_instances["native"] is replacement_client
-    create_public.assert_called_once_with(
-        "native",
-        ytmusic_client.YTMUSIC_REQUEST_TIMEOUT_SECONDS,
-    )
+    assert create_public.call_args_list == [
+        (
+            ("native", ytmusic_client.YTMUSIC_REQUEST_TIMEOUT_SECONDS),
+            {},
+        ),
+        (
+            ("native", ytmusic_client.YTMUSIC_REQUEST_TIMEOUT_SECONDS),
+            {},
+        ),
+    ]
     stale_session.close.assert_called_once_with()
+    transient_session.close.assert_called_once_with()
     replacement_session.close.assert_not_called()
 
     assert ytmusic_client._invalidate_public_ytmusic(

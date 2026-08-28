@@ -19,6 +19,31 @@ interface SearchLoadingStateInput {
     primarySongsSurface: PrimarySongsSurface;
 }
 
+interface VisibleTrackResultsInput {
+    libraryTrackCount: number;
+    discoverTrackCount: number;
+    soulseekResultCount: number;
+    showLibrary: boolean;
+    showDiscover: boolean;
+    showSoulseek: boolean;
+}
+
+/** Count only sources that the active search filter can actually render. */
+export function hasVisibleTrackResults({
+    libraryTrackCount,
+    discoverTrackCount,
+    soulseekResultCount,
+    showLibrary,
+    showDiscover,
+    showSoulseek,
+}: VisibleTrackResultsInput): boolean {
+    return (
+        (showLibrary && libraryTrackCount > 0) ||
+        (showDiscover && discoverTrackCount > 0) ||
+        (showSoulseek && soulseekResultCount > 0)
+    );
+}
+
 /**
  * Keeps instant playable catalog results ahead of slower acquisition sources.
  * A background Soulseek lookup must never hide tracks the user can play now.

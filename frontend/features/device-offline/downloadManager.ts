@@ -596,6 +596,9 @@ export class DeviceOfflineDownloadManager {
         this.notify();
 
         let stopLeaseHeartbeat: (() => void) | null = null;
+        let cacheWriteSettlement: Promise<
+            { status: "fulfilled" } | { status: "rejected"; reason: unknown }
+        > | null = null;
         try {
             const backgroundCandidate: DeviceOfflineDownloadRecord = {
                 ...record,
@@ -694,17 +697,31 @@ export class DeviceOfflineDownloadManager {
             let received = 0;
             if (response.body) {
                 const [cacheBody, progressBody] = response.body.tee();
-                const cachePromise = this.dependencies.audioCache.put(
-                    absoluteVirtualUrl,
-                    createCachedAudioResponse(response, cacheBody, totalBytes),
-                );
+                cacheWriteSettlement = this.dependencies.audioCache
+                    .put(
+                        absoluteVirtualUrl,
+                        createCachedAudioResponse(
+                            response,
+                            cacheBody,
+                            totalBytes,
+                        ),
+                    )
+                    .then(
+                        () => ({ status: "fulfilled" }) as const,
+                        (reason: unknown) =>
+                            ({ status: "rejected", reason }) as const,
+                    );
                 const reader = progressBody.getReader();
                 while (true) {
                     const chunk = await reader.read();
                     if (chunk.done) break;
                     received += chunk.value?.byteLength ?? 0;
                 }
-                await cachePromise;
+                const cacheWrite = await cacheWriteSettlement;
+                cacheWriteSettlement = null;
+                if (cacheWrite.status === "rejected") {
+                    throw cacheWrite.reason;
+                }
             } else {
                 const bytes = await response.arrayBuffer();
                 received = bytes.byteLength;
@@ -751,6 +768,10 @@ export class DeviceOfflineDownloadManager {
                 virtualUrl,
                 this.dependencies.origin,
             ).toString();
+            if (cacheWriteSettlement) {
+                await cacheWriteSettlement;
+                cacheWriteSettlement = null;
+            }
             await this.dependencies.audioCache.delete(absoluteVirtualUrl);
             if (
                 this.deletedKeys.has(key) ||

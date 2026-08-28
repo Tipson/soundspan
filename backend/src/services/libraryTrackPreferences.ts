@@ -19,6 +19,7 @@ const REMOTE_PREFERENCE_READ_TRANSACTION_OPTIONS = {
     maxWait: 5_000,
     timeout: 10_000,
 };
+const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** Canonical external identity used by remote-track preference persistence. */
 export type RemoteTrackPreferenceReference =
@@ -43,7 +44,7 @@ export function parseRemoteTrackPreferenceReference(
 ): RemoteTrackPreferenceReference | null {
     if (compositeId.startsWith("yt:")) {
         const externalId = compositeId.slice(3).trim();
-        return externalId.length > 0
+        return YOUTUBE_VIDEO_ID_PATTERN.test(externalId)
             ? {
                   provider: "youtube",
                   externalId,

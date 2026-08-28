@@ -514,6 +514,24 @@ describe("library remote track preference endpoints", () => {
             expect(res.body.error).toMatch(/invalid remote track id/i);
         });
 
+        it.each([
+            ["an overlong YouTube id", "a".repeat(65)],
+            ["characters outside the YouTube id alphabet", "dQw4w9WgXc!"],
+        ])("rejects %s before persistence", async (_scenario, videoId) => {
+            const res = await request(app)
+                .post(`/api/library/remote-tracks/yt:${videoId}/preference`)
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_down" });
+
+            expect(res.status).toBe(400);
+            expect(res.body.error).toMatch(/invalid remote track id/i);
+            expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+            expect(
+                mockResolveRemoteTrackMetadataForRequest,
+            ).not.toHaveBeenCalled();
+            expect(mockEnsureRemoteTrack).not.toHaveBeenCalled();
+        });
+
         it("returns 400 for missing signal", async () => {
             const res = await request(app)
                 .post("/api/library/remote-tracks/yt:vid123/preference")

@@ -36,7 +36,7 @@ test("the browser manager forwards cross-tab invalidations and cleans up on unsu
     assert.equal(notifications, 1);
 });
 
-test("a rejected IndexedDB open is retried on the next metadata read", async (t) => {
+test("a blocked IndexedDB open closes a late handle and successful handles close on version changes", async (t) => {
     const originalIndexedDb = Object.getOwnPropertyDescriptor(
         globalThis,
         "indexedDB",
@@ -59,7 +59,13 @@ test("a rejected IndexedDB open is retried on the next metadata read", async (t)
     });
 
     let openCalls = 0;
+    let lateCloseCalls = 0;
+    let successfulCloseCalls = 0;
     const database = {
+        onversionchange: null as (() => void) | null,
+        close: () => {
+            successfulCloseCalls += 1;
+        },
         transaction: () => ({
             objectStore: () => ({
                 index: () => ({
@@ -77,6 +83,12 @@ test("a rejected IndexedDB open is retried on the next metadata read", async (t)
             }),
         }),
     };
+    const lateDatabase = {
+        ...database,
+        close: () => {
+            lateCloseCalls += 1;
+        },
+    };
     Object.defineProperty(globalThis, "IDBKeyRange", {
         configurable: true,
         value: { only: (value: string) => value },
@@ -87,7 +99,7 @@ test("a rejected IndexedDB open is retried on the next metadata read", async (t)
             open: () => {
                 openCalls += 1;
                 const request = {
-                    result: database,
+                    result: openCalls === 1 ? lateDatabase : database,
                     error: null as Error | null,
                     onupgradeneeded: null as (() => void) | null,
                     onsuccess: null as (() => void) | null,
@@ -96,8 +108,8 @@ test("a rejected IndexedDB open is retried on the next metadata read", async (t)
                 };
                 queueMicrotask(() => {
                     if (openCalls === 1) {
-                        request.error = new Error("temporary open failure");
-                        request.onerror?.();
+                        request.onblocked?.();
+                        queueMicrotask(() => request.onsuccess?.());
                     } else {
                         request.onsuccess?.();
                     }
@@ -108,7 +120,14 @@ test("a rejected IndexedDB open is retried on the next metadata read", async (t)
     });
 
     const manager = getBrowserDeviceOfflineManager();
-    await assert.rejects(manager.list("user-1"), /temporary open failure/);
+    await assert.rejects(manager.list("user-1"), /upgrade blocked/);
+    await Promise.resolve();
+    assert.equal(lateCloseCalls, 1);
     assert.deepEqual(await manager.list("user-1"), []);
     assert.equal(openCalls, 2);
+    assert.equal(typeof database.onversionchange, "function");
+    database.onversionchange?.();
+    assert.equal(successfulCloseCalls, 1);
+    assert.deepEqual(await manager.list("user-1"), []);
+    assert.equal(openCalls, 3);
 });

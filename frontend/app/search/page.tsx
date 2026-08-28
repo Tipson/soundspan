@@ -32,6 +32,7 @@ import { useAuth } from "@/lib/auth-context";
 import type { FilterTab } from "@/features/search/types";
 import { useFeatures } from "@/lib/features-context";
 import {
+    hasVisibleTrackResults,
     resolvePrimarySongsSurface,
     shouldShowSearchLoadingState,
 } from "@/features/search/searchSongsPriority";
@@ -179,10 +180,14 @@ export default function SearchPage() {
 
     // Determine if we should show the 2-column layout
     const hasTopResult = visibleLibraryTopArtist || topArtist;
-    const hasTracks =
-        libraryTracks.length > 0 ||
-        soulseekResults.length > 0 ||
-        unownedDiscoverTracks.length > 0;
+    const hasTracks = hasVisibleTrackResults({
+        libraryTrackCount: libraryTracks.length,
+        discoverTrackCount: unownedDiscoverTracks.length,
+        soulseekResultCount: soulseekResults.length,
+        showLibrary,
+        showDiscover,
+        showSoulseek,
+    });
     const primarySongsSurface = resolvePrimarySongsSurface({
         playableTrackCount:
             (showLibrary ? libraryTracks.length : 0) +

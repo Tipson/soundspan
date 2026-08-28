@@ -44,6 +44,7 @@ function openDatabase(): Promise<IDBDatabase> {
     if (!databasePromise) {
         const openAttempt = new Promise<IDBDatabase>((resolve, reject) => {
             const request = indexedDB.open(DEVICE_OFFLINE_DATABASE_NAME, 1);
+            let settled = false;
             request.onupgradeneeded = () => {
                 const database = request.result;
                 const store = database.objectStoreNames.contains(
@@ -68,10 +69,29 @@ function openDatabase(): Promise<IDBDatabase> {
                     );
                 }
             };
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-            request.onblocked = () =>
+            request.onsuccess = () => {
+                const database = request.result;
+                if (settled) {
+                    database.close();
+                    return;
+                }
+                settled = true;
+                database.onversionchange = () => {
+                    database.close();
+                    databasePromise = null;
+                };
+                resolve(database);
+            };
+            request.onerror = () => {
+                if (settled) return;
+                settled = true;
+                reject(request.error);
+            };
+            request.onblocked = () => {
+                if (settled) return;
+                settled = true;
                 reject(new Error("Device download database upgrade blocked"));
+            };
         });
         const retryableAttempt = openAttempt.catch((error: unknown) => {
             if (databasePromise === retryableAttempt) databasePromise = null;

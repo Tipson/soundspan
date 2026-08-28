@@ -2,9 +2,35 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
+    hasVisibleTrackResults,
     resolvePrimarySongsSurface,
     shouldShowSearchLoadingState,
 } from "../../features/search/searchSongsPriority";
+
+test("hidden sources do not count as tracks for the active search filter", () => {
+    assert.equal(
+        hasVisibleTrackResults({
+            libraryTrackCount: 4,
+            discoverTrackCount: 0,
+            soulseekResultCount: 3,
+            showLibrary: false,
+            showDiscover: true,
+            showSoulseek: false,
+        }),
+        false,
+    );
+    assert.equal(
+        hasVisibleTrackResults({
+            libraryTrackCount: 4,
+            discoverTrackCount: 0,
+            soulseekResultCount: 0,
+            showLibrary: true,
+            showDiscover: false,
+            showSoulseek: false,
+        }),
+        true,
+    );
+});
 
 test("playable catalog results win over a slow acquisition search", () => {
     assert.equal(

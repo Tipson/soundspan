@@ -14,6 +14,7 @@ const MAX_IMAGE_CACHE_ENTRIES = 2000;
 const MAX_CONCURRENT_IMAGE_REQUESTS = 4;
 const REQUEST_DELAY_MS = 10;
 const IMAGE_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const NAVIGATION_NETWORK_TIMEOUT_MS = 5_000;
 
 const CRITICAL_PRECACHE_DOCUMENTS = ["/", "/library?tab=downloads"];
 const CRITICAL_PRECACHE_ASSETS = ["/runtime-config"];
@@ -117,6 +118,25 @@ function queueImageRequest(request, cacheKey) {
     });
 }
 
+async function fetchNavigationWithTimeout(request) {
+    const controller = new AbortController();
+    let timeoutHandle;
+    const timeout = new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+            controller.abort();
+            reject(new Error("Navigation network request timed out"));
+        }, NAVIGATION_NETWORK_TIMEOUT_MS);
+    });
+    try {
+        return await Promise.race([
+            fetch(request, { signal: controller.signal }),
+            timeout,
+        ]);
+    } finally {
+        clearTimeout(timeoutHandle);
+    }
+}
+
 function parseSingleByteRange(value, size) {
     if (!value || size < 0 || value.includes(",")) return null;
     const match = /^bytes=(\d*)-(\d*)$/.exec(value.trim());
@@ -165,26 +185,26 @@ async function serveDeviceAudio(request, url) {
         });
     }
 
-    const bytes = new Uint8Array(await cached.arrayBuffer());
-    const range = parseSingleByteRange(rangeHeader, bytes.byteLength);
+    const cachedBlob = await cached.blob();
+    const range = parseSingleByteRange(rangeHeader, cachedBlob.size);
     if (!range) {
         return new Response(null, {
             status: 416,
             headers: {
                 "accept-ranges": "bytes",
-                "content-range": `bytes */${bytes.byteLength}`,
+                "content-range": `bytes */${cachedBlob.size}`,
             },
         });
     }
 
-    const body = bytes.slice(range.start, range.end + 1);
+    const body = cachedBlob.slice(range.start, range.end + 1);
     const headers = new Headers(cached.headers);
     headers.set("accept-ranges", "bytes");
     headers.set(
         "content-range",
-        `bytes ${range.start}-${range.end}/${bytes.byteLength}`,
+        `bytes ${range.start}-${range.end}/${cachedBlob.size}`,
     );
-    headers.set("content-length", String(body.byteLength));
+    headers.set("content-length", String(body.size));
     return new Response(request.method === "HEAD" ? null : body, {
         status: 206,
         headers,
@@ -648,7 +668,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
         (async () => {
             try {
-                const response = await fetch(request);
+                const response =
+                    request.mode === "navigate"
+                        ? await fetchNavigationWithTimeout(request)
+                        : await fetch(request);
                 if (response.status === 200) {
                     const cache = await caches.open(CACHE_NAME);
                     await cache.put(request, response.clone());

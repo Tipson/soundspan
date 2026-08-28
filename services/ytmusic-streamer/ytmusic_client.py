@@ -220,7 +220,7 @@ def _lease_public_ytmusic(
     strategy: Literal["tv", "native"],
     request_timeout_seconds: float | None = None,
 ) -> Iterator[YTMusic]:
-    """Keep an owned Session alive for exactly one synchronous provider call."""
+    """Keep an owned Session alive and exclusive to one provider call."""
     if request_timeout_seconds is not None:
         scoped_client = _get_public_ytmusic(strategy, request_timeout_seconds)
         try:
@@ -233,12 +233,15 @@ def _lease_public_ytmusic(
         yt = _get_public_ytmusic(strategy)
         state: _PublicYTMusicClientState | None
         retry = False
+        use_isolated_client = False
         with _public_ytmusic_lock:
             cached = _public_ytmusic_instances.get(strategy)
             state = _public_ytmusic_client_state(yt, create=cached is yt)
             if cached is yt and state is not None:
                 if state.retired or state.closed:
                     retry = True
+                elif state.active_leases > 0:
+                    use_isolated_client = True
                 else:
                     state.active_leases += 1
             elif state is not None:
@@ -248,6 +251,17 @@ def _lease_public_ytmusic(
 
         if retry:
             continue
+
+        if use_isolated_client:
+            isolated_client = _create_public_ytmusic(
+                strategy,
+                YTMUSIC_REQUEST_TIMEOUT_SECONDS,
+            )
+            try:
+                yield isolated_client
+            finally:
+                _close_owned_ytmusic_session(isolated_client)
+            return
 
         try:
             yield yt

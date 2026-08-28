@@ -308,6 +308,10 @@ class SharedMapMetadataStore implements DeviceOfflineMetadataStore {
 }
 
 type Listener = (event: Record<string, unknown>) => void;
+type HarnessTimers = {
+    setTimeout: (callback: () => void, delayMs?: number) => unknown;
+    clearTimeout: (handle: unknown) => void;
+};
 
 function createHarness(
     fetchImpl: (
@@ -315,6 +319,7 @@ function createHarness(
     ) => Promise<Response> = async () => {
         throw new TypeError("offline");
     },
+    timerOverrides?: HarnessTimers,
 ) {
     const listeners = new Map<string, Listener[]>();
     const caches = new FakeCacheStorage();
@@ -361,8 +366,15 @@ function createHarness(
             Headers,
             URL,
             ReadableStream,
-            setTimeout,
-            clearTimeout,
+            AbortController,
+            setTimeout:
+                timerOverrides?.setTimeout ??
+                ((callback: () => void, delayMs?: number) =>
+                    setTimeout(callback, delayMs)),
+            clearTimeout:
+                timerOverrides?.clearTimeout ??
+                ((handle: unknown) =>
+                    clearTimeout(handle as ReturnType<typeof setTimeout>)),
             console,
         }),
         { filename: "sw.js" },
@@ -800,13 +812,25 @@ test("background events also require downloading background state", async () => 
 test("service worker serves a complete cached track and valid byte ranges from the stable virtual URL", async () => {
     const harness = createHarness();
     const audioCache = await harness.caches.open("soundspan-device-audio-v1");
-    await audioCache.put(
-        `${ORIGIN}/__offline/audio/opaque-key`,
-        new Response(Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), {
+    const audioUrl = `${ORIGIN}/__offline/audio/opaque-key`;
+    const cachedAudio = new Response(
+        Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        {
             status: 200,
             headers: { "content-type": "audio/mpeg" },
-        }),
+        },
     );
+    const cloneCachedAudio = cachedAudio.clone.bind(cachedAudio);
+    let cachedArrayBufferCalls = 0;
+    cachedAudio.clone = () => {
+        const clone = cloneCachedAudio();
+        clone.arrayBuffer = async () => {
+            cachedArrayBufferCalls += 1;
+            throw new Error("Range serving copied the full cache body");
+        };
+        return clone;
+    };
+    audioCache.values.set(audioUrl, cachedAudio);
 
     const full = await harness.dispatch("fetch", {
         request: new Request(`${ORIGIN}/__offline/audio/opaque-key`),
@@ -829,10 +853,12 @@ test("service worker serves a complete cached track and valid byte ranges from t
     assert.equal(range.headers.get("content-range"), "bytes 2-5/10");
     assert.equal(range.headers.get("content-length"), "4");
     assert.equal(range.headers.get("accept-ranges"), "bytes");
+    assert.equal(range.headers.get("content-type"), "audio/mpeg");
     assert.deepEqual(
         new Uint8Array(await range.arrayBuffer()),
         Uint8Array.from([2, 3, 4, 5]),
     );
+    assert.equal(cachedArrayBufferCalls, 0);
 });
 
 test("service worker answers invalid or multi-range requests with 416", async () => {
@@ -1002,6 +1028,43 @@ test("cold offline navigation to Library Downloads returns its cached app shell"
     assert.equal(response.status, 200);
     assert.match(await response.text(), /Downloads shell/);
 });
+
+test(
+    "a stalled navigation times out into the cached app shell",
+    { timeout: 500 },
+    async () => {
+        let timeoutDelayMs: number | undefined;
+        const harness = createHarness(
+            () => new Promise<Response>(() => undefined),
+            {
+                setTimeout: (callback, delayMs) => {
+                    timeoutDelayMs = delayMs;
+                    queueMicrotask(callback);
+                    return Symbol("navigation-timeout");
+                },
+                clearTimeout: () => undefined,
+            },
+        );
+        const shellCache = await harness.caches.open("soundspan-v3");
+        await shellCache.put(
+            `${ORIGIN}/library?tab=downloads`,
+            new Response("<html><body>Timed fallback</body></html>"),
+        );
+
+        const response = await harness.dispatch("fetch", {
+            request: {
+                method: "GET",
+                mode: "navigate",
+                url: `${ORIGIN}/library?tab=downloads`,
+                headers: new Headers(),
+            },
+        });
+
+        assert.equal(timeoutDelayMs, 5_000);
+        assert.ok(response);
+        assert.match(await response.text(), /Timed fallback/);
+    },
+);
 
 test("Next route-transition requests remain outside the service worker response path", async () => {
     const harness = createHarness(async () => new Response("unexpected"));
