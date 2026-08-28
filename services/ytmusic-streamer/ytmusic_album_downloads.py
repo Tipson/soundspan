@@ -18,7 +18,7 @@ from yt_download import (
     build_album_track_paths,
     build_audio_download_opts,
 )
-from ytmusic_client import _get_public_ytmusic
+from ytmusic_client import _run_public_ytmusic
 from ytmusic_downloads import TERMINAL_DOWNLOAD_STATUSES
 from ytmusic_library import get_public_album_metadata
 from ytmusic_models import YtAlbumDownloadRequest
@@ -81,9 +81,11 @@ async def yt_album_search(
     """Search public YouTube Music albums for the download workflow."""
     clamped_limit = max(1, min(25, limit))
     try:
-        yt = _get_public_ytmusic("native")
-        search = partial(yt.search, filter="albums", limit=clamped_limit)
-        raw_items = await _browse_public_bounded(search, query)
+        raw_items = await _browse_public_bounded(
+            _run_public_ytmusic,
+            "native",
+            lambda yt: yt.search(query, filter="albums", limit=clamped_limit),
+        )
         items = raw_items if isinstance(raw_items, list) else []
         albums = [
             album

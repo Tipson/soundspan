@@ -320,6 +320,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                             width={48}
                             height={48}
                             sizes="48px"
+                            unoptimized
                             className="tv-np-cover"
                         />
                     )}

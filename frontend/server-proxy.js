@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { createProxyMiddleware } = require("http-proxy-middleware");
+const {
+    prepareProxyAuthentication,
+    redactProxyLogValue,
+} = require("./lib/media-auth");
 
 // Time-to-first-byte budgets for backend requests, matching the retired
 // Next route-handler proxy (lib/apiProxy.ts): 20s for regular API calls,
@@ -89,8 +93,9 @@ function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
         );
 
         const timer = setTimeout(() => {
+            const safeUrl = redactProxyLogValue(req?.url);
             logger.error(
-                `[${name}] ${req?.method} ${req?.url} timed out after ${timeoutMs}ms waiting for the first upstream byte`,
+                `[${name}] ${req?.method} ${safeUrl} timed out after ${timeoutMs}ms waiting for the first upstream byte`,
             );
             if (
                 res &&
@@ -145,8 +150,11 @@ function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
  */
 function createProxyErrorHandler({ name, logger, errorMessage, errorCode }) {
     return (err, req, res) => {
-        const detail = err instanceof Error ? err.message : String(err);
-        logger.error(`[${name}] ${req?.method} ${req?.url} failed:`, detail);
+        const detail = redactProxyLogValue(
+            err instanceof Error ? err.message : String(err),
+        );
+        const safeUrl = redactProxyLogValue(req?.url);
+        logger.error(`[${name}] ${req?.method} ${safeUrl} failed:`, detail);
 
         if (res && typeof res.writeHead === "function") {
             if (!res.headersSent) {
@@ -232,16 +240,32 @@ function buildBackendProxyOptions({
  * proxies) that streams requests to the backend and answers with the
  * structured 503 JSON contract when the backend is unreachable.
  *
- * @param {{ name: string, target: string, ws?: boolean, logger: { error: Function }, errorMessage: string, errorCode: string }} config
+ * @param {{ name: string, target: string, ws?: boolean, logger: { error: Function }, errorMessage: string, errorCode: string, promoteAuthToken?: boolean }} config
  * @returns {import("http-proxy-middleware").RequestHandler}
  */
 function createBackendProxy(config) {
-    return createProxyMiddleware(buildBackendProxyOptions(config));
+    const proxy = createProxyMiddleware(buildBackendProxyOptions(config));
+    if (!config.promoteAuthToken) {
+        return proxy;
+    }
+
+    const authenticatedProxy = (req, res, next) => {
+        prepareProxyAuthentication(req);
+        return proxy(req, res, next);
+    };
+    if (typeof proxy.upgrade === "function") {
+        authenticatedProxy.upgrade = (req, socket, head) => {
+            prepareProxyAuthentication(req);
+            return proxy.upgrade(req, socket, head);
+        };
+    }
+    return authenticatedProxy;
 }
 
 module.exports = {
     createProxyErrorHandler,
     createFirstByteTimeoutProxyReqHandler,
+    prepareProxyAuthentication,
     resolveProxyTimeoutMs,
     buildBackendProxyOptions,
     createBackendProxy,

@@ -3,7 +3,9 @@
 import json
 import os
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
@@ -29,6 +31,18 @@ TV_CLIENT_NAME = "TVHTML5"
 TV_CLIENT_VERSION = "7.20250101.00.00"
 # Keep transport work inside the sidecar's default 30-second browse and shutdown budgets.
 YTMUSIC_REQUEST_TIMEOUT_SECONDS = 25.0
+_SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE = "_soundspan_requests_session"
+_SOUNDSPAN_PUBLIC_CLIENT_STATE_ATTRIBUTE = "_soundspan_public_client_state"
+
+
+@dataclass(slots=True)
+class _PublicYTMusicClientState:
+    """Track safe retirement for one cached public client's owned Session."""
+
+    active_leases: int = 0
+    retired: bool = False
+    closed: bool = False
+
 
 # Per-user authenticated clients are used for user-private operations.
 _ytmusic_instances: dict[str, YTMusic] = {}
@@ -39,12 +53,14 @@ _public_ytmusic_instances: dict[Literal["tv", "native"], YTMusic] = {}
 _public_ytmusic_lock = threading.Lock()
 
 
-def _build_ytmusic_requests_session() -> requests.Session:
+def _build_ytmusic_requests_session(
+    timeout_seconds: float = YTMUSIC_REQUEST_TIMEOUT_SECONDS,
+) -> requests.Session:
     """Create a pooled ytmusicapi transport with a bounded request timeout."""
     session = requests.Session()
     session.request = partial(  # type: ignore[method-assign]
         session.request,
-        timeout=YTMUSIC_REQUEST_TIMEOUT_SECONDS,
+        timeout=timeout_seconds,
     )
     return session
 
@@ -103,30 +119,221 @@ def _apply_tv_client_context(yt: YTMusic) -> None:
     yt.params = "?alt=json"  # TV client must NOT send the API key
 
 
-def _get_public_ytmusic(strategy: Literal["tv", "native"]) -> YTMusic:
-    """
-    Get or create an unauthenticated YTMusic instance for public search.
-    """
-    with _public_ytmusic_lock:
-        existing = _public_ytmusic_instances.get(strategy)
-    if existing:
-        return existing
-
-    yt = YTMusic(
-        language=YTMUSIC_LANGUAGE,
-        requests_session=_build_ytmusic_requests_session(),
-    )
-    if strategy == "tv":
-        _apply_tv_client_context(yt)
-    with _public_ytmusic_lock:
-        _public_ytmusic_instances[strategy] = yt
+def _create_public_ytmusic(
+    strategy: Literal["tv", "native"],
+    request_timeout_seconds: float,
+) -> YTMusic:
+    """Create one public client with an operation-specific transport budget."""
+    request_session = _build_ytmusic_requests_session(request_timeout_seconds)
+    try:
+        yt = YTMusic(
+            language=YTMUSIC_LANGUAGE,
+            requests_session=request_session,
+        )
+        setattr(yt, _SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE, request_session)
+        setattr(yt, _SOUNDSPAN_PUBLIC_CLIENT_STATE_ATTRIBUTE, _PublicYTMusicClientState())
+        if strategy == "tv":
+            _apply_tv_client_context(yt)
+    except BaseException:
+        request_session.close()
+        raise
     return yt
 
 
-def _invalidate_public_ytmusic(strategy: Literal["tv", "native"]) -> None:
-    """Force re-creation of a public search client on next use."""
+def _close_owned_ytmusic_session(yt: YTMusic | None) -> None:
+    """Detach and close the requests Session owned by one client, if present."""
+    if yt is None:
+        return
+    request_session = vars(yt).pop(
+        _SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE,
+        None,
+    )
+    close = getattr(request_session, "close", None)
+    if callable(close):
+        close()
+
+
+def _public_ytmusic_client_state(
+    yt: YTMusic,
+    *,
+    create: bool,
+) -> _PublicYTMusicClientState | None:
+    """Return the lifecycle state attached to an owned public client."""
+    state = vars(yt).get(_SOUNDSPAN_PUBLIC_CLIENT_STATE_ATTRIBUTE)
+    if isinstance(state, _PublicYTMusicClientState):
+        return state
+    if not create:
+        return None
+    state = _PublicYTMusicClientState()
+    setattr(yt, _SOUNDSPAN_PUBLIC_CLIENT_STATE_ATTRIBUTE, state)
+    return state
+
+
+def _get_public_ytmusic(
+    strategy: Literal["tv", "native"],
+    request_timeout_seconds: float | None = None,
+) -> YTMusic:
+    """
+    Get or create an unauthenticated YTMusic instance for public search.
+    """
+    # Operation-specific budgets must never reuse the default cached Session:
+    # a cached 25s client would keep its blocking to_thread alive after the
+    # shorter radio endpoint budget has already returned.
+    if request_timeout_seconds is not None:
+        return _create_public_ytmusic(strategy, request_timeout_seconds)
+
     with _public_ytmusic_lock:
-        _public_ytmusic_instances.pop(strategy, None)
+        existing = _public_ytmusic_instances.get(strategy)
+    if existing is not None:
+        return existing
+
+    candidate = _create_public_ytmusic(strategy, YTMUSIC_REQUEST_TIMEOUT_SECONDS)
+    with _public_ytmusic_lock:
+        existing = _public_ytmusic_instances.get(strategy)
+        if existing is None:
+            _public_ytmusic_instances[strategy] = candidate
+            return candidate
+
+    _close_owned_ytmusic_session(candidate)
+    return existing
+
+
+def _release_public_ytmusic_lease(
+    yt: YTMusic,
+    state: _PublicYTMusicClientState,
+) -> None:
+    """Release one active use and close a retired Session at the safe boundary."""
+    should_close = False
+    with _public_ytmusic_lock:
+        if state.active_leases <= 0:
+            raise RuntimeError("Public YTMusic lease released more than once")
+        state.active_leases -= 1
+        if state.retired and state.active_leases == 0 and not state.closed:
+            state.closed = True
+            should_close = True
+    if should_close:
+        _close_owned_ytmusic_session(yt)
+
+
+@contextmanager
+def _lease_public_ytmusic(
+    strategy: Literal["tv", "native"],
+    request_timeout_seconds: float | None = None,
+) -> Iterator[YTMusic]:
+    """Keep an owned Session alive for exactly one synchronous provider call."""
+    if request_timeout_seconds is not None:
+        scoped_client = _get_public_ytmusic(strategy, request_timeout_seconds)
+        try:
+            yield scoped_client
+        finally:
+            _close_owned_ytmusic_session(scoped_client)
+        return
+
+    while True:
+        yt = _get_public_ytmusic(strategy)
+        state: _PublicYTMusicClientState | None
+        retry = False
+        with _public_ytmusic_lock:
+            cached = _public_ytmusic_instances.get(strategy)
+            state = _public_ytmusic_client_state(yt, create=cached is yt)
+            if cached is yt and state is not None:
+                if state.retired or state.closed:
+                    retry = True
+                else:
+                    state.active_leases += 1
+            elif state is not None:
+                # The client was invalidated after lookup but before lease
+                # acquisition. Never hand its retired/closed Session to work.
+                retry = True
+
+        if retry:
+            continue
+
+        try:
+            yield yt
+        finally:
+            # Tests and legacy overrides may supply an unmanaged mock client.
+            # Owned cached clients always carry state and must be released.
+            if state is not None:
+                _release_public_ytmusic_lease(yt, state)
+        return
+
+
+def _invalidate_public_ytmusic(
+    strategy: Literal["tv", "native"],
+    *,
+    expected: YTMusic | None = None,
+) -> bool:
+    """Retire the expected cached client without evicting a newer replacement."""
+    removed: YTMusic | None = None
+    should_close = False
+    with _public_ytmusic_lock:
+        current = _public_ytmusic_instances.get(strategy)
+        if current is None or (expected is not None and current is not expected):
+            return False
+        removed = _public_ytmusic_instances.pop(strategy)
+        state = _public_ytmusic_client_state(removed, create=True)
+        if state is None:  # pragma: no cover - create=True always returns state
+            return True
+        state.retired = True
+        if state.active_leases == 0 and not state.closed:
+            state.closed = True
+            should_close = True
+
+    if should_close:
+        _close_owned_ytmusic_session(removed)
+    return True
+
+
+def _run_public_ytmusic(
+    strategy: Literal["tv", "native"],
+    func: Callable[[YTMusic], Any],
+    *,
+    request_timeout_seconds: float | None = None,
+) -> Any:
+    """Run one public provider call while retaining its owned Session."""
+    with _lease_public_ytmusic(strategy, request_timeout_seconds) as yt:
+        return func(yt)
+
+
+def _run_public_ytmusic_with_retry(
+    strategy: Literal["tv", "native"],
+    operation: str,
+    func: Callable[[YTMusic], Any],
+    *,
+    request_timeout_seconds: float | None = None,
+    retry_timeouts: bool = True,
+) -> Any:
+    """Run one idempotent public browse call with a fresh-client retry.
+
+    YouTube occasionally returns an empty or otherwise unparsable browse
+    response.  A cached ``requests.Session`` can then keep Explore in a broken
+    state until the sidecar restarts.  Rebuilding the client once is bounded,
+    safe for read-only browse calls, and leaves the final error mapping to the
+    owning HTTP route.
+    """
+
+    attempted_client: YTMusic | None = None
+
+    def run_once() -> Any:
+        nonlocal attempted_client
+        with _lease_public_ytmusic(strategy, request_timeout_seconds) as yt:
+            attempted_client = yt
+            return func(yt)
+
+    try:
+        return run_once()
+    except Exception as first_error:
+        if not retry_timeouts and isinstance(first_error, requests.Timeout):
+            raise
+        log.warning(
+            "Public YTMusic %s failed with %s; recreating client and retrying once",
+            operation,
+            type(first_error).__name__,
+        )
+        if request_timeout_seconds is None and attempted_client is not None:
+            _invalidate_public_ytmusic(strategy, expected=attempted_client)
+        return run_once()
 
 
 def _get_ytmusic(user_id: str) -> YTMusic:

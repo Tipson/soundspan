@@ -46,8 +46,14 @@ function toPlaybackTrack(
     key: string,
     match: SearchProviderMatch,
 ) {
+    const playbackId =
+        match.source === "tidal" && match.tidalTrackId
+            ? `tidal:${match.tidalTrackId}`
+            : match.source === "youtube" && match.youtubeVideoId
+              ? `yt:${match.youtubeVideoId}`
+              : key;
     return {
-        id: key,
+        id: playbackId,
         title: track.name,
         artist: { name: track.artist ?? "" },
         album: { title: track.album ?? "" },

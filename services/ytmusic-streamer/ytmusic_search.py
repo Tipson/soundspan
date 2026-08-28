@@ -10,11 +10,11 @@ from typing import Any, Literal, cast
 from fastapi import HTTPException, Query
 from ytmusic_client import (
     SEARCH_MODE,
-    _get_public_ytmusic,
-    _invalidate_public_ytmusic,
     _invalidate_ytmusic,
     _is_oauth_auth_error,
     _resolve_user_search_strategy,
+    _run_public_ytmusic,
+    _run_public_ytmusic_with_retry,
     _run_ytmusic_with_auth_retry,
     _ytmusic_auto_tv_fallback_users,
 )
@@ -506,26 +506,20 @@ def _search_once(
         return cached
 
     if use_unauth_client:
-        yt = _get_public_ytmusic(strategy)
-        try:
+
+        def search_public(yt: YTMusic) -> JsonList:
             if strategy == "native":
-                items = _native_search(yt, query, filter=filter_, limit=limit)
-            else:
-                items = _tv_search(yt, query, filter=filter_, limit=limit)
-        except Exception as first_err:
-            log.warning(
-                "Public %s search client failed for user=%s query=%r; rebuilding and retrying once: %s",
+                return _native_search(yt, query, filter=filter_, limit=limit)
+            return _tv_search(yt, query, filter=filter_, limit=limit)
+
+        items = cast(
+            JsonList,
+            _run_public_ytmusic_with_retry(
                 strategy,
-                user_id,
-                query,
-                first_err,
-            )
-            _invalidate_public_ytmusic(strategy)
-            retry_client = _get_public_ytmusic(strategy)
-            if strategy == "native":
-                items = _native_search(retry_client, query, filter=filter_, limit=limit)
-            else:
-                items = _tv_search(retry_client, query, filter=filter_, limit=limit)
+                f"search-{strategy} user={user_id} query={query!r}",
+                search_public,
+            ),
+        )
     else:
         if strategy == "native":
             items = _run_ytmusic_with_auth_retry(
@@ -736,12 +730,15 @@ async def search_debug(req: SearchRequest, user_id: str = Query(...)) -> JsonObj
     """
     # Keep user_id in the route signature for request-shape compatibility, but
     # debug search uses the public TV client like normal search paths.
-    yt = _get_public_ytmusic("tv")
     body: JsonObject = {"query": req.query}
     if req.filter == "songs":
         body["params"] = "EgWKAQIIAWoMEA4QChADEAQQCRAF"
     try:
-        raw = await asyncio.to_thread(yt._send_request, "search", body)
+        raw = await asyncio.to_thread(
+            _run_public_ytmusic,
+            "tv",
+            lambda yt: yt._send_request("search", body),
+        )
         return {"raw": raw}
     except Exception as e:
         raise _sanitized_http_error("Debug search", e, 500, "Debug search failed") from e

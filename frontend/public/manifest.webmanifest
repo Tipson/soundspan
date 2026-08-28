@@ -65,6 +65,12 @@
             "short_name": "Library",
             "url": "/library",
             "icons": [{ "src": "assets/icons/icon-96.webp", "sizes": "96x96" }]
+        },
+        {
+            "name": "Downloads",
+            "short_name": "Downloads",
+            "url": "/library?tab=downloads",
+            "icons": [{ "src": "assets/icons/icon-96.webp", "sizes": "96x96" }]
         }
     ]
 }

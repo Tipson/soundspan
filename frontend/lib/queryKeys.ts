@@ -96,6 +96,9 @@ export const queryKeys = {
     // Home browse feed
     homeFeaturedPlaylists: (limit?: number) =>
         ["home", "featured-playlists", limit] as const,
+    personalizedHomeAll: () => ["home", "personalized"] as const,
+    personalizedHome: (limit: number) =>
+        ["home", "personalized", limit] as const,
 
     // Browse (YT Music) — used by Explore page
     browseHomeShelves: () => ["browse", "ytmusic", "home"] as const,

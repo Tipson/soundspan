@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, cast
 
 from fastapi import HTTPException, Query
-from ytmusic_client import _get_public_ytmusic, _run_ytmusic_with_auth_retry
+from ytmusic_client import _run_public_ytmusic, _run_ytmusic_with_auth_retry
 from ytmusic_runtime import JsonObject, _sanitized_http_error, app, log
 from ytmusic_stream import BROWSE_TIMEOUT, _browse_public_bounded, _validate_video_id
 from ytmusicapi.exceptions import YTMusicServerError
@@ -408,8 +408,11 @@ def _format_album_response(browse_id: str, album: JsonObject) -> JsonObject:
 
 async def get_public_album_metadata(browse_id: str) -> JsonObject:
     """Fetch and normalize an album through the public browse client."""
-    yt = _get_public_ytmusic("native")
-    album = await _browse_public_bounded(yt.get_album, browse_id)
+    album = await _browse_public_bounded(
+        _run_public_ytmusic,
+        "native",
+        lambda yt: yt.get_album(browse_id),
+    )
     return _format_album_response(browse_id, album)
 
 
@@ -443,8 +446,11 @@ async def get_artist(channel_id: str, user_id: str = Query(...)) -> JsonObject:
     """
     try:
         if user_id == "__public__":
-            yt = _get_public_ytmusic("native")
-            artist = await _browse_public_bounded(yt.get_artist, channel_id)
+            artist = await _browse_public_bounded(
+                _run_public_ytmusic,
+                "native",
+                lambda yt: yt.get_artist(channel_id),
+            )
         else:
             artist = await asyncio.to_thread(
                 _run_ytmusic_with_auth_retry,
@@ -505,8 +511,11 @@ async def get_song(video_id: str, user_id: str = Query(...)) -> JsonObject:
     video_id = _validate_video_id(video_id)
     try:
         if user_id == "__public__":
-            yt = _get_public_ytmusic("native")
-            song = await _browse_public_bounded(yt.get_song, video_id)
+            song = await _browse_public_bounded(
+                _run_public_ytmusic,
+                "native",
+                lambda yt: yt.get_song(video_id),
+            )
         else:
             song = await asyncio.to_thread(
                 _run_ytmusic_with_auth_retry,

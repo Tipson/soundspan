@@ -33,6 +33,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, memo } from "react";
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { resolveDeviceOfflinePlaybackUrl as offlineUrl } from "@/features/device-offline/playbackResolver";
 import {
     getNextTrackInfo,
     resolveDirectTrackSourceType,
@@ -550,10 +551,10 @@ export const AudioPlaybackOrchestrator = memo(
                                         nextTrack.youtubeVideoId,
                                     );
                                 } else {
-                                    // Local and peer tracks share the
-                                    // library stream route.
+                                    // Local and peer tracks share the library stream route.
                                     preloadUrl = api.getStreamUrl(nextTrack.id);
                                 }
+                                preloadUrl = offlineUrl(nextTrack, preloadUrl);
                                 const preloadFormat =
                                     resolveTrackFormatHint(nextTrack);
                                 audioEngine.preload(preloadUrl, {
@@ -1163,13 +1164,12 @@ export const AudioPlaybackOrchestrator = memo(
                         currentTrack.youtubeVideoId,
                     );
                 } else if (currentTrack.streamSource === "peer") {
-                    // Peer tracks stream through the consumer's library
-                    // route; the backend resolves the owning peer and
-                    // applies the stream-time fallback ladder.
+                    // The consumer library route applies the peer stream fallback ladder.
                     streamUrl = api.getStreamUrl(currentTrack.id);
                 } else {
                     streamUrl = api.getStreamUrl(currentTrack.id);
                 }
+                streamUrl = offlineUrl(currentTrack, streamUrl);
                 // Only restore persisted position on initial player boot when
                 // Listen Together playback is not active or pending.
                 const allowPersistedResume =

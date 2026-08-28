@@ -477,6 +477,18 @@ test("3. frontend runtime uses the base node image UID 1000 user", () => {
     );
 });
 
+test("3a. frontend runtime copies the custom proxy's local authentication dependency", () => {
+    const relativePath = "frontend/Dockerfile";
+    const runtimeStage = dockerfileStages(readRepoFile(relativePath)).at(-1);
+
+    assert.ok(runtimeStage, `${relativePath}: runtime stage must exist`);
+    assert.match(
+        runtimeStage.text,
+        /COPY\s+--from=builder\s+--chown=node:node\s+\/app\/lib\/media-auth\.js\s+\.\/lib\/media-auth\.js/i,
+        `${relativePath}: server-proxy.js requires ./lib/media-auth.js at runtime`,
+    );
+});
+
 test("4. ytmusic-streamer has no world-writable token directory", () => {
     const relativePath = "services/ytmusic-streamer/Dockerfile";
     const dockerfile = readRepoFile(relativePath);

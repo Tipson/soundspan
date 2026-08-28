@@ -9,15 +9,13 @@ import {
 } from "@/components/ui/HorizontalCarousel";
 import { MixCard } from "@/components/MixCard";
 import { HomeHero } from "@/features/home/components/HomeHero";
-import { PeerPlaylistsShelf } from "@/features/social/components/PeerPlaylistsShelf";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { ContinueListening } from "@/features/home/components/ContinueListening";
 import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
 import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
 import { FeaturedPlaylistsGrid } from "@/features/home/components/FeaturedPlaylistsGrid";
-import { PodcastsGrid } from "@/features/home/components/PodcastsGrid";
-import { AudiobooksGrid } from "@/features/home/components/AudiobooksGrid";
 import { StaticPlaylistCard } from "@/features/home/components/StaticPlaylistCard";
+import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { LastFmBadge } from "@/components/ui/LastFmBadge";
 import { useFeatures } from "@/lib/features-context";
@@ -56,11 +54,12 @@ export default function HomePage() {
         discoverWeekly,
         popularArtists,
         communityPlaylists,
-        recentPodcasts,
-        recentAudiobooks,
+        personalizedFeed,
         isLoading,
         isRefreshingMixes,
         isCommunityPlaylistsLoading,
+        isPersonalizedLoading,
+        isPersonalizedUnavailable,
         handleRefreshMixes,
     } = useHomeData();
     const { autoPlaylists } = useFeatures();
@@ -78,6 +77,48 @@ export default function HomePage() {
 
             <div className="relative max-w-[1800px] mx-auto px-4 sm:px-6 pb-8">
                 <div className="space-y-8">
+                    {isPersonalizedLoading && !personalizedFeed && (
+                        <section
+                            aria-label="Loading personal recommendations"
+                            className="rounded-2xl border border-white/8 bg-white/[0.035] p-5"
+                        >
+                            <div className="mb-4 h-7 w-40 animate-pulse rounded bg-white/10" />
+                            <PlaylistSkeleton />
+                        </section>
+                    )}
+
+                    {personalizedFeed && (
+                        <>
+                            <PersonalizedTrackShelf
+                                title="Quick picks"
+                                subtitle="Ready to play from your likes and playlists"
+                                tracks={personalizedFeed.shelves.quickPicks}
+                            />
+                            <PersonalizedTrackShelf
+                                title="Listen again"
+                                subtitle="Music you recently played"
+                                tracks={personalizedFeed.shelves.listenAgain}
+                            />
+                            <PersonalizedTrackShelf
+                                title="Fresh for you"
+                                subtitle="New tracks from your personal radio"
+                                tracks={personalizedFeed.shelves.discovery}
+                            />
+                        </>
+                    )}
+
+                    {(isPersonalizedUnavailable ||
+                        personalizedFeed?.reason ===
+                            "provider_unavailable") && (
+                        <p
+                            role="status"
+                            className="rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-4 py-3 text-sm text-amber-100/80"
+                        >
+                            Personal radio is temporarily unavailable. Your
+                            library and search still work normally.
+                        </p>
+                    )}
+
                     {/* Continue Listening */}
                     {recentlyListened.length > 0 && (
                         <section>
@@ -215,30 +256,6 @@ export default function HomePage() {
                                     playlists={communityPlaylists}
                                 />
                             )}
-                        </section>
-                    )}
-
-                    <PeerPlaylistsShelf />
-
-                    {/* Popular Podcasts */}
-                    {recentPodcasts.length > 0 && (
-                        <section>
-                            <SectionHeader
-                                title="Popular Podcasts"
-                                showAllHref="/podcasts"
-                            />
-                            <PodcastsGrid podcasts={recentPodcasts} />
-                        </section>
-                    )}
-
-                    {/* Audiobooks */}
-                    {recentAudiobooks.length > 0 && (
-                        <section>
-                            <SectionHeader
-                                title="Audiobooks"
-                                showAllHref="/audiobooks"
-                            />
-                            <AudiobooksGrid audiobooks={recentAudiobooks} />
                         </section>
                     )}
                 </div>

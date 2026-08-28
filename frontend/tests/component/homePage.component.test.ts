@@ -49,6 +49,18 @@ const state = {
     recentPodcasts: [] as unknown[],
     recentAudiobooks: [] as unknown[],
     isCommunityPlaylistsLoading: false,
+    personalizedFeed: {
+        shelves: {
+            quickPicks: [{ id: "yt:quick-1", title: "Quick One" }],
+            listenAgain: [{ id: "yt:again-1", title: "Again One" }],
+            discovery: [{ id: "yt:new-1", title: "Fresh One" }],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    } as unknown,
+    isPersonalizedLoading: false,
+    isPersonalizedUnavailable: false,
 };
 
 const featuresState = {
@@ -91,6 +103,9 @@ mock.module("@/features/home/hooks/useHomeData", {
             isLoading: state.isLoading,
             isRefreshingMixes: state.isRefreshingMixes,
             isCommunityPlaylistsLoading: state.isCommunityPlaylistsLoading,
+            personalizedFeed: state.personalizedFeed,
+            isPersonalizedLoading: state.isPersonalizedLoading,
+            isPersonalizedUnavailable: state.isPersonalizedUnavailable,
             handleRefreshMixes: async () => undefined,
         }),
     },
@@ -152,6 +167,23 @@ mock.module("@/features/social/components/PeerPlaylistsShelf", {
 });
 mock.module("@/features/home/components/FeaturedPlaylistsGrid", {
     namedExports: { FeaturedPlaylistsGrid: marker("featured-playlists-grid") },
+});
+
+mock.module("@/features/home/components/PersonalizedTrackShelf", {
+    namedExports: {
+        PersonalizedTrackShelf: ({
+            title,
+            tracks,
+        }: {
+            title: string;
+            tracks: Array<{ title: string }>;
+        }) =>
+            React.createElement(
+                "section",
+                { "data-personalized-shelf": title },
+                `${title}:${tracks.map((track) => track.title).join(",")}`,
+            ),
+    },
 });
 
 mock.module("@/features/home/components/StaticPlaylistCard", {
@@ -229,6 +261,18 @@ beforeEach(() => {
     state.recentPodcasts = [];
     state.recentAudiobooks = [];
     state.isCommunityPlaylistsLoading = false;
+    state.personalizedFeed = {
+        shelves: {
+            quickPicks: [{ id: "yt:quick-1", title: "Quick One" }],
+            listenAgain: [{ id: "yt:again-1", title: "Again One" }],
+            discovery: [{ id: "yt:new-1", title: "Fresh One" }],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+    state.isPersonalizedLoading = false;
+    state.isPersonalizedUnavailable = false;
 });
 
 test("home page renders loading screen while data is loading", async () => {
@@ -250,6 +294,16 @@ test("home page renders hero and all sections with data", async () => {
     assert.match(html, /Made For You/);
     assert.match(html, /Trending Community Playlists/);
     assert.match(html, /Recommended For You/);
+});
+
+test("home page leads with playable personal shelves before legacy library sections", async () => {
+    const HomePage = (await import("../../app/page")).default;
+    const html = renderToStaticMarkup(React.createElement(HomePage));
+
+    assert.match(html, /Quick picks:Quick One/);
+    assert.match(html, /Listen again:Again One/);
+    assert.match(html, /Fresh for you:Fresh One/);
+    assert.ok(html.indexOf("Quick picks") < html.indexOf("Continue Listening"));
 });
 
 test("home page shows My Liked and Discover Weekly in Made For You", async () => {

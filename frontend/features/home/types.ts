@@ -71,3 +71,39 @@ export interface PopularArtist {
     listeners?: number;
     mbid?: string;
 }
+
+/** Provider-neutral track returned by the personalized home feed. */
+export interface PersonalizedTrack {
+    id: string;
+    title: string;
+    duration: number;
+    trackNo: number | null;
+    artist: { id: string | null; name: string };
+    album: {
+        id: string | null;
+        title: string;
+        coverArt: string | null;
+    };
+    source: "youtube";
+    provider: {
+        tidalTrackId: null;
+        youtubeVideoId: string;
+    };
+    streamSource: "youtube";
+    youtubeVideoId: string;
+}
+
+export interface PersonalizedHomeFeed {
+    shelves: {
+        listenAgain: PersonalizedTrack[];
+        quickPicks: PersonalizedTrack[];
+        discovery: PersonalizedTrack[];
+    };
+    degraded: boolean;
+    reason:
+        | "insufficient_signals"
+        | "provider_partial_failure"
+        | "provider_unavailable"
+        | null;
+    seedCount: number;
+}

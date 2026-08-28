@@ -18,6 +18,7 @@ import {
     BRAND_METADATA_TITLE,
     BRAND_NAME,
 } from "@/lib/brand";
+import { APP_VIEWPORT } from "@/lib/viewportConfig";
 
 // Self-hosted latin variable instance (weights 300-800) of the same font the
 // build previously fetched from Google at build time - CI must not depend on
@@ -37,14 +38,7 @@ const polea = localFont({
 });
 
 // Viewport configuration - separate export for Next.js 14+
-export const viewport: Viewport = {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: "cover",
-    themeColor: "#000000",
-};
+export const viewport: Viewport = APP_VIEWPORT;
 
 export const metadata: Metadata = {
     title: BRAND_METADATA_TITLE,

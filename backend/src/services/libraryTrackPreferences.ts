@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../utils/db";
 import {
     resolveTrackPreference,
@@ -6,6 +7,403 @@ import {
     type ResolvedTrackPreference,
 } from "./trackPreference";
 import type { UnifiedTrackResponse } from "./unifiedTrackResponse";
+
+const REMOTE_PREFERENCE_TRANSACTION_ATTEMPTS = 3;
+const REMOTE_PREFERENCE_TRANSACTION_OPTIONS = {
+    isolationLevel: "Serializable" as const,
+    maxWait: 5_000,
+    timeout: 10_000,
+};
+const REMOTE_PREFERENCE_READ_TRANSACTION_OPTIONS = {
+    isolationLevel: "RepeatableRead" as const,
+    maxWait: 5_000,
+    timeout: 10_000,
+};
+
+/** Canonical external identity used by remote-track preference persistence. */
+export type RemoteTrackPreferenceReference =
+    | {
+          provider: "youtube";
+          externalId: string;
+      }
+    | {
+          provider: "tidal";
+          externalId: string;
+          tidalId: number;
+      };
+
+/** Materialized remote row targeted by a thumbs-up mutation. */
+export type RemoteTrackLikeTarget =
+    | { provider: "youtube"; trackYtMusicId: string }
+    | { provider: "tidal"; trackTidalId: string };
+
+/** Parse and canonicalize a supported remote track composite id. */
+export function parseRemoteTrackPreferenceReference(
+    compositeId: string,
+): RemoteTrackPreferenceReference | null {
+    if (compositeId.startsWith("yt:")) {
+        const externalId = compositeId.slice(3).trim();
+        return externalId.length > 0
+            ? {
+                  provider: "youtube",
+                  externalId,
+              }
+            : null;
+    }
+
+    if (!compositeId.startsWith("tidal:")) return null;
+    const externalId = compositeId.slice(6).trim();
+    if (!/^\d+$/.test(externalId)) return null;
+    const tidalId = Number(externalId);
+    if (!Number.isSafeInteger(tidalId) || tidalId <= 0) return null;
+    return {
+        provider: "tidal",
+        externalId,
+        tidalId,
+    };
+}
+
+function canonicalRemotePreferenceId(
+    reference: RemoteTrackPreferenceReference,
+): string {
+    return reference.provider === "tidal"
+        ? `tidal:${reference.tidalId}`
+        : `yt:${reference.externalId}`;
+}
+
+type RemotePreferenceClient = Pick<
+    typeof prisma,
+    | "dislikedEntity"
+    | "likedRemoteTrack"
+    | "remotePreferenceIntent"
+    | "trackTidal"
+    | "trackYtMusic"
+>;
+
+async function findRemoteLikedAt(
+    client: RemotePreferenceClient,
+    userId: string,
+    reference: RemoteTrackPreferenceReference,
+): Promise<Date | null> {
+    if (reference.provider === "tidal") {
+        const track = await client.trackTidal.findUnique({
+            where: { tidalId: reference.tidalId },
+            select: { id: true },
+        });
+        if (!track) return null;
+        const liked = await client.likedRemoteTrack.findUnique({
+            where: {
+                userId_trackTidalId: {
+                    userId,
+                    trackTidalId: track.id,
+                },
+            },
+            select: { likedAt: true },
+        });
+        return liked?.likedAt ?? null;
+    }
+
+    const track = await client.trackYtMusic.findUnique({
+        where: { videoId: reference.externalId },
+        select: { id: true },
+    });
+    if (!track) return null;
+    const liked = await client.likedRemoteTrack.findUnique({
+        where: {
+            userId_trackYtMusicId: {
+                userId,
+                trackYtMusicId: track.id,
+            },
+        },
+        select: { likedAt: true },
+    });
+    return liked?.likedAt ?? null;
+}
+
+async function loadRemoteTrackPreferenceWithClient(
+    client: RemotePreferenceClient,
+    userId: string,
+    reference: RemoteTrackPreferenceReference,
+): Promise<ResolvedTrackPreference> {
+    const likedAt = await findRemoteLikedAt(client, userId, reference);
+    const disliked = await client.dislikedEntity.findUnique({
+        where: {
+            userId_entityType_entityId: {
+                userId,
+                entityType: TRACK_DISLIKE_ENTITY_TYPE,
+                entityId: canonicalRemotePreferenceId(reference),
+            },
+        },
+        select: { dislikedAt: true },
+    });
+    return resolveTrackPreference({
+        likedAt,
+        dislikedAt: disliked?.dislikedAt ?? null,
+    });
+}
+
+/** Load one user's remote preference from a repeatable database snapshot. */
+export async function loadRemoteTrackPreference(
+    userId: string,
+    reference: RemoteTrackPreferenceReference,
+): Promise<ResolvedTrackPreference> {
+    return prisma.$transaction(
+        (tx) => loadRemoteTrackPreferenceWithClient(tx, userId, reference),
+        REMOTE_PREFERENCE_READ_TRANSACTION_OPTIONS,
+    );
+}
+
+type RemotePreferenceTransaction = RemotePreferenceClient;
+
+async function clearRemoteLike(
+    tx: RemotePreferenceTransaction,
+    userId: string,
+    reference: RemoteTrackPreferenceReference,
+): Promise<void> {
+    if (reference.provider === "tidal") {
+        const track = await tx.trackTidal.findUnique({
+            where: { tidalId: reference.tidalId },
+            select: { id: true },
+        });
+        if (track) {
+            await tx.likedRemoteTrack.deleteMany({
+                where: { userId, trackTidalId: track.id },
+            });
+        }
+        return;
+    }
+
+    const track = await tx.trackYtMusic.findUnique({
+        where: { videoId: reference.externalId },
+        select: { id: true },
+    });
+    if (track) {
+        await tx.likedRemoteTrack.deleteMany({
+            where: { userId, trackYtMusicId: track.id },
+        });
+    }
+}
+
+async function saveRemoteLike(
+    tx: RemotePreferenceTransaction,
+    userId: string,
+    reference: RemoteTrackPreferenceReference,
+    target: RemoteTrackLikeTarget | undefined,
+    likedAt: Date,
+): Promise<void> {
+    if (reference.provider === "tidal") {
+        if (!target || target.provider !== "tidal") {
+            throw new TypeError("A materialized TIDAL target is required");
+        }
+        await tx.likedRemoteTrack.upsert({
+            where: {
+                userId_trackTidalId: {
+                    userId,
+                    trackTidalId: target.trackTidalId,
+                },
+            },
+            create: { userId, trackTidalId: target.trackTidalId, likedAt },
+            update: { likedAt },
+        });
+        return;
+    }
+
+    if (!target || target.provider !== "youtube") {
+        throw new TypeError("A materialized YouTube target is required");
+    }
+    await tx.likedRemoteTrack.upsert({
+        where: {
+            userId_trackYtMusicId: {
+                userId,
+                trackYtMusicId: target.trackYtMusicId,
+            },
+        },
+        create: { userId, trackYtMusicId: target.trackYtMusicId, likedAt },
+        update: { likedAt },
+    });
+}
+
+function isRetryableRemotePreferenceAbort(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    const record = error as Record<string, unknown>;
+    const meta =
+        typeof record.meta === "object" && record.meta !== null
+            ? (record.meta as Record<string, unknown>)
+            : null;
+    const adapter =
+        typeof meta?.driverAdapterError === "object" &&
+        meta.driverAdapterError !== null
+            ? (meta.driverAdapterError as Record<string, unknown>)
+            : null;
+    const cause =
+        typeof adapter?.cause === "object" && adapter.cause !== null
+            ? (adapter.cause as Record<string, unknown>)
+            : null;
+    if (
+        [record, meta, cause].some(
+            (candidate) =>
+                candidate?.code === "P2034" ||
+                candidate?.code === "40001" ||
+                candidate?.code === "40P01",
+        )
+    ) {
+        return true;
+    }
+    const message =
+        typeof record.message === "string" ? record.message.toLowerCase() : "";
+    return (
+        message.includes("could not serialize") || message.includes("deadlock")
+    );
+}
+
+async function runRemotePreferenceTransaction<T>(
+    operation: (tx: RemotePreferenceTransaction) => Promise<T>,
+): Promise<T> {
+    for (
+        let attempt = 1;
+        attempt <= REMOTE_PREFERENCE_TRANSACTION_ATTEMPTS;
+        attempt += 1
+    ) {
+        try {
+            return await prisma.$transaction(
+                (tx) => operation(tx),
+                REMOTE_PREFERENCE_TRANSACTION_OPTIONS,
+            );
+        } catch (error) {
+            if (
+                !isRetryableRemotePreferenceAbort(error) ||
+                attempt === REMOTE_PREFERENCE_TRANSACTION_ATTEMPTS
+            ) {
+                throw error;
+            }
+        }
+    }
+    throw new Error(
+        "Remote preference transaction retry bound was not enforced",
+    );
+}
+
+/** Reserve the durable latest-request token before provider materialization. */
+export async function reserveRemoteTrackPreferenceIntent({
+    userId,
+    reference,
+    requestedAt,
+}: {
+    userId: string;
+    reference: RemoteTrackPreferenceReference;
+    requestedAt: Date;
+}): Promise<string> {
+    const token = randomUUID();
+    const remoteTrackId = canonicalRemotePreferenceId(reference);
+    await runRemotePreferenceTransaction(async (tx) => {
+        await tx.remotePreferenceIntent.upsert({
+            where: {
+                userId_remoteTrackId: { userId, remoteTrackId },
+            },
+            create: { userId, remoteTrackId, token, requestedAt },
+            update: { token, requestedAt },
+        });
+    });
+    return token;
+}
+
+/** Remove only the still-current failed request token. */
+export async function cancelRemoteTrackPreferenceIntent({
+    userId,
+    reference,
+    intentToken,
+}: {
+    userId: string;
+    reference: RemoteTrackPreferenceReference;
+    intentToken: string;
+}): Promise<void> {
+    const remoteTrackId = canonicalRemotePreferenceId(reference);
+    await runRemotePreferenceTransaction(async (tx) => {
+        await tx.remotePreferenceIntent.deleteMany({
+            where: { userId, remoteTrackId, token: intentToken },
+        });
+    });
+}
+
+async function mutateRemotePreference(
+    tx: RemotePreferenceTransaction,
+    userId: string,
+    reference: RemoteTrackPreferenceReference,
+    signal: NormalizedTrackPreferenceSignal,
+    now: Date,
+    likedTarget: RemoteTrackLikeTarget | undefined,
+): Promise<void> {
+    const dislikeWhere = {
+        userId,
+        entityType: TRACK_DISLIKE_ENTITY_TYPE,
+        entityId: canonicalRemotePreferenceId(reference),
+    };
+
+    if (signal === "thumbs_up") {
+        await tx.dislikedEntity.deleteMany({ where: dislikeWhere });
+        await saveRemoteLike(tx, userId, reference, likedTarget, now);
+        return;
+    }
+
+    await clearRemoteLike(tx, userId, reference);
+    if (signal === "thumbs_down") {
+        await tx.dislikedEntity.upsert({
+            where: {
+                userId_entityType_entityId: dislikeWhere,
+            },
+            create: { ...dislikeWhere, dislikedAt: now },
+            update: { dislikedAt: now },
+        });
+        return;
+    }
+
+    await tx.dislikedEntity.deleteMany({ where: dislikeWhere });
+}
+
+/**
+ * Atomically apply one remote preference signal, retrying bounded PostgreSQL
+ * serialization aborts. Only the latest reserved request token may mutate the
+ * like/dislike rows, so slow older materialization cannot overwrite new intent.
+ */
+export async function applyRemoteTrackPreferenceSignal({
+    userId,
+    reference,
+    signal,
+    now,
+    intentToken,
+    likedTarget,
+}: {
+    userId: string;
+    reference: RemoteTrackPreferenceReference;
+    signal: NormalizedTrackPreferenceSignal;
+    now: Date;
+    intentToken: string;
+    likedTarget?: RemoteTrackLikeTarget;
+}): Promise<ResolvedTrackPreference> {
+    const remoteTrackId = canonicalRemotePreferenceId(reference);
+    return runRemotePreferenceTransaction(async (tx) => {
+        const claim = await tx.remotePreferenceIntent.updateMany({
+            where: { userId, remoteTrackId, token: intentToken },
+            data: { token: intentToken },
+        });
+        if (claim.count === 0) {
+            return loadRemoteTrackPreferenceWithClient(tx, userId, reference);
+        }
+
+        await mutateRemotePreference(
+            tx,
+            userId,
+            reference,
+            signal,
+            now,
+            likedTarget,
+        );
+        return resolveTrackPreference({
+            likedAt: signal === "thumbs_up" ? now : null,
+            dislikedAt: signal === "thumbs_down" ? now : null,
+        });
+    });
+}
 
 export const formatTrackPreferenceResponse = (
     trackId: string,

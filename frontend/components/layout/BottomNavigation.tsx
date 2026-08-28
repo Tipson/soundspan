@@ -2,34 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Library, BookOpen, Mic, ListMusic } from "lucide-react";
+import { Home, Search, Compass, Library } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
 
 const navigationItems = [
+    {
+        name: "Home",
+        href: "/",
+        icon: Home,
+        matchPattern: "/",
+        exact: true,
+    },
+    {
+        name: "Search",
+        href: "/search",
+        icon: Search,
+        matchPattern: "/search",
+    },
+    {
+        name: "Explore",
+        href: "/explore",
+        icon: Compass,
+        matchPattern: "/explore",
+    },
     {
         name: "Library",
         href: "/library",
         icon: Library,
         matchPattern: "/library",
-    },
-    {
-        name: "Audiobooks",
-        href: "/audiobooks",
-        icon: BookOpen,
-        matchPattern: "/audiobooks",
-    },
-    {
-        name: "Podcasts",
-        href: "/podcasts",
-        icon: Mic,
-        matchPattern: "/podcasts",
-    },
-    {
-        name: "Playlists",
-        href: "/playlists",
-        icon: ListMusic,
-        matchPattern: "/playlist", // Matches both /playlists and /playlist/[id]
     },
 ];
 
@@ -56,13 +58,28 @@ export function BottomNavigation() {
         >
             <div className="flex items-center justify-around h-14">
                 {navigationItems.map((item) => {
-                    const isActive = pathname.startsWith(item.matchPattern);
+                    const isActive = item.exact
+                        ? pathname === item.matchPattern
+                        : pathname.startsWith(item.matchPattern);
                     const Icon = item.icon;
 
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
+                            onClick={
+                                item.name === "Library"
+                                    ? (event) => {
+                                          handleOfflineLibraryNavigation({
+                                              isOnline: navigator.onLine,
+                                              preventDefault: () =>
+                                                  event.preventDefault(),
+                                              hardNavigate: (path) =>
+                                                  window.location.assign(path),
+                                          });
+                                      }
+                                    : undefined
+                            }
                             className={cn(
                                 "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
                                 isActive

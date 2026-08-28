@@ -242,10 +242,12 @@ test("direct YouTube Music discover rows play with their exact provider id witho
 
     assert.equal(state.played.length, 1);
     const played = state.played[0].tracks[0] as {
+        id: string;
         streamSource: string;
         youtubeVideoId: string;
         duration: number;
     };
+    assert.equal(played.id, "yt:video-exact-1");
     assert.equal(played.streamSource, "youtube");
     assert.equal(played.youtubeVideoId, "video-exact-1");
     assert.equal(played.duration, 203);
@@ -293,10 +295,12 @@ test("metadata-only rows keep their original match key beside direct provider ro
     assert.equal(state.routed.length, 0);
     assert.equal(state.played.length, 1);
     const played = state.played[0].tracks[0] as {
+        id: string;
         streamSource: string;
         tidalTrackId: number;
         title: string;
     };
+    assert.equal(played.id, "tidal:84");
     assert.equal(played.streamSource, "tidal");
     assert.equal(played.tidalTrackId, 84);
     assert.equal(played.title, "Metadata Song");

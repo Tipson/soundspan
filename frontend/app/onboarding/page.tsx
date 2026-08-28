@@ -7,6 +7,7 @@ import Image from "next/image";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useFeatures } from "@/lib/features-context";
 import { useAuth } from "@/lib/auth-context";
+import { revokeAuthenticatedRuntime } from "@/lib/auth-runtime";
 import { BRAND_MARKETING_TAGLINE, BRAND_NAME } from "@/lib/brand";
 
 /**
@@ -104,12 +105,15 @@ export default function OnboardingPage() {
 
         setLoading(true);
         try {
+            const sessionGeneration = api.getSessionGeneration();
             const response = await api.post<{
                 token: string;
                 user: { id: string; username: string };
             }>("/onboarding/register", { username, password });
+            if (api.getSessionGeneration() !== sessionGeneration) return;
             // Store the JWT token for subsequent API calls
             if (response.token) {
+                revokeAuthenticatedRuntime();
                 api.setToken(response.token);
             }
             setStep(2);

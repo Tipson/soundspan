@@ -1,5 +1,6 @@
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { normalizeApiBaseUrlInput } from "./api-base-url";
+import { prepareFetchProxyAuthentication } from "./media-auth";
 const getEnv = (): Record<string, string | undefined> => {
     return (
         (
@@ -165,11 +166,11 @@ const wrapUpstreamBody = (
     });
 };
 
-const buildTargetUrl = (request: Request, targetPath: string): string => {
+const buildTargetUrl = (requestUrl: string, targetPath: string): string => {
     const base = getBackendUrl();
     const normalizedPath = targetPath.replace(/^\/+/, "");
     const url = new URL(`${base}/${normalizedPath}`);
-    url.search = new URL(request.url).search;
+    url.search = new URL(requestUrl).search;
     return url.toString();
 };
 
@@ -201,9 +202,14 @@ export const proxyRequest = async (
     methodOverride?: string,
 ): Promise<Response> => {
     // Used by frontend same-origin API mode (`/app/api/[...path]` route handlers).
-    const targetUrl = buildTargetUrl(request, targetPath);
     const headers = buildProxyHeaders(request);
     const method = methodOverride ?? request.method;
+    const sanitizedRequestUrl = prepareFetchProxyAuthentication(
+        request.url,
+        headers,
+        method,
+    );
+    const targetUrl = buildTargetUrl(sanitizedRequestUrl, targetPath);
 
     const controller = new AbortController();
     const upstreamSignal = request.signal;
@@ -248,8 +254,11 @@ export const proxyRequest = async (
         // If we forward those to the browser, it tries to decompress the
         // already-decompressed body and fails with "Failed to fetch".
         // Strip them so the browser treats the body as raw (uncompressed).
+        const contentEncoding = responseHeaders.get("content-encoding");
         responseHeaders.delete("content-encoding");
-        responseHeaders.delete("content-length");
+        if (contentEncoding && contentEncoding.toLowerCase() !== "identity") {
+            responseHeaders.delete("content-length");
+        }
         responseHeaders.delete("transfer-encoding");
 
         const responseBody = wrapUpstreamBody(

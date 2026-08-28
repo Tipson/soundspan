@@ -117,6 +117,11 @@ function validateEmbeddingValues(embedding: readonly number[]): void {
     }
 }
 
+function serializeEmbeddingVector(embedding: readonly number[]): string {
+    validateEmbeddingValues(embedding);
+    return `[${embedding.join(",")}]`;
+}
+
 async function lockWritableEmbeddingSpace(
     transaction: Prisma.TransactionClient,
     spaceId: string,
@@ -233,8 +238,7 @@ export async function upsertTrackEmbedding(
     spaceId: string,
     claim?: VibeEmbeddingWriteClaim,
 ): Promise<void> {
-    validateEmbeddingValues(embedding);
-    const vector = `[${embedding.join(",")}]`;
+    const vector = serializeEmbeddingVector(embedding);
     await prisma.$transaction(async (transaction) => {
         const expectedDim = await lockWritableEmbeddingSpace(
             transaction,
@@ -270,8 +274,7 @@ export async function upsertTrackEmbeddingPageInTransaction(
 ): Promise<void> {
     if (rows.length === 0) return;
     const vectors = rows.map(({ embedding }) => {
-        validateEmbeddingValues(embedding);
-        return `[${embedding.join(",")}]`;
+        return serializeEmbeddingVector(embedding);
     });
     const expectedDim = await lockWritableEmbeddingSpace(transaction, spaceId);
     if (rows.some(({ embedding }) => embedding.length !== expectedDim)) {
@@ -354,11 +357,12 @@ export async function findNearestToEmbedding(
     excludeIds: string[] = [],
 ): Promise<NearestTrackRow[]> {
     const activeSpace = await getActiveSpace();
+    const vector = serializeEmbeddingVector(embedding);
     if (excludeIds.length > 0) {
         return runAnnQuery<NearestTrackRow[]>(Prisma.sql`
             SELECT
                 t.id, t.title,
-                te.embedding <=> ${embedding}::vector AS distance,
+                te.embedding <=> ${vector}::vector AS distance,
                 a.id AS "albumId", a.title AS "albumTitle", a."coverUrl" AS "albumCoverUrl",
                 ar.id AS "artistId", ar.name AS "artistName",
                 t."loudnessLufs", t."truePeakDb",
@@ -372,14 +376,14 @@ export async function findNearestToEmbedding(
               AND ${TRACK_BROWSE_SQL}
               AND te.space_id = ${activeSpace.id}
               AND te.track_id != ALL(${excludeIds}::text[])
-            ORDER BY te.embedding <=> ${embedding}::vector
+            ORDER BY te.embedding <=> ${vector}::vector
             LIMIT ${limit}
         `);
     }
     return runAnnQuery<NearestTrackRow[]>(Prisma.sql`
         SELECT
             t.id, t.title,
-            te.embedding <=> ${embedding}::vector AS distance,
+            te.embedding <=> ${vector}::vector AS distance,
             a.id AS "albumId", a.title AS "albumTitle", a."coverUrl" AS "albumCoverUrl",
             ar.id AS "artistId", ar.name AS "artistName",
             t."loudnessLufs", t."truePeakDb",
@@ -392,7 +396,7 @@ export async function findNearestToEmbedding(
         WHERE t."removedAt" IS NULL
           AND ${TRACK_BROWSE_SQL}
           AND te.space_id = ${activeSpace.id}
-        ORDER BY te.embedding <=> ${embedding}::vector
+        ORDER BY te.embedding <=> ${vector}::vector
         LIMIT ${limit}
     `);
 }
@@ -405,6 +409,7 @@ export async function findTracksByTextEmbedding(
     spaceId?: string,
 ): Promise<TextSearchResult[]> {
     const resolvedSpaceId = spaceId ?? (await getActiveSpace()).id;
+    const vector = serializeEmbeddingVector(searchEmbedding);
     const boundedCandidateLimit =
         boundedTextSearchCandidateLimit(candidateLimit);
     // Migrating spaces have no ANN index before cutover, so pgvector uses an
@@ -415,7 +420,7 @@ export async function findTracksByTextEmbedding(
             t.title,
             t.duration,
             t."trackNo",
-            te.embedding <=> ${searchEmbedding}::vector AS distance,
+            te.embedding <=> ${vector}::vector AS distance,
             a.id as "albumId",
             a.title as "albumTitle",
             a."coverUrl" as "albumCoverUrl",
@@ -439,8 +444,8 @@ export async function findTracksByTextEmbedding(
         WHERE t."removedAt" IS NULL
           AND ${TRACK_BROWSE_SQL}
           AND te.space_id = ${resolvedSpaceId}
-          AND te.embedding <=> ${searchEmbedding}::vector <= ${maxDistance}
-        ORDER BY te.embedding <=> ${searchEmbedding}::vector
+          AND te.embedding <=> ${vector}::vector <= ${maxDistance}
+        ORDER BY te.embedding <=> ${vector}::vector
         LIMIT ${boundedCandidateLimit}
     `;
     return runAnnQuery<TextSearchResult[]>(query, undefined, {

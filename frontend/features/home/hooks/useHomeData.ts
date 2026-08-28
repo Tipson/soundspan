@@ -20,7 +20,9 @@ import type {
     PopularArtist,
     Podcast,
     Audiobook,
+    PersonalizedHomeFeed,
 } from "../types";
+import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import type {
     LikedPlaylistSummary,
     DiscoverWeeklySummary,
@@ -62,6 +64,8 @@ export interface UseHomeDataReturn {
     recentPodcasts: Podcast[];
     /** Audiobooks. */
     recentAudiobooks: Audiobook[];
+    /** Personalized playable provider shelves. */
+    personalizedFeed: PersonalizedHomeFeed | null;
 
     /** True while initial critical data is loading. */
     isLoading: boolean;
@@ -69,6 +73,10 @@ export interface UseHomeDataReturn {
     isRefreshingMixes: boolean;
     /** True while community playlists are loading. */
     isCommunityPlaylistsLoading: boolean;
+    /** True while the first personal feed is loading. */
+    isPersonalizedLoading: boolean;
+    /** True when the personal feed could not be reached at all. */
+    isPersonalizedUnavailable: boolean;
 
     /** Trigger a mixes refresh. */
     handleRefreshMixes: () => Promise<void>;
@@ -83,6 +91,7 @@ export function useHomeData(): UseHomeDataReturn {
     const { isAuthenticated } = useAuth();
     const { discovery, autoPlaylists } = useFeatures();
     const queryClient = useQueryClient();
+    const personalizedQuery = usePersonalizedHomeFeed(12, isAuthenticated);
 
     // Listen for mixes-updated event (fired when user saves mood preferences)
     useEffect(() => {
@@ -193,8 +202,14 @@ export function useHomeData(): UseHomeDataReturn {
 
     // ── Loading state ───────────────────────────────────────────────────
     const items = recentlyListenedData?.items ?? [];
+    const personalizedTrackCount = personalizedQuery.data
+        ? personalizedQuery.data.shelves.listenAgain.length +
+          personalizedQuery.data.shelves.quickPicks.length +
+          personalizedQuery.data.shelves.discovery.length
+        : 0;
 
     const hasPrimaryData =
+        personalizedTrackCount > 0 ||
         items.length > 0 ||
         (recentlyAddedData?.artists?.length ?? 0) > 0 ||
         (recommendedData?.artists?.length ?? 0) > 0 ||
@@ -204,6 +219,7 @@ export function useHomeData(): UseHomeDataReturn {
         (Array.isArray(audiobooksData) ? audiobooksData.length : 0) > 0;
 
     const allPrimaryLoading =
+        personalizedQuery.isLoading &&
         isLoadingListened &&
         isLoadingAdded &&
         isLoadingRecommended &&
@@ -228,9 +244,12 @@ export function useHomeData(): UseHomeDataReturn {
             ? podcastsData.slice(0, 10)
             : [],
         recentAudiobooks: Array.isArray(audiobooksData) ? audiobooksData : [],
+        personalizedFeed: personalizedQuery.data ?? null,
         isLoading,
         isRefreshingMixes,
         isCommunityPlaylistsLoading,
+        isPersonalizedLoading: personalizedQuery.isLoading,
+        isPersonalizedUnavailable: personalizedQuery.isError,
         handleRefreshMixes,
     };
 }

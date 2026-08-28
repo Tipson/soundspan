@@ -33,6 +33,16 @@ const state = {
     popularArtists: [{ id: "artist-3" }],
     moodCategories: [{ title: "Chill" }],
     genreCategories: [{ title: "Rock" }],
+    personalizedFeed: {
+        shelves: {
+            quickPicks: [{ id: "yt:quick", title: "Quick Track" }],
+            listenAgain: [],
+            discovery: [{ id: "yt:fresh", title: "Fresh Track" }],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    } as unknown,
 };
 
 const marker = (label: string) => {
@@ -94,6 +104,16 @@ mock.module("@/features/explore/hooks/useUserSettingsExplorePrefs", {
     },
 });
 
+mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
+    namedExports: {
+        usePersonalizedHomeFeed: () => ({
+            data: state.personalizedFeed,
+            isLoading: false,
+            isError: false,
+        }),
+    },
+});
+
 mock.module("@/hooks/useQueries", {
     namedExports: {
         mapYtMusicChartsToFeaturedPlaylists: (
@@ -145,6 +165,17 @@ mock.module("@/features/home/components/LibraryRadioStations", {
             allStations: [],
             isLoading: false,
         }),
+    },
+});
+
+mock.module("@/features/home/components/PersonalizedTrackShelf", {
+    namedExports: {
+        PersonalizedTrackShelf: ({ title }: { title: string }) =>
+            React.createElement(
+                "div",
+                { "data-personalized-shelf": title },
+                `personalized:${title}`,
+            ),
     },
 });
 
@@ -205,6 +236,16 @@ beforeEach(() => {
     state.popularArtists = [{ id: "artist-3" }];
     state.moodCategories = [{ title: "Chill" }];
     state.genreCategories = [{ title: "Rock" }];
+    state.personalizedFeed = {
+        shelves: {
+            quickPicks: [{ id: "yt:quick", title: "Quick Track" }],
+            listenAgain: [],
+            discovery: [{ id: "yt:fresh", title: "Fresh Track" }],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
 });
 
 test("explore page renders loading screen while data is loading", async () => {
@@ -221,8 +262,8 @@ test("explore page renders all sections when data is populated", async () => {
 
     assert.match(html, /home-hero/);
     assert.match(html, /made-for-you-section/);
-    assert.match(html, /Quick Start/);
-    assert.match(html, /library-radio-stations/);
+    assert.match(html, /personalized:Quick Start/);
+    assert.match(html, /personalized:Fresh for you/);
     assert.match(html, /provider-tab-section/);
     assert.match(html, /Recommended For You/);
     assert.match(html, /artists-grid/);
@@ -238,6 +279,11 @@ test("explore page shows degraded-results notice only after a query failure", as
 
     assert.match(html, /Some sections failed to load/);
     assert.match(html, />Retry</);
+    assert.ok(
+        html.indexOf("personalized:Quick Start") <
+            html.indexOf("Some sections failed to load"),
+        "Playable personal tracks stay ahead of provider failure notices",
+    );
 });
 
 test("explore page hides recommended section when empty", async () => {
@@ -261,15 +307,22 @@ test("explore page renders sections in correct order", async () => {
     const html = renderToStaticMarkup(React.createElement(ExplorePage));
 
     const madeForYouIdx = html.indexOf("made-for-you-section");
-    const quickStartIdx = html.indexOf("Quick Start");
+    const quickStartIdx = html.indexOf("personalized:Quick Start");
+    const freshIdx = html.indexOf("personalized:Fresh for you");
+    const moodPillsIdx = html.indexOf("mood-pills");
     const providerTabIdx = html.indexOf("provider-tab-section");
     const popularIdx = html.indexOf("Popular Artists");
     const recommendedIdx = html.indexOf("Recommended For You");
 
-    assert.ok(madeForYouIdx < quickStartIdx, "Made For You before Quick Start");
+    assert.ok(quickStartIdx < freshIdx, "Quick Start before Fresh for you");
     assert.ok(
-        quickStartIdx < providerTabIdx,
-        "Quick Start before Provider Tabs",
+        freshIdx < moodPillsIdx,
+        "Personal tracks before local mood shortcuts",
+    );
+    assert.ok(freshIdx < madeForYouIdx, "Personal shelves before Made For You");
+    assert.ok(
+        madeForYouIdx < providerTabIdx,
+        "Made For You before Provider Tabs",
     );
     assert.ok(
         providerTabIdx < popularIdx,

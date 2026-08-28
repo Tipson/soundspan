@@ -82,6 +82,33 @@ test("refreshes for AUTH_REQUIRED and expires the session when refresh fails", a
     }
 });
 
+test("an access-only refresh response preserves its own session refresh credential", async (testContext) => {
+    const client = new TestApiClient("http://soundspan.test");
+    client.setToken("access-old", "refresh-old");
+    let protectedRequestCount = 0;
+    const fetchMock = mockFetch(testContext, (url) => {
+        if (url.endsWith("/api/auth/refresh")) {
+            return Response.json({ token: "access-new" });
+        }
+        protectedRequestCount += 1;
+        return protectedRequestCount === 1
+            ? Response.json(
+                  { error: "Not authenticated", code: "AUTH_REQUIRED" },
+                  { status: 401 },
+              )
+            : Response.json({ ok: true });
+    });
+
+    try {
+        assert.deepEqual(await client.get("/account-private"), { ok: true });
+        assert.equal(fetchMock.mock.callCount(), 3);
+        assert.equal(client.getToken(), "access-new");
+        assert.equal(client.getRefreshToken(), "refresh-old");
+    } finally {
+        client.clearToken();
+    }
+});
+
 test("preserves the session and response body for an unmarked upstream 401", async (testContext) => {
     const sessionExpiry = trackSessionExpiry();
     const client = new TestApiClient("http://soundspan.test");

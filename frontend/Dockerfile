@@ -62,6 +62,7 @@ COPY --from=builder --chown=node:node /app/.next ./.next
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/server.js ./server.js
 COPY --from=builder --chown=node:node /app/server-proxy.js ./server-proxy.js
+COPY --from=builder --chown=node:node /app/lib/media-auth.js ./lib/media-auth.js
 COPY --from=builder --chown=node:node /packages/media-metadata-contract /packages/media-metadata-contract
 
 # Copy healthcheck and entrypoint scripts

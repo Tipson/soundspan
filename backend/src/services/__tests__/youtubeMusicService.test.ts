@@ -695,4 +695,24 @@ describe("youtubeMusic service", () => {
             expect.any(Error),
         );
     });
+
+    it("loads a bounded public radio queue for a seed video", async () => {
+        mockClient.get.mockResolvedValueOnce({
+            data: {
+                playlistId: "RDseed",
+                seedVideoId: "seed-1",
+                tracks: [{ videoId: "related-1", title: "Related" }],
+            },
+        });
+
+        await expect(ytMusicService.getRadio("seed-1", 24)).resolves.toEqual({
+            playlistId: "RDseed",
+            seedVideoId: "seed-1",
+            tracks: [{ videoId: "related-1", title: "Related" }],
+        });
+        expect(mockClient.get).toHaveBeenLastCalledWith("/radio", {
+            params: { video_id: "seed-1", limit: 24 },
+            timeout: 13_000,
+        });
+    });
 });

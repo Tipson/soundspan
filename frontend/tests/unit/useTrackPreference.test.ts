@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    applyOrderedOptimisticTrackPreferenceMutation,
     applyOptimisticTrackPreferenceMutation,
     buildOptimisticTrackPreferenceResponse,
+    completeOrderedTrackPreferenceMutation,
+    resetOrderedTrackPreferenceMutations,
 } from "../../hooks/trackPreferenceOptimistic";
 import { buildPreferenceMetadata } from "../../hooks/useTrackPreference";
+import type { TrackPreferenceResponse } from "../../lib/api";
 
 test("buildOptimisticTrackPreferenceResponse maps signal to expected score", () => {
     const thumbsUp = buildOptimisticTrackPreferenceResponse(
@@ -92,6 +96,176 @@ test("applyOptimisticTrackPreferenceMutation updates cache without waiting for c
     assert.equal(optimisticPayload.likedAt, null);
     assert.ok(optimisticPayload.dislikedAt);
     assert.ok(optimisticPayload.updatedAt);
+});
+
+test("ordered preference mutations ignore an older failure after a newer success", () => {
+    const cache = new Map<string, unknown>();
+    const key = (queryKey: readonly [string, string]) =>
+        JSON.stringify(queryKey);
+    const queryClient = {
+        cancelQueries: async () => undefined,
+        getQueryData: <T>(queryKey: readonly [string, string]) =>
+            cache.get(key(queryKey)) as T | undefined,
+        setQueryData: (queryKey: readonly [string, string], data: unknown) =>
+            cache.set(key(queryKey), data),
+    };
+    const canonicalQueryKey = ["track-preference", "yt:track-1"] as const;
+    const neutral = buildOptimisticTrackPreferenceResponse(
+        "yt:track-1",
+        "clear",
+    );
+    queryClient.setQueryData(canonicalQueryKey, neutral);
+
+    // These two starts model separate mounted hook instances sharing one
+    // QueryClient and canonical track key.
+    const older = applyOrderedOptimisticTrackPreferenceMutation(
+        queryClient,
+        "yt:track-1",
+        "thumbs_up",
+    );
+    const newer = applyOrderedOptimisticTrackPreferenceMutation(
+        queryClient,
+        "yt:track-1",
+        "thumbs_down",
+    );
+    const disliked = buildOptimisticTrackPreferenceResponse(
+        "yt:track-1",
+        "thumbs_down",
+    );
+
+    const newerCompletion = completeOrderedTrackPreferenceMutation(
+        queryClient,
+        newer,
+        { status: "success", preference: disliked },
+    );
+    assert.equal(newerCompletion.isLatest, true);
+    if (newerCompletion.isLatest) {
+        queryClient.setQueryData(canonicalQueryKey, disliked);
+    }
+
+    const olderCompletion = completeOrderedTrackPreferenceMutation(
+        queryClient,
+        older,
+        { status: "error" },
+    );
+    assert.equal(olderCompletion.isLatest, false);
+    if (olderCompletion.isLatest) {
+        queryClient.setQueryData(
+            canonicalQueryKey,
+            olderCompletion.rollbackPreference,
+        );
+    }
+
+    assert.equal(
+        queryClient.getQueryData<TrackPreferenceResponse>(canonicalQueryKey)
+            ?.signal,
+        "thumbs_down",
+    );
+});
+
+test("failed newest overlapping preference rolls back to the last stable value", () => {
+    const cache = new Map<string, unknown>();
+    const key = (queryKey: readonly [string, string]) =>
+        JSON.stringify(queryKey);
+    const queryClient = {
+        cancelQueries: async () => undefined,
+        getQueryData: <T>(queryKey: readonly [string, string]) =>
+            cache.get(key(queryKey)) as T | undefined,
+        setQueryData: (queryKey: readonly [string, string], data: unknown) =>
+            cache.set(key(queryKey), data),
+    };
+    const canonicalQueryKey = ["track-preference", "yt:track-2"] as const;
+    const neutral = buildOptimisticTrackPreferenceResponse(
+        "yt:track-2",
+        "clear",
+    );
+    queryClient.setQueryData(canonicalQueryKey, neutral);
+
+    const older = applyOrderedOptimisticTrackPreferenceMutation(
+        queryClient,
+        "yt:track-2",
+        "thumbs_up",
+    );
+    const newer = applyOrderedOptimisticTrackPreferenceMutation(
+        queryClient,
+        "yt:track-2",
+        "thumbs_down",
+    );
+    const newerCompletion = completeOrderedTrackPreferenceMutation(
+        queryClient,
+        newer,
+        { status: "error" },
+    );
+
+    assert.equal(newerCompletion.isLatest, true);
+    assert.equal(newerCompletion.rollbackPreference?.signal, "clear");
+    const olderCompletion = completeOrderedTrackPreferenceMutation(
+        queryClient,
+        older,
+        {
+            status: "success",
+            preference: buildOptimisticTrackPreferenceResponse(
+                "yt:track-2",
+                "thumbs_up",
+            ),
+        },
+    );
+    assert.equal(olderCompletion.isLatest, false);
+});
+
+test("reset retires an old auth-session lane without an ABA generation collision", () => {
+    const cache = new Map<string, unknown>();
+    const key = (queryKey: readonly [string, string]) =>
+        JSON.stringify(queryKey);
+    const queryClient = {
+        cancelQueries: async () => undefined,
+        getQueryData: <T>(queryKey: readonly [string, string]) =>
+            cache.get(key(queryKey)) as T | undefined,
+        setQueryData: (
+            queryKey: readonly [string, string],
+            data: unknown,
+        ) => cache.set(key(queryKey), data),
+    };
+    const canonicalQueryKey = ["track-preference", "yt:shared-track"] as const;
+    queryClient.setQueryData(
+        canonicalQueryKey,
+        buildOptimisticTrackPreferenceResponse("yt:shared-track", "clear"),
+    );
+    const oldSession = applyOrderedOptimisticTrackPreferenceMutation(
+        queryClient,
+        "yt:shared-track",
+        "thumbs_up",
+    );
+
+    resetOrderedTrackPreferenceMutations(queryClient);
+    queryClient.setQueryData(
+        canonicalQueryKey,
+        buildOptimisticTrackPreferenceResponse("yt:shared-track", "clear"),
+    );
+    const newSession = applyOrderedOptimisticTrackPreferenceMutation(
+        queryClient,
+        "yt:shared-track",
+        "thumbs_down",
+    );
+
+    assert.equal(oldSession.generation, newSession.generation);
+    assert.equal(
+        completeOrderedTrackPreferenceMutation(queryClient, oldSession, {
+            status: "success",
+            preference: buildOptimisticTrackPreferenceResponse(
+                "yt:shared-track",
+                "thumbs_up",
+            ),
+        }).isLatest,
+        false,
+    );
+    const newCompletion = completeOrderedTrackPreferenceMutation(
+        queryClient,
+        newSession,
+        { status: "error" },
+    );
+    assert.equal(newCompletion.isLatest, true);
+    assert.equal(newCompletion.rollbackPreference?.signal, "clear");
 });
 
 test("buildPreferenceMetadata returns metadata for remote yt: track", () => {

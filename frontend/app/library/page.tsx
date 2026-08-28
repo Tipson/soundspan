@@ -27,6 +27,8 @@ import { useAuth } from "@/lib/auth-context";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useFeatures } from "@/lib/features-context";
 import { queryKeys } from "@/lib/queryKeys";
+import { DownloadsList } from "@/features/device-offline/components/DownloadsList";
+import { useDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 
 /**
  * Renders the LibraryPage component.
@@ -38,11 +40,12 @@ export default function LibraryPage() {
     const { isInGroup } = useListenTogether();
     const { user } = useAuth();
     const { federation } = useFeatures();
+    const { records: deviceDownloads } = useDeviceOffline();
     const isAdmin = user?.role === "admin";
     const [canDeleteFromLibrary, setCanDeleteFromLibrary] = useState(false);
 
     // Get active tab from URL params, default to "artists"
-    const validTabs: Tab[] = ["artists", "albums", "tracks"];
+    const validTabs: Tab[] = ["artists", "albums", "tracks", "downloads"];
     const tabParam = searchParams.get("tab");
     const activeTab: Tab = validTabs.includes(tabParam as Tab)
         ? (tabParam as Tab)
@@ -172,7 +175,9 @@ export default function LibraryPage() {
                 ? (artistsQuery.data?.total ?? 0)
                 : activeTab === "albums"
                   ? (albumsQuery.data?.total ?? 0)
-                  : (tracksQuery.data?.total ?? 0);
+                  : activeTab === "tracks"
+                    ? (tracksQuery.data?.total ?? 0)
+                    : deviceDownloads.length;
 
         return {
             total,
@@ -187,6 +192,7 @@ export default function LibraryPage() {
         artistsQuery.data,
         albumsQuery.data,
         tracksQuery.data,
+        deviceDownloads.length,
         itemsPerPage,
         currentPage,
     ]);
@@ -201,7 +207,7 @@ export default function LibraryPage() {
             await queryClient.invalidateQueries({
                 queryKey: queryKeys.libraryAlbumsAll(),
             });
-        } else {
+        } else if (activeTab === "tracks") {
             await queryClient.invalidateQueries({
                 queryKey: queryKeys.libraryTracksAll(),
             });
@@ -415,7 +421,7 @@ export default function LibraryPage() {
                         onTabChange={changeTab}
                     />
 
-                    {federation && (
+                    {federation && activeTab !== "downloads" && (
                         <div
                             className="flex items-center gap-1"
                             aria-label="Library source"
@@ -443,43 +449,47 @@ export default function LibraryPage() {
                         </div>
                     )}
 
-                    <div className="flex items-center gap-2">
-                        {/* Shuffle Button */}
-                        <button
-                            onClick={handleShuffleLibrary}
-                            className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-hover hover:bg-brand text-black transition-all hover:scale-105"
-                            title="Shuffle Library"
-                        >
-                            <Shuffle className="w-4 h-4" />
-                        </button>
+                    {activeTab !== "downloads" && (
+                        <div className="flex items-center gap-2">
+                            {/* Shuffle Button */}
+                            <button
+                                onClick={handleShuffleLibrary}
+                                className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-hover hover:bg-brand text-black transition-all hover:scale-105"
+                                title="Shuffle Library"
+                            >
+                                <Shuffle className="w-4 h-4" />
+                            </button>
 
-                        {/* Filter Toggle */}
-                        <button
-                            onClick={() => setShowFilters(!showFilters)}
-                            className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
-                                showFilters
-                                    ? "bg-white/20 text-white"
-                                    : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
-                            }`}
-                            title="Show Filters"
-                        >
-                            <ListFilter className="w-4 h-4" />
-                        </button>
+                            {/* Filter Toggle */}
+                            <button
+                                onClick={() => setShowFilters(!showFilters)}
+                                className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
+                                    showFilters
+                                        ? "bg-white/20 text-white"
+                                        : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                                }`}
+                                title="Show Filters"
+                            >
+                                <ListFilter className="w-4 h-4" />
+                            </button>
 
-                        {/* Item Count */}
-                        <span className="text-sm text-gray-400 ml-2">
-                            {totalItems.toLocaleString()}{" "}
-                            {activeTab === "artists"
-                                ? "artists"
-                                : activeTab === "albums"
-                                  ? "albums"
-                                  : "songs"}
-                        </span>
-                    </div>
+                            {/* Item Count */}
+                            <span className="text-sm text-gray-400 ml-2">
+                                {totalItems.toLocaleString()}{" "}
+                                {activeTab === "artists"
+                                    ? "artists"
+                                    : activeTab === "albums"
+                                      ? "albums"
+                                      : activeTab === "tracks"
+                                        ? "songs"
+                                        : "downloads"}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Expandable Filters Row */}
-                {showFilters && (
+                {showFilters && activeTab !== "downloads" && (
                     <div className="flex flex-wrap items-center gap-2 mb-6 pb-4 border-b border-white/5">
                         {/* Filter Toggle (Owned / Discovery / All) - Only show for artists and albums */}
                         {(activeTab === "artists" ||
@@ -583,6 +593,8 @@ export default function LibraryPage() {
                         canDelete={canDeleteFromLibrary}
                     />
                 )}
+
+                {activeTab === "downloads" && <DownloadsList />}
 
                 {/* Pagination */}
                 {totalPages > 1 && (

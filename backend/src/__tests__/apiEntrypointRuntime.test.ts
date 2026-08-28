@@ -29,6 +29,7 @@ describe("api entrypoint runtime behavior", () => {
         "../routes/enrichment",
         "../routes/metadata",
         "../routes/homepage",
+        "../routes/personalized",
         "../routes/deviceLink",
         "../routes/notifications",
         "../routes/browse",
@@ -800,6 +801,10 @@ describe("api entrypoint runtime behavior", () => {
             "/api/enrichment": ["api-limiter", route("../routes/enrichment")],
             "/api/metadata": ["api-limiter", route("../routes/metadata")],
             "/api/homepage": ["api-limiter", route("../routes/homepage")],
+            "/api/personalized": [
+                "api-limiter",
+                route("../routes/personalized"),
+            ],
             "/api/browse": ["api-limiter", route("../routes/browse")],
             "/api/analysis": ["api-limiter", route("../routes/analysis")],
             "/api/admin": ["admin-surface-limiter", route("../routes/admin")],

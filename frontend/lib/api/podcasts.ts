@@ -52,14 +52,9 @@ export function WithPodcasts<TBase extends ApiClientConstructor>(Base: TBase) {
             podcastId: string,
             episodeId: string,
         ): string {
-            const baseUrl = `${this.getBaseUrl()}/api/podcasts/${podcastId}/episodes/${episodeId}/stream`;
-            // For audio element requests, cookies may not be sent cross-origin in development
-            // Add token as query param for authentication (supported by requireAuthOrToken)
-            const token = this.getCurrentToken();
-            if (token) {
-                return `${baseUrl}?token=${encodeURIComponent(token)}`;
-            }
-            return baseUrl;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            return `${baseUrl}/api/podcasts/${encodeURIComponent(podcastId)}/episodes/${encodeURIComponent(episodeId)}/stream`;
         }
 
         /**

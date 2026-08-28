@@ -19,10 +19,15 @@ import {
     Shuffle,
     X,
     AudioWaveform,
-    Map,
 } from "lucide-react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { VibeMapTab } from "@/components/vibe/VibeMapTab";
+import { SimilarityBadge } from "@/components/vibe/VibeTrackRow";
+import {
+    VibeLimitedNotice,
+    VibeProviderFallback,
+    VibeViewTabs,
+} from "@/components/vibe/VibeAvailability";
 
 interface TrackFeatures {
     energy: number;
@@ -160,6 +165,26 @@ function distanceToSimilarity(distance: number): number {
     return Math.max(0, 1 - distance / 2);
 }
 
+async function fetchVibeOverview() {
+    const [statusResult, tracksResult] = await Promise.allSettled([
+        api.getVibeStatus(),
+        api.getTracks({ limit: 200 }),
+    ]);
+    if (statusResult.status === "rejected") {
+        sharedFrontendLogger.error("Vibe status failed:", statusResult.reason);
+    }
+    if (tracksResult.status === "rejected") {
+        sharedFrontendLogger.error("Vibe tracks failed:", tracksResult.reason);
+    }
+    return {
+        status: statusResult.status === "fulfilled" ? statusResult.value : null,
+        tracks:
+            tracksResult.status === "fulfilled"
+                ? tracksResult.value.tracks
+                : null,
+    };
+}
+
 function CoverImage({
     coverUrl,
     title,
@@ -216,60 +241,6 @@ function CoverImage({
                 unoptimized
                 onError={() => setHasError(true)}
             />
-        </div>
-    );
-}
-
-function SimilarityBadge({
-    similarity,
-    size = "md",
-}: {
-    similarity: number;
-    size?: "sm" | "md" | "lg";
-}) {
-    const percent = Math.round(similarity * 100);
-    const sizeClasses = {
-        sm: "w-10 h-10 text-xs",
-        md: "w-14 h-14 text-sm",
-        lg: "w-20 h-20 text-lg",
-    };
-
-    return (
-        <div
-            className={cn(
-                "relative flex items-center justify-center rounded-full font-semibold",
-                sizeClasses[size],
-                percent >= 80
-                    ? "text-success"
-                    : percent >= 60
-                      ? "text-ai"
-                      : "text-content-muted",
-            )}
-        >
-            {/* Outer ring */}
-            <svg className="absolute inset-0 w-full h-full -rotate-90">
-                <circle
-                    cx="50%"
-                    cy="50%"
-                    r="45%"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeOpacity="0.15"
-                />
-                <circle
-                    cx="50%"
-                    cy="50%"
-                    r="45%"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeDasharray={`${similarity * 283} 283`}
-                    className="transition-all duration-500"
-                />
-            </svg>
-            <span className="tabular-nums">{percent}%</span>
         </div>
     );
 }
@@ -703,12 +674,12 @@ function VibePageContent() {
         totalTracks: number;
         embeddedTracks: number;
     } | null>(null);
+    const [vibeStatusUnavailable, setVibeStatusUnavailable] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>("comparison");
     const [vibeTab, setVibeTab] = useState<VibeTab>("explore");
     const [searchQuery, setSearchQuery] = useState<string | null>(null);
     const [inputValue, setInputValue] = useState("");
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
-    const [hasInitialized, setHasInitialized] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem("vibe-recent-searches");
@@ -993,24 +964,15 @@ function VibePageContent() {
 
     // Load vibe status and library tracks (for random button) on mount
     useEffect(() => {
-        if (hasInitialized) return;
-        setHasInitialized(true);
-
         const init = async () => {
-            try {
-                const [status, { tracks }] = await Promise.all([
-                    api.getVibeStatus(),
-                    api.getTracks({ limit: 200 }),
-                ]);
-                setVibeStatus(status);
-                setLibraryTracks(tracks);
-            } catch (err) {
-                sharedFrontendLogger.error("Failed to load vibe status:", err);
-            }
+            const { status, tracks } = await fetchVibeOverview();
+            setVibeStatusUnavailable(status === null);
+            if (status) setVibeStatus(status);
+            if (tracks) setLibraryTracks(tracks);
         };
 
-        init();
-    }, [hasInitialized]);
+        void init();
+    }, []);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -1061,18 +1023,28 @@ function VibePageContent() {
             };
             await loadSimilarTracks(asLibraryTrack);
         } else {
-            try {
-                const [status, { tracks }] = await Promise.all([
-                    api.getVibeStatus(),
-                    api.getTracks({ limit: 200 }),
-                ]);
-                setVibeStatus(status);
-                setLibraryTracks(tracks);
-            } catch (err) {
-                sharedFrontendLogger.error("Failed to refresh:", err);
-            }
+            const { status, tracks } = await fetchVibeOverview();
+            setVibeStatusUnavailable(status === null);
+            if (status) setVibeStatus(status);
+            if (tracks) setLibraryTracks(tracks);
         }
     }, [sourceTrack, loadSimilarTracks]);
+
+    const embeddedTrackCount = vibeStatus?.embeddedTracks;
+    const hasFullVibeMap = (embeddedTrackCount ?? 0) >= 5;
+
+    if (
+        vibeStatusUnavailable ||
+        (embeddedTrackCount !== undefined && embeddedTrackCount < 2)
+    ) {
+        return (
+            <VibeProviderFallback
+                embeddedTracks={
+                    vibeStatusUnavailable ? null : (embeddedTrackCount ?? 0)
+                }
+            />
+        );
+    }
 
     // MAP TAB — full-bleed immersive surface. `main#main-content` is the
     // nearest positioned ancestor, so with no other in-flow page content this
@@ -1081,7 +1053,7 @@ function VibePageContent() {
     // floating bottom UI clears the mini player via `bottomInset`. The page
     // header/search stay explore-only; the floating chip in headerSlot is the
     // way back.
-    if (vibeTab === "map") {
+    if (vibeTab === "map" && hasFullVibeMap) {
         return (
             <VibeMapTab
                 currentTrackPresent={!!currentTrack}
@@ -1168,25 +1140,12 @@ function VibePageContent() {
                         </p>
                     )}
 
-                    {/* Explore / Map tab bar. The map tab early-returns the
-                        full-bleed surface above, so within this header the
-                        Explore tab is always the active one. */}
-                    <div className="flex gap-1 mt-4 bg-white/5 rounded-lg p-1 max-w-xs">
-                        <button
-                            onClick={() => setVibeTab("explore")}
-                            className="flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-sm font-medium transition-colors bg-white/10 text-white"
-                        >
-                            <AudioWaveform className="w-4 h-4" />
-                            Explore
-                        </button>
-                        <button
-                            onClick={() => setVibeTab("map")}
-                            className="flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-400 hover:text-gray-300"
-                        >
-                            <Map className="w-4 h-4" />
-                            Map
-                        </button>
-                    </div>
+                    {hasFullVibeMap && (
+                        <VibeViewTabs
+                            onExplore={() => setVibeTab("explore")}
+                            onMap={() => setVibeTab("map")}
+                        />
+                    )}
 
                     {/* Search — only visible in explore tab */}
                     {vibeTab === "explore" && (
@@ -1245,6 +1204,10 @@ function VibePageContent() {
                         </>
                     )}
                 </div>
+
+                {embeddedTrackCount !== undefined && embeddedTrackCount < 5 && (
+                    <VibeLimitedNotice embeddedTracks={embeddedTrackCount} />
+                )}
 
                 {vibeTab === "explore" && (
                     <>
@@ -1506,14 +1469,6 @@ function VibePageContent() {
                                             )}
                                         </div>
                                     </div>
-
-                                    {vibeStatus &&
-                                        vibeStatus.embeddedTracks === 0 && (
-                                            <p className="text-xs text-error mt-6">
-                                                No tracks embedded yet; the
-                                                provider embeds in background.
-                                            </p>
-                                        )}
                                 </div>
                             )}
                     </>

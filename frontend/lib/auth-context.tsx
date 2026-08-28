@@ -4,6 +4,7 @@ import {
     createContext,
     useContext,
     useEffect,
+    useRef,
     useState,
     ReactNode,
     useMemo,
@@ -11,8 +12,21 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "./api";
-import { getQueryClient } from "@/lib/query-client";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    clearCachedAuthUser,
+    isAuthSessionChangeStorageEvent,
+    readCachedAuthUser,
+    logoutWithMandatoryLocalCleanup,
+    shouldRestoreCachedOfflineSession,
+    writeCachedAuthUser,
+} from "@/lib/auth-offline-session";
+import {
+    AUTH_RUNTIME_REVOKED_EVENT,
+    revokeAuthenticatedRuntime,
+} from "@/lib/auth-runtime";
+import { replaceAuthTokenFromCurrentUrl } from "@/lib/auth-url-token";
+import { activateUserPlaybackStorage } from "@/lib/userPlaybackStorage";
 
 interface User {
     id: string;
@@ -49,25 +63,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
     const pathname = usePathname();
+    const authEpochRef = useRef(0);
 
     useEffect(() => {
         // Check if user has valid session on mount ONLY
         const checkAuth = async () => {
+            const authEpoch = ++authEpochRef.current;
             // Check for token in URL (from redirect after login)
-            if (typeof window !== "undefined") {
-                const urlParams = new URLSearchParams(window.location.search);
-                const tokenFromUrl = urlParams.get("token");
-                if (tokenFromUrl) {
-                    // Store the token from URL
-                    api.setToken(tokenFromUrl);
-                    // Clean up URL (remove token param)
-                    const cleanUrl = window.location.pathname;
-                    window.history.replaceState({}, "", cleanUrl);
-                }
-            }
+            replaceAuthTokenFromCurrentUrl({
+                revokeRuntime: () =>
+                    revokeAuthenticatedRuntime({
+                        notifyAuthProvider: false,
+                    }),
+                setToken: (token) => api.setToken(token),
+            });
+            const sessionGeneration = api.getSessionGeneration();
+            const isCurrentAuthAttempt = () =>
+                authEpoch === authEpochRef.current &&
+                sessionGeneration === api.getSessionGeneration();
 
             try {
                 const userData = await api.getCurrentUser();
+                if (!isCurrentAuthAttempt()) return;
+                activateUserPlaybackStorage(userData.id);
+                writeCachedAuthUser(userData);
                 setUser(userData);
                 setIsAuthenticated(true);
 
@@ -83,7 +102,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 ) {
                     router.push("/");
                 }
-            } catch {
+            } catch (error) {
+                if (!isCurrentAuthAttempt()) return;
+                const cachedUser = readCachedAuthUser();
+                if (
+                    cachedUser &&
+                    shouldRestoreCachedOfflineSession({
+                        error,
+                        online:
+                            typeof navigator === "undefined" ||
+                            navigator.onLine,
+                        hasAccessToken: Boolean(api.getToken()),
+                        cachedUser,
+                    })
+                ) {
+                    activateUserPlaybackStorage(cachedUser.id);
+                    setUser(cachedUser);
+                    setIsAuthenticated(true);
+                    return;
+                }
+                revokeAuthenticatedRuntime({ notifyAuthProvider: false });
                 setIsAuthenticated(false);
                 setUser(null);
 
@@ -105,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         const status = await api.get<{ hasAccount: boolean }>(
                             "/onboarding/status",
                         );
+                        if (!isCurrentAuthAttempt()) return;
 
                         if (!status.hasAccount) {
                             // No users exist - redirect to onboarding
@@ -114,11 +153,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     } catch {
                         // Intentionally ignored: if onboarding status check fails, assume users exist and proceed to login
                     }
+                    if (!isCurrentAuthAttempt()) return;
                     // Users exist but not logged in - redirect to login
                     router.push("/login");
                 }
             } finally {
-                setIsLoading(false);
+                if (authEpoch === authEpochRef.current) {
+                    setIsLoading(false);
+                }
             }
         };
 
@@ -126,10 +168,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
 
+    useEffect(() => {
+        const handleRuntimeRevoked = () => {
+            authEpochRef.current += 1;
+            setIsAuthenticated(false);
+            setUser(null);
+            setIsLoading(false);
+        };
+        window.addEventListener(
+            AUTH_RUNTIME_REVOKED_EVENT,
+            handleRuntimeRevoked,
+        );
+        return () =>
+            window.removeEventListener(
+                AUTH_RUNTIME_REVOKED_EVENT,
+                handleRuntimeRevoked,
+            );
+    }, []);
+
     const login = useCallback(
         async (username: string, password: string, token?: string) => {
+            revokeAuthenticatedRuntime();
+            const authEpoch = ++authEpochRef.current;
+            api.clearToken();
+            setIsAuthenticated(false);
+            setUser(null);
+            setIsLoading(true);
             try {
                 const userData = await api.login(username, password, token);
+                if (authEpoch !== authEpochRef.current) return;
 
                 // Check if 2FA is required
                 if (userData.requires2FA) {
@@ -137,8 +204,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     throw new Error("2FA token required");
                 }
 
+                activateUserPlaybackStorage(userData.id);
                 setUser(userData);
+                writeCachedAuthUser(userData);
                 setIsAuthenticated(true);
+                setIsLoading(false);
 
                 // Redirect based on onboarding status
                 if (userData.onboardingComplete === false) {
@@ -147,6 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     router.push("/");
                 }
             } catch (error: unknown) {
+                if (authEpoch === authEpochRef.current) {
+                    setIsLoading(false);
+                }
                 sharedFrontendLogger.error(
                     "[AUTH] Login failed:",
                     error instanceof Error ? error.message : error,
@@ -158,30 +231,111 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     const logout = useCallback(async () => {
-        await api.logout();
-        setIsAuthenticated(false);
-        setUser(null);
-        // Clear all cached query data so the next user session starts fresh
-        if (typeof window !== "undefined") {
-            getQueryClient().clear();
+        authEpochRef.current += 1;
+        try {
+            await logoutWithMandatoryLocalCleanup({
+                remoteLogout: () => api.logout(),
+                clearLocalSession: () => {
+                    revokeAuthenticatedRuntime();
+                    api.clearToken();
+                    setIsAuthenticated(false);
+                    setUser(null);
+                    setIsLoading(false);
+                },
+            });
+        } catch (error) {
+            sharedFrontendLogger.warn(
+                "[AUTH] Server logout failed; local session was cleared",
+                error,
+            );
         }
         router.push("/login");
     }, [router]);
 
+    // localStorage events fire only in the other same-origin tabs. Revoke the
+    // old React/audio/device runtime synchronously, then revalidate whichever
+    // credential the originating tab committed without copying that token
+    // through the event payload.
+    useEffect(() => {
+        const handleCrossTabSessionChange = (event: StorageEvent) => {
+            if (!isAuthSessionChangeStorageEvent(event)) return;
+
+            const authEpoch = ++authEpochRef.current;
+            revokeAuthenticatedRuntime({ notifyAuthProvider: false });
+            const storedToken = api.reloadTokenFromStorage();
+            const sessionGeneration = api.getSessionGeneration();
+            setIsAuthenticated(false);
+            setUser(null);
+            setIsLoading(false);
+
+            if (!storedToken) {
+                router.push("/login");
+                return;
+            }
+
+            void api
+                .getCurrentUser()
+                .then((userData) => {
+                    if (
+                        authEpoch !== authEpochRef.current ||
+                        api.getSessionGeneration() !== sessionGeneration
+                    ) {
+                        return;
+                    }
+                    activateUserPlaybackStorage(userData.id);
+                    writeCachedAuthUser(userData);
+                    setUser(userData);
+                    setIsAuthenticated(true);
+
+                    if (
+                        userData.onboardingComplete === false &&
+                        pathname !== "/onboarding"
+                    ) {
+                        router.push("/onboarding");
+                    } else if (
+                        userData.onboardingComplete &&
+                        pathname === "/onboarding"
+                    ) {
+                        router.push("/");
+                    }
+                })
+                .catch(() => {
+                    if (
+                        authEpoch !== authEpochRef.current ||
+                        api.getSessionGeneration() !== sessionGeneration
+                    ) {
+                        return;
+                    }
+                    clearCachedAuthUser();
+                    setUser(null);
+                    setIsAuthenticated(false);
+                    router.push("/login");
+                });
+        };
+
+        window.addEventListener("storage", handleCrossTabSessionChange);
+        return () => {
+            authEpochRef.current += 1;
+            window.removeEventListener("storage", handleCrossTabSessionChange);
+        };
+    }, [pathname, router]);
+
     // Listen for session-expired events from the API client (stale/invalid tokens)
     useEffect(() => {
         const handleSessionExpired = () => {
+            authEpochRef.current += 1;
             const current = window.location.pathname;
             const isPublicRoute =
                 publicPaths.includes(current) ||
                 publicPrefixes.some((prefix) => current.startsWith(prefix));
-            if (isPublicRoute) return;
 
             setIsAuthenticated(false);
             setUser(null);
-            // Clear all cached query data so stale user data is not retained
-            getQueryClient().clear();
-            router.push("/login");
+            setIsLoading(false);
+            revokeAuthenticatedRuntime({ notifyAuthProvider: false });
+            if (!isPublicRoute) {
+                router.push("/login");
+            }
         };
         window.addEventListener("auth:session-expired", handleSessionExpired);
         return () =>

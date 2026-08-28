@@ -101,11 +101,11 @@ export function WithTidal<TBase extends ApiClientConstructor>(Base: TBase) {
          * Returns a synchronous URL string that the audio engine can load.
          */
         getTidalStreamUrl(trackId: number, quality?: string): string {
-            let url = `${this.getBaseUrl()}/api/tidal-streaming/stream/${trackId}`;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            let url = `${baseUrl}/api/tidal-streaming/stream/${trackId}`;
             const params = new URLSearchParams();
             if (quality) params.set("quality", quality);
-            const token = this.getCurrentToken();
-            if (token) params.set("token", token);
             const qs = params.toString();
             if (qs) url += `?${qs}`;
             return url;
@@ -135,10 +135,9 @@ export function WithTidal<TBase extends ApiClientConstructor>(Base: TBase) {
         // ── TIDAL Browse ──────────────────────────────────────────────
 
         getTidalBrowseImageUrl(externalUrl: string): string {
-            const baseUrl = this.getBaseUrl();
-            const token = this.getCurrentToken();
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
             const params = new URLSearchParams({ url: externalUrl });
-            if (token) params.append("token", token);
             return `${baseUrl}/api/browse/tidal/image?${params.toString()}`;
         }
 

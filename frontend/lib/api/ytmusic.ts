@@ -130,11 +130,11 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             usePublic?: boolean,
         ): string {
             const endpoint = usePublic ? "stream-public" : "stream";
-            let url = `${this.getBaseUrl()}/api/ytmusic/${endpoint}/${videoId}`;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            let url = `${baseUrl}/api/ytmusic/${endpoint}/${encodeURIComponent(videoId)}`;
             const params = new URLSearchParams();
             if (quality) params.set("quality", quality);
-            const token = this.getCurrentToken();
-            if (token) params.set("token", token);
             const qs = params.toString();
             if (qs) url += `?${qs}`;
             return url;

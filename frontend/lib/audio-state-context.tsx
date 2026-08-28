@@ -51,6 +51,10 @@ import {
 } from "@/lib/queue-item";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { markRemoteTrackChange } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getUserPlaybackStorageGeneration,
+    isUserPlaybackStorageGenerationCurrent,
+} from "@/lib/userPlaybackStorage";
 
 /**
  * Returns true when an error represents an expired or invalid session (HTTP
@@ -281,6 +285,9 @@ function parseStorageJson<T>(key: MigratingStorageKey, fallback: T): T {
  * Renders the AudioStateProvider component.
  */
 export function AudioStateProvider({ children }: { children: ReactNode }) {
+    const [playbackStorageGeneration] = useState(
+        getUserPlaybackStorageGeneration,
+    );
     const [currentTrack, setCurrentTrack] = useState<Track | null>(() =>
         parseStorageJson(STORAGE_KEYS.CURRENT_TRACK, null),
     );
@@ -340,6 +347,10 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     // Refresh audiobook/podcast progress from API on mount, then sync with server
     useEffect(() => {
         if (typeof window === "undefined") return;
+        let active = true;
+        const canApplyPlaybackState = () =>
+            active &&
+            isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration);
 
         // Fetch fresh audiobook progress
         const savedAudiobook = readStorage(STORAGE_KEYS.CURRENT_AUDIOBOOK);
@@ -355,6 +366,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 isFinished: boolean;
                             } | null;
                         }) => {
+                            if (!canApplyPlaybackState()) return;
                             if (audiobook && audiobook.progress) {
                                 setCurrentAudiobook({
                                     ...audiobookData,
@@ -364,6 +376,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                         },
                     )
                     .catch((err: unknown) => {
+                        if (!canApplyPlaybackState()) return;
                         sharedFrontendLogger.error(
                             "[AudioState] Failed to refresh audiobook progress:",
                             err,
@@ -388,6 +401,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 coverUrl: string;
                                 episodes?: Episode[];
                             }) => {
+                                if (!canApplyPlaybackState()) return;
                                 const episode = podcast.episodes?.find(
                                     (ep: Episode) => ep.id === episodeId,
                                 );
@@ -400,6 +414,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                             },
                         )
                         .catch((err: unknown) => {
+                            if (!canApplyPlaybackState()) return;
                             sharedFrontendLogger.error(
                                 "[AudioState] Failed to refresh podcast progress:",
                                 err,
@@ -414,6 +429,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         // Load playback state from server
         api.getPlaybackState()
             .then((serverState) => {
+                if (!canApplyPlaybackState()) return;
                 if (!serverState) return;
 
                 const serverPlaybackType: PlaybackSnapshotType =
@@ -522,6 +538,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     } else {
                         api.getTrack(serverState.trackId)
                             .then((track) => {
+                                if (!canApplyPlaybackState()) return;
                                 markRemoteTrackChange(
                                     hydratedLocalTrack?.id ?? null,
                                     track.id,
@@ -532,6 +549,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 setCurrentPodcast(null);
                             })
                             .catch(() => {
+                                if (!canApplyPlaybackState()) return;
                                 // Fire-and-forget: clearing stale server state, failure is non-critical
                                 api.clearPlaybackState().catch(() => {});
                                 setCurrentTrack(null);
@@ -548,17 +566,19 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                 ) {
                     api.getAudiobook(serverState.audiobookId)
                         .then((audiobook) => {
+                            if (!canApplyPlaybackState()) return;
                             setCurrentAudiobook(audiobook);
                             setPlaybackType("audiobook");
                             setCurrentTrack(null);
                             setCurrentPodcast(null);
                         })
-                        .catch((err: unknown) =>
+                        .catch((err: unknown) => {
+                            if (!canApplyPlaybackState()) return;
                             sharedFrontendLogger.error(
                                 "[AudioState] Failed to restore audiobook playback state:",
                                 err,
-                            ),
-                        );
+                            );
+                        });
                 } else if (
                     serverPlaybackType === "podcast" &&
                     serverState.podcastId
@@ -572,6 +592,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 coverUrl: string;
                                 episodes?: Episode[];
                             }) => {
+                                if (!canApplyPlaybackState()) return;
                                 const episode = podcast.episodes?.find(
                                     (ep: Episode) => ep.id === episodeId,
                                 );
@@ -590,12 +611,13 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 }
                             },
                         )
-                        .catch((err: unknown) =>
+                        .catch((err: unknown) => {
+                            if (!canApplyPlaybackState()) return;
                             sharedFrontendLogger.error(
                                 "[AudioState] Failed to restore podcast playback state:",
                                 err,
-                            ),
-                        );
+                            );
+                        });
                 }
                 if (
                     serverQueue &&
@@ -647,7 +669,10 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             .catch(() => {
                 // No server state available - this is expected on first load
             });
-    }, []);
+        return () => {
+            active = false;
+        };
+    }, [playbackStorageGeneration]);
 
     // Effect A (debounced): Persist heavy JSON blobs to localStorage.
     // Debounced at 300ms to coalesce rapid state changes (e.g. queue updates).
@@ -668,6 +693,13 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         };
 
         storageFlushRef.current.schedule(() => {
+            if (
+                !isUserPlaybackStorageGenerationCurrent(
+                    playbackStorageGeneration,
+                )
+            ) {
+                return;
+            }
             try {
                 if (snapshot.currentTrack) {
                     writeMigratingStorageItem(
@@ -722,7 +754,15 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         });
 
         return () => {
-            storageFlushRef.current.flush();
+            if (
+                isUserPlaybackStorageGenerationCurrent(
+                    playbackStorageGeneration,
+                )
+            ) {
+                storageFlushRef.current.flush();
+            } else {
+                storageFlushRef.current.cancel();
+            }
         };
     }, [
         currentTrack,
@@ -733,6 +773,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         currentIndex,
         isShuffle,
         isHydrated,
+        playbackStorageGeneration,
     ]);
 
     // Effect B (immediate): Persist cheap scalar values to localStorage.
@@ -799,6 +840,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
 
         let mounted = true;
         let isVisible = !document.hidden;
+        const canApplyPollState = () =>
+            mounted &&
+            isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration);
 
         // Handle visibility changes to save battery/resources
         const handleVisibilityChange = () => {
@@ -809,7 +853,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         let pollInterval: ReturnType<typeof setInterval> | null = null;
         const pollCallback = async () => {
             // Skip polling when tab is hidden or unmounted
-            if (!mounted || !isVisible) return;
+            if (!isVisible || !canApplyPollState()) {
+                return;
+            }
             // Prevent overlapping async poll calls
             if (pollInFlightRef.current) return;
             pollInFlightRef.current = true;
@@ -844,7 +890,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                 }
 
                 const serverState = await api.getPlaybackState();
-                if (!serverState || !mounted) return;
+                if (!serverState || !canApplyPollState()) {
+                    return;
+                }
 
                 const serverUpdatedAtMs = Date.parse(
                     String(serverState.updatedAt || ""),
@@ -959,7 +1007,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 const track = await api.getTrack(
                                     serverState.trackId,
                                 );
-                                if (!mounted) return;
+                                if (!canApplyPollState()) return;
                                 markRemoteTrackChange(
                                     localCurrentTrackId ?? null,
                                     track.id,
@@ -988,8 +1036,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                     );
                                 }
                             } catch {
-                                if (!mounted) return;
+                                if (!canApplyPollState()) return;
                                 await api.clearPlaybackState().catch(() => {});
+                                if (!canApplyPollState()) return;
                                 setCurrentTrack(null);
                                 setCurrentAudiobook(null);
                                 setCurrentPodcast(null);
@@ -1006,7 +1055,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                         const audiobook = await api.getAudiobook(
                             serverState.audiobookId,
                         );
-                        if (!mounted) return;
+                        if (!canApplyPollState()) return;
                         setCurrentAudiobook(audiobook);
                         setPlaybackType("audiobook");
                         setCurrentTrack(null);
@@ -1022,7 +1071,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                             coverUrl: string;
                             episodes?: Episode[];
                         } = await api.getPodcast(podcastId);
-                        if (!mounted) return;
+                        if (!canApplyPollState()) return;
                         const episode = podcast.episodes?.find(
                             (ep: Episode) => ep.id === episodeId,
                         );
@@ -1041,7 +1090,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                         }
                     }
 
-                    if (!mounted) return;
+                    if (!canApplyPollState()) return;
                     if (
                         serverQueue &&
                         serverQueue.length > 0 &&
@@ -1073,6 +1122,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     setLastServerSync(serverUpdatedAt);
                 }
             } catch (err: unknown) {
+                if (!canApplyPollState()) return;
                 if (isAuthExpiryError(err)) {
                     // Session expired. ConditionalAudioProvider unmounts this
                     // provider on genuine logout and remounts it on re-login,
@@ -1105,7 +1155,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             clearTimeout(jitterTimeout);
             if (pollInterval) clearInterval(pollInterval);
         };
-    }, [isHydrated]);
+    }, [isHydrated, playbackStorageGeneration]);
 
     // Memoize the context value to prevent unnecessary re-renders
     const value = useMemo(

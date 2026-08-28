@@ -79,10 +79,9 @@ export function WithSettings<TBase extends ApiClientConstructor>(Base: TBase) {
         }
 
         getProfilePictureUrl(userId: string): string {
-            const baseUrl = this.getBaseUrl();
-            const token = this.getCurrentToken();
-            const params = token ? `?token=${encodeURIComponent(token)}` : "";
-            return `${baseUrl}/api/social/profile-picture/${encodeURIComponent(userId)}${params}`;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            return `${baseUrl}/api/social/profile-picture/${encodeURIComponent(userId)}`;
         }
 
         // System Features

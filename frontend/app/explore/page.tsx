@@ -7,6 +7,8 @@ import { HomeHero } from "@/features/home/components/HomeHero";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
 import { LibraryRadioStations } from "@/features/home/components/LibraryRadioStations";
+import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
+import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
 import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
 import { MadeForYouSection } from "@/features/explore/components/MadeForYouSection";
 import { ExploreDegradedNotice } from "@/features/explore/components/ExploreDegradedNotice";
@@ -24,6 +26,7 @@ import { useTidalExploreEnabled } from "@/features/explore/hooks/useTidalExplore
 export default function ExplorePage() {
     const { showYtMusicExplore } = useUserSettingsExplorePrefs();
     const { showTidalExplore } = useTidalExploreEnabled();
+    const personalizedQuery = usePersonalizedHomeFeed(12);
 
     const {
         likedSummary,
@@ -60,28 +63,74 @@ export default function ExplorePage() {
     }
 
     const chartPlaylists = mapYtMusicChartsToFeaturedPlaylists(charts, 20);
+    const personalizedFeed = personalizedQuery.data;
+    const hasPersonalQuickStart = Boolean(
+        personalizedFeed?.shelves.quickPicks.length,
+    );
+    const hasPersonalDiscovery = Boolean(
+        personalizedFeed?.shelves.discovery.length,
+    );
+    const hasUsableLocalRadio =
+        genreStations.length > 0 || decadeStations.length > 0;
 
     return (
         <div className="relative">
             <HomeHero />
 
             <div className="relative max-w-[1800px] mx-auto px-4 sm:px-6 pb-8">
-                {/* Mood Pills — between Hero and content sections */}
-                <div className="mb-6">
-                    <MoodPills />
-                </div>
+                <div className="space-y-8">
+                    {hasPersonalQuickStart && personalizedFeed && (
+                        <PersonalizedTrackShelf
+                            title="Quick Start"
+                            subtitle="Instant radio from your likes and playlists"
+                            tracks={personalizedFeed.shelves.quickPicks}
+                        />
+                    )}
 
-                {hasDegradedResults && (
-                    <div className="mb-6">
+                    {hasPersonalDiscovery && personalizedFeed && (
+                        <PersonalizedTrackShelf
+                            title="Fresh for you"
+                            subtitle="Recommendations shaped by what you actually listen to"
+                            tracks={personalizedFeed.shelves.discovery}
+                        />
+                    )}
+
+                    {!hasPersonalQuickStart &&
+                        !personalizedQuery.isLoading &&
+                        hasUsableLocalRadio && (
+                            <section>
+                                <SectionHeader
+                                    title="Quick Start"
+                                    showAllHref="/radio"
+                                    badge={<LibraryBadge />}
+                                />
+                                <LibraryRadioStations
+                                    stations={quickStartStations}
+                                    externalLoading={isRadioLoading}
+                                />
+                            </section>
+                        )}
+
+                    <MoodPills />
+
+                    {hasDegradedResults && (
                         <ExploreDegradedNotice
                             key={degradedFailureSignature}
                             onRetry={retryAll}
                         />
-                    </div>
-                )}
+                    )}
 
-                <div className="space-y-8">
-                    {/* Made For You */}
+                    {personalizedQuery.isError && (
+                        <p
+                            role="status"
+                            className="rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-4 py-3 text-sm text-amber-100/80"
+                        >
+                            Personal recommendations could not be refreshed. The
+                            YouTube Music catalog remains available below.
+                        </p>
+                    )}
+
+                    {/* Existing saved mixes remain available after immediate-play shelves. */}
                     <MadeForYouSection
                         likedSummary={likedSummary}
                         discoverWeekly={discoverWeekly}
@@ -89,19 +138,6 @@ export default function ExplorePage() {
                         isRefreshingMixes={isRefreshingMixes}
                         handleRefreshMixes={handleRefreshMixes}
                     />
-
-                    {/* Quick Start Radio */}
-                    <section>
-                        <SectionHeader
-                            title="Quick Start"
-                            showAllHref="/radio"
-                            badge={<LibraryBadge />}
-                        />
-                        <LibraryRadioStations
-                            stations={quickStartStations}
-                            externalLoading={isRadioLoading}
-                        />
-                    </section>
 
                     {/* Library Genres Radio */}
                     {(genreStations.length > 0 || isRadioLoading) && (

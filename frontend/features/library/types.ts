@@ -3,7 +3,7 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 
-export type Tab = "artists" | "albums" | "tracks";
+export type Tab = "artists" | "albums" | "tracks" | "downloads";
 
 export interface Artist {
     id: string;

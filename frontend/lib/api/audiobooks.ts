@@ -22,14 +22,9 @@ export function WithAudiobooks<TBase extends ApiClientConstructor>(
         }
 
         getAudiobookStreamUrl(id: string): string {
-            const baseUrl = `${this.getBaseUrl()}/api/audiobooks/${id}/stream`;
-            // For audio element requests, cookies may not be sent cross-origin in development
-            // Add token as query param for authentication (supported by requireAuthOrToken)
-            const token = this.getCurrentToken();
-            if (token) {
-                return `${baseUrl}?token=${encodeURIComponent(token)}`;
-            }
-            return baseUrl;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            return `${baseUrl}/api/audiobooks/${encodeURIComponent(id)}/stream`;
         }
 
         async updateAudiobookProgress(

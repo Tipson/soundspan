@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import type { ClientRequest, ServerResponse } from "node:http";
+import {
+    createServer,
+    type ClientRequest,
+    type Server,
+    type ServerResponse,
+} from "node:http";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
 import {
     buildBackendProxyOptions,
     createBackendProxy,
     createFirstByteTimeoutProxyReqHandler,
     createProxyErrorHandler,
+    prepareProxyAuthentication,
     resolveProxyTimeoutMs,
 } from "../../server-proxy";
 
@@ -69,6 +76,23 @@ function createFakeProxyReq(): ClientRequest & {
         destroyed: boolean;
         destroy: () => void;
     };
+}
+
+async function listenOnLoopback(server: Server): Promise<number> {
+    await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => {
+            server.off("error", reject);
+            resolve();
+        });
+    });
+    return (server.address() as AddressInfo).port;
+}
+
+async function closeServer(server: Server): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+    });
 }
 
 test("buildBackendProxyOptions registers the error handler via the v3+ on.error API", () => {
@@ -137,6 +161,93 @@ test("proxy error handler responds with the structured 503 JSON contract", () =>
         logger.errors[0]?.[0] ?? "",
         /\[api-proxy\] GET \/api\/library failed:/,
     );
+});
+
+test("proxy error handler redacts query credentials from request and upstream error URLs", () => {
+    const logger = createFakeLogger();
+    const handler = createProxyErrorHandler({
+        name: "api-proxy",
+        logger,
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+    });
+    const res = createFakeResponse();
+    const accessToken = "header.payload.signature";
+
+    handler(
+        new Error(
+            `fetch http://backend:3006/api/library/cover-art/album?size=320&token=${accessToken} failed`,
+        ),
+        {
+            method: "GET",
+            url: `/api/library/cover-art/album?size=320&token=${accessToken}`,
+        },
+        res,
+    );
+
+    const serializedLog = JSON.stringify(logger.errors);
+    assert.doesNotMatch(serializedLog, new RegExp(accessToken));
+    assert.match(serializedLog, /size=320/);
+});
+
+test("proxy authentication promotes the media cookie and removes it before forwarding", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/library/cover-art/album?size=320",
+        method: "GET",
+        headers: {
+            cookie: "theme=dark; soundspan_media_auth=header.payload.signature",
+        },
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, "Bearer header.payload.signature");
+    assert.equal(req.headers.cookie, "theme=dark");
+    assert.equal(req.url, "/api/library/cover-art/album?size=320");
+});
+
+test("proxy authentication keeps legacy query-token media URLs working without forwarding the secret URL", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/browse/ytmusic/image?url=https%3A%2F%2Flh3.googleusercontent.com%2Fcover.jpg&token=query.jwt.signature",
+        method: "GET",
+        headers: {},
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, "Bearer query.jwt.signature");
+    assert.equal(
+        req.url,
+        "/api/browse/ytmusic/image?url=https%3A%2F%2Flh3.googleusercontent.com%2Fcover.jpg",
+    );
+});
+
+test("media cookie and legacy query token cannot authenticate a non-media mutation", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/settings?token=query.jwt.signature",
+        method: "POST",
+        headers: {
+            cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+        },
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, undefined);
+    assert.equal(req.headers.cookie, "theme=dark");
+    assert.equal(req.url, "/api/settings");
 });
 
 test("proxy error handler does not write once headers were already sent", () => {
@@ -321,6 +432,183 @@ test("first-byte timeout answers 504 UPSTREAM_TIMEOUT and aborts the upstream re
         logger.errors[0]?.[0] ?? "",
         /\[api-proxy\] GET \/api\/library timed out after 20000ms/,
     );
+});
+
+test("authenticated API proxy streams image bytes while forwarding only header auth", async () => {
+    let upstreamRequest:
+        | {
+              url: string;
+              authorization: string | undefined;
+              cookie: string | undefined;
+          }
+        | undefined;
+    const backend = createServer((req, res) => {
+        upstreamRequest = {
+            url: req.url ?? "",
+            authorization: req.headers.authorization,
+            cookie: req.headers.cookie,
+        };
+        res.writeHead(200, { "Content-Type": "image/jpeg" });
+        res.end(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    });
+    const backendPort = await listenOnLoopback(backend);
+    const proxy = createBackendProxy({
+        name: "api-proxy",
+        target: `http://127.0.0.1:${backendPort}`,
+        logger: createFakeLogger(),
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+        promoteAuthToken: true,
+    });
+    const frontend = createServer((req, res) => proxy(req, res));
+    const frontendPort = await listenOnLoopback(frontend);
+
+    try {
+        const response = await fetch(
+            `http://127.0.0.1:${frontendPort}/api/library/cover-art/album?size=320`,
+            {
+                headers: {
+                    cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+                },
+            },
+        );
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "image/jpeg");
+        assert.deepEqual(
+            Buffer.from(await response.arrayBuffer()),
+            Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        );
+        assert.deepEqual(upstreamRequest, {
+            url: "/api/library/cover-art/album?size=320",
+            authorization: "Bearer cookie.jwt.signature",
+            cookie: "theme=dark",
+        });
+    } finally {
+        await closeServer(frontend);
+        await closeServer(backend);
+    }
+});
+
+test("authenticated API proxy preserves Range and 206 audio semantics", async () => {
+    const completeAudio = Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    let upstreamRequest:
+        | {
+              url: string;
+              authorization: string | undefined;
+              cookie: string | undefined;
+              range: string | undefined;
+          }
+        | undefined;
+    const backend = createServer((req, res) => {
+        upstreamRequest = {
+            url: req.url ?? "",
+            authorization: req.headers.authorization,
+            cookie: req.headers.cookie,
+            range: req.headers.range,
+        };
+        const body = completeAudio.subarray(2, 6);
+        res.writeHead(206, {
+            "Content-Type": "audio/mpeg",
+            "Accept-Ranges": "bytes",
+            "Content-Range": "bytes 2-5/10",
+            "Content-Length": String(body.length),
+        });
+        res.end(body);
+    });
+    const backendPort = await listenOnLoopback(backend);
+    const proxy = createBackendProxy({
+        name: "api-proxy",
+        target: `http://127.0.0.1:${backendPort}`,
+        logger: createFakeLogger(),
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+        promoteAuthToken: true,
+    });
+    const frontend = createServer((req, res) => proxy(req, res));
+    const frontendPort = await listenOnLoopback(frontend);
+
+    try {
+        const response = await fetch(
+            `http://127.0.0.1:${frontendPort}/api/library/tracks/track-1/stream?quality=original`,
+            {
+                headers: {
+                    cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+                    range: "bytes=2-5",
+                },
+            },
+        );
+
+        assert.equal(response.status, 206);
+        assert.equal(response.headers.get("content-range"), "bytes 2-5/10");
+        assert.equal(response.headers.get("content-length"), "4");
+        assert.deepEqual(
+            Buffer.from(await response.arrayBuffer()),
+            completeAudio.subarray(2, 6),
+        );
+        assert.deepEqual(upstreamRequest, {
+            url: "/api/library/tracks/track-1/stream?quality=original",
+            authorization: "Bearer cookie.jwt.signature",
+            cookie: "theme=dark",
+            range: "bytes=2-5",
+        });
+    } finally {
+        await closeServer(frontend);
+        await closeServer(backend);
+    }
+});
+
+test("custom proxy media cookie stays read-only and exact-path scoped", () => {
+    const cases = [
+        { method: "POST", url: "/api/library/tracks/t1/stream" },
+        { method: "GET", url: "/api/library/tracks/t1/stream/delete" },
+        { method: "GET", url: "/api/ytmusic/stream" },
+    ];
+
+    for (const item of cases) {
+        const req: {
+            url: string;
+            method: string;
+            headers: Record<string, string | string[] | undefined>;
+        } = {
+            ...item,
+            headers: {
+                cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+            },
+        };
+
+        prepareProxyAuthentication(req);
+
+        assert.equal(req.headers.authorization, undefined);
+        assert.equal(req.headers.cookie, "theme=dark");
+    }
+});
+
+test("first-byte timeout never logs a query credential", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const logger = createFakeLogger();
+    const handler = createFirstByteTimeoutProxyReqHandler({
+        name: "api-proxy",
+        logger,
+        env: {},
+    });
+    const proxyReq = createFakeProxyReq();
+    const res = createFakeResponse();
+    const accessToken = "timeout.jwt.signature";
+
+    handler(
+        proxyReq,
+        {
+            method: "GET",
+            url: `/api/library/cover-art/album?size=320&token=${accessToken}`,
+        },
+        res,
+    );
+    t.mock.timers.tick(20_000);
+
+    const serializedLog = JSON.stringify(logger.errors);
+    assert.doesNotMatch(serializedLog, new RegExp(accessToken));
+    assert.match(serializedLog, /size=320/);
 });
 
 test("first-byte timeout uses the import-preview budget for import preview paths", (t) => {

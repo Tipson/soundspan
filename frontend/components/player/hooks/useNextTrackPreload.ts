@@ -2,6 +2,7 @@ import { useEffect, type MutableRefObject } from "react";
 import type { Podcast, Track } from "@/lib/audio-state-context";
 import type { QueueItem } from "@/lib/queue-item";
 import { api } from "@/lib/api";
+import { resolveDeviceOfflinePlaybackUrl } from "@/features/device-offline/playbackResolver";
 import { getNextTrackInfo } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import { resolveRemoteStreamFormat } from "../audioPlaybackOrchestratorPolicy";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
@@ -97,6 +98,7 @@ export function useNextTrackPreload({
             }
         }
 
+        streamUrl = resolveDeviceOfflinePlaybackUrl(nextTrack, streamUrl);
         audioEngine.preload(streamUrl, format);
         lastPreloadedTrackIdRef.current = nextTrack.id;
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.

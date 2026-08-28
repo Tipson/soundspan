@@ -8,11 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tracks can be downloaded to per-user device storage from Home and search menus, managed from Library > Downloads, and played through the PWA while offline with byte-range seeking; supported Android browsers may continue through Background Fetch, while iPhone and other browsers report their foreground limitation honestly.
+- The home API can build per-user Listen Again, Quick Picks, and Discovery shelves directly from remote YouTube Music plays, likes, and playlist items, balancing radio seeds across those signals while retaining useful shelves when some seeds fail.
+
 ### Changed
 
-- Search discovery merges public YouTube Music catalog songs into Last.fm results, preserving exact provider identities so those rows play immediately without a second fuzzy-match request.
+- Search discovery merges public YouTube Music catalog songs into Last.fm results, preserving exact provider identities so those rows play immediately without a second fuzzy-match request; playable catalog songs remain visible while acquisition lookup runs, and Soulseek appears only as a fallback when no playable song is available.
+- YouTube Music and TIDAL thumbs-down preferences persist per user and are removed by a later like or clear action, so disliked remote tracks stay out of personalized home recommendations.
 
 ### Fixed
+
+- Concurrent remote-track preference requests preserve the latest user action in both the database and shared browser cache even when an older like finishes or fails later, including requests with equal timestamps or a wall-clock rollback.
+- Browser media requests no longer put access tokens in image or audio URLs; the same-origin proxy promotes an API-scoped cookie only for exact read-only media routes and preserves audio Range responses.
+- Device downloads use renewable, attempt-aware browser-storage leases and a bounded background-completion grace, so concurrent tabs, logout, account changes, retries, deletes, and stale foreground or Android Background Fetch completions cannot publish another session's state or resurrect a removed copy. Service-worker updates keep the previous offline shell active unless both Downloads documents and all discovered Next.js runtime chunks are cached successfully.
+- Device-download metadata changes refresh other open tabs through an opaque signal, and a transient IndexedDB open failure can recover without reloading the app.
+- Local, OIDC, invite, registration, onboarding, and URL-token account replacement plus logout revoke cached identity, queries, preference-write lanes, and the audio/device runtime before publishing another credential; access-only replacement also discards the previous account's refresh credential, and URL secrets leave browser history before storage is touched. Cross-tab changes and late login, logout, session-validation, query, mutation, playback-poll, or progress-save callbacks cannot restore or erase the wrong session. User-bound queue, current-media, and resume data are owner-tagged and cleared on account changes while device preferences such as volume remain local.
+- Public YouTube Music mood and radio browse calls recreate and close their cached client safely after a transient provider failure, reject malformed queues, and degrade within bounded time instead of leaving Explore or recommendations broken until the sidecar restarts.
+- Vibe falls back to playable provider-radio recommendations when Audio-DNA status is unavailable or fewer than two local files have fingerprints, labels small Audio-DNA libraries honestly, and exposes the full map from five analyzed files.
 
 ## [2.6.1] - 2026-08-26
 

@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { isRemoteTrack, toAddToPlaylistRef } from "@/lib/trackRef";
 import { canShareTrack } from "@/lib/shareLinks";
+import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
+import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl";
 
 interface TrackOverflowMenuProps {
     track: Track;
@@ -88,7 +90,9 @@ export function TrackOverflowMenu({
     const menuRef = useRef<HTMLDivElement | null>(null);
     const router = useRouter();
     const controls = useAudioControls();
+    const deviceOffline = useOptionalDeviceOffline();
     const isRemote = isRemoteTrack(track);
+    const deviceRecord = deviceOffline?.recordForTrack(track) ?? null;
 
     const effectiveShowMatchVibe = showMatchVibe && !isRemote;
     const effectiveShowVibeMap = showVibeMap && !isRemote;
@@ -304,6 +308,36 @@ export function TrackOverflowMenu({
         [track, controls, closeMenu, isRemote],
     );
 
+    const handleDeviceDownload = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            closeMenu();
+            if (!deviceOffline || deviceRecord?.status === "downloading")
+                return;
+            void deviceOffline
+                .download({
+                    track,
+                    sourceUrl: getDeviceDownloadSourceUrl(track),
+                    quality: "auto",
+                })
+                .then((record) =>
+                    toast.success(
+                        record.status === "ready"
+                            ? `"${track.title}" is available offline`
+                            : `Download started for "${track.title}"`,
+                    ),
+                )
+                .catch((error: unknown) =>
+                    toast.error(
+                        error instanceof Error
+                            ? error.message
+                            : "Device download failed",
+                    ),
+                );
+        },
+        [closeMenu, deviceOffline, deviceRecord?.status, track],
+    );
+
     return (
         <>
             <div
@@ -364,6 +398,35 @@ export function TrackOverflowMenu({
                                 onClick={handleAddToPlaylist}
                                 icon={<Plus className="h-4 w-4" />}
                                 label="Add to playlist"
+                            />
+                        )}
+
+                        {deviceOffline && (
+                            <MenuButton
+                                onClick={handleDeviceDownload}
+                                disabled={
+                                    deviceRecord?.status === "downloading" ||
+                                    deviceRecord?.status === "ready"
+                                }
+                                icon={
+                                    deviceRecord?.status === "ready" ? (
+                                        <span aria-hidden="true">✓</span>
+                                    ) : deviceRecord?.status ===
+                                      "downloading" ? (
+                                        <span aria-hidden="true">…</span>
+                                    ) : (
+                                        <span aria-hidden="true">↓</span>
+                                    )
+                                }
+                                label={
+                                    deviceRecord?.status === "ready"
+                                        ? "Available offline"
+                                        : deviceRecord?.status === "downloading"
+                                          ? "Downloading…"
+                                          : deviceRecord
+                                            ? "Retry device download"
+                                            : "Download to device"
+                                }
                             />
                         )}
 

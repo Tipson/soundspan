@@ -42,6 +42,7 @@ model User {
   hiddenPlaylists           HiddenPlaylist[]
   likedTracks               LikedTrack[]
   likedRemoteTracks         LikedRemoteTrack[]
+  remotePreferenceIntents   RemotePreferenceIntent[]
   listeningState            ListeningState[]
   notifications             Notification[]
   plays                     Play[]
@@ -1005,6 +1006,19 @@ model LikedRemoteTrack {
   @@unique([userId, trackYtMusicId])
   @@index([userId])
   @@index([likedAt])
+}
+
+/// Durable latest-request marker for per-user remote track preference writes.
+model RemotePreferenceIntent {
+  userId        String
+  remoteTrackId String
+  token         String
+  requestedAt   DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, remoteTrackId])
+  @@index([userId])
+  @@map("RemoteTrackPreferenceIntent")
 }
 
 model DislikedEntity {

@@ -31,6 +31,10 @@ import { TVSearchInput } from "@/features/search/components/TVSearchInput";
 import { useAuth } from "@/lib/auth-context";
 import type { FilterTab } from "@/features/search/types";
 import { useFeatures } from "@/lib/features-context";
+import {
+    resolvePrimarySongsSurface,
+    shouldShowSearchLoadingState,
+} from "@/features/search/searchSongsPriority";
 
 type SearchSectionView = "tracks" | "albums" | "artists" | null;
 
@@ -179,6 +183,25 @@ export default function SearchPage() {
         libraryTracks.length > 0 ||
         soulseekResults.length > 0 ||
         unownedDiscoverTracks.length > 0;
+    const primarySongsSurface = resolvePrimarySongsSurface({
+        playableTrackCount:
+            (showLibrary ? libraryTracks.length : 0) +
+            unownedDiscoverTracks.length,
+        soulseekResultCount: soulseekResults.length,
+        soulseekSearching: isSoulseekSearching || isSoulseekPolling,
+        showSoulseek,
+    });
+    const showPrimaryLoadingState = shouldShowSearchLoadingState({
+        hasSearched,
+        anySourceSearching:
+            isLibrarySearching ||
+            isDiscoverSearching ||
+            isSoulseekSearching ||
+            isSoulseekPolling,
+        hasArtistResult: Boolean(libraryResults?.artists?.length),
+        discoverResultCount: discoverResults.length,
+        primarySongsSurface,
+    });
     const show2ColumnLayout =
         hasSearched &&
         hasTopResult &&
@@ -252,82 +275,77 @@ export default function SearchPage() {
                 <EmptyState hasSearched={hasSearched} isLoading={isLoading} />
 
                 {/* Loading spinner */}
-                {hasSearched &&
-                    (isLibrarySearching ||
-                        isDiscoverSearching ||
-                        isSoulseekSearching) &&
-                    (!libraryResults || !libraryResults.artists?.length) &&
-                    discoverResults.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-16 relative z-10">
-                            <div className="relative w-16 h-16 mb-4">
-                                <svg
-                                    className="w-16 h-16 animate-spin"
-                                    viewBox="0 0 64 64"
-                                >
-                                    <defs>
-                                        <linearGradient
-                                            id="spinnerGrad"
-                                            x1="0%"
-                                            y1="0%"
-                                            x2="100%"
-                                            y2="100%"
-                                        >
-                                            <stop
-                                                offset="0%"
-                                                style={{
-                                                    stopColor: "#facc15",
-                                                    stopOpacity: 1,
-                                                }}
-                                            />
-                                            <stop
-                                                offset="25%"
-                                                style={{
-                                                    stopColor: "#f59e0b",
-                                                    stopOpacity: 1,
-                                                }}
-                                            />
-                                            <stop
-                                                offset="50%"
-                                                style={{
-                                                    stopColor: "#c026d3",
-                                                    stopOpacity: 1,
-                                                }}
-                                            />
-                                            <stop
-                                                offset="75%"
-                                                style={{
-                                                    stopColor: "#2323FF",
-                                                    stopOpacity: 1,
-                                                }}
-                                            />
-                                            <stop
-                                                offset="100%"
-                                                style={{
-                                                    stopColor: "#facc15",
-                                                    stopOpacity: 1,
-                                                }}
-                                            />
-                                        </linearGradient>
-                                    </defs>
-                                    <circle
-                                        cx="32"
-                                        cy="32"
-                                        r="28"
-                                        fill="none"
-                                        stroke="url(#spinnerGrad)"
-                                        strokeWidth="4"
-                                        strokeLinecap="round"
-                                        strokeDasharray="140 40"
-                                    />
-                                </svg>
-                            </div>
-                            <p className="text-gray-400 text-sm">
-                                {isSoulseekSearching || isSoulseekPolling
-                                    ? `Searching... (${soulseekResults.length} found)`
-                                    : "Searching..."}
-                            </p>
+                {showPrimaryLoadingState && (
+                    <div className="flex flex-col items-center justify-center py-16 relative z-10">
+                        <div className="relative w-16 h-16 mb-4">
+                            <svg
+                                className="w-16 h-16 animate-spin"
+                                viewBox="0 0 64 64"
+                            >
+                                <defs>
+                                    <linearGradient
+                                        id="spinnerGrad"
+                                        x1="0%"
+                                        y1="0%"
+                                        x2="100%"
+                                        y2="100%"
+                                    >
+                                        <stop
+                                            offset="0%"
+                                            style={{
+                                                stopColor: "#facc15",
+                                                stopOpacity: 1,
+                                            }}
+                                        />
+                                        <stop
+                                            offset="25%"
+                                            style={{
+                                                stopColor: "#f59e0b",
+                                                stopOpacity: 1,
+                                            }}
+                                        />
+                                        <stop
+                                            offset="50%"
+                                            style={{
+                                                stopColor: "#c026d3",
+                                                stopOpacity: 1,
+                                            }}
+                                        />
+                                        <stop
+                                            offset="75%"
+                                            style={{
+                                                stopColor: "#2323FF",
+                                                stopOpacity: 1,
+                                            }}
+                                        />
+                                        <stop
+                                            offset="100%"
+                                            style={{
+                                                stopColor: "#facc15",
+                                                stopOpacity: 1,
+                                            }}
+                                        />
+                                    </linearGradient>
+                                </defs>
+                                <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    fill="none"
+                                    stroke="url(#spinnerGrad)"
+                                    strokeWidth="4"
+                                    strokeLinecap="round"
+                                    strokeDasharray="140 40"
+                                />
+                            </svg>
                         </div>
-                    )}
+                        <p className="text-gray-400 text-sm">
+                            {isSoulseekSearching || isSoulseekPolling
+                                ? `Searching... (${soulseekResults.length} found)`
+                                : "Searching..."}
+                        </p>
+                    </div>
+                )}
 
                 {/* 2-Column Layout: Top Result (left) + Songs (right) */}
                 {show2ColumnLayout ? (
@@ -344,12 +362,16 @@ export default function SearchPage() {
                         {/* Right Column: Songs */}
                         <div>
                             <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                                {showSoulseek && soulseekResults.length > 0 ? (
-                                    "Songs"
-                                ) : showSoulseek &&
-                                  (isSoulseekSearching || isSoulseekPolling) ? (
-                                    <>
-                                        <span>Songs</span>
+                                <Link
+                                    href={sectionViewLinks.tracks}
+                                    className="hover:underline"
+                                >
+                                    Songs
+                                </Link>
+                                {primarySongsSurface === "playable" &&
+                                    showSoulseek &&
+                                    (isSoulseekSearching ||
+                                        isSoulseekPolling) && (
                                         <span className="inline-flex items-center gap-2 text-sm font-normal text-gray-400">
                                             <svg
                                                 className="w-4 h-4 animate-spin"
@@ -365,41 +387,11 @@ export default function SearchPage() {
                                                     strokeDasharray="40 20"
                                                 />
                                             </svg>
-                                            Searching...
+                                            Adding more sources…
                                         </span>
-                                    </>
-                                ) : (
-                                    <Link
-                                        href={sectionViewLinks.tracks}
-                                        className="hover:underline"
-                                    >
-                                        Songs
-                                    </Link>
-                                )}
+                                    )}
                             </h2>
-                            {showSoulseek && soulseekResults.length > 0 ? (
-                                <SoulseekSongsList
-                                    soulseekResults={soulseekResults}
-                                    downloadingFiles={downloadingFiles}
-                                    onDownload={handleDownload}
-                                />
-                            ) : showSoulseek &&
-                              (isSoulseekSearching || isSoulseekPolling) ? (
-                                <div className="space-y-2">
-                                    {[1, 2, 3].map((i) => (
-                                        <div
-                                            key={i}
-                                            className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse"
-                                        >
-                                            <div className="w-10 h-10 rounded bg-white/10" />
-                                            <div className="flex-1 space-y-2">
-                                                <div className="h-4 bg-white/10 rounded w-3/4" />
-                                                <div className="h-3 bg-white/10 rounded w-1/2" />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
+                            {primarySongsSurface === "playable" ? (
                                 <>
                                     {showLibrary &&
                                         libraryTracks.length > 0 && (
@@ -415,7 +407,28 @@ export default function SearchPage() {
                                         />
                                     )}
                                 </>
-                            )}
+                            ) : primarySongsSurface === "soulseek" ? (
+                                <SoulseekSongsList
+                                    soulseekResults={soulseekResults}
+                                    downloadingFiles={downloadingFiles}
+                                    onDownload={handleDownload}
+                                />
+                            ) : primarySongsSurface === "soulseek-loading" ? (
+                                <div className="space-y-2">
+                                    {[1, 2, 3].map((i) => (
+                                        <div
+                                            key={i}
+                                            className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse"
+                                        >
+                                            <div className="w-10 h-10 rounded bg-white/10" />
+                                            <div className="flex-1 space-y-2">
+                                                <div className="h-4 bg-white/10 rounded w-3/4" />
+                                                <div className="h-3 bg-white/10 rounded w-1/2" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                 ) : (
@@ -436,24 +449,50 @@ export default function SearchPage() {
                                 </div>
                             )}
 
-                        {/* Soulseek Songs */}
+                        {/* Songs — owned results with unowned continuation */}
                         {hasSearched &&
-                            showSoulseek &&
-                            soulseekResults.length > 0 && (
+                            !isPodcastTab &&
+                            (sectionView === null || isTracksView) &&
+                            primarySongsSurface === "playable" && (
                                 <section>
-                                    <SoulseekSongsList
-                                        soulseekResults={soulseekResults}
-                                        downloadingFiles={downloadingFiles}
-                                        onDownload={handleDownload}
-                                    />
+                                    <h2 className="text-2xl font-bold text-white mb-6">
+                                        <Link
+                                            href={sectionViewLinks.tracks}
+                                            className="hover:underline"
+                                        >
+                                            Songs
+                                        </Link>
+                                    </h2>
+                                    {showLibrary &&
+                                        libraryTracks.length > 0 && (
+                                            <LibraryTracksList
+                                                tracks={libraryTracks}
+                                                limit={isTracksView ? null : 10}
+                                            />
+                                        )}
+                                    {unownedDiscoverTracks.length > 0 && (
+                                        <DiscoverTracksList
+                                            tracks={unownedDiscoverTracks}
+                                            limit={isTracksView ? null : 5}
+                                        />
+                                    )}
                                 </section>
                             )}
 
+                        {/* Soulseek is a fallback only when no result can play immediately. */}
+                        {hasSearched && primarySongsSurface === "soulseek" && (
+                            <section>
+                                <SoulseekSongsList
+                                    soulseekResults={soulseekResults}
+                                    downloadingFiles={downloadingFiles}
+                                    onDownload={handleDownload}
+                                />
+                            </section>
+                        )}
+
                         {/* Soulseek Loading State */}
                         {hasSearched &&
-                            showSoulseek &&
-                            soulseekResults.length === 0 &&
-                            (isSoulseekSearching || isSoulseekPolling) && (
+                            primarySongsSurface === "soulseek-loading" && (
                                 <section>
                                     <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
                                         <span>Soulseek</span>
@@ -489,37 +528,6 @@ export default function SearchPage() {
                                             </div>
                                         ))}
                                     </div>
-                                </section>
-                            )}
-
-                        {/* Songs — owned results with unowned continuation */}
-                        {hasSearched &&
-                            !isPodcastTab &&
-                            (sectionView === null || isTracksView) &&
-                            ((showLibrary && libraryTracks.length > 0) ||
-                                unownedDiscoverTracks.length > 0) && (
-                                <section>
-                                    <h2 className="text-2xl font-bold text-white mb-6">
-                                        <Link
-                                            href={sectionViewLinks.tracks}
-                                            className="hover:underline"
-                                        >
-                                            Songs
-                                        </Link>
-                                    </h2>
-                                    {showLibrary &&
-                                        libraryTracks.length > 0 && (
-                                            <LibraryTracksList
-                                                tracks={libraryTracks}
-                                                limit={isTracksView ? null : 10}
-                                            />
-                                        )}
-                                    {unownedDiscoverTracks.length > 0 && (
-                                        <DiscoverTracksList
-                                            tracks={unownedDiscoverTracks}
-                                            limit={isTracksView ? null : 5}
-                                        />
-                                    )}
                                 </section>
                             )}
                     </>

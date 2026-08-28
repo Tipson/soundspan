@@ -96,6 +96,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/offline.ts`            | `/api/offline`                                                                                        |
 | `backend/src/routes/onboarding.ts`         | `/api/onboarding`                                                                                     |
 | `backend/src/routes/openapiSupplement.ts`  | (doc-only: @openapi coverage for index.ts health/readiness and /api/docs.json endpoints; not mounted) |
+| `backend/src/routes/personalized.ts`       | `/api/personalized`                                                                                   |
 | `backend/src/routes/playbackState.ts`      | `/api/playback-state`                                                                                 |
 | `backend/src/routes/playlistImport.ts`     | `/api/import`                                                                                         |
 | `backend/src/routes/playlists.ts`          | `/api/playlists`                                                                                      |

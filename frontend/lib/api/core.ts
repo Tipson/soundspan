@@ -1,5 +1,7 @@
 import { resolveApiBaseUrl } from "../api-base-url";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { syncBrowserMediaAuthCookie } from "../media-auth";
+import { publishAuthSessionChange } from "../auth-offline-session";
 
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
@@ -17,6 +19,14 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 interface ApiError extends Error {
     status?: number;
     data?: Record<string, unknown>;
+}
+
+/** A response from credentials that were replaced while it was in flight. */
+export class SupersededAuthSessionError extends Error {
+    constructor() {
+        super("Authentication session changed while the request was pending");
+        this.name = "SupersededAuthSessionError";
+    }
 }
 
 type TokenRefreshResult = "ok" | "rejected" | "unavailable";
@@ -116,7 +126,10 @@ export abstract class ApiClientCore {
             this.token = localStorage.getItem(AUTH_TOKEN_KEY);
             if (this.token) {
                 this.tokenInitialized = true;
+                syncBrowserMediaAuthCookie(this.token);
                 this.scheduleProactiveTokenRefresh(this.token);
+            } else {
+                syncBrowserMediaAuthCookie(null);
             }
             // Note: Refresh token is loaded on-demand via getRefreshToken()
         }
@@ -141,7 +154,10 @@ export abstract class ApiClientCore {
         const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
         if (storedToken) {
             this.token = storedToken;
+            syncBrowserMediaAuthCookie(storedToken);
             this.scheduleProactiveTokenRefresh(storedToken);
+        } else {
+            syncBrowserMediaAuthCookie(null);
         }
 
         this.tokenInitialized = true;
@@ -162,6 +178,11 @@ export abstract class ApiClientCore {
         return this.token;
     }
 
+    /** Snapshot the logical credential generation for race-safe auth commits. */
+    getSessionGeneration(): number {
+        return this.sessionGeneration;
+    }
+
     // Refresh the base URL from configuration
     refreshBaseUrl(): void {
         this.baseUrl = "";
@@ -172,18 +193,23 @@ export abstract class ApiClientCore {
         this.sessionGeneration += 1;
         this.refreshPromise = null;
         this.storeTokensForCurrentSession(token, refreshToken);
+        publishAuthSessionChange();
     }
 
     private storeTokensForCurrentSession(
         token: string,
         refreshToken?: string,
+        preserveExistingRefreshToken = false,
     ): void {
         this.token = token;
         this.proactiveRefreshBackoffMs = INITIAL_PROACTIVE_REFRESH_BACKOFF_MS;
         if (typeof window !== "undefined") {
             localStorage.setItem(AUTH_TOKEN_KEY, token);
-            if (refreshToken) {
+            syncBrowserMediaAuthCookie(token);
+            if (refreshToken !== undefined) {
                 localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+            } else if (!preserveExistingRefreshToken) {
+                localStorage.removeItem(REFRESH_TOKEN_KEY);
             }
         }
         this.scheduleProactiveTokenRefresh(token);
@@ -207,7 +233,33 @@ export abstract class ApiClientCore {
         if (typeof window !== "undefined") {
             localStorage.removeItem(AUTH_TOKEN_KEY);
             localStorage.removeItem(REFRESH_TOKEN_KEY);
+            syncBrowserMediaAuthCookie(null);
         }
+        publishAuthSessionChange();
+    }
+
+    /**
+     * Replace only this tab's in-memory credential from shared browser
+     * storage. Unlike setToken/clearToken, this never emits another cross-tab
+     * event and therefore cannot create a storage-event feedback loop.
+     */
+    reloadTokenFromStorage(): string | null {
+        this.sessionGeneration += 1;
+        this.refreshPromise = null;
+        this.proactiveRefreshBackoffMs = INITIAL_PROACTIVE_REFRESH_BACKOFF_MS;
+        this.clearProactiveRefreshSchedule();
+
+        const storedToken =
+            typeof window === "undefined"
+                ? null
+                : localStorage.getItem(AUTH_TOKEN_KEY);
+        this.token = storedToken;
+        this.tokenInitialized = true;
+        syncBrowserMediaAuthCookie(storedToken);
+        if (storedToken) {
+            this.scheduleProactiveTokenRefresh(storedToken);
+        }
+        return storedToken;
     }
 
     private expireSession(
@@ -337,6 +389,12 @@ export abstract class ApiClientCore {
         return generation === this.sessionGeneration;
     }
 
+    private assertCurrentSession(generation: number): void {
+        if (!this.isCurrentSession(generation)) {
+            throw new SupersededAuthSessionError();
+        }
+    }
+
     private unavailableRefresh(
         generation: number,
         response?: Response,
@@ -420,7 +478,10 @@ export abstract class ApiClientCore {
             typeof tokens.refreshToken === "string"
                 ? tokens.refreshToken
                 : undefined;
-        this.storeTokensForCurrentSession(tokens.token, refreshToken);
+        // A refresh response may rotate only the access token. Unlike a public
+        // credential replacement, that must keep the refresh credential that
+        // authenticated this same session.
+        this.storeTokensForCurrentSession(tokens.token, refreshToken, true);
         return "ok";
     }
 
@@ -564,9 +625,11 @@ export abstract class ApiClientCore {
         endpoint: string,
         timeoutMs: number,
         hasSignal: boolean,
+        retryOnTimeout: boolean,
+        authSessionGeneration: number,
     ): string | null {
         if (hasSignal) return null;
-        return `${endpoint}|timeout=${timeoutMs}|token=${this.token ?? ""}`;
+        return `${endpoint}|timeout=${timeoutMs}|timeoutRetry=${retryOnTimeout}|token=${this.token ?? ""}|session=${authSessionGeneration}`;
     }
 
     async request<T>(
@@ -577,6 +640,7 @@ export abstract class ApiClientCore {
             _timeoutRetryCount?: number;
             _authSessionGeneration?: number;
             timeoutMs?: number;
+            retryOnTimeout?: boolean;
         } = {},
     ): Promise<T> {
         const {
@@ -585,6 +649,7 @@ export abstract class ApiClientCore {
             _timeoutRetryCount = 0,
             _authSessionGeneration = this.sessionGeneration,
             timeoutMs = DEFAULT_API_TIMEOUT_MS,
+            retryOnTimeout = true,
             ...fetchOptions
         } = options;
         const headers: HeadersInit = {
@@ -609,6 +674,8 @@ export abstract class ApiClientCore {
                       endpoint,
                       timeoutMs,
                       Boolean(fetchOptions.signal),
+                      retryOnTimeout,
+                      _authSessionGeneration,
                   )
                 : null;
 
@@ -633,28 +700,32 @@ export abstract class ApiClientCore {
                     timeoutMs,
                 );
             } catch (error) {
+                this.assertCurrentSession(_authSessionGeneration);
                 if (
                     this.isTimeoutError(error) &&
                     isIdempotentMethod &&
+                    retryOnTimeout &&
                     _timeoutRetryCount < MAX_TIMEOUT_RETRIES
                 ) {
                     await this.delay(DEFAULT_TIMEOUT_RETRY_BACKOFF_MS);
-                    if (!this.isCurrentSession(_authSessionGeneration)) {
-                        throw error;
-                    }
+                    this.assertCurrentSession(_authSessionGeneration);
                     return this.request<T>(endpoint, {
                         ...options,
                         _timeoutRetryCount: _timeoutRetryCount + 1,
                         _authSessionGeneration,
+                        retryOnTimeout,
                     });
                 }
                 throw error;
             }
 
+            this.assertCurrentSession(_authSessionGeneration);
+
             if (!response.ok) {
                 const error = await response.json().catch(() => ({
                     error: response.statusText,
                 }));
+                this.assertCurrentSession(_authSessionGeneration);
 
                 // Only log non-404 errors (404s are often expected)
                 if (!(silent404 && response.status === 404)) {
@@ -678,15 +749,11 @@ export abstract class ApiClientCore {
                     _retryCount < 2 &&
                     endpoint !== "/auth/refresh"
                 ) {
-                    if (!this.isCurrentSession(_authSessionGeneration)) {
-                        throw requestError;
-                    }
+                    this.assertCurrentSession(_authSessionGeneration);
                     const refreshResult = await this.refreshAccessToken();
 
                     if (refreshResult === "ok") {
-                        if (!this.isCurrentSession(_authSessionGeneration)) {
-                            throw requestError;
-                        }
+                        this.assertCurrentSession(_authSessionGeneration);
                         // Retry the request with new token
                         return this.request<T>(endpoint, {
                             ...options,
@@ -696,6 +763,7 @@ export abstract class ApiClientCore {
                     }
 
                     if (refreshResult === "unavailable") {
+                        this.assertCurrentSession(_authSessionGeneration);
                         throw requestError;
                     }
 
@@ -715,6 +783,7 @@ export abstract class ApiClientCore {
                 return undefined as T;
             }
             const rawBody = await response.text();
+            this.assertCurrentSession(_authSessionGeneration);
             if (rawBody === "") {
                 return undefined as T;
             }
@@ -786,6 +855,7 @@ export abstract class ApiClientCore {
             if (storedToken) {
                 this.token = storedToken;
                 this.tokenInitialized = true;
+                syncBrowserMediaAuthCookie(storedToken);
                 this.scheduleProactiveTokenRefresh(storedToken);
                 return storedToken;
             }

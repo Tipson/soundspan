@@ -115,6 +115,24 @@ export interface YtMusicMixPreview {
     count: string | null;
 }
 
+/** One playable track returned by a provider radio queue. */
+export interface YtMusicRadioTrack {
+    videoId: string;
+    title: string;
+    artist: string;
+    artists: string[];
+    album: string;
+    duration: number;
+    thumbnailUrl: string | null;
+}
+
+/** Normalized public radio queue produced from one YouTube Music seed. */
+export interface YtMusicRadioQueue {
+    playlistId: string | null;
+    seedVideoId: string;
+    tracks: YtMusicRadioTrack[];
+}
+
 /**
  * Normalize user-provided or stored quality values to sidecar query values.
  * Accepts both persisted uppercase settings and lowercase request values.
@@ -1124,6 +1142,18 @@ class YouTubeMusicService {
         const { data } = await this.client.get("/home", {
             params: { limit, ...(userId ? { user_id: userId } : {}) },
             timeout: 15_000,
+        });
+        return data;
+    }
+
+    /** Load a bounded public radio queue for one provider track. */
+    async getRadio(
+        videoId: string,
+        limit: number = 25,
+    ): Promise<YtMusicRadioQueue> {
+        const { data } = await this.client.get("/radio", {
+            params: { video_id: videoId, limit },
+            timeout: 13_000,
         });
         return data;
     }

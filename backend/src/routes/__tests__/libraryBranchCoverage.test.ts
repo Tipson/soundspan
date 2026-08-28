@@ -60,6 +60,11 @@ jest.mock("../../utils/db", () => ({
             findMany: jest.fn(),
             count: jest.fn(),
         },
+        remotePreferenceIntent: {
+            upsert: jest.fn(),
+            updateMany: jest.fn(),
+            deleteMany: jest.fn(),
+        },
         trackTidal: {
             findUnique: jest.fn(),
             upsert: jest.fn(),
@@ -495,6 +500,12 @@ describe("library branch coverage focus", () => {
         mockUserSettingsFindUnique.mockResolvedValue(null);
         mockTrackTidalFindUnique.mockResolvedValue(null);
         mockLikedRemoteDeleteMany.mockResolvedValue({ count: 0 });
+        (
+            prisma.remotePreferenceIntent.updateMany as jest.Mock
+        ).mockResolvedValue({ count: 1 });
+        (
+            prisma.remotePreferenceIntent.deleteMany as jest.Mock
+        ).mockResolvedValue({ count: 1 });
         mockGetArtistImagesBatch.mockResolvedValue(new Map());
         mockArtistCount.mockResolvedValue(1);
         mockPrismaTransaction.mockImplementation(async (callback: any) => {
@@ -503,6 +514,11 @@ describe("library branch coverage focus", () => {
                     findMany: jest.fn().mockResolvedValue([]),
                     count: jest.fn().mockResolvedValue(0),
                 },
+                dislikedEntity: prisma.dislikedEntity,
+                likedRemoteTrack: prisma.likedRemoteTrack,
+                remotePreferenceIntent: prisma.remotePreferenceIntent,
+                trackTidal: prisma.trackTidal,
+                trackYtMusic: prisma.trackYtMusic,
             };
             return callback(tx);
         });

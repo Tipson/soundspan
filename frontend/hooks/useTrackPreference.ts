@@ -9,7 +9,8 @@ import {
 } from "@/lib/api";
 import { getNextTrackPreferenceSignal } from "@/hooks/trackPreferenceSignals";
 import {
-    applyOptimisticTrackPreferenceMutation,
+    applyOrderedOptimisticTrackPreferenceMutation,
+    completeOrderedTrackPreferenceMutation,
     type TrackPreferenceOptimisticQueryClient,
 } from "@/hooks/trackPreferenceOptimistic";
 import { queryKeys } from "@/lib/queryKeys";
@@ -90,27 +91,49 @@ export function useTrackPreference(
         },
         onMutate: async (nextSignal) => {
             if (!trackId) return null;
-            return applyOptimisticTrackPreferenceMutation(
+            return applyOrderedOptimisticTrackPreferenceMutation(
                 queryClient as TrackPreferenceOptimisticQueryClient,
                 trackId,
                 nextSignal,
             );
         },
         onSuccess: (data, _signal, context) => {
+            if (!context) return;
+            const completion = completeOrderedTrackPreferenceMutation(
+                queryClient as TrackPreferenceOptimisticQueryClient,
+                context,
+                { status: "success", preference: data },
+            );
+            if (!completion.isLatest) return;
+
             const canonicalQueryKey =
-                context?.canonicalQueryKey ||
+                context.canonicalQueryKey ||
                 (["track-preference", data.trackId] as const);
             queryClient.setQueryData(canonicalQueryKey, data);
             queryClient.invalidateQueries({
                 queryKey: queryKeys.likedPlaylistAll(),
             });
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.personalizedHomeAll(),
+            });
         },
         onError: (_error, _signal, context) => {
-            if (!context?.canonicalQueryKey) return;
+            if (!context) return;
+            const completion = completeOrderedTrackPreferenceMutation(
+                queryClient as TrackPreferenceOptimisticQueryClient,
+                context,
+                { status: "error" },
+            );
+            if (!completion.isLatest) return;
+
             queryClient.setQueryData(
                 context.canonicalQueryKey,
-                context.previousPreference ?? null,
+                completion.rollbackPreference,
             );
+            queryClient.invalidateQueries({
+                queryKey: context.canonicalQueryKey,
+                exact: true,
+            });
         },
     });
 

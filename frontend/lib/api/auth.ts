@@ -1,4 +1,5 @@
-import { type ApiClientConstructor } from "./core";
+import { type ApiClientConstructor, SupersededAuthSessionError } from "./core";
+import { revokeAuthenticatedRuntime } from "@/lib/auth-runtime";
 
 /** Public authentication capabilities returned by the backend. */
 export interface AuthConfig {
@@ -72,8 +73,18 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
             this.setToken(token, refreshToken);
         }
 
-        private completeLogin(response: LoginResponse): AuthenticatedUser {
-            this.storeAuthTokens(response.token, response.refreshToken);
+        private replaceAuthTokens(token: string, refreshToken?: string): void {
+            revokeAuthenticatedRuntime();
+            this.setToken(token, refreshToken);
+        }
+
+        private completeLogin(
+            response: LoginResponse,
+            sessionGeneration: number,
+        ): AuthenticatedUser {
+            if (this.getSessionGeneration() === sessionGeneration) {
+                this.replaceAuthTokens(response.token, response.refreshToken);
+            }
             return response.user;
         }
 
@@ -92,6 +103,7 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
             password: string,
             token?: string,
         ): Promise<AuthenticatedUser> {
+            const sessionGeneration = this.getSessionGeneration();
             const data = await this.request<{
                 token?: string;
                 refreshToken?: string;
@@ -114,8 +126,13 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
                 body: JSON.stringify({ username, password, token }),
             });
 
-            // If login returned JWT tokens, store them
-            if (data.token) {
+            // A newer login/logout attempt owns the credential slot. A late
+            // response may return its user payload, but must not reinstall an
+            // older session after that slot was superseded.
+            if (
+                data.token &&
+                this.getSessionGeneration() === sessionGeneration
+            ) {
                 this.storeAuthTokens(data.token, data.refreshToken);
             }
 
@@ -198,6 +215,7 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
 
         /** Exchanges a one-time OIDC callback code and stores login tokens. */
         async exchangeOidcCode(code: string): Promise<AuthenticatedUser> {
+            const sessionGeneration = this.getSessionGeneration();
             const response = await this.request<LoginResponse>(
                 "/auth/oidc/exchange",
                 {
@@ -205,13 +223,14 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
                     body: JSON.stringify({ code }),
                 },
             );
-            return this.completeLogin(response);
+            return this.completeLogin(response, sessionGeneration);
         }
 
         /** Confirms an OIDC link and stores tokens unless 2FA is required. */
         async confirmOidcLink(
             payload: ConfirmOidcLinkPayload,
         ): Promise<AuthenticatedUser | RequiresTwoFactorResponse> {
+            const sessionGeneration = this.getSessionGeneration();
             const response = await this.request<
                 LoginResponse | RequiresTwoFactorResponse
             >("/auth/oidc/confirm-link", {
@@ -219,13 +238,14 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
                 body: JSON.stringify(payload),
             });
             if ("requires2FA" in response) return response;
-            return this.completeLogin(response);
+            return this.completeLogin(response, sessionGeneration);
         }
 
         /** Redeems an invite for OIDC provisioning and stores login tokens. */
         async redeemOidcInvite(
             payload: RedeemOidcInvitePayload,
         ): Promise<AuthenticatedUser> {
+            const sessionGeneration = this.getSessionGeneration();
             const response = await this.request<LoginResponse>(
                 "/auth/oidc/redeem-invite",
                 {
@@ -233,7 +253,7 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
                     body: JSON.stringify(payload),
                 },
             );
-            return this.completeLogin(response);
+            return this.completeLogin(response, sessionGeneration);
         }
 
         async register(fields: {
@@ -244,6 +264,7 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
             confirmPassword: string;
             email: string;
         }) {
+            const sessionGeneration = this.getSessionGeneration();
             const data = await this.request<{
                 token: string;
                 refreshToken: string;
@@ -258,8 +279,11 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
                 body: JSON.stringify(fields),
             });
             // Store tokens on success
-            if (data.token) {
-                this.storeAuthTokens(data.token, data.refreshToken);
+            if (
+                data.token &&
+                this.getSessionGeneration() === sessionGeneration
+            ) {
+                this.replaceAuthTokens(data.token, data.refreshToken);
             }
             return data;
         }
@@ -302,11 +326,21 @@ export function WithAuth<TBase extends ApiClientConstructor>(Base: TBase) {
         }
 
         async logout() {
-            await this.request<void>("/auth/logout", {
-                method: "POST",
-            });
-            // Clear the stored JWT token
-            this.clearToken();
+            const sessionGeneration = this.getSessionGeneration();
+            try {
+                await this.request<void>("/auth/logout", {
+                    method: "POST",
+                });
+            } catch (error) {
+                if (error instanceof SupersededAuthSessionError) return;
+                throw error;
+            }
+            // A slow response belongs only to the session that initiated it.
+            // The provider may already have revoked it locally or another tab
+            // may have installed a replacement credential in the meantime.
+            if (this.getSessionGeneration() === sessionGeneration) {
+                this.clearToken();
+            }
         }
 
         async getCurrentUser() {

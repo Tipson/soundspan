@@ -11,7 +11,10 @@ interface LibraryTabsProps {
  */
 export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
     return (
-        <div data-tv-section="library-tabs" className="flex gap-2 mb-4">
+        <div
+            data-tv-section="library-tabs"
+            className="flex flex-wrap gap-2 mb-4"
+        >
             <button
                 data-tv-card
                 data-tv-card-index={0}
@@ -53,6 +56,20 @@ export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
                 )}
             >
                 Songs
+            </button>
+            <button
+                data-tv-card
+                data-tv-card-index={3}
+                tabIndex={0}
+                onClick={() => onTabChange("downloads")}
+                className={cn(
+                    "px-3 py-1.5 text-sm font-medium rounded-full transition-all",
+                    activeTab === "downloads"
+                        ? "bg-white text-black"
+                        : "bg-white/10 text-white hover:bg-white/15",
+                )}
+            >
+                Downloads
             </button>
         </div>
     );
