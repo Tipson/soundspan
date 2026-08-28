@@ -2,6 +2,8 @@
 # Contains: Backend, Frontend, PostgreSQL, Redis, Audio Analyzer, DCLAP Vibe Provider
 # Usage: docker run -d -p 3030:3030 -v /path/to/music:/music ghcr.io/soundspan/soundspan-aio:latest
 
+FROM ghcr.io/soundspan/soundspan:2.6.1@sha256:0fd938950efefc8ded020f847cd2a9317303c0d26a483b70a9c1407452623f8f AS official_artifacts
+
 FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848
 
 # Add the PostgreSQL 16 repository and install runtime dependencies in one layer.
@@ -75,44 +77,45 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     && rm -f /tmp/requirements-aio.lock \
     && python3 -c "import numpy, onnxruntime, tensorflow; import importlib.util as i; assert i.find_spec('essentia')"
 
-# Download Essentia ML models (~4MB total) - these enable Enhanced vibe matching
+# Import Essentia ML models (~4MB total) from the exact official release image.
 # IMPORTANT: Using MusiCNN models to match analyzer.py expectations
 # Each download is verified against a pinned sha256 digest (roadmap F38); a
 # mismatch fails the build immediately. Digests measured 2026-07-11 (see
 # docs/modernization-roadmap.md F38).
-RUN echo "Downloading Essentia ML models for Enhanced vibe matching..." && \
+RUN --mount=from=official_artifacts,source=/app/models,target=/official/essentia,ro \
+    echo "Importing Essentia ML models for Enhanced vibe matching..." && \
     # Base MusiCNN embedding model (required for all predictions)
     curl -L --progress-bar -o /app/models/msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/autotagging/msd/msd-musicnn-1.pb" && \
+        "file:///official/essentia/msd-musicnn-1.pb" && \
     echo "cdea0722bcee7f731286843f2233e3aa69887bb5c3e2dce011eff55f38d04f3e  /app/models/msd-musicnn-1.pb" | sha256sum -c - && \
     # Mood classification heads (using MusiCNN architecture)
     curl -L --progress-bar -o /app/models/mood_happy-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_happy/mood_happy-msd-musicnn-1.pb" && \
+        "file:///official/essentia/mood_happy-msd-musicnn-1.pb" && \
     echo "d7382bc60304ea4578c298222968cd8d600c31252c7bf3e90b1f728ebb3ec36d  /app/models/mood_happy-msd-musicnn-1.pb" | sha256sum -c - && \
     curl -L --progress-bar -o /app/models/mood_sad-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_sad/mood_sad-msd-musicnn-1.pb" && \
+        "file:///official/essentia/mood_sad-msd-musicnn-1.pb" && \
     echo "a5e908cf7f59e8c379ff7c7d138dd85416985fddaebb5de14ca4193200411f61  /app/models/mood_sad-msd-musicnn-1.pb" | sha256sum -c - && \
     curl -L --progress-bar -o /app/models/mood_relaxed-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_relaxed/mood_relaxed-msd-musicnn-1.pb" && \
+        "file:///official/essentia/mood_relaxed-msd-musicnn-1.pb" && \
     echo "1252d28ca7d2204e34e0cdf84a00aa2bc9627a87bdcf923df3aad39cfa69d2d9  /app/models/mood_relaxed-msd-musicnn-1.pb" | sha256sum -c - && \
     curl -L --progress-bar -o /app/models/mood_aggressive-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_aggressive/mood_aggressive-msd-musicnn-1.pb" && \
+        "file:///official/essentia/mood_aggressive-msd-musicnn-1.pb" && \
     echo "3b6eb5645e4b47a2ceb28ef3f8612f224640c583048770791b9fc6e8e5627a67  /app/models/mood_aggressive-msd-musicnn-1.pb" | sha256sum -c - && \
     curl -L --progress-bar -o /app/models/mood_party-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_party/mood_party-msd-musicnn-1.pb" && \
+        "file:///official/essentia/mood_party-msd-musicnn-1.pb" && \
     echo "765b096300ee1d92103cb0a122fc12c33882166fb94d37875284e82ce06322a1  /app/models/mood_party-msd-musicnn-1.pb" | sha256sum -c - && \
     curl -L --progress-bar -o /app/models/mood_acoustic-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_acoustic/mood_acoustic-msd-musicnn-1.pb" && \
+        "file:///official/essentia/mood_acoustic-msd-musicnn-1.pb" && \
     echo "519ee3af8210fe32e021002a0094546aeb6fb5a59d22b7d53c48e4ee1ac9e6cc  /app/models/mood_acoustic-msd-musicnn-1.pb" | sha256sum -c - && \
     curl -L --progress-bar -o /app/models/mood_electronic-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_electronic/mood_electronic-msd-musicnn-1.pb" && \
+        "file:///official/essentia/mood_electronic-msd-musicnn-1.pb" && \
     echo "86c109b504fc6cf666c7513d684381a594218a552c3c954f212dd3a9d0c6cdc5  /app/models/mood_electronic-msd-musicnn-1.pb" | sha256sum -c - && \
     # Other classification heads
     curl -L --progress-bar -o /app/models/danceability-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/danceability/danceability-msd-musicnn-1.pb" && \
+        "file:///official/essentia/danceability-msd-musicnn-1.pb" && \
     echo "874a4b86afc9e12de3f15a47baf9ff1ac676ace109c56203e26103f2259eb95e  /app/models/danceability-msd-musicnn-1.pb" | sha256sum -c - && \
     curl -L --progress-bar -o /app/models/voice_instrumental-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/voice_instrumental/voice_instrumental-msd-musicnn-1.pb" && \
+        "file:///official/essentia/voice_instrumental-msd-musicnn-1.pb" && \
     echo "eb762cc7ee6751b2ea32179d3716e2d60a1d1a9e615b7e3b8be8a6f79d71675e  /app/models/voice_instrumental-msd-musicnn-1.pb" | sha256sum -c - && \
     echo "ML models downloaded successfully" && \
     ls -lh /app/models/
@@ -130,9 +133,11 @@ WORKDIR /app/vibe-provider-dclap
 RUN mkdir -p /app/vibe-provider-dclap/models \
     /app/vibe-provider-dclap/tokenizer /app/licenses/dclap
 
-# Vendor the immutable upstream v1 release artifacts and fail on any byte drift.
-RUN set -eu; \
-    RELEASE_URL="https://github.com/NeptuneHub/AudioMuse-AI-DCLAP/releases/download/v1"; \
+# Vendor the immutable upstream v1 release artifacts from the exact official
+# release image and fail on any byte drift.
+RUN --mount=from=official_artifacts,source=/app/vibe-provider-dclap/models,target=/official/dclap-models,ro \
+    set -eu; \
+    RELEASE_URL="file:///official/dclap-models"; \
     curl --fail --location --retry 3 --connect-timeout 30 --max-time 1800 \
         --output /app/vibe-provider-dclap/models/model_epoch_36.onnx "${RELEASE_URL}/model_epoch_36.onnx"; \
     echo "17860403f8fc90aff8ac0632a0741eb5e58d8c0b0ad2fce5ced967274b0ea971  /app/vibe-provider-dclap/models/model_epoch_36.onnx" | sha256sum -c -; \
@@ -143,11 +148,11 @@ RUN set -eu; \
         --output /app/vibe-provider-dclap/models/clap_text_model.onnx "${RELEASE_URL}/clap_text_model.onnx"; \
     echo "200d48f3905ff1f272af5006dd9851f94071a7dde4eafd9c07bc09c5ac65a714  /app/vibe-provider-dclap/models/clap_text_model.onnx" | sha256sum -c -
 
-# Vendor only tokenizer assets from an immutable Hugging Face snapshot. Runtime
-# offline flags make any accidental network fallback fail closed.
-RUN set -eu; \
-    TOKENIZER_REVISION="8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a"; \
-    TOKENIZER_URL="https://huggingface.co/laion/clap-htsat-unfused/resolve/${TOKENIZER_REVISION}"; \
+# Vendor only tokenizer assets from the immutable snapshot embedded in the exact
+# official release image. Runtime offline flags make network fallback fail closed.
+RUN --mount=from=official_artifacts,source=/app/vibe-provider-dclap/tokenizer,target=/official/dclap-tokenizer,ro \
+    set -eu; \
+    TOKENIZER_URL="file:///official/dclap-tokenizer"; \
     for TOKENIZER_FILE in config.json merges.txt special_tokens_map.json tokenizer.json tokenizer_config.json vocab.json; do \
         curl --fail --location --retry 3 --connect-timeout 30 --max-time 600 \
             --output "/app/vibe-provider-dclap/tokenizer/${TOKENIZER_FILE}" "${TOKENIZER_URL}/${TOKENIZER_FILE}"; \
@@ -218,23 +223,30 @@ COPY backend/prisma ./prisma/
 COPY backend/prisma.config.ts ./
 COPY backend/databaseUrl.js ./
 RUN echo "=== Migrations copied ===" && ls -la prisma/migrations/ && echo "=== End migrations ==="
-RUN npm ci && npm cache clean --force
-RUN npx prisma generate
+# Prefer IPv4 in this deployment: its IPv6 route is present in DNS but has no
+# usable egress. Without this, npm can intermittently stall on registry reads.
+ENV NODE_OPTIONS=--dns-result-order=ipv4first \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=60000
+RUN --mount=type=cache,id=soundspan-npm,target=/root/.npm,sharing=locked \
+    --mount=type=cache,id=soundspan-prisma,target=/root/.cache/prisma,sharing=locked \
+    --mount=from=official_artifacts,source=/root/.cache/prisma,target=/official/prisma-cache,ro \
+    cp -a /official/prisma-cache/. /root/.cache/prisma/ && \
+    npm ci
+RUN --mount=type=cache,id=soundspan-prisma,target=/root/.cache/prisma,sharing=locked \
+    npx prisma generate
 
 # Copy backend source and build
 COPY backend/src ./src
 COPY backend/tsconfig.json ./
 RUN npm run build
 
-# Prune backend dev dependencies after build (typescript, jest, tsx, etc.),
-# then reinstall the prisma CLI locally: the startup script needs
-# `./node_modules/.bin/prisma migrate deploy`, and Prisma 7's prisma.config.ts imports
-# "prisma/config", which must resolve from the app's own node_modules —
-# a globally-installed CLI cannot satisfy that import after prune.
-RUN PRISMA_VERSION=$(node -p "require('./node_modules/prisma/package.json').version") && \
-    npm prune --omit=dev && \
-    npm install --no-save prisma@"$PRISMA_VERSION" && \
-    npm cache clean --force
+# Replace build dependencies with the exact runtime dependency tree from the
+# pinned official release. The source lockfiles and schema are unchanged.
+RUN rm -rf /app/backend/node_modules
+COPY --from=official_artifacts /app/backend/node_modules/ /app/backend/node_modules/
 
 COPY backend/docker-entrypoint.sh ./
 COPY backend/healthcheck.js ./healthcheck-backend.js
@@ -249,7 +261,8 @@ WORKDIR /app/frontend
 
 # Copy frontend package files and install dependencies
 COPY frontend/package*.json ./
-RUN npm ci && npm cache clean --force
+RUN --mount=type=cache,id=soundspan-npm,target=/root/.npm,sharing=locked \
+    npm ci --legacy-peer-deps --prefer-offline
 
 # Copy frontend source and build
 COPY frontend/ ./
@@ -269,11 +282,10 @@ RUN npm run build
 # uses the plain-JS server-proxy and Next compiles proxy.ts during build.
 RUN npm run test:config:runtime
 
-# Prune frontend dev dependencies after build (typescript, eslint, playwright, etc.)
-# and remove Next.js build cache (not needed at runtime)
-RUN npm prune --omit=dev && \
-    npm cache clean --force && \
-    rm -rf .next/cache
+# Replace build dependencies with the exact official runtime tree and remove
+# the Next.js build cache, which is not needed at runtime.
+RUN rm -rf /app/frontend/node_modules .next/cache
+COPY --from=official_artifacts /app/frontend/node_modules/ /app/frontend/node_modules/
 
 # ============================================
 # SECURITY HARDENING
@@ -296,7 +308,10 @@ WORKDIR /app
 # Copy healthcheck script
 COPY healthcheck-prod.js /app/healthcheck.js
 COPY scripts/aio-postgres-credentials.sh /app/aio-postgres-credentials.sh
-RUN chmod 500 /app/aio-postgres-credentials.sh
+# Windows checkouts may materialize tracked shell scripts with CRLF. Normalize
+# the copied runtime helper explicitly so its env/bash shebang remains valid.
+RUN sed -i 's/\r$//' /app/aio-postgres-credentials.sh && \
+    chmod 500 /app/aio-postgres-credentials.sh
 
 # Create supervisord config - logs to stdout/stderr for Docker visibility
 RUN cat > /etc/supervisor/conf.d/soundspan.conf << 'EOF'
