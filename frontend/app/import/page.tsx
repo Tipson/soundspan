@@ -480,12 +480,12 @@ function ImportPageContent() {
                                         playlist URL
                                     </p>
                                     <p className="mt-2 text-xs leading-5 text-gray-400">
-                                        Spotify is used only to read the
-                                        public playlist track list. Soundspan
-                                        does not play audio from Spotify,
-                                        change the source playlist, or save
-                                        audio files to the server. Private
-                                        playlists are not supported yet.
+                                        Spotify is used only to read the public
+                                        playlist track list. Soundspan does not
+                                        play audio from Spotify, change the
+                                        source playlist, or save audio files to
+                                        the server. Private playlists are not
+                                        supported yet.
                                     </p>
                                 </div>
                                 <div className="space-y-2">

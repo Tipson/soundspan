@@ -123,10 +123,8 @@ export function useVibeModeControls({
                                 state.waveMode,
                             ),
                             {
-                                timeoutMs:
-                                    PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
-                                retryOnTimeout:
-                                    PERSONALIZED_HOME_TIMEOUT_RETRY,
+                                timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
+                                retryOnTimeout: PERSONALIZED_HOME_TIMEOUT_RETRY,
                             },
                         );
                         if (!requestIsCurrent()) {

@@ -228,10 +228,7 @@ test("provider radio advances its cursor and sends the bounded queue exclusions 
     const continuedControls = HookProbe(continued.state);
     const secondResult = continuedControls.startVibeMode();
     await Promise.resolve();
-    const secondUrl = new URL(
-        feedRequestPaths[1],
-        "https://soundspan.test",
-    );
+    const secondUrl = new URL(feedRequestPaths[1], "https://soundspan.test");
     assert.equal(secondUrl.searchParams.get("cursor"), "4");
     assert.equal(secondUrl.searchParams.get("mode"), "familiar");
     assert.deepEqual(secondUrl.searchParams.get("exclude")?.split(","), [

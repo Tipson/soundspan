@@ -116,10 +116,7 @@ export function useUnavailableYtMusicRecovery({
                         );
                         setCurrentTrack((activeTrack) =>
                             activeTrack &&
-                            isSameProviderOccurrence(
-                                activeTrack,
-                                expectedTrack,
-                            )
+                            isSameProviderOccurrence(activeTrack, expectedTrack)
                                 ? replaceProviderIdentity(
                                       activeTrack,
                                       replacement,

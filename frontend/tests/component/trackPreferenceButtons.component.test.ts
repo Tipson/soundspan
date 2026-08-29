@@ -16,10 +16,7 @@ const state = {
     isSaving: false,
     toggleLikeCalls: 0,
     toggleDislikeCalls: 0,
-    dislikeResultSignal: "thumbs_down" as
-        | "thumbs_up"
-        | "thumbs_down"
-        | "clear",
+    dislikeResultSignal: "thumbs_down" as "thumbs_up" | "thumbs_down" | "clear",
 };
 
 mock.module("lucide-react", {
@@ -48,11 +45,9 @@ mock.module("@/hooks/useTrackPreference", {
                 return {
                     trackId: "track-interactive",
                     signal: state.dislikeResultSignal,
-                    score:
-                        state.dislikeResultSignal === "thumbs_down" ? -1 : 0,
+                    score: state.dislikeResultSignal === "thumbs_down" ? -1 : 0,
                     isLiked: false,
-                    isDisliked:
-                        state.dislikeResultSignal === "thumbs_down",
+                    isDisliked: state.dislikeResultSignal === "thumbs_down",
                     likedAt: null,
                     dislikedAt:
                         state.dislikeResultSignal === "thumbs_down"

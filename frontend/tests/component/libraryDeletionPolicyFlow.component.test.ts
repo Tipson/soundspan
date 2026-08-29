@@ -108,7 +108,9 @@ test("an admin can enable a default-off deletion policy and reveal local album d
     }
 
     try {
-        await React.act(async () => root.render(React.createElement(PolicyFlow)));
+        await React.act(async () =>
+            root.render(React.createElement(PolicyFlow)),
+        );
 
         assert.match(container.textContent ?? "", /Server Library Safety/);
         const policyToggle = container.querySelector<HTMLInputElement>(

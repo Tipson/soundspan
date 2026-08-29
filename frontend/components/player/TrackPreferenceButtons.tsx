@@ -179,11 +179,7 @@ function TrackPreferenceButtonsControlled({
     const canToggleDislike = Boolean(onToggleThumbsDown);
     const handleDislikeToggle = async () => {
         const result = await (onToggleThumbsDown ?? noopPreferenceToggle)();
-        if (
-            trackId &&
-            onThumbsDownApplied &&
-            isConfirmedThumbsDown(result)
-        ) {
+        if (trackId && onThumbsDownApplied && isConfirmedThumbsDown(result)) {
             onThumbsDownApplied(trackId);
         }
         return result;
@@ -231,11 +227,7 @@ function TrackPreferenceButtonsWithQuery({
     const canToggleDislike = Boolean(trackId) || Boolean(onToggleThumbsDown);
     const handleDislikeToggle = async () => {
         const result = await (onToggleThumbsDown ?? queriedToggleDislike)();
-        if (
-            trackId &&
-            onThumbsDownApplied &&
-            isConfirmedThumbsDown(result)
-        ) {
+        if (trackId && onThumbsDownApplied && isConfirmedThumbsDown(result)) {
             onThumbsDownApplied(trackId);
         }
         return result;

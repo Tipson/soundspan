@@ -28,8 +28,7 @@ mock.module("@/lib/audio-controls-context", {
         useAudioControls: () => ({
             pause: () => undefined,
             play: () => undefined,
-            advanceQueue: (origin: string) =>
-                state.advanceOrigins.push(origin),
+            advanceQueue: (origin: string) => state.advanceOrigins.push(origin),
         }),
     },
 });

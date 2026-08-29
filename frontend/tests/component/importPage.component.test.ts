@@ -215,7 +215,10 @@ test("explains Spotify import boundaries and names the back button", async () =>
         container.textContent || "",
         /does not play audio from Spotify, change the source playlist, or save audio files to the server/i,
     );
-    assert.match(container.textContent || "", /Private playlists are not supported yet/i);
+    assert.match(
+        container.textContent || "",
+        /Private playlists are not supported yet/i,
+    );
 
     await unmount();
 });

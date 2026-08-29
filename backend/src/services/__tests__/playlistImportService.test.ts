@@ -337,9 +337,9 @@ describe("PlaylistImportService", () => {
                     },
                 ],
             });
-            expect(mockSpotifyService.getPlaylistForImport).toHaveBeenCalledWith(
-                "playlist123",
-            );
+            expect(
+                mockSpotifyService.getPlaylistForImport,
+            ).toHaveBeenCalledWith("playlist123");
         });
 
         it("allows a public Spotify import without a Soundspan user argument", async () => {
@@ -356,9 +356,9 @@ describe("PlaylistImportService", () => {
                 name: "Public Spotify Playlist",
                 tracks: [],
             });
-            expect(mockSpotifyService.getPlaylistForImport).toHaveBeenCalledWith(
-                "playlist123",
-            );
+            expect(
+                mockSpotifyService.getPlaylistForImport,
+            ).toHaveBeenCalledWith("playlist123");
         });
 
         it("fetches YouTube playlist tracks with videoId preserved", async () => {

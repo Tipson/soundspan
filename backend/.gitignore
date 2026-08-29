@@ -6,6 +6,9 @@ dist/
 logs/
 *.log
 
+# testing
+/coverage
+
 # Runtime caches (safe to delete; regenerated)
 cache/
 
