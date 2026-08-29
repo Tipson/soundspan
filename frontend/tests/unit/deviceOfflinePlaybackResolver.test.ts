@@ -1,13 +1,25 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import {
+    acquireDeviceOfflinePlaybackSource,
     clearDeviceOfflineRuntimeState,
     getDeviceOfflinePlaybackErrorMessage,
+    hasDeviceOfflinePlaybackCopy,
     prepareDeviceOfflinePlaybackSource,
+    resolveDeviceOfflineMediaIdentity,
+    resolveDeviceOfflinePlaybackIdentity,
     resolveDeviceOfflinePlaybackUrl,
     setDeviceOfflineRuntimeState,
 } from "../../features/device-offline/playbackResolver";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
+import {
+    DeviceAudioVaultError,
+    installDeviceAudioVaultFactory,
+    type DeviceAudioVault,
+    type DeviceAudioVaultRef,
+    type DeviceAudioVaultSession,
+} from "../../features/device-offline/vault";
+import { getAuthRuntimeGeneration } from "../../lib/auth-runtime-generation";
 
 const TRACK = {
     id: "yt:video-a",
@@ -46,6 +58,26 @@ function readyRecord(
     };
 }
 
+function fakeVault(open: DeviceAudioVault["open"]): DeviceAudioVault {
+    return {
+        inspectAccess: async () => ({
+            status: "ready",
+            code: null,
+            storageKind: "desktop-directory",
+            label: "Test music",
+            reason: "Ready",
+        }),
+        requestAccess: async () => ({
+            status: "ready",
+            code: null,
+            storageKind: "desktop-directory",
+            label: "Test music",
+            reason: "Ready",
+        }),
+        open,
+    };
+}
+
 afterEach(() => clearDeviceOfflineRuntimeState());
 
 test("offline playback errors distinguish missing downloads from a damaged local copy", () => {
@@ -57,6 +89,190 @@ test("offline playback errors distinguish missing downloads from a damaged local
         getDeviceOfflinePlaybackErrorMessage(true),
         /downloaded copy could not be opened/i,
     );
+});
+
+test("playback identity is the stable ready-record key, not its transient URL", () => {
+    const record = readyRecord("user-1", "stable-key");
+    setDeviceOfflineRuntimeState("user-1", [record]);
+
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "stable-key");
+    assert.equal(
+        resolveDeviceOfflineMediaIdentity(TRACK),
+        `${TRACK.id}\u0000stable-key`,
+    );
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), true);
+
+    prepareDeviceOfflinePlaybackSource(
+        "user-1",
+        record,
+        "blob:https://soundspan.test/transient",
+        () => undefined,
+    );
+
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "stable-key");
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), true);
+});
+
+test("tracks without a verified ready record have no device playback identity", () => {
+    setDeviceOfflineRuntimeState("user-1", []);
+
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), null);
+    assert.equal(resolveDeviceOfflineMediaIdentity(TRACK), TRACK.id);
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+});
+
+test("managed device playback opens an owner-scoped vault lease", async (t) => {
+    const record = {
+        ...readyRecord("user-1", "managed-key"),
+        mediaRef: "fsa1:owner:file" as DeviceAudioVaultRef,
+    };
+    const openCalls: Array<{ ownerId: string; authGeneration: number }> = [];
+    const accessCalls: unknown[] = [];
+    let releases = 0;
+    const session = {
+        ownerId: "user-1",
+        authGeneration: getAuthRuntimeGeneration(),
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: async (input: unknown) => {
+            accessCalls.push(input);
+            return {
+                kind: "play",
+                url: "blob:https://soundspan.test/managed",
+                release: () => releases++,
+            };
+        },
+    } as unknown as DeviceAudioVaultSession;
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeVault(async (input) => {
+            openCalls.push(input);
+            return session;
+        }),
+    );
+    t.after(restore);
+    setDeviceOfflineRuntimeState("user-1", [record]);
+
+    const source = await acquireDeviceOfflinePlaybackSource(
+        TRACK,
+        "/network",
+        new AbortController().signal,
+    );
+
+    assert.deepEqual(openCalls, [
+        {
+            ownerId: "user-1",
+            authGeneration: getAuthRuntimeGeneration(),
+        },
+    ]);
+    assert.deepEqual(accessCalls, [
+        {
+            kind: "play",
+            ref: record.mediaRef,
+            expectedBytes: 6,
+        },
+    ]);
+    assert.equal(source.url, "blob:https://soundspan.test/managed");
+    source.release();
+    assert.equal(releases, 1);
+});
+
+test("legacy records retain the virtual URL without opening the vault", async (t) => {
+    let openCalls = 0;
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeVault(async () => {
+            openCalls += 1;
+            throw new Error("legacy playback must not open the vault");
+        }),
+    );
+    t.after(restore);
+    const record = readyRecord("user-1", "legacy-key");
+    setDeviceOfflineRuntimeState("user-1", [record]);
+
+    const source = await acquireDeviceOfflinePlaybackSource(
+        TRACK,
+        "/network",
+        new AbortController().signal,
+    );
+
+    assert.equal(source.url, record.virtualUrl);
+    assert.equal(openCalls, 0);
+});
+
+test("a recoverable vault access failure falls back to the clean network URL", async (t) => {
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeVault(async () => {
+            throw new DeviceAudioVaultError(
+                "permission_required",
+                "Reconnect the selected folder",
+                "user-action",
+            );
+        }),
+    );
+    t.after(restore);
+    setDeviceOfflineRuntimeState("user-1", [
+        {
+            ...readyRecord("user-1", "permission-key"),
+            mediaRef: "fsa1:owner:permission" as DeviceAudioVaultRef,
+        },
+    ]);
+
+    const source = await acquireDeviceOfflinePlaybackSource(
+        TRACK,
+        "/network",
+        new AbortController().signal,
+    );
+
+    assert.equal(source.url, "/network");
+});
+
+test("an aborted managed acquisition releases a late vault URL", async (t) => {
+    let resolveAccess!: (value: unknown) => void;
+    let releases = 0;
+    const accessPromise = new Promise((resolve) => {
+        resolveAccess = resolve;
+    });
+    const session = {
+        ownerId: "user-1",
+        authGeneration: getAuthRuntimeGeneration(),
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: () => accessPromise,
+    } as unknown as DeviceAudioVaultSession;
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeVault(async () => session),
+    );
+    t.after(restore);
+    setDeviceOfflineRuntimeState("user-1", [
+        {
+            ...readyRecord("user-1", "late-key"),
+            mediaRef: "fsa1:owner:late" as DeviceAudioVaultRef,
+        },
+    ]);
+    const controller = new AbortController();
+
+    const sourcePromise = acquireDeviceOfflinePlaybackSource(
+        TRACK,
+        "/network",
+        controller.signal,
+    );
+    await Promise.resolve();
+    controller.abort();
+    resolveAccess({
+        kind: "play",
+        url: "blob:https://soundspan.test/late",
+        release: () => releases++,
+    });
+
+    await assert.rejects(
+        sourcePromise,
+        (error: unknown) =>
+            error instanceof DOMException && error.name === "AbortError",
+    );
+    assert.equal(releases, 1);
 });
 
 test("a prepared CacheStorage blob is preferred without consulting the network URL", () => {

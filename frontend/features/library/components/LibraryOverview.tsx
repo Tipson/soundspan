@@ -122,8 +122,10 @@ export function LibraryOverview({
                             Only on this device
                         </h3>
                         <p className="mt-1 text-xs leading-5 text-content-muted">
-                            Offline copies stay in this browser and do not
-                            automatically appear on your other devices.
+                            Offline music is saved as ordinary files in your
+                            selected device folder. Their status and folder
+                            permission belong to this browser profile; clearing
+                            site data does not delete the files.
                         </p>
                     </div>
                     <Link

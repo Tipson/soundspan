@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Device downloads retain audio as ordinary files below a user-selected folder on supported desktop and Android Chromium browsers; IndexedDB keeps only owner-scoped metadata, queue state, and the persisted directory handle. Existing verified CacheStorage copies migrate file-first after folder setup, while unsupported browsers explain that a native mobile build is required instead of reporting browser-private bytes as device files.
 - Library is now a personal, account-scoped music hub for liked songs, user playlists, explicitly saved albums and artists, and downloads on the current device; album and artist pages expose an optimistic Save to Library control without treating one liked track as a saved release or downloading server files.
 - Home opens with a one-tap My Wave launch, direct access to liked tracks, listening history, playlist import, and global search, then prioritizes Quick picks, Listen again, and fresh discoveries; obsolete local-library, podcast, and audiobook requests no longer delay or populate this music-first surface.
 - Home and Explore are one online-first landing page: the legacy `/explore` entry redirects to Home, live YouTube Music mixes, categories, shelves, and charts follow the personal feed, empty generated playlists stay hidden, and the primary navigation is reduced to Home, Library, and Vibe without starting the optional Listen Together polling loop.

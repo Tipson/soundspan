@@ -276,6 +276,24 @@ class SharedMapMetadataStore implements DeviceOfflineMetadataStore {
         return true;
     }
 
+    async putAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
+        const current = this.record(expected.key);
+        if (
+            current?.management !== "auto-liked" ||
+            expected.management !== "auto-liked" ||
+            !matchesDeviceOfflineRecordVersion(current, expected)
+        ) {
+            return false;
+        }
+        await this.put(next);
+        return true;
+    }
+
     async interruptForegroundIfLeaseExpired(
         expected: DeviceOfflineDownloadRecord,
         now: number,

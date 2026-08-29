@@ -15,12 +15,14 @@ const limitOptions = DEVICE_OFFLINE_AUTO_LIMIT_OPTIONS.map((limit) => ({
     label: `${limit} songs`,
 }));
 
-/** User-owned, browser-local liked-song automation controls. */
+/** User-owned controls for liked-song files retained on this device. */
 export function DeviceOfflineSettingsSection() {
     const {
         automationSettings,
         isQueueHydrated,
         storageError,
+        storage,
+        setupStorage,
         retryStorage,
         updateAutomationSettings,
     } = useDeviceOffline();
@@ -28,11 +30,32 @@ export function DeviceOfflineSettingsSection() {
     const [error, setError] = useState<string | null>(null);
     const enabled = automationSettings?.autoDownloadLiked ?? false;
     const limit = automationSettings?.autoDownloadLikedLimit ?? 100;
-    const controlsUnavailable =
+    const baseControlsUnavailable =
         isSaving ||
         !isQueueHydrated ||
         Boolean(storageError) ||
         !automationSettings;
+    const toggleUnavailable =
+        baseControlsUnavailable || (storage.status !== "ready" && !enabled);
+    const limitUnavailable =
+        baseControlsUnavailable || storage.status !== "ready";
+    const reconnectRememberedFolder =
+        Boolean(storage.directoryName) &&
+        (storage.status === "needs-setup" || storage.status === "error");
+
+    const chooseStorage = async () => {
+        setIsSaving(true);
+        setError(null);
+        try {
+            await setupStorage();
+        } catch {
+            setError(
+                "Soundspan could not open that folder. Choose it again and allow file access.",
+            );
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const update = async (
         patch:
@@ -54,7 +77,7 @@ export function DeviceOfflineSettingsSection() {
         <SettingsSection
             id="device-offline"
             title="Offline on this device"
-            description="These controls apply only to this browser or installed PWA. They do not download music to the server or sync file status to another phone."
+            description="Downloads are configured separately on every phone or computer. They are not stored on the Soundspan server and do not automatically appear on another device."
         >
             {storageError && (
                 <div
@@ -86,15 +109,74 @@ export function DeviceOfflineSettingsSection() {
                     Loading offline settings on this device…
                 </p>
             )}
+            <div
+                className="mb-4 rounded-xl border border-line-subtle bg-white/[0.03] p-4"
+                aria-live="polite"
+            >
+                {storage.status === "ready" ? (
+                    <>
+                        <p className="text-sm font-semibold text-content-heading">
+                            Device folder ready
+                        </p>
+                        <p className="mt-1 text-sm text-content-muted">
+                            New downloads will use{" "}
+                            <span className="font-medium text-content-body">
+                                {storage.directoryName ??
+                                    "the selected Soundspan folder"}
+                            </span>
+                            .
+                        </p>
+                    </>
+                ) : (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-content-heading">
+                                {storage.status === "unsupported"
+                                    ? "Device-folder downloads are unavailable"
+                                    : storage.status === "checking"
+                                      ? "Checking device storage…"
+                                      : storage.status === "requesting"
+                                        ? "Waiting for folder access…"
+                                        : reconnectRememberedFolder
+                                          ? "Reconnect music folder"
+                                          : "Choose a music folder"}
+                            </p>
+                            <p className="mt-1 text-sm leading-5 text-content-muted">
+                                {storage.explanation}
+                            </p>
+                        </div>
+                        {(storage.status === "needs-setup" ||
+                            storage.status === "error") && (
+                            <button
+                                type="button"
+                                aria-label={
+                                    reconnectRememberedFolder
+                                        ? "Reconnect music folder on this device"
+                                        : "Choose music folder on this device"
+                                }
+                                disabled={isSaving}
+                                onClick={() => void chooseStorage()}
+                                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-brand/40 px-4 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+                            >
+                                {isSaving
+                                    ? "Opening…"
+                                    : reconnectRememberedFolder
+                                      ? "Reconnect folder"
+                                      : "Choose folder"}
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
             <SettingsRow
                 htmlFor="device-auto-download-liked"
                 label="Automatically download liked songs on this device"
-                description="Off by default. When enabled, Soundspan saves liked songs gradually while this PWA is open, visible, and online, then resumes later after an interruption."
+                description="Off by default. After a device folder is ready, Soundspan saves liked songs gradually while the app is open, visible, and online, then resumes later after an interruption."
             >
                 <SettingsToggle
                     id="device-auto-download-liked"
                     checked={enabled}
-                    disabled={controlsUnavailable}
+                    disabled={toggleUnavailable}
                     onChange={(checked) =>
                         void update({ autoDownloadLiked: checked })
                     }
@@ -108,7 +190,7 @@ export function DeviceOfflineSettingsSection() {
                 <SettingsSelect
                     id="device-auto-download-limit"
                     value={String(limit)}
-                    disabled={controlsUnavailable}
+                    disabled={limitUnavailable}
                     options={limitOptions}
                     onChange={(value) =>
                         void update({
@@ -118,9 +200,10 @@ export function DeviceOfflineSettingsSection() {
                 />
             </SettingsRow>
             <p className="text-xs leading-5 text-gray-400" aria-live="polite">
-                Automatic copies use at most 2 GB on this device. iPhone and
-                iPad continue when you reopen Soundspan; Android also resumes
-                when the installed app returns to the foreground.
+                Automatic copies use at most 2 GB in this device&apos;s
+                Soundspan storage. A plain PWA cannot download reliably in the
+                background; keep Soundspan open until the current transfer
+                finishes.
             </p>
             {error && (
                 <p className="mt-2 text-xs text-red-400" role="alert">

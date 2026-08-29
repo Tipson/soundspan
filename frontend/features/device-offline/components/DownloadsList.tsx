@@ -59,6 +59,34 @@ function progressPercent(record: DeviceOfflineDownloadRecord): number | null {
     );
 }
 
+function isDeviceFileDeleteRecovery(
+    record: DeviceOfflineDownloadRecord,
+): boolean {
+    return (
+        record.errorCode === "device_file_delete_pending" ||
+        record.errorCode === "device_file_delete_failed"
+    );
+}
+
+function managementCopy(
+    management: DeviceOfflineDownloadRecord["management"],
+): string {
+    return management === "auto-liked"
+        ? "Automatic from Liked songs"
+        : "Kept offline manually";
+}
+
+function deleteConfirmation(
+    title: string,
+    management: DeviceOfflineDownloadRecord["management"],
+): string {
+    const automaticWarning =
+        management === "auto-liked"
+            ? " This automatic copy may download again while automatic liked-song downloads are enabled."
+            : "";
+    return `Remove “${title}” only from this device?${automaticWarning} Your Library and copies on other devices will not change.`;
+}
+
 function queueStatusCopy(item: DeviceOfflineQueueItem): string {
     if (item.status === "processing") {
         return "Starting device download — keep Soundspan open";
@@ -81,6 +109,8 @@ export function DownloadsList() {
         records,
         queueItems,
         capability,
+        storage,
+        setupStorage,
         cancelQueuedDownload,
         deleteDownload,
         preparePlayback,
@@ -96,6 +126,61 @@ export function DownloadsList() {
                     record.quality === item.quality,
             ),
     );
+    const reconnectRememberedFolder =
+        Boolean(storage.directoryName) &&
+        (storage.status === "needs-setup" || storage.status === "error");
+    const storageNotice =
+        storage.status === "ready" ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
+                Device folder:{" "}
+                <span className="font-medium text-white/85">
+                    {storage.directoryName ?? "selected Soundspan folder"}
+                </span>
+                . {capability.explanation}
+            </div>
+        ) : (
+            <div className="flex flex-col gap-3 rounded-xl border border-warning/25 bg-warning/10 px-4 py-4 text-sm text-content-body sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p className="font-semibold">
+                        {storage.status === "unsupported"
+                            ? "Device-folder downloads are unavailable"
+                            : storage.status === "checking"
+                              ? "Checking device storage…"
+                              : storage.status === "requesting"
+                                ? "Waiting for folder access…"
+                                : reconnectRememberedFolder
+                                  ? "Reconnect music folder"
+                                  : "Choose a music folder"}
+                    </p>
+                    <p className="mt-1 text-content-muted">
+                        {storage.explanation}
+                    </p>
+                </div>
+                {(storage.status === "needs-setup" ||
+                    storage.status === "error") && (
+                    <button
+                        type="button"
+                        aria-label={
+                            reconnectRememberedFolder
+                                ? "Reconnect music folder on this device"
+                                : "Choose music folder on this device"
+                        }
+                        onClick={() => {
+                            void setupStorage().catch(() =>
+                                toast.error(
+                                    "Could not open that folder. Choose it again and allow file access.",
+                                ),
+                            );
+                        }}
+                        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
+                    >
+                        {reconnectRememberedFolder
+                            ? "Reconnect folder"
+                            : "Choose folder"}
+                    </button>
+                )}
+            </div>
+        );
 
     const storageErrorNotice = storageError ? (
         <div
@@ -123,6 +208,7 @@ export function DownloadsList() {
 
     if (records.length === 0 && visibleQueueItems.length === 0) {
         if (storageErrorNotice) return storageErrorNotice;
+        if (storage.status !== "ready") return storageNotice;
         return (
             <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 text-center">
                 <HardDriveDownload className="mb-4 h-10 w-10 text-white/35" />
@@ -140,10 +226,7 @@ export function DownloadsList() {
     return (
         <div className="space-y-3">
             {storageErrorNotice}
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
-                {capability.explanation} Browser storage may still be reclaimed;
-                items marked interrupted can be downloaded again.
-            </div>
+            {storageNotice}
             <div className="overflow-hidden rounded-xl border border-white/10">
                 {visibleQueueItems.map((item) => (
                     <div
@@ -161,6 +244,7 @@ export function DownloadsList() {
                                 {item.track.title}
                             </p>
                             <p className="truncate text-xs text-white/50">
+                                {managementCopy(item.management)} ·{" "}
                                 {item.track.artist.name} ·{" "}
                                 {queueStatusCopy(item)}
                             </p>
@@ -197,7 +281,10 @@ export function DownloadsList() {
                             onClick={() => {
                                 if (
                                     !window.confirm(
-                                        `Remove “${item.track.title}” only from this device? Your Library and copies on other devices will not change.`,
+                                        deleteConfirmation(
+                                            item.track.title,
+                                            item.management,
+                                        ),
                                     )
                                 ) {
                                     return;
@@ -249,6 +336,7 @@ export function DownloadsList() {
                                     {record.track.title}
                                 </p>
                                 <p className="truncate text-xs text-white/50">
+                                    {managementCopy(record.management)} ·{" "}
                                     {record.track.artist.name} ·{" "}
                                     {statusCopy(record)}
                                 </p>
@@ -277,29 +365,33 @@ export function DownloadsList() {
                                 )}
                             </div>
                             {(record.status === "interrupted" ||
-                                record.status === "error") && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        void resume(record).catch(() =>
-                                            toast.error(
-                                                "Could not retry this download",
-                                            ),
-                                        );
-                                    }}
-                                    className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
-                                    aria-label={`Retry ${record.track.title}`}
-                                    title="Retry download"
-                                >
-                                    <RotateCcw className="h-4 w-4" />
-                                </button>
-                            )}
+                                record.status === "error") &&
+                                !isDeviceFileDeleteRecovery(record) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            void resume(record).catch(() =>
+                                                toast.error(
+                                                    "Could not retry this download",
+                                                ),
+                                            );
+                                        }}
+                                        className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
+                                        aria-label={`Retry ${record.track.title}`}
+                                        title="Retry download"
+                                    >
+                                        <RotateCcw className="h-4 w-4" />
+                                    </button>
+                                )}
                             <button
                                 type="button"
                                 onClick={() => {
                                     if (
                                         !window.confirm(
-                                            `Remove “${record.track.title}” only from this device? Your Library and copies on other devices will not change.`,
+                                            deleteConfirmation(
+                                                record.track.title,
+                                                record.management,
+                                            ),
                                         )
                                     ) {
                                         return;
@@ -311,8 +403,12 @@ export function DownloadsList() {
                                     );
                                 }}
                                 className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
-                                aria-label={`Delete device copy of ${record.track.title}`}
-                                title="Delete device copy"
+                                aria-label={`${isDeviceFileDeleteRecovery(record) ? "Retry deleting" : "Delete device copy of"} ${record.track.title}`}
+                                title={
+                                    isDeviceFileDeleteRecovery(record)
+                                        ? "Retry deleting device copy"
+                                        : "Delete device copy"
+                                }
                             >
                                 <Trash2 className="h-4 w-4" />
                             </button>

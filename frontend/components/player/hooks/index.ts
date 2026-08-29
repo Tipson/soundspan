@@ -4,6 +4,8 @@ export { useApplyCurrentOutputState } from "./useOutputState";
 export { useStartupStability } from "./useStartupStability";
 export { useForegroundRecovery } from "./useForegroundRecovery";
 export { useNextTrackPreload } from "./useNextTrackPreload";
+export { usePlaybackSourceLeaseController } from "./playbackSourceLeaseController";
+export { startTrackPlaybackSourceLease } from "./startTrackPlaybackSourceLease";
 export { useAutoMatchVibe, useYtMusicAuth } from "./usePlaybackAccounts";
 export { usePlaybackControlSync } from "./usePlaybackControlSync";
 export { usePlaybackMetadataSync } from "./usePlaybackMetadataSync";

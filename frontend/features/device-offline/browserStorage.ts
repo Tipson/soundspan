@@ -8,6 +8,7 @@ import {
     type DeviceOfflineAudioCache,
     type DeviceOfflineMetadataStore,
 } from "./downloadManager";
+import { getDeviceAudioVault } from "./vault";
 import {
     getAuthRuntimeLease,
     isCurrentAuthRuntime,
@@ -303,6 +304,43 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
         });
     }
 
+    async putAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        const database = await openDatabase();
+        return new Promise((resolve, reject) => {
+            let updated = false;
+            const transaction = database.transaction(
+                DEVICE_OFFLINE_STORE_NAME,
+                "readwrite",
+            );
+            const store = transaction.objectStore(DEVICE_OFFLINE_STORE_NAME);
+            const request = store.get(expected.key);
+            request.onsuccess = () => {
+                if (isAuthorized && !isAuthorized()) return;
+                const current = request.result as
+                    | DeviceOfflineDownloadRecord
+                    | undefined;
+                if (
+                    current?.management === "auto-liked" &&
+                    expected.management === "auto-liked" &&
+                    matchesDeviceOfflineRecordVersion(current, expected)
+                ) {
+                    updated = true;
+                    store.put(
+                        mergeConcurrentDeviceOfflineUpdate(current, next),
+                    );
+                }
+            };
+            request.onerror = () => transaction.abort();
+            transaction.oncomplete = () => resolve(updated);
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+    }
+
     async interruptForegroundIfLeaseExpired(
         expected: DeviceOfflineDownloadRecord,
         now: number,
@@ -464,6 +502,7 @@ export function getBrowserDeviceOfflineManager(): DeviceOfflineDownloadManager {
             new BrowserMetadataStore(),
         ),
         audioCache: new BrowserAudioCache(),
+        audioVault: getDeviceAudioVault(),
         fetch: window.fetch.bind(window),
         now: Date.now,
         createKey: createOpaqueKey,

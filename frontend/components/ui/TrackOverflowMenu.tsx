@@ -93,6 +93,43 @@ export function TrackOverflowMenu({
     const deviceOffline = useOptionalDeviceOffline();
     const isRemote = isRemoteTrack(track);
     const deviceRecord = deviceOffline?.recordForTrack(track) ?? null;
+    const deviceStorageStatus = deviceOffline?.storage.status ?? null;
+    const deviceStorageBlocked =
+        deviceStorageStatus === "unsupported" ||
+        deviceStorageStatus === "checking" ||
+        deviceStorageStatus === "requesting";
+    const isAutoManagedReady =
+        deviceRecord?.status === "ready" &&
+        deviceRecord.management === "auto-liked";
+    const deviceDownloadDisabled =
+        deviceRecord?.status === "downloading" ||
+        (deviceRecord?.status === "ready" && !isAutoManagedReady) ||
+        deviceStorageBlocked;
+    const deviceDownloadLabel = (() => {
+        if (deviceRecord?.status === "ready" && !isAutoManagedReady) {
+            return "Available offline";
+        }
+        if (deviceRecord?.status === "downloading") return "Downloading…";
+        if (deviceStorageStatus === "unsupported") {
+            return "Downloads unavailable in this browser";
+        }
+        if (deviceStorageStatus === "checking") {
+            return "Checking device storage…";
+        }
+        if (deviceStorageStatus === "requesting") {
+            return "Waiting for folder access…";
+        }
+        if (deviceStorageStatus === "needs-setup") {
+            return "Choose folder and download";
+        }
+        if (deviceStorageStatus === "error") {
+            return deviceOffline?.storage.directoryName
+                ? "Reconnect folder and download"
+                : "Choose folder and download";
+        }
+        if (isAutoManagedReady) return "Keep offline on this device";
+        return deviceRecord ? "Retry device download" : "Download to device";
+    })();
 
     const effectiveShowMatchVibe = showMatchVibe && !isRemote;
     const effectiveShowVibeMap = showVibeMap && !isRemote;
@@ -312,8 +349,7 @@ export function TrackOverflowMenu({
         (e: React.MouseEvent) => {
             e.stopPropagation();
             closeMenu();
-            if (!deviceOffline || deviceRecord?.status === "downloading")
-                return;
+            if (!deviceOffline || deviceDownloadDisabled) return;
             void deviceOffline
                 .download({
                     track,
@@ -335,7 +371,7 @@ export function TrackOverflowMenu({
                     ),
                 );
         },
-        [closeMenu, deviceOffline, deviceRecord?.status, track],
+        [closeMenu, deviceDownloadDisabled, deviceOffline, track],
     );
 
     return (
@@ -404,12 +440,10 @@ export function TrackOverflowMenu({
                         {deviceOffline && (
                             <MenuButton
                                 onClick={handleDeviceDownload}
-                                disabled={
-                                    deviceRecord?.status === "downloading" ||
-                                    deviceRecord?.status === "ready"
-                                }
+                                disabled={deviceDownloadDisabled}
                                 icon={
-                                    deviceRecord?.status === "ready" ? (
+                                    deviceRecord?.status === "ready" &&
+                                    !isAutoManagedReady ? (
                                         <span aria-hidden="true">✓</span>
                                     ) : deviceRecord?.status ===
                                       "downloading" ? (
@@ -418,15 +452,7 @@ export function TrackOverflowMenu({
                                         <span aria-hidden="true">↓</span>
                                     )
                                 }
-                                label={
-                                    deviceRecord?.status === "ready"
-                                        ? "Available offline"
-                                        : deviceRecord?.status === "downloading"
-                                          ? "Downloading…"
-                                          : deviceRecord
-                                            ? "Retry device download"
-                                            : "Download to device"
-                                }
+                                label={deviceDownloadLabel}
                             />
                         )}
 

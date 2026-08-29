@@ -103,6 +103,8 @@ export function requiresDeviceOfflineCrossTabRefresh(
         previous.bytesReceived !== next.bytesReceived ||
         previous.totalBytes !== next.totalBytes ||
         previous.contentType !== next.contentType ||
+        previous.mediaRef !== next.mediaRef ||
+        previous.integrityVersion !== next.integrityVersion ||
         previous.persistenceGranted !== next.persistenceGranted ||
         previous.management !== next.management ||
         previous.attempt !== next.attempt ||
@@ -159,6 +161,22 @@ class InvalidatingDeviceOfflineMetadataStore implements DeviceOfflineMetadataSto
         isAuthorized?: () => boolean,
     ): Promise<boolean> {
         const updated = await this.delegate.putIfCurrent(
+            expected,
+            next,
+            isAuthorized,
+        );
+        if (updated && requiresDeviceOfflineCrossTabRefresh(expected, next)) {
+            this.publish();
+        }
+        return updated;
+    }
+
+    async putAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        const updated = await this.delegate.putAutoManagedIfCurrent(
             expected,
             next,
             isAuthorized,

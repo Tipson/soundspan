@@ -305,7 +305,7 @@ export default function LibraryPage() {
                     <section>
                         <SectionHeading
                             title="Downloads on this device"
-                            description="Offline copies stored only in this browser"
+                            description="Music saved as ordinary files in your selected device folder. Their status and folder permission belong to this browser profile; clearing site data does not delete the files."
                         />
                         <DownloadsList />
                     </section>

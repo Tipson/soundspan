@@ -20,6 +20,13 @@ import {
 } from "../../features/device-offline/playbackResolver";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
 import {
+    installDeviceAudioVaultFactory,
+    type DeviceAudioPlayResult,
+    type DeviceAudioVault,
+    type DeviceAudioVaultRef,
+    type DeviceAudioVaultSession,
+} from "../../features/device-offline/vault";
+import {
     clearPlaybackHeartbeat,
     hasFreshPlaybackHeartbeat,
 } from "../../lib/audio/playback-liveness";
@@ -546,6 +553,66 @@ const makeTrack = (id: string, overrides: Partial<Track> = {}): Track => ({
     streamSource: "local",
     ...overrides,
 });
+
+const fakeDeviceAudioVault = (
+    open: DeviceAudioVault["open"],
+): DeviceAudioVault => ({
+    inspectAccess: async () => ({
+        status: "ready",
+        code: null,
+        storageKind: "desktop-directory",
+        label: "Test music",
+        reason: "Ready",
+    }),
+    requestAccess: async () => ({
+        status: "ready",
+        code: null,
+        storageKind: "desktop-directory",
+        label: "Test music",
+        reason: "Ready",
+    }),
+    open,
+});
+
+const deferred = <T>(): {
+    promise: Promise<T>;
+    resolve(value: T): void;
+} => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((resolvePromise) => {
+        resolve = resolvePromise;
+    });
+    return { promise, resolve };
+};
+
+const managedReadyRecord = (
+    ownerId: string,
+    key: string,
+    track: Track,
+    mediaRef: DeviceAudioVaultRef,
+): DeviceOfflineDownloadRecord =>
+    ({
+        key,
+        ownerId,
+        trackIdentity: `youtube:${track.youtubeVideoId ?? track.id}`,
+        quality: "auto",
+        virtualUrl: `/__offline/audio/${key}`,
+        sourceUrl: `/api/ytmusic/stream-public/${track.youtubeVideoId ?? track.id}`,
+        track,
+        status: "ready",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 6,
+        totalBytes: 6,
+        contentType: "audio/mp4",
+        persistenceGranted: true,
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+        mediaRef,
+    }) as DeviceOfflineDownloadRecord;
 
 const resetHarnessState = (): void => {
     clearDeviceOfflineRuntimeState();
@@ -1490,7 +1557,7 @@ test("unavailable YouTube Music playback keeps the existing skip when no alterna
     assert.equal(controlCalls.next, 1);
 });
 
-test("preparing a downloaded copy reloads the same track from its local Blob URL", async () => {
+test("preparing a downloaded copy keeps the ready-record media identity stable", async () => {
     const track = makeTrack("downloaded-track", {
         streamSource: "youtube",
         youtubeVideoId: "downloaded-video",
@@ -1543,9 +1610,193 @@ test("preparing a downloaded copy reloads the same track from its local Blob URL
 
     assert.equal(
         engine.loadCalls.at(-1)?.args[0],
-        "blob:https://soundspan.test/downloaded-key",
+        "/__offline/audio/downloaded-key",
     );
-    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(engine.loadCalls.length, 1);
+});
+
+test("a late device-file lease cannot load a retired track and every acquired URL is released", async (t) => {
+    const firstTrack = makeTrack("yt:first-file", {
+        streamSource: "youtube",
+        youtubeVideoId: "first-file",
+    });
+    const secondTrack = makeTrack("yt:second-file", {
+        streamSource: "youtube",
+        youtubeVideoId: "second-file",
+    });
+    const firstRef = "fsa1:user:first" as DeviceAudioVaultRef;
+    const secondRef = "fsa1:user:second" as DeviceAudioVaultRef;
+    const firstAccess = deferred<DeviceAudioPlayResult>();
+    let firstReleases = 0;
+    let secondReleases = 0;
+    const session = {
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: (input: { ref: DeviceAudioVaultRef }) => {
+            if (input.ref === firstRef) return firstAccess.promise;
+            return Promise.resolve({
+                kind: "play" as const,
+                url: "blob:https://soundspan.test/second",
+                release: () => secondReleases++,
+            });
+        },
+    } as unknown as DeviceAudioVaultSession;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async ({ authGeneration }) => {
+            return { ...session, authGeneration };
+        }),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord("user-1", "first-key", firstTrack, firstRef),
+        managedReadyRecord("user-1", "second-key", secondTrack, secondRef),
+    ]);
+    audioState.currentTrack = firstTrack;
+    audioState.queue = [firstTrack, secondTrack];
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 0);
+
+    audioState.currentTrack = secondTrack;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(
+        engine.loadCalls[0]?.args[0],
+        "blob:https://soundspan.test/second",
+    );
+
+    firstAccess.resolve({
+        kind: "play",
+        url: "blob:https://soundspan.test/first-too-late",
+        release: () => firstReleases++,
+    });
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(firstReleases, 1);
+
+    hookRuntime.unmount();
+    assert.equal(secondReleases, 1);
+});
+
+test("a terminal offline error releases the active device-file playback lease", async (t) => {
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: { onLine: false },
+    });
+    t.after(() => {
+        if (navigatorDescriptor) {
+            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+
+    const track = makeTrack("yt:offline-file", {
+        streamSource: "youtube",
+        youtubeVideoId: "offline-file",
+    });
+    const ref = "fsa1:user:offline" as DeviceAudioVaultRef;
+    let releases = 0;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(
+            async ({ ownerId, authGeneration }) =>
+                ({
+                    ownerId,
+                    authGeneration,
+                    storage: {
+                        kind: "desktop-directory",
+                        label: "Test music",
+                    },
+                    retain: async () => {
+                        throw new Error("retain is not used by playback");
+                    },
+                    access: async () => ({
+                        kind: "play" as const,
+                        url: "blob:https://soundspan.test/offline",
+                        release: () => {
+                            releases += 1;
+                        },
+                    }),
+                }) as unknown as DeviceAudioVaultSession,
+        ),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord("user-1", "offline-key", track, ref),
+    ]);
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "blob:https://soundspan.test/offline",
+    );
+
+    engine.emit("loaderror", {
+        error: new TypeError("network disconnected"),
+        code: "MEDIA_ERR_NETWORK",
+        recoverable: false,
+    });
+    await flushAsync(10);
+    assert.equal(releases, 1);
+});
+
+test("next-track preload acquires and releases its own managed device-file lease", async (t) => {
+    const currentTrack = makeTrack("current-network");
+    const nextTrack = makeTrack("yt:preloaded-file", {
+        streamSource: "youtube",
+        youtubeVideoId: "preloaded-file",
+    });
+    const nextRef = "fsa1:user:preload" as DeviceAudioVaultRef;
+    let releases = 0;
+    const session = {
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: async () => ({
+            kind: "play" as const,
+            url: "blob:https://soundspan.test/preload",
+            release: () => releases++,
+        }),
+    } as unknown as DeviceAudioVaultSession;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async ({ authGeneration }) => ({
+            ...session,
+            authGeneration,
+        })),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord("user-1", "preload-key", nextTrack, nextRef),
+    ]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+
+    assert.deepEqual(engine.preloadCalls, [
+        { url: "blob:https://soundspan.test/preload", format: "mp4" },
+    ]);
+    hookRuntime.unmount();
+    assert.equal(releases, 1);
 });
 
 test("offline playback failure pauses once without cascading through the queue", async (t) => {

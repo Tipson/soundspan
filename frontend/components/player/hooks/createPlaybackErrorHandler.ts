@@ -12,7 +12,7 @@ import {
 } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import {
     getDeviceOfflinePlaybackErrorMessage,
-    resolveDeviceOfflinePlaybackUrl,
+    hasDeviceOfflinePlaybackCopy,
 } from "@/features/device-offline/playbackResolver";
 import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 import { frontendLogger } from "@/lib/logger";
@@ -35,6 +35,7 @@ interface PlaybackErrorHandlerOptions {
     clearPendingTrackErrorSkip(): void;
     clearStartupPlaybackRecovery(): void;
     clearTransientTrackRecovery(resetAttempts: boolean): void;
+    releasePlaybackSource(): void;
     attemptUnavailableYtMusicRecovery(
         track: Track | null,
     ): Promise<UnavailableYtMusicRecoveryOutcome>;
@@ -61,6 +62,7 @@ export function createPlaybackErrorHandler({
     clearPendingTrackErrorSkip,
     clearStartupPlaybackRecovery,
     clearTransientTrackRecovery,
+    releasePlaybackSource,
     attemptUnavailableYtMusicRecovery,
     attemptTransientTrackRecovery,
     scheduleTrackErrorSkip,
@@ -113,10 +115,11 @@ export function createPlaybackErrorHandler({
             typeof navigator !== "undefined" &&
             navigator.onLine === false
         ) {
+            releasePlaybackSource();
             finishFailedPlay();
-            const deviceUrl = currentTrack
-                ? resolveDeviceOfflinePlaybackUrl(currentTrack, "")
-                : "";
+            const hasDeviceCopy = currentTrack
+                ? hasDeviceOfflinePlaybackCopy(currentTrack)
+                : false;
             playbackStateMachine.forceTransition("ERROR", {
                 error: errorMessage,
             });
@@ -128,13 +131,10 @@ export function createPlaybackErrorHandler({
             clearPendingTrackErrorSkip();
             clearStartupPlaybackRecovery();
             clearTransientTrackRecovery(true);
-            toast.error(
-                getDeviceOfflinePlaybackErrorMessage(Boolean(deviceUrl)),
-                {
-                    id: "device-offline-playback-error",
-                    duration: 5000,
-                },
-            );
+            toast.error(getDeviceOfflinePlaybackErrorMessage(hasDeviceCopy), {
+                id: "device-offline-playback-error",
+                duration: 5000,
+            });
             return;
         }
 
@@ -172,6 +172,7 @@ export function createPlaybackErrorHandler({
         }
 
         if (playbackType === "track") {
+            releasePlaybackSource();
             finishFailedPlay();
         }
         playbackStateMachine.forceTransition("ERROR", { error: errorMessage });

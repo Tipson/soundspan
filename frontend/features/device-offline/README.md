@@ -1,80 +1,51 @@
 # Device Offline
 
-Device Offline stores user-selected complete tracks in the browser without a
-server-side bulk-download job.
+Device Offline retains complete audio files on the current device. It never
+creates a server-side bulk-download job and it never treats a browser cache as
+the final destination for a new download.
 
-- `DeviceOfflineProvider.tsx` owns the active user's reconciled download list
-  and publishes only verified ready records to the synchronous player resolver.
-  It also resumes the foreground-only collection queue on mount, focus,
-  visibility, and network restoration without emitting offline error toasts.
-- `offlineQueue.ts` and `browserQueueStorage.ts` keep a second, owner-scoped
-  IndexedDB queue for album batches and optional liked-song automation. Atomic
-  leases enforce one foreground transfer per owner across tabs; identity plus
-  quality de-duplicates work, and completed items leave the queue only after
-  the download manager publishes verified ready metadata.
-- `downloadManager.ts` coordinates observable foreground transfers on Android,
-  iPhone, and desktop. Chromium Background Fetch is intentionally disabled for
-  new transfers because dynamically spooled responses can remain at 0% without
-  a reliable completion signal. Metadata lives in IndexedDB; audio is committed
-  atomically to the dedicated CacheStorage cache under an opaque virtual URL.
-- Foreground transfers publish a renewable per-attempt lease so another tab
-  cannot mistake an active download for an interrupted one. Legacy Background
-  Fetch registrations are retired independently of media metadata: mount,
-  focus, controller changes, and service-worker activation enumerate every
-  Soundspan-prefixed browser registration and retry an uncertain abort with
-  bounded backoff. This also clears orphan notifications after a record was
-  deleted or replaced. Failed/aborted events become retryable, and success is
-  published only after the retained body matches its declared byte length.
-- Foreground readers publish throttled measured-byte progress (percentage when
-  Content-Length is available, indeterminate bytes otherwise) while ready
-  remains gated on the final CacheStorage integrity check.
-- Playback-visible metadata changes publish an opaque same-origin generation
-  signal so other tabs reload only their active owner's records. Lease-only
-  renewals stay local, and a failed IndexedDB open is retried by the next read.
-  A read failure keeps the last successful owner-scoped snapshot visible and
-  presents Retry in Downloads and ordinary Settings instead of publishing a
-  false empty collection.
-- Downloads playback first materializes the verified CacheStorage response as
-  a short-lived local Blob URL, so pressing Play does not depend on a network
-  route or a newly activated service worker. `public/sw.js` also serves
-  `/__offline/audio/<key>` and single byte ranges for queued playback, keeps
-  audio across service-worker updates, and safely completes legacy Background
-  Fetch state.
-  Installation caches both offline documents and every discovered same-origin
-  Next.js runtime chunk before publishing the new shell; a failed critical
-  fetch leaves the previous worker and cache active. The v3-to-v4 worker
-  migration preserves device audio, retires old Background Fetch jobs, and
-  navigates every already-open client once per worker activation so an old
-  JavaScript bundle cannot create another stuck transfer even when its shell
-  cache was already evicted. Primary Library navigation on both mobile and
-  desktop hard-loads the precached Downloads document while offline, avoiding
-  an uncached Next.js route-transition request. A waiting worker defers that
-  activation only when the current JavaScript runtime has both an active player
-  state and a fresh engine heartbeat; a stale persisted play flag cannot hold
-  an update forever.
-- Album, artist, owned-playlist, My Liked, and YouTube Music collection pages
-  can queue their currently playable tracks with `Download to this device`.
-  Artist downloads are deliberately bounded to the top tracks exposed on the
-  page instead of crawling an unbounded discography. Library > Downloads shows
-  queued, active, interrupted, failed, and verified-ready states and is the
-  management surface for play, retry, and delete. Choosing a whole collection
-  also promotes any automatic liked copies in it to manual retention without
-  fetching the same bytes again.
-- Settings > Offline on this device can opt in to gradual liked-song downloads.
-  The default is off. The current browser imports up to the selected 25, 50,
-  100, or 200 newest liked songs and resumes only while the PWA is visible and
-  online. Automatic copies are capped at 2 GiB and the selected track count;
-  eviction removes only the oldest `auto-liked` records. A copy selected
-  manually is promoted to `manual` and is never removed by automatic quota
-  enforcement.
+- `vault/` is the deep device-file module. The production web adapter uses the
+  File System Access API and writes owner-scoped files below a directory chosen
+  by the user. Its public seam (`DeviceAudioVault`) also allows a future
+  Capacitor adapter to use Android or iOS app-private files without changing
+  queue, collection, or player callers.
+- `DeviceOfflineProvider.tsx` inspects access without prompting. A manual track
+  or collection action calls `requestAccess()` directly from the user's click
+  before it queues work. Automatic liked-song downloads never open a picker and
+  remain paused until device storage is ready.
+- Chrome and Edge on desktop, plus current Chrome versions on Android that
+  expose `showDirectoryPicker`, can select a normal device folder. Safari,
+  Firefox, iOS web apps, and other browsers without directory access are shown
+  as unsupported instead of silently falling back to browser-private bytes.
+  iPhone and iPad need a native mobile build for real app-private files.
+- `downloadManager.ts` streams each new response into the active vault,
+  publishes measured-byte progress, and marks metadata ready only after the
+  retained file passes integrity checks. Metadata and the owner-scoped work
+  queue remain in IndexedDB; the audio bytes live in the selected device
+  folder.
+- `offlineQueue.ts` and `browserQueueStorage.ts` de-duplicate album, artist,
+  playlist, and My Liked work by owner, track identity, and quality. Renewable
+  leases ensure one foreground transfer per owner across tabs. Interrupted work
+  resumes only while the app is visible, online, and storage is ready.
+- Playback opens a short-lived revocable URL from the device file. The player
+  owns that lease and releases it on replacement, error, account rotation, or
+  unmount, so an offline play does not require the Soundspan server.
+- Records created by older releases may lack `mediaRef`. After the user
+  selects a folder, verified legacy CacheStorage copies migrate file-first,
+  switch metadata atomically, and only then remove the cache entry. CacheStorage
+  is a transition path, not the destination for new files.
+- Album, artist, playlist, My Liked, and YouTube Music collection pages
+  queue the playable tracks currently exposed by the page. Artist downloads
+  remain deliberately bounded instead of crawling an unbounded discography.
+- Settings can opt in to gradual liked-song downloads after storage setup. The
+  default is off. Automatic copies are capped by the selected 25, 50, 100, or
+  200 newest liked songs and by 2 GiB; eviction removes only the oldest
+  `auto-liked` files. A manually selected copy is promoted to `manual`.
 
-Transfers are foreground-only and an interrupted retry restarts the track. Each
-browser profile on each device owns its own IndexedDB metadata and CacheStorage
-bytes; local ready/delete state is never synchronized through the server. After
-one device downloads a copy while online, its PWA can open Library > Downloads
-and play or seek that copy without reaching the Soundspan server. Browser
-storage remains subject to platform eviction when persistence is not granted.
-The server synchronizes likes and playlists, not queue state, ready status, or
-audio bytes; another device or browser profile therefore starts with no local
-copies even for the same account. Deleting a copy requires confirmation that
-only the current device is affected.
+Transfers in the web app are foreground-only: keep Soundspan open until the
+current file finishes. Every browser profile or native installation has its own
+storage setup, queue, and ready state; audio files are owner-scoped below its
+selected folder. The server synchronizes likes and playlists, but not device
+file status; downloading on one phone does not mark a second phone or a
+computer as downloaded. Deleting a file affects only the current device and
+requires an explicit confirmation.

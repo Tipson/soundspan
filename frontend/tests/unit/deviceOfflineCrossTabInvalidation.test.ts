@@ -10,6 +10,7 @@ import {
 } from "../../features/device-offline/deviceOfflineInvalidation";
 import type { DeviceOfflineMetadataStore } from "../../features/device-offline/downloadManager";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
+import type { DeviceAudioVaultRef } from "../../features/device-offline/vault/types";
 
 const RECORD: DeviceOfflineDownloadRecord = {
     key: "opaque-key-1",
@@ -140,6 +141,22 @@ test("lease-only renewals stay local while playback-visible transitions invalida
         }),
         true,
     );
+    assert.equal(
+        requiresDeviceOfflineCrossTabRefresh(RECORD, {
+            ...RECORD,
+            mediaRef: "fsa1:user-1:track-1" as DeviceAudioVaultRef,
+            updatedAt: 6,
+        }),
+        true,
+    );
+    assert.equal(
+        requiresDeviceOfflineCrossTabRefresh(RECORD, {
+            ...RECORD,
+            integrityVersion: 1,
+            updatedAt: 7,
+        }),
+        true,
+    );
 });
 
 test("successful metadata transitions publish invalidation while failed CAS and lease renewal stay quiet", async () => {
@@ -155,6 +172,7 @@ test("successful metadata transitions publish invalidation while failed CAS and 
         put: async () => undefined,
         claimReplacement: async () => claimSucceeds,
         putIfCurrent: async () => updateSucceeds,
+        putAutoManagedIfCurrent: async () => updateSucceeds,
         interruptForegroundIfLeaseExpired: async () => interruptSucceeds,
         deleteIfCurrent: async () => deleteSucceeds,
         deleteAutoManagedIfCurrent: async () => automaticDeleteSucceeds,

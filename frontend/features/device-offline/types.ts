@@ -3,6 +3,7 @@ import type {
     RemoteMediaSource,
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
+import type { DeviceAudioVaultRef } from "./vault/types";
 
 /** Portable metadata required to render and replay one downloaded track. */
 export interface DeviceOfflineTrack {
@@ -46,6 +47,8 @@ export interface DeviceOfflineDownloadRecord {
     trackIdentity: string;
     quality: string;
     virtualUrl: string;
+    /** Real device-file reference. Missing only on legacy CacheStorage records. */
+    mediaRef?: DeviceAudioVaultRef;
     sourceUrl: string;
     track: DeviceOfflineTrack;
     status: DeviceOfflineDownloadStatus;

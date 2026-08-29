@@ -13,23 +13,37 @@ import type {
     DeviceOfflineDownloadRecord,
 } from "./types";
 import type { AuthRuntimeLease } from "@/lib/auth-runtime-generation";
-
-const STREAM_SOURCE_PATHS = [
-    /^\/api\/library\/tracks\/[^/]+\/stream\/?$/,
-    /^\/api\/artists\/preview-stream\/[^/]+\/?$/,
-    /^\/api\/ytmusic\/(?:stream|stream-public)\/[^/]+\/?$/,
-    /^\/api\/youtube\/stream\/[^/]+\/?$/,
-    /^\/api\/tidal-streaming\/stream\/[^/]+\/?$/,
-    /^\/api\/audiobooks\/[^/]+\/stream\/?$/,
-    /^\/api\/podcasts\/[^/]+\/episodes\/[^/]+\/stream\/?$/,
-];
-const SENSITIVE_QUERY_NAMES = new Set([
-    "token",
-    "access_token",
-    "refresh_token",
-    "api_key",
-    "apikey",
-]);
+import {
+    assertLegacyCacheQuotaAvailable,
+    createLegacyCachedAudioResponse,
+    parseDeviceAudioContentLength,
+    verifyLegacyCachedAudioBytes,
+} from "./audioResponse";
+import {
+    classifyDeviceOfflineFailure,
+    DeviceOfflineDownloadError,
+    StaleDeviceOfflineAttemptError,
+    SupersededDeviceOfflineAuthRuntimeError,
+} from "./downloadError";
+import {
+    backgroundLeaseRetry,
+    isCurrentForegroundAttempt,
+    publishDeviceOfflineProgress,
+} from "./downloadAttemptState";
+import { normalizeDeviceAudioSourceUrl } from "./sourceValidation";
+import { type DeviceAudioVault } from "./vault";
+import { completeDeviceAudioDownload } from "./vaultRetention";
+import {
+    inspectDeviceAudioRecord,
+    reconcileDeviceAudioRecord,
+    removeDeviceAudioRecord,
+} from "./vaultRecordAccess";
+import { migrateLegacyDeviceAudioCache } from "./legacyCacheMigration";
+import {
+    deleteManagedDeviceOfflineRecord,
+    promoteReadyDeviceOfflineRecord,
+    reuseReadyDeviceOfflineRecord,
+} from "./downloadRecordManagement";
 export const DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS = 30_000;
 export const DEVICE_OFFLINE_FOREGROUND_HEARTBEAT_MS = 10_000;
 export const DEVICE_OFFLINE_PROGRESS_UPDATE_INTERVAL_MS = 500;
@@ -44,18 +58,6 @@ const DEVICE_OFFLINE_BACKGROUND_UNKNOWN_LEASE_PREFIX = "background-unknown:";
 const DEVICE_OFFLINE_BACKGROUND_STALL_LEASE_PREFIX = "background-stall:";
 const DEVICE_OFFLINE_BACKGROUND_COMPLETION_LEASE_PREFIX =
     "background-completing:";
-
-function backgroundUnknownLeaseRetry(leaseId: string): number {
-    if (!leaseId.startsWith(DEVICE_OFFLINE_BACKGROUND_UNKNOWN_LEASE_PREFIX)) {
-        return 0;
-    }
-    const retry = Number(
-        leaseId
-            .slice(DEVICE_OFFLINE_BACKGROUND_UNKNOWN_LEASE_PREFIX.length)
-            .split(":", 1)[0],
-    );
-    return Number.isSafeInteger(retry) && retry > 0 ? retry : 0;
-}
 
 export type ForegroundLeaseDisposition = "live" | "clamp" | "expired";
 
@@ -141,6 +143,11 @@ export interface DeviceOfflineMetadataStore {
         next: DeviceOfflineDownloadRecord,
         isAuthorized?: () => boolean,
     ): Promise<boolean>;
+    putAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean>;
     interruptForegroundIfLeaseExpired(
         expected: DeviceOfflineDownloadRecord,
         now: number,
@@ -164,6 +171,8 @@ export interface DeviceOfflineAudioCache {
 export interface DeviceOfflineManagerDependencies {
     metadataStore: DeviceOfflineMetadataStore;
     audioCache: DeviceOfflineAudioCache;
+    /** Real device-file destination for all new production downloads. */
+    audioVault?: DeviceAudioVault;
     fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
     now: () => number;
     createKey: () => string;
@@ -198,45 +207,6 @@ export interface DeviceOfflineManagerDependencies {
 
 type DeviceOfflineListener = () => void;
 
-class DeviceOfflineDownloadError extends Error {
-    constructor(
-        readonly code: "http" | "quota" | "cache" | "invalid_source",
-        message: string,
-    ) {
-        super(message);
-        this.name = "DeviceOfflineDownloadError";
-    }
-}
-
-class StaleDeviceOfflineAttemptError extends Error {
-    constructor() {
-        super("Device download was superseded or deleted");
-        this.name = "StaleDeviceOfflineAttemptError";
-    }
-}
-
-class SupersededDeviceOfflineAuthRuntimeError extends Error {
-    constructor() {
-        super("Authentication session changed while the download was pending");
-        this.name = "SupersededDeviceOfflineAuthRuntimeError";
-    }
-}
-
-function isCurrentForegroundAttempt(
-    current: DeviceOfflineDownloadRecord | null,
-    expected: DeviceOfflineDownloadRecord,
-): current is DeviceOfflineDownloadRecord {
-    return (
-        current?.key === expected.key &&
-        current.ownerId === expected.ownerId &&
-        current.attempt === expected.attempt &&
-        current.status === "downloading" &&
-        current.transferMode === "foreground" &&
-        (current.foregroundLeaseId ?? null) ===
-            (expected.foregroundLeaseId ?? null)
-    );
-}
-
 export function matchesDeviceOfflineRecordVersion(
     current: DeviceOfflineDownloadRecord | null,
     expected: DeviceOfflineDownloadRecord,
@@ -248,6 +218,7 @@ export function matchesDeviceOfflineRecordVersion(
         current.status === expected.status &&
         current.transferMode === expected.transferMode &&
         current.backgroundFetchId === expected.backgroundFetchId &&
+        (current.mediaRef ?? null) === (expected.mediaRef ?? null) &&
         (current.foregroundLeaseId ?? null) ===
             (expected.foregroundLeaseId ?? null)
     );
@@ -289,132 +260,6 @@ export function mergeConcurrentDeviceOfflineUpdate(
             next.foregroundLeaseExpiresAt ?? 0,
         ),
     };
-}
-
-function normalizeSourceUrl(
-    sourceUrl: string,
-    origin: string,
-): { absolute: string; stored: string } {
-    const parsed = new URL(sourceUrl, origin);
-    if (parsed.origin !== new URL(origin).origin) {
-        throw new DeviceOfflineDownloadError(
-            "invalid_source",
-            "Device downloads require a same-origin audio URL",
-        );
-    }
-    for (const name of parsed.searchParams.keys()) {
-        if (SENSITIVE_QUERY_NAMES.has(name.toLowerCase())) {
-            throw new DeviceOfflineDownloadError(
-                "invalid_source",
-                "Device download URL contains a credential",
-            );
-        }
-    }
-    if (!STREAM_SOURCE_PATHS.some((pattern) => pattern.test(parsed.pathname))) {
-        throw new DeviceOfflineDownloadError(
-            "invalid_source",
-            "Device download URL is not an approved audio route",
-        );
-    }
-    return {
-        absolute: parsed.toString(),
-        stored: `${parsed.pathname}${parsed.search}`,
-    };
-}
-
-function parseContentLength(response: Response): number | null {
-    const raw = response.headers.get("content-length");
-    if (raw === null || raw.trim() === "") return null;
-    const parsed = Number(raw);
-    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-async function verifyCachedAudioBytes(
-    response: Response,
-    expectedBytes: number | null,
-): Promise<number> {
-    const actualBytes = (await response.clone().arrayBuffer()).byteLength;
-    if (actualBytes < 1) {
-        throw new DeviceOfflineDownloadError(
-            "cache",
-            "The browser retained an empty audio response",
-        );
-    }
-    if (expectedBytes !== null && actualBytes !== expectedBytes) {
-        throw new DeviceOfflineDownloadError(
-            "cache",
-            `The retained audio is incomplete (${actualBytes} of ${expectedBytes} bytes)`,
-        );
-    }
-    return actualBytes;
-}
-
-function classifyFailure(error: unknown): {
-    status: "interrupted" | "error";
-    code: string;
-    message: string;
-} {
-    const message =
-        error instanceof Error
-            ? error.message
-            : String(error ?? "Download failed");
-    if (error instanceof DeviceOfflineDownloadError) {
-        return { status: "error", code: error.code, message };
-    }
-    if (
-        error instanceof DOMException &&
-        (error.name === "AbortError" || error.name === "NetworkError")
-    ) {
-        return { status: "interrupted", code: "interrupted", message };
-    }
-    if (error instanceof TypeError) {
-        return { status: "interrupted", code: "network", message };
-    }
-    const quotaName =
-        error && typeof error === "object" && "name" in error
-            ? String((error as { name: unknown }).name)
-            : "";
-    if (quotaName === "QuotaExceededError") {
-        return { status: "error", code: "quota", message };
-    }
-    return { status: "error", code: "cache", message };
-}
-
-function createCachedAudioResponse(
-    response: Response,
-    body: BodyInit | null,
-    totalBytes: number | null,
-): Response {
-    const headers = new Headers();
-    const contentType = response.headers.get("content-type");
-    if (contentType) headers.set("content-type", contentType);
-    if (totalBytes !== null) {
-        headers.set("content-length", String(totalBytes));
-    }
-    headers.set("accept-ranges", "bytes");
-    const etag = response.headers.get("etag");
-    if (etag) headers.set("etag", etag);
-    const lastModified = response.headers.get("last-modified");
-    if (lastModified) headers.set("last-modified", lastModified);
-    return new Response(body, { status: 200, headers });
-}
-
-async function assertQuotaAvailable(
-    dependencies: DeviceOfflineManagerDependencies,
-    totalBytes: number | null,
-): Promise<void> {
-    if (totalBytes === null || totalBytes === 0) return;
-    const estimate = await dependencies.estimateStorage();
-    if (!estimate) return;
-    const quota = Number(estimate.quota);
-    const usage = Number(estimate.usage);
-    if (!Number.isFinite(quota) || !Number.isFinite(usage)) return;
-    if (Math.max(0, quota - usage) < totalBytes) {
-        throw new DeviceOfflineDownloadError(
-            "quota",
-            "Not enough device storage for this track",
-        );
-    }
 }
 
 /** Coordinates one-track foreground/background downloads without server jobs. */
@@ -467,6 +312,35 @@ export class DeviceOfflineDownloadManager {
         return records.sort((left, right) => right.updatedAt - left.updatedAt);
     }
 
+    /** Move prior CacheStorage copies after the user explicitly selects a folder. */
+    async migrateLegacyCache(ownerId: string): Promise<number> {
+        const vault = this.dependencies.audioVault;
+        if (!vault) return 0;
+        const lease = this.ownerLease(ownerId);
+        const isAuthorized = () => this.isAuthLeaseCurrent(ownerId, lease);
+        this.assertCurrentAuthRuntime(ownerId, lease);
+        const records = await this.list(ownerId);
+        this.assertCurrentAuthRuntime(ownerId, lease);
+        const migrated = await migrateLegacyDeviceAudioCache({
+            ownerId,
+            authGeneration: lease.generation,
+            records,
+            vault,
+            audioCache: this.dependencies.audioCache,
+            origin: this.dependencies.origin,
+            signal: lease.signal,
+            now: this.dependencies.now,
+            publish: (expected, next) =>
+                this.dependencies.metadataStore.putIfCurrent(
+                    expected,
+                    next,
+                    isAuthorized,
+                ),
+        });
+        if (migrated > 0) this.notify();
+        return migrated;
+    }
+
     async reconcile(ownerId: string): Promise<DeviceOfflineDownloadRecord[]> {
         const records = await this.list(ownerId);
         let activeBackgroundIds: Set<string> | null = null;
@@ -505,7 +379,31 @@ export class DeviceOfflineDownloadManager {
             let next: DeviceOfflineDownloadRecord | null = null;
             let cacheUrlToDelete: string | null = null;
             let abortBackgroundRegistration = false;
-            if (record.status === "ready") {
+            if (
+                record.status === "ready" &&
+                record.mediaRef &&
+                this.dependencies.audioVault
+            ) {
+                const inspection = await inspectDeviceAudioRecord(
+                    this.dependencies.audioVault,
+                    record,
+                    this.ownerLease(ownerId).generation,
+                );
+                next = reconcileDeviceAudioRecord(
+                    record,
+                    inspection,
+                    this.dependencies.now(),
+                );
+                if (record.backgroundFetchId !== null) {
+                    next = {
+                        ...(next ?? record),
+                        backgroundFetchId: null,
+                        foregroundLeaseId: null,
+                        foregroundLeaseExpiresAt: null,
+                    };
+                    abortBackgroundRegistration = true;
+                }
+            } else if (record.status === "ready") {
                 const absoluteVirtualUrl = new URL(
                     record.virtualUrl,
                     this.dependencies.origin,
@@ -543,10 +441,11 @@ export class DeviceOfflineDownloadManager {
                             record.totalBytes > 0 &&
                             record.bytesReceived === record.totalBytes;
                         if (!alreadyVerified) {
-                            const verifiedBytes = await verifyCachedAudioBytes(
-                                cached,
-                                record.totalBytes,
-                            );
+                            const verifiedBytes =
+                                await verifyLegacyCachedAudioBytes(
+                                    cached,
+                                    record.totalBytes,
+                                );
                             next = {
                                 ...record,
                                 bytesReceived: verifiedBytes,
@@ -749,7 +648,7 @@ export class DeviceOfflineDownloadManager {
         const isAuthorized = () =>
             this.isAuthLeaseCurrent(input.ownerId, authRuntimeLease);
         this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
-        const source = normalizeSourceUrl(
+        const source = normalizeDeviceAudioSourceUrl(
             input.sourceUrl,
             this.dependencies.origin,
         );
@@ -762,22 +661,34 @@ export class DeviceOfflineDownloadManager {
             );
         this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
         const requestedManagement = input.management ?? "manual";
-        const previousManagement = previous
-            ? previous.management === "auto-liked"
-                ? "auto-liked"
-                : "manual"
-            : requestedManagement;
-        const management =
-            requestedManagement === "manual" || previousManagement === "manual"
-                ? "manual"
-                : "auto-liked";
+        const reusable = await reuseReadyDeviceOfflineRecord(
+            this.dependencies,
+            {
+                previous,
+                ownerId: input.ownerId,
+                trackIdentity,
+                quality: input.quality,
+                requestedManagement,
+                isAuthorized,
+                notifyChanged: () => this.notify(),
+                assertAuthorized: () =>
+                    this.assertCurrentAuthRuntime(
+                        input.ownerId,
+                        authRuntimeLease,
+                    ),
+            },
+        );
+        if (reusable.record) return reusable.record;
+        const { management } = reusable;
         const key = this.dependencies.createKey();
         const virtualUrl = buildDeviceOfflineVirtualUrl(key);
         const attempt = (previous?.attempt ?? 0) + 1;
         const foregroundLeaseId = `${key}:${attempt}`;
-        const persistenceGranted = await this.dependencies
-            .requestPersistentStorage()
-            .catch(() => null);
+        const persistenceGranted = this.dependencies.audioVault
+            ? true
+            : await this.dependencies
+                  .requestPersistentStorage()
+                  .catch(() => null);
         this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
         const now = this.dependencies.now();
         let record: DeviceOfflineDownloadRecord = {
@@ -813,14 +724,22 @@ export class DeviceOfflineDownloadManager {
         );
         if (!claimed) throw new StaleDeviceOfflineAttemptError();
         if (previous) {
+            const previousAudioCleanup =
+                previous.mediaRef && this.dependencies.audioVault
+                    ? removeDeviceAudioRecord(
+                          this.dependencies.audioVault,
+                          previous,
+                          authRuntimeLease.generation,
+                      )
+                    : this.dependencies.audioCache.delete(
+                          new URL(
+                              previous.virtualUrl,
+                              this.dependencies.origin,
+                          ).toString(),
+                      );
             await Promise.allSettled([
                 this.dependencies.abortBackgroundFetch(previous),
-                this.dependencies.audioCache.delete(
-                    new URL(
-                        previous.virtualUrl,
-                        this.dependencies.origin,
-                    ).toString(),
-                ),
+                previousAudioCleanup,
             ]);
         }
         this.notify();
@@ -832,6 +751,96 @@ export class DeviceOfflineDownloadManager {
         let unlinkAuthAbort: (() => void) | null = null;
         try {
             this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
+            if (this.dependencies.audioVault) {
+                stopLeaseHeartbeat = this.startForegroundLeaseHeartbeat(
+                    record,
+                    authRuntimeLease,
+                );
+                const controller = new AbortController();
+                this.abortByKey.set(key, {
+                    ownerId: input.ownerId,
+                    controller,
+                });
+                const abortForAuthRotation = () => controller.abort();
+                authRuntimeLease.signal.addEventListener(
+                    "abort",
+                    abortForAuthRotation,
+                    { once: true },
+                );
+                unlinkAuthAbort = () =>
+                    authRuntimeLease.signal.removeEventListener(
+                        "abort",
+                        abortForAuthRotation,
+                    );
+                if (authRuntimeLease.signal.aborted) controller.abort();
+                let publishedFileBytes = record.bytesReceived;
+                let publishedFileAt = this.dependencies.now();
+                record = await completeDeviceAudioDownload({
+                    vault: this.dependencies.audioVault,
+                    record,
+                    authGeneration: authRuntimeLease.generation,
+                    sourceUrl: source.absolute,
+                    signal: controller.signal,
+                    request: this.dependencies.fetch,
+                    now: this.dependencies.now,
+                    assertCurrent: () =>
+                        this.assertCurrentAuthRuntime(
+                            input.ownerId,
+                            authRuntimeLease,
+                        ),
+                    onHeaders: async (
+                        expected,
+                        { totalBytes, contentType },
+                    ) => {
+                        const progressRecord = {
+                            ...expected,
+                            totalBytes,
+                            contentType,
+                            updatedAt: this.dependencies.now(),
+                        };
+                        await this.updateCurrent(
+                            expected,
+                            progressRecord,
+                            isAuthorized,
+                        );
+                        this.notify();
+                        return progressRecord;
+                    },
+                    onProgress: async (expected, bytes, totalBytes) => {
+                        const now = this.dependencies.now();
+                        const shouldPublish =
+                            publishedFileBytes === 0 ||
+                            bytes - publishedFileBytes >=
+                                DEVICE_OFFLINE_PROGRESS_UPDATE_MIN_BYTES ||
+                            now - publishedFileAt >=
+                                DEVICE_OFFLINE_PROGRESS_UPDATE_INTERVAL_MS ||
+                            (totalBytes !== null && bytes >= totalBytes);
+                        if (!shouldPublish) return;
+                        await this.publishForegroundProgress(
+                            expected,
+                            bytes,
+                            totalBytes,
+                            isAuthorized,
+                        );
+                        publishedFileBytes = bytes;
+                        publishedFileAt = now;
+                    },
+                    validateCurrent: async (expected) => {
+                        const current =
+                            await this.dependencies.metadataStore.getByKey(key);
+                        if (
+                            this.deletedKeys.has(key) ||
+                            !isCurrentForegroundAttempt(current, expected)
+                        ) {
+                            throw new StaleDeviceOfflineAttemptError();
+                        }
+                    },
+                    publishReady: (expected, ready) =>
+                        this.updateCurrent(expected, ready, isAuthorized),
+                });
+                this.notify();
+                return record;
+            }
             const backgroundCandidate: DeviceOfflineDownloadRecord = {
                 ...record,
                 transferMode: "background",
@@ -931,8 +940,11 @@ export class DeviceOfflineDownloadManager {
                 );
             }
 
-            const totalBytes = parseContentLength(response);
-            await assertQuotaAvailable(this.dependencies, totalBytes);
+            const totalBytes = parseDeviceAudioContentLength(response);
+            await assertLegacyCacheQuotaAvailable(
+                this.dependencies.estimateStorage,
+                totalBytes,
+            );
             this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
             const progressRecord: DeviceOfflineDownloadRecord = {
                 ...record,
@@ -958,7 +970,7 @@ export class DeviceOfflineDownloadManager {
                 cacheWriteSettlement = this.dependencies.audioCache
                     .put(
                         absoluteVirtualUrl,
-                        createCachedAudioResponse(
+                        createLegacyCachedAudioResponse(
                             response,
                             cacheBody,
                             totalBytes,
@@ -1026,7 +1038,11 @@ export class DeviceOfflineDownloadManager {
                 this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
                 await this.dependencies.audioCache.put(
                     absoluteVirtualUrl,
-                    createCachedAudioResponse(response, bytes, totalBytes),
+                    createLegacyCachedAudioResponse(
+                        response,
+                        bytes,
+                        totalBytes,
+                    ),
                 );
                 this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
             }
@@ -1050,7 +1066,7 @@ export class DeviceOfflineDownloadManager {
                     "The browser did not retain the completed audio response",
                 );
             }
-            const verifiedBytes = await verifyCachedAudioBytes(
+            const verifiedBytes = await verifyLegacyCachedAudioBytes(
                 cached,
                 totalBytes,
             );
@@ -1114,7 +1130,7 @@ export class DeviceOfflineDownloadManager {
                     : new SupersededDeviceOfflineAuthRuntimeError();
             }
 
-            const failure = classifyFailure(error);
+            const failure = classifyDeviceOfflineFailure(error);
             const failureRecord: DeviceOfflineDownloadRecord = {
                 ...record,
                 status: failure.status,
@@ -1163,19 +1179,24 @@ export class DeviceOfflineDownloadManager {
         this.deletedKeys.add(key);
         this.cancelScheduledLeaseExpiryCheck(key);
         this.abortByKey.get(key)?.controller.abort();
-        const deleted = await this.dependencies.metadataStore.deleteIfCurrent(
-            record,
-            isAuthorized,
+        const realFile = Boolean(
+            record.mediaRef && this.dependencies.audioVault,
         );
-        if (!deleted) return false;
-        await this.dependencies
-            .abortBackgroundFetch(record)
-            .catch(() => undefined);
-        await this.dependencies.audioCache.delete(
-            new URL(record.virtualUrl, this.dependencies.origin).toString(),
-        );
-        this.notify();
-        return true;
+        try {
+            const deleted = await deleteManagedDeviceOfflineRecord(
+                this.dependencies,
+                record,
+                {
+                    authGeneration: authRuntimeLease.generation,
+                    isAuthorized,
+                },
+                false,
+            );
+            if (deleted && !realFile) this.notify();
+            return deleted;
+        } finally {
+            if (realFile) this.notify();
+        }
     }
 
     /** Stop foreground transfers before the browser adopts another account. */
@@ -1202,23 +1223,27 @@ export class DeviceOfflineDownloadManager {
             return false;
         }
 
-        const deleted =
-            await this.dependencies.metadataStore.deleteAutoManagedIfCurrent(
-                expected,
-                isAuthorized,
-            );
-        if (!deleted) return false;
         this.deletedKeys.add(expected.key);
         this.cancelScheduledLeaseExpiryCheck(expected.key);
         this.abortByKey.get(expected.key)?.controller.abort();
-        await this.dependencies
-            .abortBackgroundFetch(expected)
-            .catch(() => undefined);
-        await this.dependencies.audioCache.delete(
-            new URL(expected.virtualUrl, this.dependencies.origin).toString(),
+        const realFile = Boolean(
+            expected.mediaRef && this.dependencies.audioVault,
         );
-        this.notify();
-        return true;
+        try {
+            const deleted = await deleteManagedDeviceOfflineRecord(
+                this.dependencies,
+                expected,
+                {
+                    authGeneration: authRuntimeLease.generation,
+                    isAuthorized,
+                },
+                true,
+            );
+            if (deleted && !realFile) this.notify();
+            return deleted;
+        } finally {
+            if (realFile) this.notify();
+        }
     }
 
     /** Protect an auto-managed copy after an explicit user download action. */
@@ -1229,28 +1254,18 @@ export class DeviceOfflineDownloadManager {
         const authRuntimeLease = this.ownerLease(ownerId);
         const isAuthorized = () =>
             this.isAuthLeaseCurrent(ownerId, authRuntimeLease);
-        this.assertCurrentAuthRuntime(ownerId, authRuntimeLease);
-        const record = await this.dependencies.metadataStore.getByKey(key);
-        this.assertCurrentAuthRuntime(ownerId, authRuntimeLease);
-        if (!record || record.ownerId !== ownerId) return null;
-        if (record.management !== "auto-liked") return record;
-        const promoted: DeviceOfflineDownloadRecord = {
-            ...record,
-            management: "manual",
-            updatedAt: this.dependencies.now(),
-        };
-        if (
-            !(await this.dependencies.metadataStore.putIfCurrent(
-                record,
-                promoted,
+        const promotion = await promoteReadyDeviceOfflineRecord(
+            this.dependencies,
+            {
+                ownerId,
+                key,
                 isAuthorized,
-            ))
-        ) {
-            const current = await this.dependencies.metadataStore.getByKey(key);
-            return current?.ownerId === ownerId ? current : null;
-        }
-        this.notify();
-        return promoted;
+                assertAuthorized: () =>
+                    this.assertCurrentAuthRuntime(ownerId, authRuntimeLease),
+            },
+        );
+        if (promotion.changed) this.notify();
+        return promotion.record;
     }
 
     private async updateCurrent(
@@ -1305,32 +1320,15 @@ export class DeviceOfflineDownloadManager {
         totalBytes: number | null,
         isAuthorized?: () => boolean,
     ): Promise<void> {
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            const current = await this.dependencies.metadataStore.getByKey(
-                expected.key,
-            );
-            if (!isCurrentForegroundAttempt(current, expected)) return;
-            if (bytesReceived <= current.bytesReceived) return;
-            const now = this.dependencies.now();
-            const progress: DeviceOfflineDownloadRecord = {
-                ...current,
-                bytesReceived,
-                totalBytes,
-                foregroundLeaseExpiresAt:
-                    now + DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS,
-                updatedAt: now,
-            };
-            if (
-                await this.dependencies.metadataStore.putIfCurrent(
-                    current,
-                    progress,
-                    isAuthorized,
-                )
-            ) {
-                this.notify();
-                return;
-            }
-        }
+        const published = await publishDeviceOfflineProgress(
+            this.dependencies,
+            expected,
+            bytesReceived,
+            totalBytes,
+            DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS,
+            isAuthorized,
+        );
+        if (published) this.notify();
     }
 
     private startForegroundLeaseHeartbeat(
@@ -1446,8 +1444,10 @@ export class DeviceOfflineDownloadManager {
                 // Preserve that uncertainty for one bounded retry instead of
                 // declaring a potentially active browser transfer ended.
                 const retry =
-                    backgroundUnknownLeaseRetry(refreshed.foregroundLeaseId) +
-                    1;
+                    backgroundLeaseRetry(
+                        refreshed.foregroundLeaseId,
+                        DEVICE_OFFLINE_BACKGROUND_UNKNOWN_LEASE_PREFIX,
+                    ) + 1;
                 if (retry > DEVICE_OFFLINE_BACKGROUND_UNKNOWN_RETRY_LIMIT) {
                     if (
                         await this.dependencies.metadataStore.interruptForegroundIfLeaseExpired(

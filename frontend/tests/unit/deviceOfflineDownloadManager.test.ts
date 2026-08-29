@@ -24,6 +24,15 @@ import type {
     DeviceOfflineDownloadRecord,
     DeviceOfflineTrack,
 } from "../../features/device-offline/types";
+import {
+    DeviceAudioVaultError,
+    type DeviceAudioAccessRequest,
+    type DeviceAudioAccessResult,
+    type DeviceAudioRetainInput,
+    type DeviceAudioVault,
+    type DeviceAudioVaultRef,
+    type DeviceAudioVaultSession,
+} from "../../features/device-offline/vault/types";
 
 const TRACK: DeviceOfflineTrack = {
     id: "track-1",
@@ -111,6 +120,24 @@ class MemoryMetadataStore implements DeviceOfflineMetadataStore {
         return true;
     }
 
+    async putAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
+        const current = this.records.get(expected.key) ?? null;
+        if (
+            current?.management !== "auto-liked" ||
+            expected.management !== "auto-liked" ||
+            !matchesDeviceOfflineRecordVersion(current, expected)
+        ) {
+            return false;
+        }
+        await this.put(mergeConcurrentDeviceOfflineUpdate(current, next));
+        return true;
+    }
+
     async interruptForegroundIfLeaseExpired(
         expected: DeviceOfflineDownloadRecord,
         now: number,
@@ -182,6 +209,162 @@ class MemoryAudioCache implements DeviceOfflineAudioCache {
 
     async delete(url: string): Promise<void> {
         this.responses.delete(url);
+    }
+}
+
+class MemoryDeviceAudioVault implements DeviceAudioVault {
+    readonly files = new Map<DeviceAudioVaultRef, Uint8Array>();
+    readonly removed: DeviceAudioVaultRef[] = [];
+    failRemove = false;
+    retainCalls = 0;
+    readonly retainStarted: Promise<void>;
+    private signalRetainStarted!: () => void;
+    private releaseRetain: (() => void) | null = null;
+    private readonly retainGate: Promise<void> | null;
+    private sequence = 0;
+
+    constructor(
+        paused = false,
+        private readonly isAuthGenerationCurrent: (
+            generation: number,
+        ) => boolean = () => true,
+    ) {
+        this.retainStarted = new Promise((resolve) => {
+            this.signalRetainStarted = resolve;
+        });
+        this.retainGate = paused
+            ? new Promise<void>((resolve) => {
+                  this.releaseRetain = resolve;
+              })
+            : null;
+    }
+
+    async inspectAccess() {
+        return {
+            status: "ready" as const,
+            code: null,
+            storageKind: "desktop-directory" as const,
+            label: "Soundspan Music",
+            reason: "Music files are stored in the selected folder.",
+        };
+    }
+
+    requestAccess() {
+        return this.inspectAccess();
+    }
+
+    async open(input: {
+        ownerId: string;
+        authGeneration: number;
+    }): Promise<DeviceAudioVaultSession> {
+        return {
+            ownerId: input.ownerId,
+            authGeneration: input.authGeneration,
+            storage: {
+                kind: "desktop-directory" as const,
+                label: "Soundspan Music",
+            },
+            retain: async (request: DeviceAudioRetainInput) => {
+                this.retainCalls += 1;
+                const reader = request.stream.getReader();
+                const chunks: Uint8Array[] = [];
+                let bytes = 0;
+                while (true) {
+                    if (request.signal?.aborted) {
+                        throw new DeviceAudioVaultError(
+                            "interrupted",
+                            "Download interrupted",
+                            "retry",
+                        );
+                    }
+                    const chunk = await reader.read();
+                    if (chunk.done) break;
+                    chunks.push(Uint8Array.from(chunk.value));
+                    bytes += chunk.value.byteLength;
+                    request.onProgress?.(bytes, request.expectedBytes ?? null);
+                }
+                this.signalRetainStarted();
+                await this.retainGate;
+                if (
+                    request.expectedBytes != null &&
+                    bytes !== request.expectedBytes
+                ) {
+                    throw new DeviceAudioVaultError(
+                        "integrity",
+                        "Incomplete device file",
+                        "retry",
+                    );
+                }
+                const stored = new Uint8Array(bytes);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    stored.set(chunk, offset);
+                    offset += chunk.byteLength;
+                }
+                const ref =
+                    `test-vault:${input.ownerId}:${++this.sequence}` as DeviceAudioVaultRef;
+                this.files.set(ref, stored);
+                return {
+                    ref,
+                    bytes,
+                    contentType: request.contentType,
+                    displayName: `track-${this.sequence}.mp3`,
+                    discard: async () => {
+                        this.removed.push(ref);
+                        this.files.delete(ref);
+                    },
+                };
+            },
+            access: async <T extends DeviceAudioAccessRequest>(
+                request: T,
+            ): Promise<DeviceAudioAccessResult<T>> => {
+                if (!this.isAuthGenerationCurrent(input.authGeneration)) {
+                    throw new DeviceAudioVaultError(
+                        "auth_changed",
+                        "Authentication session changed",
+                        "none",
+                    );
+                }
+                if (request.kind === "remove") {
+                    if (this.failRemove) {
+                        throw new DeviceAudioVaultError(
+                            "io",
+                            "Device file removal failed",
+                            "retry",
+                        );
+                    }
+                    this.removed.push(request.ref);
+                    return {
+                        kind: "remove" as const,
+                        removed: this.files.delete(request.ref),
+                    } as DeviceAudioAccessResult<T>;
+                }
+                const bytes = this.files.get(request.ref);
+                if (request.kind === "inspect") {
+                    return {
+                        kind: "inspect" as const,
+                        exists: Boolean(bytes),
+                        bytes: bytes?.byteLength ?? null,
+                    } as DeviceAudioAccessResult<T>;
+                }
+                if (!bytes) {
+                    throw new DeviceAudioVaultError(
+                        "not_found",
+                        "Device file is missing",
+                        "retry",
+                    );
+                }
+                return {
+                    kind: "play" as const,
+                    url: "blob:test-vault",
+                    release: () => undefined,
+                } as DeviceAudioAccessResult<T>;
+            },
+        };
+    }
+
+    resumeRetain(): void {
+        this.releaseRetain?.();
     }
 }
 
@@ -312,6 +495,55 @@ class CoordinatedReadMetadataStore extends MemoryMetadataStore {
         if (this.readCount === 2) this.releaseReads();
         await this.readsReleased;
         return snapshot ? structuredClone(snapshot) : null;
+    }
+}
+
+class PausedAutoManagedClaimMetadataStore extends MemoryMetadataStore {
+    readonly claimStarted: Promise<void>;
+    private signalClaimStarted!: () => void;
+    private releaseClaim!: () => void;
+    private readonly claimRelease: Promise<void>;
+
+    constructor() {
+        super();
+        this.claimStarted = new Promise((resolve) => {
+            this.signalClaimStarted = resolve;
+        });
+        this.claimRelease = new Promise((resolve) => {
+            this.releaseClaim = resolve;
+        });
+    }
+
+    override async putAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        this.signalClaimStarted();
+        await this.claimRelease;
+        return super.putAutoManagedIfCurrent(expected, next, isAuthorized);
+    }
+
+    resumeClaim(): void {
+        this.releaseClaim();
+    }
+}
+
+class ProgressCountingMetadataStore extends MemoryMetadataStore {
+    progressWrites = 0;
+
+    override async putIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        if (
+            next.status === "downloading" &&
+            next.bytesReceived > expected.bytesReceived
+        ) {
+            this.progressWrites += 1;
+        }
+        return super.putIfCurrent(expected, next, isAuthorized);
     }
 }
 
@@ -534,6 +766,388 @@ test("foreground download publishes ready metadata only after a complete atomic 
         new Uint8Array(await cached.arrayBuffer()),
         Uint8Array.from([0, 1, 2, 3, 4, 5]),
     );
+});
+
+test("configured device-file storage retains new audio outside CacheStorage", async () => {
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({ audioVault });
+    const manager = new DeviceOfflineDownloadManager(deps);
+
+    const record = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    assert.equal(record.status, "ready");
+    assert.match(String(record.mediaRef), /^test-vault:user-1:/);
+    assert.equal(record.bytesReceived, 6);
+    assert.equal(record.totalBytes, 6);
+    assert.equal(audioVault.retainCalls, 1);
+    assert.equal(audioVault.files.size, 1);
+    assert.equal(deps.audioCache.putCalls, 0);
+});
+
+test("real-file progress is throttled instead of writing metadata for every stream chunk", async () => {
+    const chunkSize = 64 * 1024;
+    const chunkCount = 8;
+    const metadataStore = new ProgressCountingMetadataStore();
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({
+        metadataStore,
+        audioVault,
+        fetch: async () => {
+            const stream = new ReadableStream<Uint8Array>({
+                start(controller) {
+                    for (let index = 0; index < chunkCount; index += 1) {
+                        controller.enqueue(new Uint8Array(chunkSize));
+                    }
+                    controller.close();
+                },
+            });
+            return new Response(stream, {
+                status: 200,
+                headers: {
+                    "content-type": "audio/flac",
+                    "content-length": String(chunkSize * chunkCount),
+                },
+            });
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    assert.equal(ready.status, "ready");
+    assert.equal(ready.bytesReceived, chunkSize * chunkCount);
+    assert.equal(metadataStore.progressWrites, 3);
+    assert.equal(audioVault.retainCalls, 1);
+});
+
+test("device-file metadata becomes playable only after the atomic retain receipt", async () => {
+    const audioVault = new MemoryDeviceAudioVault(true);
+    const deps = createDependencies({ audioVault });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const pending = manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    await audioVault.retainStarted;
+    const [progress] = await manager.list("user-1");
+    assert.equal(progress.status, "downloading");
+    assert.equal(progress.mediaRef, undefined);
+
+    audioVault.resumeRetain();
+    const ready = await pending;
+    assert.equal(ready.status, "ready");
+    assert.match(String(ready.mediaRef), /^test-vault:user-1:/);
+});
+
+test("auth rotation after a file write removes the stale file before rejecting ready metadata", async () => {
+    let generation = 1;
+    const authController = new AbortController();
+    const audioVault = new MemoryDeviceAudioVault(true);
+    const deps = createDependencies({
+        audioVault,
+        getAuthRuntimeLease: () => ({
+            generation,
+            signal: authController.signal,
+        }),
+        isAuthRuntimeCurrent: (candidate) => candidate === generation,
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const lease = deps.getAuthRuntimeLease();
+    manager.activateOwner("user-1", lease);
+    const pending = manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    await audioVault.retainStarted;
+    authController.abort();
+    generation = 2;
+    audioVault.resumeRetain();
+
+    await assert.rejects(pending, /authentication session changed/i);
+    assert.equal(audioVault.files.size, 0);
+    assert.equal(audioVault.removed.length, 1);
+    assert.deepEqual(await manager.list("user-1"), []);
+    assert.equal(deps.audioCache.putCalls, 0);
+});
+
+test("delete and reconcile operate on an owner-scoped device-file reference", async () => {
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({ audioVault });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const first = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    const firstRef = first.mediaRef;
+    assert.ok(firstRef);
+
+    assert.equal(await manager.delete("user-1", first.key), true);
+    assert.equal(audioVault.files.has(firstRef), false);
+    assert.equal(deps.audioCache.putCalls, 0);
+
+    const second = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    assert.ok(second.mediaRef);
+    audioVault.files.delete(second.mediaRef);
+
+    const [reconciled] = await manager.reconcile("user-1");
+    assert.equal(reconciled.status, "interrupted");
+    assert.equal(reconciled.errorCode, "device_file_missing");
+});
+
+test("legacy CacheStorage copies migrate atomically into the selected device folder", async () => {
+    const deps = createDependencies();
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const legacy = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    const legacyUrl = `https://soundspan.test${legacy.virtualUrl}`;
+    assert.ok(await deps.audioCache.match(legacyUrl));
+    assert.equal(legacy.mediaRef, undefined);
+
+    const audioVault = new MemoryDeviceAudioVault();
+    deps.audioVault = audioVault;
+    assert.equal(await manager.migrateLegacyCache("user-1"), 1);
+
+    const [migrated] = await manager.list("user-1");
+    assert.equal(migrated.status, "ready");
+    assert.match(String(migrated.mediaRef), /^test-vault:user-1:/);
+    assert.equal(audioVault.files.size, 1);
+    assert.equal(await deps.audioCache.match(legacyUrl), null);
+});
+
+test("legacy cache cleanup retries after delete failure without retaining a second file", async () => {
+    class RetryableDeleteAudioCache extends MemoryAudioCache {
+        deleteCalls = 0;
+        failNextDelete = true;
+
+        override async delete(url: string): Promise<void> {
+            this.deleteCalls += 1;
+            if (this.failNextDelete) {
+                this.failNextDelete = false;
+                throw new Error("legacy cache cleanup failed");
+            }
+            await super.delete(url);
+        }
+    }
+
+    const audioCache = new RetryableDeleteAudioCache();
+    const deps = createDependencies({ audioCache });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const legacy = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    const legacyUrl = `https://soundspan.test${legacy.virtualUrl}`;
+    assert.ok(await audioCache.match(legacyUrl));
+
+    const audioVault = new MemoryDeviceAudioVault();
+    deps.audioVault = audioVault;
+    await assert.rejects(
+        manager.migrateLegacyCache("user-1"),
+        /legacy cache cleanup failed/,
+    );
+
+    const [migrated] = await manager.list("user-1");
+    assert.ok(migrated.mediaRef);
+    assert.equal(audioVault.retainCalls, 1);
+    assert.ok(await audioCache.match(legacyUrl));
+
+    assert.equal(await manager.migrateLegacyCache("user-1"), 0);
+    assert.equal(audioVault.retainCalls, 1);
+    assert.equal(audioCache.deleteCalls, 2);
+    assert.equal(await audioCache.match(legacyUrl), null);
+});
+
+test("legacy migration retries a transient cache inspection failure", async () => {
+    class RetryableMatchAudioCache extends MemoryAudioCache {
+        failNextMatch = false;
+
+        override async match(url: string): Promise<Response | null> {
+            if (this.failNextMatch) {
+                this.failNextMatch = false;
+                throw new Error("legacy cache inspection failed");
+            }
+            return super.match(url);
+        }
+    }
+
+    const audioCache = new RetryableMatchAudioCache();
+    const deps = createDependencies({ audioCache });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    const audioVault = new MemoryDeviceAudioVault();
+    deps.audioVault = audioVault;
+    audioCache.failNextMatch = true;
+    await assert.rejects(
+        manager.migrateLegacyCache("user-1"),
+        /legacy cache inspection failed/,
+    );
+    assert.equal(audioVault.retainCalls, 0);
+    assert.equal((await manager.list("user-1"))[0]?.mediaRef, undefined);
+
+    assert.equal(await manager.migrateLegacyCache("user-1"), 1);
+    assert.equal(audioVault.retainCalls, 1);
+    assert.ok((await manager.list("user-1"))[0]?.mediaRef);
+});
+
+test("concurrent legacy migrations publish one file and discard the losing receipt", async () => {
+    const shared = createDependencies();
+    const legacyManager = new DeviceOfflineDownloadManager(shared);
+    await legacyManager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    const firstVault = new MemoryDeviceAudioVault(true);
+    const secondVault = new MemoryDeviceAudioVault(true);
+    const firstManager = new DeviceOfflineDownloadManager(
+        createDependencies({
+            metadataStore: shared.metadataStore,
+            audioCache: shared.audioCache,
+            audioVault: firstVault,
+        }),
+    );
+    const secondManager = new DeviceOfflineDownloadManager(
+        createDependencies({
+            metadataStore: shared.metadataStore,
+            audioCache: shared.audioCache,
+            audioVault: secondVault,
+        }),
+    );
+
+    const firstMigration = firstManager.migrateLegacyCache("user-1");
+    const secondMigration = secondManager.migrateLegacyCache("user-1");
+    await Promise.all([firstVault.retainStarted, secondVault.retainStarted]);
+    firstVault.resumeRetain();
+    const firstCount = await firstMigration;
+    secondVault.resumeRetain();
+    const secondCount = await secondMigration;
+
+    assert.equal(firstCount + secondCount, 1);
+    assert.equal(firstVault.files.size + secondVault.files.size, 1);
+    const [migrated] = await firstManager.list("user-1");
+    assert.ok(migrated.mediaRef);
+    assert.equal(
+        firstVault.files.has(migrated.mediaRef) ||
+            secondVault.files.has(migrated.mediaRef),
+        true,
+    );
+});
+
+test("failed real-file deletion keeps recoverable metadata until a retry succeeds", async () => {
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({ audioVault });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    assert.ok(ready.mediaRef);
+
+    audioVault.failRemove = true;
+    await assert.rejects(
+        manager.delete("user-1", ready.key),
+        /Device file removal failed/,
+    );
+    const [recoverable] = await manager.list("user-1");
+    assert.equal(recoverable.key, ready.key);
+    assert.equal(recoverable.mediaRef, ready.mediaRef);
+    assert.equal(recoverable.status, "error");
+    assert.equal(recoverable.errorCode, "device_file_delete_failed");
+    assert.equal(audioVault.files.size, 1);
+
+    audioVault.failRemove = false;
+    assert.equal(await manager.delete("user-1", ready.key), true);
+    assert.deepEqual(await manager.list("user-1"), []);
+    assert.equal(audioVault.files.size, 0);
+});
+
+test("manual promotion cannot convert a device-file deletion tombstone", async () => {
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({ audioVault });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "auto-liked",
+    });
+
+    audioVault.failRemove = true;
+    await assert.rejects(
+        manager.delete("user-1", ready.key),
+        /Device file removal failed/,
+    );
+    const [tombstone] = await manager.list("user-1");
+    assert.equal(tombstone.status, "error");
+    assert.equal(tombstone.management, "auto-liked");
+
+    const unchanged = await manager.promoteToManual("user-1", ready.key);
+
+    assert.equal(unchanged?.status, "error");
+    assert.equal(unchanged?.management, "auto-liked");
+    assert.equal((await manager.list("user-1"))[0]?.management, "auto-liked");
+});
+
+test("auto-managed deletion cannot evict a copy promoted while its claim is pending", async () => {
+    const metadataStore = new PausedAutoManagedClaimMetadataStore();
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({ metadataStore, audioVault });
+    const deletingManager = new DeviceOfflineDownloadManager(deps);
+    const promotingManager = new DeviceOfflineDownloadManager(deps);
+    const ready = await deletingManager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "auto-liked",
+    });
+    assert.ok(ready.mediaRef);
+
+    const deletion = deletingManager.deleteAutoManagedIfCurrent(
+        "user-1",
+        ready,
+    );
+    await metadataStore.claimStarted;
+    const promoted = await promotingManager.promoteToManual(
+        "user-1",
+        ready.key,
+    );
+    metadataStore.resumeClaim();
+
+    assert.equal(promoted?.management, "manual");
+    assert.equal(await deletion, false);
+    assert.equal(
+        (await deletingManager.list("user-1"))[0]?.management,
+        "manual",
+    );
+    assert.equal(audioVault.files.has(ready.mediaRef), true);
 });
 
 test("foreground download publishes measured progress before cache integrity verification", async () => {
@@ -878,6 +1492,130 @@ test("another account in the same browser cannot delete or inherit a device-loca
     assert.equal(await manager.delete("user-2", ownerCopy.key), false);
     assert.equal((await manager.list("user-1"))[0]?.status, "ready");
     assert.ok(await deps.audioCache.match(absoluteVirtualUrl));
+});
+
+test("keeping an auto-liked device file promotes it without downloading or replacing it", async () => {
+    let fetchCalls = 0;
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({
+        audioVault,
+        fetch: async () => {
+            fetchCalls += 1;
+            return new Response(Uint8Array.from([0, 1, 2, 3, 4, 5]), {
+                status: 200,
+                headers: {
+                    "content-type": "audio/mpeg",
+                    "content-length": "6",
+                },
+            });
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const automatic = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "auto-liked",
+    });
+    assert.ok(automatic.mediaRef);
+
+    const kept = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "manual",
+    });
+
+    assert.equal(kept.key, automatic.key);
+    assert.equal(kept.mediaRef, automatic.mediaRef);
+    assert.equal(kept.status, "ready");
+    assert.equal(kept.management, "manual");
+    assert.equal(fetchCalls, 1);
+    assert.equal(audioVault.retainCalls, 1);
+    assert.equal(audioVault.removed.length, 0);
+    assert.equal(audioVault.files.size, 1);
+});
+
+test("resuming a durable manual download keeps an already ready device file", async () => {
+    let fetchCalls = 0;
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({
+        audioVault,
+        fetch: async () => {
+            fetchCalls += 1;
+            return new Response(Uint8Array.from([0, 1, 2, 3, 4, 5]), {
+                status: 200,
+                headers: {
+                    "content-type": "audio/mpeg",
+                    "content-length": "6",
+                },
+            });
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    const resumed = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    assert.equal(resumed.key, ready.key);
+    assert.equal(resumed.mediaRef, ready.mediaRef);
+    assert.equal(resumed.management, "manual");
+    assert.equal(fetchCalls, 1);
+    assert.equal(audioVault.retainCalls, 1);
+    assert.equal(audioVault.removed.length, 0);
+});
+
+test("resuming an auto-liked download keeps an already ready managed file", async () => {
+    let fetchCalls = 0;
+    const audioVault = new MemoryDeviceAudioVault();
+    const deps = createDependencies({
+        audioVault,
+        fetch: async () => {
+            fetchCalls += 1;
+            return new Response(Uint8Array.from([0, 1, 2, 3, 4, 5]), {
+                status: 200,
+                headers: {
+                    "content-type": "audio/mpeg",
+                    "content-length": "6",
+                },
+            });
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "auto-liked",
+    });
+
+    const resumed = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "auto-liked",
+    });
+
+    assert.equal(resumed.key, ready.key);
+    assert.equal(resumed.mediaRef, ready.mediaRef);
+    assert.equal(resumed.management, "auto-liked");
+    assert.equal(fetchCalls, 1);
+    assert.equal(audioVault.retainCalls, 1);
+    assert.equal(audioVault.removed.length, 0);
 });
 
 test("manual device copies are never downgraded to auto-managed eviction candidates", async () => {

@@ -18,6 +18,7 @@ const calls = {
     settingUpdates: [] as Array<Record<string, unknown>>,
     collectionEnqueues: [] as Array<Record<string, unknown>>,
     storageRetries: 0,
+    storageSetups: 0,
     confirmations: [] as string[],
 };
 let collectionStatus = {
@@ -30,11 +31,23 @@ let collectionStatus = {
 };
 
 let records: Array<Record<string, unknown>> = [];
+let trackRecord: Record<string, unknown> | null = null;
 let resumeFailure: Error | null = null;
 let deleteFailure: Error | null = null;
 let prepareFailure: Error | null = null;
 let isHydrated = true;
 let storageError: string | null = null;
+let storage = {
+    status: "ready" as
+        | "checking"
+        | "needs-setup"
+        | "requesting"
+        | "ready"
+        | "unsupported"
+        | "error",
+    directoryName: "Soundspan Music" as string | null,
+    explanation: "Downloads are saved in the selected device folder.",
+};
 let confirmDelete = true;
 const offlineContext = {
     get isHydrated() {
@@ -43,6 +56,9 @@ const offlineContext = {
     isQueueHydrated: true,
     get storageError() {
         return storageError;
+    },
+    get storage() {
+        return storage;
     },
     get records() {
         return records;
@@ -68,7 +84,9 @@ const offlineContext = {
         calls.prepares.push(record.key);
         if (prepareFailure) throw prepareFailure;
     },
-    recordForTrack: () => null,
+    get recordForTrack() {
+        return () => trackRecord;
+    },
     queueItems: [] as Array<Record<string, unknown>>,
     automationSettings: {
         ownerId: "user-1",
@@ -89,6 +107,10 @@ const offlineContext = {
     refresh: async () => undefined,
     retryStorage: async () => {
         calls.storageRetries += 1;
+    },
+    setupStorage: async () => {
+        calls.storageSetups += 1;
+        return storage;
     },
 };
 
@@ -204,6 +226,7 @@ after(() => {
 
 beforeEach(() => {
     records = [];
+    trackRecord = null;
     calls.downloads.length = 0;
     calls.deletes.length = 0;
     calls.queueCancels.length = 0;
@@ -213,6 +236,7 @@ beforeEach(() => {
     calls.settingUpdates.length = 0;
     calls.collectionEnqueues.length = 0;
     calls.storageRetries = 0;
+    calls.storageSetups = 0;
     calls.confirmations.length = 0;
     collectionStatus = {
         total: 2,
@@ -230,6 +254,11 @@ beforeEach(() => {
     prepareFailure = null;
     isHydrated = true;
     storageError = null;
+    storage = {
+        status: "ready",
+        directoryName: "Soundspan Music",
+        explanation: "Downloads are saved in the selected device folder.",
+    };
     confirmDelete = true;
     Object.defineProperty(window, "confirm", {
         configurable: true,
@@ -323,6 +352,62 @@ test("Downloads UI exposes queued device-local work without marking it playable"
     await React.act(async () => remove.click());
     assert.deepEqual(calls.queueCancels, ["queued-key"]);
     assert.match(calls.confirmations[0], /only from this device/i);
+    view.unmount();
+});
+
+test("empty Downloads asks for a real device folder instead of presenting browser cache as storage", async () => {
+    storage = {
+        status: "needs-setup",
+        directoryName: null,
+        explanation:
+            "Choose a folder so music is stored as files on this device.",
+    };
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+
+    assert.match(view.container.textContent ?? "", /Choose a music folder/i);
+    assert.doesNotMatch(
+        view.container.textContent ?? "",
+        /No device downloads|browser storage/i,
+    );
+    const setup = view.container.querySelector(
+        'button[aria-label="Choose music folder on this device"]',
+    ) as HTMLButtonElement;
+    await React.act(async () => {
+        setup.click();
+        await Promise.resolve();
+    });
+    assert.equal(calls.storageSetups, 1);
+    view.unmount();
+});
+
+test("Downloads reconnects a remembered folder without offering a destructive folder change", async () => {
+    storage = {
+        status: "error",
+        directoryName: "Soundspan Music",
+        explanation: "Allow Soundspan to use the remembered folder again.",
+    };
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+
+    assert.match(view.container.textContent ?? "", /Reconnect music folder/i);
+    assert.equal(
+        view.container.querySelector(
+            'button[aria-label="Choose music folder on this device"]',
+        ),
+        null,
+    );
+    const reconnect = view.container.querySelector(
+        'button[aria-label="Reconnect music folder on this device"]',
+    ) as HTMLButtonElement;
+    assert.ok(reconnect);
+    await React.act(async () => {
+        reconnect.click();
+        await Promise.resolve();
+    });
+    assert.equal(calls.storageSetups, 1);
     view.unmount();
 });
 
@@ -427,6 +512,8 @@ test("ordinary settings expose an opt-in auto-liked policy for this device only"
         /Automatically download liked songs on this device/i,
     );
     assert.match(view.container.textContent ?? "", /2 GB/i);
+    assert.match(view.container.textContent ?? "", /Soundspan Music/i);
+    assert.doesNotMatch(view.container.textContent ?? "", /browser storage/i);
     const toggle = view.container.querySelector(
         "#device-auto-download-liked",
     ) as HTMLInputElement;
@@ -438,6 +525,99 @@ test("ordinary settings expose an opt-in auto-liked policy for this device only"
         await Promise.resolve();
     });
     assert.deepEqual(calls.settingUpdates, [{ autoDownloadLiked: true }]);
+    view.unmount();
+});
+
+test("offline settings require an explicit device folder before enabling automatic downloads", async () => {
+    storage = {
+        status: "needs-setup",
+        directoryName: null,
+        explanation:
+            "Choose a folder so music is stored as files on this device.",
+    };
+    const { DeviceOfflineSettingsSection } =
+        await import("../../features/settings/components/sections/DeviceOfflineSettingsSection");
+    const view = await render(
+        React.createElement(DeviceOfflineSettingsSection),
+    );
+
+    assert.match(view.container.textContent ?? "", /Choose a music folder/i);
+    const toggle = view.container.querySelector(
+        "#device-auto-download-liked",
+    ) as HTMLInputElement;
+    assert.equal(toggle.disabled, true);
+    const setup = view.container.querySelector(
+        'button[aria-label="Choose music folder on this device"]',
+    ) as HTMLButtonElement;
+    await React.act(async () => {
+        setup.click();
+        await Promise.resolve();
+    });
+    assert.equal(calls.storageSetups, 1);
+    assert.deepEqual(calls.settingUpdates, []);
+    view.unmount();
+});
+
+test("offline settings reconnect a remembered folder instead of claiming to choose a new one", async () => {
+    storage = {
+        status: "error",
+        directoryName: "Soundspan Music",
+        explanation: "Allow Soundspan to use the remembered folder again.",
+    };
+    const { DeviceOfflineSettingsSection } =
+        await import("../../features/settings/components/sections/DeviceOfflineSettingsSection");
+    const view = await render(
+        React.createElement(DeviceOfflineSettingsSection),
+    );
+
+    assert.match(view.container.textContent ?? "", /Reconnect folder/i);
+    assert.equal(
+        view.container.querySelector(
+            'button[aria-label="Choose music folder on this device"]',
+        ),
+        null,
+    );
+    const reconnect = view.container.querySelector(
+        'button[aria-label="Reconnect music folder on this device"]',
+    ) as HTMLButtonElement;
+    assert.ok(reconnect);
+    await React.act(async () => {
+        reconnect.click();
+        await Promise.resolve();
+    });
+    assert.equal(calls.storageSetups, 1);
+    view.unmount();
+});
+
+test("unsupported browsers explain that a plain PWA cannot save managed files outside browser-private storage", async () => {
+    storage = {
+        status: "unsupported",
+        directoryName: null,
+        explanation:
+            "Firefox and Safari PWAs cannot save a managed music library into a normal device folder. Use Chrome or Edge on desktop, or the installed Soundspan mobile app.",
+    };
+    const { DeviceOfflineSettingsSection } =
+        await import("../../features/settings/components/sections/DeviceOfflineSettingsSection");
+    const view = await render(
+        React.createElement(DeviceOfflineSettingsSection),
+    );
+
+    assert.match(view.container.textContent ?? "", /Firefox and Safari PWAs/i);
+    assert.match(view.container.textContent ?? "", /normal device folder/i);
+    assert.equal(
+        view.container.querySelector(
+            'button[aria-label="Choose music folder on this device"]',
+        ),
+        null,
+    );
+    assert.equal(
+        (
+            view.container.querySelector(
+                "#device-auto-download-liked",
+            ) as HTMLInputElement
+        ).disabled,
+        true,
+    );
     view.unmount();
 });
 
@@ -468,6 +648,15 @@ const track = {
     streamSource: "youtube" as const,
     youtubeVideoId: "video-a",
 };
+const overflowTrack = {
+    id: track.id,
+    title: track.title,
+    duration: track.duration,
+    artist: { name: track.artist.name },
+    album: { title: track.album.title },
+    streamSource: track.streamSource,
+    youtubeVideoId: track.youtubeVideoId,
+};
 
 test("personalized discovery exposes a real clean device-download action", async () => {
     const { PersonalizedTrackShelf } =
@@ -496,6 +685,157 @@ test("personalized discovery exposes a real clean device-download action", async
     );
     assert.doesNotMatch(String(calls.downloads[0].sourceUrl), /token=/);
     view.unmount();
+});
+
+test("single-track actions explain unavailable storage without blocking folder setup", async () => {
+    const { PersonalizedTrackShelf } =
+        await import("../../features/home/components/PersonalizedTrackShelf");
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
+
+    for (const unavailable of [
+        {
+            status: "unsupported" as const,
+            label: "Device downloads are unavailable in this browser",
+        },
+        {
+            status: "checking" as const,
+            label: "Checking device storage for Alpha",
+        },
+        {
+            status: "requesting" as const,
+            label: "Waiting for folder access for Alpha",
+        },
+    ]) {
+        storage = {
+            status: unavailable.status,
+            directoryName: null,
+            explanation: "Storage is not ready.",
+        };
+        const shelf = await render(
+            React.createElement(PersonalizedTrackShelf, {
+                title: "Quick picks",
+                tracks: [track],
+            }),
+        );
+        const shelfAction = shelf.container.querySelector(
+            `button[aria-label="${unavailable.label}"]`,
+        ) as HTMLButtonElement;
+        assert.ok(shelfAction);
+        assert.equal(shelfAction.disabled, true);
+        shelf.unmount();
+    }
+
+    storage = {
+        status: "unsupported",
+        directoryName: null,
+        explanation: "Storage is not supported.",
+    };
+    const menu = await render(
+        React.createElement(TrackOverflowMenu, { track: overflowTrack }),
+    );
+    await React.act(async () =>
+        (
+            menu.container.querySelector(
+                'button[aria-label="Track actions"]',
+            ) as HTMLButtonElement
+        ).click(),
+    );
+    const unsupportedMenuAction = [
+        ...menu.container.querySelectorAll("button"),
+    ].find((button) =>
+        button.textContent?.includes("Downloads unavailable in this browser"),
+    );
+    assert.ok(unsupportedMenuAction);
+    assert.equal((unsupportedMenuAction as HTMLButtonElement).disabled, true);
+    menu.unmount();
+
+    for (const actionable of ["needs-setup", "error"] as const) {
+        storage = {
+            status: actionable,
+            directoryName: actionable === "error" ? "Soundspan Music" : null,
+            explanation: "Folder access is required.",
+        };
+        const shelf = await render(
+            React.createElement(PersonalizedTrackShelf, {
+                title: "Quick picks",
+                tracks: [track],
+            }),
+        );
+        const action = shelf.container.querySelector(
+            actionable === "error"
+                ? 'button[aria-label="Reconnect folder to download Alpha"]'
+                : 'button[aria-label="Choose a folder to download Alpha"]',
+        ) as HTMLButtonElement;
+        assert.ok(action);
+        assert.equal(action.disabled, false);
+        await React.act(async () => action.click());
+        shelf.unmount();
+    }
+    assert.equal(calls.downloads.length, 2);
+});
+
+test("single-track actions can protect an automatic ready copy", async () => {
+    trackRecord = {
+        key: "auto-ready",
+        status: "ready",
+        management: "auto-liked",
+    };
+    const { PersonalizedTrackShelf } =
+        await import("../../features/home/components/PersonalizedTrackShelf");
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
+
+    const shelf = await render(
+        React.createElement(PersonalizedTrackShelf, {
+            title: "Quick picks",
+            tracks: [track],
+        }),
+    );
+    const shelfAction = shelf.container.querySelector(
+        'button[aria-label="Keep Alpha offline on this device"]',
+    ) as HTMLButtonElement;
+    assert.ok(shelfAction);
+    assert.equal(shelfAction.disabled, false);
+    await React.act(async () => shelfAction.click());
+    shelf.unmount();
+
+    const menu = await render(
+        React.createElement(TrackOverflowMenu, { track: overflowTrack }),
+    );
+    await React.act(async () =>
+        (
+            menu.container.querySelector(
+                'button[aria-label="Track actions"]',
+            ) as HTMLButtonElement
+        ).click(),
+    );
+    const keep = [...menu.container.querySelectorAll("button")].find((button) =>
+        button.textContent?.includes("Keep offline on this device"),
+    ) as HTMLButtonElement;
+    assert.ok(keep);
+    assert.equal(keep.disabled, false);
+    await React.act(async () => keep.click());
+    assert.equal(calls.downloads.length, 2);
+    menu.unmount();
+
+    storage = {
+        status: "checking",
+        directoryName: "Soundspan Music",
+        explanation: "Checking the remembered folder.",
+    };
+    const checking = await render(
+        React.createElement(PersonalizedTrackShelf, {
+            title: "Quick picks",
+            tracks: [track],
+        }),
+    );
+    const checkingAction = checking.container.querySelector(
+        'button[aria-label="Checking device storage for Alpha"]',
+    ) as HTMLButtonElement;
+    assert.ok(checkingAction);
+    assert.equal(checkingAction.disabled, true);
+    checking.unmount();
 });
 
 test("Downloads UI plays ready copies and exposes retry/delete state actions", async () => {
@@ -568,6 +908,63 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
     assert.deepEqual(calls.plays, ["yt:video-a"]);
     assert.deepEqual(calls.resumes, ["retry-key"]);
     assert.deepEqual(calls.deletes, ["ready-key"]);
+    view.unmount();
+});
+
+test("Downloads distinguishes manual and automatic copies and warns before automatic deletion", async () => {
+    const base = {
+        ownerId: "user-1",
+        trackIdentity: "youtube:video-a",
+        quality: "auto",
+        sourceUrl: "/api/ytmusic/stream/video-a",
+        track,
+        status: "ready",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 6,
+        totalBytes: 6,
+        contentType: "audio/mpeg",
+        persistenceGranted: false,
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+    };
+    records = [
+        {
+            ...base,
+            key: "manual-key",
+            track: { ...track, id: "manual", title: "Manual copy" },
+            trackIdentity: "youtube:manual",
+            management: "manual",
+        },
+        {
+            ...base,
+            key: "automatic-key",
+            track: { ...track, id: "automatic", title: "Automatic copy" },
+            trackIdentity: "youtube:automatic",
+            management: "auto-liked",
+        },
+    ];
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+
+    assert.match(view.container.textContent ?? "", /Kept offline manually/i);
+    assert.match(
+        view.container.textContent ?? "",
+        /Automatic from Liked songs/i,
+    );
+    await React.act(async () =>
+        (
+            view.container.querySelector(
+                'button[aria-label="Delete device copy of Automatic copy"]',
+            ) as HTMLButtonElement
+        ).click(),
+    );
+    assert.match(calls.confirmations.at(-1) ?? "", /may download again/i);
+    assert.deepEqual(calls.deletes, ["automatic-key"]);
     view.unmount();
 });
 

@@ -60,11 +60,77 @@ function PersonalizedDownloadAction({ track }: { track: Track }) {
     const record = deviceOffline.recordForTrack(track);
     const busy = record?.status === "downloading";
     const ready = record?.status === "ready";
+    const autoManagedReady = ready && record.management === "auto-liked";
+    const storageStatus = deviceOffline.storage.status;
+    const storageBlocked =
+        storageStatus === "unsupported" ||
+        storageStatus === "checking" ||
+        storageStatus === "requesting";
+    const disabled = busy || (ready && !autoManagedReady) || storageBlocked;
+    const actionCopy = (() => {
+        if (ready && !autoManagedReady) {
+            return {
+                ariaLabel: `${track.title} is available offline`,
+                title: "Available offline",
+            };
+        }
+        if (busy) {
+            return {
+                ariaLabel: `Downloading ${track.title}`,
+                title: "Downloading…",
+            };
+        }
+        if (storageStatus === "unsupported") {
+            return {
+                ariaLabel: "Device downloads are unavailable in this browser",
+                title: "Downloads unavailable in this browser",
+            };
+        }
+        if (storageStatus === "checking") {
+            return {
+                ariaLabel: `Checking device storage for ${track.title}`,
+                title: "Checking device storage…",
+            };
+        }
+        if (storageStatus === "requesting") {
+            return {
+                ariaLabel: `Waiting for folder access for ${track.title}`,
+                title: "Waiting for folder access…",
+            };
+        }
+        if (storageStatus === "needs-setup") {
+            return {
+                ariaLabel: `Choose a folder to download ${track.title}`,
+                title: "Choose folder and download",
+            };
+        }
+        if (storageStatus === "error") {
+            const reconnecting = Boolean(deviceOffline.storage.directoryName);
+            return {
+                ariaLabel: reconnecting
+                    ? `Reconnect folder to download ${track.title}`
+                    : `Choose a folder to download ${track.title}`,
+                title: reconnecting
+                    ? "Reconnect folder and download"
+                    : "Choose folder and download",
+            };
+        }
+        if (autoManagedReady) {
+            return {
+                ariaLabel: `Keep ${track.title} offline on this device`,
+                title: "Keep offline on this device",
+            };
+        }
+        return {
+            ariaLabel: `Download ${track.title} to this device`,
+            title: "Download to device",
+        };
+    })();
 
     return (
         <button
             type="button"
-            disabled={busy || ready}
+            disabled={disabled}
             onClick={() => {
                 void deviceOffline
                     .download({
@@ -87,17 +153,11 @@ function PersonalizedDownloadAction({ track }: { track: Track }) {
                         ),
                     );
             }}
-            aria-label={
-                ready
-                    ? `${track.title} is available offline`
-                    : busy
-                      ? `Downloading ${track.title}`
-                      : `Download ${track.title} to this device`
-            }
-            title={ready ? "Available offline" : "Download to device"}
+            aria-label={actionCopy.ariaLabel}
+            title={actionCopy.title}
             className="mr-1 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white disabled:opacity-55 motion-reduce:transition-none"
         >
-            {ready ? (
+            {ready && !autoManagedReady ? (
                 <Check className="h-4 w-4" aria-hidden="true" />
             ) : busy ? (
                 <Loader2

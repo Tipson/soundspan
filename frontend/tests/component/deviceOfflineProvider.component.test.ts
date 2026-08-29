@@ -36,10 +36,37 @@ const queueCalls = {
         requests: Array<Record<string, unknown>>;
     }>,
     likedLoads: 0,
+    enqueues: [] as Array<Record<string, unknown>>,
 };
+const vaultCalls = {
+    inspections: 0,
+    requests: 0,
+};
+const operationOrder: string[] = [];
+let vaultAccessState = {
+    status: "ready" as
+        | "ready"
+        | "setup-required"
+        | "permission-required"
+        | "denied"
+        | "unsupported"
+        | "error",
+    code: null as
+        | null
+        | "setup_required"
+        | "permission_required"
+        | "permission_denied"
+        | "unsupported"
+        | "io",
+    storageKind: "desktop-directory" as "desktop-directory" | null,
+    label: "Soundspan Music",
+    reason: "Music files are stored in the selected folder.",
+};
+let vaultRequestState = vaultAccessState;
 let likedTracks: Array<Record<string, unknown>> = [];
 let likedRequest: Deferred<{ tracks: Array<Record<string, unknown>> }> | null =
     null;
+let likedLoadFailures = 0;
 let authUserId = "user-1";
 let storedRecords: Array<Record<string, unknown>> = [];
 let recordStorageFailure: Error | null = null;
@@ -55,6 +82,8 @@ let automationSettings = {
 };
 const controllerChangeListeners = new Set<() => void>();
 const recordSubscribers = new Set<() => void>();
+const recordDownloads: Array<Record<string, unknown>> = [];
+const legacyMigrations: string[] = [];
 const serviceWorker = {
     addEventListener(type: string, listener: () => void) {
         if (type === "controllerchange")
@@ -71,6 +100,25 @@ mock.module("@/lib/auth-context", {
     namedExports: { useAuth: () => ({ user: { id: authUserId } }) },
 });
 
+mock.module("@/features/device-offline/vault", {
+    namedExports: {
+        getDeviceAudioVault: () => ({
+            inspectAccess: async () => {
+                vaultCalls.inspections += 1;
+                return vaultAccessState;
+            },
+            requestAccess: () => {
+                vaultCalls.requests += 1;
+                operationOrder.push("request-access");
+                return Promise.resolve(vaultRequestState);
+            },
+            open: async () => {
+                throw new Error("unused");
+            },
+        }),
+    },
+});
+
 mock.module("@/features/device-offline/browserStorage", {
     namedExports: {
         getBrowserDeviceOfflineManager: () => ({
@@ -85,12 +133,18 @@ mock.module("@/features/device-offline/browserStorage", {
                 if (reconcileRequest) return reconcileRequest.promise;
                 return storedRecords;
             },
+            migrateLegacyCache: async (ownerId: string) => {
+                legacyMigrations.push(ownerId);
+                return 0;
+            },
             subscribe: (listener: () => void) => {
                 recordSubscribers.add(listener);
                 return () => recordSubscribers.delete(listener);
             },
-            download: async () => {
-                throw new Error("unused");
+            download: async (input: Record<string, unknown>) => {
+                operationOrder.push("download");
+                recordDownloads.push(input);
+                return { ...input, key: "downloaded", status: "ready" };
             },
             delete: async () => false,
         }),
@@ -126,11 +180,15 @@ mock.module("@/features/device-offline/browserQueueStorage", {
                 };
                 return automationSettings;
             },
-            enqueueBatch: async () => ({
-                total: 0,
-                queued: 0,
-                alreadyReady: 0,
-            }),
+            enqueueBatch: async (requests: Array<Record<string, unknown>>) => {
+                operationOrder.push("enqueue");
+                queueCalls.enqueues.push(...requests);
+                return {
+                    total: requests.length,
+                    queued: requests.length,
+                    alreadyReady: 0,
+                };
+            },
             syncAutoLiked: async (
                 ownerId: string,
                 requests: Array<Record<string, unknown>>,
@@ -156,6 +214,10 @@ mock.module("@/lib/api", {
         api: {
             getLikedPlaylist: async () => {
                 queueCalls.likedLoads += 1;
+                if (likedLoadFailures > 0) {
+                    likedLoadFailures -= 1;
+                    throw new Error("liked playlist temporarily unavailable");
+                }
                 if (likedRequest) return likedRequest.promise;
                 return { tracks: likedTracks };
             },
@@ -207,7 +269,22 @@ beforeEach(() => {
     queueCalls.settingUpdates.length = 0;
     queueCalls.autoSyncs.length = 0;
     queueCalls.likedLoads = 0;
+    queueCalls.enqueues.length = 0;
+    vaultCalls.inspections = 0;
+    vaultCalls.requests = 0;
+    operationOrder.length = 0;
+    recordDownloads.length = 0;
+    legacyMigrations.length = 0;
+    vaultAccessState = {
+        status: "ready",
+        code: null,
+        storageKind: "desktop-directory",
+        label: "Soundspan Music",
+        reason: "Music files are stored in the selected folder.",
+    };
+    vaultRequestState = vaultAccessState;
     likedRequest = null;
+    likedLoadFailures = 0;
     authUserId = "user-1";
     storedRecords = [];
     recordStorageFailure = null;
@@ -227,6 +304,261 @@ beforeEach(() => {
         configurable: true,
         value: serviceWorker,
     });
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
+    Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+    });
+});
+
+const manualTrack = {
+    id: "yt:manual-track",
+    title: "Manual track",
+    duration: 180,
+    artist: { name: "Artist" },
+    album: { title: "Album" },
+    streamSource: "youtube" as const,
+    youtubeVideoId: "manual-track",
+};
+
+test("a manual collection click requests device-folder access before queueing", async () => {
+    vaultAccessState = {
+        status: "setup-required",
+        code: "setup_required",
+        storageKind: "desktop-directory",
+        label: "Choose a music folder",
+        reason: "Choose a folder before downloading files to this device.",
+    };
+    vaultRequestState = {
+        status: "ready",
+        code: null,
+        storageKind: "desktop-directory",
+        label: "My Music",
+        reason: "Music files are stored in the selected folder.",
+    };
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+
+    function Probe() {
+        const offline = useDeviceOffline();
+        return React.createElement(
+            "button",
+            {
+                onClick: () =>
+                    void offline.enqueueCollection({
+                        tracks: [manualTrack],
+                        collectionId: "album:manual",
+                        collectionLabel: "Manual album",
+                    }),
+            },
+            offline.storage.status,
+        );
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                DeviceOfflineProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(container.textContent, "needs-setup");
+
+    await React.act(async () => {
+        (container.querySelector("button") as HTMLButtonElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(vaultCalls.requests, 1);
+    assert.deepEqual(operationOrder.slice(0, 2), ["request-access", "enqueue"]);
+    assert.equal(queueCalls.enqueues.length, 1);
+    assert.deepEqual(legacyMigrations, ["user-1"]);
+    assert.equal(container.textContent, "ready");
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
+test("a manual track click requests device-folder access before downloading", async () => {
+    vaultAccessState = {
+        status: "permission-required",
+        code: "permission_required",
+        storageKind: "desktop-directory",
+        label: "My Music",
+        reason: "Allow Soundspan to write to the selected folder.",
+    };
+    vaultRequestState = {
+        status: "ready",
+        code: null,
+        storageKind: "desktop-directory",
+        label: "My Music",
+        reason: "Music files are stored in the selected folder.",
+    };
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+
+    function Probe() {
+        const offline = useDeviceOffline();
+        return React.createElement(
+            "button",
+            {
+                onClick: () =>
+                    void offline.download({
+                        track: manualTrack,
+                        sourceUrl: "/api/ytmusic/stream-public/manual-track",
+                    }),
+            },
+            offline.storage.status,
+        );
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                DeviceOfflineProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await React.act(async () => {
+        (container.querySelector("button") as HTMLButtonElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(vaultCalls.requests, 1);
+    assert.deepEqual(operationOrder.slice(0, 2), [
+        "request-access",
+        "download",
+    ]);
+    assert.equal(recordDownloads.length, 1);
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
+test("auto-liked never opens a picker or starts before device storage is ready", async () => {
+    vaultAccessState = {
+        status: "setup-required",
+        code: "setup_required",
+        storageKind: "desktop-directory",
+        label: "Choose a music folder",
+        reason: "Choose a folder before downloading files to this device.",
+    };
+    automationSettings = {
+        ...automationSettings,
+        autoDownloadLiked: true,
+    };
+    likedTracks = [
+        {
+            id: "yt:auto",
+            title: "Auto",
+            duration: 180,
+            likedAt: "2026-08-29T10:00:00.000Z",
+            source: "youtube",
+            provider: { tidalTrackId: null, youtubeVideoId: "auto" },
+            artist: { id: null, name: "Artist" },
+            album: { id: null, title: "Album", coverArt: null },
+        },
+    ];
+    const { DeviceOfflineProvider } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(DeviceOfflineProvider, null, "content"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(vaultCalls.requests, 0);
+    assert.equal(queueCalls.likedLoads, 0);
+    assert.equal(queueCalls.autoSyncs.length, 0);
+    assert.equal(queueCalls.resumes.length, 0);
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
+test("ready device storage resumes legacy migration once per owner activation and app mount", async (t) => {
+    const { DeviceOfflineProvider } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let activeRoot = root;
+    t.after(async () => {
+        await React.act(async () => activeRoot.unmount());
+        container.remove();
+    });
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(DeviceOfflineProvider, null, "content"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(legacyMigrations, ["user-1"]);
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(DeviceOfflineProvider, null, "content"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(legacyMigrations, ["user-1"]);
+
+    authUserId = "user-2";
+    automationSettings = {
+        ...automationSettings,
+        ownerId: "user-2",
+    };
+    await React.act(async () => {
+        root.render(
+            React.createElement(DeviceOfflineProvider, null, "content"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(legacyMigrations, ["user-1", "user-2"]);
+
+    await React.act(async () => root.unmount());
+
+    const nextRoot = createRoot(container);
+    activeRoot = nextRoot;
+    await React.act(async () => {
+        nextRoot.render(
+            React.createElement(DeviceOfflineProvider, null, "content"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(legacyMigrations, ["user-1", "user-2", "user-2"]);
 });
 
 test("initial hydration does not expose a stale ready record before cache reconciliation", async () => {
@@ -569,6 +901,169 @@ test("a like notification during an active sync schedules one fresh My Liked sna
 
     await React.act(async () => root.unmount());
     container.remove();
+});
+
+test("auto-liked resumes after offline and hidden states and refreshes cross-device likes on focus", async (t) => {
+    automationSettings = {
+        ...automationSettings,
+        autoDownloadLiked: true,
+    };
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+    });
+    Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "hidden",
+    });
+    likedTracks = [
+        {
+            id: "yt:remote-1",
+            title: "Remote one",
+            duration: 180,
+            likedAt: "2026-08-29T10:00:00.000Z",
+            source: "youtube",
+            provider: { tidalTrackId: null, youtubeVideoId: "remote-1" },
+            artist: { id: null, name: "Artist" },
+            album: { id: null, title: "Album", coverArt: null },
+        },
+    ];
+    const { DeviceOfflineProvider } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(DeviceOfflineProvider, null, "content"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(queueCalls.likedLoads, 0);
+
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
+    await React.act(async () => {
+        window.dispatchEvent(new Event("online"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(queueCalls.likedLoads, 0);
+
+    Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+    });
+    await React.act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(queueCalls.likedLoads, 1);
+    assert.equal(
+        queueCalls.autoSyncs[0]?.requests[0]?.sourceUrl,
+        "/api/ytmusic/remote-1",
+    );
+
+    likedTracks = [
+        {
+            id: "yt:remote-2",
+            title: "Remote two",
+            duration: 180,
+            likedAt: "2026-08-29T11:00:00.000Z",
+            source: "youtube",
+            provider: { tidalTrackId: null, youtubeVideoId: "remote-2" },
+            artist: { id: null, name: "Artist" },
+            album: { id: null, title: "Album", coverArt: null },
+        },
+    ];
+    await React.act(async () => {
+        window.dispatchEvent(new Event("focus"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(queueCalls.likedLoads, 2);
+    assert.equal(
+        queueCalls.autoSyncs[1]?.requests[0]?.sourceUrl,
+        "/api/ytmusic/remote-2",
+    );
+});
+
+test("return-to-app signals coalesce and retry auto-liked after an API failure", async (t) => {
+    automationSettings = {
+        ...automationSettings,
+        autoDownloadLiked: true,
+    };
+    likedLoadFailures = 1;
+    const { DeviceOfflineProvider } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(DeviceOfflineProvider, null, "content"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(queueCalls.likedLoads, 1);
+    assert.equal(queueCalls.autoSyncs.length, 0);
+
+    likedRequest = deferred();
+    await React.act(async () => {
+        window.dispatchEvent(new Event("focus"));
+        await Promise.resolve();
+    });
+    assert.equal(queueCalls.likedLoads, 2);
+
+    await React.act(async () => {
+        window.dispatchEvent(new Event("online"));
+        window.dispatchEvent(new Event("focus"));
+        document.dispatchEvent(new Event("visibilitychange"));
+        await Promise.resolve();
+    });
+    likedTracks = [
+        {
+            id: "yt:coalesced",
+            title: "Coalesced",
+            duration: 180,
+            likedAt: "2026-08-29T12:00:00.000Z",
+            source: "youtube",
+            provider: { tidalTrackId: null, youtubeVideoId: "coalesced" },
+            artist: { id: null, name: "Artist" },
+            album: { id: null, title: "Album", coverArt: null },
+        },
+    ];
+    const activeRequest = likedRequest;
+    likedRequest = null;
+    await React.act(async () => {
+        activeRequest?.resolve({ tracks: [] });
+        await activeRequest?.promise;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(queueCalls.likedLoads, 3);
+    assert.equal(queueCalls.autoSyncs.length, 2);
+    assert.equal(
+        queueCalls.autoSyncs[1]?.requests[0]?.sourceUrl,
+        "/api/ytmusic/coalesced",
+    );
 });
 
 test("device automation settings are owner-scoped, local, and default off", async () => {

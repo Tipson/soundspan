@@ -14,20 +14,23 @@ interface DeviceCollectionDownloadButtonProps {
     className?: string;
 }
 
-/** Queue every playable collection track for this browser/PWA only. */
+/** Queue every playable collection track for this device's selected storage. */
 export function DeviceCollectionDownloadButton({
     tracks,
     collectionId,
     collectionLabel,
     className,
 }: DeviceCollectionDownloadButtonProps) {
-    const { enqueueCollection, collectionStatus } = useDeviceOffline();
+    const { enqueueCollection, collectionStatus, storage } = useDeviceOffline();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const status = collectionStatus(tracks);
     const isReady = status.total > 0 && status.ready === status.total;
     const needsManualProtection = isReady && status.autoReady > 0;
     const isProtected = isReady && !needsManualProtection;
     const isActive = status.queued + status.processing > 0;
+    const storageUnavailable = storage.status === "unsupported";
+    const storageBusy =
+        storage.status === "checking" || storage.status === "requesting";
 
     const label = useMemo(() => {
         if (needsManualProtection) return "Keep offline on this device";
@@ -41,13 +44,35 @@ export function DeviceCollectionDownloadButton({
         if (status.queued > 0) {
             return `Queued ${status.ready}/${status.total}`;
         }
+        if (storage.status === "needs-setup") {
+            return "Choose folder & download";
+        }
+        if (storage.status === "error") {
+            return "Retry folder & download";
+        }
+        if (storage.status === "unsupported") {
+            return "Device downloads unavailable";
+        }
         return "Download to this device";
-    }, [isActive, isProtected, isSubmitting, needsManualProtection, status]);
+    }, [
+        isActive,
+        isProtected,
+        isSubmitting,
+        needsManualProtection,
+        status,
+        storage.status,
+    ]);
 
     if (tracks.length === 0) return null;
 
     const handleDownload = async () => {
-        if (isSubmitting || isProtected || (isActive && status.errors === 0)) {
+        if (
+            isSubmitting ||
+            isProtected ||
+            storageUnavailable ||
+            storageBusy ||
+            (isActive && status.errors === 0)
+        ) {
             return;
         }
         setIsSubmitting(true);
@@ -66,7 +91,9 @@ export function DeviceCollectionDownloadButton({
             );
         } catch {
             toast.error(
-                "Could not queue this collection. Reconnect and try again.",
+                storage.status === "needs-setup"
+                    ? "Choose a device folder and allow file access to start the download."
+                    : "Could not queue this collection. Reconnect and try again.",
             );
         } finally {
             setIsSubmitting(false);
@@ -90,6 +117,8 @@ export function DeviceCollectionDownloadButton({
                 disabled={
                     isSubmitting ||
                     isProtected ||
+                    storageUnavailable ||
+                    storageBusy ||
                     (isActive && status.errors === 0)
                 }
                 aria-label={
@@ -97,7 +126,13 @@ export function DeviceCollectionDownloadButton({
                         ? `${collectionLabel} is available offline on this device`
                         : needsManualProtection
                           ? `Keep ${collectionLabel} offline on this device`
-                          : `Download ${collectionLabel} to this device`
+                          : storage.status === "needs-setup"
+                            ? `Choose a folder and download ${collectionLabel} to this device`
+                            : storage.status === "error"
+                              ? `Retry folder access and download ${collectionLabel} to this device`
+                              : storage.status === "unsupported"
+                                ? `${collectionLabel} cannot be downloaded in this browser`
+                                : `Download ${collectionLabel} to this device`
                 }
                 aria-describedby={`device-download-status-${collectionId}`}
                 className={cn(
@@ -119,7 +154,7 @@ export function DeviceCollectionDownloadButton({
                 className="sr-only"
                 aria-live="polite"
             >
-                {details}
+                {details}. {storage.explanation}
             </span>
         </div>
     );

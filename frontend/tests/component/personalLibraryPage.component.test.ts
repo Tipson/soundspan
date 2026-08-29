@@ -147,6 +147,10 @@ test("Library overview is a personal collection hub without server catalog contr
     assert.match(html, /Downloads on this device/);
     assert.match(html, /Saved to your account/);
     assert.match(html, /Only on this device/);
+    assert.match(html, /ordinary files/i);
+    assert.match(html, /browser profile/i);
+    assert.match(html, /clearing site data does not delete/i);
+    assert.doesNotMatch(html, /copies stay in this browser/i);
     assert.match(html, /Meteora/);
     assert.match(html, /Linkin Park/);
     assert.doesNotMatch(html, /Shuffle Library/);
@@ -168,4 +172,8 @@ test("Library tabs expose account-saved entities and existing device downloads",
         React.createElement(LibraryPage),
     );
     assert.match(downloadsHtml, /DEVICE COPIES/);
+    assert.match(downloadsHtml, /ordinary files/i);
+    assert.match(downloadsHtml, /browser profile/i);
+    assert.doesNotMatch(downloadsHtml, /stored only in this browser/i);
+    assert.match(downloadsHtml, /clearing site data does not delete/i);
 });

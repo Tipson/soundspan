@@ -43,6 +43,7 @@ import {
 import { DeviceOfflineSessionGuard } from "./sessionGuard";
 import { getDeviceDownloadSourceUrl } from "./sourceUrl";
 import { resolveDeviceOfflineTrackIdentity } from "./trackIdentity";
+import { getDeviceAudioVault, type DeviceAudioAccessState } from "./vault";
 import type {
     DeviceOfflineDownloadInput,
     DeviceOfflineDownloadRecord,
@@ -56,10 +57,98 @@ export interface DeviceOfflineCollectionDownloadInput {
     quality?: string;
 }
 
+export interface DeviceOfflineStorageState {
+    status:
+        | "checking"
+        | "needs-setup"
+        | "requesting"
+        | "ready"
+        | "unsupported"
+        | "error";
+    directoryName: string | null;
+    explanation: string;
+}
+
+const DEVICE_FOLDER_UNSUPPORTED_EXPLANATION =
+    "Safari and Firefox PWAs, and other browsers without directory access, cannot save a managed music library as normal device files. Use Chrome or Edge on a computer, or a current Chrome on Android. iPhone and iPad require a native Soundspan build.";
+
+const INITIAL_DEVICE_OFFLINE_STORAGE: DeviceOfflineStorageState = {
+    status: "checking",
+    directoryName: null,
+    explanation: "Checking whether this device can store music files…",
+};
+
+function toDeviceOfflineStorageState(
+    access: DeviceAudioAccessState,
+): DeviceOfflineStorageState {
+    if (access.status === "ready") {
+        return {
+            status: "ready",
+            directoryName: access.label || null,
+            explanation: access.reason,
+        };
+    }
+    if (
+        access.status === "setup-required" ||
+        access.status === "permission-required"
+    ) {
+        return {
+            status: "needs-setup",
+            directoryName: access.label || null,
+            explanation: access.reason,
+        };
+    }
+    if (access.status === "unsupported") {
+        return {
+            status: "unsupported",
+            directoryName: null,
+            explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
+        };
+    }
+    return {
+        status: "error",
+        directoryName: access.label || null,
+        explanation: access.reason,
+    };
+}
+
+function toDeviceOfflineStorageFailure(
+    error: unknown,
+): DeviceOfflineStorageState {
+    const code =
+        error && typeof error === "object" && "code" in error
+            ? String((error as { code?: unknown }).code)
+            : null;
+    if (code === "user_cancelled") {
+        return {
+            status: "needs-setup",
+            directoryName: null,
+            explanation:
+                "No folder was selected. Choose a music folder when you are ready to download.",
+        };
+    }
+    if (code === "unsupported") {
+        return {
+            status: "unsupported",
+            directoryName: null,
+            explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
+        };
+    }
+    return {
+        status: "error",
+        directoryName: null,
+        explanation:
+            error instanceof Error && error.message
+                ? error.message
+                : "Soundspan could not open device storage. Choose the folder again and allow file access.",
+    };
+}
+
 export interface DeviceOfflineContextValue {
     isHydrated: boolean;
     isQueueHydrated: boolean;
     storageError: string | null;
+    storage: DeviceOfflineStorageState;
     records: DeviceOfflineDownloadRecord[];
     queueItems: DeviceOfflineQueueItem[];
     automationSettings: DeviceOfflineAutomationSettings | null;
@@ -89,6 +178,7 @@ export interface DeviceOfflineContextValue {
             >
         >,
     ): Promise<void>;
+    setupStorage(): Promise<DeviceOfflineStorageState>;
     retryStorage(): Promise<void>;
     refresh(): Promise<void>;
 }
@@ -168,6 +258,22 @@ export function DeviceOfflineProvider({
         dirty: boolean;
         request: Promise<DeviceOfflineDownloadRecord[]>;
     } | null>(null);
+    const storageProbeGenerationRef = useRef(0);
+    const storageSetupPromiseRef =
+        useRef<Promise<DeviceOfflineStorageState> | null>(null);
+    const legacyMigrationRunRef = useRef<{
+        ownerId: string;
+        authGeneration: number;
+        complete: boolean;
+        promise: Promise<void> | null;
+    } | null>(null);
+    const [storage, setStorage] = useState<DeviceOfflineStorageState>(
+        INITIAL_DEVICE_OFFLINE_STORAGE,
+    );
+    const vault = useMemo(
+        () => (typeof window === "undefined" ? null : getDeviceAudioVault()),
+        [],
+    );
     const manager = useMemo(
         () =>
             typeof window === "undefined"
@@ -236,6 +342,45 @@ export function DeviceOfflineProvider({
             );
         };
     }, []);
+
+    useEffect(() => {
+        const generation = ++storageProbeGenerationRef.current;
+        if (!vault) {
+            setStorage({
+                status: "unsupported",
+                directoryName: null,
+                explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
+            });
+            return;
+        }
+        let active = true;
+        void vault.inspectAccess().then(
+            (access) => {
+                if (
+                    active &&
+                    generation === storageProbeGenerationRef.current
+                ) {
+                    setStorage(toDeviceOfflineStorageState(access));
+                }
+            },
+            () => {
+                if (
+                    active &&
+                    generation === storageProbeGenerationRef.current
+                ) {
+                    setStorage({
+                        status: "error",
+                        directoryName: null,
+                        explanation:
+                            "Soundspan could not inspect device-folder access. Try choosing the folder again.",
+                    });
+                }
+            },
+        );
+        return () => {
+            active = false;
+        };
+    }, [vault]);
 
     const load = useCallback(
         async (reconcile: boolean) => {
@@ -353,6 +498,46 @@ export function DeviceOfflineProvider({
         [manager, ownerId, sessionGuard],
     );
 
+    const resumeLegacyMigration = useCallback((): Promise<void> => {
+        if (!manager || !ownerId || !ownerAuthRuntimeLease) {
+            return Promise.resolve();
+        }
+        const authGeneration = ownerAuthRuntimeLease.generation;
+        let run = legacyMigrationRunRef.current;
+        if (
+            !run ||
+            run.ownerId !== ownerId ||
+            run.authGeneration !== authGeneration
+        ) {
+            run = {
+                ownerId,
+                authGeneration,
+                complete: false,
+                promise: null,
+            };
+            legacyMigrationRunRef.current = run;
+        }
+        if (run.complete) return Promise.resolve();
+        if (run.promise) return run.promise;
+
+        const activeRun = run;
+        const request = manager
+            .migrateLegacyCache(ownerId)
+            .then(() => load(false))
+            .then(() => {
+                if (legacyMigrationRunRef.current === activeRun) {
+                    activeRun.complete = true;
+                }
+            })
+            .finally(() => {
+                if (legacyMigrationRunRef.current === activeRun) {
+                    activeRun.promise = null;
+                }
+            });
+        activeRun.promise = request;
+        return request;
+    }, [load, manager, ownerAuthRuntimeLease, ownerId]);
+
     const loadQueue = useCallback(async (): Promise<boolean> => {
         const token = queueSessionGuard.begin(ownerId);
         if (!token) return false;
@@ -417,14 +602,14 @@ export function DeviceOfflineProvider({
     useEffect(() => {
         queueSessionGuard.mount(ownerId);
         void loadQueue();
-        if (queueManager && ownerId) {
+        if (queueManager && ownerId && storage.status === "ready") {
             void queueManager.resume(ownerId).catch(() => undefined);
         }
         return () => {
             if (queueManager && ownerId) queueManager.pause(ownerId);
             queueSessionGuard.unmount();
         };
-    }, [loadQueue, ownerId, queueManager, queueSessionGuard]);
+    }, [loadQueue, ownerId, queueManager, queueSessionGuard, storage.status]);
 
     useEffect(() => {
         automationSessionGuard.mount(ownerId);
@@ -459,6 +644,7 @@ export function DeviceOfflineProvider({
         if (!queueManager || !ownerId) return;
         const resumeQueue = () => {
             if (
+                storage.status === "ready" &&
                 navigator.onLine !== false &&
                 document.visibilityState !== "hidden"
             ) {
@@ -483,10 +669,79 @@ export function DeviceOfflineProvider({
             window.removeEventListener("focus", resumeQueue);
             document.removeEventListener("visibilitychange", handleVisibility);
         };
-    }, [loadQueue, ownerId, queueManager]);
+    }, [loadQueue, ownerId, queueManager, storage.status]);
+
+    useEffect(() => {
+        if (storage.status !== "ready") return;
+        void resumeLegacyMigration().catch(() => undefined);
+    }, [resumeLegacyMigration, storage.status]);
+
+    const setupStorage = useCallback((): Promise<DeviceOfflineStorageState> => {
+        if (storage.status === "ready") {
+            return Promise.resolve(storage);
+        }
+        if (!vault) {
+            const unsupported: DeviceOfflineStorageState = {
+                status: "unsupported",
+                directoryName: null,
+                explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
+            };
+            setStorage(unsupported);
+            return Promise.resolve(unsupported);
+        }
+        const activeRequest = storageSetupPromiseRef.current;
+        if (activeRequest) return activeRequest;
+
+        const generation = ++storageProbeGenerationRef.current;
+        setStorage({
+            status: "requesting",
+            directoryName: storage.directoryName,
+            explanation:
+                "Choose a folder in the device picker and allow Soundspan to write music files there.",
+        });
+
+        let accessRequest: Promise<DeviceAudioAccessState>;
+        try {
+            // Deliberately invoke the picker synchronously in the caller's
+            // click stack. Adding an await before this call breaks transient
+            // user activation in browsers that implement directory access.
+            accessRequest = vault.requestAccess();
+        } catch (error) {
+            accessRequest = Promise.reject(error);
+        }
+        const request = accessRequest
+            .then(toDeviceOfflineStorageState, toDeviceOfflineStorageFailure)
+            .then(async (next) => {
+                if (next.status === "ready") {
+                    await resumeLegacyMigration().catch(() => undefined);
+                }
+                if (generation === storageProbeGenerationRef.current) {
+                    setStorage(next);
+                }
+                return next;
+            })
+            .finally(() => {
+                if (storageSetupPromiseRef.current === request) {
+                    storageSetupPromiseRef.current = null;
+                }
+            });
+        storageSetupPromiseRef.current = request;
+        return request;
+    }, [resumeLegacyMigration, storage, vault]);
+
+    const requireManualStorage = useCallback(async () => {
+        const next =
+            storage.status === "ready" ? storage : await setupStorage();
+        if (next.status !== "ready") {
+            throw new Error(next.explanation);
+        }
+        return next;
+    }, [setupStorage, storage]);
 
     const syncAutoLiked = useCallback((): Promise<void> => {
-        if (!queueManager || !ownerId) return Promise.resolve();
+        if (!queueManager || !ownerId || storage.status !== "ready") {
+            return Promise.resolve();
+        }
         const active = autoSyncPromises.current.get(ownerId);
         if (active) {
             active.dirty = true;
@@ -545,7 +800,13 @@ export function DeviceOfflineProvider({
         });
         autoSyncPromises.current.set(ownerId, entry);
         return entry.promise;
-    }, [automationSessionGuard, loadQueue, ownerId, queueManager]);
+    }, [
+        automationSessionGuard,
+        loadQueue,
+        ownerId,
+        queueManager,
+        storage.status,
+    ]);
 
     useEffect(() => {
         if (!automationSettings?.autoDownloadLiked) return;
@@ -560,23 +821,54 @@ export function DeviceOfflineProvider({
         [syncAutoLiked],
     );
 
+    useEffect(() => {
+        if (
+            !automationSettings?.autoDownloadLiked ||
+            storage.status !== "ready"
+        ) {
+            return;
+        }
+        const requestSync = () => {
+            if (
+                navigator.onLine === false ||
+                document.visibilityState === "hidden"
+            ) {
+                return;
+            }
+            void syncAutoLiked().catch(() => undefined);
+        };
+        const handleVisibility = () => {
+            if (document.visibilityState !== "hidden") requestSync();
+        };
+        window.addEventListener("online", requestSync);
+        window.addEventListener("focus", requestSync);
+        document.addEventListener("visibilitychange", handleVisibility);
+        return () => {
+            window.removeEventListener("online", requestSync);
+            window.removeEventListener("focus", requestSync);
+            document.removeEventListener("visibilitychange", handleVisibility);
+        };
+    }, [automationSettings?.autoDownloadLiked, storage.status, syncAutoLiked]);
+
     const download = useCallback(
         async (input: Omit<DeviceOfflineDownloadInput, "ownerId">) => {
             if (!manager || !ownerId)
                 throw new Error("Sign in to download tracks");
+            await requireManualStorage();
             try {
                 return await manager.download({ ...input, ownerId });
             } finally {
                 await load(true);
             }
         },
-        [load, manager, ownerId],
+        [load, manager, ownerId, requireManualStorage],
     );
 
     const resume = useCallback(
         async (record: DeviceOfflineDownloadRecord) => {
             if (record.ownerId !== ownerId) return;
             if (queueManager && ownerId) {
+                await requireManualStorage();
                 await queueManager.enqueueBatch([
                     {
                         ownerId,
@@ -599,7 +891,14 @@ export function DeviceOfflineProvider({
                 sourceUrl: record.sourceUrl,
             });
         },
-        [download, load, loadQueue, ownerId, queueManager],
+        [
+            download,
+            load,
+            loadQueue,
+            ownerId,
+            queueManager,
+            requireManualStorage,
+        ],
     );
 
     const deleteDownload = useCallback(
@@ -647,6 +946,10 @@ export function DeviceOfflineProvider({
             if (record.status !== "ready") {
                 throw new Error("This device copy is not ready for playback");
             }
+            // Real device files are acquired as a revocable lease by the
+            // player orchestrator. Only legacy CacheStorage records need the
+            // eager prepared-source bridge below.
+            if (record.mediaRef) return;
             if (hasPreparedDeviceOfflinePlaybackSource(ownerId, record.key)) {
                 return;
             }
@@ -696,6 +999,7 @@ export function DeviceOfflineProvider({
             if (!queueManager || !ownerId) {
                 throw new Error("Sign in to download tracks");
             }
+            await requireManualStorage();
             const result = await queueManager.enqueueBatch(
                 input.tracks.map((track) => ({
                     ownerId,
@@ -714,7 +1018,7 @@ export function DeviceOfflineProvider({
                 .finally(loadQueue);
             return result;
         },
-        [loadQueue, ownerId, queueManager],
+        [loadQueue, ownerId, queueManager, requireManualStorage],
     );
 
     const collectionStatus = useCallback(
@@ -740,33 +1044,47 @@ export function DeviceOfflineProvider({
             if (!queueManager || !ownerId) {
                 throw new Error("Sign in to configure device downloads");
             }
+            if (
+                patch.autoDownloadLiked === true &&
+                storage.status !== "ready"
+            ) {
+                throw new Error(
+                    "Choose a device folder before enabling automatic downloads",
+                );
+            }
             const next = await queueManager.updateSettings(ownerId, patch);
             await loadQueue();
             if (next.autoDownloadLiked) {
                 await syncAutoLiked().catch(() => undefined);
-            } else {
+            } else if (storage.status === "ready") {
                 void queueManager
                     .resume(ownerId)
                     .catch(() => undefined)
                     .finally(loadQueue);
             }
         },
-        [loadQueue, ownerId, queueManager, syncAutoLiked],
+        [loadQueue, ownerId, queueManager, storage.status, syncAutoLiked],
     );
 
     const retryStorage = useCallback(async () => {
         const [, queueLoaded] = await Promise.all([load(true), loadQueue()]);
-        if (queueLoaded && queueManager && ownerId) {
+        if (
+            queueLoaded &&
+            queueManager &&
+            ownerId &&
+            storage.status === "ready"
+        ) {
             await queueManager.resume(ownerId).catch(() => undefined);
             await loadQueue();
         }
-    }, [load, loadQueue, ownerId, queueManager]);
+    }, [load, loadQueue, ownerId, queueManager, storage.status]);
 
     const value = useMemo<DeviceOfflineContextValue>(
         () => ({
             isHydrated,
             isQueueHydrated,
             storageError,
+            storage,
             records,
             queueItems,
             automationSettings,
@@ -780,6 +1098,7 @@ export function DeviceOfflineProvider({
             enqueueCollection,
             collectionStatus,
             updateAutomationSettings,
+            setupStorage,
             retryStorage,
             refresh: () => load(false),
         }),
@@ -799,6 +1118,8 @@ export function DeviceOfflineProvider({
             queueItems,
             resume,
             retryStorage,
+            setupStorage,
+            storage,
             storageError,
             automationSettings,
             updateAutomationSettings,
