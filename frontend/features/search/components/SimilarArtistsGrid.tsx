@@ -4,7 +4,7 @@ import { Music } from "lucide-react";
 import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
 import { formatListeners } from "@/lib/format";
-import { getArtistRouteParam } from "@/utils/artistRoute";
+import { getDiscoveryArtistHref } from "@/utils/artistRoute";
 
 interface SimilarArtistsGridProps {
     similarArtists: DiscoverResult[];
@@ -45,20 +45,19 @@ export function SimilarArtistsGrid({
                 data-tv-section="search-results-artists"
             >
                 {similarArtists.map((result, index) => {
-                    const artistId =
-                        getArtistRouteParam(
-                            {
-                                mbid: result.mbid,
-                                name: result.name,
-                            },
-                            { preferLibraryId: false },
-                        ) || encodeURIComponent(result.name);
+                    const artistHref =
+                        getDiscoveryArtistHref({
+                            id: result.id,
+                            mbid: result.mbid,
+                            name: result.name,
+                            youtubeChannelId: result.youtubeChannelId,
+                        }) || `/artist/${encodeURIComponent(result.name)}`;
                     const imageUrl = getProxiedImageUrl(result.image);
 
                     return (
                         <Link
-                            key={`artist-${artistId}-${index}`}
-                            href={`/artist/${artistId}`}
+                            key={`artist-${artistHref}-${index}`}
+                            href={artistHref}
                             data-tv-card
                             data-tv-card-index={index}
                             tabIndex={0}

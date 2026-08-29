@@ -19,6 +19,8 @@ export interface DiscoverySelection {
     secondaryArtists: DiscoverResult[];
     /** External track matches. */
     tracks: DiscoverResult[];
+    /** Browsable external album matches. */
+    albums: DiscoverResult[];
 }
 
 /**
@@ -49,11 +51,13 @@ export function deriveDiscoverySelection({
             discoveryShownAsTop: false,
             secondaryArtists: [],
             tracks: [],
+            albums: [],
         };
     }
 
     const artists = discoverResults.filter((r) => r.type === "music");
     const tracks = discoverResults.filter((r) => r.type === "track");
+    const albums = discoverResults.filter((r) => r.type === "album");
 
     const exactTargets = [query, aliasCanonical ?? ""]
         .map((value) => normalizeArtistName(value))
@@ -81,5 +85,6 @@ export function deriveDiscoverySelection({
         discoveryShownAsTop,
         secondaryArtists,
         tracks,
+        albums,
     };
 }

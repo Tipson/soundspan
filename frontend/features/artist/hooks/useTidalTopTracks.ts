@@ -89,9 +89,10 @@ export function useTidalTopTracks(artist: Artist | null | undefined) {
 
         return topTracks.filter(
             (t) =>
-                !t.album?.id ||
-                !t.album?.title ||
-                t.album.title === "Unknown Album",
+                !(t.streamSource === "youtube" && !!t.youtubeVideoId) &&
+                (!t.album?.id ||
+                    !t.album?.title ||
+                    t.album.title === "Unknown Album"),
         );
     }, [topTracks, tidalAvailable]);
 

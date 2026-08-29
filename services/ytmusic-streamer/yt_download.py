@@ -76,8 +76,8 @@ PROXY_AUDIO_FORMAT_SELECTORS = {
 # raises "Requested format is not available" (surfacing as a 502 on
 # /yt/info). "android_vr" and "android_music" still serve the DASH audio
 # formats anonymously; listing both lets yt-dlp fall through if one breaks.
-# NOTE: this is the regular-YouTube client. The authenticated
-# music.youtube.com stream path keeps its own ["android_music"] context.
+# NOTE: this is the regular-YouTube client. The music.youtube.com stream
+# paths manage their independently verified client set in ytmusic_stream.py.
 YT_PLAYER_CLIENTS = ["android_vr", "android_music"]
 
 

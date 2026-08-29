@@ -5,6 +5,12 @@ import {
     type CanonicalMediaProviderIdentity,
     type CanonicalMediaSource,
 } from "@soundspan/media-metadata-contract";
+import {
+    AUDIO_LOAD_TIMEOUT_MS,
+    AUDIO_LOAD_TIMEOUT_RETRIES,
+    PROVIDER_AUDIO_LOAD_TIMEOUT_MS,
+    PROVIDER_AUDIO_LOAD_TIMEOUT_RETRIES,
+} from "./audioPlaybackOrchestratorConstants";
 
 /** Provider fields used to resolve the direct playback source. */
 export interface RuntimeProviderTrack {
@@ -116,5 +122,36 @@ export function isLikelyTransientStreamError(error: unknown): boolean {
         message.includes("503") ||
         message.includes("502") ||
         message.includes("504")
+    );
+}
+
+export function resolveAudioLoadTimeoutPolicy(
+    playbackType: "track" | "audiobook" | "podcast" | null,
+    track: RuntimeProviderTrack | null,
+    resolvedStreamUrl?: string | null,
+): { timeoutMs: number; maxRetries: number } {
+    const usesColdProviderSpool =
+        playbackType === "track" &&
+        !resolvedStreamUrl?.startsWith("/__offline/audio/") &&
+        (track?.streamSource === "youtube" ||
+            track?.streamSource === "youtube-direct");
+    return usesColdProviderSpool
+        ? {
+              timeoutMs: PROVIDER_AUDIO_LOAD_TIMEOUT_MS,
+              maxRetries: PROVIDER_AUDIO_LOAD_TIMEOUT_RETRIES,
+          }
+        : {
+              timeoutMs: AUDIO_LOAD_TIMEOUT_MS,
+              maxRetries: AUDIO_LOAD_TIMEOUT_RETRIES,
+          };
+}
+
+/** Honors the engine's terminal retry decision before adding an outer reload. */
+export function shouldAttemptOuterTransientRecovery(input: {
+    error: unknown;
+    recoverable?: boolean;
+}): boolean {
+    return (
+        input.recoverable !== false && isLikelyTransientStreamError(input.error)
     );
 }

@@ -75,7 +75,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
     // Show loading state only on protected pages
     if (!isPublicPage && isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-black">
+            <div className="min-h-dvh flex items-center justify-center bg-black">
                 <div className="flex flex-col items-center gap-4">
                     <GradientSpinner size="lg" />
                     <p className="text-white/60 text-sm">Loading...</p>
@@ -117,7 +117,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     >
                         Skip to main content
                     </a>
-                    <div className="h-screen bg-black overflow-hidden flex flex-col">
+                    <div className="h-dvh bg-black overflow-hidden flex flex-col">
                         <MediaControlsHandler />
                         <TopBar isActivityPanelOpen={activityPanel.isOpen} />
 
@@ -141,9 +141,9 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                                 className="flex-1 bg-gradient-to-b from-surface-hover via-black to-black mx-2 mb-2 rounded-lg overflow-y-auto relative focus:outline-none"
                                 style={{
                                     marginTop:
-                                        "calc(58px + env(safe-area-inset-top, 0px))",
+                                        "calc(58px + var(--safe-area-top))",
                                     marginBottom:
-                                        "calc(56px + env(safe-area-inset-bottom, 0px) + 8px)",
+                                        "calc(56px + var(--safe-area-bottom) + 8px)",
                                 }}
                             >
                                 <GalaxyBackground />
@@ -173,7 +173,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     Skip to main content
                 </a>
                 <div
-                    className="h-screen bg-black overflow-hidden flex flex-col"
+                    className="h-dvh bg-black overflow-hidden flex flex-col"
                     style={{ paddingTop: "64px" }}
                 >
                     <MediaControlsHandler />
@@ -205,7 +205,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
     // If not authenticated on a protected page, auth context will redirect
     return (
-        <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="min-h-dvh flex items-center justify-center bg-black">
             <div className="flex flex-col items-center gap-4">
                 <GradientSpinner size="lg" />
                 <p className="text-white/60 text-sm">Redirecting...</p>

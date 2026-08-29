@@ -142,6 +142,11 @@ describe("browseImageCache", () => {
         await expect(
             fetchAndCacheBrowseImage("https://images.example/bad.jpg"),
         ).resolves.toBeNull();
+        expect(fetchExternalImage).toHaveBeenCalledWith({
+            url: "https://images.example/bad.jpg",
+            timeoutMs: 6_000,
+            maxRetries: 2,
+        });
         expect(mockScopedLogger.warn).toHaveBeenCalledTimes(1);
     });
 

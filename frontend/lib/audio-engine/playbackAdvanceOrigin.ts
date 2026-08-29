@@ -1,5 +1,5 @@
 /** Origin of a playback action that may change or retry the active track. */
-export type PlaybackAdvanceOrigin = "error" | "manual" | null;
+export type PlaybackAdvanceOrigin = "error" | "manual" | "feedback" | null;
 
 /** Pending origin consumed by the first breaker-reset decision. */
 export interface PlaybackAdvanceOriginMarker {

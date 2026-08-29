@@ -1,6 +1,10 @@
 # Integrations Guide
 
-soundspan works standalone, but these integrations unlock additional discovery and playback workflows.
+soundspan works standalone, but these integrations unlock additional discovery
+and playback workflows. YouTube Music can provide the online catalog, search,
+radio, and playback; Spotify URLs are import-only. Lidarr, Soulseek, and TIDAL
+downloads are optional ways to create permanent server-library files and are
+not required for playlist import, online playback, or device-offline copies.
 
 For environment and secret setup, see [`CONFIGURATION_AND_SECURITY.md`](CONFIGURATION_AND_SECURITY.md).
 
@@ -75,23 +79,40 @@ soundspan can connect directly to Soulseek for discovery/download flows.
 
 ## YouTube Music
 
-Stream unowned tracks via per-user YouTube Music OAuth.
+Search and stream tracks through the YouTube Music sidecar. Public browse,
+search, matching, and playback normally work without linking a Google account.
+Per-user OAuth is optional and unlocks account-specific endpoints.
+Global music search returns playable songs plus browsable catalog albums and
+artists; provider-only artist pages keep the exact channel identity and expose
+their popular tracks and albums without adding files to the local library.
 
-> Disclaimer: Uses unofficial libraries (`ytmusicapi`, `yt-dlp`) and requires YouTube Music Premium.
+> Disclaimer: Uses unofficial libraries (`ytmusicapi`, `yt-dlp`) and is not
+> affiliated with Google or YouTube. Some account-specific or Premium content
+> may require a linked account and the corresponding entitlement. Availability
+> varies by account, region, and provider behavior; users are responsible for
+> complying with YouTube's terms.
 
 ### Requirements
 
 - Running `ytmusic-streamer` sidecar
-- Google OAuth client configured as "TVs and Limited Input devices"
+- YouTube Music enabled in soundspan
+- Optional for account-specific features: Google OAuth client configured as
+  "TVs and Limited Input devices"
 
-### Admin setup
+### Basic admin setup
 
-1. Create OAuth client in Google Cloud Console
-2. Open **Admin** → **YouTube Music**
-3. Enable and set client ID/secret
-4. Save
+1. Open **Admin** → **YouTube Music**
+2. Enable YouTube Music
+3. Save
 
-### Per-user setup
+This is enough for the public access modes listed below when the sidecar and
+provider are available.
+
+### Optional account linking
+
+First create an OAuth client in Google Cloud Console, configure it in
+**Admin** → **YouTube Music**, and save. Then each user who needs
+account-specific features can:
 
 1. Open **Settings** → **Integrations** → **YouTube Music**
 2. Select **Open Google Sign-In Page**
@@ -115,8 +136,40 @@ without a linked account, subject to sidecar availability and provider behavior.
 
 | Mode                                                        | Endpoints                                                                                                                                                                                                                                                                                         |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Normally works without a linked account (sidecar-dependent) | `GET /api/browse/ytmusic/charts`, `GET /api/browse/ytmusic/categories`, `GET /api/browse/ytmusic/playlist/:id`, `POST /api/ytmusic/search`, `POST /api/ytmusic/match`, `POST /api/ytmusic/match-batch`, `GET /api/ytmusic/stream-info-public/:videoId`, `GET /api/ytmusic/stream-public/:videoId` |
-| Per-user OAuth required                                     | `GET /api/ytmusic/album/:browseId`, `GET /api/ytmusic/artist/:channelId`, `GET /api/ytmusic/song/:videoId`, `GET /api/ytmusic/stream-info/:videoId`, `GET /api/ytmusic/stream/:videoId`, `GET /api/ytmusic/library/songs`, `GET /api/ytmusic/library/albums`                                      |
+| Normally works without a linked account (sidecar-dependent) | `GET /api/browse/ytmusic/charts`, `GET /api/browse/ytmusic/categories`, `GET /api/browse/ytmusic/playlist/:id`, `POST /api/ytmusic/search`, `GET /api/ytmusic/album/:browseId`, `GET /api/ytmusic/artist/:channelId`, `GET /api/ytmusic/song/:videoId`, `POST /api/ytmusic/match`, `POST /api/ytmusic/match-batch`, `GET /api/ytmusic/stream-info-public/:videoId`, `GET /api/ytmusic/stream-public/:videoId` |
+| Per-user OAuth required                                     | `GET /api/ytmusic/stream-info/:videoId`, `GET /api/ytmusic/stream/:videoId`, `GET /api/ytmusic/library/songs`, `GET /api/ytmusic/library/albums`                                                                                                                                                                                                            |
+
+## Spotify playlist import
+
+Spotify is an import-only metadata source in soundspan: it does not stream
+audio from Spotify or modify the source playlist. Paste a public playlist URL
+on **Import Playlist**; no Spotify account connection is required. Private
+playlists are not supported.
+
+The default flow creates a durable background job and reports progress under
+**Activity** → **Imports**; previewing remains optional. Provider pagination is
+validated before a playlist is created, and repeated source positions stay in
+their original order. Accepted entries are resolved to the local library or an
+enabled playback provider such as YouTube Music; importing does not create
+permanent audio files on the server. Availability remains dependent on
+Spotify's public web responses.
+
+## Personalized recommendations
+
+My Wave is designed to work without a separate recommendation service. The
+YouTube Music sidecar supplies playable candidates from the online catalog,
+then soundspan ranks them per user using explicit likes and dislikes, playlist
+membership, recent repeats, completed or meaningful listens, early skips,
+provider order, and artist diversity. The For you, New, and Familiar modes are
+deterministic ranking policies over the same bounded candidate pipeline; a
+failure in one provider seed degrades the page instead of disabling playback.
+
+ListenBrainz remains an optional scrobble destination. The current release does
+not put a ListenBrainz recommendation request in the live My Wave path, so an
+account, token, outage, or identity mismatch there cannot break Home or Vibe.
+The catalog boundary includes an isolated optional-candidate seam for a future
+reader once that API contract is dependable; local soundspan feedback remains
+the final ranking authority.
 
 ## Track Mapping and Playlist Import APIs
 

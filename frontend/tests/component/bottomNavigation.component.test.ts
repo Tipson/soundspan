@@ -10,7 +10,7 @@ mock.module("lucide-react", {
     namedExports: {
         Home: Icon,
         Search: Icon,
-        Compass: Icon,
+        AudioWaveform: Icon,
         Library: Icon,
         BookOpen: Icon,
         Mic: Icon,
@@ -36,7 +36,7 @@ mock.module("next/link", {
 });
 
 mock.module("next/navigation", {
-    namedExports: { usePathname: () => "/explore" },
+    namedExports: { usePathname: () => "/vibe" },
 });
 
 mock.module("@/hooks/useMediaQuery", {
@@ -53,13 +53,17 @@ test("mobile navigation prioritizes the four music discovery destinations", asyn
 
     assert.match(html, /aria-label="Home"/);
     assert.match(html, /href="\/search"/);
-    assert.match(html, /aria-label="Explore"/);
+    assert.match(html, /aria-label="Vibe"/);
+    assert.match(html, /href="\/vibe"/);
     assert.match(html, /aria-label="Library"/);
     assert.match(html, /href="\/library"/);
-    assert.match(html, /aria-label="Explore" aria-current="page"/);
+    assert.match(html, /aria-label="Vibe" aria-current="page"/);
+    assert.doesNotMatch(html, /aria-label="Explore"/);
     assert.doesNotMatch(html, /Audiobooks/);
     assert.doesNotMatch(html, /Podcasts/);
     assert.doesNotMatch(html, /Playlists/);
+    assert.match(html, /padding-left:var\(--safe-area-left\)/);
+    assert.match(html, /padding-right:var\(--safe-area-right\)/);
 
     assert.ok(libraryClick);
     const hardNavigations: string[] = [];

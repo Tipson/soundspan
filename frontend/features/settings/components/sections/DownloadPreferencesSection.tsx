@@ -38,15 +38,15 @@ export function DownloadPreferencesSection({
     return (
         <SettingsSection
             id="download-preferences"
-            title="Download Preferences"
-            description="Configure how music is downloaded for playlists and discovery"
+            title="Server Download Preferences"
+            description="Configure optional actions that save permanent files to the server"
         >
             <SettingsRow
                 label="Primary Download Source"
                 description={
                     isDisabled
                         ? "Requires at least one download service to be configured"
-                        : "Choose how to download music for imported playlists"
+                        : "Choose the source used only when you explicitly request a permanent server copy"
                 }
             >
                 <SettingsSelect

@@ -10,6 +10,7 @@ import { toAddToPlaylistRef } from "@/lib/trackRef";
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { publishDeviceOfflineLikedChange } from "@/features/device-offline/likedAutomation";
 
 /**
  * Executes useArtistActions.
@@ -217,6 +218,7 @@ export function useArtistActions() {
                     queryClient.invalidateQueries({
                         queryKey: queryKeys.likedPlaylistAll(),
                     });
+                    publishDeviceOfflineLikedChange();
                     toast.success(`Liked ${allTracks.length} tracks`);
                 } catch (error) {
                     // Rollback: restore previous cache values then refetch

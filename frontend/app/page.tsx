@@ -8,9 +8,9 @@ import {
     CarouselItem,
 } from "@/components/ui/HorizontalCarousel";
 import { MixCard } from "@/components/MixCard";
-import { HomeHero } from "@/features/home/components/HomeHero";
+import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
+import { HomeQuickActions } from "@/features/home/components/HomeQuickActions";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
-import { ContinueListening } from "@/features/home/components/ContinueListening";
 import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
 import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
 import { FeaturedPlaylistsGrid } from "@/features/home/components/FeaturedPlaylistsGrid";
@@ -40,14 +40,11 @@ function PlaylistSkeleton() {
 }
 
 /**
- * Home page — library-focused landing with Made For You and trending
- * community playlists. The Explore page (/explore) serves as the
- * separate discovery tab with full trending/moods browsing.
+ * Home page — personal-radio landing with immediate playback, quick access,
+ * personalized shelves, and broader discovery recommendations.
  */
 export default function HomePage() {
     const {
-        recentlyListened,
-        recentlyAdded,
         recommended,
         mixes,
         likedSummary,
@@ -72,11 +69,16 @@ export default function HomePage() {
         likedSummary !== null || discoverWeekly !== null || mixes.length > 0;
 
     return (
-        <div className="relative">
-            <HomeHero />
+        <div className="relative min-h-screen bg-surface pb-28 pt-4 sm:pt-6">
+            <div className="relative mx-auto max-w-[1800px] px-4 sm:px-6">
+                <div className="space-y-7 sm:space-y-9">
+                    <HomeWaveHero
+                        personalizedFeed={personalizedFeed}
+                        isLoading={isPersonalizedLoading}
+                    />
 
-            <div className="relative max-w-[1800px] mx-auto px-4 sm:px-6 pb-8">
-                <div className="space-y-8">
+                    <HomeQuickActions />
+
                     {isPersonalizedLoading && !personalizedFeed && (
                         <section
                             aria-label="Loading personal recommendations"
@@ -112,33 +114,12 @@ export default function HomePage() {
                             "provider_unavailable") && (
                         <p
                             role="status"
-                            className="rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-4 py-3 text-sm text-amber-100/80"
+                            className="rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning"
                         >
                             Personal radio is temporarily unavailable. Your
-                            library and search still work normally.
+                            liked tracks, playlists, and search still work
+                            normally.
                         </p>
-                    )}
-
-                    {/* Continue Listening */}
-                    {recentlyListened.length > 0 && (
-                        <section>
-                            <SectionHeader
-                                title="Continue Listening"
-                                showAllHref="/library?tab=artists"
-                            />
-                            <ContinueListening items={recentlyListened} />
-                        </section>
-                    )}
-
-                    {/* Recently Added */}
-                    {recentlyAdded.length > 0 && (
-                        <section>
-                            <SectionHeader
-                                title="Recently Added"
-                                showAllHref="/library?tab=artists"
-                            />
-                            <ArtistsGrid artists={recentlyAdded} />
-                        </section>
                     )}
 
                     {/* Made For You */}
@@ -151,7 +132,7 @@ export default function HomePage() {
                                         <button
                                             onClick={handleRefreshMixes}
                                             disabled={isRefreshingMixes}
-                                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors font-semibold group bg-white/5 hover:bg-white/10 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="group flex min-h-11 items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                                         >
                                             {isRefreshingMixes ? (
                                                 <GradientSpinner size="sm" />
@@ -176,11 +157,11 @@ export default function HomePage() {
                                             title="My Liked"
                                             subtitle={`${likedSummary.total} tracks`}
                                             placeholderIcon={
-                                                <Heart className="w-12 h-12 text-pink-500 fill-pink-500" />
+                                                <Heart className="h-12 w-12 fill-brand/25 text-brand-light" />
                                             }
                                             overlayIcon={
                                                 <Heart
-                                                    className="w-6 h-6 text-pink-500"
+                                                    className="h-6 w-6 text-brand-light"
                                                     strokeWidth={2.5}
                                                 />
                                             }
@@ -196,11 +177,11 @@ export default function HomePage() {
                                             title="Discover Weekly"
                                             subtitle={`${discoverWeekly.totalCount} tracks`}
                                             placeholderIcon={
-                                                <Zap className="w-12 h-12 text-blue-400" />
+                                                <Zap className="h-12 w-12 text-ai-hover" />
                                             }
                                             overlayIcon={
                                                 <Zap
-                                                    className="w-6 h-6 text-pink-500"
+                                                    className="h-6 w-6 text-ai-hover"
                                                     strokeWidth={2.5}
                                                 />
                                             }
@@ -229,17 +210,6 @@ export default function HomePage() {
                         </section>
                     )}
 
-                    {/* Popular Artists */}
-                    {popularArtists.length > 0 && (
-                        <section>
-                            <SectionHeader
-                                title="Popular Artists"
-                                badge={<LastFmBadge />}
-                            />
-                            <PopularArtistsGrid artists={popularArtists} />
-                        </section>
-                    )}
-
                     {/* Trending Community Playlists */}
                     {(isCommunityPlaylistsLoading ||
                         communityPlaylists.length > 0) && (
@@ -256,6 +226,17 @@ export default function HomePage() {
                                     playlists={communityPlaylists}
                                 />
                             )}
+                        </section>
+                    )}
+
+                    {/* Popular Artists */}
+                    {popularArtists.length > 0 && (
+                        <section>
+                            <SectionHeader
+                                title="Popular Artists"
+                                badge={<LastFmBadge />}
+                            />
+                            <PopularArtistsGrid artists={popularArtists} />
                         </section>
                     )}
                 </div>

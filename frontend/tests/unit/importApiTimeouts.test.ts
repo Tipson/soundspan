@@ -7,6 +7,10 @@ import { WithImports } from "@/lib/api/imports";
 // responding, so they can legitimately outlive the default request timeout.
 // These tests pin the extended-timeout contract for both preview endpoints.
 
+test("playlist preview client budget stays below the proxy budget", () => {
+    assert.equal(IMPORT_PREVIEW_TIMEOUT_MS, 120_000);
+});
+
 interface RecordedCall {
     endpoint: string;
     timeoutMs: number | undefined;

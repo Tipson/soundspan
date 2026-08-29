@@ -383,6 +383,7 @@ export function ActivityPanel({
                             />
                         )}
                         {effectiveActiveTab === "history" && <HistoryTab />}
+                        {effectiveActiveTab === "imports" && <ImportsTab />}
                         {effectiveActiveTab === "social" && (
                             <SocialTab
                                 users={socialUsers}

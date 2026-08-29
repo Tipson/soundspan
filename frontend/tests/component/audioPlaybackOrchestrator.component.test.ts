@@ -8,6 +8,17 @@ import {
     writePlaybackAdvanceOrigin,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
 import { afterEach, before, beforeEach, mock, test } from "node:test";
+import type {
+    VibeModeStartOptions,
+    VibeModeStartResult,
+    VibeQueueMutationKind,
+} from "../../lib/audio-controls-types";
+import {
+    clearDeviceOfflineRuntimeState,
+    prepareDeviceOfflinePlaybackSource,
+    setDeviceOfflineRuntimeState,
+} from "../../features/device-offline/playbackResolver";
+import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -19,11 +30,14 @@ type Track = {
     streamSource?: "local" | "tidal" | "youtube";
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    playlistItemId?: string;
+    trackYtMusicId?: string;
     artist?: { name?: string };
     album?: { title?: string };
     displayTitle?: string;
     mediaSource?: unknown;
     provider?: {
+        source?: "local" | "tidal" | "youtube" | "youtube-direct";
         providerTrackId?: string;
         tidalTrackId?: number;
         youtubeVideoId?: string;
@@ -384,6 +398,8 @@ const audioState = {
     currentIndex: 0,
     isShuffle: false,
     shuffleIndices: [] as number[],
+    vibeMode: false,
+    waveMode: "for-you" as "for-you" | "new" | "familiar",
 };
 
 const playbackState = {
@@ -411,6 +427,7 @@ const audioStateSetterCalls = {
     setCurrentAudiobook: [] as Array<Audiobook | null>,
     setCurrentPodcast: [] as Array<Podcast | null>,
     setPlaybackType: [] as Array<PlaybackType>,
+    setQueue: [] as Track[][],
 };
 
 const controlCalls = {
@@ -434,6 +451,15 @@ const apiCalls = {
         isFinished: boolean;
     }>,
     reportPlaybackClientMetric: [] as Array<Record<string, unknown>>,
+    recoverUnavailableYtMusicTrack: [] as Array<Record<string, unknown>>,
+    logPlay: [] as Array<{
+        trackRef: Record<string, unknown>;
+        context: Record<string, unknown>;
+    }>,
+    updatePlayEngagement: [] as Array<{
+        playId: string;
+        input: Record<string, unknown>;
+    }>,
 };
 
 const preemptChecks: Array<{
@@ -459,6 +485,18 @@ let podcastCacheStatus = {
 };
 let seekToleranceOverride: boolean | null = null;
 let mirrorMachineIntentToPlaybackState = false;
+let startVibeModeImpl: (
+    options?: VibeModeStartOptions,
+) => Promise<VibeModeStartResult> = async () => ({
+    success: false,
+    trackCount: 0,
+});
+let advanceQueueRequiresCapturedNext = false;
+let recoverUnavailableYtMusicTrackImpl: (
+    input: Record<string, unknown>,
+) => Promise<Record<string, unknown>> = async () => {
+    throw new Error("unavailable recovery disabled in harness");
+};
 const loggerCalls = {
     info: [] as Array<unknown[]>,
     warn: [] as Array<unknown[]>,
@@ -506,6 +544,7 @@ const makeTrack = (id: string, overrides: Partial<Track> = {}): Track => ({
 });
 
 const resetHarnessState = (): void => {
+    clearDeviceOfflineRuntimeState();
     engine.reset();
     hookRuntime.unmount();
     heartbeatInstances.length = 0;
@@ -521,6 +560,8 @@ const resetHarnessState = (): void => {
     audioState.currentIndex = 0;
     audioState.isShuffle = false;
     audioState.shuffleIndices = [0, 1];
+    audioState.vibeMode = false;
+    audioState.waveMode = "for-you";
 
     playbackState.isPlaying = false;
     playbackState.currentTime = 0;
@@ -560,6 +601,11 @@ const resetHarnessState = (): void => {
     };
     seekToleranceOverride = null;
     mirrorMachineIntentToPlaybackState = false;
+    startVibeModeImpl = async () => ({ success: false, trackCount: 0 });
+    advanceQueueRequiresCapturedNext = false;
+    recoverUnavailableYtMusicTrackImpl = async () => {
+        throw new Error("unavailable recovery disabled in harness");
+    };
     loggerCalls.info.length = 0;
     loggerCalls.warn.length = 0;
     loggerCalls.error.length = 0;
@@ -573,59 +619,41 @@ const applyValue = <T>(incoming: T | ((previous: T) => T), previous: T): T => {
     return incoming;
 };
 
-mock.module("react", {
-    exports: {
-        default: {
-            createElement: (..._args: unknown[]) => ({ __mocked: true }),
-            createContext: <T>(defaultValue: T) => ({
-                __defaultValue: defaultValue,
-            }),
-            useContext: (context: { __defaultValue: unknown } | null) =>
-                context?.__defaultValue ?? {
-                    prefetchQuery: async () => undefined,
-                },
-            useRef: <T>(value: T) => hookRuntime.useRef(value),
-            useCallback: <T extends (...args: unknown[]) => unknown>(
-                fn: T,
-                deps?: readonly unknown[],
-            ) => hookRuntime.useCallback(fn, deps),
-            useEffect: (effect: EffectCallback, deps?: readonly unknown[]) =>
-                hookRuntime.useEffect(effect, deps),
-            useLayoutEffect: (
-                effect: EffectCallback,
-                deps?: readonly unknown[],
-            ) => hookRuntime.useLayoutEffect(effect, deps),
-            useState: <T>(initial: T | (() => T)) => [
-                typeof initial === "function"
-                    ? (initial as () => T)()
-                    : initial,
-                () => undefined,
-            ],
-            useMemo: <T>(factory: () => T) => factory(),
-            memo: <T>(component: T) => component,
-            forwardRef: <T>(render: T) => render,
-            Fragment: "mock-fragment",
+const reactMock = {
+    createElement: (..._args: unknown[]) => ({ __mocked: true }),
+    createContext: <T>(defaultValue: T) => ({
+        __defaultValue: defaultValue,
+    }),
+    useContext: (context: { __defaultValue: unknown } | null) =>
+        context?.__defaultValue ?? {
+            prefetchQuery: async () => undefined,
         },
-        memo: <T>(component: T) => component,
-        createContext: <T>(defaultValue: T) => ({
-            __defaultValue: defaultValue,
-        }),
-        useContext: (context: { __defaultValue: unknown } | null) =>
-            context?.__defaultValue ?? { prefetchQuery: async () => undefined },
-        useRef: <T>(value: T) => hookRuntime.useRef(value),
-        useCallback: <T extends (...args: unknown[]) => unknown>(
-            fn: T,
-            deps?: readonly unknown[],
-        ) => hookRuntime.useCallback(fn, deps),
-        useEffect: (effect: EffectCallback, deps?: readonly unknown[]) =>
-            hookRuntime.useEffect(effect, deps),
-        useLayoutEffect: (effect: EffectCallback, deps?: readonly unknown[]) =>
-            hookRuntime.useLayoutEffect(effect, deps),
-    },
+    useRef: <T>(value: T) => hookRuntime.useRef(value),
+    useCallback: <T extends (...args: unknown[]) => unknown>(
+        fn: T,
+        deps?: readonly unknown[],
+    ) => hookRuntime.useCallback(fn, deps),
+    useEffect: (effect: EffectCallback, deps?: readonly unknown[]) =>
+        hookRuntime.useEffect(effect, deps),
+    useLayoutEffect: (effect: EffectCallback, deps?: readonly unknown[]) =>
+        hookRuntime.useLayoutEffect(effect, deps),
+    useState: <T>(initial: T | (() => T)) => [
+        typeof initial === "function" ? (initial as () => T)() : initial,
+        () => undefined,
+    ],
+    useMemo: <T>(factory: () => T) => factory(),
+    memo: <T>(component: T) => component,
+    forwardRef: <T>(render: T) => render,
+    Fragment: "mock-fragment",
+};
+
+mock.module("react", {
+    defaultExport: reactMock,
+    namedExports: reactMock,
 });
 
 mock.module("react/jsx-runtime", {
-    exports: {
+    namedExports: {
         Fragment: "mock-fragment",
         jsx: (..._args: unknown[]) => ({ __mocked: true }),
         jsxs: (..._args: unknown[]) => ({ __mocked: true }),
@@ -633,19 +661,19 @@ mock.module("react/jsx-runtime", {
 });
 
 mock.module("@/components/player/PlaybackProgressSnapshot", {
-    exports: {
+    namedExports: {
         PlaybackProgressSnapshot: () => null,
     },
 });
 
 mock.module("@/lib/audio-engine", {
-    exports: {
+    namedExports: {
         createRuntimeAudioEngine: () => engine,
     },
 });
 
 mock.module("@/lib/audio-state-context", {
-    exports: {
+    namedExports: {
         useAudioState: () => ({
             currentTrack: audioState.currentTrack,
             currentAudiobook: audioState.currentAudiobook,
@@ -709,16 +737,22 @@ mock.module("@/lib/audio-state-context", {
                     audioState.playbackType,
                 );
             },
+            setQueue: (value: Track[] | ((previous: Track[]) => Track[])) => {
+                audioState.queue = applyValue(value, audioState.queue);
+                audioStateSetterCalls.setQueue.push(audioState.queue);
+            },
             queue: audioState.queue,
             currentIndex: audioState.currentIndex,
             isShuffle: audioState.isShuffle,
             shuffleIndices: audioState.shuffleIndices,
+            vibeMode: audioState.vibeMode,
+            waveMode: audioState.waveMode,
         }),
     },
 });
 
 mock.module("@/lib/audio-playback-context", {
-    exports: {
+    namedExports: {
         usePlaybackStatus: () => ({
             isPlaying: playbackState.isPlaying,
             setCurrentTime: (value: number) => {
@@ -764,30 +798,38 @@ mock.module("@/lib/audio-playback-context", {
 });
 
 mock.module("@/lib/audio-controls-context", {
-    exports: {
-        useAudioControls: () => ({
-            pause: () => {
-                controlCalls.pause += 1;
-            },
-            next: () => {
-                controlCalls.next += 1;
-            },
-            advanceQueue: () => {
-                controlCalls.next += 1;
-            },
-            nextPodcastEpisode: () => {
-                controlCalls.nextPodcastEpisode += 1;
-            },
-            startVibeMode: async () => {
-                controlCalls.startVibeMode += 1;
-                return { success: false, trackCount: 0 };
-            },
-        }),
+    namedExports: {
+        useAudioControls: () => {
+            const queueLengthAtRender = audioState.queue.length;
+            return {
+                pause: () => {
+                    controlCalls.pause += 1;
+                },
+                next: () => {
+                    controlCalls.next += 1;
+                },
+                advanceQueue: () => {
+                    if (
+                        !advanceQueueRequiresCapturedNext ||
+                        queueLengthAtRender > 1
+                    ) {
+                        controlCalls.next += 1;
+                    }
+                },
+                nextPodcastEpisode: () => {
+                    controlCalls.nextPodcastEpisode += 1;
+                },
+                startVibeMode: async (options?: VibeModeStartOptions) => {
+                    controlCalls.startVibeMode += 1;
+                    return startVibeModeImpl(options);
+                },
+            };
+        },
     },
 });
 
 mock.module("@/lib/audio-load-preemption", {
-    exports: {
+    namedExports: {
         shouldAllowInitialPersistedTrackResume: (input: {
             isInitialTrackLoad: boolean;
             listenTogetherActiveOrPending: boolean;
@@ -809,7 +851,7 @@ mock.module("@/lib/audio-load-preemption", {
 });
 
 mock.module("@/lib/api", {
-    exports: {
+    namedExports: {
         api: {
             getStreamUrl: (trackId: string) => {
                 apiCalls.getStreamUrl.push(trackId);
@@ -819,6 +861,12 @@ mock.module("@/lib/api", {
                 `https://stream.test/tidal/${trackId}`,
             getYtMusicStreamUrl: (videoId: string) =>
                 `https://stream.test/yt/${videoId}`,
+            recoverUnavailableYtMusicTrack: async (
+                input: Record<string, unknown>,
+            ) => {
+                apiCalls.recoverUnavailableYtMusicTrack.push(input);
+                return recoverUnavailableYtMusicTrackImpl(input);
+            },
             getAudiobookStreamUrl: (bookId: string) =>
                 `https://stream.test/audiobook/${bookId}`,
             getPodcastEpisodeStreamUrl: (
@@ -860,6 +908,20 @@ mock.module("@/lib/api", {
             ) => {
                 apiCalls.reportPlaybackClientMetric.push(payload);
             },
+            logPlay: async (
+                trackRef: Record<string, unknown>,
+                context: Record<string, unknown>,
+            ) => {
+                apiCalls.logPlay.push({ trackRef, context });
+                return { id: `play-${apiCalls.logPlay.length}` };
+            },
+            updatePlayEngagement: async (
+                playId: string,
+                input: Record<string, unknown>,
+            ) => {
+                apiCalls.updatePlayEngagement.push({ playId, input });
+                return { success: true as const };
+            },
             getYtMusicStatus: async () => ({
                 enabled: false,
                 available: false,
@@ -870,13 +932,13 @@ mock.module("@/lib/api", {
 });
 
 mock.module("@/lib/audio-engine/engineMode", {
-    exports: {
+    namedExports: {
         resolveStreamingEngineMode: () => runtimeEngineMode,
     },
 });
 
 mock.module("@/lib/audio-engine/recoveryPolicy", {
-    exports: {
+    namedExports: {
         resolveLocalAuthoritativeRecovery: (
             local: { positionSec: number; shouldPlay: boolean },
             server?: { resumeAtSec?: number },
@@ -896,7 +958,7 @@ mock.module("@/lib/audio-engine/recoveryPolicy", {
 });
 
 mock.module("@/lib/audio-engine/playbackRecoveryPolicy", {
-    exports: {
+    namedExports: {
         ...realPlaybackRecoveryPolicy,
         isSeekWithinTolerance: (
             actual: number,
@@ -913,7 +975,7 @@ mock.module("@/lib/audio-engine/playbackRecoveryPolicy", {
 });
 
 mock.module("@/lib/audio-seek-emitter", {
-    exports: {
+    namedExports: {
         audioSeekEmitter: {
             subscribe: (handler: (time: number) => void | Promise<void>) => {
                 seekSubscribers.add(handler);
@@ -926,20 +988,21 @@ mock.module("@/lib/audio-seek-emitter", {
 });
 
 mock.module("@/lib/query-events", {
-    exports: {
+    namedExports: {
         dispatchQueryEvent: () => undefined,
     },
 });
 
 mock.module("@/lib/listen-together-session", {
-    exports: {
+    namedExports: {
         enqueueLatestListenTogetherHostTrackOperation: async (operation: {
             action: string;
         }) => {
             listenTogetherHostTrackOperations.push(operation.action);
         },
         getListenTogetherSessionSnapshot: () => listenTogetherSnapshot,
-        isListenTogetherActiveOrPending: () => false,
+        isListenTogetherActiveOrPending: () =>
+            Boolean(listenTogetherSnapshot?.groupId),
         resolveListenTogetherFollowerGroupId: (
             snapshot: { groupId?: string; isHost?: boolean } | null,
         ) =>
@@ -955,7 +1018,7 @@ mock.module("@/lib/listen-together-session", {
 });
 
 mock.module("@/lib/storage-migration", {
-    exports: {
+    namedExports: {
         createMigratingStorageKey: (key: string) => key,
         PODCAST_DEBUG_STORAGE_KEY: "podcast_debug",
         readMigratingStorageItem: (key: string) =>
@@ -1046,7 +1109,7 @@ class MockHeartbeatMonitor {
 }
 
 mock.module("@/lib/audio", {
-    exports: {
+    namedExports: {
         playbackStateMachine: {
             transition: transitionPlaybackMachine,
             forceTransition: transitionPlaybackMachine,
@@ -1063,7 +1126,7 @@ mock.module("@/lib/audio", {
 });
 
 mock.module("@tanstack/react-query", {
-    exports: {
+    namedExports: {
         useQueryClient: () => ({
             prefetchQuery: async () => undefined,
         }),
@@ -1071,7 +1134,7 @@ mock.module("@tanstack/react-query", {
 });
 
 mock.module("@/hooks/useLyrics", {
-    exports: {
+    namedExports: {
         fetchLyrics: async () => null,
         lyricsQueryKeys: {
             lyrics: (trackId: string) => ["lyrics", trackId],
@@ -1080,13 +1143,13 @@ mock.module("@/hooks/useLyrics", {
 });
 
 mock.module("@/lib/lyrics-cache-policy", {
-    exports: {
+    namedExports: {
         LYRICS_QUERY_STALE_TIME: 60_000,
     },
 });
 
 mock.module("sonner", {
-    exports: {
+    namedExports: {
         toast: {
             error: (message: string) => {
                 toastErrors.push(message);
@@ -1096,7 +1159,7 @@ mock.module("sonner", {
 });
 
 mock.module("@/lib/logger", {
-    exports: {
+    namedExports: {
         frontendLogger: (() => {
             const logger = {
                 info: (...args: unknown[]) => {
@@ -1116,7 +1179,7 @@ mock.module("@/lib/logger", {
 });
 
 mock.module("@soundspan/media-metadata-contract", {
-    exports: {
+    namedExports: {
         normalizeCanonicalMediaProviderIdentity: (input: {
             streamSource?: "local" | "tidal" | "youtube";
             tidalTrackId?: number;
@@ -1307,6 +1370,261 @@ test("recoverable autoplay rejection preserves the track without scheduling a sk
     await flushAsync();
     assert.equal(playbackMachine.state, "PLAYING");
     assert.equal(playbackState.isPlaying, true);
+});
+
+test("unavailable YouTube Music playback swaps in the validated alternate without skipping", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("yt:z0NfI2NeDHI", {
+        title: "Radio (Official Video)",
+        streamSource: "youtube",
+        youtubeVideoId: "z0NfI2NeDHI",
+        artist: { name: "Rammstein" },
+        album: { title: "Rammstein" },
+        playlistItemId: "playlist-item-1",
+        trackYtMusicId: "yt-row-original",
+        provider: {
+            source: "youtube",
+            providerTrackId: "z0NfI2NeDHI",
+            youtubeVideoId: "z0NfI2NeDHI",
+        },
+    });
+    const repeatedOccurrence = {
+        ...failedTrack,
+        playlistItemId: "playlist-item-2",
+    };
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [
+        failedTrack,
+        repeatedOccurrence,
+        makeTrack("next-after-unavailable"),
+    ];
+    recoverUnavailableYtMusicTrackImpl = async () => ({
+        status: "replaced",
+        originalVideoId: "z0NfI2NeDHI",
+        replacement: {
+            videoId: "alternate02",
+            title: "Radio",
+            duration: 274,
+            trackYtMusicId: "yt-row-alternate",
+        },
+        persisted: true,
+    });
+
+    renderOrchestrator();
+    await flushAsync();
+    await emitFatalLoadError();
+
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 1);
+    assert.deepEqual(
+        apiCalls.recoverUnavailableYtMusicTrack[0]?.excludedVideoIds,
+        ["z0NfI2NeDHI"],
+    );
+    assert.equal(audioState.currentTrack?.youtubeVideoId, "alternate02");
+    assert.equal(audioState.currentTrack?.trackYtMusicId, "yt-row-alternate");
+    assert.equal(audioState.queue[0]?.youtubeVideoId, "alternate02");
+    assert.equal(audioState.queue[1]?.youtubeVideoId, "z0NfI2NeDHI");
+    assert.equal(audioState.queue[1]?.trackYtMusicId, "yt-row-original");
+    assert.equal(controlCalls.next, 0);
+
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/alternate02",
+    );
+
+    t.mock.timers.tick(1_201);
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+});
+
+test("unavailable YouTube Music playback keeps the existing skip when no alternate exists", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("yt:z0NfI2NeDHI", {
+        title: "Radio (Official Video)",
+        streamSource: "youtube",
+        youtubeVideoId: "z0NfI2NeDHI",
+        artist: { name: "Rammstein" },
+        album: { title: "Rammstein" },
+    });
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack, makeTrack("next-after-no-candidate")];
+    recoverUnavailableYtMusicTrackImpl = async () => ({
+        status: "no_candidate",
+        originalVideoId: "z0NfI2NeDHI",
+        replacement: null,
+        persisted: false,
+    });
+
+    renderOrchestrator();
+    await flushAsync();
+    await emitFatalLoadError();
+    assert.equal(controlCalls.next, 0);
+
+    t.mock.timers.tick(1_201);
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
+test("preparing a downloaded copy reloads the same track from its local Blob URL", async () => {
+    const track = makeTrack("downloaded-track", {
+        streamSource: "youtube",
+        youtubeVideoId: "downloaded-video",
+    });
+    const record = {
+        key: "downloaded-key",
+        ownerId: "user-1",
+        trackIdentity: "youtube:downloaded-video",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/downloaded-key",
+        sourceUrl: "/api/ytmusic/stream-public/downloaded-video",
+        track,
+        status: "ready",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 6,
+        totalBytes: 6,
+        contentType: "audio/mp4",
+        persistenceGranted: true,
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+    } as DeviceOfflineDownloadRecord;
+    setDeviceOfflineRuntimeState("user-1", [record]);
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "/__offline/audio/downloaded-key",
+    );
+
+    assert.equal(
+        prepareDeviceOfflinePlaybackSource(
+            "user-1",
+            record,
+            "blob:https://soundspan.test/downloaded-key",
+            () => undefined,
+        ),
+        true,
+    );
+    audioState.currentTrack = { ...track };
+    audioState.queue = [audioState.currentTrack];
+    rerenderOrchestrator();
+    await flushAsync();
+
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "blob:https://soundspan.test/downloaded-key",
+    );
+    assert.equal(engine.loadCalls.length, 2);
+});
+
+test("offline playback failure pauses once without cascading through the queue", async (t) => {
+    mock.timers.enable();
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: { onLine: false },
+    });
+    t.after(() => {
+        if (navigatorDescriptor) {
+            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+
+    const tracks = [
+        makeTrack("offline-1", {
+            streamSource: "youtube",
+            youtubeVideoId: "offline-video-1",
+        }),
+        makeTrack("offline-2", {
+            streamSource: "youtube",
+            youtubeVideoId: "offline-video-2",
+        }),
+    ];
+    audioState.currentTrack = tracks[0];
+    audioState.queue = tracks;
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("loaderror", {
+        error: new TypeError("network disconnected"),
+        code: "MEDIA_ERR_NETWORK",
+        recoverable: false,
+    });
+    engine.emit("playerror", {
+        error: new TypeError("network still disconnected"),
+        code: "MEDIA_ERR_NETWORK",
+        recoverable: false,
+    });
+    await flushAsync(10);
+    mock.timers.tick(10_000);
+    await flushAsync();
+
+    assert.equal(controlCalls.next, 0);
+    assert.equal(playbackState.isPlaying, false);
+    assert.equal(playbackState.isBuffering, false);
+    assert.ok(toastErrors.length <= 1);
+    if (toastErrors[0]) {
+        assert.match(toastErrors[0], /offline/i);
+        assert.doesNotMatch(toastErrors[0], /trying the next track/i);
+    }
+    assert.doesNotMatch(toastErrors.join(" "), /multiple tracks failed/i);
+});
+
+test("offline load timeout stops without retrying or advancing the queue", async (t) => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: { onLine: false },
+    });
+    t.after(() => {
+        if (navigatorDescriptor) {
+            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+
+    const failedTrack = makeTrack("offline-timeout");
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack, makeTrack("must-not-autoskip")];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+
+    mock.timers.tick(20_000);
+    await flushAsync();
+    mock.timers.tick(350);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+
+    mock.timers.tick(25_000);
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    assert.equal(playbackState.isPlaying, false);
+    assert.equal(playbackState.isBuffering, false);
+    assert.equal(playbackMachine.state, "ERROR");
+    assert.ok(toastErrors.length <= 1);
 });
 
 test("foreground visibility does not bypass a tripped failure breaker", async () => {
@@ -1696,6 +2014,251 @@ test("newly loaded source can end immediately after an advance", async () => {
     engine.emit("end");
 
     assert.equal(controlCalls.next, 2);
+});
+
+test("late Auto Match continuation advances from the rerendered shuffled queue", async () => {
+    let commitQueueMutation!: (mutation: VibeQueueMutationKind) => void;
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = (options) =>
+        new Promise((resolve) => {
+            commitQueueMutation = (mutation) => {
+                if (!options?.queueCommitToken) return;
+                options.onLocalQueueCommit?.({
+                    token: options.queueCommitToken,
+                    mutation,
+                });
+            };
+            resolveVibe = resolve;
+        });
+    const seed = makeTrack("late-vibe-seed", {
+        streamSource: "youtube",
+        youtubeVideoId: "AAAAAAAAAAA",
+    });
+    audioState.queue = [makeTrack("played-0"), seed, makeTrack("played-2")];
+    audioState.currentTrack = seed;
+    audioState.currentIndex = 1;
+    audioState.isShuffle = true;
+    audioState.shuffleIndices = [2, 0, 1];
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(controlCalls.startVibeMode, 1);
+    engine.emit("load", { durationSec: 210 });
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+
+    commitQueueMutation("append");
+    audioState.queue = [...audioState.queue, makeTrack("provider-next")];
+    audioState.shuffleIndices = [2, 0, 1, 3];
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+
+    resolveVibe({ success: true, trackCount: 1 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
+test("late Audio-DNA continuation advances after replacing a longer queue", async () => {
+    let commitQueueMutation!: (mutation: VibeQueueMutationKind) => void;
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = (options) =>
+        new Promise((resolve) => {
+            commitQueueMutation = (mutation) => {
+                if (!options?.queueCommitToken) return;
+                options.onLocalQueueCommit?.({
+                    token: options.queueCommitToken,
+                    mutation,
+                });
+            };
+            resolveVibe = resolve;
+        });
+    const originalQueue = Array.from({ length: 60 }, (_, index) =>
+        makeTrack(`long-queue-${index}`),
+    );
+    const seed = originalQueue[59];
+    audioState.queue = originalQueue;
+    audioState.currentTrack = seed;
+    audioState.currentIndex = 59;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.emit("end");
+    await flushAsync();
+
+    commitQueueMutation("replace");
+    audioState.queue = [
+        seed,
+        ...Array.from({ length: 50 }, (_, index) =>
+            makeTrack(`dna-next-${index}`),
+        ),
+    ];
+    audioState.currentIndex = 0;
+    rerenderOrchestrator();
+    await flushAsync();
+
+    assert.equal(controlCalls.next, 0);
+    resolveVibe({ success: true, trackCount: 50 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
+test("late Auto Match continuation does not advance a manually selected duplicate track", async () => {
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+    const earlierDuplicate = makeTrack("duplicate-vibe-seed", {
+        title: "Earlier occurrence",
+    });
+    const endingDuplicate = makeTrack("duplicate-vibe-seed", {
+        title: "Ending occurrence",
+    });
+    audioState.queue = [
+        earlierDuplicate,
+        makeTrack("played-middle"),
+        endingDuplicate,
+    ];
+    audioState.currentTrack = endingDuplicate;
+    audioState.currentIndex = 2;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+
+    audioState.queue = [...audioState.queue];
+    audioState.currentTrack = earlierDuplicate;
+    audioState.currentIndex = 0;
+    rerenderOrchestrator();
+    await flushAsync();
+
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+});
+
+test("successful late Auto Match cannot adopt a manually selected duplicate in a replaced queue", async () => {
+    let reportForeignQueueCommit!: () => void;
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = (options) =>
+        new Promise((resolve) => {
+            reportForeignQueueCommit = () => {
+                options?.onLocalQueueCommit?.({
+                    token: {},
+                    mutation: "replace",
+                });
+            };
+            resolveVibe = resolve;
+        });
+    const earlierDuplicate = makeTrack("duplicate-success-seed", {
+        title: "Earlier occurrence",
+    });
+    const endingDuplicate = makeTrack("duplicate-success-seed", {
+        title: "Ending occurrence",
+    });
+    audioState.queue = [
+        earlierDuplicate,
+        makeTrack("success-middle"),
+        endingDuplicate,
+    ];
+    audioState.currentTrack = endingDuplicate;
+    audioState.currentIndex = 2;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.emit("end");
+    await flushAsync();
+
+    audioState.queue = [...audioState.queue];
+    audioState.currentTrack = earlierDuplicate;
+    audioState.currentIndex = 0;
+    rerenderOrchestrator();
+    await flushAsync();
+
+    reportForeignQueueCommit();
+    resolveVibe({ success: true, trackCount: 1 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+});
+
+test("late Auto Match resolution cannot advance after the player unmounts", async () => {
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+    const seed = makeTrack("unmounted-vibe-seed");
+    audioState.queue = [seed];
+    audioState.currentTrack = seed;
+    audioState.currentIndex = 0;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.emit("end");
+    await flushAsync();
+
+    hookRuntime.unmount();
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+
+    assert.equal(controlCalls.next, 0);
+});
+
+test("unrelated queue replacement does not satisfy a pending Auto Match request", async () => {
+    advanceQueueRequiresCapturedNext = true;
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+    const seed = makeTrack("pending-vibe-seed", {
+        streamSource: "youtube",
+        youtubeVideoId: "BBBBBBBBBBB",
+    });
+    audioState.queue = [seed];
+    audioState.currentTrack = seed;
+    audioState.currentIndex = 0;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.emit("end");
+    await flushAsync();
+
+    audioState.queue = [seed, makeTrack("manually-added")];
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
 });
 
 test("keeps engine end listeners attached across playback state churn", async () => {
@@ -2252,6 +2815,162 @@ test("unmount cleanup stops engine and detaches listeners", async () => {
     assert.ok(engine.offCalls.length > 0);
 });
 
+test("remote Wave completion sends one contextual engagement update", async () => {
+    playbackState.isPlaying = true;
+    audioState.vibeMode = true;
+    audioState.waveMode = "new";
+    audioState.currentTrack = makeTrack("yt:wave-track", {
+        streamSource: "youtube",
+        youtubeVideoId: "wave-track",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    audioState.queue = [audioState.currentTrack];
+
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 0 });
+    engine.emit("timeupdate", { timeSec: 5 });
+    engine.emit("timeupdate", { timeSec: 10 });
+    engine.emit("end");
+    engine.emit("end");
+    await flushAsync(12);
+
+    assert.equal(apiCalls.logPlay.length, 1);
+    assert.deepEqual(apiCalls.logPlay[0]?.context, {
+        playContext: "wave",
+        waveMode: "new",
+    });
+    assert.deepEqual(apiCalls.updatePlayEngagement, [
+        {
+            playId: "play-1",
+            input: {
+                listenedSeconds: 10,
+                completionRatio: 1,
+                outcome: "completed",
+            },
+        },
+    ]);
+});
+
+test("remote track change finalizes an early listen as skipped once", async () => {
+    playbackState.isPlaying = true;
+    const first = makeTrack("yt:first-track", {
+        streamSource: "youtube",
+        youtubeVideoId: "first-track",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 200,
+    });
+    audioState.currentTrack = first;
+    audioState.queue = [first];
+
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("timeupdate", { timeSec: 0 });
+    engine.emit("timeupdate", { timeSec: 8 });
+
+    const second = makeTrack("yt:second-track", {
+        streamSource: "youtube",
+        youtubeVideoId: "second-track",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 200,
+    });
+    audioState.currentTrack = second;
+    audioState.queue = [second];
+    rerenderOrchestrator();
+    await flushAsync(12);
+
+    assert.deepEqual(apiCalls.updatePlayEngagement, [
+        {
+            playId: "play-1",
+            input: {
+                listenedSeconds: 8,
+                completionRatio: 0.04,
+                outcome: "skipped",
+            },
+        },
+    ]);
+});
+
+test("adjacent duplicate remote occurrences create separate play sessions", async () => {
+    playbackState.isPlaying = true;
+    const duplicate = makeTrack("yt:duplicate-track", {
+        streamSource: "youtube",
+        youtubeVideoId: "duplicate-track",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 200,
+    });
+    audioState.currentTrack = duplicate;
+    audioState.queue = [duplicate, { ...duplicate }];
+    audioState.currentIndex = 0;
+
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("timeupdate", { timeSec: 0 });
+    engine.emit("timeupdate", { timeSec: 5 });
+
+    audioState.currentTrack = { ...duplicate };
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync(12);
+
+    assert.equal(apiCalls.logPlay.length, 2);
+    assert.deepEqual(apiCalls.updatePlayEngagement, [
+        {
+            playId: "play-1",
+            input: {
+                listenedSeconds: 5,
+                completionRatio: 0.025,
+                outcome: "skipped",
+            },
+        },
+    ]);
+});
+
+test("fatal remote playback error finalizes engagement as failed", async () => {
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("tidal:42", {
+        streamSource: "tidal",
+        tidalTrackId: 42,
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 200,
+    });
+    audioState.queue = [audioState.currentTrack];
+
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("load", { durationSec: 200 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 0 });
+    engine.emit("timeupdate", { timeSec: 5 });
+    engine.emit("playerror", {
+        error: new Error("decoder rejected stream"),
+        code: "3",
+        recoverable: false,
+    });
+    await flushAsync(12);
+
+    assert.deepEqual(apiCalls.updatePlayEngagement, [
+        {
+            playId: "play-1",
+            input: {
+                listenedSeconds: 5,
+                completionRatio: 0.025,
+                outcome: "failed",
+            },
+        },
+    ]);
+});
+
 test("keeps track time snapshot id null when track playback has no active track", async () => {
     audioState.playbackType = "track";
     audioState.currentTrack = null;
@@ -2449,6 +3168,212 @@ test("load timeout retries once and then fails playback", async (t) => {
     assert.ok(playbackCalls.setIsBuffering.includes(false));
 });
 
+test("multi-track load timeout skips the failed track after one retry", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("timeout-queue-track");
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack, makeTrack("timeout-queue-next")];
+
+    renderOrchestrator();
+    await flushAsync();
+
+    t.mock.timers.tick(20_000);
+    await flushAsync();
+    t.mock.timers.tick(350);
+    await flushAsync();
+    t.mock.timers.tick(20_000);
+    await flushAsync();
+    t.mock.timers.tick(1_201);
+    await flushAsync();
+
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(controlCalls.next, 1);
+});
+
+test("load timeout advances with the queue callback committed while loading", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    advanceQueueRequiresCapturedNext = true;
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("timeout-live-queue-track");
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack];
+
+    renderOrchestrator();
+    await flushAsync();
+
+    audioState.queue = [failedTrack, makeTrack("timeout-live-queue-next")];
+    rerenderOrchestrator();
+    await flushAsync();
+
+    t.mock.timers.tick(20_000);
+    await flushAsync();
+    t.mock.timers.tick(350);
+    await flushAsync();
+    t.mock.timers.tick(20_000);
+    await flushAsync();
+    t.mock.timers.tick(1_201);
+    await flushAsync();
+
+    assert.equal(controlCalls.next, 1);
+});
+
+test("cold YouTube Music spools stop after one bounded 135-second load window", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("provider-timeout-track", {
+        streamSource: "youtube",
+        youtubeVideoId: "kXYiU_JCYtU",
+    });
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack, makeTrack("provider-timeout-next")];
+
+    renderOrchestrator();
+    await flushAsync();
+
+    t.mock.timers.tick(20_000);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(engine.stopCalls, 0);
+
+    t.mock.timers.tick(100_000);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(engine.stopCalls, 0);
+
+    t.mock.timers.tick(14_999);
+    await flushAsync();
+    assert.equal(engine.stopCalls, 0);
+
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.stopCalls, 1);
+
+    const playCallsAfterTimeout = engine.playCalls;
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+    assert.equal(engine.playCalls, playCallsAfterTimeout);
+
+    t.mock.timers.tick(1_201);
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
+test("engine-terminal network errors bypass outer transient recovery", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("terminal-network-track");
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack, makeTrack("terminal-network-next")];
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    await flushAsync();
+
+    engine.emit("playerror", {
+        error: new Error("MEDIA_ERR_NETWORK"),
+        code: "2",
+        recoverable: false,
+    });
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 0);
+
+    t.mock.timers.tick(751);
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
+test("metadata load and play events do not reset transient retry budget", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("flapping-stream-track");
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack, makeTrack("flapping-stream-next")];
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    await flushAsync();
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+        engine.emit("playerror", {
+            error: new Error("network connection reset"),
+        });
+        await flushAsync();
+        t.mock.timers.tick(450);
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        await flushAsync();
+    }
+
+    engine.emit("playerror", {
+        error: new Error("network connection reset"),
+    });
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 4);
+
+    t.mock.timers.tick(751);
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
+test("confirmed progress after a transient reload resets its retry budget", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const recoveredTrack = makeTrack("recovered-stream-track");
+    audioState.currentTrack = recoveredTrack;
+    audioState.queue = [recoveredTrack, makeTrack("recovered-stream-next")];
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 0 });
+    engine.emit("timeupdate", { timeSec: 0.6 });
+    await flushAsync();
+
+    engine.emit("playerror", {
+        error: new Error("network connection reset"),
+    });
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    engine.emit("timeupdate", { timeSec: 1.6 });
+    await flushAsync();
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+        engine.emit("playerror", {
+            error: new Error("network connection reset"),
+        });
+        await flushAsync();
+        t.mock.timers.tick(450);
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        await flushAsync();
+    }
+
+    assert.equal(engine.reloadCalls, 5);
+    assert.equal(controlCalls.next, 0);
+});
+
 test("transient playback errors reload the current track and resume", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     playbackState.isPlaying = true;
@@ -2477,6 +3402,32 @@ test("transient playback errors reload the current track and resume", async (t) 
     engine.emit("load", { durationSec: 210 });
     await flushAsync();
     assert.ok(engine.playCalls > playCallsBeforeResume);
+});
+
+test("transient YouTube errors retry the source before alternate lookup", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const currentTrack = makeTrack("yt:transient01", {
+        streamSource: "youtube",
+        youtubeVideoId: "transient01",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack];
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+
+    engine.emit("playerror", {
+        error: new Error("network connection reset"),
+    });
+    await flushAsync();
+
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
 });
 
 test("heartbeat stall buffers and buffer timeout runs transient recovery", async (t) => {

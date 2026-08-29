@@ -26,6 +26,7 @@ function requestUrl(input: Request | string | { url: string }): string {
 class FakeCache {
     readonly values = new Map<string, Response>();
     readonly putKeys: string[] = [];
+    failDeletes = false;
 
     async match(input: Request | string | { url: string }) {
         return this.values.get(requestUrl(input))?.clone();
@@ -38,6 +39,7 @@ class FakeCache {
     }
 
     async delete(input: Request | string | { url: string }) {
+        if (this.failDeletes) throw new Error("cache cleanup failed");
         return this.values.delete(requestUrl(input));
     }
 
@@ -232,7 +234,9 @@ class SharedMapMetadataStore implements DeviceOfflineMetadataStore {
     async claimReplacement(
         expected: DeviceOfflineDownloadRecord | null,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
         const current = await this.getByTrackQuality(
             next.ownerId,
             next.trackIdentity,
@@ -257,7 +261,9 @@ class SharedMapMetadataStore implements DeviceOfflineMetadataStore {
     async putIfCurrent(
         expected: DeviceOfflineDownloadRecord,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
         if (
             !matchesDeviceOfflineRecordVersion(
                 this.record(expected.key),
@@ -294,12 +300,30 @@ class SharedMapMetadataStore implements DeviceOfflineMetadataStore {
 
     async deleteIfCurrent(
         expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
         if (
             !matchesDeviceOfflineRecordVersion(
                 this.record(expected.key),
                 expected,
             )
+        ) {
+            return false;
+        }
+        return this.records.delete(expected.key);
+    }
+
+    async deleteAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
+        const current = this.record(expected.key);
+        if (
+            current?.management !== "auto-liked" ||
+            expected.management !== "auto-liked" ||
+            !matchesDeviceOfflineRecordVersion(current, expected)
         ) {
             return false;
         }
@@ -320,16 +344,32 @@ function createHarness(
         throw new TypeError("offline");
     },
     timerOverrides?: HarnessTimers,
+    clientNavigateResults: readonly ("resolve" | "reject")[] = ["resolve"],
 ) {
     const listeners = new Map<string, Listener[]>();
     const caches = new FakeCacheStorage();
     const indexedDB = new FakeIndexedDb();
     const clientMessages: unknown[] = [];
+    const clientNavigations: string[] = [];
+    const legacyBackgroundFetches = new Map<
+        string,
+        { id: string; abort: () => Promise<boolean> }
+    >();
     let skipWaitingCalls = 0;
     let claimCalls = 0;
 
     const self = {
         location: { origin: ORIGIN },
+        registration: {
+            backgroundFetch: {
+                async getIds() {
+                    return [...legacyBackgroundFetches.keys()];
+                },
+                async get(id: string) {
+                    return legacyBackgroundFetches.get(id);
+                },
+            },
+        },
         addEventListener(type: string, listener: Listener) {
             const current = listeners.get(type) ?? [];
             current.push(listener);
@@ -343,13 +383,22 @@ function createHarness(
                 claimCalls += 1;
             },
             async matchAll() {
-                return [
-                    {
-                        postMessage(message: unknown) {
-                            clientMessages.push(structuredClone(message));
-                        },
+                return clientNavigateResults.map((result, index) => ({
+                    url:
+                        index === 0
+                            ? `${ORIGIN}/library?tab=downloads`
+                            : `${ORIGIN}/search?client=${index}`,
+                    postMessage(message: unknown) {
+                        clientMessages.push(structuredClone(message));
                     },
-                ];
+                    async navigate(url: string) {
+                        clientNavigations.push(url);
+                        if (result === "reject") {
+                            throw new Error("client navigation failed");
+                        }
+                        return this;
+                    },
+                }));
             },
         },
     };
@@ -407,6 +456,23 @@ function createHarness(
         caches,
         indexedDB,
         clientMessages,
+        clientNavigations,
+        addLegacyBackgroundFetch(
+            id: string,
+            abort: () => Promise<boolean> = async () => true,
+        ) {
+            legacyBackgroundFetches.set(id, {
+                id,
+                abort: async () => {
+                    const result = await abort();
+                    if (result) legacyBackgroundFetches.delete(id);
+                    return result;
+                },
+            });
+        },
+        hasLegacyBackgroundFetch(id: string) {
+            return legacyBackgroundFetches.has(id);
+        },
         dispatch,
         get skipWaitingCalls() {
             return skipWaitingCalls;
@@ -454,6 +520,7 @@ function backgroundFetchRegistration(
 
 test("background fetch success stores audio, marks its record ready, and notifies open clients", async () => {
     const harness = createHarness();
+    const systemUiUpdates: unknown[] = [];
     const key = "background-key";
     const registrationId = `soundspan-device-audio-${key}::1`;
     harness.indexedDB.records.set(
@@ -477,6 +544,8 @@ test("background fetch success stores audio, marks its record ready, and notifie
             }),
             registrationId,
         ),
+        updateUI: async (value: unknown) =>
+            systemUiUpdates.push(structuredClone(value)),
     });
 
     const audioCache = await harness.caches.open("soundspan-device-audio-v1");
@@ -497,12 +566,14 @@ test("background fetch success stores audio, marks its record ready, and notifie
     assert.equal(stored?.foregroundLeaseExpiresAt, null);
     assert.equal(stored?.bytesReceived, 4);
     assert.equal(stored?.totalBytes, 4);
+    assert.equal(stored?.integrityVersion, 1);
     assert.equal(stored?.contentType, "audio/mpeg");
     assert.equal(stored?.errorCode, null);
     assert.equal(stored?.errorMessage, null);
     assert.deepEqual(harness.clientMessages, [
         { type: "DEVICE_OFFLINE_CHANGED", key, status: "ready" },
     ]);
+    assert.deepEqual(systemUiUpdates, [{ title: "Download saved" }]);
 });
 
 test("background success measures a body when Content-Length is absent", async () => {
@@ -511,7 +582,10 @@ test("background success measures a body when Content-Length is absent", async (
     const registrationId = `soundspan-device-audio-${key}::1`;
     harness.indexedDB.records.set(
         key,
-        downloadingRecord(key, { backgroundFetchId: registrationId }),
+        downloadingRecord(key, {
+            backgroundFetchId: registrationId,
+            updatedAt: Date.now(),
+        }),
     );
 
     await harness.dispatch("backgroundfetchsuccess", {
@@ -534,13 +608,87 @@ test("background success measures a body when Content-Length is absent", async (
     assert.equal(stored?.totalBytes, 4);
 });
 
+test("background success never publishes ready when the retained body is shorter than Content-Length", async () => {
+    const harness = createHarness();
+    const key = "truncated-background-key";
+    const registrationId = `soundspan-device-audio-${key}::1`;
+    harness.indexedDB.records.set(
+        key,
+        downloadingRecord(key, {
+            backgroundFetchId: registrationId,
+            updatedAt: Date.now(),
+        }),
+    );
+
+    await harness.dispatch("backgroundfetchsuccess", {
+        registration: backgroundFetchRegistration(
+            key,
+            new Response(Uint8Array.from([8, 6, 4, 2]), {
+                status: 200,
+                headers: {
+                    "content-type": "audio/mpeg",
+                    "content-length": "8",
+                },
+            }),
+            registrationId,
+        ),
+    });
+
+    const audioCache = await harness.caches.open("soundspan-device-audio-v1");
+    assert.equal(
+        await audioCache.match(`${ORIGIN}/__offline/audio/${key}`),
+        undefined,
+    );
+    const stored = harness.indexedDB.records.get(key);
+    assert.equal(stored?.status, "interrupted");
+    assert.equal(stored?.backgroundFetchId, null);
+    assert.equal(stored?.errorCode, "background_failed");
+    assert.match(String(stored?.errorMessage), /length|complete|bytes/i);
+    assert.deepEqual(harness.clientMessages, [
+        { type: "DEVICE_OFFLINE_CHANGED", key, status: "interrupted" },
+    ]);
+});
+
+test("background failure remains retryable when best-effort cache cleanup rejects", async () => {
+    const harness = createHarness();
+    const key = "cleanup-failure-key";
+    const registrationId = `soundspan-device-audio-${key}::1`;
+    harness.indexedDB.records.set(
+        key,
+        downloadingRecord(key, {
+            backgroundFetchId: registrationId,
+            updatedAt: Date.now(),
+        }),
+    );
+    const audioCache = await harness.caches.open("soundspan-device-audio-v1");
+    audioCache.failDeletes = true;
+
+    await harness.dispatch("backgroundfetchsuccess", {
+        registration: backgroundFetchRegistration(
+            key,
+            new Response("provider failure", { status: 503 }),
+            registrationId,
+        ),
+    });
+
+    const stored = harness.indexedDB.records.get(key);
+    assert.equal(stored?.status, "interrupted");
+    assert.equal(stored?.errorCode, "background_failed");
+    assert.deepEqual(harness.clientMessages, [
+        { type: "DEVICE_OFFLINE_CHANGED", key, status: "interrupted" },
+    ]);
+});
+
 test("reconcile winner-first grace lets the worker claim and publish background success", async () => {
     const harness = createHarness();
     const key = "background-completion-key";
     const registrationId = `soundspan-device-audio-${key}::1`;
     harness.indexedDB.records.set(
         key,
-        downloadingRecord(key, { backgroundFetchId: registrationId }),
+        downloadingRecord(key, {
+            backgroundFetchId: registrationId,
+            updatedAt: Date.now(),
+        }),
     );
     const workerOpen = harness.indexedDB.pauseNextOpen();
     let releaseResponse!: (response: Response) => void;
@@ -575,12 +723,17 @@ test("reconcile winner-first grace lets the worker claim and publish background 
         requestPersistentStorage: async () => null,
         estimateStorage: async () => null,
         startBackgroundFetch: async () => "unavailable",
-        abortBackgroundFetch: async () => undefined,
+        abortBackgroundFetch: async () => "cleared",
         listActiveBackgroundFetches: async () => [],
         scheduleLeaseHeartbeat: () => Symbol("not-used"),
         cancelLeaseHeartbeat: () => undefined,
         scheduleLeaseExpiryCheck: () => Symbol("not-used"),
         cancelLeaseExpiryCheck: () => undefined,
+        getAuthRuntimeLease: () => ({
+            generation: 0,
+            signal: new AbortController().signal,
+        }),
+        isAuthRuntimeCurrent: (generation) => generation === 0,
     });
     assert.equal(
         (await manager.reconcile("user-one"))[0]?.status,
@@ -609,6 +762,7 @@ test("reconcile winner-first grace lets the worker claim and publish background 
 
 test("background fetch success removes its orphan cache entry when the record was deleted", async () => {
     const harness = createHarness();
+    const systemUiUpdates: unknown[] = [];
     const key = "deleted-key";
 
     await harness.dispatch("backgroundfetchsuccess", {
@@ -619,6 +773,8 @@ test("background fetch success removes its orphan cache entry when the record wa
                 headers: { "content-length": "3" },
             }),
         ),
+        updateUI: async (value: unknown) =>
+            systemUiUpdates.push(structuredClone(value)),
     });
 
     const audioCache = await harness.caches.open("soundspan-device-audio-v1");
@@ -627,6 +783,7 @@ test("background fetch success removes its orphan cache entry when the record wa
         undefined,
     );
     assert.deepEqual(harness.clientMessages, []);
+    assert.deepEqual(systemUiUpdates, [{ title: "Download stopped" }]);
 });
 
 test("a stale background success cannot overwrite a newer attempt or its cache", async () => {
@@ -906,7 +1063,7 @@ test("install rejects a failed Downloads document without replacing the previous
         await (await previousCache.match(`${ORIGIN}/`))?.text(),
         "previous shell",
     );
-    assert.equal((await harness.caches.open("soundspan-v3")).values.size, 0);
+    assert.equal((await harness.caches.open("soundspan-v4")).values.size, 0);
 });
 
 test("install rejects a failed discovered Next chunk before publishing critical documents", async () => {
@@ -941,7 +1098,7 @@ test("install rejects a failed discovered Next chunk before publishing critical 
         await (await previousCache.match(`${ORIGIN}/`))?.text(),
         "previous shell",
     );
-    assert.equal((await harness.caches.open("soundspan-v3")).values.size, 0);
+    assert.equal((await harness.caches.open("soundspan-v4")).values.size, 0);
 });
 
 test("successful install atomically caches both offline documents and their Next runtime chunks", async () => {
@@ -972,7 +1129,7 @@ test("successful install atomically caches both offline documents and their Next
 
     await harness.dispatch("install");
 
-    const shellCache = await harness.caches.open("soundspan-v3");
+    const shellCache = await harness.caches.open("soundspan-v4");
     for (const path of [
         "/",
         "/library?tab=downloads",
@@ -984,30 +1141,65 @@ test("successful install atomically caches both offline documents and their Next
     }
 });
 
-test("activate removes stale shell caches but never deletes device audio", async () => {
+test("activate retires legacy Background Fetch, reloads an old client once, and preserves device audio", async () => {
     const harness = createHarness();
     await harness.caches.open("soundspan-v0");
     await harness.caches.open("soundspan-v2");
     await harness.caches.open("soundspan-v3");
+    await harness.caches.open("soundspan-v4");
     await harness.caches.open("soundspan-device-audio-v1");
     await harness.caches.open("soundspan-device-audio-v1-future");
+    const legacyId = "soundspan-device-audio-stuck::1";
+    const foreignId = "another-app-download";
+    harness.addLegacyBackgroundFetch(legacyId);
+    harness.addLegacyBackgroundFetch(foreignId);
 
     await harness.dispatch("activate");
 
     assert.equal(harness.caches.stores.has("soundspan-v0"), false);
     assert.equal(harness.caches.stores.has("soundspan-v2"), false);
-    assert.equal(harness.caches.stores.has("soundspan-v3"), true);
+    assert.equal(harness.caches.stores.has("soundspan-v3"), false);
+    assert.equal(harness.caches.stores.has("soundspan-v4"), true);
     assert.equal(harness.caches.stores.has("soundspan-device-audio-v1"), true);
     assert.equal(
         harness.caches.stores.has("soundspan-device-audio-v1-future"),
         true,
     );
+    assert.equal(harness.hasLegacyBackgroundFetch(legacyId), false);
+    assert.equal(harness.hasLegacyBackgroundFetch(foreignId), true);
+    assert.deepEqual(harness.clientNavigations, [
+        `${ORIGIN}/library?tab=downloads`,
+    ]);
+    assert.equal(harness.claimCalls, 1);
+});
+
+test("activate reloads an open client even when only the v4 cache remains", async () => {
+    const harness = createHarness();
+    await harness.caches.open("soundspan-v4");
+
+    await harness.dispatch("activate");
+
+    assert.deepEqual(harness.clientNavigations, [
+        `${ORIGIN}/library?tab=downloads`,
+    ]);
+});
+
+test("one rejected client navigation does not block the remaining clients", async () => {
+    const harness = createHarness(undefined, undefined, ["reject", "resolve"]);
+    await harness.caches.open("soundspan-v4");
+
+    await harness.dispatch("activate");
+
+    assert.deepEqual(harness.clientNavigations, [
+        `${ORIGIN}/library?tab=downloads`,
+        `${ORIGIN}/search?client=1`,
+    ]);
     assert.equal(harness.claimCalls, 1);
 });
 
 test("cold offline navigation to Library Downloads returns its cached app shell", async () => {
     const harness = createHarness();
-    const shellCache = await harness.caches.open("soundspan-v3");
+    const shellCache = await harness.caches.open("soundspan-v4");
     await shellCache.put(
         `${ORIGIN}/library?tab=downloads`,
         new Response("<html><body>Downloads shell</body></html>", {
@@ -1045,7 +1237,7 @@ test(
                 clearTimeout: () => undefined,
             },
         );
-        const shellCache = await harness.caches.open("soundspan-v3");
+        const shellCache = await harness.caches.open("soundspan-v4");
         await shellCache.put(
             `${ORIGIN}/library?tab=downloads`,
             new Response("<html><body>Timed fallback</body></html>"),
@@ -1114,4 +1306,27 @@ test("waiting service-worker update activates only after an explicit message", a
 
     await harness.dispatch("message", { data: { type: "SKIP_WAITING" } });
     assert.equal(harness.skipWaitingCalls, 1);
+});
+
+test("service worker advertises the device-offline background protocol", async () => {
+    const harness = createHarness();
+    const responses: unknown[] = [];
+
+    await harness.dispatch("message", {
+        data: { type: "DEVICE_OFFLINE_CAPABILITIES_REQUEST" },
+        ports: [
+            {
+                postMessage(value: unknown) {
+                    responses.push(structuredClone(value));
+                },
+            },
+        ],
+    });
+
+    assert.deepEqual(responses, [
+        {
+            type: "DEVICE_OFFLINE_CAPABILITIES",
+            backgroundFetchProtocol: 0,
+        },
+    ]);
 });

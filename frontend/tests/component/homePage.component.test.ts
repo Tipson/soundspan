@@ -6,8 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 const state = {
     isLoading: false,
     isRefreshingMixes: false,
-    recentlyListened: [{ id: "listen-1" }] as unknown[],
-    recentlyAdded: [{ id: "artist-1" }] as unknown[],
     recommended: [{ id: "artist-2" }] as unknown[],
     mixes: [
         {
@@ -46,8 +44,6 @@ const state = {
         },
     ] as unknown[],
     popularArtists: [{ id: "pop-1" }] as unknown[],
-    recentPodcasts: [] as unknown[],
-    recentAudiobooks: [] as unknown[],
     isCommunityPlaylistsLoading: false,
     personalizedFeed: {
         shelves: {
@@ -90,16 +86,12 @@ mock.module("@/lib/features-context", {
 mock.module("@/features/home/hooks/useHomeData", {
     namedExports: {
         useHomeData: () => ({
-            recentlyListened: state.recentlyListened,
-            recentlyAdded: state.recentlyAdded,
             recommended: state.recommended,
             mixes: state.mixes,
             likedSummary: state.likedSummary,
             discoverWeekly: state.discoverWeekly,
             communityPlaylists: state.communityPlaylists,
             popularArtists: state.popularArtists,
-            recentPodcasts: state.recentPodcasts,
-            recentAudiobooks: state.recentAudiobooks,
             isLoading: state.isLoading,
             isRefreshingMixes: state.isRefreshingMixes,
             isCommunityPlaylistsLoading: state.isCommunityPlaylistsLoading,
@@ -115,8 +107,35 @@ mock.module("@/components/ui/LoadingScreen", {
     namedExports: { LoadingScreen: marker("loading-screen") },
 });
 
-mock.module("@/features/home/components/HomeHero", {
-    namedExports: { HomeHero: marker("home-hero") },
+mock.module("@/features/home/components/HomeWaveHero", {
+    namedExports: {
+        HomeWaveHero: ({
+            personalizedFeed,
+        }: {
+            personalizedFeed: {
+                shelves: {
+                    quickPicks: unknown[];
+                    listenAgain: unknown[];
+                    discovery: unknown[];
+                };
+            } | null;
+        }) =>
+            React.createElement(
+                "div",
+                null,
+                `home-wave-hero:${
+                    personalizedFeed
+                        ? personalizedFeed.shelves.quickPicks.length +
+                          personalizedFeed.shelves.listenAgain.length +
+                          personalizedFeed.shelves.discovery.length
+                        : 0
+                }`,
+            ),
+    },
+});
+
+mock.module("@/features/home/components/HomeQuickActions", {
+    namedExports: { HomeQuickActions: marker("home-quick-actions") },
 });
 
 mock.module("@/features/home/components/SectionHeader", {
@@ -226,8 +245,6 @@ beforeEach(() => {
     featuresState.autoPlaylists = true;
     state.isLoading = false;
     state.isRefreshingMixes = false;
-    state.recentlyListened = [{ id: "listen-1" }];
-    state.recentlyAdded = [{ id: "artist-1" }];
     state.recommended = [{ id: "artist-2" }];
     state.mixes = [
         {
@@ -258,8 +275,6 @@ beforeEach(() => {
         },
     ];
     state.popularArtists = [{ id: "pop-1" }];
-    state.recentPodcasts = [];
-    state.recentAudiobooks = [];
     state.isCommunityPlaylistsLoading = false;
     state.personalizedFeed = {
         shelves: {
@@ -284,26 +299,28 @@ test("home page renders loading screen while data is loading", async () => {
     assert.doesNotMatch(html, /Continue Listening/);
 });
 
-test("home page renders hero and all sections with data", async () => {
+test("home page renders the Wave hero, quick access, and recommendation sections", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /home-hero/);
-    assert.match(html, /Continue Listening/);
-    assert.match(html, /Recently Added/);
+    assert.match(html, /home-wave-hero:3/);
+    assert.match(html, /home-quick-actions/);
     assert.match(html, /Made For You/);
     assert.match(html, /Trending Community Playlists/);
     assert.match(html, /Recommended For You/);
 });
 
-test("home page leads with playable personal shelves before legacy library sections", async () => {
+test("home page leads with Wave and playable personal shelves", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
     assert.match(html, /Quick picks:Quick One/);
     assert.match(html, /Listen again:Again One/);
     assert.match(html, /Fresh for you:Fresh One/);
-    assert.ok(html.indexOf("Quick picks") < html.indexOf("Continue Listening"));
+    assert.ok(html.indexOf("home-wave-hero") < html.indexOf("Quick picks"));
+    assert.ok(html.indexOf("Quick picks") < html.indexOf("Listen again"));
+    assert.ok(html.indexOf("Listen again") < html.indexOf("Fresh for you"));
+    assert.ok(html.indexOf("Fresh for you") < html.indexOf("Made For You"));
 });
 
 test("home page shows My Liked and Discover Weekly in Made For You", async () => {
@@ -317,22 +334,14 @@ test("home page shows My Liked and Discover Weekly in Made For You", async () =>
     assert.match(html, /mix-card:Daily Mix 1/);
 });
 
-test("home page hides Continue Listening when empty", async () => {
-    state.recentlyListened = [];
+test("home page does not render legacy local-library shelves", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
     assert.doesNotMatch(html, /Continue Listening/);
-    assert.match(html, /Recently Added/);
-});
-
-test("home page hides Recently Added when empty", async () => {
-    state.recentlyAdded = [];
-    const HomePage = (await import("../../app/page")).default;
-    const html = renderToStaticMarkup(React.createElement(HomePage));
-
     assert.doesNotMatch(html, /Recently Added/);
-    assert.match(html, /Continue Listening/);
+    assert.doesNotMatch(html, /Podcasts/);
+    assert.doesNotMatch(html, /Audiobooks/);
 });
 
 test("home page hides Made For You when all sources empty", async () => {

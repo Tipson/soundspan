@@ -1,4 +1,11 @@
 let authRuntimeGeneration = 0;
+let authRuntimeAbortController = new AbortController();
+
+/** Identity and cancellation signal for one same-tab authenticated runtime. */
+export interface AuthRuntimeLease {
+    generation: number;
+    signal: AbortSignal;
+}
 
 /** Same-tab signal that removes React state owned by the retired account. */
 export const AUTH_RUNTIME_REVOKED_EVENT = "auth:runtime-revoked";
@@ -16,9 +23,19 @@ export function getAuthRuntimeGeneration(): number {
     return authRuntimeGeneration;
 }
 
+/** Capture a lease that is aborted synchronously when credentials rotate. */
+export function getAuthRuntimeLease(): AuthRuntimeLease {
+    return {
+        generation: authRuntimeGeneration,
+        signal: authRuntimeAbortController.signal,
+    };
+}
+
 /** Retire every async callback that captured the previous auth runtime. */
 export function advanceAuthRuntimeGeneration(): number {
+    authRuntimeAbortController.abort();
     authRuntimeGeneration += 1;
+    authRuntimeAbortController = new AbortController();
     return authRuntimeGeneration;
 }
 

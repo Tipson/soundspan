@@ -110,6 +110,51 @@ describe("GET /api/personalized/home", () => {
         expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 25);
     });
 
+    it.each(["for-you", "new", "familiar"])(
+        "forwards the supported %s Wave mode",
+        async (mode) => {
+            const response = await request(app)
+                .get(`/api/personalized/home?mode=${mode}`)
+                .set("x-test-auth", "ok");
+
+            expect(response.status).toBe(200);
+            expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 12, {
+                mode,
+            });
+        },
+    );
+
+    it("forwards a bounded continuation cursor and canonical provider exclusions", async () => {
+        const response = await request(app)
+            .get(
+                "/api/personalized/home?limit=25&cursor=7&exclude=yt%3Afirst%2Csecond%2Cfirst",
+            )
+            .set("x-test-auth", "ok");
+
+        expect(response.status).toBe(200);
+        expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 25, {
+            cursor: 7,
+            excludeVideoIds: ["first", "second"],
+        });
+    });
+
+    it.each([
+        "cursor=-1",
+        "cursor=1.5",
+        "exclude=bad%20id",
+        "mode=random",
+        `exclude=${Array.from({ length: 81 }, (_, index) => `id-${index}`).join(
+            "%2C",
+        )}`,
+    ])("rejects invalid continuation query %s", async (query) => {
+        const response = await request(app)
+            .get(`/api/personalized/home?${query}`)
+            .set("x-test-auth", "ok");
+
+        expect(response.status).toBe(400);
+        expect(mockGetHomeFeed).not.toHaveBeenCalled();
+    });
+
     it.each(["0", "26", "1.5", "many"])(
         "rejects invalid limit %s at the HTTP boundary",
         async (limit) => {

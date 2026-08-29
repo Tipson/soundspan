@@ -5,7 +5,7 @@ import { useOverlayPlayerAudio } from "./hooks/useOverlayPlayerAudio";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
 import { resolvePlaybackQualityBadgeFromStreamSource } from "@/hooks/useStreamBitrate";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import Image from "next/image";
+import { CachedImage } from "@/components/ui/CachedImage";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -605,7 +605,7 @@ export function OverlayPlayer() {
                                 className="relative h-full w-full overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a2a2a] to-surface-hover shadow-2xl"
                             >
                                 {coverUrl ? (
-                                    <Image
+                                    <CachedImage
                                         key={coverUrl}
                                         src={coverUrl}
                                         alt={title}
@@ -746,6 +746,7 @@ export function OverlayPlayer() {
                                                         trackId={
                                                             preferenceTrackId
                                                         }
+                                                        mode="both"
                                                         buttonSizeClassName="h-11 w-11"
                                                         iconSizeClassName="h-6 w-6"
                                                         metadata={buildPreferenceMetadata(
@@ -1115,7 +1116,7 @@ export function OverlayPlayer() {
                                         >
                                             <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-md bg-surface-hover">
                                                 {coverUrl ? (
-                                                    <Image
+                                                    <CachedImage
                                                         src={coverUrl}
                                                         alt={title}
                                                         fill

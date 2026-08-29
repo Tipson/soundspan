@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
     useAudioState,
     usePlaybackStatus,
@@ -9,8 +10,9 @@ import {
 } from "@/lib/audio-context";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
-import { api } from "@/lib/api";
+import { api, type SavedMusicEntityInput } from "@/lib/api";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useDownloadContext } from "@/lib/download-context";
 import { useListenTogether } from "@/lib/listen-together-context";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -34,6 +36,9 @@ import { AlbumHero } from "@/features/album/components/AlbumHero";
 import { AlbumActionBar } from "@/features/album/components/AlbumActionBar";
 import { TrackList } from "@/features/album/components/TrackList";
 import { SimilarAlbums } from "@/features/album/components/SimilarAlbums";
+import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
+import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
+import { toAlbumPlaybackTrack } from "@/features/album/albumPlayback";
 
 interface AlbumPageProps {
     params: Promise<{
@@ -77,6 +82,9 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     >([]);
     const [, setIsBulkAdd] = useState(false);
     const [, setIsAddingToPlaylist] = useState(false);
+    const [libraryDeletionAllowed, setLibraryDeletionAllowed] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
 
     // Custom hooks
     const {
@@ -122,18 +130,73 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         ? { ...rawAlbum, tracks: enrichedTracks || rawAlbum.tracks }
         : rawAlbum;
     const isAlbumLiked = useAlbumLikedState(album);
+    const savedAlbumEntity: SavedMusicEntityInput | null = album
+        ? {
+              type: "album",
+              source:
+                  source === "library"
+                      ? "library"
+                      : source === "remote"
+                        ? "remote"
+                        : "discovery",
+              entityId: album.id,
+              title: album.title,
+              subtitle: album.artist?.name ?? null,
+              imageUrl: album.coverUrl || album.coverArt || null,
+          }
+        : null;
     const isProviderMatching =
         !isTidalStatusResolved ||
         !isYtStatusResolved ||
         isTidalMatching ||
         isYtMatching;
+    const canDeleteFromLibrary = source === "library" && libraryDeletionAllowed;
     const hasTracks = Boolean(album?.tracks && album.tracks.length > 0);
+    const deviceDownloadTracks = (album?.tracks ?? [])
+        .filter((track: AlbumTrack) => {
+            const hasLocalSource = source === "library";
+            const hasTidalSource =
+                track.streamSource === "tidal" &&
+                typeof track.tidalTrackId === "number";
+            const hasYouTubeSource =
+                track.streamSource === "youtube" &&
+                Boolean(track.youtubeVideoId);
+            return hasLocalSource || hasTidalSource || hasYouTubeSource;
+        })
+        .map((track: AlbumTrack) => toAlbumPlaybackTrack(track, album!));
     const showTrackPlaceholder = detailsLoading && !hasTracks;
     const { highlightTrackId } = useTrackDeepLink(
         album,
         (track) => playTrackNow(track, album!),
         hasTracks,
     );
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (source !== "library") {
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        void api
+            .getLibraryDeletePolicy()
+            .then((policy) => {
+                if (!cancelled) setLibraryDeletionAllowed(policy.canDelete);
+            })
+            .catch((error) => {
+                sharedFrontendLogger.warn(
+                    "Failed to load library deletion policy:",
+                    error,
+                );
+                if (!cancelled) setLibraryDeletionAllowed(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [source]);
 
     // Get cover URL for display and color extraction
     // Proxy through API to handle native: URLs and CORS
@@ -220,6 +283,25 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         }
     };
 
+    const handleDeleteAlbum = async () => {
+        if (isDeletingAlbum || !canDeleteFromLibrary || source !== "library") {
+            return;
+        }
+
+        setIsDeletingAlbum(true);
+        try {
+            if (currentTrack?.album?.id === album.id) pause();
+            const result = await api.deleteAlbum(album.id);
+            toast.success(result.message || `Deleted “${album.title}”`);
+            router.replace("/library?tab=albums");
+        } catch (error) {
+            sharedFrontendLogger.error("Failed to delete album:", error);
+            toast.error("Could not delete this album. Please try again.");
+        } finally {
+            setIsDeletingAlbum(false);
+        }
+    };
+
     return (
         <div className="min-h-screen flex flex-col">
             <AlbumHero
@@ -268,6 +350,18 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     isSubmittingRequest={isSubmittingRequest}
                     onRequestAlbum={() => void requestAlbum()}
                     isInListenTogetherGroup={isInGroup}
+                    canDeleteFromLibrary={canDeleteFromLibrary}
+                    onDeleteAlbum={() => setShowDeleteConfirm(true)}
+                    librarySaveControl={
+                        <SaveMusicEntityButton entity={savedAlbumEntity} />
+                    }
+                    deviceDownloadControl={
+                        <DeviceCollectionDownloadButton
+                            tracks={deviceDownloadTracks}
+                            collectionId={`album:${album.id}`}
+                            collectionLabel={album.title}
+                        />
+                    }
                 />
             </AlbumHero>
 
@@ -338,6 +432,15 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     setIsBulkAdd(false);
                 }}
                 onSelectPlaylist={handlePlaylistSelected}
+            />
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                onClose={() => setShowDeleteConfirm(false)}
+                onConfirm={() => void handleDeleteAlbum()}
+                title="Delete album from server?"
+                message={`This permanently removes “${album.title}” and its audio files from the server library. This cannot be undone.`}
+                confirmText={isDeletingAlbum ? "Deleting…" : "Delete album"}
+                variant="danger"
             />
         </div>
     );

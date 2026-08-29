@@ -84,7 +84,7 @@ export function isActivityTabVisible(
         return true;
     }
 
-    return tab !== "active" && tab !== "history" && tab !== "imports";
+    return tab !== "active" && tab !== "history";
 }
 
 /**

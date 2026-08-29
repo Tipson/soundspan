@@ -33,6 +33,7 @@ jest.mock("../../utils/redis", () => ({
 
 jest.mock("../../services/lastfm", () => ({
     lastFmService: {
+        isConfigured: jest.fn(),
         getArtistCorrection: jest.fn(),
         searchArtists: jest.fn(),
         searchTracks: jest.fn(),
@@ -43,6 +44,10 @@ jest.mock("../../services/youtubeMusic", () => ({
     ytMusicService: {
         searchCanonical: jest.fn(),
     },
+}));
+
+jest.mock("../../services/ytMusicDiscoveryCatalog", () => ({
+    searchYtMusicDiscoveryCatalog: jest.fn(),
 }));
 
 jest.mock("../../utils/systemSettings", () => ({
@@ -62,15 +67,18 @@ import { prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { lastFmService } from "../../services/lastfm";
 import { ytMusicService } from "../../services/youtubeMusic";
+import { searchYtMusicDiscoveryCatalog } from "../../services/ytMusicDiscoveryCatalog";
 import { getSystemSettings } from "../../utils/systemSettings";
 
 const mockArtistFindMany = prisma.artist.findMany as jest.Mock;
 const mockRedisGet = redisClient.get as jest.Mock;
 const mockRedisSetEx = redisClient.setEx as jest.Mock;
+const mockLastFmIsConfigured = lastFmService.isConfigured as jest.Mock;
 const mockGetArtistCorrection = lastFmService.getArtistCorrection as jest.Mock;
 const mockSearchArtists = lastFmService.searchArtists as jest.Mock;
 const mockSearchTracks = lastFmService.searchTracks as jest.Mock;
 const mockYtMusicSearch = ytMusicService.searchCanonical as jest.Mock;
+const mockYtMusicDiscoverySearch = searchYtMusicDiscoveryCatalog as jest.Mock;
 const mockGetSystemSettings = getSystemSettings as jest.Mock;
 
 function getGetHandler(path: string) {
@@ -106,6 +114,7 @@ describe("search discover compatibility", () => {
         jest.clearAllMocks();
         mockRedisGet.mockResolvedValue(null);
         mockRedisSetEx.mockResolvedValue("OK");
+        mockLastFmIsConfigured.mockResolvedValue(true);
         mockGetArtistCorrection.mockResolvedValue(null);
         mockSearchTracks.mockResolvedValue([]);
         mockYtMusicSearch.mockResolvedValue({
@@ -113,6 +122,12 @@ describe("search discover compatibility", () => {
             filter: "songs",
             total: 0,
             results: [],
+        });
+        mockYtMusicDiscoverySearch.mockResolvedValue({
+            tracks: [],
+            albums: [],
+            artists: [],
+            failedFilters: [],
         });
         mockGetSystemSettings.mockResolvedValue({ ytMusicEnabled: true });
         mockArtistFindMany.mockResolvedValue([]);
@@ -203,5 +218,112 @@ describe("search discover compatibility", () => {
             }),
         ]);
         expect(mockArtistFindMany).not.toHaveBeenCalled();
+    });
+
+    it("uses one bounded catalog batch for each of two concurrent user searches", async () => {
+        const releases: Array<() => void> = [];
+        mockLastFmIsConfigured.mockResolvedValue(false);
+        mockYtMusicDiscoverySearch.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    releases.push(() =>
+                        resolve({
+                            tracks: [],
+                            albums: [],
+                            artists: [],
+                            failedFilters: [],
+                        }),
+                    );
+                }),
+        );
+
+        const firstRes = createRes();
+        const secondRes = createRes();
+        const first = discoverHandler(
+            {
+                query: { q: "radiohead", type: "music", limit: "20" },
+                user: { id: "user-1" },
+            } as any,
+            firstRes,
+        );
+        const second = discoverHandler(
+            {
+                query: { q: "massive attack", type: "music", limit: "20" },
+                user: { id: "user-2" },
+            } as any,
+            secondRes,
+        );
+
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(mockYtMusicDiscoverySearch).toHaveBeenCalledTimes(2);
+        expect(mockYtMusicDiscoverySearch).toHaveBeenNthCalledWith(
+            1,
+            ytMusicService,
+            "__public__",
+            "radiohead",
+            20,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(mockYtMusicDiscoverySearch).toHaveBeenNthCalledWith(
+            2,
+            ytMusicService,
+            "__public__",
+            "massive attack",
+            20,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(mockYtMusicSearch).not.toHaveBeenCalled();
+
+        releases.forEach((release) => release());
+        await Promise.all([first, second]);
+        expect(firstRes.statusCode).toBe(200);
+        expect(secondRes.statusCode).toBe(200);
+    });
+
+    it("keeps Last.fm and successful batch rows when one catalog category fails", async () => {
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-track",
+                name: "Metadata result",
+                artist: "Metadata artist",
+            },
+        ]);
+        mockYtMusicDiscoverySearch.mockResolvedValueOnce({
+            tracks: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "youtube001",
+                    title: "Playable result",
+                    artistName: "Provider artist",
+                    albumTitle: null,
+                    durationSec: 180,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+            albums: [],
+            artists: [],
+            failedFilters: ["albums"],
+        });
+        const res = createRes();
+
+        await discoverHandler(
+            {
+                query: { q: "partial", type: "music", limit: "20" },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "lastfm-track" }),
+                expect.objectContaining({ youtubeVideoId: "youtube001" }),
+            ]),
+        );
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 });

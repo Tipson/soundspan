@@ -16,6 +16,7 @@ from ytmusic_search import (
     BATCH_DELAY_MIN,
     SEARCH_CACHE_TTL,
     _clean_search_cache,
+    shutdown_search_provider,
 )
 from ytmusic_stream import EXTRACT_DELAY_MAX, EXTRACT_DELAY_MIN, _clean_stream_cache
 
@@ -71,6 +72,7 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    await shutdown_search_provider()
     await shutdown_library_playlist_provider()
     _clean_stream_cache()
     _clean_search_cache()

@@ -79,11 +79,9 @@ const systemSettingsSchema = z.object({
     audiobookshelfEnabled: z.boolean().optional(),
     audiobookshelfUrl: z.string().url().optional().or(z.literal("")),
     audiobookshelfApiKey: z.string().nullable().optional(),
-
     // Soulseek (direct connection via slsk-client)
     soulseekUsername: z.string().nullable().optional(),
     soulseekPassword: z.string().nullable().optional(),
-
     // Storage Paths
     musicPath: z.string().optional(),
     downloadPath: z.string().optional(),

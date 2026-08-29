@@ -1,8 +1,8 @@
+import type { ReactNode } from "react";
 import {
     Play,
     Pause,
     Shuffle,
-    Download,
     Radio,
     ListMusic,
     Loader2,
@@ -17,7 +17,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { toast } from "sonner";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 
-const BRAND_PLAY = "#60a5fa";
+const BRAND_PLAY = "var(--color-brand-hover)";
 
 interface ArtistActionBarProps {
     artist: Artist;
@@ -38,37 +38,29 @@ interface ArtistActionBarProps {
     onPause?: () => void;
     downloadsEnabled?: boolean;
     isInListenTogetherGroup?: boolean;
+    librarySaveControl?: ReactNode;
+    deviceDownloadControl?: ReactNode;
 }
 
 /**
  * Renders the ArtistActionBar component.
  */
 export function ArtistActionBar({
-    artist: _artist,
-    albums,
     source,
-    colors: _colors,
     onPlayAll,
     onShuffle,
-    onDownloadAll,
     onAddAllToQueue,
     onAddToPlaylist,
     onLikeAll,
     isLikingAll = false,
     onStartRadio,
-    isPendingDownload,
     isPlaying = false,
     isPlayingThisArtist = false,
     onPause,
-    downloadsEnabled = true,
     isInListenTogetherGroup = false,
+    librarySaveControl,
+    deviceDownloadControl,
 }: ArtistActionBarProps) {
-    const availableAlbums = albums.filter(
-        (album) => album.availability !== "unavailable",
-    );
-    const showDownloadAll =
-        downloadsEnabled &&
-        (source === "discovery" || availableAlbums.length > 0);
     const showPause = isPlaying && isPlayingThisArtist;
     const showRadio = source === "library" && onStartRadio;
     const lockMessage =
@@ -96,7 +88,7 @@ export function ArtistActionBar({
                     <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
                         <button
                             onClick={handleLockedAction}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm border border-white/15 bg-white/10 text-white/40"
+                            className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm border border-white/15 bg-white/10 text-content-muted"
                             title={lockMessage}
                         >
                             {showPause ? (
@@ -109,8 +101,9 @@ export function ArtistActionBar({
 
                         <button
                             onClick={handleLockedAction}
-                            className="h-8 w-8 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white/40"
+                            className="h-11 w-11 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-content-muted"
                             title={lockMessage}
+                            aria-label="Shuffle play unavailable during Listen Together"
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -120,7 +113,7 @@ export function ArtistActionBar({
                         {/* Play Button */}
                         <button
                             onClick={handlePlayPauseClick}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
+                            className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
                             style={{ backgroundColor: BRAND_PLAY }}
                         >
                             {showPlaySpinner ? (
@@ -136,19 +129,25 @@ export function ArtistActionBar({
                         {/* Shuffle Button */}
                         <button
                             onClick={onShuffle}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                             title="Shuffle play"
+                            aria-label="Shuffle play"
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
                     </>
                 )}
 
+                {librarySaveControl}
+
+                {deviceDownloadControl}
+
                 {onAddAllToQueue && (
                     <button
                         onClick={onAddAllToQueue}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                         title="Add all to queue"
+                        aria-label="Add all to queue"
                     >
                         <ListMusic className="w-5 h-5" />
                     </button>
@@ -157,8 +156,9 @@ export function ArtistActionBar({
                 {onAddToPlaylist && (
                     <button
                         onClick={onAddToPlaylist}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                         title="Add all to playlist"
+                        aria-label="Add all to playlist"
                     >
                         <Plus className="w-5 h-5" />
                     </button>
@@ -169,12 +169,13 @@ export function ArtistActionBar({
                         onClick={onLikeAll}
                         disabled={isLikingAll}
                         className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                            "h-11 w-11 rounded-full flex items-center justify-center transition-all",
                             isLikingAll
                                 ? "cursor-not-allowed text-white/35"
                                 : "text-white/60 hover:bg-white/10 hover:text-white",
                         )}
                         title="Like all tracks"
+                        aria-label="Like all tracks"
                     >
                         {isLikingAll ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -184,36 +185,13 @@ export function ArtistActionBar({
                     </button>
                 )}
 
-                {showDownloadAll && (
-                    <button
-                        onClick={onDownloadAll}
-                        disabled={isPendingDownload}
-                        className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                            isPendingDownload
-                                ? "bg-white/5 text-white/50 cursor-not-allowed"
-                                : "hover:bg-white/10 text-white/60 hover:text-white",
-                        )}
-                        title={
-                            isPendingDownload
-                                ? "Queueing missing albums"
-                                : "Download all missing albums"
-                        }
-                    >
-                        {isPendingDownload ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                            <Download className="w-5 h-5" />
-                        )}
-                    </button>
-                )}
-
                 {/* Radio Button - Only for library artists */}
                 {showRadio && (
                     <button
                         onClick={onStartRadio}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                         title="Start artist radio"
+                        aria-label="Start artist radio"
                     >
                         <Radio className="w-5 h-5" />
                     </button>
@@ -221,7 +199,7 @@ export function ArtistActionBar({
             </div>
 
             {isInListenTogetherGroup && (
-                <p className="text-xs text-white/40">{lockMessage}</p>
+                <p className="text-xs text-content-muted">{lockMessage}</p>
             )}
         </div>
     );

@@ -54,6 +54,32 @@ test("does not trigger before reaching the final queue track", () => {
     );
 });
 
+test("follows shuffle playback order instead of the physical queue end", () => {
+    const base = {
+        playbackType: "track" as const,
+        queueLength: 3,
+        repeatMode: "off" as const,
+        isListenTogether: false,
+        isShuffle: true,
+        shuffleIndices: [2, 0, 1],
+    };
+
+    assert.equal(
+        shouldAutoMatchVibeAtQueueEnd({
+            ...base,
+            currentIndex: 2,
+        }),
+        false,
+    );
+    assert.equal(
+        shouldAutoMatchVibeAtQueueEnd({
+            ...base,
+            currentIndex: 1,
+        }),
+        true,
+    );
+});
+
 test("does not trigger during Listen Together sessions", () => {
     assert.equal(
         shouldAutoMatchVibeAtQueueEnd({

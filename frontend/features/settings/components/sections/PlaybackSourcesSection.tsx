@@ -54,7 +54,7 @@ export function PlaybackSourcesSection({
         >
             <SettingsRow
                 label="Source priority"
-                description="Your own library always wins when it has the track. This order decides what is tried next: connected peer libraries, TIDAL, or YT Music."
+                description="Your own library always wins. This is a priority, not a connection status list. Unavailable or disabled sources are skipped; the remaining order decides what is tried next."
             >
                 <SettingsSelect
                     value={stored}

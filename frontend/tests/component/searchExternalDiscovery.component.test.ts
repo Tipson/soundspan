@@ -6,18 +6,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 mock.module("lucide-react", {
     namedExports: {
         Music: () => React.createElement("svg", { "data-icon": "music" }),
+        Disc3: () => React.createElement("svg", { "data-icon": "disc" }),
     },
 });
 
 mock.module("next/image", {
-    defaultExport: ({ alt }: { alt?: string }) =>
-        React.createElement("img", { alt }),
+    defaultExport: ({ alt, src }: { alt?: string; src?: string }) =>
+        React.createElement("img", { alt, src }),
 });
 
 mock.module("@/lib/api", {
     namedExports: {
         api: {
             getCoverArtUrl: (url: string) => `/proxied/${url}`,
+            getBrowseImageUrl: (url: string) => `/browse-proxied/${url}`,
             getTidalStreamingStatus: async () => ({
                 enabled: false,
                 available: false,
@@ -118,6 +120,47 @@ test("top result prefers an exact external match when asked", async () => {
     assert.doesNotMatch(html, /Nick Drake/);
 });
 
+test("YouTube Music-only artists keep their provider channel route identity", async () => {
+    const { TopResult } =
+        await import("../../features/search/components/TopResult");
+    const html = renderToStaticMarkup(
+        React.createElement(TopResult, {
+            discoveryArtist: {
+                type: "music",
+                name: "Massive Attack",
+                youtubeChannelId: "UCmassiveattack",
+            },
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/artist\/Massive%20Attack\?provider=ytmusic&amp;channelId=UCmassiveattack"/,
+    );
+});
+
+test("YouTube Music-only related artists use the provider-aware artist route", async () => {
+    const { SimilarArtistsGrid } =
+        await import("../../features/search/components/SimilarArtistsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(SimilarArtistsGrid, {
+            similarArtists: [
+                {
+                    type: "music",
+                    name: "Portishead",
+                    youtubeChannelId: "UCportishead",
+                    provider: "ytmusic",
+                },
+            ],
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/artist\/Portishead\?provider=ytmusic&amp;channelId=UCportishead"/,
+    );
+});
+
 test("discover tracks render artist links and album context", async () => {
     const { DiscoverTracksList } =
         await import("../../features/search/components/DiscoverTracksList");
@@ -151,4 +194,34 @@ test("discover tracks render artist links and album context", async () => {
     assert.match(html, /aria-label="Go to Drake"/);
     assert.match(html, /Orphan Song/);
     assert.doesNotMatch(html, /href="\/artist\//);
+});
+
+test("provider albums link to the existing playable YouTube Music album page", async () => {
+    const { ProviderAlbumsGrid } =
+        await import("../../features/search/components/ProviderAlbumsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(ProviderAlbumsGrid, {
+            albums: [
+                {
+                    type: "album",
+                    id: "MPREb_mezzanine",
+                    browseId: "MPREb_mezzanine",
+                    name: "Mezzanine",
+                    artist: "Massive Attack",
+                    image: "https://img/mezzanine.jpg",
+                    year: "1998",
+                    provider: "ytmusic",
+                },
+            ],
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/explore\/yt-playlist\/MPREb_mezzanine\?type=album"/,
+    );
+    assert.match(html, /Mezzanine/);
+    assert.match(html, /Massive Attack/);
+    assert.match(html, /1998/);
+    assert.match(html, /\/browse-proxied\/https:\/\/img\/mezzanine.jpg/);
 });

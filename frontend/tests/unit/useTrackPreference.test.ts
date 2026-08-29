@@ -221,10 +221,8 @@ test("reset retires an old auth-session lane without an ABA generation collision
         cancelQueries: async () => undefined,
         getQueryData: <T>(queryKey: readonly [string, string]) =>
             cache.get(key(queryKey)) as T | undefined,
-        setQueryData: (
-            queryKey: readonly [string, string],
-            data: unknown,
-        ) => cache.set(key(queryKey), data),
+        setQueryData: (queryKey: readonly [string, string], data: unknown) =>
+            cache.set(key(queryKey), data),
     };
     const canonicalQueryKey = ["track-preference", "yt:shared-track"] as const;
     queryClient.setQueryData(
@@ -301,6 +299,21 @@ test("buildPreferenceMetadata returns metadata for remote tidal: track", () => {
         duration: 300,
         thumbnailUrl: undefined,
     });
+});
+
+test("buildPreferenceMetadata reuses album artwork for remote preferences", () => {
+    const result = buildPreferenceMetadata({
+        id: "yt:teardrop",
+        title: "Teardrop",
+        artist: { name: "Massive Attack" },
+        album: {
+            title: "Mezzanine",
+            coverArt: "https://example.com/mezzanine.jpg",
+        },
+        duration: 331,
+    });
+
+    assert.equal(result?.thumbnailUrl, "https://example.com/mezzanine.jpg");
 });
 
 test("buildPreferenceMetadata returns undefined for local track", () => {

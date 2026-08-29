@@ -5,6 +5,17 @@ import {
     getTvNavigation,
 } from "../../components/layout/tvNavigation";
 
+test("TV navigation hides inactive podcasts and audiobooks", () => {
+    assert.equal(
+        TV_NAVIGATION.some((item) => item.href === "/podcasts"),
+        false,
+    );
+    assert.equal(
+        TV_NAVIGATION.some((item) => item.href === "/audiobooks"),
+        false,
+    );
+});
+
 test("TV navigation includes the Discovery link by default", () => {
     assert.equal(
         TV_NAVIGATION.some((item) => item.href === "/discover"),

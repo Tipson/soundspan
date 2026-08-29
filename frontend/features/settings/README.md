@@ -22,6 +22,7 @@ Start-here guide for `frontend/features/settings`.
 | `components/sections/AudiobookshelfSection.tsx` | components |
 | `components/sections/CacheSection.tsx` | components |
 | `components/sections/DownloadPreferencesSection.tsx` | components |
+| `components/sections/DeviceOfflineSettingsSection.tsx` | per-device offline automation controls |
 | `components/sections/downloadSourceConfig.ts` | components |
 | `components/sections/DownloadServicesSection.tsx` | components |
 | `components/sections/FederationSection.tsx` | components |
@@ -31,7 +32,7 @@ Start-here guide for `frontend/features/settings`.
 | `components/sections/IntegrationsSection.tsx` | components |
 | `components/sections/LibraryHealthSection.tsx` | components |
 | `components/sections/libraryHealthDetails.tsx` | components |
-| `components/sections/LibrarySafetySection.tsx` | components |
+| `components/sections/LibrarySafetySection.tsx` | minimal admin control for permanent local-album deletion |
 | `components/sections/LidarrSection.tsx` | components |
 | `components/sections/LinkedIdentitiesPanel.tsx` | components |
 | `components/sections/playbackHistoryConfig.ts` | components |
@@ -74,3 +75,23 @@ Start-here guide for `frontend/features/settings`.
 ## Update Rule
 
 - When adding/removing significant files or changing behavior in this domain, update or verify this README and keep the targeted commands below accurate in the same change set.
+
+## Integration Surfaces
+
+- Playback Sources and YouTube Music configure worldwide search, provider
+  recommendations, and streaming. Source order is a priority list; disabled or
+  unavailable providers are skipped. Public YouTube Music access can operate
+  without linking a Google account, while optional linking adds personal
+  library access.
+- Playlist import copies playlist structure and matched provider references; it
+  does not fetch audio from Spotify or implicitly save files to the server.
+- This personal streaming deployment exposes active playback sources, YouTube
+  Music, artwork/cache controls, permanent local-album deletion safety, and user
+  administration on the Admin page. The destructive policy is off by default;
+  upstream server-download and broader local-library maintenance components
+  stay in the source tree for compatibility but are intentionally not mounted.
+- Per-device offline copies and automatic liked-song downloads belong to the
+  ordinary user Settings page; they never invoke server acquisition services
+  or synchronize queue, ready, or delete state to another device. If browser
+  storage cannot be read, these controls stay explicitly unavailable beside a
+  Retry action rather than silently falling back to default values.

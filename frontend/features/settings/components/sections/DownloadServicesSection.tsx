@@ -27,10 +27,17 @@ export function DownloadServicesSection({
     return (
         <SettingsSection
             id="download-services"
-            title="Download Services"
-            description="Configure services for downloading music"
+            title="Additional Server Download Services"
+            description="Optional extra sources for permanent server copies"
         >
             <div className="space-y-3">
+                <div className="mx-4 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs text-blue-100/80">
+                    YouTube Music already provides worldwide search and
+                    streaming and can also save full albums when you explicitly
+                    request a permanent server copy. The services below are
+                    optional and are not required for playlist import or offline
+                    downloads on your phone.
+                </div>
                 <LidarrCard
                     settings={settings}
                     onUpdate={onUpdate}

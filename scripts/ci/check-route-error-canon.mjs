@@ -12,10 +12,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const BASELINE = Object.freeze({
     "backend/src/routes/admin.ts": 3,
-    "backend/src/routes/analysis.ts": 12,
+    "backend/src/routes/analysis.ts": 10,
     "backend/src/routes/apiKeys.ts": 3,
     "backend/src/routes/artists.ts": 4,
-    "backend/src/routes/audiobooks.ts": 12,
+    "backend/src/routes/audiobooks.ts": 11,
     "backend/src/routes/auth/accountSecurity.ts": 9,
     "backend/src/routes/auth/adminUserInvites.ts": 9,
     "backend/src/routes/auth/localCredentials.ts": 1,
@@ -28,7 +28,6 @@ const BASELINE = Object.freeze({
     "backend/src/routes/library/albums.ts": 1,
     "backend/src/routes/library/artists.ts": 2,
     "backend/src/routes/library/maintenance.ts": 1,
-    "backend/src/routes/library/tracks.ts": 1,
     "backend/src/routes/listenTogether.ts": 1,
     "backend/src/routes/listeningState.ts": 3,
     "backend/src/routes/lyrics.ts": 1,
@@ -41,7 +40,7 @@ const BASELINE = Object.freeze({
     "backend/src/routes/plays.ts": 4,
     "backend/src/routes/podcasts.ts": 17,
     "backend/src/routes/recommendations.ts": 4,
-    "backend/src/routes/releases.ts": 4,
+    "backend/src/routes/releases.ts": 3,
     "backend/src/routes/search.ts": 4,
     "backend/src/routes/settings.ts": 5,
     "backend/src/routes/shareLinks.ts": 6,
@@ -95,12 +94,8 @@ const LEAK_BASELINE = Object.freeze({
     "backend/src/services/discoverWeekly/generationService.ts": 4,
     // discoverWeekly/playlistPersistence.ts remaining 1: internal transaction-failure message; server-side only, frozen under the slice-E scope guard.
     "backend/src/services/discoverWeekly/playlistPersistence.ts": 1,
-    // discoverWeekly/state.ts remaining 2: Prisma retry classification error.message reads; internal retry decisions only, frozen under the slice-E and slice-X1 scope guards.
-    "backend/src/services/discoverWeekly/state.ts": 2,
     // enrichmentState.ts +1: Redis retry classification's ternary-consequent error.message (~L77); frozen under the ratchet-widening (slice-X1) scope guard.
     "backend/src/services/enrichmentState.ts": 1,
-    // genericImportJobRunner.ts remaining 1: latestJob.error passthrough on user cancel (~L91); import-job state plumbing, frozen under the slice-J scope guard.
-    "backend/src/services/genericImportJobRunner.ts": 1,
     // imageProxy.ts +1: image-fetch result's ternary-consequent lastError.message (~L248); frozen under the ratchet-widening (slice-X1) scope guard.
     "backend/src/services/imageProxy.ts": 1,
     // importJobStore.ts remaining 1: persisted input.error passthrough (~L192); job-state plumbing, frozen under the slice-J scope guard.
@@ -118,8 +113,6 @@ const LEAK_BASELINE = Object.freeze({
     // musicScanner.ts remaining 1: per-file scan-error detail stored in scan progress/health records (~L211); server-side scan state, admin-only surface.
     "backend/src/services/musicScanner.ts": 1,
     "backend/src/services/podcastCache.ts": 0,
-    // podcastDownload.ts remaining 2: internal error classification and logger detail; neither reaches a response body.
-    "backend/src/services/podcastDownload.ts": 2,
     // remoteTrackBackfillService.ts +2: numeric phase error counters (~L164 and ~L168); no error text; frozen under the ratchet-widening (slice-B2) scope guard.
     "backend/src/services/remoteTrackBackfillService.ts": 2,
     // rssParser.ts +1: feed-failure result's ternary-consequent error.message (~L252); frozen under the ratchet-widening (slice-X1) scope guard.
@@ -134,23 +127,17 @@ const LEAK_BASELINE = Object.freeze({
     "backend/src/services/spotifyImport/lifecycle.ts": 3,
     "backend/src/services/spotifyImport/matching.ts": 0,
     "backend/src/services/spotifyImport/preview.ts": 0,
-    "backend/src/services/spotifyImport/state.ts": 6,
+    "backend/src/services/spotifyImport/state.ts": 4,
     // youtubeDownload.ts remaining 4: sidecar job-state plumbing — data.error in the per-video mapper (~L433), and data.errors / entry.error / data.error in the album-job mapper (~L443-459). The sidecar sanitizes these to code-owned generic strings ("Track download failed", "Album download failed") before they enter any payload; frozen under the slice-J scope guard.
     "backend/src/services/youtubeDownload.ts": 4,
-    // queueCleaner.ts remaining 2: Prisma/retry error classification used only to decide whether the internal cleanup job retries.
-    "backend/src/jobs/queueCleaner.ts": 2,
     // errorHandler.ts remaining 5: typed AppError fields plus development-only unknown-error detail; this is an existing transport-boundary policy exception frozen as the middleware root enters the ratchet.
     "backend/src/middleware/errorHandler.ts": 5,
-    // dataIntegrity.ts remaining 2: Prisma/retry error classification used only by internal worker retry decisions.
-    "backend/src/workers/dataIntegrity.ts": 2,
     // index.ts remaining 3: one scheduler retry classifier, one numeric error counter, and one worker-result detail used only in scoped server logs.
     "backend/src/workers/index.ts": 3,
-    // moodBucketWorker.ts remaining 2: internal retry classification and a scoped server-log diagnostic.
-    "backend/src/workers/moodBucketWorker.ts": 2,
+    // moodBucketWorker.ts remaining 1: a scoped server-log diagnostic.
+    "backend/src/workers/moodBucketWorker.ts": 1,
     // organizeSingles.ts is explicitly frozen at zero after sanitizing its client-visible session-log errors and absolute paths.
     "backend/src/workers/organizeSingles.ts": 0,
-    // discoverProcessor.ts remaining 1: Redis retry classification used only by the internal worker.
-    "backend/src/workers/processors/discoverProcessor.ts": 1,
     // imageProcessor.ts remaining 1: an existing internal queue-result error field returned to its Bull processor.
     "backend/src/workers/processors/imageProcessor.ts": 1,
     "backend/src/workers/umapWorker.ts": 0,

@@ -177,10 +177,13 @@ export interface PlaylistDetailTrack {
 /** Resolved track item returned by the playlist detail endpoint. */
 export interface PlaylistDetailTrackItem {
     id: string;
+    playlistId?: string;
     type: "track";
     sort: number;
     track: PlaylistDetailTrack | null;
     trackId?: string | null;
+    trackTidalId?: string | null;
+    trackYtMusicId?: string | null;
     provider?: PlaylistTrackProvider;
     playback?: PlaylistPlaybackMeta;
 }
@@ -291,6 +294,54 @@ export interface PurgeRemovedStatusResponse {
     remaining: number;
     purging: boolean;
     lastFailure: string | null;
+}
+
+/** Music entity kinds that can be explicitly saved to one account. */
+export type SavedMusicEntityType = "album" | "artist";
+
+/** Stable identity shared by local, discovery, and provider music entities. */
+export interface SavedMusicEntityIdentity {
+    type: SavedMusicEntityType;
+    source: string;
+    entityId: string;
+}
+
+/** Snapshot persisted when an album or artist is saved to the personal Library. */
+export interface SavedMusicEntityInput extends SavedMusicEntityIdentity {
+    title: string;
+    subtitle: string | null;
+    imageUrl: string | null;
+}
+
+/** Account-owned saved music record returned by the Library API. */
+export interface SavedMusicEntity {
+    id: string;
+    entityType: SavedMusicEntityType;
+    source: string;
+    entityId: string;
+    title: string;
+    subtitle: string | null;
+    imageUrl: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+/** Paginated personal Library response for explicitly saved music. */
+export interface SavedMusicEntitiesResponse {
+    items: SavedMusicEntity[];
+    total: number;
+}
+
+/** Saved state for one exact source identity. */
+export interface SavedMusicEntityStatusResponse {
+    saved: boolean;
+    item: SavedMusicEntity | null;
+}
+
+/** Result of idempotently removing one entity from the personal Library. */
+export interface RemoveSavedMusicEntityResponse {
+    saved: false;
+    removed: boolean;
 }
 
 export interface ShareLinkRecord {

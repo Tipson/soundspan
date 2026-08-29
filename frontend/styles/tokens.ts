@@ -21,7 +21,7 @@ export const DESIGN_TOKENS: Record<string, string> = {
     content: "#ffffff",
     "content-body": "#e5e5e5",
     "content-disabled": "#525252",
-    "content-muted": "#737373",
+    "content-muted": "#8a8a8a",
     "content-secondary": "#a3a3a3",
     error: "#ef4444",
     success: "#22c55e",

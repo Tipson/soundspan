@@ -19,8 +19,15 @@ const getBackendUrl = (): string => {
 };
 
 const DEFAULT_PROXY_TIMEOUT_MS = 20_000;
-const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 90_000;
+const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 150_000;
+const DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS = 125_000;
+const DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS = 90_000;
 const IMPORT_PREVIEW_PROXY_PATH = "api/import/preview";
+const UNAVAILABLE_RECOVERY_PROXY_PATH = "api/ytmusic/recover-unavailable";
+const MEDIA_STREAM_PATH_PATTERNS = [
+    /^(?:api\/)?ytmusic\/(?:stream|stream-public)\/[^/]+$/,
+    /^(?:api\/)?youtube\/stream\/[^/]+$/,
+];
 
 const parsePositiveTimeoutMs = (value: string | undefined): number | null => {
     const parsed = Number(value);
@@ -33,6 +40,13 @@ const parsePositiveTimeoutMs = (value: string | undefined): number | null => {
 const normalizeTargetPath = (targetPath: string): string =>
     targetPath.replace(/^\/+|\/+$/g, "").toLowerCase();
 
+const isMediaStreamPath = (targetPath: string): boolean => {
+    const normalized = normalizeTargetPath(targetPath);
+    return MEDIA_STREAM_PATH_PATTERNS.some((pattern) =>
+        pattern.test(normalized),
+    );
+};
+
 export const resolveProxyTimeoutMs = (
     targetPath: string,
     env: Record<string, string | undefined> = getEnv(),
@@ -41,7 +55,19 @@ export const resolveProxyTimeoutMs = (
         parsePositiveTimeoutMs(env.PROXY_REQUEST_TIMEOUT_MS) ??
         DEFAULT_PROXY_TIMEOUT_MS;
 
-    if (normalizeTargetPath(targetPath) !== IMPORT_PREVIEW_PROXY_PATH) {
+    if (isMediaStreamPath(targetPath)) {
+        return Math.max(globalTimeout, DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS);
+    }
+
+    const normalizedPath = normalizeTargetPath(targetPath);
+    if (normalizedPath === UNAVAILABLE_RECOVERY_PROXY_PATH) {
+        return Math.max(
+            globalTimeout,
+            DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS,
+        );
+    }
+
+    if (normalizedPath !== IMPORT_PREVIEW_PROXY_PATH) {
         return globalTimeout;
     }
 

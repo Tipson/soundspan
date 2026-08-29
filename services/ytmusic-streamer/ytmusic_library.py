@@ -7,7 +7,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, cast
 
 from fastapi import HTTPException, Query
-from ytmusic_client import _run_public_ytmusic, _run_ytmusic_with_auth_retry
+from ytmusic_client import (
+    _run_public_ytmusic,
+    _run_public_ytmusic_with_retry,
+    _run_ytmusic_with_auth_retry,
+)
 from ytmusic_runtime import JsonObject, _sanitized_http_error, app, log
 from ytmusic_stream import BROWSE_TIMEOUT, _browse_public_bounded, _validate_video_id
 from ytmusicapi.exceptions import YTMusicServerError
@@ -512,9 +516,12 @@ async def get_song(video_id: str, user_id: str = Query(...)) -> JsonObject:
     try:
         if user_id == "__public__":
             song = await _browse_public_bounded(
-                _run_public_ytmusic,
-                "native",
-                lambda yt: yt.get_song(video_id),
+                lambda: _run_public_ytmusic_with_retry(
+                    "native",
+                    "song metadata browse",
+                    lambda yt: yt.get_song(video_id),
+                    retry_timeouts=False,
+                )
             )
         else:
             song = await asyncio.to_thread(

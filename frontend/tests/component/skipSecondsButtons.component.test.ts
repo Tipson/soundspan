@@ -36,6 +36,11 @@ GlobalRegistrator.register();
 const Icon = (props: Record<string, unknown>) =>
     React.createElement("i", props);
 
+const preferenceCalls = {
+    like: 0,
+    dislike: 0,
+};
+
 // ---------------------------------------------------------------------------
 // Shared leaf mocks (specifiers used by both FullPlayer and OverlayPlayer)
 // ---------------------------------------------------------------------------
@@ -77,6 +82,7 @@ mock.module("lucide-react", {
         RefreshCw: Icon,
         Radio: Icon,
         Heart: Icon,
+        ThumbsDown: Icon,
         Trash2: Icon,
         X: Icon,
         Plus: Icon,
@@ -145,7 +151,12 @@ mock.module("@/hooks/useTrackPreference", {
         useTrackPreference: () => ({
             signal: "clear",
             isSaving: false,
-            toggleLike: async () => undefined,
+            toggleLike: async () => {
+                preferenceCalls.like += 1;
+            },
+            toggleDislike: async () => {
+                preferenceCalls.dislike += 1;
+            },
         }),
     },
 });
@@ -308,7 +319,14 @@ mock.module("@/lib/audio-controls-context", {
 // ---------------------------------------------------------------------------
 
 const overlayState = {
-    currentTrack: null as null | { id: string; duration?: number },
+    currentTrack: null as null | {
+        id: string;
+        title: string;
+        duration?: number;
+        streamSource?: "youtube" | "tidal";
+        artist?: { id?: string; name: string };
+        album?: { id?: string; title: string };
+    },
     currentAudiobook: null as null | { id: string; duration?: number },
     currentPodcast: {
         id: "pod-1",
@@ -516,6 +534,8 @@ after(() => {
 });
 
 beforeEach(() => {
+    preferenceCalls.like = 0;
+    preferenceCalls.dislike = 0;
     fullPlayerCalls.skipBackward.length = 0;
     fullPlayerCalls.skipForward.length = 0;
     fullPlayerCalls.previous = 0;
@@ -534,6 +554,7 @@ beforeEach(() => {
     overlayCalls.previous = 0;
     overlayCalls.next = 0;
     overlayState.playbackType = "podcast";
+    overlayState.currentTrack = null;
     overlayState.currentPodcast = {
         id: "pod-1",
         duration: 1800,
@@ -599,6 +620,21 @@ test("FullPlayer renders Skip back/forward 15 seconds buttons alongside unchange
     assert.ok(previous, "Previous track button must still be present");
     assert.ok(next, "Next track button must still be present");
 
+    await unmount(mounted);
+});
+
+test("FullPlayer dislike control uses the track-preference mutation", async () => {
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const mounted = await mount(React.createElement(FullPlayer));
+    const dislike = mounted.container.querySelector(
+        '[aria-label="Dislike"]',
+    ) as HTMLButtonElement | null;
+    assert.ok(dislike);
+
+    await React.act(async () => dislike.click());
+
+    assert.equal(preferenceCalls.dislike, 1);
+    assert.equal(preferenceCalls.like, 0);
     await unmount(mounted);
 });
 
@@ -783,6 +819,30 @@ test("OverlayPlayer renders Skip back/forward 15 seconds buttons for podcast pla
 
     assert.ok(skipBack, "expected a 'Skip back 15 seconds' button");
     assert.ok(skipForward, "expected a 'Skip forward 15 seconds' button");
+
+    await unmount(mounted);
+});
+
+test("OverlayPlayer exposes both like and dislike controls for music", async () => {
+    overlayState.playbackType = "track";
+    overlayState.currentTrack = {
+        id: "yt:overlay-track",
+        title: "Overlay Track",
+        duration: 240,
+        streamSource: "youtube",
+        artist: { id: "artist-1", name: "Overlay Artist" },
+        album: { id: "album-1", title: "Overlay Album" },
+    };
+    overlayState.currentPodcast = null;
+
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+
+    assert.ok(mounted.container.querySelector('[aria-label="Like"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Dislike"]'));
 
     await unmount(mounted);
 });

@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
 import { useSearchData } from "@/features/search/hooks/useSearchData";
 import { dedupeDiscoverTracks } from "@/features/search/songDedup";
+import { dedupeDiscoverAlbums } from "@/features/search/albumDedup";
 import { useSoulseekSearch } from "@/features/search/hooks/useSoulseekSearch";
 import { useYouTubeUrl } from "@/features/search/hooks/useYouTubeUrl";
 import { YouTubePreviewCard } from "@/features/search/components/YouTubePreviewCard";
@@ -15,12 +16,10 @@ import { SearchFilters } from "@/features/search/components/SearchFilters";
 import { TopResult } from "@/features/search/components/TopResult";
 import { EmptyState } from "@/features/search/components/EmptyState";
 import { LibraryAlbumsGrid } from "@/features/search/components/LibraryAlbumsGrid";
-import { LibraryPodcastsGrid } from "@/features/search/components/LibraryPodcastsGrid";
-import { DiscoverPodcastsGrid } from "@/features/search/components/DiscoverPodcastsGrid";
-import { LibraryAudiobooksGrid } from "@/features/search/components/LibraryAudiobooksGrid";
 import { LibraryTracksList } from "@/features/search/components/LibraryTracksList";
 import { SimilarArtistsGrid } from "@/features/search/components/SimilarArtistsGrid";
 import { DiscoverTracksList } from "@/features/search/components/DiscoverTracksList";
+import { ProviderAlbumsGrid } from "@/features/search/components/ProviderAlbumsGrid";
 import {
     deriveDiscoverySelection,
     normalizeArtistName,
@@ -33,6 +32,7 @@ import type { FilterTab } from "@/features/search/types";
 import { useFeatures } from "@/lib/features-context";
 import {
     hasVisibleTrackResults,
+    resolveSearchCatalogPolicy,
     resolvePrimarySongsSurface,
     shouldShowSearchLoadingState,
 } from "@/features/search/searchSongsPriority";
@@ -52,7 +52,6 @@ export default function SearchPage() {
     const canDownloadYouTube = user?.role === "admin";
     const [filterTab, setFilterTab] = useState<FilterTab>("all");
     const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
-    const isPodcastTab = filterTab === "podcasts";
     const viewParam = searchParams.get("view");
     const sectionView: SearchSectionView =
         viewParam === "tracks" ||
@@ -60,17 +59,20 @@ export default function SearchPage() {
         viewParam === "artists"
             ? viewParam
             : null;
-    const isTracksView = !isPodcastTab && sectionView === "tracks";
-    const isAlbumsView = !isPodcastTab && sectionView === "albums";
-    const isArtistsView = !isPodcastTab && sectionView === "artists";
-    const isSectionView = !isPodcastTab && sectionView !== null;
+    const isTracksView = sectionView === "tracks";
+    const isAlbumsView = sectionView === "albums";
+    const isArtistsView = sectionView === "artists";
+    const isSectionView = sectionView !== null;
     const sectionViewLinks = {
         tracks: `/search?q=${encodeURIComponent(query)}&view=tracks`,
         albums: `/search?q=${encodeURIComponent(query)}&view=albums`,
         artists: `/search?q=${encodeURIComponent(query)}&view=artists`,
     };
-    const librarySearchType = isPodcastTab ? "podcasts" : "all";
-    const discoverSearchType = isPodcastTab ? "podcasts" : "all";
+    const searchCatalogPolicy = resolveSearchCatalogPolicy({
+        isTracksView,
+        isAlbumsView,
+        isArtistsView,
+    });
 
     // Custom hooks
     const {
@@ -83,10 +85,10 @@ export default function SearchPage() {
         hasSearched,
     } = useSearchData({
         query,
-        libraryType: librarySearchType,
-        discoverType: discoverSearchType,
+        libraryType: "all",
+        discoverType: searchCatalogPolicy.discoverType,
         libraryLimit: isTracksView || isAlbumsView ? 100 : 20,
-        discoverLimit: 20,
+        discoverLimit: searchCatalogPolicy.discoverLimit,
         similarArtistsLimit: isArtistsView ? 50 : 6,
         source: filterTab === "peers" ? "peers" : "all",
     });
@@ -142,6 +144,7 @@ export default function SearchPage() {
         preferDiscovery: preferDiscoveryTopResult,
         secondaryArtists: secondaryDiscoverArtists,
         tracks: discoverTracks,
+        albums: discoverAlbums,
     } = deriveDiscoverySelection({
         discoverResults,
         query,
@@ -163,15 +166,11 @@ export default function SearchPage() {
         isDiscoverSearching ||
         isSoulseekSearching ||
         isSoulseekPolling;
-    const showPodcastResults = filterTab === "all" || isPodcastTab;
-    const discoverPodcastResults = discoverResults.filter(
-        (result) => result.type === "podcast",
-    );
     const libraryTracks = libraryResults?.tracks ?? [];
     const libraryAlbums = libraryResults?.albums ?? [];
-    const libraryPodcasts = libraryResults?.podcasts ?? [];
-    const hasPodcastResults =
-        libraryPodcasts.length > 0 || discoverPodcastResults.length > 0;
+    const unownedDiscoverAlbums = showDiscover
+        ? dedupeDiscoverAlbums(discoverAlbums, libraryAlbums)
+        : [];
     // One Songs section: external matches continue the owned list, minus
     // songs the library results already cover.
     const unownedDiscoverTracks = showDiscover
@@ -212,8 +211,7 @@ export default function SearchPage() {
         hasTopResult &&
         hasTracks &&
         (showLibrary || showDiscover) &&
-        !isSectionView &&
-        !isPodcastTab;
+        !isSectionView;
 
     // Handle TV search
     const handleTVSearch = (searchQuery: string) => {
@@ -408,7 +406,9 @@ export default function SearchPage() {
                                     {unownedDiscoverTracks.length > 0 && (
                                         <DiscoverTracksList
                                             tracks={unownedDiscoverTracks}
-                                            limit={5}
+                                            limit={
+                                                searchCatalogPolicy.discoverTrackDisplayLimit
+                                            }
                                         />
                                     )}
                                 </>
@@ -441,8 +441,7 @@ export default function SearchPage() {
                         {/* Original single-column layout when not showing 2-column */}
                         {hasSearched &&
                             (showDiscover || showLibrary) &&
-                            hasTopResult &&
-                            !isPodcastTab && (
+                            hasTopResult && (
                                 <div>
                                     <TopResult
                                         libraryArtist={visibleLibraryTopArtist}
@@ -456,7 +455,6 @@ export default function SearchPage() {
 
                         {/* Songs — owned results with unowned continuation */}
                         {hasSearched &&
-                            !isPodcastTab &&
                             (sectionView === null || isTracksView) &&
                             primarySongsSurface === "playable" && (
                                 <section>
@@ -478,7 +476,9 @@ export default function SearchPage() {
                                     {unownedDiscoverTracks.length > 0 && (
                                         <DiscoverTracksList
                                             tracks={unownedDiscoverTracks}
-                                            limit={isTracksView ? null : 5}
+                                            limit={
+                                                searchCatalogPolicy.discoverTrackDisplayLimit
+                                            }
                                         />
                                     )}
                                 </section>
@@ -541,7 +541,6 @@ export default function SearchPage() {
                 {/* Library Albums */}
                 {hasSearched &&
                     showLibrary &&
-                    !isPodcastTab &&
                     (sectionView === null || isAlbumsView) &&
                     libraryAlbums.length > 0 && (
                         <section>
@@ -560,51 +559,23 @@ export default function SearchPage() {
                         </section>
                     )}
 
-                {/* Library Podcasts */}
+                {/* Provider Albums */}
                 {hasSearched &&
-                    showPodcastResults &&
-                    !isSectionView &&
-                    libraryPodcasts.length > 0 && (
+                    showDiscover &&
+                    (sectionView === null || isAlbumsView) &&
+                    unownedDiscoverAlbums.length > 0 && (
                         <section>
-                            <h2 className="text-2xl font-bold text-white mb-6">
-                                Podcasts in Your Library
+                            <h2 className="mb-6 text-2xl font-bold text-white">
+                                <Link
+                                    href={sectionViewLinks.albums}
+                                    className="hover:underline"
+                                >
+                                    Albums from YouTube Music
+                                </Link>
                             </h2>
-                            <LibraryPodcastsGrid
-                                podcasts={libraryPodcasts}
-                                limit={isPodcastTab ? null : 6}
-                            />
-                        </section>
-                    )}
-
-                {/* Discover Podcasts */}
-                {hasSearched &&
-                    showPodcastResults &&
-                    !isSectionView &&
-                    discoverPodcastResults.length > 0 && (
-                        <section>
-                            <h2 className="text-2xl font-bold text-white mb-6">
-                                Discover Podcasts
-                            </h2>
-                            <DiscoverPodcastsGrid
-                                podcasts={discoverPodcastResults}
-                                limit={isPodcastTab ? null : 6}
-                            />
-                        </section>
-                    )}
-
-                {/* Library Audiobooks */}
-                {hasSearched &&
-                    showLibrary &&
-                    !isPodcastTab &&
-                    !isSectionView &&
-                    libraryResults?.audiobooks &&
-                    libraryResults.audiobooks.length > 0 && (
-                        <section>
-                            <h2 className="text-2xl font-bold text-white mb-6">
-                                Audiobooks
-                            </h2>
-                            <LibraryAudiobooksGrid
-                                audiobooks={libraryResults.audiobooks}
+                            <ProviderAlbumsGrid
+                                albums={unownedDiscoverAlbums}
+                                limit={isAlbumsView ? null : 6}
                             />
                         </section>
                     )}
@@ -612,7 +583,6 @@ export default function SearchPage() {
                 {/* Discover Artists — external matches beyond the top result */}
                 {hasSearched &&
                     showDiscover &&
-                    !isPodcastTab &&
                     (sectionView === null || isArtistsView) &&
                     secondaryDiscoverArtists.length > 0 && (
                         <SimilarArtistsGrid
@@ -628,7 +598,6 @@ export default function SearchPage() {
                 {/* Related Artists */}
                 {hasSearched &&
                     showDiscover &&
-                    !isPodcastTab &&
                     (sectionView === null || isArtistsView) &&
                     visibleSimilarArtists.length > 0 && (
                         <SimilarArtistsGrid
@@ -640,36 +609,23 @@ export default function SearchPage() {
                 {/* No Results */}
                 {hasSearched &&
                     !isLoading &&
-                    (isPodcastTab
-                        ? !hasPodcastResults
-                        : !topArtist &&
-                          secondaryDiscoverArtists.length === 0 &&
-                          discoverTracks.length === 0 &&
-                          (!showPodcastResults ||
-                              discoverPodcastResults.length === 0) &&
-                          (!showSoulseek || soulseekResults.length === 0) &&
-                          (!showLibrary ||
-                              !libraryResults ||
-                              (!libraryResults.artists?.length &&
-                                  !libraryResults.albums?.length &&
-                                  !libraryResults.tracks?.length &&
-                                  !libraryResults.audiobooks?.length &&
-                                  // Library podcasts render only on the All
-                                  // and Podcasts tabs; episodes only under
-                                  // the podcast tab handled above.
-                                  (!showPodcastResults ||
-                                      !libraryResults.podcasts?.length)))) && (
+                    !topArtist &&
+                    secondaryDiscoverArtists.length === 0 &&
+                    discoverTracks.length === 0 &&
+                    discoverAlbums.length === 0 &&
+                    (!showSoulseek || soulseekResults.length === 0) &&
+                    (!showLibrary ||
+                        !libraryResults ||
+                        (!libraryResults.artists?.length &&
+                            !libraryResults.albums?.length &&
+                            !libraryResults.tracks?.length)) && (
                         <div className="flex flex-col items-center justify-center py-24 text-center">
                             <SearchIcon className="w-16 h-16 text-gray-400 mb-4" />
                             <h3 className="text-xl font-bold text-white mb-2">
-                                {isPodcastTab
-                                    ? "No podcasts found"
-                                    : "No results found"}
+                                No results found
                             </h3>
                             <p className="text-gray-400">
-                                {isPodcastTab
-                                    ? "Try searching by podcast title or creator"
-                                    : "Try searching for something else"}
+                                Try searching for something else
                             </p>
                         </div>
                     )}

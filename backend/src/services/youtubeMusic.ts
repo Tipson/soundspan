@@ -17,6 +17,15 @@ import { config } from "../config";
 import { logger } from "../utils/logger";
 import type { CanonicalMediaSearchResult } from "@soundspan/media-metadata-contract";
 import { cachedSingleflight } from "../utils/singleflight";
+import {
+    findPlayableYtMusicAlternate,
+    type YtMusicPlayableAlternate,
+    type YtMusicPlayableAlternateInput,
+} from "./ytMusicPlayableAlternate";
+export type {
+    YtMusicPlayableAlternate,
+    YtMusicPlayableAlternateInput,
+} from "./ytMusicPlayableAlternate";
 
 // ── Sidecar URL ────────────────────────────────────────────────────
 const YTMUSIC_STREAMER_URL = config.ytmusicStreamer.url;
@@ -63,6 +72,48 @@ export interface YtMusicCanonicalSearchResponse {
     filter: "songs" | "albums" | "artists" | "videos" | null;
     total: number;
     results: CanonicalMediaSearchResult[];
+}
+
+/** Per-request transport policy for latency-sensitive catalog searches. */
+export interface YtMusicSearchOptions {
+    timeoutMs?: number;
+    maxRetries?: number;
+}
+
+/** Per-request transport policy for sidecar stream probes. */
+export interface YtMusicStreamInfoOptions {
+    timeoutMs?: number;
+    maxRetries?: number;
+}
+
+/** A browsable YouTube Music album returned by catalog search. */
+export interface YtMusicCatalogAlbumResult {
+    mediaType: "album";
+    provider: "ytmusic";
+    browseId: string;
+    title: string;
+    artistName: string;
+    year: string | null;
+    thumbnailUrl: string | null;
+    raw: Record<string, unknown>;
+}
+
+/** A browsable YouTube Music artist returned by catalog search. */
+export interface YtMusicCatalogArtistResult {
+    mediaType: "artist";
+    provider: "ytmusic";
+    channelId: string;
+    name: string;
+    thumbnailUrl: string | null;
+    raw: Record<string, unknown>;
+}
+
+/** Normalized non-track catalog response for albums or artists. */
+export interface YtMusicCatalogSearchResponse {
+    query: string;
+    filter: "albums" | "artists";
+    total: number;
+    results: Array<YtMusicCatalogAlbumResult | YtMusicCatalogArtistResult>;
 }
 
 export interface YtMusicAlbum {
@@ -228,15 +279,35 @@ function resolveAlbumTitle(item: Record<string, unknown>): string | null {
 function resolveThumbnailUrl(item: Record<string, unknown>): string | null {
     const thumbnails = item.thumbnails;
     if (!Array.isArray(thumbnails)) return null;
-    for (const thumb of thumbnails) {
+    let bestUrl: string | null = null;
+    let bestArea = -1;
+    let bestIndex = -1;
+    for (const [index, thumb] of thumbnails.entries()) {
         if (!thumb || typeof thumb !== "object") continue;
-        const url = normalizeText((thumb as Record<string, unknown>).url);
-        if (url) return url;
+        const record = thumb as Record<string, unknown>;
+        const url = normalizeText(record.url);
+        if (!url) continue;
+        const width = typeof record.width === "number" ? record.width : 0;
+        const height = typeof record.height === "number" ? record.height : 0;
+        const area = width > 0 && height > 0 ? width * height : 0;
+        if (area > bestArea || (area === bestArea && index > bestIndex)) {
+            bestUrl = url;
+            bestArea = area;
+            bestIndex = index;
+        }
     }
-    return null;
+    return bestUrl;
 }
 
-function toCanonicalSearchResultItem(
+/** Return true when a raw YouTube Music search item is explicitly a video. */
+export function isExplicitVideoSearchResult(item: unknown): boolean {
+    if (!item || typeof item !== "object") return false;
+    const type = normalizeText((item as Record<string, unknown>).type);
+    return type?.toLowerCase() === "video";
+}
+
+/** Normalize a raw YouTube Music song into the shared media-search contract. */
+export function toCanonicalSearchResultItem(
     item: unknown,
 ): CanonicalMediaSearchResult | null {
     if (!item || typeof item !== "object") {
@@ -265,6 +336,68 @@ function toCanonicalSearchResultItem(
         artistName: resolvePrimaryArtist(record),
         albumTitle: resolveAlbumTitle(record),
         durationSec,
+        thumbnailUrl: resolveThumbnailUrl(record),
+        raw: record,
+    };
+}
+
+/** Normalize a raw YouTube Music album while preserving its browse identity. */
+export function toCatalogAlbumResultItem(
+    item: unknown,
+): YtMusicCatalogAlbumResult | null {
+    if (!item || typeof item !== "object") {
+        return null;
+    }
+
+    const record = item as Record<string, unknown>;
+    const resultType = (
+        normalizeText(record.type) ?? normalizeText(record.resultType)
+    )?.toLowerCase();
+    const browseId = normalizeText(record.browseId);
+    const title = normalizeText(record.title);
+    if (resultType !== "album" || !browseId || !title) {
+        return null;
+    }
+
+    return {
+        mediaType: "album",
+        provider: "ytmusic",
+        browseId,
+        title,
+        artistName: resolvePrimaryArtist(record),
+        year: normalizeText(record.year),
+        thumbnailUrl: resolveThumbnailUrl(record),
+        raw: record,
+    };
+}
+
+/** Normalize a raw YouTube Music artist while preserving its channel identity. */
+export function toCatalogArtistResultItem(
+    item: unknown,
+): YtMusicCatalogArtistResult | null {
+    if (!item || typeof item !== "object") {
+        return null;
+    }
+
+    const record = item as Record<string, unknown>;
+    const resultType = (
+        normalizeText(record.type) ?? normalizeText(record.resultType)
+    )?.toLowerCase();
+    const channelId =
+        normalizeText(record.channelId) ?? normalizeText(record.browseId);
+    const name =
+        normalizeText(record.artist) ??
+        normalizeText(record.name) ??
+        normalizeText(record.title);
+    if (resultType !== "artist" || !channelId || !name) {
+        return null;
+    }
+
+    return {
+        mediaType: "artist",
+        provider: "ytmusic",
+        channelId,
+        name,
         thumbnailUrl: resolveThumbnailUrl(record),
         raw: record,
     };
@@ -471,25 +604,50 @@ class YouTubeMusicService {
         userId: string,
         query: string,
         filter?: "songs" | "albums" | "artists" | "videos",
+        limit?: number,
+        options: YtMusicSearchOptions = {},
     ): Promise<YtMusicSearchResult> {
-        return retryWithBackoff(async () => {
-            const res = await this.client.post(
-                "/search",
-                { query, filter },
-                { params: { user_id: userId } },
-            );
-            return res.data;
-        }, `search(${query})`);
+        return retryWithBackoff(
+            async () => {
+                const requestConfig = {
+                    params: { user_id: userId },
+                    ...(options.timeoutMs
+                        ? { timeout: options.timeoutMs }
+                        : {}),
+                };
+                const res = await this.client.post(
+                    "/search",
+                    { query, filter, ...(limit ? { limit } : {}) },
+                    requestConfig,
+                );
+                return res.data;
+            },
+            `search(${query})`,
+            options.maxRetries ?? 3,
+        );
     }
 
     async searchCanonical(
         userId: string,
         query: string,
         filter?: "songs" | "albums" | "artists" | "videos",
+        limit?: number,
+        options: YtMusicSearchOptions = {},
     ): Promise<YtMusicCanonicalSearchResponse> {
-        const rawResult = await this.search(userId, query, filter);
+        const rawResult = await this.search(
+            userId,
+            query,
+            filter,
+            limit,
+            options,
+        );
         const canonicalResults = Array.isArray(rawResult.results)
             ? rawResult.results
+                  .filter(
+                      (item) =>
+                          filter !== "songs" ||
+                          !isExplicitVideoSearchResult(item),
+                  )
                   .map((item) => toCanonicalSearchResultItem(item))
                   .filter(
                       (item): item is CanonicalMediaSearchResult =>
@@ -506,6 +664,49 @@ class YouTubeMusicService {
                     ? rawResult.total
                     : canonicalResults.length,
             results: canonicalResults,
+        };
+    }
+
+    /** Search browsable YouTube Music album or artist identities. */
+    async searchCatalog(
+        userId: string,
+        query: string,
+        filter: "albums" | "artists",
+        limit?: number,
+        options: YtMusicSearchOptions = {},
+    ): Promise<YtMusicCatalogSearchResponse> {
+        const rawResult = await this.search(
+            userId,
+            query,
+            filter,
+            limit,
+            options,
+        );
+        const mapper =
+            filter === "albums"
+                ? toCatalogAlbumResultItem
+                : toCatalogArtistResultItem;
+        const results = Array.isArray(rawResult.results)
+            ? rawResult.results
+                  .map((item) => mapper(item))
+                  .filter(
+                      (
+                          item,
+                      ): item is
+                          | YtMusicCatalogAlbumResult
+                          | YtMusicCatalogArtistResult => item !== null,
+                  )
+            : [];
+
+        return {
+            query,
+            filter,
+            total:
+                typeof rawResult.total === "number" &&
+                Number.isFinite(rawResult.total)
+                    ? rawResult.total
+                    : results.length,
+            results,
         };
     }
 
@@ -543,13 +744,23 @@ class YouTubeMusicService {
         userId: string,
         videoId: string,
         quality?: string,
+        options: YtMusicStreamInfoOptions = {},
     ): Promise<YtMusicStreamInfo> {
-        return retryWithBackoff(async () => {
-            const params: Record<string, string> = { user_id: userId };
-            if (quality) params.quality = quality;
-            const res = await this.client.get(`/stream/${videoId}`, { params });
-            return res.data;
-        }, `getStreamInfo(${videoId})`);
+        return retryWithBackoff(
+            async () => {
+                const params: Record<string, string> = { user_id: userId };
+                if (quality) params.quality = quality;
+                const res = await this.client.get(`/stream/${videoId}`, {
+                    params,
+                    ...(options.timeoutMs
+                        ? { timeout: options.timeoutMs }
+                        : {}),
+                });
+                return res.data;
+            },
+            `getStreamInfo(${videoId})`,
+            options.maxRetries ?? 3,
+        );
     }
 
     /**
@@ -622,18 +833,23 @@ class YouTubeMusicService {
             filter?: "songs" | "albums" | "artists" | "videos";
             limit?: number;
         }>,
+        options: YtMusicSearchOptions = {},
     ): Promise<Array<{ results: any[]; total: number; error: string | null }>> {
-        return retryWithBackoff(async () => {
-            const res = await this.client.post(
-                "/search/batch",
-                { queries },
-                {
-                    params: { user_id: userId },
-                    timeout: 60_000, // Longer timeout for batch
-                },
-            );
-            return res.data.results;
-        }, `searchBatch(${queries.length} queries)`);
+        return retryWithBackoff(
+            async () => {
+                const res = await this.client.post(
+                    "/search/batch",
+                    { queries },
+                    {
+                        params: { user_id: userId },
+                        timeout: options.timeoutMs ?? 60_000,
+                    },
+                );
+                return res.data.results;
+            },
+            `searchBatch(${queries.length} queries)`,
+            options.maxRetries ?? 3,
+        );
     }
 
     /**
@@ -1094,6 +1310,38 @@ class YouTubeMusicService {
         }
 
         return null;
+    }
+
+    /**
+     * Find another exact recording and prove that it is streamable before the
+     * player switches provider identity. Probes are sequential and capped so
+     * one broken search page cannot fan out sidecar extraction work.
+     */
+    async findPlayableAlternateForTrack(
+        userId: string,
+        input: YtMusicPlayableAlternateInput,
+    ): Promise<YtMusicPlayableAlternate | null> {
+        return findPlayableYtMusicAlternate(
+            {
+                searchSongs: (requestUserId, query, limit, options) =>
+                    this.searchCanonical(
+                        requestUserId,
+                        query,
+                        "songs",
+                        limit,
+                        options,
+                    ),
+                probeStream: (requestUserId, videoId, options) =>
+                    this.getStreamInfo(
+                        requestUserId,
+                        videoId,
+                        undefined,
+                        options,
+                    ),
+            },
+            userId,
+            input,
+        );
     }
 
     // ── Browse (unauthenticated) ─────────────────────────────────

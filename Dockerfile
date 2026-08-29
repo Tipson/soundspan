@@ -244,9 +244,14 @@ COPY backend/tsconfig.json ./
 RUN npm run build
 
 # Replace build dependencies with the exact runtime dependency tree from the
-# pinned official release. The source lockfiles and schema are unchanged.
-RUN rm -rf /app/backend/node_modules
+# pinned official release while keeping the schema-specific Prisma client that
+# was generated from this checkout.
+RUN mv /app/backend/node_modules/.prisma /tmp/backend-generated-prisma && \
+    rm -rf /app/backend/node_modules
 COPY --from=official_artifacts /app/backend/node_modules/ /app/backend/node_modules/
+RUN rm -rf /app/backend/node_modules/.prisma && \
+    mv /tmp/backend-generated-prisma /app/backend/node_modules/.prisma && \
+    node -e "const { Prisma } = require('@prisma/client'); const packageVersion = require('@prisma/client/package.json').version; if (Prisma.prismaVersion.client !== packageVersion) throw new Error('Prisma runtime and generated client versions differ'); const models = new Map(Prisma.dmmf.datamodel.models.map((model) => [model.name, model])); for (const name of ['RemotePreferenceIntent', 'SavedMusicEntity']) if (!models.has(name)) throw new Error('Generated Prisma client is missing ' + name); const play = models.get('Play'); for (const name of ['completionRatio', 'waveMode']) if (!play?.fields.some((field) => field.name === name)) throw new Error('Generated Prisma Play model is missing ' + name)"
 
 COPY backend/docker-entrypoint.sh ./
 COPY backend/healthcheck.js ./healthcheck-backend.js

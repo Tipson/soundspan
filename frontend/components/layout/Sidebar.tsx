@@ -27,6 +27,7 @@ import {
     type UnifiedPlaylistSort,
 } from "@/lib/unifiedPlaylists";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
 
 interface Playlist {
     id: string;
@@ -306,6 +307,19 @@ export function Sidebar() {
                         <Link
                             key={item.name}
                             href={item.href}
+                            onClick={
+                                item.href === "/library"
+                                    ? (event) => {
+                                          handleOfflineLibraryNavigation({
+                                              isOnline: navigator.onLine,
+                                              preventDefault: () =>
+                                                  event.preventDefault(),
+                                              hardNavigate: (path) =>
+                                                  window.location.assign(path),
+                                          });
+                                      }
+                                    : undefined
+                            }
                             aria-current={isActive ? "page" : undefined}
                             className={cn(
                                 "block rounded-lg transition-all duration-200 group relative overflow-hidden",

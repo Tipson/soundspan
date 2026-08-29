@@ -23,7 +23,7 @@ export function LibraryHeader() {
             <div className="relative px-4 md:px-8 py-6">
                 <PageHeader
                     title="Your Library"
-                    subtitle="Your music collection"
+                    subtitle="Favorites and playlists follow your account. Downloads stay on this device."
                     icon={Music2}
                     className="mb-0"
                 />

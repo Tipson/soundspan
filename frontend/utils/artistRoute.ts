@@ -4,6 +4,10 @@ interface ArtistRouteInput {
     name?: string | null;
 }
 
+interface DiscoveryArtistRouteInput extends ArtistRouteInput {
+    youtubeChannelId?: string | null;
+}
+
 interface ArtistRouteOptions {
     preferLibraryId?: boolean;
     encodeNameFallback?: boolean;
@@ -55,4 +59,26 @@ export const getArtistHref = (
 ): string | null => {
     const routeParam = getArtistRouteParam(artist, options);
     return routeParam ? `/artist/${routeParam}` : null;
+};
+
+/**
+ * Resolve a catalog artist without confusing a YouTube channel ID for a
+ * Soundspan/MusicBrainz artist ID. A real MBID remains the canonical route;
+ * YouTube-only artists carry their exact provider identity in the query.
+ */
+export const getDiscoveryArtistHref = (
+    artist: DiscoveryArtistRouteInput,
+): string | null => {
+    const mbid = normalizeRouteValue(artist.mbid);
+    if (isUsableArtistMbid(mbid)) {
+        return `/artist/${mbid}`;
+    }
+
+    const youtubeChannelId = normalizeRouteValue(artist.youtubeChannelId);
+    if (youtubeChannelId) {
+        const routeName = normalizeRouteValue(artist.name) ?? youtubeChannelId;
+        return `/artist/${encodeURIComponent(routeName)}?provider=ytmusic&channelId=${encodeURIComponent(youtubeChannelId)}`;
+    }
+
+    return getArtistHref(artist, { preferLibraryId: false });
 };

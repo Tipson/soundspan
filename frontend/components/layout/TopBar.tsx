@@ -109,9 +109,17 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
         <header
             className="fixed top-0 left-0 right-0 bg-black flex items-center px-3 z-50"
             style={{
-                height: isMobileOrTablet ? "58px" : "64px",
+                height: isMobileOrTablet
+                    ? "calc(58px + var(--safe-area-top))"
+                    : "64px",
                 paddingTop: isMobileOrTablet
-                    ? "env(safe-area-inset-top)"
+                    ? "var(--safe-area-top)"
+                    : undefined,
+                paddingLeft: isMobileOrTablet
+                    ? "calc(0.75rem + var(--safe-area-left))"
+                    : undefined,
+                paddingRight: isMobileOrTablet
+                    ? "calc(0.75rem + var(--safe-area-right))"
                     : undefined,
             }}
         >
@@ -126,25 +134,25 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 new CustomEvent("toggle-mobile-menu"),
                             );
                         }}
-                        className="w-10 h-10 flex items-center justify-center bg-surface-raised border border-line rounded-md text-white hover:bg-surface-overlay transition-colors mr-2 flex-shrink-0"
+                        className="h-11 w-11 flex items-center justify-center bg-surface-raised border border-line rounded-md text-white hover:bg-surface-overlay transition-colors mr-2 flex-shrink-0"
                         aria-label="Open menu"
                     >
                         <Menu className="w-5 h-5" />
                     </button>
 
                     {/* Back slot (reserved to keep search position stable across routes) */}
-                    <div className="w-10 h-10 mr-1 flex items-center justify-center flex-shrink-0">
+                    <div className="h-11 w-11 mr-1 flex items-center justify-center flex-shrink-0">
                         {pathname !== "/" ? (
                             <button
                                 onClick={() => router.back()}
-                                className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-surface text-gray-400 hover:bg-surface-hover hover:text-white"
+                                className="h-11 w-11 rounded-full flex items-center justify-center transition-all bg-surface text-gray-400 hover:bg-surface-hover hover:text-white"
                                 aria-label="Go back"
                                 title="Go back"
                             >
                                 <ChevronLeft className="w-5 h-5" />
                             </button>
                         ) : (
-                            <span className="w-10 h-10" aria-hidden="true" />
+                            <span className="h-11 w-11" aria-hidden="true" />
                         )}
                     </div>
 
@@ -152,7 +160,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                     <Link
                         href="/"
                         className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center transition-all flex-shrink-0 mr-1",
+                            "h-11 w-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 mr-1",
                             pathname === "/"
                                 ? "bg-white text-black"
                                 : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white",
@@ -179,7 +187,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="w-full h-10 pl-10 pr-3 bg-surface-hover hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all outline-none"
+                                className="w-full h-11 pl-10 pr-3 bg-surface-hover hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all outline-none"
                             />
                         </div>
                     </form>
@@ -191,7 +199,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 new CustomEvent("toggle-activity-panel"),
                             );
                         }}
-                        className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors ml-2 flex-shrink-0 relative"
+                        className="h-11 w-11 flex items-center justify-center text-gray-400 hover:text-white transition-colors ml-2 flex-shrink-0 relative"
                         aria-label="Notifications"
                         title="Notifications"
                     >

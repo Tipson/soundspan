@@ -333,7 +333,13 @@ async function fetchAndCacheBrowseImageOnce(
     url: string,
     key: string,
 ): Promise<BrowseImageCacheEntry | null> {
-    const result = await fetchExternalImage({ url });
+    // Provider thumbnails are optional UI decoration. Fail quickly when an
+    // upstream host is unreachable so one broken image cannot stall a shelf.
+    const result = await fetchExternalImage({
+        url,
+        timeoutMs: 6_000,
+        maxRetries: 2,
+    });
     if (!result.ok) {
         browseImageCacheLogger.warn("Failed to fetch image", {
             status: result.status,

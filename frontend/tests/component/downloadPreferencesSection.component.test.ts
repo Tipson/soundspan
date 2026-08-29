@@ -66,10 +66,12 @@ async function renderSection(overrides: Partial<SystemSettings>) {
 test("renders disabled state when no download service is configured", async () => {
     const html = await renderSection({});
 
-    assert.match(html, /Download Preferences/);
+    assert.match(html, /Server Download Preferences/);
+    assert.match(html, /permanent files to the server/);
     assert.match(html, /Requires at least one download service/);
     assert.match(html, />Soulseek \(Per-track\)</);
     assert.doesNotMatch(html, /YouTube Music \(Albums\)/);
+    assert.doesNotMatch(html, /download music for imported playlists/i);
 });
 
 test("offers YouTube Music as a source when YT Music is enabled", async () => {
@@ -82,6 +84,7 @@ test("offers YouTube Music as a source when YT Music is enabled", async () => {
 
     assert.match(html, />YouTube Music \(Albums\)</);
     assert.match(html, />TIDAL \(Per-track \/ album\)</);
+    assert.match(html, /explicitly request a permanent server copy/);
     assert.doesNotMatch(html, /Requires at least one download service/);
 });
 

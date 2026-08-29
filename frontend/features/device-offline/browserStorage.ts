@@ -3,10 +3,15 @@ import {
     DeviceOfflineDownloadManager,
     foregroundLeaseDisposition,
     interruptExpiredForegroundRecord,
+    mergeConcurrentDeviceOfflineUpdate,
     matchesDeviceOfflineRecordVersion,
     type DeviceOfflineAudioCache,
     type DeviceOfflineMetadataStore,
 } from "./downloadManager";
+import {
+    getAuthRuntimeLease,
+    isCurrentAuthRuntime,
+} from "@/lib/auth-runtime-generation";
 import {
     abortBrowserBackgroundFetch,
     listBrowserBackgroundFetchIds,
@@ -24,6 +29,75 @@ export const DEVICE_OFFLINE_AUDIO_CACHE_NAME = "soundspan-device-audio-v1";
 
 let databasePromise: Promise<IDBDatabase> | null = null;
 let manager: DeviceOfflineDownloadManager | null = null;
+
+interface DeviceOfflinePlaybackSourceRuntime {
+    origin: string;
+    match(url: string): Promise<Response | null>;
+    createObjectUrl(blob: Blob): string;
+    revokeObjectUrl(url: string): void;
+}
+
+export interface BrowserDeviceOfflinePlaybackSource {
+    url: string;
+    revoke(): void;
+}
+
+function defaultPlaybackSourceRuntime(): DeviceOfflinePlaybackSourceRuntime {
+    return {
+        origin: window.location.origin,
+        match: async (url) =>
+            (await (
+                await caches.open(DEVICE_OFFLINE_AUDIO_CACHE_NAME)
+            ).match(url)) ?? null,
+        createObjectUrl: (blob) => URL.createObjectURL(blob),
+        revokeObjectUrl: (url) => URL.revokeObjectURL(url),
+    };
+}
+
+/** Materialize one verified device copy without requiring a service worker fetch. */
+export async function createBrowserDeviceOfflinePlaybackSource(
+    record: DeviceOfflineDownloadRecord,
+    runtime: DeviceOfflinePlaybackSourceRuntime = defaultPlaybackSourceRuntime(),
+): Promise<BrowserDeviceOfflinePlaybackSource> {
+    if (record.status !== "ready") {
+        throw new Error("This device copy is not ready for playback");
+    }
+    const absoluteVirtualUrl = new URL(
+        record.virtualUrl,
+        runtime.origin,
+    ).toString();
+    const cached = await runtime.match(absoluteVirtualUrl);
+    if (!cached) {
+        throw new Error(
+            "This device copy is no longer available. Download it again while online.",
+        );
+    }
+    const blob = await cached.blob();
+    if (blob.size < 1) {
+        throw new Error(
+            "This device copy is empty. Download it again while online.",
+        );
+    }
+    if (
+        typeof record.totalBytes === "number" &&
+        record.totalBytes > 0 &&
+        blob.size !== record.totalBytes
+    ) {
+        throw new Error(
+            `This device copy is incomplete (${blob.size} of ${record.totalBytes} bytes). Download it again while online.`,
+        );
+    }
+    const url = runtime.createObjectUrl(blob);
+    let revoked = false;
+    return {
+        url,
+        revoke: () => {
+            if (revoked) return;
+            revoked = true;
+            runtime.revokeObjectUrl(url);
+        },
+    };
+}
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -160,6 +234,7 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
     async claimReplacement(
         expected: DeviceOfflineDownloadRecord | null,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
         const database = await openDatabase();
         return new Promise((resolve, reject) => {
@@ -173,6 +248,7 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
                 .index("ownerTrackQuality")
                 .get([next.ownerId, next.trackIdentity, next.quality]);
             request.onsuccess = () => {
+                if (isAuthorized && !isAuthorized()) return;
                 const current = request.result ?? null;
                 const canClaim = expected
                     ? matchesDeviceOfflineRecordVersion(current, expected)
@@ -192,6 +268,7 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
     async putIfCurrent(
         expected: DeviceOfflineDownloadRecord,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
         const database = await openDatabase();
         return new Promise((resolve, reject) => {
@@ -203,6 +280,7 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
             const store = transaction.objectStore(DEVICE_OFFLINE_STORE_NAME);
             const request = store.get(expected.key);
             request.onsuccess = () => {
+                if (isAuthorized && !isAuthorized()) return;
                 if (
                     matchesDeviceOfflineRecordVersion(
                         request.result ?? null,
@@ -210,7 +288,12 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
                     )
                 ) {
                     updated = true;
-                    store.put(next);
+                    store.put(
+                        mergeConcurrentDeviceOfflineUpdate(
+                            request.result,
+                            next,
+                        ),
+                    );
                 }
             };
             request.onerror = () => transaction.abort();
@@ -260,6 +343,7 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
 
     async deleteIfCurrent(
         expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
         const database = await openDatabase();
         return new Promise((resolve, reject) => {
@@ -271,11 +355,46 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
             const store = transaction.objectStore(DEVICE_OFFLINE_STORE_NAME);
             const request = store.get(expected.key);
             request.onsuccess = () => {
+                if (isAuthorized && !isAuthorized()) return;
                 if (
                     matchesDeviceOfflineRecordVersion(
                         request.result ?? null,
                         expected,
                     )
+                ) {
+                    deleted = true;
+                    store.delete(expected.key);
+                }
+            };
+            request.onerror = () => transaction.abort();
+            transaction.oncomplete = () => resolve(deleted);
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+    }
+
+    async deleteAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        const database = await openDatabase();
+        return new Promise((resolve, reject) => {
+            let deleted = false;
+            const transaction = database.transaction(
+                DEVICE_OFFLINE_STORE_NAME,
+                "readwrite",
+            );
+            const store = transaction.objectStore(DEVICE_OFFLINE_STORE_NAME);
+            const request = store.get(expected.key);
+            request.onsuccess = () => {
+                if (isAuthorized && !isAuthorized()) return;
+                const current = request.result as
+                    | DeviceOfflineDownloadRecord
+                    | undefined;
+                if (
+                    current?.management === "auto-liked" &&
+                    expected.management === "auto-liked" &&
+                    matchesDeviceOfflineRecordVersion(current, expected)
                 ) {
                     deleted = true;
                     store.delete(expected.key);
@@ -367,6 +486,8 @@ export function getBrowserDeviceOfflineManager(): DeviceOfflineDownloadManager {
             window.setTimeout(callback, delayMs),
         cancelLeaseExpiryCheck: (handle) =>
             window.clearTimeout(handle as number),
+        getAuthRuntimeLease,
+        isAuthRuntimeCurrent: isCurrentAuthRuntime,
     });
     return manager;
 }

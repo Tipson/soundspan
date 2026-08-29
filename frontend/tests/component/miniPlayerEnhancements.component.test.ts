@@ -227,12 +227,13 @@ mock.module("@/components/player/SyncBadge", {
 // Mock TrackPreferenceButtons
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
-        TrackPreferenceButtons: (props: { trackId: string }) =>
+        TrackPreferenceButtons: (props: { trackId: string; mode?: string }) =>
             React.createElement(
                 "div",
                 {
                     "data-testid": "track-pref-buttons",
                     "data-track-id": props.trackId,
+                    "data-mode": props.mode,
                 },
                 "thumbs",
             ),
@@ -262,9 +263,25 @@ test("MiniPlayer renders Next Track button", async () => {
 
     // Should have a "Next track" button
     assert.match(html, /Next track/, "Should have Next track button");
+    const nextButton = html.match(
+        /<button[^>]*aria-label="Next track"[^>]*>/,
+    )?.[0];
+    assert.ok(nextButton);
+    assert.match(nextButton, /h-11 w-11/);
+    const playButton = html.match(/<button[^>]*aria-label="Pause"[^>]*>/)?.[0];
+    assert.ok(playButton);
+    assert.match(playButton, /h-11 w-11/);
+    assert.match(
+        html,
+        /padding-left:calc\(0\.75rem \+ var\(--safe-area-left\)\)/,
+    );
+    assert.match(
+        html,
+        /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
+    );
 });
 
-test("MiniPlayer renders thumbs-up (TrackPreferenceButtons) for tracks", async () => {
+test("MiniPlayer renders like and dislike preferences for tracks", async () => {
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
 
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
@@ -276,6 +293,7 @@ test("MiniPlayer renders thumbs-up (TrackPreferenceButtons) for tracks", async (
         "Should render TrackPreferenceButtons",
     );
     assert.match(html, /data-track-id="t1"/, "Should pass correct track ID");
+    assert.match(html, /data-mode="both"/, "Should expose both preferences");
 });
 
 test("MiniPlayer does not render Next/thumbs when no media playing", async () => {

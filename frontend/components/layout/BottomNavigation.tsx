@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Search, Compass, Library } from "lucide-react";
+import { AudioWaveform, Home, Search, Library } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
@@ -22,10 +22,10 @@ const navigationItems = [
         matchPattern: "/search",
     },
     {
-        name: "Explore",
-        href: "/explore",
-        icon: Compass,
-        matchPattern: "/explore",
+        name: "Vibe",
+        href: "/vibe",
+        icon: AudioWaveform,
+        matchPattern: "/vibe",
     },
     {
         name: "Library",
@@ -53,10 +53,16 @@ export function BottomNavigation() {
             role="navigation"
             aria-label="Main navigation"
             style={{
-                paddingBottom: "env(safe-area-inset-bottom, 0px)",
+                paddingBottom: "var(--safe-area-bottom)",
             }}
         >
-            <div className="flex items-center justify-around h-14">
+            <div
+                className="flex h-14 items-center justify-around"
+                style={{
+                    paddingLeft: "var(--safe-area-left)",
+                    paddingRight: "var(--safe-area-right)",
+                }}
+            >
                 {navigationItems.map((item) => {
                     const isActive = item.exact
                         ? pathname === item.matchPattern

@@ -64,6 +64,8 @@ const artistState = {
         { id: "owned-1", title: "Owned Album", owned: true },
         { id: "available-1", title: "Available Album", owned: false },
     ] as Array<Record<string, unknown>>,
+    providerAlbums: [] as Array<Record<string, unknown>>,
+    artistProvider: null as "ytmusic" | null,
     tidalTopTracks: {
         enrichedTopTracks: null as unknown[] | null,
         isMatching: false,
@@ -129,10 +131,12 @@ const capture = {
     artistPopularTracks: null as Record<string, unknown> | null,
     artistActionBar: null as Record<string, unknown> | null,
     discoverActionBar: null as Record<string, unknown> | null,
+    providerAlbums: null as Record<string, unknown> | null,
+    playedTracks: null as Array<Record<string, unknown>> | null,
 };
 
 mock.module("next/navigation", {
-    exports: {
+    namedExports: {
         useRouter: () => ({
             push: () => undefined,
             back: () => undefined,
@@ -141,7 +145,7 @@ mock.module("next/navigation", {
 });
 
 mock.module("@/lib/audio-context", {
-    exports: {
+    namedExports: {
         useAudioState: () => ({
             currentTrack: null,
         }),
@@ -153,14 +157,16 @@ mock.module("@/lib/audio-context", {
         }),
         useAudioControls: () => ({
             pause: () => undefined,
-            playTracks: () => undefined,
+            playTracks: (tracks: Array<Record<string, unknown>>) => {
+                capture.playedTracks = tracks;
+            },
             playNow: () => undefined,
         }),
     },
 });
 
 mock.module("@/lib/download-context", {
-    exports: {
+    namedExports: {
         useDownloadContext: () => ({
             isPendingByMbid: () => false,
             downloadsEnabled: true,
@@ -169,7 +175,7 @@ mock.module("@/lib/download-context", {
 });
 
 mock.module("@/lib/listen-together-context", {
-    exports: {
+    namedExports: {
         useListenTogether: () => ({
             isInGroup: false,
         }),
@@ -177,7 +183,7 @@ mock.module("@/lib/listen-together-context", {
 });
 
 mock.module("@/lib/features-context", {
-    exports: {
+    namedExports: {
         useFeatures: () => ({
             musicCNN: false,
             vibeEmbeddings: false,
@@ -191,7 +197,7 @@ mock.module("@/lib/features-context", {
 });
 
 mock.module("@/hooks/useImageColor", {
-    exports: {
+    namedExports: {
         useImageColor: () => ({
             colors: {
                 vibrant: "#4488ee",
@@ -202,7 +208,7 @@ mock.module("@/hooks/useImageColor", {
 });
 
 mock.module("@/lib/api", {
-    exports: {
+    namedExports: {
         api: {
             getCoverArtUrl: (id: string, size: number) =>
                 `/cover/${encodeURIComponent(id)}?size=${size}`,
@@ -220,27 +226,27 @@ mock.module("@/lib/api", {
 });
 
 mock.module("@/components/ui/LoadingScreen", {
-    exports: {
+    namedExports: {
         LoadingScreen: ({ message }: { message?: string }) =>
             React.createElement("div", null, "loading-screen", message ?? ""),
     },
 });
 
 mock.module("@/components/ui/GradientSpinner", {
-    exports: {
+    namedExports: {
         GradientSpinner: marker("gradient-spinner"),
     },
 });
 
 mock.module("lucide-react", {
-    exports: {
+    namedExports: {
         RefreshCw: Icon,
         Music2: Icon,
     },
 });
 
 mock.module("sonner", {
-    exports: {
+    namedExports: {
         toast: {
             success: () => undefined,
             error: () => undefined,
@@ -250,7 +256,7 @@ mock.module("sonner", {
 });
 
 mock.module("@/features/album/hooks/useAlbumData", {
-    exports: {
+    namedExports: {
         useAlbumData: () => ({
             album: albumState.album,
             source: albumState.source,
@@ -262,7 +268,7 @@ mock.module("@/features/album/hooks/useAlbumData", {
 });
 
 mock.module("@/features/album/hooks/useTidalGapFill", {
-    exports: {
+    namedExports: {
         useTidalGapFill: () => ({
             enrichedTracks: albumState.tidalGapFill.enrichedTracks,
             isMatching: albumState.tidalGapFill.isMatching,
@@ -272,7 +278,7 @@ mock.module("@/features/album/hooks/useTidalGapFill", {
 });
 
 mock.module("@/features/album/hooks/useYtMusicGapFill", {
-    exports: {
+    namedExports: {
         useYtMusicGapFill: () => ({
             enrichedTracks: albumState.ytGapFill.enrichedTracks,
             isMatching: albumState.ytGapFill.isMatching,
@@ -282,7 +288,7 @@ mock.module("@/features/album/hooks/useYtMusicGapFill", {
 });
 
 mock.module("@/features/album/hooks/useAlbumRequest", {
-    exports: {
+    namedExports: {
         useAlbumRequest: () => ({
             requestsEnabled: false,
             isRequestedAlbum: false,
@@ -293,7 +299,7 @@ mock.module("@/features/album/hooks/useAlbumRequest", {
 });
 
 mock.module("@/features/album/hooks/useAlbumActions", {
-    exports: {
+    namedExports: {
         useAlbumActions: () => ({
             playAlbum: () => undefined,
             shufflePlay: () => undefined,
@@ -308,19 +314,19 @@ mock.module("@/features/album/hooks/useAlbumActions", {
 });
 
 mock.module("@/components/ui/PlaylistSelector", {
-    exports: {
+    namedExports: {
         PlaylistSelector: marker("playlist-selector"),
     },
 });
 
 mock.module("@/features/album/components/AlbumHero", {
-    exports: {
+    namedExports: {
         AlbumHero: marker("album-hero"),
     },
 });
 
 mock.module("@/features/album/components/AlbumActionBar", {
-    exports: {
+    namedExports: {
         AlbumActionBar: (props: Record<string, unknown>) => {
             capture.albumActionBar = props;
             return React.createElement("div", null, "album-action-bar");
@@ -329,7 +335,7 @@ mock.module("@/features/album/components/AlbumActionBar", {
 });
 
 mock.module("@/features/album/components/TrackList", {
-    exports: {
+    namedExports: {
         TrackList: (props: Record<string, unknown>) => {
             capture.albumTrackList = props;
             return React.createElement("div", null, "album-track-list");
@@ -338,13 +344,13 @@ mock.module("@/features/album/components/TrackList", {
 });
 
 mock.module("@/features/album/components/SimilarAlbums", {
-    exports: {
+    namedExports: {
         SimilarAlbums: marker("similar-albums"),
     },
 });
 
 mock.module("@/features/artist/hooks/useArtistAlbumRequests", {
-    exports: {
+    namedExports: {
         useArtistAlbumRequests: () => ({
             requestsEnabled: false,
             isRequestableAlbum: () => false,
@@ -356,10 +362,12 @@ mock.module("@/features/artist/hooks/useArtistAlbumRequests", {
 });
 
 mock.module("@/features/artist/hooks/useArtistData", {
-    exports: {
+    namedExports: {
         useArtistData: () => ({
             artist: artistState.artist,
             albums: artistState.albums,
+            providerAlbums: artistState.providerAlbums,
+            artistProvider: artistState.artistProvider,
             loading: artistState.loading,
             detailsLoading: artistState.detailsLoading,
             error: artistState.error,
@@ -372,7 +380,7 @@ mock.module("@/features/artist/hooks/useArtistData", {
 });
 
 mock.module("@/features/artist/hooks/useArtistActions", {
-    exports: {
+    namedExports: {
         useArtistActions: () => ({
             playAll: () => undefined,
             shufflePlay: () => undefined,
@@ -382,7 +390,7 @@ mock.module("@/features/artist/hooks/useArtistActions", {
 });
 
 mock.module("@/features/artist/hooks/useDownloadActions", {
-    exports: {
+    namedExports: {
         useDownloadActions: () => ({
             downloadArtist: () => undefined,
             downloadAlbum: () => undefined,
@@ -391,7 +399,7 @@ mock.module("@/features/artist/hooks/useDownloadActions", {
 });
 
 mock.module("@/features/artist/hooks/useTidalTopTracks", {
-    exports: {
+    namedExports: {
         useTidalTopTracks: () => ({
             enrichedTopTracks: artistState.tidalTopTracks.enrichedTopTracks,
             isMatching: artistState.tidalTopTracks.isMatching,
@@ -401,7 +409,7 @@ mock.module("@/features/artist/hooks/useTidalTopTracks", {
 });
 
 mock.module("@/features/artist/hooks/useYtMusicTopTracks", {
-    exports: {
+    namedExports: {
         useYtMusicTopTracks: () => ({
             enrichedTopTracks: artistState.ytTopTracks.enrichedTopTracks,
             isMatching: artistState.ytTopTracks.isMatching,
@@ -411,13 +419,13 @@ mock.module("@/features/artist/hooks/useYtMusicTopTracks", {
 });
 
 mock.module("@/features/artist/components/ArtistHero", {
-    exports: {
+    namedExports: {
         ArtistHero: marker("artist-hero"),
     },
 });
 
 mock.module("@/features/artist/components/ArtistActionBar", {
-    exports: {
+    namedExports: {
         ArtistActionBar: (props: Record<string, unknown>) => {
             capture.artistActionBar = props;
             return React.createElement("div", null, "artist-action-bar");
@@ -426,13 +434,13 @@ mock.module("@/features/artist/components/ArtistActionBar", {
 });
 
 mock.module("@/features/artist/components/ArtistBio", {
-    exports: {
+    namedExports: {
         ArtistBio: marker("artist-bio"),
     },
 });
 
 mock.module("@/features/artist/components/PopularTracks", {
-    exports: {
+    namedExports: {
         PopularTracks: (props: Record<string, unknown>) => {
             capture.artistPopularTracks = props;
             return React.createElement("div", null, "popular-tracks");
@@ -441,31 +449,40 @@ mock.module("@/features/artist/components/PopularTracks", {
 });
 
 mock.module("@/features/artist/components/Discography", {
-    exports: {
+    namedExports: {
         Discography: marker("discography"),
     },
 });
 
 mock.module("@/features/artist/components/AvailableAlbums", {
-    exports: {
+    namedExports: {
         AvailableAlbums: marker("available-albums"),
     },
 });
 
 mock.module("@/features/artist/components/SimilarArtists", {
-    exports: {
+    namedExports: {
         SimilarArtists: marker("similar-artists"),
     },
 });
 
+mock.module("@/features/search/components/ProviderAlbumsGrid", {
+    namedExports: {
+        ProviderAlbumsGrid: (props: Record<string, unknown>) => {
+            capture.providerAlbums = props;
+            return React.createElement("div", null, "provider-albums");
+        },
+    },
+});
+
 mock.module("@/components/ui/ReleaseSelectionModal", {
-    exports: {
+    namedExports: {
         ReleaseSelectionModal: marker("release-selection-modal"),
     },
 });
 
 mock.module("@/features/discover/hooks/useDiscoverData", {
-    exports: {
+    namedExports: {
         useDiscoverData: () => ({
             playlist: discoverState.playlist,
             config: discoverState.config,
@@ -481,7 +498,7 @@ mock.module("@/features/discover/hooks/useDiscoverData", {
 });
 
 mock.module("@/features/discover/hooks/useDiscoverProviderGapFill", {
-    exports: {
+    namedExports: {
         useDiscoverProviderGapFill: () => ({
             tracks:
                 discoverState.providerTracks ||
@@ -496,7 +513,7 @@ mock.module("@/features/discover/hooks/useDiscoverProviderGapFill", {
 });
 
 mock.module("@/features/discover/hooks/useDiscoverActions", {
-    exports: {
+    namedExports: {
         useDiscoverActions: () => ({
             handleGenerate: () => undefined,
             handlePlayPlaylist: () => undefined,
@@ -507,7 +524,7 @@ mock.module("@/features/discover/hooks/useDiscoverActions", {
 });
 
 mock.module("@/features/discover/hooks/usePreviewPlayer", {
-    exports: {
+    namedExports: {
         usePreviewPlayer: () => ({
             currentPreview: null,
             handleTogglePreview: () => undefined,
@@ -516,13 +533,13 @@ mock.module("@/features/discover/hooks/usePreviewPlayer", {
 });
 
 mock.module("@/features/discover/components/DiscoverHero", {
-    exports: {
+    namedExports: {
         DiscoverHero: marker("discover-hero"),
     },
 });
 
 mock.module("@/features/discover/components/DiscoverActionBar", {
-    exports: {
+    namedExports: {
         DiscoverActionBar: (props: Record<string, unknown>) => {
             capture.discoverActionBar = props;
             return React.createElement("div", null, "discover-action-bar");
@@ -531,25 +548,25 @@ mock.module("@/features/discover/components/DiscoverActionBar", {
 });
 
 mock.module("@/features/discover/components/DiscoverSettings", {
-    exports: {
+    namedExports: {
         DiscoverSettings: marker("discover-settings"),
     },
 });
 
 mock.module("@/features/discover/components/TrackList", {
-    exports: {
+    namedExports: {
         TrackList: marker("discover-track-list"),
     },
 });
 
 mock.module("@/features/discover/components/UnavailableAlbums", {
-    exports: {
+    namedExports: {
         UnavailableAlbums: marker("unavailable-albums"),
     },
 });
 
 mock.module("@/features/discover/components/HowItWorks", {
-    exports: {
+    namedExports: {
         HowItWorks: marker("how-it-works"),
     },
 });
@@ -599,6 +616,8 @@ beforeEach(() => {
         { id: "owned-1", title: "Owned Album", owned: true },
         { id: "available-1", title: "Available Album", owned: false },
     ];
+    artistState.providerAlbums = [];
+    artistState.artistProvider = null;
     artistState.tidalTopTracks = {
         enrichedTopTracks: null,
         isMatching: false,
@@ -646,6 +665,8 @@ beforeEach(() => {
     capture.artistPopularTracks = null;
     capture.artistActionBar = null;
     capture.discoverActionBar = null;
+    capture.providerAlbums = null;
+    capture.playedTracks = null;
 });
 
 function resolvedParams(id: string) {
@@ -797,6 +818,57 @@ test("artist route renders popular tracks and provider matching metadata", async
         "/artist/artist-1/popular",
     );
     assert.equal(capture.artistActionBar?.source, "discovery");
+});
+
+test("YouTube Music artist route exposes playable tracks and provider albums", async () => {
+    artistState.source = "discovery";
+    artistState.artistProvider = "ytmusic";
+    artistState.artist = {
+        id: "ytartist:UCmassiveattack",
+        name: "Massive Attack",
+        topTracks: [
+            {
+                id: "yt:teardrop",
+                title: "Teardrop",
+                duration: 331,
+                streamSource: "youtube",
+                youtubeVideoId: "teardrop",
+                artist: {
+                    id: "ytartist:UCmassiveattack",
+                    name: "Massive Attack",
+                },
+                album: { title: "Mezzanine" },
+            },
+        ],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerAlbums = [
+        {
+            type: "album",
+            id: "MPREb_mezzanine",
+            browseId: "MPREb_mezzanine",
+            name: "Mezzanine",
+            artist: "Massive Attack",
+            provider: "ytmusic",
+        },
+    ];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.match(html, /provider-albums/);
+    assert.equal(
+        (capture.providerAlbums?.albums as Array<{ browseId: string }>)[0]
+            .browseId,
+        "MPREb_mezzanine",
+    );
+    assert.equal(capture.artistPopularTracks?.popularHref, undefined);
+    assert.equal(capture.artistActionBar?.downloadsEnabled, false);
+
+    (capture.artistActionBar?.onPlayAll as () => void)();
+    assert.equal(capture.playedTracks?.[0]?.youtubeVideoId, "teardrop");
+    assert.equal(capture.playedTracks?.[0]?.streamSource, "youtube");
 });
 
 test("discover route shows spinner while loading", async () => {

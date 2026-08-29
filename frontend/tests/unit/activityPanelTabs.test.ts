@@ -22,18 +22,19 @@ test("admin sees every activity tab", () => {
     assert.equal(isActivityTabVisible("history", true), true);
 });
 
-test("non-admin hides active/history tabs", () => {
+test("non-admin hides download tabs but keeps personal imports visible", () => {
     const visibleTabs = getVisibleActivityTabIds(false);
-    assert.deepEqual(visibleTabs, ["notifications", "social"]);
+    assert.deepEqual(visibleTabs, ["notifications", "imports", "social"]);
     assert.equal(isActivityTabVisible("notifications", false), true);
     assert.equal(isActivityTabVisible("social", false), true);
     assert.equal(isActivityTabVisible("active", false), false);
     assert.equal(isActivityTabVisible("history", false), false);
-    assert.equal(isActivityTabVisible("imports", false), false);
+    assert.equal(isActivityTabVisible("imports", false), true);
 });
 
-test("admin keeps imports visible and imports tab has no badge", () => {
+test("imports stay visible for every user and have no badge", () => {
     assert.equal(isActivityTabVisible("imports", true), true);
+    assert.equal(isActivityTabVisible("imports", false), true);
 
     const badgeState = getActivityPanelBadgeState({
         unreadCount: 1,

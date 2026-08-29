@@ -441,6 +441,8 @@ def test_sync_spool_options_reject_live_streams(
     assert live_rejection
     assert match_filter({"is_live": False, "title": "Recorded track"}) is None
     assert len(captured_options["progress_hooks"]) == 1
+    assert captured_options["noprogress"] is True
+    assert captured_options["concurrent_fragment_downloads"] == 4
 
 
 def test_sync_spool_deletes_completed_file_over_total_budget(

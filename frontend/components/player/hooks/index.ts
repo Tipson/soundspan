@@ -10,6 +10,7 @@ export { usePlaybackMetadataSync } from "./usePlaybackMetadataSync";
 export { usePlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 export { usePlaybackRecoveryHelpers } from "./usePlaybackRecoveryHelpers";
 export { usePlaybackStateSync } from "./usePlaybackStateSync";
+export { usePlayEngagementTracking } from "./usePlayEngagementTracking";
 export { usePlaybackUnmountCleanup } from "./usePlaybackUnmountCleanup";
 export { usePlaybackWatchdogs } from "./usePlaybackWatchdogs";
 export { usePodcastSeeking } from "./usePodcastSeeking";
@@ -20,3 +21,4 @@ export {
 export { useQueueRecoveryEffects } from "./useQueueRecoveryEffects";
 export { useLoudnessNormalization } from "./useLoudnessNormalization";
 export { useTrackRecovery } from "./useTrackRecovery";
+export { createPlaybackErrorHandler } from "./createPlaybackErrorHandler";

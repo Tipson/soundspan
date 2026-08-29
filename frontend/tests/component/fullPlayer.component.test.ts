@@ -280,6 +280,14 @@ test("FullPlayer shows retry affordance when audioError is present", async () =>
     assert.match(html, /title="Retry playback"/);
 });
 
+test("FullPlayer exposes both like and dislike controls for music", async () => {
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /aria-label="Like"/);
+    assert.match(html, /aria-label="Dislike"/);
+});
+
 test("FullPlayer uses podcast saved progress when live currentTime is zero", async () => {
     state.playbackType = "podcast";
     state.currentTrack = null;

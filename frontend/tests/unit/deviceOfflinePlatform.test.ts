@@ -1,14 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    abortBrowserBackgroundFetch,
     backgroundFetchIdForKey,
     inspectBrowserServiceWorkerRegistration,
     resolveDeviceOfflineTransferCapability,
     startBrowserBackgroundFetch,
+    sweepLegacyBrowserBackgroundFetches,
     type BackgroundFetchRegistrationLike,
     type BrowserServiceWorkerContainerLike,
 } from "../../features/device-offline/platform";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
+
+function activeDeviceOfflineWorker() {
+    return {
+        postMessage(
+            message: unknown,
+            transfer: readonly { postMessage: (value: unknown) => void }[] = [],
+        ) {
+            if (
+                (message as { type?: string })?.type !==
+                "DEVICE_OFFLINE_CAPABILITIES_REQUEST"
+            ) {
+                return;
+            }
+            transfer[0]?.postMessage({
+                type: "DEVICE_OFFLINE_CAPABILITIES",
+                backgroundFetchProtocol: 1,
+            });
+        },
+    };
+}
 
 test("background registrations are isolated by download attempt", () => {
     assert.notEqual(
@@ -18,7 +40,7 @@ test("background registrations are isolated by download attempt", () => {
     assert.match(backgroundFetchIdForKey("opaque:key", 2), /%3A.*::2$/);
 });
 
-test("Android uses Background Fetch only when the live registration exposes it", () => {
+test("Android uses the verified foreground path even when Background Fetch is exposed", () => {
     const backgroundFetch = {
         fetch: async () => ({ id: "download-1" }),
     } as unknown as BackgroundFetchRegistrationLike["backgroundFetch"];
@@ -28,7 +50,7 @@ test("Android uses Background Fetch only when the live registration exposes it",
             userAgent: "Mozilla/5.0 (Linux; Android 15)",
             backgroundFetch,
         }).mode,
-        "background",
+        "foreground",
     );
     assert.equal(
         resolveDeviceOfflineTransferCapability({
@@ -98,8 +120,8 @@ test("only an active service worker registration can expose Background Fetch", a
     assert.equal(active.state, "active");
 });
 
-test("an ambiguous Background Fetch start timeout never falls back to a duplicate foreground transfer", async () => {
-    const pendingStart = new Promise<{ id: string }>(() => undefined);
+test("Android never starts the unreliable browser Background Fetch path", async () => {
+    let backgroundFetchCalls = 0;
     const record = {
         key: "opaque-key",
         attempt: 1,
@@ -113,9 +135,12 @@ test("an ambiguous Background Fetch start timeout never falls back to a duplicat
         {
             serviceWorker: {
                 getRegistration: async () => ({
-                    active: {},
+                    active: activeDeviceOfflineWorker(),
                     backgroundFetch: {
-                        fetch: async () => pendingStart,
+                        fetch: async () => {
+                            backgroundFetchCalls += 1;
+                            return { id: "must-not-start" };
+                        },
                     },
                 }),
             },
@@ -125,5 +150,192 @@ test("an ambiguous Background Fetch start timeout never falls back to a duplicat
         },
     );
 
-    assert.equal(result, "unknown");
+    assert.equal(result, "unavailable");
+    assert.equal(backgroundFetchCalls, 0);
+});
+
+test("legacy stalled Background Fetch cleanup aborts the Chrome system registration", async () => {
+    const backgroundFetchId = "soundspan-device-audio-legacy-key::1";
+    let requestedId: string | null = null;
+    let abortCalls = 0;
+    const record = {
+        key: "legacy-key",
+        attempt: 1,
+        backgroundFetchId,
+    } as DeviceOfflineDownloadRecord;
+
+    const result = await abortBrowserBackgroundFetch(record, {
+        serviceWorker: {
+            getRegistration: async () => ({
+                active: {},
+                backgroundFetch: {
+                    fetch: async () => ({ id: "unused" }),
+                    get: async (id) => {
+                        requestedId = id;
+                        return {
+                            id,
+                            abort: async () => {
+                                abortCalls += 1;
+                                return true;
+                            },
+                        };
+                    },
+                },
+            }),
+        },
+        lookupTimeoutMs: 5,
+        operationTimeoutMs: 5,
+    });
+
+    assert.equal(requestedId, backgroundFetchId);
+    assert.equal(abortCalls, 1);
+    assert.equal(result, "cleared");
+});
+
+test("legacy cleanup preserves uncertainty when Chrome rejects, stalls, or declines abort", async () => {
+    const record = {
+        key: "legacy-key",
+        attempt: 1,
+        backgroundFetchId: "soundspan-device-audio-legacy-key::1",
+    } as DeviceOfflineDownloadRecord;
+    for (const abort of [
+        async () => false,
+        async () => {
+            throw new Error("Chrome rejected abort");
+        },
+        () => new Promise<boolean>(() => undefined),
+    ]) {
+        assert.equal(
+            await abortBrowserBackgroundFetch(record, {
+                serviceWorker: {
+                    getRegistration: async () => ({
+                        active: {},
+                        backgroundFetch: {
+                            fetch: async () => ({ id: "unused" }),
+                            get: async (id) => ({ id, abort }),
+                        },
+                    }),
+                },
+                lookupTimeoutMs: 5,
+                operationTimeoutMs: 5,
+            }),
+            "unknown",
+        );
+    }
+});
+
+test("a missing legacy registration is confirmed cleared", async () => {
+    const result = await abortBrowserBackgroundFetch(
+        {
+            key: "gone-key",
+            attempt: 1,
+            backgroundFetchId: "soundspan-device-audio-gone-key::1",
+        } as DeviceOfflineDownloadRecord,
+        {
+            serviceWorker: {
+                getRegistration: async () => ({
+                    active: {},
+                    backgroundFetch: {
+                        fetch: async () => ({ id: "unused" }),
+                        get: async () => undefined,
+                    },
+                }),
+            },
+            lookupTimeoutMs: 5,
+            operationTimeoutMs: 5,
+        },
+    );
+    assert.equal(result, "cleared");
+});
+
+test("legacy sweep retries orphaned Soundspan registrations without touching foreign downloads", async () => {
+    const ownId = "soundspan-device-audio-orphan::1";
+    const foreignId = "another-app-download";
+    let abortAttempts = 0;
+    const requested: string[] = [];
+    const runtime = {
+        serviceWorker: {
+            getRegistration: async () => ({
+                active: {},
+                backgroundFetch: {
+                    fetch: async () => ({ id: "unused" }),
+                    getIds: async () => [ownId, foreignId],
+                    get: async (id: string) => {
+                        requested.push(id);
+                        return {
+                            id,
+                            abort: async () => {
+                                abortAttempts += 1;
+                                return abortAttempts > 1;
+                            },
+                        };
+                    },
+                },
+            }),
+        },
+        lookupTimeoutMs: 5,
+        operationTimeoutMs: 5,
+    };
+
+    assert.equal(await sweepLegacyBrowserBackgroundFetches(runtime), "unknown");
+    assert.equal(await sweepLegacyBrowserBackgroundFetches(runtime), "cleared");
+    assert.deepEqual(requested, [ownId, ownId]);
+});
+
+test("legacy sweep does not turn a hung registration enumeration into an empty list", async () => {
+    assert.equal(
+        await sweepLegacyBrowserBackgroundFetches({
+            serviceWorker: {
+                getRegistration: async () => ({
+                    active: {},
+                    backgroundFetch: {
+                        fetch: async () => ({ id: "unused" }),
+                        getIds: () => new Promise<string[]>(() => undefined),
+                        get: async () => undefined,
+                    },
+                }),
+            },
+            lookupTimeoutMs: 5,
+            operationTimeoutMs: 5,
+        }),
+        "unknown",
+    );
+});
+
+test("an older active worker without the device-offline protocol falls back to foreground", async () => {
+    let backgroundFetchCalls = 0;
+    const record = {
+        key: "mixed-version-key",
+        attempt: 1,
+        totalBytes: null,
+        track: { title: "Mixed version" },
+    } as DeviceOfflineDownloadRecord;
+
+    const result = await startBrowserBackgroundFetch(
+        record,
+        "https://soundspan.test/api/ytmusic/stream-public/track-1",
+        {
+            serviceWorker: {
+                getRegistration: async () => ({
+                    active: {
+                        postMessage() {
+                            // Previous Soundspan workers ignore this request.
+                        },
+                    },
+                    backgroundFetch: {
+                        fetch: async () => {
+                            backgroundFetchCalls += 1;
+                            return { id: "must-not-start" };
+                        },
+                    },
+                }),
+            },
+            userAgent: "Mozilla/5.0 (Linux; Android 15)",
+            lookupTimeoutMs: 5,
+            operationTimeoutMs: 5,
+        },
+    );
+
+    assert.equal(result, "unavailable");
+    assert.equal(backgroundFetchCalls, 0);
 });

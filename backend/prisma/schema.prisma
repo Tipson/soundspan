@@ -68,6 +68,7 @@ model User {
   federationPeersCreated    FederationPeer[]
   federationPlaylistFollows FederationPlaylistFollow[]
   scrobbleConnections       ScrobbleConnection[]
+  savedMusicEntities        SavedMusicEntity[]
 }
 
 model UserSettings {
@@ -649,17 +650,23 @@ model TranscodedFile {
 }
 
 model Play {
-  id             String        @id @default(cuid())
-  userId         String
-  trackId        String?
-  trackTidalId   String?
-  trackYtMusicId String?
-  playedAt       DateTime      @default(now())
-  source         ListenSource  @default(LIBRARY)
-  track          Track?        @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  trackTidal     TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
-  trackYtMusic   TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(cuid())
+  userId              String
+  trackId             String?
+  trackTidalId        String?
+  trackYtMusicId      String?
+  playedAt            DateTime      @default(now())
+  source              ListenSource  @default(LIBRARY)
+  listenedSeconds     Float?
+  completionRatio     Float?
+  outcome             String?
+  playContext         String?
+  waveMode            String?
+  engagementUpdatedAt DateTime?
+  track               Track?        @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  trackTidal          TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
+  trackYtMusic        TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, playedAt])
   @@index([trackId])
@@ -700,6 +707,26 @@ model HiddenPlaylist {
   @@index([userId])
 }
 
+/// An album or artist explicitly saved to one user's personal collection.
+/// Provider entities use snapshot metadata because they may not have local
+/// Artist/Album rows and must remain visible without downloading server files.
+model SavedMusicEntity {
+  id         String   @id @default(cuid())
+  userId     String
+  entityType String
+  source     String
+  entityId   String
+  title      String
+  subtitle   String?
+  imageUrl   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, source, entityId])
+  @@index([userId, entityType, createdAt])
+}
+
 model ShareLink {
   id             String    @id @default(cuid())
   token          String    @unique
@@ -732,9 +759,9 @@ model PlaylistItem {
   trackTidal     TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
   trackYtMusic   TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
 
-  @@unique([playlistId, trackId])
-  @@unique([playlistId, trackTidalId])
-  @@unique([playlistId, trackYtMusicId])
+  @@unique([playlistId, trackId, sort])
+  @@unique([playlistId, trackTidalId, sort])
+  @@unique([playlistId, trackYtMusicId, sort])
   @@index([playlistId, sort])
   @@index([trackTidalId])
   @@index([trackYtMusicId])

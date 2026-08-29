@@ -63,7 +63,7 @@ const BASELINE = Object.freeze({
     "backend/src/routes/youtubeMusic.ts": 1604,
     "backend/src/services/lidarr.ts": 1689,
     "backend/src/services/simpleDownloadManager.ts": 1191,
-    "backend/src/services/spotify.ts": 1624,
+    "backend/src/services/spotify.ts": 1555,
     "backend/src/workers/unifiedEnrichment.ts": 1825,
     "frontend/app/playlist/[id]/page.tsx": 1506,
     "frontend/app/vibe/page.tsx": 1524,

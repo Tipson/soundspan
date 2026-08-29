@@ -42,3 +42,18 @@ test("SearchFilters shows the Peers pill when federation is enabled", async () =
     assert.match(html, />Peers</);
     assert.match(html, /bg-brand/);
 });
+
+test("SearchFilters stays music-only and hides the podcasts pill", async () => {
+    const { SearchFilters } =
+        await import("../../features/search/components/SearchFilters");
+    const html = renderToStaticMarkup(
+        React.createElement(SearchFilters, {
+            filterTab: "all",
+            onFilterChange: () => undefined,
+            soulseekEnabled: false,
+            federationEnabled: false,
+            hasSearched: true,
+        }),
+    );
+    assert.doesNotMatch(html, />Podcasts</);
+});

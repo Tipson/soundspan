@@ -63,8 +63,6 @@ const reconnectJobSchema = z.object({
     url: z.string().url(),
 });
 
-const TERMINAL_JOB_STATUSES = new Set(["completed", "failed", "cancelled"]);
-
 function buildNormalizedSource(sourceType: string, sourceId: string): string {
     return `${sourceType.trim().toLowerCase()}:${sourceId.trim()}`;
 }
@@ -126,25 +124,8 @@ router.post("/jobs", requireAuth, async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Unsupported playlist URL" });
         }
 
-        const userId = req.user!.id;
-        const normalizedSource = buildNormalizedSource(
-            parsedSource.source,
-            parsedSource.id,
-        );
-        const existingJob = await importJobStore.findActiveJobForSource(
-            userId,
-            normalizedSource,
-        );
-
-        if (existingJob) {
-            return res.status(200).json({
-                deduped: true,
-                job: existingJob,
-            });
-        }
-
-        const job = await importJobStore.createJob({
-            userId,
+        const claim = await importJobStore.claimJob({
+            userId: req.user!.id,
             sourceType: parsedSource.source,
             sourceId: parsedSource.id,
             sourceUrl: parsed.data.url,
@@ -160,12 +141,18 @@ router.post("/jobs", requireAuth, async (req: Request, res: Response) => {
                 unresolved: 0,
             },
         });
+        genericImportJobRunner.enqueue(claim.job.id);
 
-        genericImportJobRunner.enqueue(job.id);
+        if (!claim.created) {
+            return res.status(200).json({
+                deduped: true,
+                job: claim.job,
+            });
+        }
 
         res.status(202).json({
             deduped: false,
-            job,
+            job: claim.job,
         });
     } catch (err) {
         logger.error("[Import] Job submit failed:", err);
@@ -307,26 +294,25 @@ router.post(
     requireAuth,
     async (req: Request<{ jobId: string }>, res: Response) => {
         try {
-            const job = await importJobStore.getJob(req.params.jobId);
-            if (!job) {
+            const cancellation = await importJobStore.requestCancellation(
+                req.params.jobId,
+                req.user!.id,
+            );
+            if (cancellation.outcome === "not_found") {
                 return res.status(404).json({ error: "Import job not found" });
             }
-            if (job.userId !== req.user!.id) {
+            if (cancellation.outcome === "forbidden") {
                 return res.status(403).json({
                     error: "Not authorized to cancel this import job",
                 });
             }
-            if (TERMINAL_JOB_STATUSES.has(job.status)) {
+            if (cancellation.outcome === "conflict") {
                 return res.status(409).json({
-                    error: `Import job already ${job.status}`,
+                    error: `Import job already ${cancellation.job.status}`,
                 });
             }
 
-            const cancelledJob = await importJobStore.updateJob(job.id, {
-                status: "cancelling",
-                error: "Cancelled by user",
-            });
-            res.json({ job: cancelledJob });
+            res.json({ job: cancellation.job });
         } catch (err) {
             logger.error("[Import] Job cancel failed:", err);
             res.status(500).json({ error: "Failed to cancel import job" });

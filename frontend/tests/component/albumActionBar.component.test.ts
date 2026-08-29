@@ -24,6 +24,7 @@ mock.module("lucide-react", {
         Heart: icon("heart"),
         Check: icon("check"),
         Send: icon("send"),
+        Trash2: icon("trash2"),
     },
 });
 
@@ -103,6 +104,44 @@ test("AlbumActionBar renders share button near other album actions", async () =>
     assert.match(html, /title="Add all to queue"/);
 });
 
+test("AlbumActionBar renders the explicit personal-library control", async () => {
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
+
+    const html = renderToStaticMarkup(
+        React.createElement(AlbumActionBar, {
+            ...baseProps,
+            librarySaveControl: React.createElement(
+                "button",
+                null,
+                "Save to Library",
+            ),
+        }),
+    );
+
+    assert.match(html, /Save to Library/);
+});
+
+test("AlbumActionBar keeps the device copy control separate from server acquisition", async () => {
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
+
+    const html = renderToStaticMarkup(
+        React.createElement(AlbumActionBar, {
+            ...baseProps,
+            downloadsEnabled: false,
+            deviceDownloadControl: React.createElement(
+                "button",
+                null,
+                "Download to this device",
+            ),
+        }),
+    );
+
+    assert.match(html, /Download to this device/);
+    assert.doesNotMatch(html, />Download</);
+});
+
 test("AlbumActionBar still renders share button for non-library albums", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
@@ -121,7 +160,7 @@ test("AlbumActionBar still renders share button for non-library albums", async (
     assert.match(html, /title="Share album"/);
 });
 
-test("AlbumActionBar keeps remote albums playable and acquirable without album preference controls", async () => {
+test("AlbumActionBar keeps remote albums playable without server acquisition controls", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
@@ -134,18 +173,24 @@ test("AlbumActionBar keeps remote albums playable and acquirable without album p
                 rgMbid: "remote-release-group",
             },
             source: "remote" as const,
+            deviceDownloadControl: React.createElement(
+                "button",
+                null,
+                "Download to this device",
+            ),
         }),
     );
 
     assert.match(html, />Play All</);
-    assert.match(html, />Download</);
-    assert.match(html, />Search</);
+    assert.match(html, /Download to this device/);
+    assert.doesNotMatch(html, />Download</);
+    assert.doesNotMatch(html, />Search</);
     assert.match(html, /title="Add to playlist"/);
     assert.doesNotMatch(html, /Like every track on this album/);
     assert.doesNotMatch(html, /Remove like from all tracks/);
 });
 
-test("AlbumActionBar shows Request instead of Download for non-admin viewers", async () => {
+test("AlbumActionBar hides server requests in the online-first action bar", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
@@ -164,12 +209,12 @@ test("AlbumActionBar shows Request instead of Download for non-admin viewers", a
         }),
     );
 
-    assert.match(html, />Request</);
+    assert.doesNotMatch(html, />Request</);
     assert.doesNotMatch(html, />Download</);
     assert.doesNotMatch(html, />Search</);
 });
 
-test("AlbumActionBar renders a disabled Requested state for open requests", async () => {
+test("AlbumActionBar hides server request status in the online-first action bar", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
@@ -189,8 +234,8 @@ test("AlbumActionBar renders a disabled Requested state for open requests", asyn
         }),
     );
 
-    assert.match(html, />Requested</);
-    assert.match(html, /already have an open request/);
+    assert.doesNotMatch(html, />Requested</);
+    assert.doesNotMatch(html, /already have an open request/);
     assert.doesNotMatch(html, />Request</);
 });
 
@@ -213,8 +258,34 @@ test("AlbumActionBar never shows Request to viewers with direct downloads", asyn
         }),
     );
 
-    assert.match(html, />Download</);
+    assert.doesNotMatch(html, />Download</);
     assert.doesNotMatch(html, />Request</);
+});
+
+test("AlbumActionBar icon controls are touch-sized and have accessible names", async () => {
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
+    const html = renderToStaticMarkup(
+        React.createElement(AlbumActionBar, {
+            ...baseProps,
+            onAddAllToQueue: noop,
+            onToggleAlbumLike: noop,
+        }),
+    );
+
+    for (const label of [
+        "Shuffle play",
+        "Share album",
+        "Add all to queue",
+        "Add to playlist",
+        "Like every track on this album",
+    ]) {
+        const button = html.match(
+            new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
+        )?.[0];
+        assert.ok(button, `missing accessible button: ${label}`);
+        assert.match(button, /h-11 w-11/);
+    }
 });
 
 test("AlbumActionBar hides acquisition controls for a synthetic remote release group", async () => {
@@ -236,4 +307,29 @@ test("AlbumActionBar hides acquisition controls for a synthetic remote release g
     assert.match(html, />Play All</);
     assert.doesNotMatch(html, />Download</);
     assert.doesNotMatch(html, />Search</);
+});
+
+test("AlbumActionBar exposes a touch-sized delete action only for deletable local albums", async () => {
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
+
+    const localHtml = renderToStaticMarkup(
+        React.createElement(AlbumActionBar, {
+            ...baseProps,
+            canDeleteFromLibrary: true,
+            onDeleteAlbum: noop,
+        }),
+    );
+    assert.match(localHtml, /title="Delete album from server library"/);
+    assert.match(localHtml, /h-11 w-11/);
+
+    const remoteHtml = renderToStaticMarkup(
+        React.createElement(AlbumActionBar, {
+            ...baseProps,
+            source: "remote" as const,
+            canDeleteFromLibrary: true,
+            onDeleteAlbum: noop,
+        }),
+    );
+    assert.doesNotMatch(remoteHtml, /Delete album from server library/);
 });

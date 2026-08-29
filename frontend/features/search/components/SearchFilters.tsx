@@ -68,24 +68,10 @@ export function SearchFilters({
             >
                 Discover
             </button>
-            <button
-                data-tv-card
-                data-tv-card-index={3}
-                tabIndex={0}
-                onClick={() => onFilterChange("podcasts")}
-                className={cn(
-                    "px-4 py-2 text-sm font-bold rounded-full transition-all",
-                    filterTab === "podcasts"
-                        ? "bg-white text-black"
-                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
-                )}
-            >
-                Podcasts
-            </button>
             {federationEnabled && (
                 <button
                     data-tv-card
-                    data-tv-card-index={4}
+                    data-tv-card-index={3}
                     tabIndex={0}
                     onClick={() => onFilterChange("peers")}
                     className={cn(
@@ -102,7 +88,7 @@ export function SearchFilters({
             {soulseekEnabled && (
                 <button
                     data-tv-card
-                    data-tv-card-index={federationEnabled ? 5 : 4}
+                    data-tv-card-index={federationEnabled ? 4 : 3}
                     tabIndex={0}
                     onClick={() => onFilterChange("soulseek")}
                     className={cn(

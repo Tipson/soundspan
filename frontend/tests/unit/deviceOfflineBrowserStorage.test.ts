@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { DEVICE_OFFLINE_METADATA_CHANGE_KEY } from "../../features/device-offline/deviceOfflineInvalidation";
-import { getBrowserDeviceOfflineManager } from "../../features/device-offline/browserStorage";
+import {
+    createBrowserDeviceOfflinePlaybackSource,
+    getBrowserDeviceOfflineManager,
+} from "../../features/device-offline/browserStorage";
+import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
 
 GlobalRegistrator.register({ url: "https://soundspan.test/" });
 
@@ -34,6 +38,96 @@ test("the browser manager forwards cross-tab invalidations and cleans up on unsu
         }),
     );
     assert.equal(notifications, 1);
+});
+
+test("a ready device copy materializes from CacheStorage as a revocable local Blob URL", async () => {
+    const matchedUrls: string[] = [];
+    const createdBlobs: Blob[] = [];
+    const revokedUrls: string[] = [];
+    const record = {
+        ownerId: "user-1",
+        key: "ready-key",
+        status: "ready",
+        virtualUrl: "/__offline/audio/ready-key",
+    } as DeviceOfflineDownloadRecord;
+
+    const source = await createBrowserDeviceOfflinePlaybackSource(record, {
+        origin: "https://soundspan.test",
+        match: async (url) => {
+            matchedUrls.push(url);
+            return new Response(Uint8Array.from([1, 2, 3]), {
+                headers: { "content-type": "audio/mp4" },
+            });
+        },
+        createObjectUrl: (blob) => {
+            createdBlobs.push(blob);
+            return "blob:https://soundspan.test/ready-key";
+        },
+        revokeObjectUrl: (url) => revokedUrls.push(url),
+    });
+
+    assert.deepEqual(matchedUrls, [
+        "https://soundspan.test/__offline/audio/ready-key",
+    ]);
+    assert.equal(createdBlobs.length, 1);
+    assert.equal(createdBlobs[0].type, "audio/mp4");
+    assert.equal(source.url, "blob:https://soundspan.test/ready-key");
+    source.revoke();
+    source.revoke();
+    assert.deepEqual(revokedUrls, ["blob:https://soundspan.test/ready-key"]);
+});
+
+test("materializing a missing device cache fails locally instead of returning its network source", async () => {
+    const record = {
+        ownerId: "user-1",
+        key: "missing-key",
+        status: "ready",
+        virtualUrl: "/__offline/audio/missing-key",
+        sourceUrl: "/api/ytmusic/stream-public/video-a",
+    } as DeviceOfflineDownloadRecord;
+    let created = false;
+
+    await assert.rejects(
+        createBrowserDeviceOfflinePlaybackSource(record, {
+            origin: "https://soundspan.test",
+            match: async () => null,
+            createObjectUrl: () => {
+                created = true;
+                return "blob:unexpected";
+            },
+            revokeObjectUrl: () => undefined,
+        }),
+        /no longer available/i,
+    );
+    assert.equal(created, false);
+});
+
+test("materializing a truncated ready device copy fails before creating a playback URL", async () => {
+    const record = {
+        ownerId: "user-1",
+        key: "truncated-key",
+        status: "ready",
+        virtualUrl: "/__offline/audio/truncated-key",
+        totalBytes: 6,
+    } as DeviceOfflineDownloadRecord;
+    let created = false;
+
+    await assert.rejects(
+        createBrowserDeviceOfflinePlaybackSource(record, {
+            origin: "https://soundspan.test",
+            match: async () =>
+                new Response(Uint8Array.from([1, 2, 3]), {
+                    headers: { "content-length": "6" },
+                }),
+            createObjectUrl: () => {
+                created = true;
+                return "blob:unexpected";
+            },
+            revokeObjectUrl: () => undefined,
+        }),
+        /incomplete/i,
+    );
+    assert.equal(created, false);
 });
 
 test("a blocked IndexedDB open closes a late handle and successful handles close on version changes", async (t) => {

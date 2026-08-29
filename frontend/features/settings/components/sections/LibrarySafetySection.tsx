@@ -16,12 +16,12 @@ export function LibrarySafetySection({
     return (
         <SettingsSection
             id="library-safety"
-            title="Library Safety"
-            description="Guardrails for destructive library actions."
+            title="Server Library Safety"
+            description="Keep permanent server-file deletion locked unless you explicitly need it."
         >
             <SettingsRow
-                label="Allow library deletion"
-                description="When disabled, deleting tracks/albums/artists is blocked server-side and delete buttons are hidden in Library."
+                label="Allow permanent album deletion"
+                description="Off by default. Enabling this reveals deletion for locally stored albums; the server still validates every request."
                 htmlFor="library-deletion-enabled"
             >
                 <SettingsToggle
@@ -30,17 +30,6 @@ export function LibrarySafetySection({
                     onChange={(checked) =>
                         onUpdate({ libraryDeletionEnabled: checked })
                     }
-                />
-            </SettingsRow>
-            <SettingsRow
-                label="Show version"
-                description="Display the app version in the bottom-right corner of the player bar."
-                htmlFor="show-version"
-            >
-                <SettingsToggle
-                    id="show-version"
-                    checked={settings.showVersion}
-                    onChange={(checked) => onUpdate({ showVersion: checked })}
                 />
             </SettingsRow>
         </SettingsSection>

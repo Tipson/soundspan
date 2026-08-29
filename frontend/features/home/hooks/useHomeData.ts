@@ -1,8 +1,7 @@
 /**
  * useHomeData Hook
  *
- * Manages data loading for the Home page, fetching library-focused sections
- * plus Made For You cards and trending community playlists.
+ * Manages data loading for the Home page's personalized and discovery music.
  */
 
 import { frontendLogger as log } from "@/lib/logger";
@@ -12,14 +11,10 @@ import { useAuth } from "@/lib/auth-context";
 import { useFeatures } from "@/lib/features-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { subscribeQueryEvent } from "@/lib/query-events";
 import type {
     Artist,
-    ListenedItem,
     Mix,
     PopularArtist,
-    Podcast,
-    Audiobook,
     PersonalizedHomeFeed,
 } from "../types";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
@@ -29,25 +24,17 @@ import type {
 } from "@/features/explore/hooks/useExploreData";
 import type { PlaylistPreview } from "@/features/home/components/FeaturedPlaylistsGrid";
 import {
-    useRecentlyListenedQuery,
-    useRecentlyAddedQuery,
     useRecommendationsQuery,
     useLikedPlaylistQuery,
     useDiscoverWeeklySummaryQuery,
     useMixesQuery,
     usePopularArtistsQuery,
-    useTopPodcastsQuery,
-    useAudiobooksQuery,
     useRefreshMixesMutation,
     useYtMusicHomeShelvesQuery,
     queryKeys,
 } from "@/hooks/useQueries";
 
 export interface UseHomeDataReturn {
-    /** Continue Listening items. */
-    recentlyListened: ListenedItem[];
-    /** Recently added artists. */
-    recentlyAdded: Artist[];
     /** Recommended artists from Last.fm. */
     recommended: Artist[];
     /** Generated mixes. */
@@ -60,10 +47,6 @@ export interface UseHomeDataReturn {
     popularArtists: PopularArtist[];
     /** Trending community playlists from YT Music home shelves. */
     communityPlaylists: PlaylistPreview[];
-    /** Popular podcasts. */
-    recentPodcasts: Podcast[];
-    /** Audiobooks. */
-    recentAudiobooks: Audiobook[];
     /** Personalized playable provider shelves. */
     personalizedFeed: PersonalizedHomeFeed | null;
 
@@ -103,21 +86,7 @@ export function useHomeData(): UseHomeDataReturn {
             window.removeEventListener("mixes-updated", handleMixesUpdated);
     }, [queryClient]);
 
-    // Listen for library-updated event (fired when library scan completes)
-    useEffect(() => {
-        const unsubscribe = subscribeQueryEvent("library-updated", () => {
-            queryClient.refetchQueries({
-                queryKey: queryKeys.recentlyAdded(10),
-            });
-        });
-        return unsubscribe;
-    }, [queryClient]);
-
-    // ── Library queries ─────────────────────────────────────────────────
-    const { data: recentlyListenedData, isLoading: isLoadingListened } =
-        useRecentlyListenedQuery(10);
-    const { data: recentlyAddedData, isLoading: isLoadingAdded } =
-        useRecentlyAddedQuery(10);
+    // ── Personal music queries ──────────────────────────────────────────
     const { data: recommendedData, isLoading: isLoadingRecommended } =
         useRecommendationsQuery(10, discovery);
     const { data: mixesData, isLoading: isLoadingMixes } =
@@ -127,13 +96,9 @@ export function useHomeData(): UseHomeDataReturn {
     const { data: likedData } = useLikedPlaylistQuery(4);
     const { data: discoverData } = useDiscoverWeeklySummaryQuery(discovery);
 
-    // ── Popular Artists / Podcasts / Audiobooks ──────────────────────────
+    // ── Popular Artists ─────────────────────────────────────────────────
     const { data: popularData, isLoading: isLoadingPopular } =
         usePopularArtistsQuery(20);
-    const { data: podcastsData, isLoading: isLoadingPodcasts } =
-        useTopPodcastsQuery(10);
-    const { data: audiobooksData, isLoading: isLoadingAudiobooks } =
-        useAudiobooksQuery({ limit: 10 });
 
     // ── Trending Community Playlists ────────────────────────────────────
     const { data: shelvesData, isLoading: isCommunityPlaylistsLoading } =
@@ -201,7 +166,6 @@ export function useHomeData(): UseHomeDataReturn {
     }, [shelvesData]);
 
     // ── Loading state ───────────────────────────────────────────────────
-    const items = recentlyListenedData?.items ?? [];
     const personalizedTrackCount = personalizedQuery.data
         ? personalizedQuery.data.shelves.listenAgain.length +
           personalizedQuery.data.shelves.quickPicks.length +
@@ -210,40 +174,26 @@ export function useHomeData(): UseHomeDataReturn {
 
     const hasPrimaryData =
         personalizedTrackCount > 0 ||
-        items.length > 0 ||
-        (recentlyAddedData?.artists?.length ?? 0) > 0 ||
         (recommendedData?.artists?.length ?? 0) > 0 ||
         (Array.isArray(mixesData) ? mixesData.length : 0) > 0 ||
-        (popularData?.artists?.length ?? 0) > 0 ||
-        (Array.isArray(podcastsData) ? podcastsData.length : 0) > 0 ||
-        (Array.isArray(audiobooksData) ? audiobooksData.length : 0) > 0;
+        (popularData?.artists?.length ?? 0) > 0;
 
     const allPrimaryLoading =
         personalizedQuery.isLoading &&
-        isLoadingListened &&
-        isLoadingAdded &&
         isLoadingRecommended &&
         isLoadingMixes &&
-        isLoadingPopular &&
-        isLoadingPodcasts &&
-        isLoadingAudiobooks;
+        isLoadingPopular;
 
     const isLoading =
         !isAuthenticated || (!hasPrimaryData && allPrimaryLoading);
 
     return {
-        recentlyListened: items,
-        recentlyAdded: recentlyAddedData?.artists ?? [],
         recommended: discovery ? (recommendedData?.artists ?? []) : [],
         mixes: autoPlaylists && Array.isArray(mixesData) ? mixesData : [],
         likedSummary,
         discoverWeekly,
         popularArtists: popularData?.artists ?? [],
         communityPlaylists,
-        recentPodcasts: Array.isArray(podcastsData)
-            ? podcastsData.slice(0, 10)
-            : [],
-        recentAudiobooks: Array.isArray(audiobooksData) ? audiobooksData : [],
         personalizedFeed: personalizedQuery.data ?? null,
         isLoading,
         isRefreshingMixes,

@@ -11,6 +11,7 @@ export interface AlbumActionVisibilityInput {
     requestsEnabled: boolean;
     hasAddAllToQueue: boolean;
     hasAlbumPreferenceAction: boolean;
+    canDeleteFromLibrary: boolean;
     isInListenTogetherGroup: boolean;
 }
 
@@ -25,6 +26,7 @@ export interface AlbumActionVisibility {
     canShowAddAllToQueue: boolean;
     canShowAddToPlaylist: boolean;
     canShowAlbumPreference: boolean;
+    canDeleteAlbum: boolean;
     canShareAlbum: boolean;
     hasActionControls: boolean;
 }
@@ -64,12 +66,16 @@ export function getAlbumActionVisibility(
     );
     const canShowAlbumPreference =
         isOwned && input.source !== "remote" && input.hasAlbumPreferenceAction;
+    const canDeleteAlbum = Boolean(
+        input.canDeleteFromLibrary && input.source === "library",
+    );
     const canShareAlbum = Boolean(input.albumId);
     const hasLockedControls = isLibraryVisible || showAcquisition;
     const optionalControls =
         input.hasAddAllToQueue ||
         isLibraryVisible ||
         canShowAlbumPreference ||
+        canDeleteAlbum ||
         canShareAlbum;
 
     return {
@@ -82,6 +88,7 @@ export function getAlbumActionVisibility(
         canShowAddAllToQueue: input.hasAddAllToQueue,
         canShowAddToPlaylist: isLibraryVisible,
         canShowAlbumPreference,
+        canDeleteAlbum,
         canShareAlbum,
         hasActionControls: input.isInListenTogetherGroup
             ? hasLockedControls || showRequest || optionalControls

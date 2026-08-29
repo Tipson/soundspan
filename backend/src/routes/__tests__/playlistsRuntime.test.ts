@@ -2134,10 +2134,15 @@ describe("playlists route runtime", () => {
             userId: "u1",
             isPublic: false,
         });
-        prisma.playlistItem.findMany.mockResolvedValueOnce([
-            { trackId: "t-2" },
-            { trackId: "t-1" },
-        ]);
+        prisma.playlistItem.findMany
+            .mockResolvedValueOnce([
+                { id: "pli-2", trackId: "t-2" },
+                { id: "pli-1", trackId: "t-1" },
+            ])
+            .mockResolvedValueOnce([
+                { id: "pli-2", trackId: "t-2" },
+                { id: "pli-1", trackId: "t-1" },
+            ]);
         const reorderReq = {
             user: { id: "u1" },
             params: { id: "pl-1" },
@@ -2146,7 +2151,23 @@ describe("playlists route runtime", () => {
         const reorderRes = createRes();
         await reorderItems(reorderReq, reorderRes);
         expect(reorderRes.statusCode).toBe(200);
-        expect(prisma.playlistItem.update).toHaveBeenCalledTimes(2);
+        expect(prisma.playlistItem.update).toHaveBeenCalledTimes(4);
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(1, {
+            where: { id: "pli-2" },
+            data: { sort: 6 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(2, {
+            where: { id: "pli-1" },
+            data: { sort: 7 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(3, {
+            where: { id: "pli-2" },
+            data: { sort: 0 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(4, {
+            where: { id: "pli-1" },
+            data: { sort: 1 },
+        });
         expect(prisma.$transaction).toHaveBeenCalled();
     });
 
@@ -2329,9 +2350,17 @@ describe("playlists route runtime", () => {
         expect(res.statusCode).toBe(200);
         expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(1, {
             where: { id: "pli-2" },
-            data: { sort: 0 },
+            data: { sort: 6 },
         });
         expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(2, {
+            where: { id: "pli-1" },
+            data: { sort: 7 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(3, {
+            where: { id: "pli-2" },
+            data: { sort: 0 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(4, {
             where: { id: "pli-1" },
             data: { sort: 1 },
         });

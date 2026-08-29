@@ -132,6 +132,14 @@ test("lease-only renewals stay local while playback-visible transitions invalida
         }),
         true,
     );
+    assert.equal(
+        requiresDeviceOfflineCrossTabRefresh(RECORD, {
+            ...RECORD,
+            management: "manual",
+            updatedAt: 5,
+        }),
+        true,
+    );
 });
 
 test("successful metadata transitions publish invalidation while failed CAS and lease renewal stay quiet", async () => {
@@ -139,6 +147,7 @@ test("successful metadata transitions publish invalidation while failed CAS and 
     let claimSucceeds = false;
     let interruptSucceeds = false;
     let deleteSucceeds = false;
+    let automaticDeleteSucceeds = false;
     const delegate: DeviceOfflineMetadataStore = {
         listByOwner: async () => [RECORD],
         getByKey: async () => RECORD,
@@ -148,6 +157,7 @@ test("successful metadata transitions publish invalidation while failed CAS and 
         putIfCurrent: async () => updateSucceeds,
         interruptForegroundIfLeaseExpired: async () => interruptSucceeds,
         deleteIfCurrent: async () => deleteSucceeds,
+        deleteAutoManagedIfCurrent: async () => automaticDeleteSucceeds,
     };
     const publications: unknown[][] = [];
     const store = withDeviceOfflineMetadataInvalidation(delegate, (...args) =>
@@ -203,5 +213,11 @@ test("successful metadata transitions publish invalidation while failed CAS and 
     assert.equal(await store.deleteIfCurrent(RECORD), false);
     deleteSucceeds = true;
     assert.equal(await store.deleteIfCurrent(RECORD), true);
+    assert.deepEqual(publications, [[]]);
+
+    publications.length = 0;
+    assert.equal(await store.deleteAutoManagedIfCurrent(RECORD), false);
+    automaticDeleteSucceeds = true;
+    assert.equal(await store.deleteAutoManagedIfCurrent(RECORD), true);
     assert.deepEqual(publications, [[]]);
 });

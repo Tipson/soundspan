@@ -13,6 +13,16 @@ Start-here guide for `frontend/features/search`.
 External song results retain Last.fm metadata and merge exact YouTube Music
 provider identities when that integration is enabled. Rows with a provider
 identity play directly; only metadata-only rows use provider fuzzy matching.
+The same global query returns browsable YouTube Music albums and artists;
+provider albums open through the existing playable album route.
+The primary search surface is music-only: songs, albums, and artists. Dormant
+podcast/audiobook components remain for upstream compatibility but are not
+queried or rendered here. The dedicated Tracks view requests up to 50 results
+per catalog source, the overview shows up to 10 external songs, and obvious
+long-form/video presentations are ranked after songs.
+Discovery source work is bounded independently (1.5s alias correction plus a
+9s provider deadline); the browser allows 14s and the default proxy allows 20s,
+so a slow provider yields available partial results instead of erasing them.
 
 ## Directory Contents
 
@@ -25,6 +35,7 @@ identity play directly; only metadata-only rows use provider fuzzy matching.
 | `components/LibraryAlbumsGrid.tsx` | components |
 | `components/LibraryAudiobooksGrid.tsx` | components |
 | `components/LibraryPodcastsGrid.tsx` | components |
+| `components/ProviderAlbumsGrid.tsx` | components |
 | `components/LibraryTracksList.tsx` | components |
 | `components/SearchFilters.tsx` | components |
 | `components/SimilarArtistsGrid.tsx` | components |
@@ -39,6 +50,7 @@ identity play directly; only metadata-only rows use provider fuzzy matching.
 | `hooks/useYouTubePlaylist.ts` | hooks |
 | `hooks/useYouTubeUrl.ts` | hooks |
 | `discoverySelection.ts` | root |
+| `albumDedup.ts` | root |
 | `songDedup.ts` | root |
 | `types.ts` | root |
 

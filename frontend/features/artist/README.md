@@ -35,3 +35,10 @@ Start-here guide for `frontend/features/artist`.
 ## Update Rule
 
 - When adding/removing significant files or changing behavior in this domain, update or verify this README and keep the targeted commands below accurate in the same change set.
+
+## Online-first Actions
+
+The artist action bar exposes playback, account Library, playlist, preference,
+radio, and current-device offline controls. It does not mount permanent server
+acquisition actions; Download to this device queues the artist's playable
+popular tracks in the current browser/PWA only.

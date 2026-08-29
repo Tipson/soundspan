@@ -193,3 +193,199 @@ test("an older failed mutation cannot overwrite a newer preference from another 
         "thumbs_down",
     );
 });
+
+test("dislike toggle clears an active dislike and otherwise writes thumbs_down through the ordered mutation", async (testContext) => {
+    const [{ useTrackPreference }, { createRoot }] = await Promise.all([
+        import("../../hooks/useTrackPreference"),
+        import("react-dom/client"),
+    ]);
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false },
+        },
+    });
+    queryClient.setQueryData(
+        ["track-preference", TRACK_ID],
+        preferenceResponse("thumbs_down"),
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    function DislikeTrigger() {
+        const preference = useTrackPreference(TRACK_ID);
+        return React.createElement(
+            "button",
+            {
+                onClick: () => {
+                    void preference.toggleDislike().catch(() => undefined);
+                },
+            },
+            preference.signal,
+        );
+    }
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client: queryClient },
+                React.createElement(DislikeTrigger),
+            ),
+        );
+    });
+    testContext.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+        queryClient.clear();
+    });
+    await flushReact();
+
+    const button = container.querySelector("button");
+    assert.ok(button);
+
+    await React.act(async () => button.click());
+    await flushReact();
+    assert.equal(pendingPreferences[0]?.signal, "clear");
+    assert.equal(
+        queryClient.getQueryData<PreferenceResponse>([
+            "track-preference",
+            TRACK_ID,
+        ])?.signal,
+        "clear",
+    );
+
+    await React.act(async () => {
+        pendingPreferences[0]?.resolve(preferenceResponse("clear"));
+    });
+    await flushReact();
+
+    await React.act(async () => button.click());
+    await flushReact();
+    assert.equal(pendingPreferences[1]?.signal, "thumbs_down");
+    assert.equal(
+        queryClient.getQueryData<PreferenceResponse>([
+            "track-preference",
+            TRACK_ID,
+        ])?.signal,
+        "thumbs_down",
+    );
+
+    await React.act(async () => {
+        pendingPreferences[1]?.resolve(preferenceResponse("thumbs_down"));
+    });
+    await flushReact();
+});
+
+test("successful like and dislike mutations both invalidate the personalized home feed", async (testContext) => {
+    const [{ useTrackPreference }, { createRoot }] = await Promise.all([
+        import("../../hooks/useTrackPreference"),
+        import("react-dom/client"),
+    ]);
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false },
+        },
+    });
+    const invalidatedKeys: unknown[] = [];
+    queryClient.invalidateQueries = (async (filters: {
+        queryKey?: unknown;
+    }) => {
+        invalidatedKeys.push(filters.queryKey);
+    }) as typeof queryClient.invalidateQueries;
+    queryClient.setQueryData(
+        ["track-preference", TRACK_ID],
+        preferenceResponse("clear"),
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    function PreferenceTriggers() {
+        const preference = useTrackPreference(TRACK_ID);
+        return React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+                "button",
+                {
+                    "data-testid": "like",
+                    onClick: () => {
+                        void preference.toggleLike().catch(() => undefined);
+                    },
+                },
+                "like",
+            ),
+            React.createElement(
+                "button",
+                {
+                    "data-testid": "dislike",
+                    onClick: () => {
+                        void preference.toggleDislike().catch(() => undefined);
+                    },
+                },
+                "dislike",
+            ),
+        );
+    }
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client: queryClient },
+                React.createElement(PreferenceTriggers),
+            ),
+        );
+    });
+    testContext.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+        queryClient.clear();
+    });
+    await flushReact();
+
+    const likeButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="like"]',
+    );
+    const dislikeButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="dislike"]',
+    );
+    assert.ok(likeButton);
+    assert.ok(dislikeButton);
+
+    await React.act(async () => likeButton.click());
+    await flushReact();
+    assert.equal(pendingPreferences[0]?.signal, "thumbs_up");
+    await React.act(async () => {
+        pendingPreferences[0]?.resolve(preferenceResponse("thumbs_up"));
+    });
+    await flushReact();
+    assert.ok(
+        invalidatedKeys.some(
+            (key) =>
+                JSON.stringify(key) ===
+                JSON.stringify(["home", "personalized"]),
+        ),
+        "thumbs_up success invalidates the personalized home prefix",
+    );
+
+    invalidatedKeys.length = 0;
+    await React.act(async () => dislikeButton.click());
+    await flushReact();
+    assert.equal(pendingPreferences[1]?.signal, "thumbs_down");
+    await React.act(async () => {
+        pendingPreferences[1]?.resolve(preferenceResponse("thumbs_down"));
+    });
+    await flushReact();
+    assert.ok(
+        invalidatedKeys.some(
+            (key) =>
+                JSON.stringify(key) ===
+                JSON.stringify(["home", "personalized"]),
+        ),
+        "thumbs_down success invalidates the personalized home prefix",
+    );
+});

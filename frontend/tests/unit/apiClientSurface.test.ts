@@ -144,6 +144,7 @@ const EXPECTED_PUBLIC_METHODS: readonly string[] = [
     "getRecommendationsForYou",
     "getRefreshToken",
     "getScanStatus",
+    "getSavedMusicEntityStatus",
     "getSettings",
     "getSharedResource",
     "getShuffledTracks",
@@ -209,6 +210,7 @@ const EXPECTED_PUBLIC_METHODS: readonly string[] = [
     "listApiKeys",
     "listAppPasswords",
     "listImportJobs",
+    "listSavedMusicEntities",
     "listShareLinks",
     "logPlay",
     "login",
@@ -237,6 +239,7 @@ const EXPECTED_PUBLIC_METHODS: readonly string[] = [
     "removeDiscoverExclusion",
     "removeItemFromPlaylist",
     "removePendingTrack",
+    "removeSavedMusicEntity",
     "removePodcast",
     "removeTrackFromPlaylist",
     "reorderPlaylistItems",
@@ -258,6 +261,7 @@ const EXPECTED_PUBLIC_METHODS: readonly string[] = [
     "revokeInviteCode",
     "revokeShareLink",
     "saveMixAsPlaylist",
+    "saveMusicEntity",
     "saveMoodBucketMix",
     "savePlaybackState",
     "saveYtMusicOAuthToken",
@@ -299,6 +303,7 @@ const EXPECTED_PUBLIC_METHODS: readonly string[] = [
     "updatePlaylist",
     "updatePodcastEpisodeProgress",
     "updatePodcastProgress",
+    "updatePlayEngagement",
     "updateSettings",
     "updateSystemSettings",
     "updateTrackMetadata",
@@ -316,5 +321,5 @@ test("api facade exposes every pinned public method", () => {
 });
 
 test("api facade public surface count is pinned", () => {
-    assert.equal(EXPECTED_PUBLIC_METHODS.length, 296);
+    assert.equal(EXPECTED_PUBLIC_METHODS.length, 301);
 });

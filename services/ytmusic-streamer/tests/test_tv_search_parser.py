@@ -140,7 +140,7 @@ def test_tv_search_prefers_valid_content_id_over_malformed_watch_id() -> None:
 def test_tv_search_skips_malformed_lockups_without_losing_later_results() -> None:
     import app
 
-    malformed = {
+    malformed: dict[str, Any] = {
         "lockupViewModel": {
             "contentType": "LOCKUP_CONTENT_TYPE_MUSIC",
             "rendererContext": None,
@@ -165,3 +165,136 @@ def test_tv_search_rejects_noncanonical_watch_endpoint_video_id() -> None:
     results = app._tv_search(yt, "Linkin Park Numb", limit=20)
 
     assert results == []
+
+
+def test_native_search_normalizer_preserves_album_and_artist_browse_identities() -> None:
+    import app
+
+    album = app._normalize_native_search_item(
+        {
+            "resultType": "album",
+            "browseId": "MPREb_album-1",
+            "title": "Mezzanine",
+            "artist": "Massive Attack",
+            "year": "1998",
+            "thumbnails": [{"url": "https://img/album.jpg"}],
+        }
+    )
+    artist = app._normalize_native_search_item(
+        {
+            "resultType": "artist",
+            "browseId": "UCmassiveattack",
+            "artist": "Massive Attack",
+            "thumbnails": [{"url": "https://img/artist.jpg"}],
+        }
+    )
+
+    assert album == {
+        "type": "album",
+        "browseId": "MPREb_album-1",
+        "title": "Mezzanine",
+        "artist": "Massive Attack",
+        "artists": ["Massive Attack"],
+        "year": "1998",
+        "thumbnails": [{"url": "https://img/album.jpg"}],
+        "isExplicit": False,
+    }
+    assert artist == {
+        "type": "artist",
+        "browseId": "UCmassiveattack",
+        "channelId": "UCmassiveattack",
+        "title": "Massive Attack",
+        "artist": "Massive Attack",
+        "thumbnails": [{"url": "https://img/artist.jpg"}],
+    }
+
+
+def test_tv_search_preserves_browsable_album_and_artist_lockups() -> None:
+    import app
+
+    def browse_lockup(
+        content_type: str, browse_id: str, title: str, metadata_values: list[str]
+    ) -> dict[str, Any]:
+        return {
+            "lockupViewModel": {
+                "contentType": content_type,
+                "contentId": browse_id,
+                "rendererContext": {
+                    "commandContext": {
+                        "onTap": {"innertubeCommand": {"browseEndpoint": {"browseId": browse_id}}}
+                    }
+                },
+                "metadata": {
+                    "lockupMetadataViewModel": {
+                        "title": {"content": title},
+                        "metadata": {
+                            "contentMetadataViewModel": {
+                                "metadataRows": [
+                                    {
+                                        "metadataParts": [
+                                            {"text": {"content": value}}
+                                            for value in metadata_values
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                },
+                "contentImage": {
+                    "thumbnailViewModel": {
+                        "image": {"sources": [{"url": f"https://img/{browse_id}.jpg"}]}
+                    }
+                },
+            }
+        }
+
+    album_yt = _FakeYTMusic(
+        {
+            "contents": [
+                browse_lockup(
+                    "LOCKUP_CONTENT_TYPE_ALBUM",
+                    "MPREb_album-1",
+                    "Mezzanine",
+                    ["Massive Attack", "1998"],
+                )
+            ]
+        }
+    )
+    artist_yt = _FakeYTMusic(
+        {
+            "contents": [
+                browse_lockup(
+                    "LOCKUP_CONTENT_TYPE_ARTIST",
+                    "UCmassiveattack",
+                    "Massive Attack",
+                    [],
+                )
+            ]
+        }
+    )
+
+    assert app._tv_search(album_yt, "Linkin Park Numb", filter="albums", limit=20) == [
+        {
+            "type": "album",
+            "browseId": "MPREb_album-1",
+            "title": "Mezzanine",
+            "artist": "Massive Attack",
+            "artists": ["Massive Attack"],
+            "year": "1998",
+            "thumbnails": [{"url": "https://img/MPREb_album-1.jpg"}],
+            "isExplicit": False,
+        }
+    ]
+    assert app._tv_search(artist_yt, "Linkin Park Numb", filter="artists", limit=20) == [
+        {
+            "type": "artist",
+            "browseId": "UCmassiveattack",
+            "channelId": "UCmassiveattack",
+            "title": "Massive Attack",
+            "artist": "Massive Attack",
+            "thumbnails": [{"url": "https://img/UCmassiveattack.jpg"}],
+        }
+    ]
+    assert app._tv_search(artist_yt, "Linkin Park Numb", filter="albums", limit=20) == []
+    assert app._tv_search(album_yt, "Linkin Park Numb", filter="artists", limit=20) == []

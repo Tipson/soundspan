@@ -211,25 +211,33 @@ describe("youtubeMusic service", () => {
                         videoId: "vid-1",
                         title: "Song One",
                         artist: "Artist One",
+                        type: "song",
                         album: { title: "Album One" },
                         duration_seconds: 201,
                         thumbnails: [{ url: "https://img/1.jpg" }],
+                    },
+                    {
+                        videoId: "vid-video",
+                        title: "Artist One Full Concert",
+                        artist: "Uploader Channel",
+                        type: "video",
+                        duration_seconds: 5400,
                     },
                     {
                         videoId: "",
                         title: "Missing video id",
                     },
                 ],
-                total: 2,
+                total: 3,
             },
         });
 
         await expect(
-            ytMusicService.searchCanonical("u1", "artist one", "songs"),
+            ytMusicService.searchCanonical("u1", "artist one", "songs", 50),
         ).resolves.toEqual({
             query: "artist one",
             filter: "songs",
-            total: 2,
+            total: 3,
             results: [
                 {
                     source: "youtube",
@@ -247,6 +255,145 @@ describe("youtubeMusic service", () => {
                 },
             ],
         });
+        expect(mockClient.post).toHaveBeenCalledWith(
+            "/search",
+            { query: "artist one", filter: "songs", limit: 50 },
+            { params: { user_id: "u1" } },
+        );
+    });
+
+    it("normalizes album and artist catalog identities without requiring video ids", async () => {
+        mockClient.post
+            .mockResolvedValueOnce({
+                data: {
+                    results: [
+                        {
+                            type: "album",
+                            browseId: "MPREb_album-1",
+                            title: "Mezzanine",
+                            artist: "Massive Attack",
+                            year: "1998",
+                            thumbnails: [
+                                {
+                                    url: "https://img/album-small.jpg",
+                                    width: 60,
+                                    height: 60,
+                                },
+                                {
+                                    url: "https://img/album.jpg",
+                                    width: 544,
+                                    height: 544,
+                                },
+                            ],
+                        },
+                        {
+                            type: "album",
+                            title: "Missing browse identity",
+                        },
+                        {
+                            type: "artist",
+                            browseId: "UCnot-an-album",
+                            title: "Not an album",
+                            artist: "Not an album",
+                        },
+                    ],
+                    total: 2,
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    results: [
+                        {
+                            type: "artist",
+                            channelId: "UCmassiveattack",
+                            browseId: "UCmassiveattack",
+                            title: "Massive Attack",
+                            artist: "Massive Attack",
+                            thumbnails: [
+                                {
+                                    url: "https://img/artist-small.jpg",
+                                    width: 60,
+                                    height: 60,
+                                },
+                                {
+                                    url: "https://img/artist.jpg",
+                                    width: 544,
+                                    height: 544,
+                                },
+                            ],
+                        },
+                        {
+                            type: "album",
+                            browseId: "MPREb_not-an-artist",
+                            title: "Not an artist",
+                            artist: "Massive Attack",
+                        },
+                    ],
+                    total: 2,
+                },
+            });
+
+        await expect(
+            ytMusicService.searchCatalog("u1", "massive attack", "albums", 20, {
+                timeoutMs: 8_000,
+                maxRetries: 0,
+            }),
+        ).resolves.toEqual({
+            query: "massive attack",
+            filter: "albums",
+            total: 2,
+            results: [
+                {
+                    mediaType: "album",
+                    provider: "ytmusic",
+                    browseId: "MPREb_album-1",
+                    title: "Mezzanine",
+                    artistName: "Massive Attack",
+                    year: "1998",
+                    thumbnailUrl: "https://img/album.jpg",
+                    raw: expect.objectContaining({
+                        browseId: "MPREb_album-1",
+                    }),
+                },
+            ],
+        });
+        await expect(
+            ytMusicService.searchCatalog(
+                "u1",
+                "massive attack",
+                "artists",
+                20,
+                { timeoutMs: 8_000, maxRetries: 0 },
+            ),
+        ).resolves.toEqual({
+            query: "massive attack",
+            filter: "artists",
+            total: 2,
+            results: [
+                {
+                    mediaType: "artist",
+                    provider: "ytmusic",
+                    channelId: "UCmassiveattack",
+                    name: "Massive Attack",
+                    thumbnailUrl: "https://img/artist.jpg",
+                    raw: expect.objectContaining({
+                        browseId: "UCmassiveattack",
+                    }),
+                },
+            ],
+        });
+        expect(mockClient.post).toHaveBeenNthCalledWith(
+            1,
+            "/search",
+            { query: "massive attack", filter: "albums", limit: 20 },
+            { params: { user_id: "u1" }, timeout: 8_000 },
+        );
+        expect(mockClient.post).toHaveBeenNthCalledWith(
+            2,
+            "/search",
+            { query: "massive attack", filter: "artists", limit: 20 },
+            { params: { user_id: "u1" }, timeout: 8_000 },
+        );
     });
 
     it("handles browse, stream, and library request shapes", async () => {
@@ -534,6 +681,557 @@ describe("youtubeMusic service", () => {
                 200,
             ),
         ).resolves.toBeNull();
+    });
+
+    it("excludes the unavailable video and validates exact alternates before returning one", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "z0NfI2NeDHI",
+                        title: "Radio (Official Video)",
+                        artist: "Rammstein",
+                        duration_seconds: 275,
+                        type: "song",
+                    },
+                    {
+                        videoId: "alternate01",
+                        title: "Radio",
+                        artist: "Rammstein",
+                        duration_seconds: 275,
+                        type: "song",
+                    },
+                    {
+                        videoId: "alternate02",
+                        title: "Radio (Official Audio)",
+                        artist: "Rammstein",
+                        duration_seconds: 274,
+                        type: "song",
+                    },
+                ],
+                total: 3,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockRejectedValueOnce({ response: { status: 451 } })
+            .mockResolvedValueOnce({
+                videoId: "alternate02",
+                url: "https://sidecar.invalid/alternate02",
+                content_type: "audio/webm",
+                duration: 274,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Rammstein - Radio (Official Video)",
+                albumTitle: "Rammstein",
+                duration: 275,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toEqual(
+            expect.objectContaining({
+                videoId: "alternate02",
+                title: "Radio (Official Audio)",
+                artist: "Rammstein",
+                duration: 274,
+            }),
+        );
+
+        expect(searchSpy).toHaveBeenCalledWith(
+            "__public__",
+            "Rammstein Radio",
+            "songs",
+            12,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(streamInfoSpy.mock.calls.map((call) => call[1])).toEqual([
+            "alternate01",
+            "alternate02",
+        ]);
+        expect(streamInfoSpy).not.toHaveBeenCalledWith(
+            expect.anything(),
+            "z0NfI2NeDHI",
+            expect.anything(),
+            expect.anything(),
+        );
+
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("accepts the live exact artist-prefixed reupload metadata from a different uploader", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "LR__DRBbnZw",
+                        title: "Rammstein - Radio(Official Video)",
+                        artist: "Ну Съиздил",
+                        duration_seconds: 291,
+                        type: "song",
+                    },
+                ],
+                total: 1,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockResolvedValueOnce({
+                videoId: "LR__DRBbnZw",
+                url: "https://sidecar.invalid/LR__DRBbnZw",
+                content_type: "audio/webm",
+                duration: 290,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Rammstein - Radio (Official Video)",
+                albumTitle: "Rammstein",
+                duration: 291,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toEqual(
+            expect.objectContaining({
+                videoId: "LR__DRBbnZw",
+                title: "Rammstein - Radio (Official Video)",
+                artist: "Rammstein",
+                duration: 291,
+            }),
+        );
+        expect(streamInfoSpy.mock.calls.map((call) => call[1])).toEqual([
+            "LR__DRBbnZw",
+        ]);
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("supports no-space artist separators and probes exact-artist candidates first", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "Hk77fdYbxOM",
+                        title: "Rammstein- Radio (Audio HQ)",
+                        artist: "Topsic",
+                        album: "Rammstein",
+                        duration_seconds: 277,
+                        type: "song",
+                    },
+                    {
+                        videoId: "alternate02",
+                        title: "Radio (Official Audio)",
+                        artist: "Rammstein",
+                        duration_seconds: 274,
+                        type: "song",
+                    },
+                ],
+                total: 2,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockResolvedValueOnce({
+                videoId: "alternate02",
+                url: "https://sidecar.invalid/alternate02",
+                content_type: "audio/webm",
+                duration: 274,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Rammstein - Radio (Official Video)",
+                albumTitle: "Rammstein",
+                duration: 291,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toEqual(expect.objectContaining({ videoId: "alternate02" }));
+        expect(streamInfoSpy.mock.calls.map((call) => call[1])).toEqual([
+            "alternate02",
+        ]);
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("uses the live no-space artist-prefixed fallback when no exact uploader exists", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "Hk77fdYbxOM",
+                        title: "Rammstein- Radio (Audio HQ)",
+                        artist: "Topsic",
+                        album: "Rammstein",
+                        duration_seconds: 277,
+                        type: "song",
+                    },
+                ],
+                total: 1,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockResolvedValueOnce({
+                videoId: "Hk77fdYbxOM",
+                url: "https://sidecar.invalid/Hk77fdYbxOM",
+                content_type: "audio/webm",
+                duration: 277,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Rammstein - Radio (Official Video)",
+                albumTitle: "Rammstein",
+                duration: 291,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toEqual(
+            expect.objectContaining({
+                videoId: "Hk77fdYbxOM",
+                artist: "Rammstein",
+                duration: 277,
+            }),
+        );
+        expect(streamInfoSpy.mock.calls.map((call) => call[1])).toEqual([
+            "Hk77fdYbxOM",
+        ]);
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("prefers the live fallback whose version marker and duration match the original", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "Hk77fdYbxOM",
+                        title: "Rammstein- Radio (Audio HQ)",
+                        artist: "Topsic",
+                        album: "Rammstein",
+                        duration_seconds: 277,
+                        type: "song",
+                    },
+                    {
+                        videoId: "LR__DRBbnZw",
+                        title: "Rammstein - Radio(Official Video)",
+                        artist: "Ну Съиздил",
+                        duration_seconds: 291,
+                        type: "song",
+                    },
+                ],
+                total: 2,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockResolvedValueOnce({
+                videoId: "LR__DRBbnZw",
+                url: "https://sidecar.invalid/LR__DRBbnZw",
+                content_type: "audio/webm",
+                duration: 290,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Rammstein - Radio (Official Video)",
+                albumTitle: "Rammstein",
+                duration: 291,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toEqual(expect.objectContaining({ videoId: "LR__DRBbnZw" }));
+        expect(streamInfoSpy.mock.calls.map((call) => call[1])).toEqual([
+            "LR__DRBbnZw",
+        ]);
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("rejects fallback probes whose resolved identity or duration is incompatible", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "LR__DRBbnZw",
+                        title: "Rammstein - Radio(Official Video)",
+                        artist: "Ну Съиздил",
+                        duration_seconds: 291,
+                        type: "song",
+                    },
+                    {
+                        videoId: "Hk77fdYbxOM",
+                        title: "Rammstein- Radio (Audio HQ)",
+                        artist: "Topsic",
+                        duration_seconds: 277,
+                        type: "song",
+                    },
+                ],
+                total: 2,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockResolvedValueOnce({
+                videoId: "LR__DRBbnZw",
+                url: "https://sidecar.invalid/LR__DRBbnZw",
+                content_type: "audio/webm",
+                duration: 3_600,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            })
+            .mockResolvedValueOnce({
+                videoId: "different01",
+                url: "https://sidecar.invalid/Hk77fdYbxOM",
+                content_type: "audio/webm",
+                duration: 277,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Rammstein - Radio (Official Video)",
+                duration: 291,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toBeNull();
+        expect(streamInfoSpy.mock.calls.map((call) => call[1])).toEqual([
+            "LR__DRBbnZw",
+            "Hk77fdYbxOM",
+        ]);
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("rejects mismatched uploaders without a safe exact prefix or with unsafe versions", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "noprefix001",
+                        title: "Radio (Official Video)",
+                        artist: "Random Uploader",
+                        duration_seconds: 291,
+                        type: "song",
+                    },
+                    ...[
+                        ["livebad0001", "Rammstein - Radio (Live)"],
+                        ["lyricsbad01", "Rammstein - Radio (Lyrics)"],
+                        ["translat001", "Rammstein - Radio (Translation)"],
+                        ["karaoke0001", "Rammstein - Radio (Karaoke)"],
+                        ["makingof001", "Rammstein - Radio (Making Of)"],
+                        ["espanol0001", "Rammstein - Radio (Español)"],
+                    ].map(([videoId, title]) => ({
+                        videoId,
+                        title,
+                        artist: "Random Uploader",
+                        duration_seconds: 291,
+                        type: "song",
+                    })),
+                    {
+                        videoId: "wrongname01",
+                        title: "Rammstein - Radio Ga Ga",
+                        artist: "Random Uploader",
+                        duration_seconds: 291,
+                        type: "song",
+                    },
+                    {
+                        videoId: "wrongdur001",
+                        title: "Rammstein - Radio (Official Video)",
+                        artist: "Random Uploader",
+                        duration_seconds: 3_600,
+                        type: "song",
+                    },
+                ],
+                total: 9,
+            });
+        const streamInfoSpy = jest.spyOn(ytMusicService, "getStreamInfo");
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Rammstein - Radio (Official Video)",
+                duration: 291,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toBeNull();
+        expect(streamInfoSpy).not.toHaveBeenCalled();
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("bounds alternate validation and returns null when no exact candidate streams", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: Array.from({ length: 5 }, (_, index) => ({
+                    videoId: `blocked000${index}`,
+                    title: "Radio",
+                    artist: "Rammstein",
+                    duration_seconds: 275 + index,
+                    type: "song",
+                })),
+                total: 5,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockRejectedValue({ response: { status: 404 } });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Radio",
+                duration: 275,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toBeNull();
+
+        expect(streamInfoSpy).toHaveBeenCalledTimes(3);
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("does not validate or return a merely similar alternate", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "wrongtrack01",
+                        title: "Radio Ga Ga",
+                        artist: "Queen",
+                        duration_seconds: 343,
+                        type: "song",
+                    },
+                ],
+                total: 1,
+            });
+        const streamInfoSpy = jest.spyOn(ytMusicService, "getStreamInfo");
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Radio",
+                duration: 275,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toBeNull();
+
+        expect(streamInfoSpy).not.toHaveBeenCalled();
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("does not probe malformed or duration-incompatible exact candidates", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "malformed",
+                        title: "Radio",
+                        artist: "Rammstein",
+                        duration_seconds: 275,
+                        type: "song",
+                    },
+                    {
+                        videoId: "wrongdur001",
+                        title: "Radio",
+                        artist: "Rammstein",
+                        duration_seconds: 3_600,
+                        type: "song",
+                    },
+                ],
+                total: 2,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockResolvedValue({
+                videoId: "malformed",
+                url: "https://sidecar.invalid/malformed",
+                content_type: "audio/webm",
+                duration: 275,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Rammstein",
+                title: "Radio",
+                duration: 275,
+                excludedVideoIds: ["z0NfI2NeDHI"],
+            }),
+        ).resolves.toBeNull();
+
+        expect(streamInfoSpy).not.toHaveBeenCalled();
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
+    });
+
+    it("treats version markers as words rather than title substrings", async () => {
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockResolvedValueOnce({
+                results: [
+                    {
+                        videoId: "livevers001",
+                        title: "Deliverance (Live)",
+                        artist: "Opeth",
+                        duration_seconds: 830,
+                        type: "song",
+                    },
+                ],
+                total: 1,
+            });
+        const streamInfoSpy = jest
+            .spyOn(ytMusicService, "getStreamInfo")
+            .mockResolvedValue({
+                videoId: "livevers001",
+                url: "https://sidecar.invalid/livevers001",
+                content_type: "audio/webm",
+                duration: 830,
+                abr: 128,
+                acodec: "opus",
+                expires_at: 1,
+            });
+
+        await expect(
+            ytMusicService.findPlayableAlternateForTrack("__public__", {
+                artist: "Opeth",
+                title: "Deliverance",
+                duration: 830,
+                excludedVideoIds: ["original001"],
+            }),
+        ).resolves.toBeNull();
+
+        expect(streamInfoSpy).not.toHaveBeenCalled();
+        searchSpy.mockRestore();
+        streamInfoSpy.mockRestore();
     });
 
     it("parses numeric candidate duration values when duration_seconds is absent", async () => {

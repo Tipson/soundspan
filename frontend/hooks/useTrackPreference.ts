@@ -7,13 +7,17 @@ import {
     type TrackPreferenceResponse,
     type TrackPreferenceSignal,
 } from "@/lib/api";
-import { getNextTrackPreferenceSignal } from "@/hooks/trackPreferenceSignals";
+import {
+    getNextTrackDislikeSignal,
+    getNextTrackPreferenceSignal,
+} from "@/hooks/trackPreferenceSignals";
 import {
     applyOrderedOptimisticTrackPreferenceMutation,
     completeOrderedTrackPreferenceMutation,
     type TrackPreferenceOptimisticQueryClient,
 } from "@/hooks/trackPreferenceOptimistic";
 import { queryKeys } from "@/lib/queryKeys";
+import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
 
 export interface TrackPreferenceMetadata {
     title?: string;
@@ -34,7 +38,10 @@ export function buildPreferenceMetadata(
               title?: string;
               duration?: number;
               artist?: { name?: string } | string | null;
-              album?: { title?: string } | string | null;
+              album?:
+                  | { title?: string; coverArt?: string | null }
+                  | string
+                  | null;
               streamSource?: string | null;
               thumbnailUrl?: string;
           }
@@ -57,7 +64,11 @@ export function buildPreferenceMetadata(
         artist: artistName ?? undefined,
         album: albumTitle ?? undefined,
         duration: track.duration,
-        thumbnailUrl: track.thumbnailUrl,
+        thumbnailUrl:
+            track.thumbnailUrl ??
+            (typeof track.album === "object"
+                ? (track.album?.coverArt ?? undefined)
+                : undefined),
     };
 }
 
@@ -116,6 +127,7 @@ export function useTrackPreference(
             queryClient.invalidateQueries({
                 queryKey: queryKeys.personalizedHomeAll(),
             });
+            publishDeviceOfflineLikedChangeForSignal(data.signal);
         },
         onError: (_error, _signal, context) => {
             if (!context) return;
@@ -153,6 +165,11 @@ export function useTrackPreference(
         return setSignal(nextSignal);
     };
 
+    const toggleDislike = async () => {
+        const nextSignal = getNextTrackDislikeSignal(signal);
+        return setSignal(nextSignal);
+    };
+
     return {
         preference,
         signal,
@@ -162,5 +179,6 @@ export function useTrackPreference(
         error: preferenceQuery.error || preferenceMutation.error || null,
         setSignal,
         toggleLike,
+        toggleDislike,
     };
 }

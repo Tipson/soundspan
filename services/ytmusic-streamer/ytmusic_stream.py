@@ -92,6 +92,31 @@ _spool_prune_lock = threading.Lock()
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _ALLOWED_STREAM_QUALITIES = {"LOW", "MEDIUM", "HIGH", "LOSSLESS"}
+_PERMANENT_UNAVAILABLE_PATTERNS = (
+    re.compile(r"\b(?:this\s+)?video\s+(?:is\s+)?unavailable\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:this\s+)?video\s+is\s+(?:no\s+longer|not)\s+available\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:this\s+video\s+is\s+private|private\s+video)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:this\s+)?(?:video|content)\s+(?:has\s+been|was|is)\s+(?:removed|deleted)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:youtube\s+)?(?:account|channel|uploader)\b[^\r\n]{0,160}\bterminated\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bterminated\b[^\r\n]{0,160}\b(?:youtube\s+)?(?:account|channel|uploader)\b",
+        re.IGNORECASE,
+    ),
+)
+# Both direct metadata extraction and the HLS spool use the client set that
+# exposes public audio formats without an android_music-only failure.
+_YTMUSIC_PLAYER_CLIENTS = ["default", "web_safari"]
+# Keep per-track HLS fan-out modest while shortening complete-file spool time.
+_SPOOL_FRAGMENT_CONCURRENCY = 4
 _SPOOL_QUALITY_ALTERNATION = "|".join(
     re.escape(quality) for quality in sorted(_ALLOWED_STREAM_QUALITIES)
 )
@@ -119,6 +144,15 @@ def _validate_stream_quality(quality: str) -> str:
     return normalized
 
 
+def _is_permanently_unavailable_error(error_message: str) -> bool:
+    """Return whether yt-dlp identified a permanently unusable video identity.
+
+    Patterns require video/content/account context so format-selection and
+    extractor availability errors remain transient 5xx failures.
+    """
+    return any(pattern.search(error_message) for pattern in _PERMANENT_UNAVAILABLE_PATTERNS)
+
+
 def _stream_extraction_http_error(
     video_id: str, error_label: str, error: Exception
 ) -> HTTPException:
@@ -139,6 +173,21 @@ def _stream_extraction_http_error(
             detail={
                 "error": "age_restricted",
                 "message": "This content requires age verification and cannot be streamed.",
+                "video_id": video_id,
+            },
+        )
+    if _is_permanently_unavailable_error(error_str):
+        log.error(
+            "%s failed: %s",
+            error_label,
+            error,
+            exc_info=True,  # noqa: LOG014 -- called while handling the extraction exception
+        )
+        return HTTPException(
+            status_code=404,
+            detail={
+                "error": "content_unavailable",
+                "message": "This content is unavailable and cannot be streamed.",
                 "video_id": video_id,
             },
         )
@@ -260,7 +309,7 @@ def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> 
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://music.youtube.com/",
         },
-        "extractor_args": {"youtube": {"player_client": ["android_music"]}},
+        "extractor_args": {"youtube": {"player_client": _YTMUSIC_PLAYER_CLIENTS}},
     }
     return _extract_stream_info(
         f"{user_id}:{video_id}",
@@ -477,8 +526,10 @@ def _build_ytmusic_spool_options(
         "format": fmt,
         "outtmpl": outtmpl,
         "quiet": True,
+        "noprogress": True,
         "no_warnings": True,
         "noplaylist": True,
+        "concurrent_fragment_downloads": _SPOOL_FRAGMENT_CONCURRENCY,
         "match_filter": match_filter,
         "progress_hooks": [progress_hook],
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
@@ -489,7 +540,7 @@ def _build_ytmusic_spool_options(
         },
         "extractor_args": {
             "youtube": {
-                "player_client": ["default", "web_safari"],
+                "player_client": _YTMUSIC_PLAYER_CLIENTS,
             },
         },
         "js_runtimes": {"deno": {}},

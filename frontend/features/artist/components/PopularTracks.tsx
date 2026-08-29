@@ -211,6 +211,8 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                     track.streamSource === "youtube"
                                         ? track.streamSource
                                         : undefined,
+                                tidalTrackId: track.tidalTrackId,
+                                youtubeVideoId: track.youtubeVideoId,
                                 source: track.source,
                                 peer: track.peer,
                             }}

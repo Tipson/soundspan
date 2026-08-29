@@ -4,6 +4,10 @@ import {
     type ApiData,
 } from "./core";
 
+// Backend discovery owns at most 10.5s (correction + provider deadline).
+// Keep the browser above that budget and below the default 20s proxy cutoff.
+export const DISCOVER_SEARCH_TIMEOUT_MS = 14_000;
+
 /** Add discover-domain operations to an API client base class. */
 export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class DiscoverApi extends Base {
@@ -189,7 +193,11 @@ export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
                 } | null;
             }>(
                 `/search/discover?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}`,
-                { signal },
+                {
+                    signal,
+                    timeoutMs: DISCOVER_SEARCH_TIMEOUT_MS,
+                    retryOnTimeout: false,
+                },
             );
         }
 

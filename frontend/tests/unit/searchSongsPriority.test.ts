@@ -3,9 +3,46 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
     hasVisibleTrackResults,
+    resolveSearchCatalogPolicy,
     resolvePrimarySongsSurface,
     shouldShowSearchLoadingState,
 } from "../../features/search/searchSongsPriority";
+
+test("general music search excludes podcasts and expands the dedicated tracks view", () => {
+    assert.deepEqual(
+        resolveSearchCatalogPolicy({
+            isTracksView: false,
+        }),
+        {
+            discoverType: "music",
+            discoverLimit: 20,
+            discoverTrackDisplayLimit: 10,
+        },
+    );
+    assert.deepEqual(
+        resolveSearchCatalogPolicy({
+            isTracksView: true,
+        }),
+        {
+            discoverType: "music",
+            discoverLimit: 50,
+            discoverTrackDisplayLimit: null,
+        },
+    );
+});
+
+test("dedicated album and artist views request the expanded provider catalog", () => {
+    for (const view of ["albums", "artists"] as const) {
+        assert.equal(
+            resolveSearchCatalogPolicy({
+                isTracksView: false,
+                isAlbumsView: view === "albums",
+                isArtistsView: view === "artists",
+            }).discoverLimit,
+            50,
+        );
+    }
+});
 
 test("hidden sources do not count as tracks for the active search filter", () => {
     assert.equal(
@@ -115,4 +152,17 @@ test("the single-column page renders playable songs before acquisition fallbacks
         singleColumnBranch,
         /primarySongsSurface === "soulseek-loading"/,
     );
+});
+
+test("the primary search surface stays music-only when no audiobook catalog is configured", async () => {
+    const source = await readFile(
+        new URL("../../app/search/page.tsx", import.meta.url),
+        "utf8",
+    );
+
+    assert.doesNotMatch(source, /LibraryAudiobooksGrid/);
+    assert.doesNotMatch(source, /LibraryPodcastsGrid/);
+    assert.doesNotMatch(source, /DiscoverPodcastsGrid/);
+    assert.doesNotMatch(source, />Audiobooks</);
+    assert.doesNotMatch(source, />Discover Podcasts</);
 });

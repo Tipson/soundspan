@@ -11,6 +11,7 @@ from ytmusic_client import (
 )
 from ytmusic_library import _format_album_response
 from ytmusic_runtime import JsonList, JsonObject, _sanitized_http_error, app, log
+from ytmusic_stream import _browse_public_bounded
 from ytmusicapi import YTMusic
 
 # Comma-separated shelf titles excluded from /home responses.
@@ -108,10 +109,13 @@ async def get_home(
     with HTTP 400.
     """
     try:
-        home = await asyncio.to_thread(
-            _run_public_ytmusic,
-            "native",
-            lambda yt: yt.get_home(limit=limit),
+        home = await _browse_public_bounded(
+            lambda: _run_public_ytmusic_with_retry(
+                "native",
+                "home browse",
+                lambda yt: yt.get_home(limit=limit),
+                retry_timeouts=False,
+            )
         )
 
         shelves = []
@@ -161,6 +165,8 @@ async def get_home(
                 shelves.append({"title": title, "contents": contents})
 
         return shelves
+    except HTTPException:
+        raise
     except Exception as e:
         raise _sanitized_http_error("Home fetch", e, 500, "Failed to load home") from e
 

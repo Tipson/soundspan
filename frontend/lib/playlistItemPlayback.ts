@@ -57,6 +57,8 @@ export function toAudioTrack(item: PlayablePlaylistItem): AudioTrack {
             id: track.album.id,
         },
         duration: track.duration,
+        playlistItemId: item.id,
+        ...(item.trackYtMusicId ? { trackYtMusicId: item.trackYtMusicId } : {}),
         source: track.source,
         peer: track.peer,
         ...(track.streamSource === "tidal"

@@ -1,16 +1,17 @@
 "use client";
 
 import { useId, useMemo } from "react";
-import Image from "next/image";
-import { Music, Play, Radio } from "lucide-react";
+import { Check, Download, Loader2, Music, Play, Radio } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Track } from "@/lib/audio-state-context";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import type { PersonalizedTrack } from "../types";
 import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl";
 import { toast } from "sonner";
+import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 
 interface PersonalizedTrackShelfProps {
     title: string;
@@ -18,36 +19,22 @@ interface PersonalizedTrackShelfProps {
     tracks: PersonalizedTrack[];
 }
 
-function toPlaybackTrack(track: PersonalizedTrack): Track {
-    const youtubeVideoId =
-        track.youtubeVideoId || track.provider.youtubeVideoId;
-    return {
-        id: `yt:${youtubeVideoId}`,
-        title: track.title,
-        artist: {
-            name: track.artist.name,
-            ...(track.artist.id ? { id: track.artist.id } : {}),
-        },
-        album: {
-            title: track.album.title,
-            coverArt: track.album.coverArt,
-            ...(track.album.id ? { id: track.album.id } : {}),
-        },
-        duration: track.duration,
-        source: "youtube",
-        provider: {
-            source: "youtube",
-            youtubeVideoId,
-        },
-        streamSource: "youtube",
-        youtubeVideoId,
-    };
-}
-
 function trackImageUrl(track: PersonalizedTrack): string | null {
     return track.album.coverArt
         ? api.getCoverArtUrl(track.album.coverArt, 160)
         : null;
+}
+
+function ArtworkFallback({ title }: { title: string }) {
+    return (
+        <span
+            role="img"
+            aria-label={`Artwork unavailable for ${title}`}
+            className="flex h-full w-full items-center justify-center"
+        >
+            <Music className="h-5 w-5 text-white/35" aria-hidden="true" />
+        </span>
+    );
 }
 
 function PersonalizedDownloadAction({ track }: { track: Track }) {
@@ -91,9 +78,18 @@ function PersonalizedDownloadAction({ track }: { track: Track }) {
                       : `Download ${track.title} to this device`
             }
             title={ready ? "Available offline" : "Download to device"}
-            className="mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg text-white/65 transition hover:bg-white/10 hover:text-white disabled:opacity-55"
+            className="mr-1 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white disabled:opacity-55 motion-reduce:transition-none"
         >
-            <span aria-hidden="true">{ready ? "✓" : busy ? "…" : "↓"}</span>
+            {ready ? (
+                <Check className="h-4 w-4" aria-hidden="true" />
+            ) : busy ? (
+                <Loader2
+                    className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                />
+            ) : (
+                <Download className="h-4 w-4" aria-hidden="true" />
+            )}
         </button>
     );
 }
@@ -106,7 +102,7 @@ export function PersonalizedTrackShelf({
 }: PersonalizedTrackShelfProps) {
     const titleId = useId();
     const { playTracks } = useAudioControls();
-    const queue = useMemo(() => tracks.map(toPlaybackTrack), [tracks]);
+    const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
 
     if (tracks.length === 0) return null;
 
@@ -133,7 +129,7 @@ export function PersonalizedTrackShelf({
                 <button
                     type="button"
                     onClick={() => playTracks(queue, 0)}
-                    className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-black shadow-lg shadow-brand/15 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-black shadow-lg shadow-brand/15 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-black motion-reduce:transition-none"
                     aria-label={`Play all ${title}`}
                 >
                     <Radio className="h-4 w-4" aria-hidden="true" />
@@ -161,21 +157,20 @@ export function PersonalizedTrackShelf({
                             >
                                 <span className="relative h-13 w-13 shrink-0 overflow-hidden rounded-lg bg-white/[0.07] shadow-md">
                                     {imageUrl ? (
-                                        <Image
+                                        <CachedImage
                                             src={imageUrl}
                                             alt=""
                                             fill
                                             sizes="52px"
                                             className="object-cover transition duration-300 group-hover:scale-105"
-                                            unoptimized
+                                            fallback={
+                                                <ArtworkFallback
+                                                    title={track.title}
+                                                />
+                                            }
                                         />
                                     ) : (
-                                        <span className="flex h-full w-full items-center justify-center">
-                                            <Music
-                                                className="h-5 w-5 text-white/35"
-                                                aria-hidden="true"
-                                            />
-                                        </span>
+                                        <ArtworkFallback title={track.title} />
                                     )}
                                     <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
                                         <Play

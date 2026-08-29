@@ -34,7 +34,18 @@ mock.module("next/link", {
     }: {
         href: string;
         children: React.ReactNode;
-    }) => React.createElement("a", { href, ...rest }, children),
+        onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+    }) =>
+        React.createElement(
+            "a",
+            {
+                href,
+                "data-has-on-click":
+                    typeof rest.onClick === "function" ? "true" : undefined,
+                ...rest,
+            },
+            children,
+        ),
 });
 
 mock.module("next/image", {
@@ -170,8 +181,8 @@ test("renders social navigation without my history link", async () => {
     assert.match(html, />Explore</);
     assert.match(html, />Library</);
     assert.match(html, />Listen Together</);
-    assert.match(html, />Audiobooks</);
-    assert.match(html, />Podcasts</);
+    assert.doesNotMatch(html, />Audiobooks</);
+    assert.doesNotMatch(html, />Podcasts</);
     assert.doesNotMatch(html, /My History/);
 });
 
@@ -189,13 +200,7 @@ test("keeps prefetch enabled for primary sidebar navigation links", async () => 
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
-    const navHrefs = [
-        "/explore",
-        "/library",
-        "/listen-together",
-        "/audiobooks",
-        "/podcasts",
-    ];
+    const navHrefs = ["/explore", "/library", "/listen-together"];
 
     for (const href of navHrefs) {
         const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -209,6 +214,15 @@ test("keeps prefetch enabled for primary sidebar navigation links", async () => 
             `Primary nav link ${href} should not force prefetch off`,
         );
     }
+});
+
+test("desktop Library navigation can enter the precached Downloads shell offline", async () => {
+    const { Sidebar } = await import("../../components/layout/Sidebar");
+    const html = renderToStaticMarkup(React.createElement(Sidebar));
+
+    const libraryLink = html.match(/<a[^>]*href="\/library"[^>]*>/);
+    assert.ok(libraryLink, "Expected desktop Library link");
+    assert.match(libraryLink[0], /data-has-on-click="true"/);
 });
 
 test("renders badged peer playlists in the unified list when federated", async () => {

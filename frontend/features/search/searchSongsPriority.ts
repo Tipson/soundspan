@@ -4,6 +4,18 @@ export type PrimarySongsSurface =
     | "soulseek-loading"
     | "empty";
 
+interface SearchCatalogPolicyInput {
+    isTracksView: boolean;
+    isAlbumsView?: boolean;
+    isArtistsView?: boolean;
+}
+
+interface SearchCatalogPolicy {
+    discoverType: "music";
+    discoverLimit: number;
+    discoverTrackDisplayLimit: number | null;
+}
+
 interface PrimarySongsSurfaceInput {
     playableTrackCount: number;
     soulseekResultCount: number;
@@ -26,6 +38,20 @@ interface VisibleTrackResultsInput {
     showLibrary: boolean;
     showDiscover: boolean;
     showSoulseek: boolean;
+}
+
+/** Keep the default search music-first while giving the full Tracks view room. */
+export function resolveSearchCatalogPolicy({
+    isTracksView,
+    isAlbumsView = false,
+    isArtistsView = false,
+}: SearchCatalogPolicyInput): SearchCatalogPolicy {
+    const isExpandedMusicView = isTracksView || isAlbumsView || isArtistsView;
+    return {
+        discoverType: "music",
+        discoverLimit: isExpandedMusicView ? 50 : 20,
+        discoverTrackDisplayLimit: isTracksView ? null : 10,
+    };
 }
 
 /** Count only sources that the active search filter can actually render. */

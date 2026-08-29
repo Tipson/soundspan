@@ -1,23 +1,19 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
     Play,
     Pause,
     Shuffle,
-    Download,
     ListMusic,
     Plus,
     Share2,
     Loader2,
-    Search,
     Heart,
-    Check,
-    Send,
+    Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
-import { ReleaseSelectionModal } from "@/components/ui/ReleaseSelectionModal";
 import { ShareLinkModal } from "@/components/ui/ShareLinkModal";
 import type { Album, AlbumSource } from "../types";
 import {
@@ -25,7 +21,7 @@ import {
     type AlbumActionVisibility,
 } from "../albumActionVisibility";
 
-const BRAND_PLAY = "#60a5fa";
+const BRAND_PLAY = "var(--color-brand-hover)";
 const LOCK_MESSAGE =
     "Listen Together is active — use Add to Queue to add tracks to the shared session.";
 
@@ -51,6 +47,10 @@ interface AlbumActionBarProps {
     isSubmittingRequest?: boolean;
     onRequestAlbum?: () => void;
     isInListenTogetherGroup?: boolean;
+    canDeleteFromLibrary?: boolean;
+    onDeleteAlbum?: () => void;
+    librarySaveControl?: ReactNode;
+    deviceDownloadControl?: ReactNode;
 }
 
 interface PlaybackControlsProps {
@@ -68,7 +68,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
             <button
                 type="button"
                 onClick={props.onPlayPause}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
+                className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
                 style={{ backgroundColor: BRAND_PLAY }}
             >
                 {props.showSpinner ? (
@@ -83,8 +83,9 @@ function PlaybackControls(props: PlaybackControlsProps) {
             <button
                 type="button"
                 onClick={props.onShuffle}
-                className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                 title="Shuffle play"
+                aria-label="Shuffle play"
             >
                 <Shuffle className="w-5 h-5" />
             </button>
@@ -92,98 +93,14 @@ function PlaybackControls(props: PlaybackControlsProps) {
                 <button
                     type="button"
                     onClick={props.onShare}
-                    className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                    className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                     title="Share album"
+                    aria-label="Share album"
                 >
                     <Share2 className="w-5 h-5" />
                 </button>
             )}
         </>
-    );
-}
-
-interface AcquisitionControlsProps {
-    pending: boolean;
-    onDownload: () => void;
-    onSearch: () => void;
-}
-
-function AcquisitionControls(props: AcquisitionControlsProps) {
-    const enabledClass =
-        "bg-brand-hover hover:bg-brand text-black hover:scale-105";
-    const pendingClass = "bg-white/5 text-white/50 cursor-not-allowed";
-    return (
-        <div className="flex items-center gap-2">
-            <button
-                type="button"
-                onClick={props.onDownload}
-                disabled={props.pending}
-                className={cn(
-                    "flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all",
-                    props.pending ? pendingClass : enabledClass,
-                )}
-                title="Auto-download best release"
-            >
-                <Download className="w-4 h-4" />
-                <span>{props.pending ? "Downloading..." : "Download"}</span>
-            </button>
-            <button
-                type="button"
-                onClick={props.onSearch}
-                disabled={props.pending}
-                className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all",
-                    props.pending ? pendingClass : enabledClass,
-                )}
-                title="Search and select a specific release"
-            >
-                <Search className="w-4 h-4" />
-                <span>Search</span>
-            </button>
-        </div>
-    );
-}
-
-interface RequestControlsProps {
-    requested: boolean;
-    submitting: boolean;
-    onRequest: () => void;
-}
-
-function RequestControls(props: RequestControlsProps) {
-    if (props.requested) {
-        return (
-            <button
-                type="button"
-                disabled
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full font-medium bg-white/5 text-white/50 cursor-not-allowed"
-                title="You already have an open request for this album"
-            >
-                <Check className="w-4 h-4" />
-                <span>Requested</span>
-            </button>
-        );
-    }
-    return (
-        <button
-            type="button"
-            onClick={props.onRequest}
-            disabled={props.submitting}
-            className={cn(
-                "flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all",
-                props.submitting
-                    ? "bg-white/5 text-white/50 cursor-not-allowed"
-                    : "bg-brand-hover hover:bg-brand text-black hover:scale-105",
-            )}
-            title="Ask an admin to add this album to the library"
-        >
-            {props.submitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-                <Send className="w-4 h-4" />
-            )}
-            <span>{props.submitting ? "Requesting..." : "Request"}</span>
-        </button>
     );
 }
 
@@ -193,7 +110,7 @@ function LockedPlaybackControls({ showPause }: { showPause: boolean }) {
             <button
                 type="button"
                 onClick={() => toast.error(LOCK_MESSAGE)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm border border-white/15 bg-white/10 text-white/40"
+                className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm border border-white/15 bg-white/10 text-content-muted"
                 title={LOCK_MESSAGE}
             >
                 {showPause ? (
@@ -206,38 +123,11 @@ function LockedPlaybackControls({ showPause }: { showPause: boolean }) {
             <button
                 type="button"
                 onClick={() => toast.error(LOCK_MESSAGE)}
-                className="h-8 w-8 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white/40"
+                className="h-11 w-11 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-content-muted"
                 title={LOCK_MESSAGE}
+                aria-label="Shuffle play unavailable during Listen Together"
             >
                 <Shuffle className="w-5 h-5" />
-            </button>
-        </>
-    );
-}
-
-function LockedAcquisitionControls({ pending }: { pending: boolean }) {
-    return (
-        <>
-            <button
-                type="button"
-                onClick={() => toast.error(LOCK_MESSAGE)}
-                className={cn(
-                    "flex items-center gap-2 px-5 py-2.5 rounded-full font-medium border border-white/15 bg-white/10 text-white/40",
-                    pending && "opacity-70",
-                )}
-                title={LOCK_MESSAGE}
-            >
-                <Download className="w-4 h-4" />
-                <span>{pending ? "Downloading..." : "Download"}</span>
-            </button>
-            <button
-                type="button"
-                onClick={() => toast.error(LOCK_MESSAGE)}
-                className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2.5 font-medium text-white/40"
-                title={LOCK_MESSAGE}
-            >
-                <Search className="w-4 h-4" />
-                <span>Search</span>
             </button>
         </>
     );
@@ -246,15 +136,11 @@ function LockedAcquisitionControls({ pending }: { pending: boolean }) {
 function LockedControls(props: {
     visibility: AlbumActionVisibility;
     showPause: boolean;
-    pending: boolean;
 }) {
     return (
         <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
             {props.visibility.isLibraryVisible && (
                 <LockedPlaybackControls showPause={props.showPause} />
-            )}
-            {props.visibility.showAcquisition && (
-                <LockedAcquisitionControls pending={props.pending} />
             )}
         </div>
     );
@@ -271,7 +157,7 @@ function AlbumPreferenceButton(props: {
             onClick={props.onToggle}
             disabled={props.applying}
             className={cn(
-                "h-8 w-8 rounded-full flex items-center justify-center transition-colors",
+                "h-11 w-11 rounded-full flex items-center justify-center transition-colors",
                 props.applying
                     ? "cursor-not-allowed text-white/35"
                     : props.liked
@@ -279,6 +165,11 @@ function AlbumPreferenceButton(props: {
                       : "text-white/60 hover:bg-white/10 hover:text-white",
             )}
             title={
+                props.liked
+                    ? "Remove like from all tracks"
+                    : "Like every track on this album"
+            }
+            aria-label={
                 props.liked
                     ? "Remove like from all tracks"
                     : "Like every track on this album"
@@ -301,19 +192,25 @@ interface SecondaryControlsProps {
     onAddToPlaylist: () => void;
     onShare: () => void;
     onToggleAlbumLike?: () => void;
+    onDeleteAlbum?: () => void;
     liked: boolean;
     applying: boolean;
+    librarySaveControl?: ReactNode;
+    deviceDownloadControl?: ReactNode;
 }
 
 function SecondaryControls(props: SecondaryControlsProps) {
     return (
         <>
+            {props.librarySaveControl}
+            {props.deviceDownloadControl}
             {props.visibility.canShowAddAllToQueue && (
                 <button
                     type="button"
                     onClick={props.onAddAllToQueue}
-                    className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                    className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                     title="Add all to queue"
+                    aria-label="Add all to queue"
                 >
                     <ListMusic className="w-5 h-5" />
                 </button>
@@ -323,8 +220,9 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     <button
                         type="button"
                         onClick={props.onShare}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                         title="Share album"
+                        aria-label="Share album"
                     >
                         <Share2 className="w-5 h-5" />
                     </button>
@@ -333,8 +231,9 @@ function SecondaryControls(props: SecondaryControlsProps) {
                 <button
                     type="button"
                     onClick={props.onAddToPlaylist}
-                    className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                    className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
                     title="Add to playlist"
+                    aria-label="Add to playlist"
                 >
                     <Plus className="w-5 h-5" />
                 </button>
@@ -347,29 +246,28 @@ function SecondaryControls(props: SecondaryControlsProps) {
                         onToggle={props.onToggleAlbumLike}
                     />
                 )}
+            {props.visibility.canDeleteAlbum && props.onDeleteAlbum && (
+                <button
+                    type="button"
+                    onClick={props.onDeleteAlbum}
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                    title="Delete album from server library"
+                    aria-label="Delete album from server library"
+                >
+                    <Trash2 className="h-5 w-5" aria-hidden="true" />
+                </button>
+            )}
         </>
     );
 }
 
 function AlbumActionModals(props: {
     album: Album;
-    acquisitionMbid: string | null;
-    showReleaseModal: boolean;
-    closeReleaseModal: () => void;
     showShareModal: boolean;
     closeShareModal: () => void;
 }) {
     return (
         <>
-            {props.acquisitionMbid && (
-                <ReleaseSelectionModal
-                    isOpen={props.showReleaseModal}
-                    onClose={props.closeReleaseModal}
-                    albumMbid={props.acquisitionMbid}
-                    artistName={props.album.artist?.name || "Unknown Artist"}
-                    albumTitle={props.album.title}
-                />
-            )}
             <ShareLinkModal
                 isOpen={props.showShareModal}
                 onClose={props.closeShareModal}
@@ -388,17 +286,21 @@ function ActionControlRow(props: {
     showSpinner: boolean;
     onPlayPause: () => void;
     onShare: () => void;
-    onSearch: () => void;
 }) {
     const { actions, visibility } = props;
-    if (!visibility.hasActionControls) return null;
+    if (
+        !visibility.hasActionControls &&
+        !actions.librarySaveControl &&
+        !actions.deviceDownloadControl
+    ) {
+        return null;
+    }
     return (
         <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-2.5 py-2 backdrop-blur-sm">
             {actions.isInListenTogetherGroup && visibility.hasLockedControls ? (
                 <LockedControls
                     visibility={visibility}
                     showPause={props.showPause}
-                    pending={actions.isPendingDownload}
                 />
             ) : (
                 <>
@@ -412,20 +314,6 @@ function ActionControlRow(props: {
                             canShare={visibility.canShareAlbum}
                         />
                     )}
-                    {visibility.showAcquisition && (
-                        <AcquisitionControls
-                            pending={actions.isPendingDownload}
-                            onDownload={actions.onDownloadAlbum}
-                            onSearch={props.onSearch}
-                        />
-                    )}
-                    {visibility.showRequest && actions.onRequestAlbum && (
-                        <RequestControls
-                            requested={actions.isRequestedAlbum ?? false}
-                            submitting={actions.isSubmittingRequest ?? false}
-                            onRequest={actions.onRequestAlbum}
-                        />
-                    )}
                 </>
             )}
             <SecondaryControls
@@ -436,6 +324,9 @@ function ActionControlRow(props: {
                 onToggleAlbumLike={actions.onToggleAlbumLike}
                 liked={actions.isAlbumLiked ?? false}
                 applying={actions.isApplyingAlbumPreference ?? false}
+                onDeleteAlbum={actions.onDeleteAlbum}
+                librarySaveControl={actions.librarySaveControl}
+                deviceDownloadControl={actions.deviceDownloadControl}
             />
         </div>
     );
@@ -443,7 +334,6 @@ function ActionControlRow(props: {
 
 /** Renders album actions from the pure visibility policy. */
 export function AlbumActionBar(props: AlbumActionBarProps) {
-    const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
     const showPause = Boolean(props.isPlaying && props.isPlayingThisAlbum);
     const visibility = getAlbumActionVisibility({
@@ -457,6 +347,7 @@ export function AlbumActionBar(props: AlbumActionBarProps) {
             (props.requestsEnabled ?? false) && Boolean(props.onRequestAlbum),
         hasAddAllToQueue: Boolean(props.onAddAllToQueue),
         hasAlbumPreferenceAction: Boolean(props.onToggleAlbumLike),
+        canDeleteFromLibrary: props.canDeleteFromLibrary ?? false,
         isInListenTogetherGroup: props.isInListenTogetherGroup ?? false,
     });
     const { showSpinner, trigger } = usePlayButtonFeedback();
@@ -476,20 +367,12 @@ export function AlbumActionBar(props: AlbumActionBarProps) {
                 showSpinner={showSpinner}
                 onPlayPause={playPause}
                 onShare={openShare}
-                onSearch={() => setShowReleaseModal(true)}
             />
             {props.isInListenTogetherGroup && visibility.hasLockedControls && (
-                <p className="text-xs text-white/40">{LOCK_MESSAGE}</p>
+                <p className="text-xs text-content-muted">{LOCK_MESSAGE}</p>
             )}
             <AlbumActionModals
                 album={props.album}
-                acquisitionMbid={
-                    visibility.showAcquisition
-                        ? visibility.acquisitionMbid
-                        : null
-                }
-                showReleaseModal={showReleaseModal}
-                closeReleaseModal={() => setShowReleaseModal(false)}
                 showShareModal={showShareModal}
                 closeShareModal={() => setShowShareModal(false)}
             />

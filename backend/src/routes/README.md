@@ -125,6 +125,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/webhooks.ts`           | `/api/webhooks`                                                                                       |
 | `backend/src/routes/youtube.ts`            | `/api/youtube`                                                                                        |
 | `backend/src/routes/youtubeMusic.ts`       | `/api/ytmusic`                                                                                        |
+| `backend/src/routes/youtubeMusicUnavailableRecovery.ts` | Unavailable-track recovery sub-router under `/api/ytmusic`                              |
 
 ### Library Submodules
 
@@ -148,6 +149,7 @@ composed from these order-dependent domain and helper modules:
 | `backend/src/routes/library/radio.ts`                      | Library radio generation routes                               |
 | `backend/src/routes/library/radioPlaylists.ts`             | Persisted generated-radio playlist mutation routes            |
 | `backend/src/routes/library/remoteTracks.ts`               | Remote-track preference routes                                |
+| `backend/src/routes/library/savedMusicEntities.ts`         | Account-scoped saved album and artist collection routes       |
 | `backend/src/routes/library/trackAudioInfo.ts`             | Track audio-information helper                                |
 | `backend/src/routes/library/tracks.ts`                     | Track browse, detail, preference, stream, and deletion routes |
 

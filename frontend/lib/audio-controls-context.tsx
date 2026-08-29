@@ -73,6 +73,7 @@ import {
     LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,
     QUEUE_CLEARED_AT_KEY_SUFFIX,
 } from "@/lib/playback-state-cadence";
+import { useVibeModeControls } from "@/lib/audio/useVibeModeControls";
 
 const LAST_PLAYBACK_STATE_SAVE_AT_KEY = createMigratingStorageKey(
     LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,
@@ -995,7 +996,12 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             if (state.queue.length === 0) return;
 
             // Handle repeat one
-            if (state.repeatMode === "one" && state.repeatOneCount === 0) {
+            if (
+                origin !== "error" &&
+                origin !== "feedback" &&
+                state.repeatMode === "one" &&
+                state.repeatOneCount === 0
+            ) {
                 state.setRepeatOneCount(1);
                 playbackState.setCurrentTime(0);
                 playbackState.setIsPlaying(false);
@@ -1029,7 +1035,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 currentIndex: state.currentIndex,
                 isShuffle: state.isShuffle,
                 shuffleIndices: state.shuffleIndices,
-                repeatMode: state.repeatMode,
+                repeatMode:
+                    origin === "error" && state.repeatMode === "one"
+                        ? "off"
+                        : state.repeatMode,
             });
             if (advance.kind === "stop") {
                 return;
@@ -2078,136 +2087,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         toggleMute,
     } = useVolumeModeControls(volumeMode);
 
-    // Vibe mode controls - uses CLAP similarity API
-    const startVibeMode = useCallback(async (): Promise<{
-        success: boolean;
-        trackCount: number;
-    }> => {
-        const currentTrack = state.currentTrack;
-        if (!currentTrack?.id) {
-            return { success: false, trackCount: 0 };
-        }
-
-        try {
-            const response = await api.getVibeSimilarTracks(
-                currentTrack.id,
-                50,
-            );
-
-            if (!response.tracks || response.tracks.length === 0) {
-                return { success: false, trackCount: 0 };
-            }
-
-            const ltSession = getActiveListenTogetherSession();
-            if (ltSession) {
-                const queueIds = [
-                    currentTrack.id,
-                    ...response.tracks.map((t) => t.id),
-                ];
-                const uniqueQueueIds = Array.from(new Set(queueIds));
-
-                if (uniqueQueueIds.length === 0) {
-                    return { success: false, trackCount: 0 };
-                }
-
-                if (typeof window !== "undefined") {
-                    const trackLabel =
-                        uniqueQueueIds.length === 1
-                            ? "1 song"
-                            : `${uniqueQueueIds.length} songs`;
-                    const confirmed = window.confirm(
-                        `You're in a Listen Together group. Match Vibe will add ${trackLabel} to the shared queue. Continue?`,
-                    );
-                    if (!confirmed) {
-                        toast.info("Match Vibe cancelled");
-                        return { success: false, trackCount: 0 };
-                    }
-                }
-
-                const queueResult =
-                    await listenTogetherSocket.addToQueue(uniqueQueueIds);
-                showListenTogetherQueueMutationToasts(queueResult, {
-                    singleAccepted: "Added 1 track to group queue",
-                    multiAccepted: (acceptedCount) =>
-                        `Added ${acceptedCount} tracks to group queue`,
-                });
-                return {
-                    success: queueResult.acceptedCount > 0,
-                    trackCount: queueResult.acceptedCount,
-                };
-            }
-
-            // Disable shuffle when vibe mode starts - vibe queue is sorted by similarity
-            state.setIsShuffle(false);
-            state.setShuffleIndices([]);
-
-            // Build queue IDs including current track
-            const queueIds = [
-                currentTrack.id,
-                ...response.tracks.map((t) => t.id),
-            ];
-
-            // Map API response to Track format for the queue (with audio features for vibe badge)
-            const vibeTracks: Track[] = response.tracks.map((t) => ({
-                id: t.id,
-                title: t.title,
-                duration: t.duration,
-                artist: { name: t.artist.name, id: t.artist.id },
-                album: {
-                    title: t.album.title,
-                    coverArt: t.album.coverUrl || undefined,
-                    id: t.album.id,
-                },
-                audioFeatures: t.audioFeatures,
-            }));
-
-            // Set vibe mode state — use source features from the API response
-            state.setVibeMode(true);
-            state.setVibeSourceFeatures(
-                response.sourceFeatures || currentTrack.audioFeatures || null,
-            );
-            state.setVibeQueueIds(queueIds);
-
-            // Build new queue: current track (with source features) + similar tracks
-            state.setQueue((prev) => {
-                const current = prev[state.currentIndex];
-                const base =
-                    current && !isEpisodeQueueItem(current)
-                        ? current
-                        : currentTrack;
-                const enriched = response.sourceFeatures
-                    ? {
-                          ...base,
-                          audioFeatures: {
-                              ...base.audioFeatures,
-                              ...response.sourceFeatures,
-                          },
-                      }
-                    : base;
-                return [enriched, ...vibeTracks];
-            });
-
-            // Reset index to 0 (current track is now at index 0)
-            state.setCurrentIndex(0);
-
-            return { success: true, trackCount: response.tracks.length };
-        } catch (error) {
-            sharedFrontendLogger.error(
-                "[Vibe] Failed to get similar tracks:",
-                error,
-            );
-            if (error instanceof Error) {
-                toast.error(error.message);
-            }
-            return { success: false, trackCount: 0 };
-        }
-    }, [state, getActiveListenTogetherSession]);
-
-    const stopVibeMode = useCallback(() => {
-        state.setVibeMode(false);
-        state.setVibeSourceFeatures(null);
-        state.setVibeQueueIds([]);
-    }, [state]);
+    const { startVibeMode, stopVibeMode } = useVibeModeControls({
+        state,
+        getActiveListenTogetherSession,
+        showQueueMutationToasts: showListenTogetherQueueMutationToasts,
+    });
 
     // Memoize the entire context value
     const value = useMemo(

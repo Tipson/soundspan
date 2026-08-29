@@ -770,6 +770,64 @@ test("12. Prisma CLI stages copy relative prisma.config.ts imports", () => {
     }
 });
 
+test("12a. AIO preserves its generated Prisma client when replacing backend dependencies", () => {
+    const instructions = readRepoFile("Dockerfile")
+        .replace(/\\\r?\n\s*/g, " ")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const officialDependenciesIndex = instructions.findIndex((instruction) =>
+        /^COPY\s+--from=official_artifacts\s+\/app\/backend\/node_modules\/?\s+\/app\/backend\/node_modules\/?$/i.test(
+            instruction,
+        ),
+    );
+
+    assert.notEqual(
+        officialDependenciesIndex,
+        -1,
+        "Dockerfile: expected the pinned official backend dependency replacement",
+    );
+
+    const generatedClientStash = instructions
+        .slice(0, officialDependenciesIndex)
+        .map((instruction) =>
+            instruction.match(
+                /\bmv\s+\/app\/backend\/node_modules\/\.prisma\s+(\S+)/i,
+            ),
+        )
+        .find(Boolean)?.[1];
+
+    assert.ok(
+        generatedClientStash,
+        "Dockerfile: stash the schema-specific .prisma client before replacing backend node_modules",
+    );
+
+    const runtimeInstructions = instructions.slice(
+        officialDependenciesIndex + 1,
+    );
+    assert.ok(
+        runtimeInstructions.some((instruction) =>
+            new RegExp(
+                `\\bmv\\s+${generatedClientStash.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s+\\/app\\/backend\\/node_modules\\/\\.prisma\\b`,
+                "i",
+            ).test(instruction),
+        ),
+        "Dockerfile: restore the generated .prisma client after the official dependency replacement",
+    );
+    assert.ok(
+        runtimeInstructions.some(
+            (instruction) =>
+                /^RUN\s+/i.test(instruction) &&
+                instruction.includes("@prisma/client") &&
+                instruction.includes("RemotePreferenceIntent") &&
+                instruction.includes("SavedMusicEntity") &&
+                instruction.includes("completionRatio") &&
+                instruction.includes("waveMode"),
+        ),
+        "Dockerfile: fail the image build unless the runtime Prisma client exposes the release schema",
+    );
+});
+
 test("13. Helm exec probe binaries exist in component runtime images", () => {
     const references = execProbeReferences(
         readRepoFile("charts/soundspan/values.yaml"),

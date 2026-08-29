@@ -15,6 +15,7 @@ import { AccountSection } from "@/features/settings/components/sections/AccountS
 import { SignInSecuritySection } from "@/features/settings/components/sections/SignInSecuritySection";
 import { SocialSection } from "@/features/settings/components/sections/SocialSection";
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
+import { DeviceOfflineSettingsSection } from "@/features/settings/components/sections/DeviceOfflineSettingsSection";
 import { IntegrationsSection } from "@/features/settings/components/sections/IntegrationsSection";
 
 // Define sidebar items
@@ -23,8 +24,9 @@ const sidebarItems: SidebarItem[] = [
     { id: "sign-in-security", label: "Sign-in & Security" },
     { id: "social", label: "Social" },
     { id: "history", label: "History & Personalization" },
-    { id: "playback", label: "Playback" },
     { id: "scrobbling", label: "Scrobbling" },
+    { id: "playback", label: "Playback" },
+    { id: "device-offline", label: "Offline on this device" },
     { id: "integrations", label: "Integrations" },
     { id: "api-keys", label: "API Keys" },
 ];
@@ -172,6 +174,8 @@ export default function SettingsPage() {
                     updateUserSettings({ loudnessMode: mode })
                 }
             />
+
+            <DeviceOfflineSettingsSection />
 
             {/* Integrations (YouTube Music + TIDAL — visible to all users) */}
             <IntegrationsSection

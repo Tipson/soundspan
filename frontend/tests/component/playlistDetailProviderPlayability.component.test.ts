@@ -80,8 +80,12 @@ mock.module("@/components/ui/ShareLinkModal", {
 
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
-        TrackPreferenceButtons: () =>
-            React.createElement("button", { type: "button" }, "prefs"),
+        TrackPreferenceButtons: ({ mode }: { mode?: string }) =>
+            React.createElement(
+                "button",
+                { type: "button", "data-preference-mode": mode },
+                "prefs",
+            ),
     },
 });
 
@@ -488,6 +492,26 @@ test("playlist detail renders overflow menu for remote tracks (tidal + youtube)"
         3,
         `Expected 3 overflow menus (local + tidal + youtube), got ${overflowCount}`,
     );
+});
+
+test("playlist rows keep the compact like-only preference control", async () => {
+    const mod = await import("../../app/playlist/[id]/page");
+    const PlaylistDetailPage = mod.default;
+
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(PlaylistDetailPage),
+        ),
+    );
+
+    const compactPreferenceCount = (
+        html.match(/data-preference-mode="up-only"/g) ?? []
+    ).length;
+    assert.equal(compactPreferenceCount, 3);
+    assert.doesNotMatch(html, /data-preference-mode="both"/);
 });
 
 test("playlist detail renders provider badges and unplayable fallback messaging", async () => {

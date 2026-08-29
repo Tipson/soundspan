@@ -36,6 +36,9 @@ export type DeviceOfflineDownloadStatus =
 
 export type DeviceOfflineTransferMode = "foreground" | "background";
 
+/** Whether a local copy is protected by an explicit user action or auto-managed. */
+export type DeviceOfflineManagement = "manual" | "auto-liked";
+
 /** IndexedDB record for one user, track identity, and requested quality. */
 export interface DeviceOfflineDownloadRecord {
     key: string;
@@ -54,8 +57,12 @@ export interface DeviceOfflineDownloadRecord {
     foregroundLeaseExpiresAt?: number | null;
     bytesReceived: number;
     totalBytes: number | null;
+    /** Version of the complete-body check performed before publishing ready. */
+    integrityVersion?: number;
     contentType: string | null;
     persistenceGranted: boolean | null;
+    /** Legacy records omit this field and are always treated as manual. */
+    management?: DeviceOfflineManagement;
     attempt: number;
     createdAt: number;
     updatedAt: number;
@@ -68,4 +75,6 @@ export interface DeviceOfflineDownloadInput {
     track: DeviceOfflineTrack;
     quality?: string;
     sourceUrl: string;
+    /** Defaults to manual so existing callers can never create evictable copies. */
+    management?: DeviceOfflineManagement;
 }

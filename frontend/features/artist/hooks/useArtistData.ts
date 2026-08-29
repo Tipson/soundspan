@@ -1,10 +1,14 @@
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
 import { api } from "@/lib/api";
 import { useDownloadContext } from "@/lib/download-context";
 import { ArtistSource } from "../types";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import {
+    normalizeYtMusicArtist,
+    normalizeYtMusicChannelId,
+} from "../ytMusicArtist";
 
 /**
  * Executes useArtistData.
@@ -12,6 +16,19 @@ import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 export function useArtistData() {
     const params = useParams();
     const id = params.id as string;
+    const searchParams = useSearchParams();
+    const providerChannelId = normalizeYtMusicChannelId(
+        searchParams.get("channelId"),
+    );
+    const isYtMusicArtist =
+        searchParams.get("provider") === "ytmusic" && !!providerChannelId;
+    const fallbackArtistName = useMemo(() => {
+        try {
+            return decodeURIComponent(id || "");
+        } catch {
+            return id || "YouTube Music artist";
+        }
+    }, [id]);
     const { downloadStatus } = useDownloadContext();
     const prevActiveCountRef = useRef(downloadStatus.activeDownloads.length);
     const retryCountRef = useRef(0);
@@ -19,7 +36,31 @@ export function useArtistData() {
 
     // Heuristic used across the app: local DB IDs do not contain hyphens.
     // For these IDs we can fetch a fast "core" payload first.
-    const shouldUseLightweightCore = Boolean(id && !id.includes("-"));
+    const shouldUseLightweightCore = Boolean(
+        id && !isYtMusicArtist && !id.includes("-"),
+    );
+
+    const {
+        data: providerArtistData,
+        isLoading: isProviderLoading,
+        isError: isProviderError,
+        refetch: refetchProvider,
+    } = useQuery({
+        queryKey: queryKeys.ytMusicArtist(providerChannelId || ""),
+        queryFn: async () => {
+            if (!providerChannelId) {
+                throw new Error("YouTube Music channel ID is required");
+            }
+            const payload = await api.getYtMusicArtist(providerChannelId);
+            return normalizeYtMusicArtist(payload, {
+                channelId: providerChannelId,
+                fallbackName: fallbackArtistName,
+            });
+        },
+        enabled: isYtMusicArtist,
+        staleTime: 10 * 60 * 1000,
+        retry: 1,
+    });
 
     const {
         data: coreArtist,
@@ -48,19 +89,23 @@ export function useArtistData() {
                 });
             }
         },
-        enabled: !!id,
+        enabled: !!id && !isYtMusicArtist,
         staleTime: 10 * 60 * 1000,
         retry: 1,
     });
 
     const coreSource: ArtistSource | null = useMemo(() => {
+        if (isYtMusicArtist && providerArtistData?.artist) {
+            return "discovery";
+        }
         if (!coreArtist) return null;
         return coreArtist.id && !coreArtist.id.includes("-")
             ? "library"
             : "discovery";
-    }, [coreArtist]);
+    }, [coreArtist, isYtMusicArtist, providerArtistData]);
 
     const shouldHydrateDetails =
+        !isYtMusicArtist &&
         !!id &&
         !!coreArtist &&
         ((coreSource === "library" && shouldUseLightweightCore) ||
@@ -94,7 +139,9 @@ export function useArtistData() {
         retry: 1,
     });
 
-    const artist = detailedArtist || coreArtist;
+    const artist = isYtMusicArtist
+        ? providerArtistData?.artist
+        : detailedArtist || coreArtist;
 
     const detailsLoading =
         shouldHydrateDetails &&
@@ -132,11 +179,21 @@ export function useArtistData() {
     }, [id]);
 
     const reloadArtist = useCallback(async () => {
+        if (isYtMusicArtist) {
+            await refetchProvider();
+            return;
+        }
         await refetchCore();
         if (shouldHydrateDetails) {
             await refetchDetails();
         }
-    }, [refetchCore, refetchDetails, shouldHydrateDetails]);
+    }, [
+        isYtMusicArtist,
+        refetchCore,
+        refetchDetails,
+        refetchProvider,
+        shouldHydrateDetails,
+    ]);
 
     // Refetch when downloads complete (active count decreases)
     useEffect(() => {
@@ -153,8 +210,9 @@ export function useArtistData() {
     // Determine source from merged artist data (core or hydrated details)
     const source: ArtistSource | null = useMemo(() => {
         if (!artist) return null;
+        if (isYtMusicArtist) return "discovery";
         return artist.id && !artist.id.includes("-") ? "library" : "discovery";
-    }, [artist]);
+    }, [artist, isYtMusicArtist]);
 
     // Sort state: 'year' or 'dateAdded'
     const [sortBy, setSortBy] = useState<"year" | "dateAdded">("year");
@@ -182,9 +240,11 @@ export function useArtistData() {
     return {
         artist,
         albums,
-        loading: isCoreLoading,
+        providerAlbums: providerArtistData?.providerAlbums ?? [],
+        artistProvider: isYtMusicArtist ? ("ytmusic" as const) : null,
+        loading: isYtMusicArtist ? isProviderLoading : isCoreLoading,
         detailsLoading,
-        error: isCoreError,
+        error: isYtMusicArtist ? isProviderError : isCoreError,
         source,
         sortBy,
         setSortBy,

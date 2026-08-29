@@ -167,6 +167,7 @@ test("shows all tabs for admin users on desktop", async () => {
     assert.match(html, />Notifications</);
     assert.match(html, />Active</);
     assert.match(html, />History</);
+    assert.match(html, />Imports</);
     assert.match(html, />Social</);
     assert.match(html, /notifications-tab/);
     assert.equal(
@@ -199,6 +200,7 @@ test("hides admin-only tabs for non-admin users and falls back from hidden activ
     );
 
     assert.match(html, />Notifications</);
+    assert.match(html, />Imports</);
     assert.match(html, />Social</);
     assert.doesNotMatch(html, />Active</);
     assert.doesNotMatch(html, />History</);
@@ -231,13 +233,16 @@ test("renders mobile overlay with social content and capped badges", async () =>
     assert.match(html, /99\+/);
 });
 
-test("renders controlled active, history, and social content", async () => {
+test("renders controlled active, history, imports, and social content", async () => {
     const { ActivityPanel } =
         await import("../../components/layout/ActivityPanel");
 
-    const tabCases: Array<[string, "active" | "history" | "social"]> = [
+    const tabCases: Array<
+        [string, "active" | "history" | "imports" | "social"]
+    > = [
         ["active-tab", "active"],
         ["history-tab", "history"],
+        ["imports-tab", "imports"],
         ["social-tab", "social"],
     ];
 

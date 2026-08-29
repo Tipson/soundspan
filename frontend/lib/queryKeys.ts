@@ -16,6 +16,8 @@ export const queryKeys = {
         ["artist", "details", id, source || "unknown"] as const,
     artistLibrary: (id: string) => ["artist", "library", id] as const,
     artistDiscovery: (id: string) => ["artist", "discovery", id] as const,
+    ytMusicArtist: (channelId: string) =>
+        ["artist", "ytmusic", channelId] as const,
 
     // Album queries
     album: (id: string) => ["album", id] as const,
@@ -48,6 +50,14 @@ export const queryKeys = {
     }) => ["library", "tracks", params] as const,
     likedPlaylist: (limit: number = 10_000) =>
         ["library", "liked-playlist", limit] as const,
+    savedMusicAll: () => ["library", "saved"] as const,
+    savedMusic: (
+        type: "album" | "artist" | undefined,
+        limit: number,
+        offset: number,
+    ) => ["library", "saved", "list", type ?? "all", limit, offset] as const,
+    savedMusicStatus: (type: string, source: string, entityId: string) =>
+        ["library", "saved", "status", type, source, entityId] as const,
     recentlyListened: (limit?: number) =>
         ["library", "recently-listened", limit] as const,
     recentlyAdded: (limit?: number) =>
@@ -97,8 +107,10 @@ export const queryKeys = {
     homeFeaturedPlaylists: (limit?: number) =>
         ["home", "featured-playlists", limit] as const,
     personalizedHomeAll: () => ["home", "personalized"] as const,
-    personalizedHome: (limit: number) =>
-        ["home", "personalized", limit] as const,
+    personalizedHome: (
+        limit: number,
+        mode: "for-you" | "new" | "familiar" = "for-you",
+    ) => ["home", "personalized", limit, mode] as const,
 
     // Browse (YT Music) — used by Explore page
     browseHomeShelves: () => ["browse", "ytmusic", "home"] as const,

@@ -104,6 +104,7 @@ export function requiresDeviceOfflineCrossTabRefresh(
         previous.totalBytes !== next.totalBytes ||
         previous.contentType !== next.contentType ||
         previous.persistenceGranted !== next.persistenceGranted ||
+        previous.management !== next.management ||
         previous.attempt !== next.attempt ||
         previous.createdAt !== next.createdAt ||
         previous.errorCode !== next.errorCode ||
@@ -141,8 +142,13 @@ class InvalidatingDeviceOfflineMetadataStore implements DeviceOfflineMetadataSto
     async claimReplacement(
         expected: DeviceOfflineDownloadRecord | null,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
-        const claimed = await this.delegate.claimReplacement(expected, next);
+        const claimed = await this.delegate.claimReplacement(
+            expected,
+            next,
+            isAuthorized,
+        );
         if (claimed) this.publish();
         return claimed;
     }
@@ -150,8 +156,13 @@ class InvalidatingDeviceOfflineMetadataStore implements DeviceOfflineMetadataSto
     async putIfCurrent(
         expected: DeviceOfflineDownloadRecord,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
-        const updated = await this.delegate.putIfCurrent(expected, next);
+        const updated = await this.delegate.putIfCurrent(
+            expected,
+            next,
+            isAuthorized,
+        );
         if (updated && requiresDeviceOfflineCrossTabRefresh(expected, next)) {
             this.publish();
         }
@@ -173,8 +184,24 @@ class InvalidatingDeviceOfflineMetadataStore implements DeviceOfflineMetadataSto
 
     async deleteIfCurrent(
         expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
-        const deleted = await this.delegate.deleteIfCurrent(expected);
+        const deleted = await this.delegate.deleteIfCurrent(
+            expected,
+            isAuthorized,
+        );
+        if (deleted) this.publish();
+        return deleted;
+    }
+
+    async deleteAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        const deleted = await this.delegate.deleteAutoManagedIfCurrent(
+            expected,
+            isAuthorized,
+        );
         if (deleted) this.publish();
         return deleted;
     }

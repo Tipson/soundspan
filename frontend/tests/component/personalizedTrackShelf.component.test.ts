@@ -16,6 +16,9 @@ const Icon = () => React.createElement("svg");
 
 mock.module("lucide-react", {
     namedExports: {
+        Check: Icon,
+        Download: Icon,
+        Loader2: Icon,
         Music: Icon,
         Play: Icon,
         Radio: Icon,
@@ -23,8 +26,15 @@ mock.module("lucide-react", {
 });
 
 mock.module("next/image", {
-    defaultExport: ({ alt, src }: { alt?: string; src?: string }) =>
-        React.createElement("img", { alt, src }),
+    defaultExport: ({
+        alt,
+        src,
+        onError,
+    }: {
+        alt?: string;
+        src?: string;
+        onError?: React.ReactEventHandler<HTMLImageElement>;
+    }) => React.createElement("img", { alt, src, onError }),
 });
 
 mock.module("@/lib/api", {
@@ -170,5 +180,22 @@ test("personalized shelf renders no empty chrome", async () => {
     );
 
     assert.equal(container.innerHTML, "");
+    unmount();
+});
+
+test("personalized shelf shows a meaningful fallback when cover art cannot load", async () => {
+    const { PersonalizedTrackShelf } =
+        await import("../../features/home/components/PersonalizedTrackShelf");
+    const { container, unmount } = await render(
+        React.createElement(PersonalizedTrackShelf, {
+            title: "Quick picks",
+            tracks,
+        }),
+    );
+
+    assert.equal(
+        container.querySelector('[role="img"]')?.getAttribute("aria-label"),
+        "Artwork unavailable for Alpha",
+    );
     unmount();
 });

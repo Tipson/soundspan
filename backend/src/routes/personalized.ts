@@ -9,6 +9,8 @@ import { sendRouteError } from "../utils/routeErrorResponse";
 const router = Router();
 const log = logger.child("PersonalizedHome");
 const DEFAULT_SHELF_LIMIT = 12;
+const MAX_CONTINUATION_EXCLUSIONS = 80;
+const PROVIDER_VIDEO_ID_PATTERN = /^(?:yt:)?[A-Za-z0-9_-]{1,64}$/;
 const personalizedHomeQuerySchema = z
     .object({
         limit: z
@@ -18,8 +20,38 @@ const personalizedHomeQuerySchema = z
             .pipe(z.number().int().min(1).max(25))
             .optional(),
         token: z.string().optional(),
+        cursor: z
+            .string()
+            .regex(/^(?:0|[1-9]\d*)$/)
+            .transform(Number)
+            .pipe(z.number().int().min(0).max(1_000_000))
+            .optional(),
+        exclude: z.string().max(5_280).optional(),
+        mode: z.enum(["for-you", "new", "familiar"]).optional(),
     })
     .strict();
+
+function parseContinuationExclusions(value: string | undefined): string[] {
+    if (!value) return [];
+    const videoIds = Array.from(
+        new Set(
+            value
+                .split(",")
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+                .map((entry) =>
+                    entry.startsWith("yt:") ? entry.slice(3) : entry,
+                ),
+        ),
+    );
+    if (
+        videoIds.length > MAX_CONTINUATION_EXCLUSIONS ||
+        videoIds.some((videoId) => !PROVIDER_VIDEO_ID_PATTERN.test(videoId))
+    ) {
+        throw new TypeError("Invalid personalized continuation exclusions");
+    }
+    return videoIds;
+}
 
 router.use(requireAuthOrToken);
 
@@ -90,7 +122,7 @@ router.use(requireAuthOrToken);
  *               type: string
  *     PersonalizedHomeFeed:
  *       type: object
- *       required: [shelves, degraded, reason, seedCount]
+ *       required: [shelves, degraded, reason, seedCount, nextCursor]
  *       properties:
  *         shelves:
  *           type: object
@@ -118,6 +150,10 @@ router.use(requireAuthOrToken);
  *           type: integer
  *           minimum: 0
  *           maximum: 3
+ *         nextCursor:
+ *           type: integer
+ *           minimum: 0
+ *           description: Cursor for a fresh provider-radio seed page
  */
 
 /**
@@ -137,6 +173,24 @@ router.use(requireAuthOrToken);
  *           maximum: 25
  *           default: 12
  *         description: Maximum number of tracks returned in each shelf
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           enum: [for-you, new, familiar]
+ *           default: for-you
+ *         description: Deterministic Wave ranking policy
+ *       - in: query
+ *         name: cursor
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *         description: Rotates the bounded set of recommendation seeds for queue continuation
+ *       - in: query
+ *         name: exclude
+ *         schema:
+ *           type: string
+ *         description: Up to 80 comma-separated YouTube video IDs already present in the queue
  *     responses:
  *       200:
  *         description: Personalized remote-only home shelves
@@ -167,10 +221,31 @@ async function handlePersonalizedHome(req: Request, res: Response) {
         });
     }
 
-    const feed = await personalizedCatalogService.getHomeFeed(
-        userId,
-        parsedQuery.data.limit ?? DEFAULT_SHELF_LIMIT,
-    );
+    let excludeVideoIds: string[];
+    try {
+        excludeVideoIds = parseContinuationExclusions(parsedQuery.data.exclude);
+    } catch {
+        return sendRouteError(
+            res,
+            400,
+            "Invalid personalized home feed query",
+            { code: "INVALID_QUERY" },
+        );
+    }
+    const limit = parsedQuery.data.limit ?? DEFAULT_SHELF_LIMIT;
+    const hasContinuationContext =
+        parsedQuery.data.cursor !== undefined ||
+        excludeVideoIds.length > 0 ||
+        parsedQuery.data.mode !== undefined;
+    const feed = hasContinuationContext
+        ? await personalizedCatalogService.getHomeFeed(userId, limit, {
+              ...(parsedQuery.data.cursor !== undefined
+                  ? { cursor: parsedQuery.data.cursor }
+                  : {}),
+              ...(excludeVideoIds.length > 0 ? { excludeVideoIds } : {}),
+              ...(parsedQuery.data.mode ? { mode: parsedQuery.data.mode } : {}),
+          })
+        : await personalizedCatalogService.getHomeFeed(userId, limit);
     if (feed.degraded) {
         log.warn("Personalized home feed returned degraded provider results", {
             reason: feed.reason,

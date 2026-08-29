@@ -6,6 +6,11 @@ export const CURRENT_TIME_TRACK_ID_KEY = createMigratingStorageKey(
 );
 export const AUDIO_LOAD_TIMEOUT_MS = 20_000;
 export const AUDIO_LOAD_TIMEOUT_RETRIES = 1;
+// Provider playback can spend up to 120 seconds preparing audio before the
+// frontend proxy receives its first byte. Keep the player watchdog above the
+// upstream and proxy budgets so those layers own their timeout responses.
+export const PROVIDER_AUDIO_LOAD_TIMEOUT_MS = 135_000;
+export const PROVIDER_AUDIO_LOAD_TIMEOUT_RETRIES = 0;
 // First audible progress at or past this position counts as a completed
 // load even when the engine's synthetic "load" event has not fired yet.
 export const STARTUP_AUDIBLE_THRESHOLD_SEC = 0.2;

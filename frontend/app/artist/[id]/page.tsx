@@ -12,11 +12,12 @@ import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ReleaseSelectionModal } from "@/components/ui/ReleaseSelectionModal";
 import { useImageColor } from "@/hooks/useImageColor";
-import { api } from "@/lib/api";
+import { api, type SavedMusicEntityInput } from "@/lib/api";
 import { toast } from "sonner";
 import { useListenTogether } from "@/lib/listen-together-context";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { resolvePreferenceTrackId } from "@/lib/trackRef";
+import { shuffleArray } from "@/utils/shuffle";
 
 // Hooks
 import { useArtistData } from "@/features/artist/hooks/useArtistData";
@@ -35,6 +36,9 @@ import { PopularTracks } from "@/features/artist/components/PopularTracks";
 import { Discography } from "@/features/artist/components/Discography";
 import { AvailableAlbums } from "@/features/artist/components/AvailableAlbums";
 import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
+import { ProviderAlbumsGrid } from "@/features/search/components/ProviderAlbumsGrid";
+import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
+import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
 
 function ListSectionSkeleton({
     title,
@@ -96,6 +100,8 @@ export default function ArtistPage() {
     const {
         artist,
         albums,
+        providerAlbums = [],
+        artistProvider = null,
         loading,
         detailsLoading,
         error,
@@ -104,6 +110,7 @@ export default function ArtistPage() {
         setSortBy,
         reloadArtist,
     } = useArtistData();
+    const isDirectYtMusicArtist = artistProvider === "ytmusic";
 
     const artistAlbumRequests = useArtistAlbumRequests(artist?.name || "");
     const albumRequestControls = {
@@ -153,11 +160,12 @@ export default function ArtistPage() {
         isMatching: isYtMatching,
         isStatusResolved: isYtStatusResolved,
     } = useYtMusicTopTracks(tidalArtist);
-    const isProviderMatching =
-        !isTidalStatusResolved ||
-        !isYtStatusResolved ||
-        isTidalMatching ||
-        isYtMatching;
+    const isProviderMatching = isDirectYtMusicArtist
+        ? false
+        : !isTidalStatusResolved ||
+          !isYtStatusResolved ||
+          isTidalMatching ||
+          isYtMatching;
 
     // Separate owned and available albums
     const ownedAlbums = albums.filter((a) => a.owned);
@@ -181,6 +189,24 @@ export default function ArtistPage() {
         : null;
 
     const { colors } = useImageColor(lowResImage || rawImageUrl);
+
+    const savedArtistEntity: SavedMusicEntityInput | null = artist
+        ? {
+              type: "artist",
+              source: isDirectYtMusicArtist
+                  ? "ytmusic"
+                  : source === "library"
+                    ? "library"
+                    : "discovery",
+              entityId:
+                  isDirectYtMusicArtist && artist.id.startsWith("ytartist:")
+                      ? artist.id.slice("ytartist:".length)
+                      : artist.id,
+              title: artist.name,
+              subtitle: null,
+              imageUrl: rawImageUrl ?? null,
+          }
+        : null;
 
     const isLibraryArtist = source === "library";
     const showProgressivePlaceholders = isLibraryArtist && detailsLoading;
@@ -241,6 +267,36 @@ export default function ArtistPage() {
             streamSource: "peer" as const,
         }),
     });
+    const deviceDownloadTracks = (enrichedTopTracks || artist?.topTracks || [])
+        .filter(
+            (track: Track) =>
+                Boolean(track.filePath) ||
+                (track.streamSource === "tidal" &&
+                    typeof track.tidalTrackId === "number") ||
+                (track.streamSource === "youtube" &&
+                    Boolean(track.youtubeVideoId)),
+        )
+        .map(formatTrackForPlayback);
+
+    function handlePlayProviderArtist(shuffle: boolean) {
+        if (!artist) return;
+        const playableTracks = (
+            enrichedTopTracks ||
+            artist.topTracks ||
+            []
+        ).filter(
+            (track: Track) =>
+                track.streamSource === "youtube" && !!track.youtubeVideoId,
+        );
+        if (playableTracks.length === 0) {
+            toast.error("No playable tracks found for this artist");
+            return;
+        }
+        const orderedTracks = shuffle
+            ? shuffleArray(playableTracks)
+            : playableTracks;
+        playTracks(orderedTracks.map(formatTrackForPlayback), 0);
+    }
 
     // Play track handler (for popular tracks)
     function handlePlayTrack(track: Track) {
@@ -390,9 +446,23 @@ export default function ArtistPage() {
                     albums={albums}
                     source={source || "discovery"}
                     colors={colors}
-                    onPlayAll={() => playAll(artist, albums)}
-                    onAddAllToQueue={() => addAllToQueue(artist, albums)}
-                    onShuffle={() => shufflePlay(artist, albums)}
+                    onPlayAll={() =>
+                        isDirectYtMusicArtist
+                            ? handlePlayProviderArtist(false)
+                            : playAll(artist, albums)
+                    }
+                    onAddAllToQueue={() =>
+                        isDirectYtMusicArtist
+                            ? handleAddAllPopularToQueue(
+                                  enrichedTopTracks || artist.topTracks || [],
+                              )
+                            : addAllToQueue(artist, albums)
+                    }
+                    onShuffle={() =>
+                        isDirectYtMusicArtist
+                            ? handlePlayProviderArtist(true)
+                            : shufflePlay(artist, albums)
+                    }
                     onDownloadAll={() => downloadArtist(artist)}
                     onStartRadio={handleStartRadio}
                     onAddToPlaylist={
@@ -409,8 +479,22 @@ export default function ArtistPage() {
                         currentTrack?.artist?.name === artist.name
                     }
                     onPause={pause}
-                    downloadsEnabled={downloadsEnabled}
+                    downloadsEnabled={
+                        downloadsEnabled && !isDirectYtMusicArtist
+                    }
                     isInListenTogetherGroup={isInGroup}
+                    librarySaveControl={
+                        <SaveMusicEntityButton entity={savedArtistEntity} />
+                    }
+                    deviceDownloadControl={
+                        deviceDownloadTracks.length > 0 ? (
+                            <DeviceCollectionDownloadButton
+                                tracks={deviceDownloadTracks}
+                                collectionId={`artist:${artist.id}`}
+                                collectionLabel={artist.name}
+                            />
+                        ) : undefined
+                    }
                 />
             </ArtistHero>
 
@@ -442,7 +526,11 @@ export default function ArtistPage() {
                             colors={colors}
                             onPlayTrack={handlePlayTrack}
                             isProviderMatching={isProviderMatching}
-                            popularHref={`/artist/${artist.id}/popular`}
+                            popularHref={
+                                isDirectYtMusicArtist
+                                    ? undefined
+                                    : `/artist/${artist.id}/popular`
+                            }
                             onAddAllToQueue={handleAddAllPopularToQueue}
                         />
                     ) : (
@@ -459,6 +547,16 @@ export default function ArtistPage() {
                         sortBy={sortBy}
                         onSortChange={setSortBy}
                     />
+
+                    {providerAlbums.length > 0 && (
+                        <section>
+                            <h2 className="mb-4 text-xl font-bold">Albums</h2>
+                            <ProviderAlbumsGrid
+                                albums={providerAlbums}
+                                limit={null}
+                            />
+                        </section>
+                    )}
 
                     {/* Available Albums to Download */}
                     {availableAlbums.length > 0 ? (

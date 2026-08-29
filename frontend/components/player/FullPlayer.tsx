@@ -9,7 +9,7 @@ import { useAudioVolumeMode } from "@/lib/audio-volume-mode-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
 import { useStreamBitrate } from "@/hooks/useStreamBitrate";
-import Image from "next/image";
+import { CachedImage } from "@/components/ui/CachedImage";
 import Link from "next/link";
 import {
     Play,
@@ -384,7 +384,7 @@ export function FullPlayer() {
                                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                 <div className="relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-surface-hover rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
                                     {coverUrl ? (
-                                        <Image
+                                        <CachedImage
                                             key={coverUrl}
                                             src={coverUrl}
                                             alt={title}
@@ -700,10 +700,11 @@ export function FullPlayer() {
                                 </button>
                             )}
 
-                            {/* Heart */}
+                            {/* Track preferences */}
                             <TrackPreferenceButtons
                                 trackId={preferenceTrackId}
-                                buttonSizeClassName="h-8 w-8"
+                                mode="both"
+                                buttonSizeClassName="h-11 w-11"
                                 iconSizeClassName="h-[18px] w-[18px]"
                                 metadata={buildPreferenceMetadata(currentTrack)}
                             />

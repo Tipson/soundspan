@@ -40,6 +40,7 @@ test("globals.css @theme stays synchronized with DESIGN_TOKENS", () => {
 
 test("text and brand tokens meet the normal-text contrast floor", () => {
     for (const foreground of [
+        DESIGN_TOKENS["content-muted"],
         DESIGN_TOKENS["content-secondary"],
         DESIGN_TOKENS["content-body"],
         DESIGN_TOKENS.brand,

@@ -54,10 +54,13 @@ export function YouTubeMusicAdminSection({
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-200/80">
                     This integration uses unofficial libraries and is not
-                    affiliated with or endorsed by Google or YouTube. A YouTube
-                    Music Premium subscription is required. Users are
-                    responsible for ensuring their use complies with
-                    YouTube&apos;s Terms of Service.
+                    affiliated with or endorsed by Google or YouTube. Public
+                    search, browse, and streaming can work without linking a
+                    Google account. Linking is optional and adds personal
+                    library access. Some content or account features may require
+                    YouTube Music Premium. Availability varies by account and
+                    region; users must comply with YouTube&apos;s Terms of
+                    Service.
                 </p>
             </div>
             <SettingsRow
@@ -344,9 +347,12 @@ export function YouTubeMusicCard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Not affiliated with or endorsed by Google. Requires a YouTube
-                Music Premium subscription. You are responsible for complying
-                with YouTube&apos;s Terms of Service.
+                Not affiliated with or endorsed by Google. Public catalog access
+                can work without linking an account; linking is optional and
+                adds personal library access. Some content or account features
+                may require YouTube Music Premium. Availability varies by
+                account and region; you must comply with YouTube&apos;s Terms of
+                Service.
             </p>
         </div>
     );

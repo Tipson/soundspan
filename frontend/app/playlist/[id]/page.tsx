@@ -1237,7 +1237,7 @@ export default function PlaylistDetailPage() {
                                                             trackId={
                                                                 localTrackId!
                                                             }
-                                                            mode="both"
+                                                            mode="up-only"
                                                             buttonSizeClassName="h-8 w-8"
                                                             iconSizeClassName="h-4 w-4"
                                                         />
@@ -1288,7 +1288,7 @@ export default function PlaylistDetailPage() {
                                                     <>
                                                         <TrackPreferenceButtons
                                                             trackId={track!.id}
-                                                            mode="both"
+                                                            mode="up-only"
                                                             buttonSizeClassName="h-8 w-8"
                                                             iconSizeClassName="h-4 w-4"
                                                             metadata={buildPreferenceMetadata(

@@ -6,6 +6,7 @@ import { buildOptimisticTrackPreferenceResponse } from "@/hooks/trackPreferenceO
 import { toast } from "sonner";
 import type { Album } from "../types";
 import { queryKeys } from "@/lib/queryKeys";
+import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
 
 function albumTrackIds(album: Album): string[] {
     return Array.from(
@@ -58,6 +59,7 @@ export function useAlbumPreferenceActions() {
             await queryClient.invalidateQueries({
                 queryKey: queryKeys.likedPlaylistAll(),
             });
+            publishDeviceOfflineLikedChangeForSignal(signal);
             toast.success(preferenceSuccessMessage(signal, trackIds.length));
         } catch {
             toast.error("Failed to update album track preferences");

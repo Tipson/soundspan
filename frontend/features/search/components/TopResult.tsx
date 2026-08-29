@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Music } from "lucide-react";
 import { api } from "@/lib/api";
 import { Artist, DiscoverResult } from "../types";
-import { getArtistRouteParam } from "@/utils/artistRoute";
+import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 interface TopResultProps {
     libraryArtist?: Artist;
@@ -33,20 +33,19 @@ export function TopResult({
         ? libraryArtist?.name || ""
         : discoveryArtist?.name || "";
 
-    // Get the artist ID for linking - prefer MBID for consistent URLs
-    const artistId = isLibrary
-        ? getArtistRouteParam({
+    // Keep provider-only identities out of the generic artist ID route.
+    const artistHref = isLibrary
+        ? getArtistHref({
               id: libraryArtist?.id,
               mbid: libraryArtist?.mbid,
               name: libraryArtist?.name,
-          }) || encodeURIComponent(name)
-        : getArtistRouteParam(
-              {
-                  mbid: discoveryArtist?.mbid,
-                  name: discoveryArtist?.name,
-              },
-              { preferLibraryId: false },
-          ) || encodeURIComponent(name);
+          }) || `/artist/${encodeURIComponent(name)}`
+        : getDiscoveryArtistHref({
+              id: discoveryArtist?.id,
+              mbid: discoveryArtist?.mbid,
+              name: discoveryArtist?.name,
+              youtubeChannelId: discoveryArtist?.youtubeChannelId,
+          }) || `/artist/${encodeURIComponent(name)}`;
 
     // Get the image URL
     const imageUrl = isLibrary
@@ -57,7 +56,7 @@ export function TopResult({
         <section data-tv-section="search-top-result">
             <h2 className="text-2xl font-bold text-white mb-6">Top result</h2>
             <Link
-                href={`/artist/${artistId}`}
+                href={artistHref}
                 className="bg-surface-sunken hover:bg-surface-elevated p-6 rounded-lg transition-all flex items-center gap-6 w-full sm:w-96"
                 data-tv-card
                 data-tv-card-index={0}

@@ -13,23 +13,55 @@ const state = {
     embeddedTracks: 1,
     statusFail: false,
     tracksFail: false,
+    vibeEmbeddings: true,
+    audioAnalysis: true,
     personalizedEnabled: false,
-    personalizedFeed: {
+    personalizedMode: "for-you",
+    playedTrackIds: [] as string[],
+    playedAsVibeQueue: false,
+    vibeModeEnabled: false,
+    waveMode: "for-you",
+    vibeQueueIds: [] as string[],
+    advanceOrigins: [] as string[],
+    currentTrack: null as null | { id: string; title: string },
+    personalizedFeed: createPersonalizedFeed(),
+};
+
+function createPersonalizedFeed() {
+    return {
         shelves: {
             quickPicks: [
                 {
                     id: "yt:radio-1",
-                    title: "Provider Radio Track",
+                    title: "Quick Pick",
+                },
+                {
+                    id: "yt:shared-1",
+                    title: "Shared Pick",
                 },
             ],
-            listenAgain: [],
-            discovery: [],
+            listenAgain: [
+                {
+                    id: "yt:familiar-1",
+                    title: "Familiar Track",
+                },
+            ],
+            discovery: [
+                {
+                    id: "yt:discovery-1",
+                    title: "Discovery Track",
+                },
+                {
+                    id: "yt:shared-1",
+                    title: "Shared Pick",
+                },
+            ],
         },
         degraded: false,
         reason: null,
         seedCount: 1,
-    },
-};
+    };
+}
 
 const Icon = () => React.createElement("i");
 const MotionDiv = ({
@@ -66,6 +98,11 @@ mock.module("lucide-react", {
         X: Icon,
         AudioWaveform: Icon,
         Map: Icon,
+        Heart: Icon,
+        History: Icon,
+        ListMusic: Icon,
+        SkipForward: Icon,
+        ThumbsDown: Icon,
     },
 });
 
@@ -87,8 +124,8 @@ mock.module("next/link", {
 mock.module("@/lib/features-context", {
     namedExports: {
         useFeatures: () => ({
-            vibeEmbeddings: true,
-            audioAnalysis: true,
+            vibeEmbeddings: state.vibeEmbeddings,
+            audioAnalysis: state.audioAnalysis,
             loading: false,
         }),
     },
@@ -100,14 +137,60 @@ mock.module("@/lib/audio-context", {
     },
 });
 
+mock.module("@/lib/audio-controls-context", {
+    namedExports: {
+        useAudioControls: () => ({
+            playTracks: async (
+                tracks: Array<{ id: string }>,
+                _startIndex?: number,
+                isVibeQueue?: boolean,
+            ) => {
+                state.playedTrackIds = tracks.map((track) => track.id);
+                state.playedAsVibeQueue = isVibeQueue === true;
+            },
+            advanceQueue: (origin: string) => state.advanceOrigins.push(origin),
+        }),
+    },
+});
+
+mock.module("@/lib/audio/providerRadioContinuation", {
+    namedExports: {
+        toProviderPlaybackTrack: (track: { id: string }) => track,
+    },
+});
+
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
-            setVibeMode: () => undefined,
+            setVibeMode: (enabled: boolean) => {
+                state.vibeModeEnabled = enabled;
+            },
+            setWaveMode: (mode: string) => {
+                state.waveMode = mode;
+            },
             setVibeSourceFeatures: () => undefined,
-            setVibeQueueIds: () => undefined,
-            currentTrack: null,
+            setVibeQueueIds: (ids: string[]) => {
+                state.vibeQueueIds = ids;
+            },
+            currentTrack: state.currentTrack,
         }),
+    },
+});
+
+mock.module("@/components/vibe/NowPlayingConnected", {
+    namedExports: {
+        NowPlayingConnected: ({
+            track,
+        }: {
+            track: null | { title: string };
+        }) =>
+            track
+                ? React.createElement(
+                      "div",
+                      { "data-testid": "wave-now-playing" },
+                      track.title,
+                  )
+                : null,
     },
 });
 
@@ -139,8 +222,13 @@ mock.module("@/lib/logger", {
 
 mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
     namedExports: {
-        usePersonalizedHomeFeed: (_limit: number, enabled: boolean) => {
+        usePersonalizedHomeFeed: (
+            _limit: number,
+            enabled: boolean,
+            mode: string,
+        ) => {
             state.personalizedEnabled = enabled;
+            state.personalizedMode = mode;
             return {
                 data: state.personalizedFeed,
                 isLoading: false,
@@ -182,7 +270,18 @@ beforeEach(() => {
     state.embeddedTracks = 1;
     state.statusFail = false;
     state.tracksFail = false;
+    state.vibeEmbeddings = true;
+    state.audioAnalysis = true;
     state.personalizedEnabled = false;
+    state.personalizedMode = "for-you";
+    state.playedTrackIds = [];
+    state.playedAsVibeQueue = false;
+    state.vibeModeEnabled = false;
+    state.waveMode = "for-you";
+    state.vibeQueueIds = [];
+    state.advanceOrigins = [];
+    state.currentTrack = null;
+    state.personalizedFeed = createPersonalizedFeed();
     window.localStorage.clear();
 });
 
@@ -222,21 +321,23 @@ function findButton(
     );
 }
 
-test("Vibe replaces an unusable audio-DNA surface with provider radio below two local embeddings", async () => {
+test("Vibe replaces an unusable analysis surface with a plain-language My Wave landing", async () => {
     state.embeddedTracks = 1;
     const mounted = await mountPage();
 
+    assert.match(mounted.container.textContent ?? "", /My Wave/);
     assert.match(
         mounted.container.textContent ?? "",
-        /Radio while Vibe warms up/,
+        /likes, dislikes, listening history, and playlists/i,
+    );
+    assert.match(mounted.container.textContent ?? "", /Skips/);
+    assert.doesNotMatch(
+        mounted.container.textContent ?? "",
+        /provider|audio[- ]dna|local(?:ly)? (?:files|stored|analyzed)/i,
     );
     assert.match(
         mounted.container.textContent ?? "",
-        /Audio-DNA Vibe needs at least two locally stored, analyzed files/,
-    );
-    assert.match(
-        mounted.container.textContent ?? "",
-        /Provider radio:Provider Radio Track/,
+        /For you:Quick Pick,Discovery Track,Familiar Track,Shared Pick/,
     );
     assert.equal(state.personalizedEnabled, true);
     assert.equal(findButton(mounted.container, "Map"), null);
@@ -248,80 +349,147 @@ test("Vibe replaces an unusable audio-DNA surface with provider radio below two 
     await unmountPage(mounted);
 });
 
-test("Vibe still offers provider radio when the unrelated local-track list fails", async () => {
+test("My Wave remains the primary Vibe page when local audio analysis is disabled", async () => {
+    state.vibeEmbeddings = false;
+    state.audioAnalysis = false;
+    const mounted = await mountPage();
+
+    assert.match(mounted.container.textContent ?? "", /My Wave/);
+    assert.match(
+        mounted.container.textContent ?? "",
+        /likes, dislikes, listening history, and playlists/i,
+    );
+    assert.doesNotMatch(
+        mounted.container.textContent ?? "",
+        /Feature not available|DCLAP/i,
+    );
+    assert.equal(state.personalizedEnabled, true);
+
+    await unmountPage(mounted);
+});
+
+test("My Wave mode buttons switch the real shelf and the hero plays the active selection", async () => {
+    const mounted = await mountPage();
+    const newToMe = findButton(mounted.container, "New to me");
+    const familiar = findButton(mounted.container, "Familiar");
+
+    assert.ok(newToMe);
+    assert.ok(familiar);
+    assert.equal(newToMe.getAttribute("aria-pressed"), "false");
+
+    await React.act(async () => newToMe.click());
+    assert.equal(newToMe.getAttribute("aria-pressed"), "true");
+    assert.equal(state.personalizedMode, "new");
+    assert.match(
+        mounted.container.textContent ?? "",
+        /New to me:Discovery Track,Shared Pick/,
+    );
+    assert.doesNotMatch(
+        mounted.container.textContent ?? "",
+        /New to me:.*Familiar Track/,
+    );
+
+    await React.act(async () => familiar.click());
+    assert.equal(state.personalizedMode, "familiar");
+    assert.match(
+        mounted.container.textContent ?? "",
+        /Familiar:Familiar Track/,
+    );
+
+    const playWave = findButton(mounted.container, "Play My Wave");
+    assert.ok(playWave);
+    await React.act(async () => playWave.click());
+    assert.deepEqual(state.playedTrackIds, ["yt:familiar-1"]);
+    assert.equal(state.playedAsVibeQueue, true);
+    assert.equal(state.vibeModeEnabled, true);
+    assert.equal(state.waveMode, "familiar");
+    assert.deepEqual(state.vibeQueueIds, ["yt:familiar-1"]);
+
+    await unmountPage(mounted);
+});
+
+test("My Wave exposes connected like and dislike controls for the current track", async () => {
+    state.currentTrack = { id: "yt:playing-1", title: "Playing Track" };
+    const mounted = await mountPage();
+
+    assert.match(mounted.container.textContent ?? "", /Shape the next tracks/i);
+    assert.equal(
+        mounted.container.querySelector('[data-testid="wave-now-playing"]')
+            ?.textContent,
+        "Playing Track",
+    );
+    const skip = findButton(mounted.container, "Skip");
+    assert.ok(skip);
+    await React.act(async () => skip.click());
+    assert.deepEqual(state.advanceOrigins, ["manual"]);
+
+    await unmountPage(mounted);
+});
+
+test("Familiar mode falls back to quick picks when listening history is empty", async () => {
+    state.personalizedFeed.shelves.listenAgain = [];
+    const mounted = await mountPage();
+    const familiar = findButton(mounted.container, "Familiar");
+
+    assert.ok(familiar);
+    await React.act(async () => familiar.click());
+    assert.match(
+        mounted.container.textContent ?? "",
+        /Familiar:Quick Pick,Shared Pick/,
+    );
+
+    await unmountPage(mounted);
+});
+
+test("Vibe still offers My Wave when the unrelated local-track list fails", async () => {
     state.embeddedTracks = 1;
     state.tracksFail = true;
     const mounted = await mountPage();
 
     assert.match(
         mounted.container.textContent ?? "",
-        /Provider radio:Provider Radio Track/,
+        /For you:Quick Pick,Discovery Track,Familiar Track,Shared Pick/,
     );
     assert.equal(state.personalizedEnabled, true);
 
     await unmountPage(mounted);
 });
 
-test("Vibe falls back to provider radio when Audio-DNA status is unavailable", async () => {
+test("Vibe falls back to My Wave when analysis status is unavailable", async () => {
     state.statusFail = true;
     const mounted = await mountPage();
 
+    assert.match(mounted.container.textContent ?? "", /My Wave/);
+    assert.match(mounted.container.textContent ?? "", /listening history/i);
     assert.match(
         mounted.container.textContent ?? "",
-        /Radio while Vibe warms up/,
-    );
-    assert.match(
-        mounted.container.textContent ?? "",
-        /Audio-DNA status is temporarily unavailable/,
-    );
-    assert.match(
-        mounted.container.textContent ?? "",
-        /Provider radio:Provider Radio Track/,
+        /For you:Quick Pick,Discovery Track,Familiar Track,Shared Pick/,
     );
     assert.equal(state.personalizedEnabled, true);
 
     await unmountPage(mounted);
 });
 
-for (const embeddedTracks of [2, 4]) {
-    test(`Vibe keeps limited exploration but withholds the full map at ${embeddedTracks} local embeddings`, async () => {
+for (const embeddedTracks of [2, 4, 5]) {
+    test(`Vibe stays online-first with ${embeddedTracks} legacy local embeddings`, async () => {
         state.embeddedTracks = embeddedTracks;
         const mounted = await mountPage();
 
-        assert.match(mounted.container.textContent ?? "", /Limited Audio DNA/);
-        assert.match(
+        assert.match(mounted.container.textContent ?? "", /My Wave/);
+        assert.doesNotMatch(
             mounted.container.textContent ?? "",
-            /The full Vibe map needs at least 5 locally analyzed files/,
+            /Audio DNA|locally analyzed files|audio fingerprints/,
         );
-        assert.equal(
+        assert.ok(
             mounted.container.querySelector('[data-testid="provider-radio"]'),
+        );
+        assert.equal(state.personalizedEnabled, true);
+        assert.equal(findButton(mounted.container, "Map"), null);
+        assert.equal(
+            mounted.container.querySelector('[data-testid="vibe-map"]'),
             null,
         );
-        assert.equal(state.personalizedEnabled, false);
-        assert.equal(findButton(mounted.container, "Map"), null);
 
         await unmountPage(mounted);
     });
 }
-
-test("Vibe preserves the working full map from five local embeddings", async () => {
-    state.embeddedTracks = 5;
-    const mounted = await mountPage();
-
-    assert.doesNotMatch(
-        mounted.container.textContent ?? "",
-        /Limited Audio DNA/,
-    );
-    assert.equal(
-        mounted.container.querySelector('[data-testid="provider-radio"]'),
-        null,
-    );
-    assert.equal(state.personalizedEnabled, false);
-    const mapButton = findButton(mounted.container, "Map");
-    assert.ok(mapButton);
-
-    await React.act(async () => mapButton.click());
-    assert.ok(mounted.container.querySelector('[data-testid="vibe-map"]'));
-
-    await unmountPage(mounted);
-});

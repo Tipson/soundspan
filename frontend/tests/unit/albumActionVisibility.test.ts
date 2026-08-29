@@ -14,6 +14,7 @@ const baseInput = {
     requestsEnabled: false,
     hasAddAllToQueue: true,
     hasAlbumPreferenceAction: true,
+    canDeleteFromLibrary: false,
     isInListenTogetherGroup: false,
 };
 
@@ -21,6 +22,24 @@ test("synthetic release-group identifiers are not acquisition MBIDs", () => {
     assert.equal(isSyntheticRgMbid("remote:generated-hash"), true);
     assert.equal(isSyntheticRgMbid("real-release-group"), false);
     assert.equal(isSyntheticRgMbid(undefined), false);
+});
+
+test("destructive album action is limited to deletable local library albums", () => {
+    const local = getAlbumActionVisibility({
+        ...baseInput,
+        source: "library",
+        owned: true,
+        canDeleteFromLibrary: true,
+    });
+    assert.equal(local.canDeleteAlbum, true);
+
+    const remote = getAlbumActionVisibility({
+        ...baseInput,
+        source: "remote",
+        owned: true,
+        canDeleteFromLibrary: true,
+    });
+    assert.equal(remote.canDeleteAlbum, false);
 });
 
 test("album action visibility keeps synthetic remote albums playable but not acquirable", () => {

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 from httpx import AsyncClient
 
 # ---------------------------------------------------------------------------
@@ -124,6 +127,75 @@ class TestHomeShelfFiltering:
         assert "Quick picks" in titles
         assert "Listen again" in titles
         assert "Trending" in titles
+
+    @pytest.mark.anyio
+    async def test_transient_json_failure_retries_with_a_fresh_public_client(
+        self, client: AsyncClient
+    ) -> None:
+        """An empty provider response should not leave the home feed broken."""
+        stale_client = MagicMock()
+        stale_client.get_home.side_effect = json.JSONDecodeError(
+            "empty upstream response",
+            "",
+            0,
+        )
+        fresh_client = MagicMock()
+        fresh_client.get_home.return_value = _SAMPLE_SHELVES
+
+        with (
+            patch(
+                "app._get_public_ytmusic",
+                side_effect=[stale_client, fresh_client],
+            ) as get_public,
+            patch("app._invalidate_public_ytmusic") as invalidate_public,
+        ):
+            response = await client.get("/home")
+
+        assert response.status_code == 200
+        assert [shelf["title"] for shelf in response.json()] == [
+            "Listen again",
+            "Trending",
+        ]
+        assert get_public.call_count == 2
+        invalidate_public.assert_called_once_with("native", expected=stale_client)
+
+    @pytest.mark.anyio
+    async def test_transport_timeout_is_not_retried(self, client: AsyncClient) -> None:
+        """One provider timeout must not multiply the home endpoint's wait."""
+        stalled_client = MagicMock()
+        stalled_client.get_home.side_effect = requests.Timeout("provider stalled")
+
+        with (
+            patch("app._get_public_ytmusic", return_value=stalled_client) as get_public,
+            patch("app._invalidate_public_ytmusic") as invalidate_public,
+        ):
+            response = await client.get("/home")
+
+        assert response.status_code == 500
+        assert response.json() == {"error": "Failed to load home"}
+        assert get_public.call_count == 1
+        invalidate_public.assert_not_called()
+
+    @pytest.mark.anyio
+    async def test_slow_provider_call_obeys_the_browse_deadline(self, client: AsyncClient) -> None:
+        """Home must return 504 instead of waiting indefinitely on provider work."""
+        slow_client = MagicMock()
+
+        def slow_home(*, limit: int) -> list[dict[str, object]]:
+            _ = limit
+            time.sleep(0.5)
+            return []
+
+        slow_client.get_home.side_effect = slow_home
+
+        with (
+            patch("app.BROWSE_TIMEOUT", 0.05),
+            patch("app._get_public_ytmusic", return_value=slow_client),
+        ):
+            response = await client.get("/home")
+
+        assert response.status_code == 504
+        assert response.json() == {"error": "YouTube Music request timed out"}
 
 
 # ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ import {
     BRAND_NAME,
 } from "@/lib/brand";
 import { APP_VIEWPORT } from "@/lib/viewportConfig";
+import { ImportCompletionMonitor } from "@/components/activity/ImportCompletionMonitor";
 
 // Self-hosted latin variable instance (weights 300-800) of the same font the
 // build previously fetched from Google at build time - CI must not depend on
@@ -82,6 +83,7 @@ export default async function RootLayout({
                     <AuthProvider>
                         <FeaturesProvider>
                             <QueryProvider>
+                                <ImportCompletionMonitor />
                                 <DownloadProvider>
                                     <ConditionalAudioProvider>
                                         <ToastProvider>

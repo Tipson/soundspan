@@ -5,8 +5,8 @@ import {
     MOBILE_QUICK_LINKS,
 } from "../../components/layout/socialNavigation";
 
-test("sidebar navigation has 7 items", () => {
-    assert.equal(SIDEBAR_NAVIGATION.length, 7);
+test("sidebar navigation keeps the five music-first destinations", () => {
+    assert.equal(SIDEBAR_NAVIGATION.length, 5);
 });
 
 test("sidebar navigation starts with Home then Explore", () => {
@@ -16,15 +16,15 @@ test("sidebar navigation starts with Home then Explore", () => {
     assert.equal(SIDEBAR_NAVIGATION[1].href, "/explore");
 });
 
-test("sidebar navigation includes Library, Listen Together, Audiobooks, Podcasts", () => {
+test("sidebar navigation stays music-first without inactive spoken-word sections", () => {
     const names = SIDEBAR_NAVIGATION.map((item) => item.name);
     assert.ok(names.includes("Library"), "should include Library");
     assert.ok(
         names.includes("Listen Together"),
         "should include Listen Together",
     );
-    assert.ok(names.includes("Audiobooks"), "should include Audiobooks");
-    assert.ok(names.includes("Podcasts"), "should include Podcasts");
+    assert.ok(!names.includes("Audiobooks"), "should hide Audiobooks");
+    assert.ok(!names.includes("Podcasts"), "should hide Podcasts");
 });
 
 test("sidebar navigation does not include removed items", () => {

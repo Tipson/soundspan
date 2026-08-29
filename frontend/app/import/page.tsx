@@ -2,15 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-    ArrowLeft,
-    Check,
-    ExternalLink,
-    FileUp,
-    Link,
-    Loader2,
-    Music4,
-} from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Check, FileUp, Link, Loader2, Music4 } from "lucide-react";
 import {
     api,
     type ImportResolutionSource,
@@ -22,6 +15,7 @@ import { useToast } from "@/lib/toast-context";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { formatTime } from "@/utils/formatTime";
+import { queryKeys } from "@/lib/queryKeys";
 
 type ImportStep = "input" | "preview" | "executing" | "complete";
 type ImportMode = "url" | "file";
@@ -206,12 +200,13 @@ function ImportPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
-    const hasAutoFetched = useRef(false);
+    const queryClient = useQueryClient();
+    const hasAutoSubmitted = useRef(false);
+    const jobSubmissionInFlightRef = useRef(false);
 
     const [step, setStep] = useState<ImportStep>("input");
     const [importMode, setImportMode] = useState<ImportMode>("url");
     const [urlInput, setUrlInput] = useState("");
-    const [canonicalUrl, setCanonicalUrl] = useState("");
     const [playlistName, setPlaylistName] = useState("");
     const [preview, setPreview] =
         useState<PlaylistImportPreviewResponse | null>(null);
@@ -219,47 +214,12 @@ function ImportPageContent() {
         null,
     );
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [isJobSubmitting, setIsJobSubmitting] = useState(false);
     const [isExecuting, setIsExecuting] = useState(false);
     const [m3uFileName, setM3uFileName] = useState("");
     const [m3uContent, setM3uContent] = useState("");
     const [m3uPlaylistName, setM3uPlaylistName] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const fetchPreview = useCallback(
-        async (nextUrl: string) => {
-            if (!nextUrl.trim()) {
-                toast.error("Please enter a playlist URL");
-                return;
-            }
-
-            const parsedUrl = tryParsePlaylistUrl(nextUrl);
-            if (!parsedUrl || !isSupportedPlaylistUrl(parsedUrl.href)) {
-                toast.error(
-                    "Supported URLs: Spotify, Deezer, YouTube Music, and TIDAL playlists",
-                );
-                return;
-            }
-
-            const nextCanonicalUrl = parsedUrl.href;
-            setIsPreviewLoading(true);
-            try {
-                const response =
-                    await api.previewPlaylistImport(nextCanonicalUrl);
-                setUrlInput(nextCanonicalUrl);
-                setCanonicalUrl(nextCanonicalUrl);
-                setPreview(response);
-                setPlaylistName(response.playlistName);
-                setStep("preview");
-            } catch (error) {
-                toast.error(
-                    getErrorMessage(error, "Failed to preview playlist"),
-                );
-            } finally {
-                setIsPreviewLoading(false);
-            }
-        },
-        [toast],
-    );
 
     const handleM3uFileSelect = useCallback(
         (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -306,16 +266,6 @@ function ImportPageContent() {
         }
     }, [m3uContent, m3uPlaylistName, toast]);
 
-    useEffect(() => {
-        const urlParam = searchParams.get("url");
-        if (!urlParam || hasAutoFetched.current) {
-            return;
-        }
-
-        hasAutoFetched.current = true;
-        void fetchPreview(urlParam);
-    }, [fetchPreview, searchParams]);
-
     const handleExecute = async () => {
         if (!preview) return;
 
@@ -325,6 +275,9 @@ function ImportPageContent() {
             const executeResult = await executeImportAction({
                 previewData: preview,
                 name: playlistName,
+            });
+            void queryClient.invalidateQueries({
+                queryKey: queryKeys.personalizedHomeAll(),
             });
             setResult(executeResult);
             setStep("complete");
@@ -338,36 +291,80 @@ function ImportPageContent() {
         }
     };
 
-    const handleSubmitBackgroundJob = async () => {
-        if (!canonicalUrl) return;
-
-        try {
-            const result = await api.submitImportJob(
-                canonicalUrl,
-                playlistName || undefined,
-            );
-            if (result.deduped) {
-                toast.info(
-                    "An import for this playlist is already in progress",
-                );
-            } else {
-                toast.success(
-                    "Import job submitted — check the Imports tab in Activity",
-                );
+    const handleSubmitBackgroundJob = useCallback(
+        async (nextUrl: string) => {
+            if (jobSubmissionInFlightRef.current) {
+                return;
             }
-            resetFlow();
-        } catch (error) {
-            toast.error(getErrorMessage(error, "Failed to submit import job"));
+            const parsedUrl = tryParsePlaylistUrl(nextUrl);
+            if (!parsedUrl || !isSupportedPlaylistUrl(parsedUrl.href)) {
+                toast.error(
+                    "Supported URLs: Spotify, Deezer, YouTube Music, and TIDAL playlists",
+                );
+                return;
+            }
+            const nextCanonicalUrl = parsedUrl.href;
+            jobSubmissionInFlightRef.current = true;
+            setUrlInput(nextCanonicalUrl);
+            setIsJobSubmitting(true);
+
+            try {
+                const result = await api.submitImportJob(nextCanonicalUrl);
+                if (result.deduped) {
+                    toast.info(
+                        "An import for this playlist is already in progress",
+                    );
+                } else {
+                    toast.success(
+                        "Import job submitted — check the Imports tab in Activity",
+                    );
+                }
+                window.dispatchEvent(
+                    new CustomEvent("import-jobs-changed", {
+                        detail: { jobId: result.job.id },
+                    }),
+                );
+                setUrlInput("");
+            } catch (error) {
+                toast.error(
+                    getErrorMessage(error, "Failed to submit import job"),
+                );
+            } finally {
+                jobSubmissionInFlightRef.current = false;
+                setIsJobSubmitting(false);
+            }
+        },
+        [toast],
+    );
+
+    useEffect(() => {
+        const urlParam = searchParams.get("url");
+        if (!urlParam || hasAutoSubmitted.current) {
+            return;
         }
+
+        const timeoutId = window.setTimeout(() => {
+            if (hasAutoSubmitted.current) return;
+            hasAutoSubmitted.current = true;
+            void handleSubmitBackgroundJob(urlParam);
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [handleSubmitBackgroundJob, searchParams]);
+
+    const returnToInput = () => {
+        setStep("input");
+        setPlaylistName("");
+        setPreview(null);
+        setResult(null);
     };
 
     const resetFlow = () => {
         setStep("input");
         setUrlInput("");
-        setCanonicalUrl("");
         setPlaylistName("");
         setPreview(null);
         setResult(null);
+        setIsJobSubmitting(false);
         setIsExecuting(false);
         setM3uContent("");
         setM3uFileName("");
@@ -382,7 +379,6 @@ function ImportPageContent() {
     const completedImportableCount = result
         ? result.summary.total - result.summary.unresolved
         : 0;
-
     return (
         <div className="min-h-screen relative">
             <div className="absolute inset-0 pointer-events-none">
@@ -399,6 +395,7 @@ function ImportPageContent() {
             <div className="relative max-w-3xl mx-auto px-6 py-6">
                 <div className="flex items-center gap-4 mb-6">
                     <button
+                        aria-label="Back"
                         onClick={() => router.back()}
                         className="p-2 hover:bg-white/5 rounded-full transition-colors"
                     >
@@ -458,7 +455,9 @@ function ImportPageContent() {
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-colors"
                                         onKeyDown={(event) =>
                                             event.key === "Enter" &&
-                                            void fetchPreview(urlInput)
+                                            void handleSubmitBackgroundJob(
+                                                urlInput,
+                                            )
                                         }
                                     />
                                     <p className="text-xs text-gray-400 mt-2">
@@ -480,23 +479,42 @@ function ImportPageContent() {
                                         </span>{" "}
                                         playlist URL
                                     </p>
+                                    <p className="mt-2 text-xs leading-5 text-gray-400">
+                                        Spotify is used only to read the
+                                        public playlist track list. Soundspan
+                                        does not play audio from Spotify,
+                                        change the source playlist, or save
+                                        audio files to the server. Private
+                                        playlists are not supported yet.
+                                    </p>
                                 </div>
-                                <button
-                                    onClick={() => void fetchPreview(urlInput)}
-                                    disabled={
-                                        isPreviewLoading || !urlInput.trim()
-                                    }
-                                    className="w-full py-3 rounded-full font-medium bg-brand text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                                >
-                                    {isPreviewLoading ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                            Loading Preview...
-                                        </>
-                                    ) : (
-                                        "Preview Import"
-                                    )}
-                                </button>
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={() =>
+                                            void handleSubmitBackgroundJob(
+                                                urlInput,
+                                            )
+                                        }
+                                        disabled={
+                                            isJobSubmitting || !urlInput.trim()
+                                        }
+                                        className="w-full py-3 rounded-full font-medium bg-brand text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {isJobSubmitting ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Starting Import...
+                                            </>
+                                        ) : (
+                                            "Start Import"
+                                        )}
+                                    </button>
+                                    <p className="text-center text-xs text-gray-400">
+                                        Large playlists continue in the
+                                        background. Progress appears in the
+                                        Imports tab in Activity.
+                                    </p>
+                                </div>
                             </>
                         )}
 
@@ -587,16 +605,6 @@ function ImportPageContent() {
                                     {preview.summary.total} songs found
                                 </p>
                             </div>
-                            {canonicalUrl && (
-                                <a
-                                    href={canonicalUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-gray-400 hover:text-brand transition-colors"
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                </a>
-                            )}
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -670,7 +678,7 @@ function ImportPageContent() {
 
                         <div className="flex items-center gap-3 pt-2">
                             <button
-                                onClick={() => setStep("input")}
+                                onClick={returnToInput}
                                 className="px-6 py-3 rounded-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
                             >
                                 Back
@@ -692,15 +700,6 @@ function ImportPageContent() {
                                 )}
                             </button>
                         </div>
-                        {canonicalUrl && importableCount > 0 && (
-                            <button
-                                onClick={() => void handleSubmitBackgroundJob()}
-                                disabled={isExecuting}
-                                className="w-full mt-2 py-2.5 rounded-full text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 transition-colors"
-                            >
-                                Run in Background
-                            </button>
-                        )}
                     </div>
                 )}
 

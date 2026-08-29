@@ -3,12 +3,14 @@ import test from "node:test";
 import {
     clampForegroundLeaseClockSkew,
     DEVICE_OFFLINE_BACKGROUND_MISSING_GRACE_MS,
+    DEVICE_OFFLINE_BACKGROUND_STALL_MS,
     DEVICE_OFFLINE_BACKGROUND_UNKNOWN_RETRY_LIMIT,
     DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS,
     DeviceOfflineDownloadManager,
     foregroundLeaseDisposition,
     interruptExpiredForegroundRecord,
     matchesDeviceOfflineRecordVersion,
+    mergeConcurrentDeviceOfflineUpdate,
     type DeviceOfflineAudioCache,
     type DeviceOfflineManagerDependencies,
     type DeviceOfflineMetadataStore,
@@ -70,7 +72,9 @@ class MemoryMetadataStore implements DeviceOfflineMetadataStore {
     async claimReplacement(
         expected: DeviceOfflineDownloadRecord | null,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
         const current =
             [...this.records.values()].find(
                 (record) =>
@@ -90,7 +94,9 @@ class MemoryMetadataStore implements DeviceOfflineMetadataStore {
     async putIfCurrent(
         expected: DeviceOfflineDownloadRecord,
         next: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
         if (
             !matchesDeviceOfflineRecordVersion(
                 this.records.get(expected.key) ?? null,
@@ -99,7 +105,9 @@ class MemoryMetadataStore implements DeviceOfflineMetadataStore {
         ) {
             return false;
         }
-        await this.put(next);
+        const current = this.records.get(expected.key);
+        assert.ok(current);
+        await this.put(mergeConcurrentDeviceOfflineUpdate(current, next));
         return true;
     }
 
@@ -127,12 +135,30 @@ class MemoryMetadataStore implements DeviceOfflineMetadataStore {
 
     async deleteIfCurrent(
         expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
     ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
         if (
             !matchesDeviceOfflineRecordVersion(
                 this.records.get(expected.key) ?? null,
                 expected,
             )
+        ) {
+            return false;
+        }
+        return this.records.delete(expected.key);
+    }
+
+    async deleteAutoManagedIfCurrent(
+        expected: DeviceOfflineDownloadRecord,
+        isAuthorized?: () => boolean,
+    ): Promise<boolean> {
+        if (isAuthorized && !isAuthorized()) return false;
+        const current = this.records.get(expected.key) ?? null;
+        if (
+            current?.management !== "auto-liked" ||
+            expected.management !== "auto-liked" ||
+            !matchesDeviceOfflineRecordVersion(current, expected)
         ) {
             return false;
         }
@@ -297,6 +323,7 @@ function createDependencies(
 } {
     const metadataStore = new MemoryMetadataStore();
     const audioCache = new MemoryAudioCache();
+    const defaultAuthController = new AbortController();
     let keySequence = 0;
     return {
         fetch: async () =>
@@ -316,12 +343,17 @@ function createDependencies(
             quota: 10_000_000,
         }),
         startBackgroundFetch: async () => "unavailable",
-        abortBackgroundFetch: async () => undefined,
+        abortBackgroundFetch: async () => "cleared",
         listActiveBackgroundFetches: async () => [],
         scheduleLeaseHeartbeat: () => Symbol("lease-heartbeat"),
         cancelLeaseHeartbeat: () => undefined,
         scheduleLeaseExpiryCheck: () => Symbol("lease-expiry-check"),
         cancelLeaseExpiryCheck: () => undefined,
+        getAuthRuntimeLease: () => ({
+            generation: 0,
+            signal: defaultAuthController.signal,
+        }),
+        isAuthRuntimeCurrent: (generation) => generation === 0,
         ...overrides,
         metadataStore: overrides.metadataStore ?? metadataStore,
         audioCache: overrides.audioCache ?? audioCache,
@@ -330,6 +362,150 @@ function createDependencies(
         audioCache: MemoryAudioCache;
     };
 }
+
+test("an auth-runtime replacement during persistence setup cannot fetch or retain another account's audio", async () => {
+    let runtimeGeneration = 1;
+    const runtimeController = new AbortController();
+    let signalPersistenceStarted!: () => void;
+    const persistenceStarted = new Promise<void>((resolve) => {
+        signalPersistenceStarted = resolve;
+    });
+    let releasePersistence!: () => void;
+    const persistenceGate = new Promise<void>((resolve) => {
+        releasePersistence = resolve;
+    });
+    let fetches = 0;
+    const deps = createDependencies({
+        getAuthRuntimeLease: () => ({
+            generation: runtimeGeneration,
+            signal: runtimeController.signal,
+        }),
+        isAuthRuntimeCurrent: (generation) => generation === runtimeGeneration,
+        requestPersistentStorage: async () => {
+            signalPersistenceStarted();
+            await persistenceGate;
+            return true;
+        },
+        fetch: async () => {
+            fetches += 1;
+            return new Response("must-not-fetch");
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+
+    const pending = manager.download({
+        ownerId: "user-a",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    await persistenceStarted;
+    runtimeGeneration = 2;
+    releasePersistence();
+
+    await assert.rejects(pending, /authentication session changed/i);
+    assert.equal(fetches, 0);
+    assert.deepEqual(await manager.list("user-a"), []);
+});
+
+test("a stale owner callback cannot adopt a replacement runtime with the same owner id", async () => {
+    let runtimeGeneration = 1;
+    const retiredController = new AbortController();
+    const freshController = new AbortController();
+    let currentLease = {
+        generation: runtimeGeneration,
+        signal: retiredController.signal,
+    };
+    let fetches = 0;
+    const deps = createDependencies({
+        getAuthRuntimeLease: () => currentLease,
+        isAuthRuntimeCurrent: (generation) => generation === runtimeGeneration,
+        fetch: async () => {
+            fetches += 1;
+            return new Response(Uint8Array.of(1), {
+                status: 200,
+                headers: { "content-length": "1" },
+            });
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const retiredLease = currentLease;
+    manager.activateOwner("user-a", retiredLease);
+
+    retiredController.abort();
+    runtimeGeneration = 2;
+    currentLease = {
+        generation: runtimeGeneration,
+        signal: freshController.signal,
+    };
+
+    await assert.rejects(
+        async () =>
+            manager.download({
+                ownerId: "user-a",
+                track: TRACK,
+                sourceUrl: "/api/library/tracks/track-1/stream",
+            }),
+        /authentication session changed/i,
+    );
+    assert.equal(fetches, 0);
+
+    manager.activateOwner("user-a", currentLease);
+    assert.equal(
+        (
+            await manager.download({
+                ownerId: "user-a",
+                track: TRACK,
+                sourceUrl: "/api/library/tracks/track-1/stream",
+            })
+        ).status,
+        "ready",
+    );
+    assert.equal(fetches, 1);
+});
+
+test("revoking an owner lease aborts an in-flight credentialed fetch and removes its attempt", async () => {
+    const authController = new AbortController();
+    let signalFetchStarted!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => {
+        signalFetchStarted = resolve;
+    });
+    const deps = createDependencies({
+        getAuthRuntimeLease: () => ({
+            generation: 1,
+            signal: authController.signal,
+        }),
+        isAuthRuntimeCurrent: () => !authController.signal.aborted,
+        fetch: async (_input, init) => {
+            signalFetchStarted();
+            return new Promise<Response>((_resolve, reject) => {
+                init?.signal?.addEventListener(
+                    "abort",
+                    () =>
+                        reject(
+                            new DOMException("Runtime retired", "AbortError"),
+                        ),
+                    { once: true },
+                );
+            });
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const lease = deps.getAuthRuntimeLease();
+    manager.activateOwner("user-a", lease);
+
+    const pending = manager.download({
+        ownerId: "user-a",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    await fetchStarted;
+    authController.abort();
+
+    await assert.rejects(pending, /runtime retired|session changed/i);
+    assert.deepEqual(await manager.list("user-a"), []);
+    assert.equal(deps.audioCache.responses.size, 0);
+});
 
 test("foreground download publishes ready metadata only after a complete atomic device-cache write", async () => {
     const deps = createDependencies();
@@ -358,6 +534,150 @@ test("foreground download publishes ready metadata only after a complete atomic 
         new Uint8Array(await cached.arrayBuffer()),
         Uint8Array.from([0, 1, 2, 3, 4, 5]),
     );
+});
+
+test("foreground download publishes measured progress before cache integrity verification", async () => {
+    const audioCache = new PausedAudioCache();
+    const deps = createDependencies({ audioCache });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const pending = manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    await audioCache.putStarted;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const progress = [...deps.metadataStore.records.values()][0];
+    assert.equal(progress.status, "downloading");
+    assert.equal(progress.bytesReceived, 6);
+    assert.equal(progress.totalBytes, 6);
+    assert.equal(progress.integrityVersion, undefined);
+
+    audioCache.resumePut();
+    const ready = await pending;
+    assert.equal(ready.status, "ready");
+    assert.equal(ready.integrityVersion, 1);
+});
+
+test("foreground progress metadata is throttled instead of writing every stream chunk", async () => {
+    class CountingProgressMetadataStore extends MemoryMetadataStore {
+        progressWrites = 0;
+
+        override async putIfCurrent(
+            expected: DeviceOfflineDownloadRecord,
+            next: DeviceOfflineDownloadRecord,
+        ): Promise<boolean> {
+            if (
+                next.status === "downloading" &&
+                next.bytesReceived > expected.bytesReceived
+            ) {
+                this.progressWrites += 1;
+            }
+            return super.putIfCurrent(expected, next);
+        }
+    }
+    const metadataStore = new CountingProgressMetadataStore();
+    const deps = createDependencies({
+        metadataStore,
+        fetch: async () =>
+            new Response(
+                new ReadableStream<Uint8Array>({
+                    start(controller) {
+                        for (let index = 0; index < 20; index += 1) {
+                            controller.enqueue(Uint8Array.of(index));
+                        }
+                        controller.close();
+                    },
+                }),
+                { status: 200, headers: { "content-length": "20" } },
+            ),
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+
+    await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    assert.ok(metadataStore.progressWrites >= 1);
+    assert.ok(metadataStore.progressWrites <= 2);
+});
+
+test("lease and progress writes cannot regress one another in IndexedDB", () => {
+    const current: DeviceOfflineDownloadRecord = {
+        key: "progress-key",
+        ownerId: "user-1",
+        trackIdentity: "track:track-1",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/progress-key",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        track: TRACK,
+        status: "downloading",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        foregroundLeaseId: "lease-1",
+        foregroundLeaseExpiresAt: 90_000,
+        bytesReceived: 512_000,
+        totalBytes: 1_024_000,
+        contentType: "audio/mpeg",
+        persistenceGranted: true,
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 30_000,
+        errorCode: null,
+        errorMessage: null,
+    };
+    const staleHeartbeat = {
+        ...current,
+        bytesReceived: 0,
+        foregroundLeaseExpiresAt: 80_000,
+        updatedAt: 20_000,
+    };
+
+    const merged = mergeConcurrentDeviceOfflineUpdate(current, staleHeartbeat);
+    assert.equal(merged.bytesReceived, 512_000);
+    assert.equal(merged.totalBytes, 1_024_000);
+    assert.equal(merged.foregroundLeaseExpiresAt, 90_000);
+    assert.equal(merged.updatedAt, 30_000);
+});
+
+test("foreground download rejects a retained cache body shorter than Content-Length", async () => {
+    class TruncatingAudioCache extends MemoryAudioCache {
+        override async put(url: string, response: Response): Promise<void> {
+            this.putCalls += 1;
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            this.responses.set(
+                url,
+                new Response(bytes.slice(0, Math.max(0, bytes.length - 1)), {
+                    status: 200,
+                    headers: response.headers,
+                }),
+            );
+        }
+    }
+
+    const audioCache = new TruncatingAudioCache();
+    const deps = createDependencies({ audioCache });
+    const manager = new DeviceOfflineDownloadManager(deps);
+
+    await assert.rejects(
+        manager.download({
+            ownerId: "user-1",
+            track: TRACK,
+            quality: "auto",
+            sourceUrl: "/api/library/tracks/track-1/stream",
+        }),
+        /complete|length|bytes/i,
+    );
+
+    const failed = [...deps.metadataStore.records.values()][0];
+    assert.equal(failed.status, "error");
+    assert.equal(failed.errorCode, "cache");
+    assert.equal(deps.audioCache.responses.size, 0);
 });
 
 test("a progress failure drains the cache write before deleting its partial entry", async () => {
@@ -543,6 +863,125 @@ test("records and playback resolution are isolated by owner and quality", async 
     );
 });
 
+test("another account in the same browser cannot delete or inherit a device-local copy", async () => {
+    const deps = createDependencies();
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ownerCopy = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    const absoluteVirtualUrl = `https://soundspan.test${ownerCopy.virtualUrl}`;
+
+    assert.deepEqual(await manager.list("user-2"), []);
+    assert.equal(await manager.delete("user-2", ownerCopy.key), false);
+    assert.equal((await manager.list("user-1"))[0]?.status, "ready");
+    assert.ok(await deps.audioCache.match(absoluteVirtualUrl));
+});
+
+test("manual device copies are never downgraded to auto-managed eviction candidates", async () => {
+    const deps = createDependencies();
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const manual = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    assert.equal(manual.management, "manual");
+
+    const retriedByAutomation = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "auto-liked",
+    });
+    assert.equal(retriedByAutomation.management, "manual");
+
+    const automatic = await manager.download({
+        ownerId: "user-1",
+        track: {
+            ...TRACK,
+            id: "yt:auto-track",
+            youtubeVideoId: "auto-track",
+            streamSource: "youtube",
+        },
+        quality: "auto",
+        sourceUrl: "/api/ytmusic/stream-public/auto-track",
+        management: "auto-liked",
+    });
+    assert.equal(automatic.management, "auto-liked");
+    assert.equal(await manager.promoteToManual("user-2", automatic.key), null);
+    assert.equal(
+        (await manager.promoteToManual("user-1", automatic.key))?.management,
+        "manual",
+    );
+});
+
+test("reconcile cannot downgrade a ready copy promoted to manual during cache verification", async () => {
+    class DeferredMatchAudioCache extends MemoryAudioCache {
+        readonly matchStarted: Promise<void>;
+        private signalMatchStarted!: () => void;
+        private releaseMatch!: () => void;
+        private readonly matchRelease: Promise<void>;
+        pauseMatch = false;
+
+        constructor() {
+            super();
+            this.matchStarted = new Promise((resolve) => {
+                this.signalMatchStarted = resolve;
+            });
+            this.matchRelease = new Promise((resolve) => {
+                this.releaseMatch = resolve;
+            });
+        }
+
+        override async match(url: string): Promise<Response | null> {
+            const response = await super.match(url);
+            if (!this.pauseMatch) return response;
+            this.signalMatchStarted();
+            await this.matchRelease;
+            return response;
+        }
+
+        resumeMatch(): void {
+            this.releaseMatch();
+        }
+    }
+
+    let now = 100;
+    const audioCache = new DeferredMatchAudioCache();
+    const deps = createDependencies({ audioCache, now: () => now });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        management: "auto-liked",
+    });
+    await deps.metadataStore.put({
+        ...ready,
+        integrityVersion: undefined,
+    });
+    audioCache.pauseMatch = true;
+
+    const reconciliation = manager.reconcile("user-1");
+    await audioCache.matchStarted;
+    now = 200;
+    const promoted = await manager.promoteToManual("user-1", ready.key);
+    assert.equal(promoted?.management, "manual");
+    assert.equal(promoted?.updatedAt, 200);
+    audioCache.resumeMatch();
+
+    const [reconciled] = await reconciliation;
+    assert.equal(reconciled.management, "manual");
+    assert.equal(reconciled.updatedAt, 200);
+    assert.equal(reconciled.integrityVersion, 1);
+});
+
 test("background mode is accepted only when the platform adapter actually starts it", async () => {
     let foregroundFetches = 0;
     const deps = createDependencies({
@@ -652,8 +1091,11 @@ test("verification expiry rechecks and confirms a late ambiguous Background Fetc
 
     assert.equal(confirmed.status, "downloading");
     assert.equal(confirmed.transferMode, "background");
-    assert.equal(confirmed.foregroundLeaseId, null);
-    assert.equal(confirmed.foregroundLeaseExpiresAt, null);
+    assert.match(confirmed.foregroundLeaseId ?? "", /^background-stall:/);
+    assert.equal(
+        confirmed.foregroundLeaseExpiresAt,
+        candidate.updatedAt + DEVICE_OFFLINE_BACKGROUND_STALL_MS,
+    );
 });
 
 test("unknown registration enumeration extends an expired background verification lease by a bounded retry", async () => {
@@ -724,6 +1166,7 @@ test("reconcile preserves a background registration while another manager is sti
         },
         abortBackgroundFetch: async (record) => {
             aborted.push(record.backgroundFetchId ?? "");
+            return "cleared";
         },
         listActiveBackgroundFetches: async () => [],
     });
@@ -968,6 +1411,7 @@ test("reconcile clamps a wildly future foreground lease before it can become imm
 
 test("a failed background registration enumeration is unknown, not proof of interruption", async () => {
     const metadataStore = new MemoryMetadataStore();
+    const currentTime = 700_000;
     const record: DeviceOfflineDownloadRecord = {
         key: "background-enumeration-key",
         ownerId: "user-1",
@@ -986,7 +1430,7 @@ test("a failed background registration enumeration is unknown, not proof of inte
         persistenceGranted: true,
         attempt: 1,
         createdAt: 1,
-        updatedAt: 1,
+        updatedAt: currentTime,
         errorCode: null,
         errorMessage: null,
     };
@@ -994,6 +1438,7 @@ test("a failed background registration enumeration is unknown, not proof of inte
     const manager = new DeviceOfflineDownloadManager(
         createDependencies({
             metadataStore,
+            now: () => currentTime,
             listActiveBackgroundFetches: async () => {
                 throw new Error("registration temporarily unavailable");
             },
@@ -1006,6 +1451,7 @@ test("a failed background registration enumeration is unknown, not proof of inte
 
 test("a hung background registration enumeration cannot block offline hydration", async () => {
     const metadataStore = new MemoryMetadataStore();
+    const currentTime = 800_000;
     const record: DeviceOfflineDownloadRecord = {
         key: "hung-background-enumeration-key",
         ownerId: "user-1",
@@ -1024,7 +1470,7 @@ test("a hung background registration enumeration cannot block offline hydration"
         persistenceGranted: true,
         attempt: 1,
         createdAt: 1,
-        updatedAt: 1,
+        updatedAt: currentTime,
         errorCode: null,
         errorMessage: null,
     };
@@ -1032,6 +1478,7 @@ test("a hung background registration enumeration cannot block offline hydration"
     const manager = new DeviceOfflineDownloadManager(
         createDependencies({
             metadataStore,
+            now: () => currentTime,
             backgroundFetchLookupTimeoutMs: 5,
             listActiveBackgroundFetches: () =>
                 new Promise<never>(() => undefined),
@@ -1040,6 +1487,278 @@ test("a hung background registration enumeration cannot block offline hydration"
 
     assert.deepEqual(await manager.reconcile("user-1"), [record]);
     assert.deepEqual(metadataStore.records.get(record.key), record);
+});
+
+test("reconcile aborts a legacy Background Fetch stuck at zero and exposes a foreground retry", async () => {
+    const metadataStore = new MemoryMetadataStore();
+    const currentTime = 1_000_000;
+    const backgroundFetchId =
+        "soundspan-device-audio-stalled-background-key::1";
+    const record: DeviceOfflineDownloadRecord = {
+        key: "stalled-background-key",
+        ownerId: "user-1",
+        trackIdentity: "track:track-1",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/stalled-background-key",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        track: TRACK,
+        status: "downloading",
+        transferMode: "background",
+        backgroundFetchId,
+        foregroundLeaseId: null,
+        foregroundLeaseExpiresAt: null,
+        bytesReceived: 0,
+        totalBytes: null,
+        contentType: null,
+        persistenceGranted: true,
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: currentTime - DEVICE_OFFLINE_BACKGROUND_STALL_MS,
+        errorCode: null,
+        errorMessage: null,
+    };
+    await metadataStore.put(record);
+    const aborted: string[] = [];
+    const manager = new DeviceOfflineDownloadManager(
+        createDependencies({
+            metadataStore,
+            now: () => currentTime,
+            listActiveBackgroundFetches: async () => [backgroundFetchId],
+            abortBackgroundFetch: async (candidate) => {
+                aborted.push(candidate.backgroundFetchId ?? "");
+                return "cleared";
+            },
+        }),
+    );
+
+    const [interrupted] = await manager.reconcile("user-1");
+
+    assert.equal(interrupted.status, "interrupted");
+    assert.equal(interrupted.backgroundFetchId, null);
+    assert.equal(interrupted.errorCode, "background_stalled");
+    assert.match(interrupted.errorMessage ?? "", /retry.*foreground/i);
+    assert.deepEqual(aborted, [backgroundFetchId]);
+});
+
+test("reconcile clears a lingering Android Background Fetch after a verified copy is already ready", async () => {
+    const metadataStore = new MemoryMetadataStore();
+    const deps = createDependencies({ metadataStore });
+    const initialManager = new DeviceOfflineDownloadManager(deps);
+    const ready = await initialManager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    const backgroundFetchId = `soundspan-device-audio-${ready.key}::${ready.attempt}`;
+    await metadataStore.put({
+        ...ready,
+        transferMode: "background",
+        backgroundFetchId,
+    });
+    const aborted: string[] = [];
+    const manager = new DeviceOfflineDownloadManager(
+        createDependencies({
+            metadataStore,
+            audioCache: deps.audioCache,
+            listActiveBackgroundFetches: async () => [backgroundFetchId],
+            abortBackgroundFetch: async (candidate) => {
+                aborted.push(candidate.backgroundFetchId ?? "");
+                return "cleared";
+            },
+        }),
+    );
+
+    const [reconciled] = await manager.reconcile("user-1");
+
+    assert.equal(reconciled.status, "ready");
+    assert.equal(reconciled.backgroundFetchId, null);
+    assert.equal(reconciled.errorCode, null);
+    assert.deepEqual(aborted, [backgroundFetchId]);
+});
+
+test("reconcile schedules an automatic timeout for a fresh legacy Background Fetch", async () => {
+    const metadataStore = new MemoryMetadataStore();
+    let currentTime = 2_000_000;
+    const backgroundFetchId = "soundspan-device-audio-fresh-legacy-key::1";
+    const record: DeviceOfflineDownloadRecord = {
+        key: "fresh-legacy-key",
+        ownerId: "user-1",
+        trackIdentity: "track:track-1",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/fresh-legacy-key",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+        track: TRACK,
+        status: "downloading",
+        transferMode: "background",
+        backgroundFetchId,
+        foregroundLeaseId: null,
+        foregroundLeaseExpiresAt: null,
+        bytesReceived: 0,
+        totalBytes: null,
+        contentType: null,
+        persistenceGranted: true,
+        attempt: 1,
+        createdAt: currentTime,
+        updatedAt: currentTime,
+        errorCode: null,
+        errorMessage: null,
+    };
+    await metadataStore.put(record);
+    let expiryCheck: (() => void) | null = null;
+    let expiryDelay = 0;
+    const aborted: string[] = [];
+    const manager = new DeviceOfflineDownloadManager(
+        createDependencies({
+            metadataStore,
+            now: () => currentTime,
+            listActiveBackgroundFetches: async () => [backgroundFetchId],
+            abortBackgroundFetch: async (candidate) => {
+                aborted.push(candidate.backgroundFetchId ?? "");
+                return "cleared";
+            },
+            scheduleLeaseExpiryCheck: (callback, delayMs) => {
+                expiryCheck = callback;
+                expiryDelay = delayMs;
+                return Symbol("legacy-background-timeout");
+            },
+        }),
+    );
+
+    const [pending] = await manager.reconcile("user-1");
+
+    assert.equal(pending.status, "downloading");
+    assert.match(pending.foregroundLeaseId ?? "", /^background-stall:/);
+    assert.equal(expiryDelay, DEVICE_OFFLINE_BACKGROUND_STALL_MS + 1);
+    assert.ok(expiryCheck);
+
+    currentTime += DEVICE_OFFLINE_BACKGROUND_STALL_MS + 1;
+    (expiryCheck as unknown as () => void)();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const [interrupted] = await manager.list("user-1");
+    assert.equal(interrupted.status, "interrupted");
+    assert.equal(interrupted.errorCode, "background_stalled");
+    assert.deepEqual(aborted, [backgroundFetchId]);
+});
+
+test("reconcile removes a truncated ready cache entry instead of exposing it to playback", async () => {
+    const deps = createDependencies();
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    await deps.metadataStore.put({ ...ready, integrityVersion: undefined });
+    const absoluteVirtualUrl = `https://soundspan.test${ready.virtualUrl}`;
+    deps.audioCache.responses.set(
+        absoluteVirtualUrl,
+        new Response(Uint8Array.from([0, 1, 2]), {
+            headers: { "content-length": "6" },
+        }),
+    );
+
+    const [interrupted] = await manager.reconcile("user-1");
+
+    assert.equal(interrupted.status, "interrupted");
+    assert.equal(interrupted.errorCode, "cache_integrity");
+    assert.equal(await deps.audioCache.match(absoluteVirtualUrl), null);
+});
+
+test("reconcile keeps a damaged copy non-playable even when cache cleanup fails", async () => {
+    class DeleteFailingAudioCache extends MemoryAudioCache {
+        failDelete = false;
+
+        override async delete(url: string): Promise<void> {
+            if (this.failDelete) throw new Error("CacheStorage delete failed");
+            await super.delete(url);
+        }
+    }
+
+    const audioCache = new DeleteFailingAudioCache();
+    const deps = createDependencies({ audioCache });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    await deps.metadataStore.put({ ...ready, integrityVersion: undefined });
+    const absoluteVirtualUrl = `https://soundspan.test${ready.virtualUrl}`;
+    audioCache.responses.set(
+        absoluteVirtualUrl,
+        new Response(Uint8Array.from([0, 1, 2]), {
+            headers: { "content-length": "6" },
+        }),
+    );
+    audioCache.failDelete = true;
+
+    const [interrupted] = await manager.reconcile("user-1");
+
+    assert.equal(interrupted.status, "interrupted");
+    assert.equal(interrupted.errorCode, "cache_integrity");
+});
+
+test("reconcile hides a ready copy when CacheStorage cannot be inspected", async () => {
+    class MatchFailingAudioCache extends MemoryAudioCache {
+        failMatch = false;
+
+        override async match(url: string): Promise<Response | null> {
+            if (this.failMatch) throw new Error("CacheStorage match failed");
+            return super.match(url);
+        }
+    }
+
+    const audioCache = new MatchFailingAudioCache();
+    const deps = createDependencies({ audioCache });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    audioCache.failMatch = true;
+
+    const [interrupted] = await manager.reconcile("user-1");
+
+    assert.equal(interrupted.status, "interrupted");
+    assert.equal(interrupted.errorCode, "cache_unavailable");
+});
+
+test("reconcile does not re-read every body after ready integrity was already verified", async () => {
+    class BodyReadRejectingAudioCache extends MemoryAudioCache {
+        rejectBodyReads = false;
+
+        override async match(url: string): Promise<Response | null> {
+            const response = await super.match(url);
+            if (!response || !this.rejectBodyReads) return response;
+            response.clone = () => {
+                throw new Error("verified cache body was read again");
+            };
+            return response;
+        }
+    }
+
+    const audioCache = new BodyReadRejectingAudioCache();
+    const deps = createDependencies({ audioCache });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    audioCache.rejectBodyReads = true;
+
+    const [reconciled] = await manager.reconcile("user-1");
+
+    assert.equal(ready.integrityVersion, 1);
+    assert.equal(reconciled.status, "ready");
+    assert.equal(reconciled.errorCode, null);
 });
 
 test("a missing background registration gets one bounded completion grace before interruption", async () => {
@@ -1117,6 +1836,7 @@ test("a deleted background candidate is aborted instead of reported started", as
         },
         abortBackgroundFetch: async (candidate) => {
             aborted.push(candidate.backgroundFetchId ?? "");
+            return "cleared";
         },
     });
     const manager = new DeviceOfflineDownloadManager(deps);
@@ -1351,6 +2071,7 @@ test("delete removes metadata before aborting registration and cache", async () 
                     `https://soundspan.test${record.virtualUrl}`,
                 ),
             );
+            return "cleared";
         },
     });
     const record: DeviceOfflineDownloadRecord = {

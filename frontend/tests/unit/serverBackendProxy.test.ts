@@ -309,19 +309,55 @@ test("createBackendProxy returns a middleware exposing websocket upgrade", () =>
     assert.equal(typeof proxy.upgrade, "function");
 });
 
-test("resolveProxyTimeoutMs applies the 20s default and 90s import-preview default", () => {
+test("resolveProxyTimeoutMs applies route-specific first-byte defaults", () => {
     assert.equal(resolveProxyTimeoutMs("/api/library", {}), 20_000);
-    assert.equal(resolveProxyTimeoutMs("/api/import/preview", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/api/import/preview/", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/api/import/preview/step", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/API/Import/Preview", {}), 90_000);
+    assert.equal(resolveProxyTimeoutMs("/api/import/preview", {}), 150_000);
+    assert.equal(resolveProxyTimeoutMs("/api/import/preview/", {}), 150_000);
+    assert.equal(
+        resolveProxyTimeoutMs("/api/import/preview/step", {}),
+        150_000,
+    );
+    assert.equal(resolveProxyTimeoutMs("/API/Import/Preview", {}), 150_000);
     // Mount-stripped form (e.g. if the proxy is ever Express-mounted under
     // /api, req.url loses the prefix) keeps the import-preview budget.
-    assert.equal(resolveProxyTimeoutMs("/import/preview", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/import/preview/step", {}), 90_000);
+    assert.equal(resolveProxyTimeoutMs("/import/preview", {}), 150_000);
+    assert.equal(resolveProxyTimeoutMs("/import/preview/step", {}), 150_000);
     // Non-preview paths that merely share the prefix text are not special.
     assert.equal(resolveProxyTimeoutMs("/api/import/previews", {}), 20_000);
     assert.equal(resolveProxyTimeoutMs("/import/previews", {}), 20_000);
+
+    for (const mediaPath of [
+        "/api/ytmusic/stream-public/kXYiU_JCYtU",
+        "/api/ytmusic/stream/kXYiU_JCYtU",
+        "/api/youtube/stream/kXYiU_JCYtU",
+        "/ytmusic/stream-public/kXYiU_JCYtU",
+        "/youtube/stream/kXYiU_JCYtU",
+    ]) {
+        assert.equal(resolveProxyTimeoutMs(mediaPath, {}), 125_000);
+    }
+    assert.equal(
+        resolveProxyTimeoutMs("/api/ytmusic/stream-info/kXYiU_JCYtU", {}),
+        20_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs(
+            "/api/ytmusic/stream-publications/kXYiU_JCYtU",
+            {},
+        ),
+        20_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs("/api/ytmusic/recover-unavailable", {}),
+        90_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs("/ytmusic/recover-unavailable", {}),
+        90_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs("/api/ytmusic/recover-unavailable-extra", {}),
+        20_000,
+    );
 });
 
 test("resolveProxyTimeoutMs honors PROXY_REQUEST_TIMEOUT_MS and PROXY_IMPORT_PREVIEW_TIMEOUT_MS", () => {
@@ -342,14 +378,14 @@ test("resolveProxyTimeoutMs honors PROXY_REQUEST_TIMEOUT_MS and PROXY_IMPORT_PRE
         resolveProxyTimeoutMs("/api/import/preview", {
             PROXY_REQUEST_TIMEOUT_MS: "5000",
         }),
-        90_000,
+        150_000,
     );
     // …but a higher global raises it when no explicit preview override exists.
     assert.equal(
         resolveProxyTimeoutMs("/api/import/preview", {
-            PROXY_REQUEST_TIMEOUT_MS: "100000",
+            PROXY_REQUEST_TIMEOUT_MS: "200000",
         }),
-        100_000,
+        200_000,
     );
     // Invalid values fall back to the defaults.
     assert.equal(
@@ -379,7 +415,7 @@ test("buildBackendProxyOptions registers the first-byte timeout handler when ena
 
     assert.equal(typeof options.on?.proxyReq, "function");
     assert.equal("timeout" in options, false);
-    assert.equal(options.proxyTimeout, 120000);
+    assert.equal(options.proxyTimeout, 150000);
 });
 
 test("buildBackendProxyOptions widens only the upstream timeout for configured first-byte budgets", () => {
@@ -395,6 +431,20 @@ test("buildBackendProxyOptions widens only the upstream timeout for configured f
 
     assert.equal("timeout" in options, false);
     assert.equal(options.proxyTimeout, 300000);
+});
+
+test("buildBackendProxyOptions never lets a lower preview override cut off media", () => {
+    const options = buildBackendProxyOptions({
+        name: "api-proxy",
+        target: "http://127.0.0.1:3006",
+        logger: createFakeLogger(),
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+        firstByteTimeout: true,
+        env: { PROXY_IMPORT_PREVIEW_TIMEOUT_MS: "120000" },
+    });
+
+    assert.equal(options.proxyTimeout, 125000);
 });
 
 test("first-byte timeout answers 504 UPSTREAM_TIMEOUT and aborts the upstream request", (t) => {
@@ -631,7 +681,36 @@ test("first-byte timeout uses the import-preview budget for import preview paths
     assert.equal(res.writeHeadCalls.length, 0);
     assert.equal(proxyReq.destroyed, false);
 
-    t.mock.timers.tick(70_000);
+    t.mock.timers.tick(130_000);
+    assert.equal(res.writeHeadCalls.length, 1);
+    assert.equal(res.writeHeadCalls[0]?.statusCode, 504);
+    assert.equal(proxyReq.destroyed, true);
+});
+
+test("first-byte timeout lets a YouTube media spool exceed the regular API budget", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const handler = createFirstByteTimeoutProxyReqHandler({
+        name: "api-proxy",
+        logger: createFakeLogger(),
+        env: {},
+    });
+    const proxyReq = createFakeProxyReq();
+    const res = createFakeResponse();
+
+    handler(
+        proxyReq,
+        {
+            method: "GET",
+            url: "/api/ytmusic/stream-public/kXYiU_JCYtU?quality=high",
+        },
+        res,
+    );
+
+    t.mock.timers.tick(20_000);
+    assert.equal(res.writeHeadCalls.length, 0);
+    assert.equal(proxyReq.destroyed, false);
+
+    t.mock.timers.tick(105_000);
     assert.equal(res.writeHeadCalls.length, 1);
     assert.equal(res.writeHeadCalls[0]?.statusCode, 504);
     assert.equal(proxyReq.destroyed, true);

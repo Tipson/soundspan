@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { playbackStateMachine } from "@/lib/audio";
 import {
     getListenTogetherSessionSnapshot,
@@ -27,6 +27,9 @@ import {
 } from "@/lib/audio-engine/playbackRecoveryPolicy";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import type { usePlaybackRecoveryHelpers } from "./usePlaybackRecoveryHelpers";
+import type { Track } from "@/lib/audio-state-context";
+import type { QueueItem } from "@/lib/queue-item";
+import { useUnavailableYtMusicRecovery } from "./useUnavailableYtMusicRecovery";
 import {
     isPlaybackAutoRestartSuppressed,
     setPlaybackAutoRestartSuppressed,
@@ -40,6 +43,12 @@ interface UseTrackRecoveryOptions {
     next: (origin: PlaybackAdvanceOrigin) => void;
     setCurrentTime: (time: number) => void;
     setIsBuffering: (isBuffering: boolean) => void;
+    setCurrentTrack: (
+        value: Track | null | ((previous: Track | null) => Track | null),
+    ) => void;
+    setQueue: (
+        value: QueueItem[] | ((previous: QueueItem[]) => QueueItem[]),
+    ) => void;
 }
 
 /** Preserves startup, transient-error, and queue-skip recovery callbacks. */
@@ -49,7 +58,14 @@ export function useTrackRecovery({
     next,
     setCurrentTime,
     setIsBuffering,
+    setCurrentTrack,
+    setQueue,
 }: UseTrackRecoveryOptions) {
+    const latestNextRef = useRef(next);
+    useEffect(() => {
+        latestNextRef.current = next;
+    }, [next]);
+
     const {
         clearStartupPlaybackRecovery,
         clearPendingTrackErrorSkip,
@@ -81,6 +97,13 @@ export function useTrackRecovery({
         transientTrackRecoveryLoadListenerRef,
         transientTrackRecoveryTimeoutRef,
     } = refs;
+    const unavailableYtMusicRecovery = useUnavailableYtMusicRecovery({
+        refs,
+        playbackRecoveryHelpers,
+        setCurrentTrack,
+        setQueue,
+        setIsBuffering,
+    });
 
     const scheduleStartupPlaybackRecovery = useCallback(
         (trackId: string | null, recheckCount: number = 0) => {
@@ -348,12 +371,12 @@ export function useTrackRecovery({
                 lastTrackIdRef.current = null;
                 isLoadingRef.current = false;
                 advancePlayIntentAtMsRef.current = Date.now();
-                next("error");
+                latestNextRef.current("error");
             }, TRACK_ERROR_SKIP_DELAY_MS);
             return false;
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.
-        [clearPendingTrackErrorSkip, next, stopAutomaticPlaybackRestarts],
+        [clearPendingTrackErrorSkip, stopAutomaticPlaybackRestarts],
     );
 
     const attemptTransientTrackRecovery = useCallback(
@@ -389,6 +412,11 @@ export function useTrackRecovery({
             }
 
             transientTrackRecoveryAttemptRef.current += 1;
+            playbackProgressConfirmationRef.current =
+                rearmPlaybackProgressConfirmationOnError(
+                    playbackProgressConfirmationRef.current,
+                    failedTrackId,
+                );
             const attemptNumber = transientTrackRecoveryAttemptRef.current;
             clearPendingTrackErrorSkip();
             clearTransientTrackRecovery(false);
@@ -471,5 +499,6 @@ export function useTrackRecovery({
         requestListenTogetherFollowerRecovery,
         scheduleTrackErrorSkip,
         attemptTransientTrackRecovery,
+        ...unavailableYtMusicRecovery,
     };
 }

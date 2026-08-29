@@ -86,6 +86,7 @@ function queueDebugLog(message: string, data?: Record<string, unknown>) {
 }
 
 export type PlayerMode = "full" | "mini" | "overlay";
+export type WaveMode = "for-you" | "new" | "familiar";
 
 // Audio features for vibe mode visualization
 export interface AudioFeatures {
@@ -128,6 +129,10 @@ export interface Track {
     streamSource?: RemoteMediaSource;
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    /** Owning playlist item used for compare-and-swap provider recovery. */
+    playlistItemId?: string;
+    /** Materialized YouTube Music row currently attached to that item. */
+    trackYtMusicId?: string;
     /** Audio container reported by /api/youtube/info for youtube-direct tracks. */
     youtubeAudioFormat?: "mp4" | "webm";
     // Metadata override fields
@@ -213,6 +218,7 @@ interface AudioStateContextType {
 
     // Vibe mode state
     vibeMode: boolean;
+    waveMode: WaveMode;
     vibeSourceFeatures: AudioFeatures | null;
     vibeQueueIds: string[];
 
@@ -236,6 +242,7 @@ interface AudioStateContextType {
     setLastServerSync: (date: SetStateAction<Date | null>) => void;
     setRepeatOneCount: (count: SetStateAction<number>) => void;
     setVibeMode: (mode: SetStateAction<boolean>) => void;
+    setWaveMode: (mode: SetStateAction<WaveMode>) => void;
     setVibeSourceFeatures: (
         features: SetStateAction<AudioFeatures | null>,
     ) => void;
@@ -340,6 +347,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
 
     // Vibe mode state
     const [vibeMode, setVibeMode] = useState(false);
+    const [waveMode, setWaveMode] = useState<WaveMode>("for-you");
     const [vibeSourceFeatures, setVibeSourceFeatures] =
         useState<AudioFeatures | null>(null);
     const [vibeQueueIds, setVibeQueueIds] = useState<string[]>([]);
@@ -1171,6 +1179,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             isRepeat: repeatMode !== "off",
             shuffleIndices,
             vibeMode,
+            waveMode,
             vibeSourceFeatures,
             vibeQueueIds,
             isHydrated,
@@ -1188,6 +1197,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             setLastServerSync,
             setRepeatOneCount,
             setVibeMode,
+            setWaveMode,
             setVibeSourceFeatures,
             setVibeQueueIds,
         }),
@@ -1202,6 +1212,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             repeatMode,
             shuffleIndices,
             vibeMode,
+            waveMode,
             vibeSourceFeatures,
             vibeQueueIds,
             isHydrated,

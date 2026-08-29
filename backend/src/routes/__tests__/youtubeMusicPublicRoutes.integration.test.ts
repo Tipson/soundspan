@@ -89,6 +89,12 @@ jest.mock("../../services/trackMappingService", () => ({
     },
 }));
 
+jest.mock("../../services/ytMusicUnavailableRecovery", () => ({
+    ytMusicUnavailableRecoveryService: {
+        recover: jest.fn(),
+    },
+}));
+
 jest.mock("../../utils/encryption", () => ({
     encrypt: jest.fn((value: string) => `enc:${value}`),
     decrypt: jest.fn((value: string) => value.replace(/^enc:/, "")),
@@ -99,6 +105,7 @@ import {
     ytMusicService,
 } from "../../services/youtubeMusic";
 import { getSystemSettings } from "../../utils/systemSettings";
+import { ytMusicUnavailableRecoveryService } from "../../services/ytMusicUnavailableRecovery";
 jest.mock("../../config", () => ({ config: { nodeEnv: "test" } }));
 import router from "../youtubeMusic";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
@@ -111,6 +118,8 @@ describe("youtube music public stream routes integration", () => {
         normalizeYtMusicStreamQuality as unknown as jest.Mock;
     const mockGetStreamInfo = ytMusicService.getStreamInfo as jest.Mock;
     const mockGetStreamProxy = ytMusicService.getStreamProxy as jest.Mock;
+    const mockRecoverUnavailable =
+        ytMusicUnavailableRecoveryService.recover as jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -172,6 +181,60 @@ describe("youtube music public stream routes integration", () => {
             "video-1",
             "norm:low",
         );
+    });
+
+    it("forwards a bounded unavailable-track recovery request for the authenticated user", async () => {
+        mockRecoverUnavailable.mockResolvedValueOnce({
+            status: "replaced",
+            originalVideoId: "z0NfI2NeDHI",
+            replacement: {
+                videoId: "alternate02",
+                title: "Radio",
+                duration: 274,
+                trackYtMusicId: "yt-row-alternate",
+            },
+            persisted: true,
+        });
+
+        const body = {
+            originalVideoId: "z0NfI2NeDHI",
+            artist: "Rammstein",
+            title: "Radio (Official Video)",
+            albumTitle: "Rammstein",
+            duration: 275,
+            excludedVideoIds: ["z0NfI2NeDHI"],
+            playlistItemId: "playlist-item-1",
+            expectedTrackYtMusicId: "yt-row-original",
+        };
+        const res = await request(app)
+            .post("/api/ytmusic/recover-unavailable")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send(body);
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(
+            expect.objectContaining({
+                status: "replaced",
+                originalVideoId: "z0NfI2NeDHI",
+                persisted: true,
+            }),
+        );
+        expect(mockRecoverUnavailable).toHaveBeenCalledWith("user-1", body);
+    });
+
+    it("rejects malformed or partially correlated recovery requests", async () => {
+        const res = await request(app)
+            .post("/api/ytmusic/recover-unavailable")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                originalVideoId: "not-a-video-id",
+                artist: "Rammstein",
+                title: "Radio",
+                playlistItemId: "playlist-item-1",
+            });
+
+        expect(res.status).toBe(400);
+        expect(mockRecoverUnavailable).not.toHaveBeenCalled();
     });
 
     it("maps stream-info-public missing content to 404", async () => {

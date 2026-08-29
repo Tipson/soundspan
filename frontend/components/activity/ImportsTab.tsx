@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ImportJob } from "@/lib/api";
 import {
     Loader2,
@@ -60,20 +60,79 @@ export function ImportsTab() {
     const router = useRouter();
     const [jobs, setJobs] = useState<ImportJob[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const loadGenerationRef = useRef(0);
+    const loadInFlightRef = useRef(false);
+    const refreshPendingRef = useRef(false);
+    const mountedRef = useRef(false);
 
-    const loadJobs = useCallback(async () => {
-        try {
-            const data = await api.listImportJobs();
-            setJobs(data.jobs);
-        } catch {
-            // Silently fail — tab is informational
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
+    const loadJobs = useCallback(
+        async (mode: "refresh" | "poll" = "refresh") => {
+            if (!mountedRef.current) return;
+            if (loadInFlightRef.current) {
+                if (mode === "refresh") refreshPendingRef.current = true;
+                return;
+            }
+
+            loadInFlightRef.current = true;
+            let latestGeneration = loadGenerationRef.current;
+            try {
+                let runAgain = true;
+                while (runAgain && mountedRef.current) {
+                    refreshPendingRef.current = false;
+                    const generation = ++loadGenerationRef.current;
+                    latestGeneration = generation;
+                    let data: Awaited<
+                        ReturnType<typeof api.listImportJobs>
+                    > | null = null;
+                    try {
+                        data = await api.listImportJobs();
+                    } catch {
+                        // Silently fail — tab is informational
+                    }
+
+                    runAgain = mountedRef.current && refreshPendingRef.current;
+                    if (
+                        !runAgain &&
+                        data &&
+                        mountedRef.current &&
+                        loadGenerationRef.current === generation
+                    ) {
+                        setJobs(data.jobs);
+                    }
+                }
+            } finally {
+                loadInFlightRef.current = false;
+                if (
+                    mountedRef.current &&
+                    loadGenerationRef.current === latestGeneration
+                ) {
+                    setIsLoading(false);
+                }
+            }
+        },
+        [],
+    );
 
     useEffect(() => {
+        mountedRef.current = true;
         void loadJobs();
+        return () => {
+            mountedRef.current = false;
+            refreshPendingRef.current = false;
+            loadGenerationRef.current += 1;
+        };
+    }, [loadJobs]);
+
+    useEffect(() => {
+        const handleJobsChanged = () => {
+            void loadJobs();
+        };
+        window.addEventListener("import-jobs-changed", handleJobsChanged);
+        return () =>
+            window.removeEventListener(
+                "import-jobs-changed",
+                handleJobsChanged,
+            );
     }, [loadJobs]);
 
     // Poll for active jobs
@@ -87,7 +146,7 @@ export function ImportsTab() {
         );
         if (!hasActive) return;
 
-        const interval = setInterval(loadJobs, 3000);
+        const interval = setInterval(() => void loadJobs("poll"), 3000);
         return () => clearInterval(interval);
     }, [jobs, loadJobs]);
 
@@ -127,6 +186,14 @@ export function ImportsTab() {
                     job.status === "resolving" ||
                     job.status === "creating_playlist" ||
                     job.status === "cancelling";
+                const createdPlaylistId =
+                    job.status === "completed" || job.status === "cancelled"
+                        ? job.createdPlaylistId
+                        : null;
+                const cancellationWarning =
+                    job.status === "cancelled" && createdPlaylistId
+                        ? job.error
+                        : null;
 
                 return (
                     <div
@@ -177,26 +244,33 @@ export function ImportsTab() {
                                     Cancel
                                 </button>
                             )}
-                            {job.status === "completed" &&
-                                job.createdPlaylistId && (
-                                    <button
-                                        onClick={() =>
-                                            router.push(
-                                                `/playlist/${job.createdPlaylistId}`,
-                                            )
-                                        }
-                                        className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
-                                    >
-                                        View Playlist
-                                        <ArrowRight className="w-3 h-3" />
-                                    </button>
-                                )}
+                            {createdPlaylistId && (
+                                <button
+                                    onClick={() =>
+                                        router.push(
+                                            `/playlist/${createdPlaylistId}`,
+                                        )
+                                    }
+                                    className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
+                                >
+                                    View Playlist
+                                    <ArrowRight className="w-3 h-3" />
+                                </button>
+                            )}
                             {job.status === "failed" && job.error && (
                                 <p className="text-xs text-red-400/60 truncate">
                                     {job.error}
                                 </p>
                             )}
                         </div>
+                        {cancellationWarning && (
+                            <p
+                                role="status"
+                                className="mt-1 text-xs text-amber-300/80"
+                            >
+                                Warning: {cancellationWarning}
+                            </p>
+                        )}
                     </div>
                 );
             })}

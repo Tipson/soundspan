@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { useAudioState, type Track } from "@/lib/audio-state-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import {
@@ -18,13 +18,13 @@ import { NowPlayingCard } from "./NowPlayingCard";
  * host — never re-renders on the playback clock. Play/pause uses the verified
  * real controls (`pause()` / `play()`, matching the MiniPlayer toggle).
  *
- * Also wires the like heart: `track` is the full audio-state `Track` (a
+ * Also wires the preference controls: `track` is the full audio-state `Track` (a
  * superset of `NowPlayingCardTrack`, which stays narrow so NowPlayingCard's
  * own tests don't need the whole Track shape), and `preferenceTrackId`
  * mirrors FullPlayer/MiniPlayer's own `playbackType === "track"` gate so a
  * podcast/audiobook episode (which can be "now playing" here too, just
- * off-map) disables the heart via TrackPreferenceButtons' existing
- * `canSetTrackPreference` rather than adding bespoke podcast detection.
+ * off-map) disables the controls via TrackPreferenceButtons' existing
+ * enabled-state logic rather than adding bespoke podcast detection.
  */
 export function NowPlayingConnected({
     track,
@@ -40,13 +40,24 @@ export function NowPlayingConnected({
     const { isPlaying, duration } = usePlaybackStatus();
     // Now-playing card shows the position; it is a legitimate clock consumer.
     const { currentTime } = usePlaybackProgress();
-    const { pause, play } = useAudioControls();
+    const { pause, play, advanceQueue } = useAudioControls();
     const { playbackType } = useAudioState();
     const onTogglePlay = useCallback(
         () => (isPlaying ? pause() : play()),
         [isPlaying, pause, play],
     );
     const preferenceTrackId = playbackType === "track" ? track?.id : undefined;
+    const activePreferenceTrackIdRef = useRef(preferenceTrackId);
+    useLayoutEffect(() => {
+        activePreferenceTrackIdRef.current = preferenceTrackId;
+    }, [preferenceTrackId]);
+    const onThumbsDownApplied = useCallback(
+        (appliedTrackId: string) => {
+            if (activePreferenceTrackIdRef.current !== appliedTrackId) return;
+            advanceQueue("feedback");
+        },
+        [advanceQueue],
+    );
     return (
         <NowPlayingCard
             track={track}
@@ -60,11 +71,12 @@ export function NowPlayingConnected({
             likeSlot={
                 <TrackPreferenceButtons
                     trackId={preferenceTrackId}
-                    mode="up-only"
+                    mode="both"
                     resolveFromQuery
-                    buttonSizeClassName="h-10 w-10"
+                    buttonSizeClassName="h-11 w-11"
                     iconSizeClassName="w-5 h-5"
                     metadata={buildPreferenceMetadata(track)}
+                    onThumbsDownApplied={onThumbsDownApplied}
                 />
             }
         />

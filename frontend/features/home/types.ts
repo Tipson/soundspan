@@ -106,4 +106,5 @@ export interface PersonalizedHomeFeed {
         | "provider_unavailable"
         | null;
     seedCount: number;
+    nextCursor?: number;
 }

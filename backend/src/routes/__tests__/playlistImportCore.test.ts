@@ -39,9 +39,11 @@ jest.mock("../../services/playlistImportService", () => ({
 jest.mock("../../services/importJobStore", () => ({
     importJobStore: {
         createJob: jest.fn(),
+        claimJob: jest.fn(),
         getJob: jest.fn(),
         listJobsForUser: jest.fn(),
         findActiveJobForSource: jest.fn(),
+        requestCancellation: jest.fn(),
         updateJob: jest.fn(),
     },
 }));
@@ -68,12 +70,12 @@ const mockPreviewImport = playlistImportService.previewImport as jest.Mock;
 const mockPreviewM3UImport =
     playlistImportService.previewM3UImport as jest.Mock;
 const mockImportPlaylist = playlistImportService.importPlaylist as jest.Mock;
-const mockCreateJob = importJobStore.createJob as jest.Mock;
+const mockClaimJob = importJobStore.claimJob as jest.Mock;
 const mockGetJob = importJobStore.getJob as jest.Mock;
 const mockListJobsForUser = importJobStore.listJobsForUser as jest.Mock;
 const mockFindActiveJobForSource =
     importJobStore.findActiveJobForSource as jest.Mock;
-const mockUpdateJob = importJobStore.updateJob as jest.Mock;
+const mockRequestCancellation = importJobStore.requestCancellation as jest.Mock;
 const mockEnqueueImportJob = genericImportJobRunner.enqueue as jest.Mock;
 
 const spotifyUrl = "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk";
@@ -163,8 +165,10 @@ describe("playlistImport route core coverage", () => {
                 source: "spotify",
                 id: "37i9dQZF1DX4JAvHpjipBk",
             });
-            mockFindActiveJobForSource.mockResolvedValueOnce(null);
-            mockCreateJob.mockResolvedValueOnce(createdJob);
+            mockClaimJob.mockResolvedValueOnce({
+                created: true,
+                job: createdJob,
+            });
 
             const res = await request(app)
                 .post("/api/import/jobs")
@@ -173,11 +177,7 @@ describe("playlistImport route core coverage", () => {
 
             expect(res.status).toBe(202);
             expect(res.body).toEqual({ deduped: false, job: createdJob });
-            expect(mockFindActiveJobForSource).toHaveBeenCalledWith(
-                "user-1",
-                "spotify:37i9dQZF1DX4JAvHpjipBk",
-            );
-            expect(mockCreateJob).toHaveBeenCalledWith({
+            expect(mockClaimJob).toHaveBeenCalledWith({
                 userId: "user-1",
                 sourceType: "spotify",
                 sourceId: "37i9dQZF1DX4JAvHpjipBk",
@@ -209,7 +209,10 @@ describe("playlistImport route core coverage", () => {
                 source: "spotify",
                 id: "37i9dQZF1DX4JAvHpjipBk",
             });
-            mockFindActiveJobForSource.mockResolvedValueOnce(existingJob);
+            mockClaimJob.mockResolvedValueOnce({
+                created: false,
+                job: existingJob,
+            });
 
             const res = await request(app)
                 .post("/api/import/jobs")
@@ -218,8 +221,7 @@ describe("playlistImport route core coverage", () => {
 
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ deduped: true, job: existingJob });
-            expect(mockCreateJob).not.toHaveBeenCalled();
-            expect(mockEnqueueImportJob).not.toHaveBeenCalled();
+            expect(mockEnqueueImportJob).toHaveBeenCalledWith("job-existing");
         });
 
         it("returns 400 for invalid or unsupported job submissions", async () => {
@@ -251,7 +253,7 @@ describe("playlistImport route core coverage", () => {
                 source: "spotify",
                 id: "37i9dQZF1DX4JAvHpjipBk",
             });
-            mockFindActiveJobForSource.mockRejectedValueOnce(boom);
+            mockClaimJob.mockRejectedValueOnce(boom);
 
             const res = await request(app)
                 .post("/api/import/jobs")
@@ -437,19 +439,16 @@ describe("playlistImport route core coverage", () => {
 
     describe("POST /api/import/jobs/:jobId/cancel", () => {
         it("updates the job status to cancelling", async () => {
-            const currentJob = {
-                id: "job-1",
-                userId: "user-1",
-                status: "resolving",
-            };
             const cancelledJob = {
                 id: "job-1",
                 userId: "user-1",
                 status: "cancelling",
                 error: "Cancelled by user",
             };
-            mockGetJob.mockResolvedValueOnce(currentJob);
-            mockUpdateJob.mockResolvedValueOnce(cancelledJob);
+            mockRequestCancellation.mockResolvedValueOnce({
+                outcome: "updated",
+                job: cancelledJob,
+            });
 
             const res = await request(app)
                 .post("/api/import/jobs/job-1/cancel")
@@ -457,38 +456,43 @@ describe("playlistImport route core coverage", () => {
 
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ job: cancelledJob });
-            expect(mockUpdateJob).toHaveBeenCalledWith("job-1", {
-                status: "cancelling",
-                error: "Cancelled by user",
-            });
+            expect(mockRequestCancellation).toHaveBeenCalledWith(
+                "job-1",
+                "user-1",
+            );
         });
 
         it("returns 404, 403, 409, and 500 for cancel errors", async () => {
-            mockGetJob.mockResolvedValueOnce(null);
+            mockRequestCancellation.mockResolvedValueOnce({
+                outcome: "not_found",
+                job: null,
+            });
             const notFoundRes = await request(app)
                 .post("/api/import/jobs/job-missing/cancel")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
-            mockGetJob.mockResolvedValueOnce({
-                id: "job-2",
-                userId: "user-2",
-                status: "resolving",
+            mockRequestCancellation.mockResolvedValueOnce({
+                outcome: "forbidden",
+                job: null,
             });
             const forbiddenRes = await request(app)
                 .post("/api/import/jobs/job-2/cancel")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
-            mockGetJob.mockResolvedValueOnce({
-                id: "job-3",
-                userId: "user-1",
-                status: "completed",
+            mockRequestCancellation.mockResolvedValueOnce({
+                outcome: "conflict",
+                job: {
+                    id: "job-3",
+                    userId: "user-1",
+                    status: "completed",
+                },
             });
             const conflictRes = await request(app)
                 .post("/api/import/jobs/job-3/cancel")
                 .set(AUTH_HEADER, AUTH_VALUE);
 
             const boom = new Error("cancel failed");
-            mockGetJob.mockRejectedValueOnce(boom);
+            mockRequestCancellation.mockRejectedValueOnce(boom);
             const errorRes = await request(app)
                 .post("/api/import/jobs/job-4/cancel")
                 .set(AUTH_HEADER, AUTH_VALUE);

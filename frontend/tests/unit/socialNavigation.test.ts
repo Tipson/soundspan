@@ -78,3 +78,14 @@ test("sidebar and quick links expose the vibe map destination", () => {
         true,
     );
 });
+
+test("primary music navigation hides podcasts and unconfigured audiobooks", () => {
+    assert.equal(
+        SIDEBAR_NAVIGATION.some((link) => link.href === "/podcasts"),
+        false,
+    );
+    assert.equal(
+        SIDEBAR_NAVIGATION.some((link) => link.href === "/audiobooks"),
+        false,
+    );
+});

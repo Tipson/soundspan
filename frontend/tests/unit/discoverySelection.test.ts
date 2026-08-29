@@ -18,6 +18,14 @@ const track = (name: string, artistName: string): DiscoverResult => ({
     artist: artistName,
 });
 
+const album = (name: string, artistName: string): DiscoverResult => ({
+    type: "album",
+    id: `album-${name}`,
+    browseId: `MPREb-${name}`,
+    name,
+    artist: artistName,
+});
+
 test("normalizeArtistName strips case, whitespace, and diacritics", () => {
     assert.equal(normalizeArtistName("  Björk "), "bjork");
     assert.equal(normalizeArtistName("DRAKE"), "drake");
@@ -131,4 +139,25 @@ test("tracks pass through when discovery is visible", () => {
 
     assert.equal(selection.tracks.length, 1);
     assert.equal(selection.topArtist, undefined);
+});
+
+test("provider albums pass through separately from artists and tracks", () => {
+    const selection = deriveDiscoverySelection({
+        discoverResults: [
+            artist("Massive Attack"),
+            track("Teardrop", "Massive Attack"),
+            album("Mezzanine", "Massive Attack"),
+        ],
+        query: "massive attack",
+        aliasCanonical: null,
+        libraryTopName: null,
+        showDiscover: true,
+    });
+
+    assert.deepEqual(
+        selection.albums.map((result) => result.name),
+        ["Mezzanine"],
+    );
+    assert.equal(selection.tracks.length, 1);
+    assert.equal(selection.topArtist?.name, "Massive Attack");
 });

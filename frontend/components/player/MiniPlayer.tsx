@@ -9,7 +9,7 @@ import { usePlaybackProgress } from "@/lib/audio-playback-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
 import { useStreamBitrate } from "@/hooks/useStreamBitrate";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
-import Image from "next/image";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { motion } from "framer-motion";
 import {
     Play,
@@ -88,7 +88,7 @@ export function MiniPlayer() {
         <div
             className="fixed inset-x-0 z-50"
             style={{
-                bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
+                bottom: "calc(56px + var(--safe-area-bottom))",
             }}
         >
             <div className="overflow-hidden border-t border-white/10 bg-black/95 backdrop-blur-sm">
@@ -101,6 +101,10 @@ export function MiniPlayer() {
 
                 <div
                     className="flex items-center gap-3 px-3 py-2.5"
+                    style={{
+                        paddingLeft: "calc(0.75rem + var(--safe-area-left))",
+                        paddingRight: "calc(0.75rem + var(--safe-area-right))",
+                    }}
                     onClick={() => setPlayerMode("overlay")}
                     onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
@@ -122,7 +126,7 @@ export function MiniPlayer() {
                         className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-black/30"
                     >
                         {coverUrl ? (
-                            <Image
+                            <CachedImage
                                 src={coverUrl}
                                 alt={title}
                                 fill
@@ -175,8 +179,8 @@ export function MiniPlayer() {
                         >
                             <TrackPreferenceButtons
                                 trackId={currentTrack.id}
-                                mode="up-only"
-                                buttonSizeClassName="h-8 w-8"
+                                mode="both"
+                                buttonSizeClassName="h-11 w-11"
                                 iconSizeClassName="h-4 w-4"
                                 metadata={buildPreferenceMetadata(currentTrack)}
                             />
@@ -203,7 +207,7 @@ export function MiniPlayer() {
                                 }
                             }}
                             className={cn(
-                                "h-10 w-10 rounded-full transition shadow-md flex items-center justify-center",
+                                "h-11 w-11 rounded-full transition shadow-md flex items-center justify-center",
                                 audioError
                                     ? "bg-red-500 text-white hover:bg-red-400"
                                     : isBuffering
@@ -241,7 +245,7 @@ export function MiniPlayer() {
                         </button>
                         <button
                             onClick={() => next()}
-                            className="h-8 w-8 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                            className="h-11 w-11 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-colors"
                             aria-label="Next track"
                             title="Next track"
                         >

@@ -14,6 +14,8 @@ const prisma = {
     },
     play: {
         create: jest.fn(),
+        updateMany: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
         deleteMany: jest.fn(),
@@ -72,6 +74,8 @@ const app = createRouteTestApp("/api/plays", router);
 describe("plays routes integration", () => {
     const mockTrackFindUnique = prismaClient.track.findUnique as jest.Mock;
     const mockPlayCreate = prismaClient.play.create as jest.Mock;
+    const mockPlayUpdateMany = prismaClient.play.updateMany as jest.Mock;
+    const mockPlayFindFirst = prismaClient.play.findFirst as jest.Mock;
     const mockPlayFindMany = prismaClient.play.findMany as jest.Mock;
     const mockPlayCount = prismaClient.play.count as jest.Mock;
     const mockPlayDeleteMany = prismaClient.play.deleteMany as jest.Mock;
@@ -85,24 +89,34 @@ describe("plays routes integration", () => {
             trackId: "track-1",
             source: "LIBRARY",
         });
+        mockPlayUpdateMany.mockResolvedValue({ count: 1 });
+        mockPlayFindFirst.mockResolvedValue(null);
         mockPlayFindMany.mockResolvedValue([]);
         mockPlayCount.mockResolvedValue(0);
         mockPlayDeleteMany.mockResolvedValue({ count: 0 });
     });
 
     it("requires auth for all mounted plays routes", async () => {
-        const [postRes, listRes, summaryRes, historyRes] = await Promise.all([
-            request(app).post("/api/plays").send({ trackId: "track-1" }),
-            request(app).get("/api/plays"),
-            request(app).get("/api/plays/summary"),
-            request(app).delete("/api/plays/history?range=all"),
-        ]);
+        const [postRes, engagementRes, listRes, summaryRes, historyRes] =
+            await Promise.all([
+                request(app).post("/api/plays").send({ trackId: "track-1" }),
+                request(app).patch("/api/plays/play-1/engagement").send({
+                    listenedSeconds: 120,
+                    completionRatio: 0.66,
+                    outcome: "meaningful",
+                }),
+                request(app).get("/api/plays"),
+                request(app).get("/api/plays/summary"),
+                request(app).delete("/api/plays/history?range=all"),
+            ]);
 
         expect(postRes.status).toBe(401);
+        expect(engagementRes.status).toBe(401);
         expect(listRes.status).toBe(401);
         expect(summaryRes.status).toBe(401);
         expect(historyRes.status).toBe(401);
         expect(postRes.body).toEqual({ error: "Not authenticated" });
+        expect(engagementRes.body).toEqual({ error: "Not authenticated" });
         expect(listRes.body).toEqual({ error: "Not authenticated" });
         expect(summaryRes.body).toEqual({ error: "Not authenticated" });
         expect(historyRes.body).toEqual({ error: "Not authenticated" });
@@ -147,6 +161,173 @@ describe("plays routes integration", () => {
             listenedAt: expect.any(Date),
             reference: { source: "local", id: "track-1" },
         });
+    });
+
+    it("POST /api/plays stores bounded recommendation context when supplied", async () => {
+        await request(app)
+            .post("/api/plays")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                trackId: "track-1",
+                playContext: "wave",
+                waveMode: "new",
+            });
+
+        expect(mockPlayCreate).toHaveBeenCalledWith({
+            data: {
+                userId: "user-1",
+                trackId: "track-1",
+                source: "LIBRARY",
+                playedAt: expect.any(Date),
+                playContext: "wave",
+                waveMode: "new",
+            },
+        });
+    });
+
+    it("PATCH /api/plays/:id/engagement records a user-owned outcome", async () => {
+        const res = await request(app)
+            .patch("/api/plays/play-1/engagement")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                listenedSeconds: 178.5,
+                completionRatio: 0.99,
+                outcome: "completed",
+            });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ success: true });
+        expect(mockPlayUpdateMany).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                id: "play-1",
+                userId: "user-1",
+                AND: expect.arrayContaining([
+                    {
+                        OR: [
+                            { completionRatio: null },
+                            { completionRatio: { lte: 0.99 } },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { listenedSeconds: null },
+                            { listenedSeconds: { lte: 178.5 } },
+                        ],
+                    },
+                ]),
+            }),
+            data: {
+                listenedSeconds: 178.5,
+                completionRatio: 0.99,
+                outcome: "completed",
+                engagementUpdatedAt: expect.any(Date),
+            },
+        });
+    });
+
+    it("treats an out-of-order lower-progress engagement retry as idempotent", async () => {
+        mockPlayUpdateMany.mockResolvedValueOnce({ count: 0 });
+        mockPlayFindFirst.mockResolvedValueOnce({ id: "play-1" });
+
+        const res = await request(app)
+            .patch("/api/plays/play-1/engagement")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                listenedSeconds: 10,
+                completionRatio: 0.05,
+                outcome: "skipped",
+            });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ success: true, stale: true });
+        expect(mockPlayUpdateMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    AND: expect.arrayContaining([
+                        {
+                            OR: expect.arrayContaining([
+                                {
+                                    AND: [
+                                        { completionRatio: 0.05 },
+                                        { listenedSeconds: 10 },
+                                        {
+                                            OR: [
+                                                { outcome: null },
+                                                {
+                                                    outcome: {
+                                                        in: [
+                                                            "failed",
+                                                            "skipped",
+                                                        ],
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                },
+                            ]),
+                        },
+                    ]),
+                }),
+            }),
+        );
+        expect(mockPlayFindFirst).toHaveBeenCalledWith({
+            where: { id: "play-1", userId: "user-1" },
+            select: { id: true },
+        });
+    });
+
+    it("never lets an equal-ratio retry reduce listened seconds", async () => {
+        await request(app)
+            .patch("/api/plays/play-1/engagement")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                listenedSeconds: 90,
+                completionRatio: 0.5,
+                outcome: "meaningful",
+            });
+
+        expect(mockPlayUpdateMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    AND: expect.arrayContaining([
+                        {
+                            OR: [
+                                { listenedSeconds: null },
+                                { listenedSeconds: { lte: 90 } },
+                            ],
+                        },
+                    ]),
+                }),
+            }),
+        );
+    });
+
+    it("PATCH /api/plays/:id/engagement rejects invalid payloads and foreign records", async () => {
+        const invalid = await request(app)
+            .patch("/api/plays/play-1/engagement")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                listenedSeconds: -1,
+                completionRatio: 2,
+                outcome: "ignored",
+            });
+
+        expect(invalid.status).toBe(400);
+        expect(mockPlayUpdateMany).not.toHaveBeenCalled();
+
+        mockPlayUpdateMany.mockResolvedValueOnce({ count: 0 });
+        const missing = await request(app)
+            .patch("/api/plays/foreign-play/engagement")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                listenedSeconds: 5,
+                completionRatio: 0.02,
+                outcome: "skipped",
+            });
+
+        expect(missing.status).toBe(404);
+        expect(missing.body).toEqual({ error: "Play not found" });
     });
 
     it("POST /api/plays validates required fields", async () => {

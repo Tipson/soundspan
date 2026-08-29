@@ -34,7 +34,7 @@ export function SettingsSelect({
                 disabled={disabled}
                 className={`
                     appearance-none bg-line-strong text-white text-sm
-                    pl-3 pr-8 py-1.5 rounded-md
+                    min-h-11 pl-3 pr-8 py-1.5 rounded-md
                     border-0 outline-none
                     ${SETTINGS_FIELD_FOCUS_RING}
                     cursor-pointer transition-colors

@@ -9,23 +9,9 @@ import { RestartModal } from "@/components/ui/RestartModal";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
-import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
+import { SettingsLayout } from "@/features/settings/components/ui";
 import { useFeatures } from "@/lib/features-context";
-
-const baseSidebarItems: SidebarItem[] = [
-    { id: "playback-sources", label: "Playback Sources" },
-    { id: "download-preferences", label: "Download Preferences" },
-    { id: "download-services", label: "Download Services" },
-    { id: "audiobookshelf", label: "Media Servers" },
-    { id: "youtube-music-admin", label: "YouTube Music" },
-    { id: "ai-services", label: "Artwork" },
-    { id: "storage", label: "Storage" },
-    { id: "library-safety", label: "Library Safety" },
-    { id: "library-health", label: "Library Health" },
-    { id: "library-insights", label: "Library Insights" },
-    { id: "cache", label: "Cache & Automation" },
-    { id: "users", label: "Users" },
-];
+import { getPersonalStreamingAdminSidebarItems } from "@/features/settings/personalStreamingAdminSections";
 
 function renderSectionFallback() {
     return (
@@ -35,34 +21,10 @@ function renderSectionFallback() {
     );
 }
 
-const DownloadPreferencesSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/DownloadPreferencesSection").then(
-            (mod) => mod.DownloadPreferencesSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
 const PlaybackSourcesSection = dynamic(
     () =>
         import("@/features/settings/components/sections/PlaybackSourcesSection").then(
             (mod) => mod.PlaybackSourcesSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const DownloadServicesSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/DownloadServicesSection").then(
-            (mod) => mod.DownloadServicesSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const AudiobookshelfSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/AudiobookshelfSection").then(
-            (mod) => mod.AudiobookshelfSection,
         ),
     { loading: renderSectionFallback },
 );
@@ -83,10 +45,10 @@ const AIServicesSection = dynamic(
     { loading: renderSectionFallback },
 );
 
-const StoragePathsSection = dynamic(
+const CacheSection = dynamic(
     () =>
-        import("@/features/settings/components/sections/StoragePathsSection").then(
-            (mod) => mod.StoragePathsSection,
+        import("@/features/settings/components/sections/CacheSection").then(
+            (mod) => mod.CacheSection,
         ),
     { loading: renderSectionFallback },
 );
@@ -95,30 +57,6 @@ const LibrarySafetySection = dynamic(
     () =>
         import("@/features/settings/components/sections/LibrarySafetySection").then(
             (mod) => mod.LibrarySafetySection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const LibraryHealthSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/LibraryHealthSection").then(
-            (mod) => mod.LibraryHealthSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const LibraryInsightsSection = dynamic(
-    () =>
-        import("@/features/library-health/components/LibraryInsightsSection").then(
-            (mod) => mod.LibraryInsightsSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const CacheSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/CacheSection").then(
-            (mod) => mod.CacheSection,
         ),
     { loading: renderSectionFallback },
 );
@@ -155,13 +93,7 @@ export default function AdminPage() {
     >({});
     const saveStatus = useInlineStatus();
     const sidebarItems = useMemo(
-        () =>
-            federation
-                ? [
-                      ...baseSidebarItems,
-                      { id: "federation", label: "Federation" },
-                  ]
-                : baseSidebarItems,
+        () => getPersonalStreamingAdminSidebarItems(federation),
         [federation],
     );
 
@@ -287,25 +219,6 @@ export default function AdminPage() {
                     onUpdate={updateSystemSettings}
                 />
 
-                <DownloadPreferencesSection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                />
-
-                <DownloadServicesSection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                    onTest={handleTestService}
-                    testingServices={testingServices}
-                />
-
-                <AudiobookshelfSection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                    onTest={handleTestService}
-                    isTesting={testingServices.audiobookshelf || false}
-                />
-
                 <YouTubeMusicAdminSection
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
@@ -322,23 +235,12 @@ export default function AdminPage() {
                     }
                 />
 
-                <StoragePathsSection
+                <CacheSection
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
-                    onTest={handleTestService}
-                    isTesting={false}
                 />
 
                 <LibrarySafetySection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                />
-
-                <LibraryHealthSection />
-
-                <LibraryInsightsSection />
-
-                <CacheSection
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
                 />

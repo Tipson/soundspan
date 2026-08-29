@@ -7,6 +7,12 @@ import type {
     PurgeRemovedTracksResponse,
     RadioPlaylistFilter,
     RadioPlaylistMutationResponse,
+    RemoveSavedMusicEntityResponse,
+    SavedMusicEntitiesResponse,
+    SavedMusicEntityIdentity,
+    SavedMusicEntityInput,
+    SavedMusicEntityStatusResponse,
+    SavedMusicEntityType,
     TrackPreferenceResponse,
     TrackPreferenceSignal,
 } from "../api";
@@ -103,6 +109,52 @@ export function WithLibrary<TBase extends ApiClientConstructor>(Base: TBase) {
                 limit: number;
             }>(
                 `/library/albums?${toSearchParams(params as Record<string, string | number | boolean | undefined>).toString()}`,
+            );
+        }
+
+        /** List albums or artists explicitly saved to the signed-in account. */
+        async listSavedMusicEntities(params?: {
+            type?: SavedMusicEntityType;
+            limit?: number;
+            offset?: number;
+        }) {
+            const query = toSearchParams(params ?? {}).toString();
+            return this.request<SavedMusicEntitiesResponse>(
+                `/library/saved${query ? `?${query}` : ""}`,
+            );
+        }
+
+        /** Resolve saved state for one exact provider or Soundspan identity. */
+        async getSavedMusicEntityStatus(identity: SavedMusicEntityIdentity) {
+            const query = toSearchParams({
+                type: identity.type,
+                source: identity.source,
+                entityId: identity.entityId,
+            }).toString();
+            return this.request<SavedMusicEntityStatusResponse>(
+                `/library/saved/status?${query}`,
+            );
+        }
+
+        /** Save or refresh an album/artist snapshot in the personal Library. */
+        async saveMusicEntity(entity: SavedMusicEntityInput) {
+            return this.request<SavedMusicEntityStatusResponse>(
+                "/library/saved",
+                {
+                    method: "PUT",
+                    body: JSON.stringify(entity),
+                },
+            );
+        }
+
+        /** Idempotently remove one album or artist from the personal Library. */
+        async removeSavedMusicEntity(identity: SavedMusicEntityIdentity) {
+            return this.request<RemoveSavedMusicEntityResponse>(
+                "/library/saved",
+                {
+                    method: "DELETE",
+                    body: JSON.stringify(identity),
+                },
             );
         }
 

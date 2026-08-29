@@ -14,6 +14,7 @@ import {
     type TrackPreferenceOptimisticQueryClient,
 } from "../../hooks/trackPreferenceOptimistic";
 import { revokeAuthenticatedRuntime } from "../../lib/auth-runtime";
+import { getAuthRuntimeLease } from "../../lib/auth-runtime-generation";
 import { getQueryClient, QueryProvider } from "../../lib/query-client";
 
 GlobalRegistrator.register({ url: "https://soundspan.test/" });
@@ -119,6 +120,17 @@ test("runtime revocation isolates late account A writes while fresh account B mu
         "fresh-account-b",
     );
     accountBMutation.reset();
+});
+
+test("runtime revocation synchronously aborts the retired auth lease", () => {
+    const retired = getAuthRuntimeLease();
+
+    revokeAuthenticatedRuntime({ notifyAuthProvider: false });
+
+    const current = getAuthRuntimeLease();
+    assert.equal(retired.signal.aborted, true);
+    assert.equal(current.signal.aborted, false);
+    assert.notEqual(current.generation, retired.generation);
 });
 
 test("QueryProvider publishes the fresh account B client after runtime rotation", async () => {

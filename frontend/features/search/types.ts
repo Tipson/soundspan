@@ -7,7 +7,6 @@ export type FilterTab =
     | "all"
     | "library"
     | "discover"
-    | "podcasts"
     | "peers"
     | "soulseek";
 
@@ -99,7 +98,7 @@ export interface SearchResult {
 }
 
 export interface DiscoverResult {
-    type: "music" | "podcast" | "track";
+    type: "music" | "album" | "podcast" | "track";
     id?: string;
     name: string;
     mbid?: string;
@@ -118,6 +117,11 @@ export interface DiscoverResult {
     tidalTrackId?: number;
     youtubeVideoId?: string;
     duration?: number | null;
+    browseId?: string;
+    year?: string | null;
+    provider?: "ytmusic";
+    /** YouTube Music artist route identity; accepted by discovery fallback. */
+    youtubeChannelId?: string;
 }
 
 export interface AliasInfo {

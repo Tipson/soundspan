@@ -11,6 +11,8 @@ const mockPrisma = {
     },
     playlist: {
         create: jest.fn(),
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
     },
     playlistItem: {
         createMany: jest.fn(),
@@ -39,9 +41,8 @@ mockLogger.child.mockReturnValue(mockLogger);
 
 const mockSpotifyService = {
     parseUrl: jest.fn(),
-    getPlaylist: jest.fn(),
+    getPlaylistForImport: jest.fn(),
 };
-
 const mockDeezerService = {
     getPlaylist: jest.fn(),
 };
@@ -109,7 +110,11 @@ describe("PlaylistImportService", () => {
             ytMusicClientSecret: null,
         });
         mockPrisma.playlist.create.mockResolvedValue({ id: "playlist_1" });
-        mockPrisma.playlistItem.createMany.mockResolvedValue({ count: 0 });
+        mockPrisma.playlist.findUnique.mockResolvedValue(null);
+        mockPrisma.playlist.upsert.mockResolvedValue({ id: "playlist_1" });
+        mockPrisma.playlistItem.createMany.mockImplementation(
+            async ({ data }: { data: unknown[] }) => ({ count: data.length }),
+        );
         mockTidalStreamingService.restoreOAuth.mockResolvedValue(true);
         mockTrackMappingService.createMapping.mockResolvedValue({
             id: "mapping_1",
@@ -300,6 +305,62 @@ describe("PlaylistImportService", () => {
     });
 
     describe("fetchSourceTracks", () => {
+        it("imports a public Spotify playlist without a user OAuth connection", async () => {
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
+                name: "Public Spotify Playlist",
+                tracks: [
+                    {
+                        artist: "Artist",
+                        title: "Track",
+                        album: "Album",
+                        durationMs: 180_000,
+                        isrc: "ISRC1",
+                    },
+                ],
+            });
+
+            await expect(
+                playlistImportService.fetchSourceTracks(
+                    "spotify",
+                    "playlist123",
+                    "user_1",
+                ),
+            ).resolves.toEqual({
+                name: "Public Spotify Playlist",
+                tracks: [
+                    {
+                        artist: "Artist",
+                        title: "Track",
+                        album: "Album",
+                        duration: 180,
+                        isrc: "ISRC1",
+                    },
+                ],
+            });
+            expect(mockSpotifyService.getPlaylistForImport).toHaveBeenCalledWith(
+                "playlist123",
+            );
+        });
+
+        it("allows a public Spotify import without a Soundspan user argument", async () => {
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
+                name: "Public Spotify Playlist",
+                tracks: [],
+            });
+            await expect(
+                playlistImportService.fetchSourceTracks(
+                    "spotify",
+                    "playlist123",
+                ),
+            ).resolves.toEqual({
+                name: "Public Spotify Playlist",
+                tracks: [],
+            });
+            expect(mockSpotifyService.getPlaylistForImport).toHaveBeenCalledWith(
+                "playlist123",
+            );
+        });
+
         it("fetches YouTube playlist tracks with videoId preserved", async () => {
             mockYtMusicService.getBrowsePlaylist.mockResolvedValueOnce({
                 id: "PLtest123",
@@ -1069,7 +1130,7 @@ describe("PlaylistImportService", () => {
                 type: "playlist",
                 id: "sp_123",
             });
-            mockSpotifyService.getPlaylist.mockResolvedValueOnce({
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
                 name: "My Playlist",
                 tracks: [
                     {
@@ -1126,7 +1187,7 @@ describe("PlaylistImportService", () => {
                 type: "playlist",
                 id: "sp_batch",
             });
-            mockSpotifyService.getPlaylist.mockResolvedValueOnce({
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
                 name: "Batch Playlist",
                 tracks: [
                     {
@@ -1202,7 +1263,7 @@ describe("PlaylistImportService", () => {
                 type: "playlist",
                 id: "sp_tidal",
             });
-            mockSpotifyService.getPlaylist.mockResolvedValueOnce({
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
                 name: "Tidal Playlist",
                 tracks: [
                     {
@@ -1278,7 +1339,7 @@ describe("PlaylistImportService", () => {
                 type: "playlist",
                 id: "sp_tidal_restore_fail",
             });
-            mockSpotifyService.getPlaylist.mockResolvedValueOnce({
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
                 name: "Restore Fail Playlist",
                 tracks: [
                     {
@@ -1477,9 +1538,14 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
         };
 
         it("creates playlist from provided preview data without re-fetching", async () => {
-            await playlistImportService.importPlaylist("user_1", previewData);
+            const result = await playlistImportService.importPlaylist(
+                "user_1",
+                previewData,
+            );
 
             expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.playlist.create).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.playlist.upsert).not.toHaveBeenCalled();
             expect(mockPrisma.playlistItem.createMany).toHaveBeenCalledWith({
                 data: [
                     {
@@ -1491,17 +1557,287 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
                     },
                     {
                         playlistId: "playlist_1",
+                        trackId: "track_local_1",
+                        trackTidalId: null,
+                        trackYtMusicId: null,
+                        sort: 1,
+                    },
+                    {
+                        playlistId: "playlist_1",
                         trackId: null,
                         trackTidalId: null,
                         trackYtMusicId: "cy_3",
+                        sort: 2,
+                    },
+                ],
+            });
+            expect(mockTrackMappingService.createMapping).toHaveBeenCalledTimes(
+                3,
+            );
+            expect(result.summary).toEqual(previewData.summary);
+        });
+
+        it("preserves duplicate Spotify occurrences in order with an exact execution summary", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "spotify-duplicates",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
+                name: "Repeated favourite",
+                tracks: [
+                    {
+                        title: "Same Song",
+                        artist: "Same Artist",
+                        album: "Same Album",
+                        durationMs: 180_000,
+                        isrc: "DUPLICATE-ISRC",
+                    },
+                    {
+                        title: "Same Song",
+                        artist: "Same Artist",
+                        album: "Same Album",
+                        durationMs: 180_000,
+                        isrc: "DUPLICATE-ISRC",
+                    },
+                ],
+            });
+            mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
+                {
+                    videoId: "same-video",
+                    title: "Same Song",
+                    duration: 180,
+                },
+                {
+                    videoId: "same-video",
+                    title: "Same Song",
+                    duration: 180,
+                },
+            ]);
+            mockTrackMappingService.upsertTrackYtMusic.mockResolvedValue({
+                id: "same-yt-row",
+            });
+
+            const preview = await playlistImportService.previewImport(
+                "user_1",
+                "https://open.spotify.com/playlist/spotify-duplicates",
+            );
+            const execution = await playlistImportService.importPlaylist(
+                "user_1",
+                preview,
+            );
+
+            expect(preview.summary).toEqual({
+                total: 2,
+                local: 0,
+                youtube: 2,
+                tidal: 0,
+                unresolved: 0,
+            });
+            expect(mockPrisma.playlistItem.createMany).toHaveBeenCalledWith({
+                data: [
+                    {
+                        playlistId: "playlist_1",
+                        trackId: null,
+                        trackTidalId: null,
+                        trackYtMusicId: "same-yt-row",
+                        sort: 0,
+                    },
+                    {
+                        playlistId: "playlist_1",
+                        trackId: null,
+                        trackTidalId: null,
+                        trackYtMusicId: "same-yt-row",
                         sort: 1,
                     },
                 ],
-                skipDuplicates: true,
             });
-            expect(mockTrackMappingService.createMapping).toHaveBeenCalledTimes(
-                2,
+            expect(execution.summary).toEqual(preview.summary);
+        });
+
+        it("fails closed if the database reports an incomplete item write", async () => {
+            mockPrisma.playlistItem.createMany.mockResolvedValueOnce({
+                count: 1,
+            });
+
+            await expect(
+                playlistImportService.importPlaylist("user_1", previewData),
+            ).rejects.toThrow(
+                "Playlist import item persistence was incomplete",
             );
+            expect(
+                mockTrackMappingService.createMapping,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("returns the atomic winner without writing items after a concurrent identity race", async () => {
+            const raceConflict = Object.assign(
+                new Error("unique constraint race"),
+                {
+                    code: "P2002",
+                    meta: {
+                        modelName: "Playlist",
+                        target: ["userId", "mixId"],
+                    },
+                },
+            );
+            mockPrisma.playlist.findUnique
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: "race-winner-playlist" });
+            mockPrisma.playlist.create.mockRejectedValueOnce(raceConflict);
+
+            const result = await playlistImportService.importPlaylist(
+                "user_1",
+                previewData,
+                undefined,
+                { idempotencyKey: "job-42" },
+            );
+
+            expect(result.playlistId).toBe("race-winner-playlist");
+            expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+            expect(mockPrisma.playlist.findUnique).toHaveBeenNthCalledWith(2, {
+                where: {
+                    userId_mixId: {
+                        userId: "user_1",
+                        mixId: "generic-import-job:job-42",
+                    },
+                },
+                select: { id: true },
+            });
+            expect(mockPrisma.playlist.create).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.playlistItem.createMany).not.toHaveBeenCalled();
+            expect(mockPrisma.playlist.upsert).not.toHaveBeenCalled();
+        });
+
+        it("finds a committed generic import playlist by owner and job identity", async () => {
+            mockPrisma.playlist.findUnique.mockResolvedValueOnce({
+                id: "owner-job-playlist",
+            });
+
+            await expect(
+                playlistImportService.findImportedPlaylistId(
+                    "user_1",
+                    "job-42",
+                ),
+            ).resolves.toBe("owner-job-playlist");
+
+            expect(mockPrisma.playlist.findUnique).toHaveBeenCalledWith({
+                where: {
+                    userId_mixId: {
+                        userId: "user_1",
+                        mixId: "generic-import-job:job-42",
+                    },
+                },
+                select: { id: true },
+            });
+        });
+
+        it("does not retry a P2002 from an unrelated unique constraint", async () => {
+            const unrelatedConflict = Object.assign(
+                new Error("different unique constraint"),
+                {
+                    code: "P2002",
+                    meta: {
+                        modelName: "Playlist",
+                        target: ["spotifyPlaylistId"],
+                    },
+                },
+            );
+            mockPrisma.playlist.create.mockRejectedValueOnce(unrelatedConflict);
+
+            await expect(
+                playlistImportService.importPlaylist(
+                    "user_1",
+                    previewData,
+                    undefined,
+                    { idempotencyKey: "job-42" },
+                ),
+            ).rejects.toBe(unrelatedConflict);
+
+            expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.playlist.findUnique).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.playlist.create).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.playlistItem.createMany).not.toHaveBeenCalled();
+        });
+
+        it("preserves an item the user removed before a committed job retry", async () => {
+            mockPrisma.playlist.findUnique
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: "job-playlist" });
+            mockPrisma.playlist.create.mockResolvedValueOnce({
+                id: "job-playlist",
+            });
+
+            const first = await playlistImportService.importPlaylist(
+                "user_1",
+                previewData,
+                undefined,
+                { idempotencyKey: "job-delete-safe" },
+            );
+            expect(mockPrisma.playlistItem.createMany).toHaveBeenCalledTimes(1);
+
+            mockPrisma.playlistItem.createMany.mockClear();
+            const retryAfterUserDeletion =
+                await playlistImportService.importPlaylist(
+                    "user_1",
+                    previewData,
+                    undefined,
+                    { idempotencyKey: "job-delete-safe" },
+                );
+
+            expect(first.playlistId).toBe("job-playlist");
+            expect(retryAfterUserDeletion.playlistId).toBe("job-playlist");
+            expect(mockPrisma.playlist.create).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.playlistItem.createMany).not.toHaveBeenCalled();
+            expect(mockPrisma.playlist.upsert).not.toHaveBeenCalled();
+        });
+
+        it("scopes a job idempotency key to the playlist owner", async () => {
+            const playlists = new Map<string, { id: string }>();
+            mockPrisma.playlist.create.mockImplementation(
+                async ({ data }: any) => {
+                    const key = `${data.userId}:${data.mixId}`;
+                    const created = { id: `playlist-${data.userId}` };
+                    playlists.set(key, created);
+                    return created;
+                },
+            );
+
+            const [firstUser, secondUser] = await Promise.all([
+                playlistImportService.importPlaylist(
+                    "user_1",
+                    previewData,
+                    undefined,
+                    { idempotencyKey: "shared-job-id" },
+                ),
+                playlistImportService.importPlaylist(
+                    "user_2",
+                    previewData,
+                    undefined,
+                    { idempotencyKey: "shared-job-id" },
+                ),
+            ]);
+
+            expect(firstUser.playlistId).toBe("playlist-user_1");
+            expect(secondUser.playlistId).toBe("playlist-user_2");
+            expect(playlists.size).toBe(2);
+            expect(mockPrisma.playlist.findUnique).toHaveBeenNthCalledWith(1, {
+                where: {
+                    userId_mixId: {
+                        userId: "user_1",
+                        mixId: "generic-import-job:shared-job-id",
+                    },
+                },
+                select: { id: true },
+            });
+            expect(mockPrisma.playlist.findUnique).toHaveBeenNthCalledWith(2, {
+                where: {
+                    userId_mixId: {
+                        userId: "user_2",
+                        mixId: "generic-import-job:shared-job-id",
+                    },
+                },
+                select: { id: true },
+            });
         });
 
         it("uses overrideName when provided", async () => {

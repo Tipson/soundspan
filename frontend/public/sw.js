@@ -1,5 +1,5 @@
 // soundspan Service Worker
-const CACHE_NAME = "soundspan-v3";
+const CACHE_NAME = "soundspan-v4";
 const IMAGE_CACHE_NAME = "soundspan-images-v3";
 const IMAGE_METADATA_CACHE_NAME = "soundspan-images-metadata-v2";
 const DEVICE_AUDIO_CACHE_NAME = "soundspan-device-audio-v1";
@@ -9,12 +9,17 @@ const DEVICE_AUDIO_TEMP_PATH_PREFIX = "/__offline/audio-temp/";
 const DEVICE_OFFLINE_DATABASE_NAME = "soundspan-device-offline-v1";
 const DEVICE_OFFLINE_STORE_NAME = "downloads";
 const BACKGROUND_FETCH_ID_PREFIX = "soundspan-device-audio-";
+// Protocol 0 explicitly retires new Background Fetch starts. Activation also
+// navigates every already-open client once so an older bundle cannot recreate
+// the retired protocol after the worker's initial cleanup sweep.
+const DEVICE_OFFLINE_BACKGROUND_FETCH_PROTOCOL = 0;
 const BACKGROUND_COMPLETION_LEASE_TTL_MS = 5 * 60 * 1000;
 const MAX_IMAGE_CACHE_ENTRIES = 2000;
 const MAX_CONCURRENT_IMAGE_REQUESTS = 4;
 const REQUEST_DELAY_MS = 10;
 const IMAGE_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const NAVIGATION_NETWORK_TIMEOUT_MS = 5_000;
+const LEGACY_BACKGROUND_OPERATION_TIMEOUT_MS = 3_000;
 
 const CRITICAL_PRECACHE_DOCUMENTS = ["/", "/library?tab=downloads"];
 const CRITICAL_PRECACHE_ASSETS = ["/runtime-config"];
@@ -30,6 +35,65 @@ const IMAGE_PATTERNS = [
 
 let activeImageRequests = 0;
 const imageRequestQueue = [];
+
+function settleOperationWithin(operation, timeoutMs) {
+    return new Promise((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve({ state: "timeout" });
+        }, timeoutMs);
+        Promise.resolve(operation).then(
+            (value) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve({ state: "resolved", value });
+            },
+            () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve({ state: "rejected" });
+            },
+        );
+    });
+}
+
+async function retireLegacyBackgroundFetches() {
+    const manager = self.registration?.backgroundFetch;
+    if (!manager?.getIds || !manager?.get) return false;
+    const idsResult = await settleOperationWithin(
+        manager.getIds(),
+        LEGACY_BACKGROUND_OPERATION_TIMEOUT_MS,
+    );
+    if (idsResult.state !== "resolved" || !Array.isArray(idsResult.value)) {
+        return false;
+    }
+    const ids = idsResult.value.filter(
+        (id) =>
+            typeof id === "string" && id.startsWith(BACKGROUND_FETCH_ID_PREFIX),
+    );
+    const results = await Promise.all(
+        ids.map(async (id) => {
+            const lookup = await settleOperationWithin(
+                manager.get(id),
+                LEGACY_BACKGROUND_OPERATION_TIMEOUT_MS,
+            );
+            if (lookup.state !== "resolved") return false;
+            const registration = lookup.value;
+            if (!registration) return true;
+            if (typeof registration.abort !== "function") return false;
+            const aborted = await settleOperationWithin(
+                registration.abort(),
+                LEGACY_BACKGROUND_OPERATION_TIMEOUT_MS,
+            );
+            return aborted.state === "resolved" && aborted.value !== false;
+        }),
+    );
+    return results.every(Boolean);
+}
 
 function isImageRoute(pathname) {
     return IMAGE_PATTERNS.some((pattern) => pattern.test(pathname));
@@ -363,7 +427,7 @@ async function markBackgroundFetchInterrupted(registration, code, message) {
 
 async function handleBackgroundFetchSuccess(registration) {
     const identity = backgroundFetchIdentity(registration);
-    if (!identity) return;
+    if (!identity) return "ignored";
     const completionLeaseId = `background-completing:${identity.id}`;
     const completionClaimed = await mutateDeviceOfflineRecord(
         identity.key,
@@ -378,7 +442,7 @@ async function handleBackgroundFetchSuccess(registration) {
                   }
                 : null,
     );
-    if (!completionClaimed) return;
+    if (!completionClaimed) return "ignored";
     const records = await registration.matchAll();
     if (records.length !== 1) {
         throw new Error("Expected one background audio response");
@@ -417,14 +481,33 @@ async function handleBackgroundFetchSuccess(registration) {
         Number.isSafeInteger(contentLength) && contentLength >= 0
             ? contentLength
             : null;
-    const totalBytes =
-        declaredTotalBytes ?? (await retained.clone().arrayBuffer()).byteLength;
+    const actualTotalBytes = (await retained.clone().arrayBuffer()).byteLength;
+    if (actualTotalBytes < 1) {
+        throw new Error("Completed background audio response is empty");
+    }
+    if (
+        declaredTotalBytes !== null &&
+        declaredTotalBytes !== actualTotalBytes
+    ) {
+        throw new Error(
+            `Completed background audio length mismatch (${actualTotalBytes} of ${declaredTotalBytes} bytes)`,
+        );
+    }
+    const totalBytes = actualTotalBytes;
     const latest = await getDeviceOfflineRecord(identity.key);
     if (!isCurrentBackgroundFetch(latest, identity.id)) {
         await cache.delete(temporaryUrl);
-        return;
+        return "ignored";
     }
     await cache.put(virtualUrl, retained.clone());
+    const published = await cache.match(virtualUrl);
+    if (!published) throw new Error("Completed audio was not published");
+    const publishedBytes = (await published.arrayBuffer()).byteLength;
+    if (publishedBytes !== totalBytes) {
+        throw new Error(
+            `Published background audio length mismatch (${publishedBytes} of ${totalBytes} bytes)`,
+        );
+    }
     const updated = await mutateDeviceOfflineRecord(identity.key, (record) =>
         isCurrentBackgroundFetch(record, identity.id)
             ? {
@@ -436,6 +519,7 @@ async function handleBackgroundFetchSuccess(registration) {
                   foregroundLeaseExpiresAt: null,
                   bytesReceived: totalBytes ?? record.bytesReceived,
                   totalBytes: totalBytes ?? record.totalBytes,
+                  integrityVersion: 1,
                   contentType: retained.headers.get("content-type"),
                   updatedAt: Date.now(),
                   errorCode: null,
@@ -452,34 +536,43 @@ async function handleBackgroundFetchSuccess(registration) {
         ) {
             await cache.delete(virtualUrl);
         }
-        return;
+        return "ignored";
     }
     await notifyDeviceOfflineClients(identity.key, "ready");
+    return "saved";
 }
 
 async function handleBackgroundFetchSuccessSafely(registration) {
     try {
-        await handleBackgroundFetchSuccess(registration);
+        return await handleBackgroundFetchSuccess(registration);
     } catch (error) {
         const identity = backgroundFetchIdentity(registration);
         if (identity) {
-            const cache = await caches.open(DEVICE_AUDIO_CACHE_NAME);
-            await cache.delete(
-                new URL(
-                    `${DEVICE_AUDIO_TEMP_PATH_PREFIX}${encodeURIComponent(identity.id)}`,
-                    self.location.origin,
-                ).toString(),
-            );
-            const current = await getDeviceOfflineRecord(identity.key).catch(
-                () => null,
-            );
-            if (!current || isCurrentBackgroundFetch(current, identity.id)) {
+            try {
+                const cache = await caches.open(DEVICE_AUDIO_CACHE_NAME);
                 await cache.delete(
                     new URL(
-                        `${DEVICE_AUDIO_PATH_PREFIX}${encodeURIComponent(identity.key)}`,
+                        `${DEVICE_AUDIO_TEMP_PATH_PREFIX}${encodeURIComponent(identity.id)}`,
                         self.location.origin,
                     ).toString(),
                 );
+                const current = await getDeviceOfflineRecord(
+                    identity.key,
+                ).catch(() => null);
+                if (
+                    !current ||
+                    isCurrentBackgroundFetch(current, identity.id)
+                ) {
+                    await cache.delete(
+                        new URL(
+                            `${DEVICE_AUDIO_PATH_PREFIX}${encodeURIComponent(identity.key)}`,
+                            self.location.origin,
+                        ).toString(),
+                    );
+                }
+            } catch {
+                // Cleanup is best-effort; the retryable metadata transition is
+                // the safety boundary that prevents a partial copy playing.
             }
         }
         await markBackgroundFetchInterrupted(
@@ -489,6 +582,7 @@ async function handleBackgroundFetchSuccessSafely(registration) {
                 ? error.message
                 : "Background download could not be saved",
         ).catch(() => undefined);
+        return "failed";
     }
 }
 
@@ -566,6 +660,13 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("message", (event) => {
+    if (event.data?.type === "DEVICE_OFFLINE_CAPABILITIES_REQUEST") {
+        event.ports?.[0]?.postMessage({
+            type: "DEVICE_OFFLINE_CAPABILITIES",
+            backgroundFetchProtocol: DEVICE_OFFLINE_BACKGROUND_FETCH_PROTOCOL,
+        });
+        return;
+    }
     if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
@@ -573,6 +674,7 @@ self.addEventListener("activate", (event) => {
     event.waitUntil(
         (async () => {
             const cacheNames = await caches.keys();
+            await retireLegacyBackgroundFetches().catch(() => false);
             await Promise.all(
                 cacheNames
                     .filter(
@@ -585,29 +687,61 @@ self.addEventListener("activate", (event) => {
                     .map((name) => caches.delete(name)),
             );
             await self.clients.claim();
+            // Activation is the only reliable migration barrier for already
+            // open clients: an old shell cache or Background Fetch ID may have
+            // been evicted before this worker can inspect it. Navigating every
+            // window client exactly once per worker activation prevents an old
+            // JavaScript bundle from recreating the retired transfer protocol.
+            const windowClients = await self.clients.matchAll({
+                type: "window",
+                includeUncontrolled: true,
+            });
+            await Promise.allSettled(
+                windowClients.map((client) =>
+                    typeof client.navigate === "function" && client.url
+                        ? client.navigate(client.url)
+                        : Promise.resolve(),
+                ),
+            );
         })(),
     );
 });
 
 self.addEventListener("backgroundfetchsuccess", (event) => {
-    event.waitUntil(handleBackgroundFetchSuccessSafely(event.registration));
+    event.waitUntil(
+        (async () => {
+            const outcome = await handleBackgroundFetchSuccessSafely(
+                event.registration,
+            );
+            await event.updateUI?.({
+                title:
+                    outcome === "saved" ? "Download saved" : "Download stopped",
+            });
+        })(),
+    );
 });
 self.addEventListener("backgroundfetchfail", (event) => {
     event.waitUntil(
-        markBackgroundFetchInterrupted(
-            event.registration,
-            "background_failed",
-            "The browser background download failed. Resume to try again.",
-        ).catch(() => undefined),
+        (async () => {
+            await markBackgroundFetchInterrupted(
+                event.registration,
+                "background_failed",
+                "The browser background download failed. Resume to try again.",
+            ).catch(() => undefined);
+            await event.updateUI?.({ title: "Download stopped" });
+        })(),
     );
 });
 self.addEventListener("backgroundfetchabort", (event) => {
     event.waitUntil(
-        markBackgroundFetchInterrupted(
-            event.registration,
-            "interrupted",
-            "The background download was interrupted. Resume to try again.",
-        ).catch(() => undefined),
+        (async () => {
+            await markBackgroundFetchInterrupted(
+                event.registration,
+                "interrupted",
+                "The background download was interrupted. Resume to try again.",
+            ).catch(() => undefined);
+            await event.updateUI?.({ title: "Download stopped" });
+        })(),
     );
 });
 

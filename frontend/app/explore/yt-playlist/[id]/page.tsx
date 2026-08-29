@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import {
     ArrowLeft,
     Play,
@@ -31,6 +30,9 @@ import { cn } from "@/utils/cn";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackList, TrackListHeader } from "@/components/track";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
+import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
 import type {
     TrackRowItem,
     TrackRowSlots,
@@ -437,6 +439,13 @@ function YtMusicPlaylistDetailPageContent() {
                 })),
         [playlist?.tracks],
     );
+    const deviceDownloadTracks = useMemo(
+        () =>
+            (playlist?.tracks ?? [])
+                .filter((track) => Boolean(track.videoId))
+                .map(browseTrackToQueueTrack),
+        [playlist?.tracks],
+    );
     const {
         isAllLiked,
         isApplying: isApplyingLikeAll,
@@ -521,6 +530,17 @@ function YtMusicPlaylistDetailPageContent() {
     // Total duration
     const totalDuration =
         playlist?.tracks.reduce((sum, track) => sum + track.duration, 0) || 0;
+    const providerAlbumEntity =
+        isAlbumType && playlist
+            ? {
+                  type: "album" as const,
+                  source: "ytmusic",
+                  entityId: playlistId,
+                  title: playlist.title,
+                  subtitle: playlist.tracks[0]?.artist || null,
+                  imageUrl: playlist.thumbnailUrl,
+              }
+            : null;
 
     const formatTotalDuration = (seconds: number) => {
         const hours = Math.floor(seconds / 3600);
@@ -587,7 +607,7 @@ function YtMusicPlaylistDetailPageContent() {
                     {/* Cover Art */}
                     <div className="relative w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
                         {playlist.thumbnailUrl ? (
-                            <Image
+                            <CachedImage
                                 src={api.getBrowseImageUrl(
                                     playlist.thumbnailUrl,
                                 )}
@@ -615,7 +635,9 @@ function YtMusicPlaylistDetailPageContent() {
                                 <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z" />
                             </svg>
                             <p className="text-xs font-medium text-white/90">
-                                YouTube Music Playlist
+                                {isAlbumType
+                                    ? "YouTube Music Album"
+                                    : "YouTube Music Playlist"}
                             </p>
                         </div>
                         <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
@@ -640,7 +662,7 @@ function YtMusicPlaylistDetailPageContent() {
 
             {/* Action Bar */}
             <div className="bg-gradient-to-b from-surface-hover/60 to-transparent px-4 md:px-8 py-4">
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                     {/* Play Button (red) */}
                     <button
                         onClick={handleTogglePlay}
@@ -664,7 +686,7 @@ function YtMusicPlaylistDetailPageContent() {
                     {playlist && playlist.tracks.length > 1 && (
                         <button
                             onClick={handleShuffle}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-all hover:bg-white/10 hover:text-white"
                             title="Shuffle play"
                         >
                             <Shuffle className="w-5 h-5" />
@@ -674,7 +696,7 @@ function YtMusicPlaylistDetailPageContent() {
                     {/* Add to Queue */}
                     <button
                         onClick={handleAddToQueue}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-all hover:bg-white/10 hover:text-white"
                         title="Add all to queue"
                     >
                         <ListMusic className="w-5 h-5" />
@@ -683,7 +705,7 @@ function YtMusicPlaylistDetailPageContent() {
                     {/* Add to Playlist */}
                     <button
                         onClick={() => setShowPlaylistSelector(true)}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-all hover:bg-white/10 hover:text-white"
                         title="Add all to playlist"
                     >
                         <Plus className="w-5 h-5" />
@@ -695,7 +717,7 @@ function YtMusicPlaylistDetailPageContent() {
                             onClick={toggleLikeAll}
                             disabled={isApplyingLikeAll}
                             className={cn(
-                                "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                                "flex h-11 w-11 items-center justify-center rounded-full transition-all",
                                 isApplyingLikeAll
                                     ? "cursor-not-allowed text-white/35"
                                     : isAllLiked
@@ -721,12 +743,22 @@ function YtMusicPlaylistDetailPageContent() {
                         </button>
                     )}
 
+                    {isAlbumType && (
+                        <SaveMusicEntityButton entity={providerAlbumEntity} />
+                    )}
+
+                    <DeviceCollectionDownloadButton
+                        tracks={deviceDownloadTracks}
+                        collectionId={`ytmusic:${playlist.id}`}
+                        collectionLabel={playlist.title}
+                    />
+
                     <div className="flex-1" />
 
                     {/* Back button */}
                     <button
                         onClick={() => router.back()}
-                        className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+                        className="flex min-h-11 items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         <span className="hidden sm:inline">Back</span>

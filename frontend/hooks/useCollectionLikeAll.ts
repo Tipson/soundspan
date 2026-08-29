@@ -6,6 +6,7 @@ import { buildOptimisticTrackPreferenceResponse } from "@/hooks/trackPreferenceO
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
 
 export interface LikeableTrack {
     id: string;
@@ -120,6 +121,7 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
             queryClient.invalidateQueries({
                 queryKey: queryKeys.likedPlaylistAll(),
             });
+            publishDeviceOfflineLikedChangeForSignal(nextSignal);
 
             if (nextSignal === "thumbs_up") {
                 toast.success(

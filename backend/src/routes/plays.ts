@@ -17,10 +17,34 @@ import {
     forwardScrobbleIsolated,
     forwardTrackReferenceIsolated,
 } from "../services/scrobbleForwarder";
+import { sendInternalRouteError } from "../utils/routeErrorResponse";
 
 const router = Router();
 
 router.use(requireAuth);
+
+const playContextSchema = z.enum([
+    "wave",
+    "home",
+    "search",
+    "playlist",
+    "album",
+    "artist",
+    "library",
+]);
+const waveModeSchema = z.enum(["for-you", "new", "familiar"]);
+const playOutcomeSchema = z.enum([
+    "meaningful",
+    "completed",
+    "skipped",
+    "failed",
+]);
+const PLAY_OUTCOMES_BY_PRIORITY = [
+    "failed",
+    "skipped",
+    "meaningful",
+    "completed",
+] as const;
 
 const playSchema = z
     .object({
@@ -32,6 +56,8 @@ const playSchema = z
         album: z.string().trim().min(1).optional(),
         duration: z.number().int().nonnegative().optional(),
         thumbnailUrl: z.string().trim().min(1).optional(),
+        playContext: playContextSchema.optional(),
+        waveMode: waveModeSchema.optional(),
     })
     .superRefine((data, ctx) => {
         const providedIdentifiers = [
@@ -64,6 +90,93 @@ const playSchema = z
             }
         }
     });
+
+const playEngagementSchema = z
+    .object({
+        listenedSeconds: z.number().finite().min(0).max(86_400),
+        completionRatio: z.number().finite().min(0).max(1),
+        outcome: playOutcomeSchema,
+    })
+    .strict();
+
+function recommendationContextData(payload: z.infer<typeof playSchema>) {
+    return {
+        ...(payload.playContext ? { playContext: payload.playContext } : {}),
+        ...(payload.waveMode ? { waveMode: payload.waveMode } : {}),
+    };
+}
+
+function equalProgressOutcomeFilter(
+    outcome: z.infer<typeof playOutcomeSchema>,
+) {
+    const outcomeIndex = PLAY_OUTCOMES_BY_PRIORITY.indexOf(outcome);
+    return {
+        OR: [
+            { outcome: null },
+            {
+                outcome: {
+                    in: PLAY_OUTCOMES_BY_PRIORITY.slice(0, outcomeIndex + 1),
+                },
+            },
+        ],
+    };
+}
+
+function monotonicEngagementFilter(
+    engagement: z.infer<typeof playEngagementSchema>,
+) {
+    return {
+        AND: [
+            {
+                OR: [
+                    { completionRatio: null },
+                    {
+                        completionRatio: {
+                            lte: engagement.completionRatio,
+                        },
+                    },
+                ],
+            },
+            {
+                OR: [
+                    { listenedSeconds: null },
+                    {
+                        listenedSeconds: {
+                            lte: engagement.listenedSeconds,
+                        },
+                    },
+                ],
+            },
+            {
+                OR: [
+                    { completionRatio: null },
+                    {
+                        completionRatio: {
+                            lt: engagement.completionRatio,
+                        },
+                    },
+                    { listenedSeconds: null },
+                    {
+                        listenedSeconds: {
+                            lt: engagement.listenedSeconds,
+                        },
+                    },
+                    {
+                        AND: [
+                            {
+                                completionRatio: engagement.completionRatio,
+                            },
+                            {
+                                listenedSeconds: engagement.listenedSeconds,
+                            },
+                            equalProgressOutcomeFilter(engagement.outcome),
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
+}
 
 const playHistoryRangeSchema = z.enum(["7d", "30d", "365d", "all"]);
 type PlayHistoryRange = z.infer<typeof playHistoryRangeSchema>;
@@ -249,6 +362,12 @@ router.delete("/history", async (req, res) => {
  *                     type: string
  *                     minLength: 1
  *                     description: Local library track ID
+ *                   playContext:
+ *                     type: string
+ *                     enum: [wave, home, search, playlist, album, artist, library]
+ *                   waveMode:
+ *                     type: string
+ *                     enum: [for-you, new, familiar]
  *               - type: object
  *                 required: [tidalTrackId, title, artist, album, duration]
  *                 not:
@@ -275,6 +394,12 @@ router.delete("/history", async (req, res) => {
  *                   thumbnailUrl:
  *                     type: string
  *                     minLength: 1
+ *                   playContext:
+ *                     type: string
+ *                     enum: [wave, home, search, playlist, album, artist, library]
+ *                   waveMode:
+ *                     type: string
+ *                     enum: [for-you, new, familiar]
  *               - type: object
  *                 required: [youtubeVideoId, title, artist, album, duration]
  *                 not:
@@ -301,6 +426,12 @@ router.delete("/history", async (req, res) => {
  *                   thumbnailUrl:
  *                     type: string
  *                     minLength: 1
+ *                   playContext:
+ *                     type: string
+ *                     enum: [wave, home, search, playlist, album, artist, library]
+ *                   waveMode:
+ *                     type: string
+ *                     enum: [for-you, new, familiar]
  *     responses:
  *       200:
  *         description: Play logged successfully
@@ -334,6 +465,7 @@ router.post("/", async (req, res) => {
                     trackId: payload.trackId,
                     source: "LIBRARY",
                     playedAt,
+                    ...recommendationContextData(payload),
                 },
             });
 
@@ -379,6 +511,7 @@ router.post("/", async (req, res) => {
                     trackTidalId: ensured.id,
                     source: "TIDAL",
                     playedAt,
+                    ...recommendationContextData(payload),
                 },
             });
             forwardScrobbleIsolated({
@@ -424,6 +557,7 @@ router.post("/", async (req, res) => {
                 trackYtMusicId: ensured.id,
                 source: "YOUTUBE_MUSIC",
                 playedAt,
+                ...recommendationContextData(payload),
             },
         });
 
@@ -449,6 +583,96 @@ router.post("/", async (req, res) => {
         }
         logger.error("Create play error:", error);
         res.status(500).json({ error: "Failed to log play" });
+    }
+});
+
+/**
+ * @openapi
+ * /api/plays/{playId}/engagement:
+ *   patch:
+ *     summary: Record the final playback outcome used by recommendations
+ *     tags: [Plays]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: playId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [listenedSeconds, completionRatio, outcome]
+ *             properties:
+ *               listenedSeconds:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 86400
+ *               completionRatio:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 1
+ *               outcome:
+ *                 type: string
+ *                 enum: [meaningful, completed, skipped, failed]
+ *     responses:
+ *       200:
+ *         description: Engagement recorded
+ *       400:
+ *         description: Invalid engagement payload
+ *       401:
+ *         description: Not authenticated
+ *       404:
+ *         description: Play does not belong to the authenticated user
+ */
+router.patch("/:playId/engagement", async (req, res) => {
+    const playId = z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .safeParse(req.params.playId);
+    const engagement = playEngagementSchema.safeParse(req.body);
+    if (!playId.success || !engagement.success) {
+        return res.status(400).json({
+            error: "Invalid engagement",
+            details: [
+                ...(!playId.success ? playId.error.issues : []),
+                ...(!engagement.success ? engagement.error.issues : []),
+            ],
+        });
+    }
+
+    try {
+        const result = await prisma.play.updateMany({
+            where: {
+                id: playId.data,
+                userId: req.user!.id,
+                ...monotonicEngagementFilter(engagement.data),
+            },
+            data: {
+                ...engagement.data,
+                engagementUpdatedAt: new Date(),
+            },
+        });
+        if (result.count === 0) {
+            const existing = await prisma.play.findFirst({
+                where: { id: playId.data, userId: req.user!.id },
+                select: { id: true },
+            });
+            if (!existing) {
+                return res.status(404).json({ error: "Play not found" });
+            }
+            return res.json({ success: true, stale: true });
+        }
+        return res.json({ success: true });
+    } catch (error) {
+        logger.error("Update play engagement error:", error);
+        return sendInternalRouteError(res, "Failed to update engagement");
     }
 });
 

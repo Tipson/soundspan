@@ -2,6 +2,29 @@ import axios from "axios";
 import { logger } from "../utils/logger";
 import { deezerService } from "./deezer";
 import { rateLimiter } from "./rateLimiter";
+import {
+    decodeSpotifyHtmlEntities,
+    fetchSpotifyPlaylistEmbedSession,
+    parseSpotifyDurationLabelToMs,
+    parseSpotifyEmbedTrackRows,
+} from "./spotifyEmbed";
+import {
+    fetchAllSpotifyPlaylistItems,
+    SpotifyPlaylistPaginationError,
+} from "./spotifyPlaylistPagination";
+import type {
+    SpotifyAlbum,
+    SpotifyPlaylist,
+    SpotifyPlaylistPreview,
+    SpotifyTrack,
+} from "./spotifyTypes";
+
+export type {
+    SpotifyAlbum,
+    SpotifyPlaylist,
+    SpotifyPlaylistPreview,
+    SpotifyTrack,
+} from "./spotifyTypes";
 
 /**
  * Spotify Service
@@ -11,50 +34,6 @@ import { rateLimiter } from "./rateLimiter";
  * Falls back to Deezer API when Spotify scraping fails.
  */
 
-export interface SpotifyTrack {
-    spotifyId: string;
-    title: string;
-    artist: string;
-    artistId: string;
-    album: string;
-    albumId: string;
-    isrc: string | null;
-    durationMs: number;
-    trackNumber: number;
-    previewUrl: string | null;
-    coverUrl: string | null;
-}
-
-export interface SpotifyPlaylist {
-    id: string;
-    name: string;
-    description: string | null;
-    owner: string;
-    imageUrl: string | null;
-    trackCount: number;
-    tracks: SpotifyTrack[];
-    isPublic: boolean;
-}
-
-export interface SpotifyAlbum {
-    id: string;
-    name: string;
-    artist: string;
-    artistId: string;
-    imageUrl: string | null;
-    releaseDate: string | null;
-    trackCount: number;
-}
-
-export interface SpotifyPlaylistPreview {
-    id: string;
-    name: string;
-    description: string | null;
-    owner: string;
-    imageUrl: string | null;
-    trackCount: number;
-}
-
 // URL patterns
 const SPOTIFY_PLAYLIST_REGEX =
     /(?:spotify\.com\/playlist\/|spotify:playlist:)([a-zA-Z0-9]+)/;
@@ -62,14 +41,6 @@ const SPOTIFY_ALBUM_REGEX =
     /(?:spotify\.com\/album\/|spotify:album:)([a-zA-Z0-9]+)/;
 const SPOTIFY_TRACK_REGEX =
     /(?:spotify\.com\/track\/|spotify:track:)([a-zA-Z0-9]+)/;
-const HTML_NAMED_ENTITIES: Readonly<Record<string, string>> = {
-    amp: "&",
-    quot: '"',
-    apos: "'",
-    lt: "<",
-    gt: ">",
-    nbsp: " ",
-};
 
 class SpotifyService {
     private anonymousToken: string | null = null;
@@ -77,7 +48,6 @@ class SpotifyService {
     private tokenRefreshPromise: Promise<string | null> | null = null;
     private lastTokenEndpointFailureLogAt: number = 0;
     private static readonly TOKEN_FAILURE_LOG_WINDOW_MS = 5 * 60 * 1000;
-
     private logTokenEndpointFailure(): void {
         const now = Date.now();
         if (
@@ -173,6 +143,25 @@ class SpotifyService {
 
         this.logTokenEndpointFailure();
         return null;
+    }
+
+    /**
+     * Recover the same short-lived anonymous token shipped to Spotify embeds.
+     * This keeps credential-free playlist imports on the complete paginated API
+     * even when the standalone token endpoint is blocked by provider policy.
+     */
+    private async getAnonymousTokenFromPlaylistEmbed(
+        playlistId: string,
+    ): Promise<string | null> {
+        const session = await fetchSpotifyPlaylistEmbedSession(playlistId);
+        if (!session) {
+            return null;
+        }
+
+        this.anonymousToken = session.token;
+        this.tokenExpiry = session.expiresAt;
+        logger.debug("Spotify: Recovered anonymous token from embed session");
+        return session.token;
     }
 
     /**
@@ -726,130 +715,18 @@ class SpotifyService {
     }
 
     private decodeHtmlEntities(value: string): string {
-        return value.replace(
-            /&(?:#x([0-9a-fA-F]+)|#(\d+)|(amp|quot|apos|lt|gt|nbsp));/g,
-            (
-                match,
-                hex: string | undefined,
-                dec: string | undefined,
-                named,
-            ) => {
-                if (hex !== undefined) {
-                    return String.fromCharCode(Number.parseInt(hex, 16));
-                }
-                if (dec !== undefined) {
-                    return String.fromCharCode(Number.parseInt(dec, 10));
-                }
-                return HTML_NAMED_ENTITIES[named] ?? match;
-            },
-        );
-    }
-
-    private stripHtmlContent(value: string): string {
-        const withoutTags = value.replace(/<[^>]+>/g, " ");
-        return this.decodeHtmlEntities(withoutTags).replace(/\s+/g, " ").trim();
+        return decodeSpotifyHtmlEntities(value);
     }
 
     private parseDurationLabelToMs(label: string): number {
-        const parts = label
-            .trim()
-            .split(":")
-            .map((part) => Number.parseInt(part, 10));
-        if (parts.some((part) => Number.isNaN(part) || part < 0)) {
-            return 0;
-        }
-
-        if (parts.length === 2) {
-            return (parts[0] * 60 + parts[1]) * 1000;
-        }
-        if (parts.length === 3) {
-            return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
-        }
-        return 0;
+        return parseSpotifyDurationLabelToMs(label);
     }
 
     private parseEmbedTrackRows(
         playlistId: string,
         html: string,
     ): SpotifyPlaylist | null {
-        const tracks: SpotifyTrack[] = [];
-        const rowPattern =
-            /<li[^>]*data-testid="tracklist-row-\d+"[^>]*>([\s\S]*?)<\/li>/g;
-        let rowMatch: RegExpExecArray | null;
-
-        while ((rowMatch = rowPattern.exec(html)) !== null) {
-            const rowContent = rowMatch[1];
-            const titleMatch = rowContent.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
-            const artistMatch = rowContent.match(/<h4[^>]*>([\s\S]*?)<\/h4>/i);
-            if (!titleMatch || !artistMatch) {
-                continue;
-            }
-
-            const title = this.stripHtmlContent(titleMatch[1]);
-            const artistContent = artistMatch[1].replace(
-                /^\s*<span[^>]*>[\s\S]*?<\/span>\s*/i,
-                "",
-            );
-            const artist = this.stripHtmlContent(artistContent);
-            if (!title || !artist) {
-                continue;
-            }
-
-            const durationMatch = rowContent.match(
-                /data-testid="duration-cell"[^>]*>([^<]+)</i,
-            );
-            const durationMs = durationMatch
-                ? this.parseDurationLabelToMs(
-                      this.decodeHtmlEntities(durationMatch[1]),
-                  )
-                : 0;
-
-            const index = tracks.length;
-            tracks.push({
-                spotifyId: `${playlistId}:${index}`,
-                title,
-                artist,
-                artistId: "",
-                album: "Unknown Album",
-                albumId: "",
-                isrc: null,
-                durationMs,
-                trackNumber: index + 1,
-                previewUrl: null,
-                coverUrl: null,
-            });
-        }
-
-        if (tracks.length === 0) {
-            return null;
-        }
-
-        const metadataMatch = html.match(
-            /<span[^>]*>([^<]+)<\/span>\s*<span[^>]*>\s*(?:·|&middot;|&#183;)\s*<\/span>\s*<span[^>]*>([^<]+)<\/span>/i,
-        );
-        const playlistName = metadataMatch
-            ? this.stripHtmlContent(metadataMatch[1])
-            : "Unknown Playlist";
-        const playlistOwner = metadataMatch
-            ? this.stripHtmlContent(metadataMatch[2])
-            : "Unknown";
-        const imageMatch = html.match(
-            /--image-src:url\((?:&#x27;|&#39;|["'])?([^"')]+)(?:&#x27;|&#39;|["'])?\)/i,
-        );
-        const imageUrl = imageMatch
-            ? this.decodeHtmlEntities(imageMatch[1])
-            : null;
-
-        return {
-            id: playlistId,
-            name: playlistName || "Unknown Playlist",
-            description: null,
-            owner: playlistOwner || "Unknown",
-            imageUrl,
-            trackCount: tracks.length,
-            tracks,
-            isPublic: true,
-        };
+        return parseSpotifyEmbedTrackRows(playlistId, html);
     }
 
     /**
@@ -857,9 +734,19 @@ class SpotifyService {
      */
     private async fetchPlaylistViaAnonymousApi(
         playlistId: string,
+        requireComplete = false,
     ): Promise<SpotifyPlaylist | null> {
-        const token = await this.getAnonymousToken();
+        let token = await this.getAnonymousToken();
+        if (!token && requireComplete) {
+            token = await this.getAnonymousTokenFromPlaylistEmbed(playlistId);
+        }
         if (!token) {
+            if (requireComplete) {
+                throw new SpotifyPlaylistPaginationError(
+                    "Spotify could not provide a complete playlist; no partial import was created",
+                    { providerFailure: true },
+                );
+            }
             return await this.fetchPlaylistViaEmbedHtml(playlistId);
         }
 
@@ -875,7 +762,7 @@ class SpotifyService {
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                     },
                     params: {
-                        fields: "id,name,description,owner.display_name,images,public,tracks.total,tracks.items(track(id,name,artists(id,name),album(id,name,images),duration_ms,track_number,preview_url,external_ids))",
+                        fields: "id,name,description,owner.display_name,images,public,tracks.total,tracks.next,tracks.limit,tracks.offset,tracks.items(track(id,type,name,artists(id,name),album(id,name,images),duration_ms,track_number,preview_url,external_ids))",
                     },
                     timeout: 15000,
                 },
@@ -886,12 +773,25 @@ class SpotifyService {
                 `Spotify: Fetched playlist "${playlist.name}" with ${playlist.tracks?.items?.length || 0} tracks`,
             );
 
+            const playlistItems = await fetchAllSpotifyPlaylistItems(
+                playlist.tracks,
+                playlistId,
+                token,
+            );
+            logger.debug(
+                `Spotify: Fetched ${playlistItems.length}/${playlist.tracks?.total || playlistItems.length} playlist items across all pages`,
+            );
+
             const tracks: SpotifyTrack[] = [];
             let unknownAlbumCount = 0;
 
-            for (const item of playlist.tracks?.items || []) {
-                const track = item.track;
-                if (!track || !track.id) {
+            for (const item of playlistItems) {
+                const track = item?.track ?? item?.item;
+                if (
+                    !track ||
+                    !track.id ||
+                    (track.type && track.type !== "track")
+                ) {
                     continue;
                 }
 
@@ -1048,6 +948,20 @@ class SpotifyService {
                 error.response?.status,
                 error.response?.data || error.message,
             );
+
+            if (
+                error instanceof SpotifyPlaylistPaginationError &&
+                (!error.allowsAnonymousFallback || requireComplete)
+            ) {
+                throw error;
+            }
+
+            if (requireComplete) {
+                throw new SpotifyPlaylistPaginationError(
+                    "Spotify playlist fetch failed; no partial import was created",
+                    { cause: error, providerFailure: true },
+                );
+            }
 
             // Fallback to embed HTML parsing
             return await this.fetchPlaylistViaEmbedHtml(playlistId);
@@ -1324,6 +1238,23 @@ class SpotifyService {
 
         logger.debug("Spotify: Fetching public playlist via anonymous token");
         return await this.fetchPlaylistViaAnonymousApi(playlistId);
+    }
+
+    /** Fetch a public Spotify playlist only when every declared item is proven present. */
+    async getPlaylistForImport(
+        urlOrId: string,
+    ): Promise<SpotifyPlaylist | null> {
+        let playlistId = urlOrId;
+        const parsed = this.parseUrl(urlOrId);
+        if (parsed) {
+            if (parsed.type !== "playlist") {
+                throw new Error(`Expected playlist URL, got ${parsed.type}`);
+            }
+            playlistId = parsed.id;
+        }
+
+        logger.debug("Spotify: Fetching complete public playlist for import");
+        return await this.fetchPlaylistViaAnonymousApi(playlistId, true);
     }
 
     /**
