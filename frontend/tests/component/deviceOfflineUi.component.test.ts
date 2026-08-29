@@ -112,6 +112,8 @@ mock.module("lucide-react", {
         Disc3: Icon,
         AudioWaveform: Icon,
         ChevronDown: Icon,
+        ChevronLeft: Icon,
+        ChevronRight: Icon,
         Download: Icon,
         Check: Icon,
         AlertTriangle: Icon,
