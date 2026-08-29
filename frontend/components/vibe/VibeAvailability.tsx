@@ -143,7 +143,7 @@ export function VibeProviderFallback() {
     ]);
 
     return (
-        <main className="relative min-h-screen overflow-hidden bg-surface px-4 pb-28 pt-5 sm:px-6 sm:pt-7">
+        <main className="relative min-h-full overflow-hidden bg-surface px-4 pb-4 pt-5 sm:px-6 sm:pb-8 sm:pt-7">
             <div className="mx-auto max-w-5xl">
                 <section className="relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-surface-raised shadow-2xl shadow-black/30">
                     <div
@@ -270,7 +270,7 @@ export function VibeProviderFallback() {
                     {currentTrack && (
                         <section
                             aria-labelledby="wave-now-playing-title"
-                            className="relative border-t border-white/8 bg-black/20 px-4 py-4 backdrop-blur sm:px-6"
+                            className="relative hidden border-t border-white/8 bg-black/20 px-4 py-4 backdrop-blur min-[1025px]:block min-[1025px]:px-6"
                         >
                             <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="min-w-0">

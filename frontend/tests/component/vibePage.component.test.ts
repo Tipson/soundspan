@@ -398,6 +398,15 @@ test("My Wave exposes connected like and dislike controls for the current track"
     const mounted = await mountPage();
 
     assert.match(mounted.container.textContent ?? "", /Now playing/i);
+    const inlineNowPlaying = mounted.container.querySelector<HTMLElement>(
+        '[aria-labelledby="wave-now-playing-title"]',
+    );
+    assert.ok(inlineNowPlaying);
+    assert.match(inlineNowPlaying.className, /(?:^|\s)hidden(?:\s|$)/);
+    assert.match(
+        inlineNowPlaying.className,
+        /(?:^|\s)min-\[1025px\]:block(?:\s|$)/,
+    );
     assert.equal(
         mounted.container.querySelector('[data-testid="wave-now-playing"]')
             ?.textContent,
