@@ -13,6 +13,7 @@ from fastapi import HTTPException, Query
 from ytmusic_client import (
     SEARCH_MODE,
     _invalidate_ytmusic,
+    _is_issue_813_invalid_argument_error,
     _is_oauth_auth_error,
     _resolve_user_search_strategy,
     _run_public_ytmusic,
@@ -418,6 +419,12 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
                 browse_id = str(browse_endpoint.get("browseId") or "")
                 if not browse_id and not video_id:
                     browse_id = content_id
+
+                # TVHTML5 can return channels and ordinary playlists inside an
+                # album-filtered response. Only native album identities and TV
+                # OLAK album-playlist identities have a supported browse path.
+                if filter == "albums" and not browse_id.startswith(("MPRE", "VLOLAK5uy_")):
+                    return
 
                 if not video_id and browse_id and (is_album_content or is_artist_content):
                     metadata = _nested_object(r, "metadata", "lockupMetadataViewModel")
@@ -854,7 +861,8 @@ def _search_with_mode_fallback(
 ) -> tuple[JsonList, Literal["tv", "native"]]:
     """
     Execute search according to configured mode.
-    In auto mode, try native first and fall back to tv per-user on failure.
+    In auto mode, try native first and fall back to TV for the current public
+    request. Only the authenticated #813 signature pins a user's later calls.
     `use_unauth_client=True` routes search through public clients so queries do
     not use user OAuth sessions.
     """
@@ -902,7 +910,13 @@ def _search_with_mode_fallback(
             filter_,
             native_err,
         )
-        _ytmusic_auto_tv_fallback_users.add(user_id)
+        # Public catalog calls deliberately use disposable unauthenticated
+        # clients. Never let one transient provider failure pin the shared
+        # public identity to TV mode for every user and every future request.
+        # Authenticated clients retain the existing #813 workaround, but only
+        # for the specific invalid-argument signature it was designed for.
+        if not use_unauth_client and _is_issue_813_invalid_argument_error(native_err):
+            _ytmusic_auto_tv_fallback_users.add(user_id)
         if not use_unauth_client:
             _invalidate_ytmusic(user_id)
         return (
@@ -1036,7 +1050,8 @@ async def search(req: SearchRequest, user_id: str = Query(...)) -> JsonObject:
     is not touched. user_id is still used for cache segmentation and pacing.
 
     Mode behavior is controlled by YTMUSIC_SEARCH_MODE:
-      - auto (default): try native and pin user to tv fallback on failure
+      - auto (default): native first; public fallback is request-scoped and an
+        authenticated #813 failure pins only that user to TV
       - tv: force TVHTML parser path
       - native: force ytmusicapi yt.search()
     """

@@ -370,6 +370,23 @@ class TestBrowseAlbumEndpoint:
         mock_yt.get_album.assert_called_once_with("MPREb_test123")
 
     @pytest.mark.anyio
+    async def test_browse_album_resolves_tv_album_playlist_identity(
+        self, client: AsyncClient
+    ) -> None:
+        """A TV OLAK album row should resolve to its canonical MPRE identity."""
+        mock_yt = MagicMock()
+        mock_yt.get_album_browse_id.return_value = "MPREb_resolved123"
+        mock_yt.get_album.return_value = _SAMPLE_ALBUM_RESPONSE
+
+        with patch("app._get_public_ytmusic", return_value=mock_yt):
+            resp = await client.get("/browse-album/VLOLAK5uy_album123")
+
+        assert resp.status_code == 200
+        assert resp.json()["browseId"] == "MPREb_resolved123"
+        mock_yt.get_album_browse_id.assert_called_once_with("OLAK5uy_album123")
+        mock_yt.get_album.assert_called_once_with("MPREb_resolved123")
+
+    @pytest.mark.anyio
     async def test_browse_album_not_found_returns_404(self, client: AsyncClient) -> None:
         """Should return 404 when get_album raises a 'not found' exception."""
         mock_yt = MagicMock()

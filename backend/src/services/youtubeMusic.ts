@@ -355,7 +355,12 @@ export function toCatalogAlbumResultItem(
     )?.toLowerCase();
     const browseId = normalizeText(record.browseId);
     const title = normalizeText(record.title);
-    if (resultType !== "album" || !browseId || !title) {
+    if (
+        resultType !== "album" ||
+        !browseId ||
+        (!browseId.startsWith("MPRE") && !browseId.startsWith("VLOLAK5uy_")) ||
+        !title
+    ) {
         return null;
     }
 

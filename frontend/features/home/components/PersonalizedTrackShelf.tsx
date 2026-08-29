@@ -1,7 +1,24 @@
 "use client";
 
-import { useId, useMemo } from "react";
-import { Check, Download, Loader2, Music, Play, Radio } from "lucide-react";
+import {
+    useCallback,
+    useEffect,
+    useId,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
+import {
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    Download,
+    Loader2,
+    Music,
+    Play,
+    Radio,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Track } from "@/lib/audio-state-context";
@@ -103,6 +120,59 @@ export function PersonalizedTrackShelf({
     const titleId = useId();
     const { playTracks } = useAudioControls();
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+    const shelfIdentity = `${title}:${tracks.map((track) => track.id).join("|")}`;
+
+    const syncScrollControls = useCallback(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        setCanScrollLeft(container.scrollLeft > 1);
+        setCanScrollRight(
+            container.scrollLeft <
+                container.scrollWidth - container.clientWidth - 1,
+        );
+    }, []);
+
+    useLayoutEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        container.scrollLeft = 0;
+        syncScrollControls();
+    }, [shelfIdentity, syncScrollControls]);
+
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        syncScrollControls();
+        container.addEventListener("scroll", syncScrollControls, {
+            passive: true,
+        });
+        window.addEventListener("resize", syncScrollControls);
+        const resizeObserver =
+            typeof ResizeObserver === "undefined"
+                ? null
+                : new ResizeObserver(syncScrollControls);
+        resizeObserver?.observe(container);
+        return () => {
+            container.removeEventListener("scroll", syncScrollControls);
+            window.removeEventListener("resize", syncScrollControls);
+            resizeObserver?.disconnect();
+        };
+    }, [shelfIdentity, syncScrollControls]);
+
+    const scrollShelf = (direction: "left" | "right") => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        container.scrollBy({
+            left:
+                direction === "left"
+                    ? -container.clientWidth * 0.82
+                    : container.clientWidth * 0.82,
+            behavior: "smooth",
+        });
+    };
 
     if (tracks.length === 0) return null;
 
@@ -126,20 +196,50 @@ export function PersonalizedTrackShelf({
                         <p className="mt-1 text-sm text-white/55">{subtitle}</p>
                     )}
                 </div>
-                <button
-                    type="button"
-                    onClick={() => playTracks(queue, 0)}
-                    className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-black shadow-lg shadow-brand/15 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-black motion-reduce:transition-none"
-                    aria-label={`Play all ${title}`}
-                >
-                    <Radio className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Play all</span>
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                    <div className="hidden items-center gap-1 sm:flex">
+                        <button
+                            type="button"
+                            disabled={!canScrollLeft}
+                            onClick={() => scrollShelf("left")}
+                            className="grid min-h-11 min-w-11 place-items-center rounded-full border border-white/10 bg-black/30 text-white transition hover:border-white/20 hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:scroll-auto motion-reduce:transition-none"
+                            aria-label={`Scroll ${title} left`}
+                        >
+                            <ChevronLeft
+                                className="h-5 w-5"
+                                aria-hidden="true"
+                            />
+                        </button>
+                        <button
+                            type="button"
+                            disabled={!canScrollRight}
+                            onClick={() => scrollShelf("right")}
+                            className="grid min-h-11 min-w-11 place-items-center rounded-full border border-white/10 bg-black/30 text-white transition hover:border-white/20 hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:scroll-auto motion-reduce:transition-none"
+                            aria-label={`Scroll ${title} right`}
+                        >
+                            <ChevronRight
+                                className="h-5 w-5"
+                                aria-hidden="true"
+                            />
+                        </button>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => playTracks(queue, 0)}
+                        className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-black shadow-lg shadow-brand/15 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-black motion-reduce:transition-none"
+                        aria-label={`Play all ${title}`}
+                    >
+                        <Radio className="h-4 w-4" aria-hidden="true" />
+                        <span className="hidden sm:inline">Play all</span>
+                    </button>
+                </div>
             </div>
 
             <div
+                ref={scrollContainerRef}
                 role="list"
-                className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(260px,82vw)] gap-2 overflow-x-auto pb-1 sm:auto-cols-[minmax(300px,380px)]"
+                data-testid="personalized-track-shelf-scroll"
+                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col grid-rows-2 auto-cols-[minmax(260px,82vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth pb-1 sm:auto-cols-[minmax(300px,380px)] motion-reduce:scroll-auto"
             >
                 {tracks.map((track, index) => {
                     const imageUrl = trackImageUrl(track);
@@ -147,7 +247,7 @@ export function PersonalizedTrackShelf({
                         <div
                             key={`${track.id}-${index}`}
                             role="listitem"
-                            className="group flex min-h-[68px] items-center overflow-hidden rounded-xl border border-white/[0.055] bg-black/25 transition hover:border-white/15 hover:bg-white/[0.09]"
+                            className="group flex min-h-[68px] snap-start scroll-ml-0 items-center overflow-hidden rounded-xl border border-white/[0.055] bg-black/25 transition hover:border-white/15 hover:bg-white/[0.09]"
                         >
                             <button
                                 type="button"

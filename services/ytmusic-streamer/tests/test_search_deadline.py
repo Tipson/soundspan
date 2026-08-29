@@ -41,6 +41,100 @@ def test_search_budgets_finish_before_backend_abort() -> None:
     )
 
 
+def test_public_search_fallback_does_not_pin_shared_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One public provider failure must not force future users into TV mode."""
+    import app
+
+    attempts: list[str] = []
+
+    def search_once(
+        _user_id: str,
+        _query: str,
+        _filter: Any,
+        _limit: int,
+        strategy: str,
+        *,
+        use_unauth_client: bool,
+    ) -> list[dict[str, str]]:
+        assert use_unauth_client is True
+        attempts.append(strategy)
+        if strategy == "native":
+            raise RuntimeError("transient native failure")
+        return [{"videoId": "dQw4w9WgXcQ"}]
+
+    app._ytmusic_auto_tv_fallback_users.discard("__public__")
+    monkeypatch.setattr(app, "SEARCH_MODE", "auto")
+    monkeypatch.setattr(app, "_resolve_user_search_strategy", lambda _user_id: "native")
+    monkeypatch.setattr(app, "_search_once", search_once)
+
+    try:
+        results, strategy = app._search_with_mode_fallback(
+            "__public__",
+            "Linkin Park",
+            "songs",
+            20,
+            use_unauth_client=True,
+        )
+        assert results == [{"videoId": "dQw4w9WgXcQ"}]
+        assert strategy == "tv"
+        assert attempts == ["native", "tv"]
+        assert "__public__" not in app._ytmusic_auto_tv_fallback_users
+    finally:
+        app._ytmusic_auto_tv_fallback_users.discard("__public__")
+
+
+def test_authenticated_issue_813_fallback_remains_pinned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The exact authenticated #813 signature should retain its workaround."""
+    import app
+
+    class InvalidArgumentError(Exception):
+        response = type(
+            "Response",
+            (),
+            {
+                "status_code": 400,
+                "text": "Request contains an invalid argument",
+            },
+        )()
+
+    def search_once(
+        _user_id: str,
+        _query: str,
+        _filter: Any,
+        _limit: int,
+        strategy: str,
+        *,
+        use_unauth_client: bool,
+    ) -> list[dict[str, str]]:
+        assert use_unauth_client is False
+        if strategy == "native":
+            raise InvalidArgumentError()
+        return []
+
+    app._ytmusic_auto_tv_fallback_users.discard("user-813")
+    monkeypatch.setattr(app, "SEARCH_MODE", "auto")
+    monkeypatch.setattr(app, "_resolve_user_search_strategy", lambda _user_id: "native")
+    monkeypatch.setattr(app, "_search_once", search_once)
+    monkeypatch.setattr(app, "_invalidate_ytmusic", lambda _user_id: None)
+
+    try:
+        _results, strategy = app._search_with_mode_fallback(
+            "user-813",
+            "Linkin Park",
+            "songs",
+            20,
+            use_unauth_client=False,
+        )
+        assert strategy == "tv"
+        assert "user-813" in app._ytmusic_auto_tv_fallback_users
+    finally:
+        app._ytmusic_auto_tv_fallback_users.discard("user-813")
+
+
 @pytest.mark.anyio
 async def test_provider_timeout_returns_504_without_tv_fallback(
     client: AsyncClient,

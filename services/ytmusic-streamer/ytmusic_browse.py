@@ -9,7 +9,7 @@ from ytmusic_client import (
     _run_public_ytmusic_with_retry,
     _run_ytmusic_with_auth_retry,
 )
-from ytmusic_library import _format_album_response
+from ytmusic_library import get_public_album_metadata
 from ytmusic_runtime import JsonList, JsonObject, _sanitized_http_error, app, log
 from ytmusic_stream import _browse_public_bounded
 from ytmusicapi import YTMusic
@@ -263,12 +263,7 @@ async def get_radio(
 async def get_browse_album(browse_id: str) -> JsonObject:
     """Get album details from YouTube Music (unauthenticated, public browse)."""
     try:
-        album = await asyncio.to_thread(
-            _run_public_ytmusic,
-            "native",
-            lambda yt: yt.get_album(browse_id),
-        )
-        return _format_album_response(browse_id, album)
+        return await get_public_album_metadata(browse_id)
     except HTTPException:
         raise
     except Exception as e:

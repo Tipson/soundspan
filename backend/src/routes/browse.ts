@@ -800,7 +800,7 @@ router.get(
                 .join(" \u00B7 ");
 
             const result = {
-                id,
+                id: album.browseId || id,
                 title: album.title,
                 description,
                 trackCount: album.trackCount ?? album.tracks.length,

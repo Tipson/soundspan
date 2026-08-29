@@ -14,7 +14,9 @@ External song results retain Last.fm metadata and merge exact YouTube Music
 provider identities when that integration is enabled. Rows with a provider
 identity play directly; only metadata-only rows use provider fuzzy matching.
 The same global query returns browsable YouTube Music albums and artists;
-provider albums open through the existing playable album route.
+provider artist identities remain available even when a same-name local artist
+exists, and canonical native or resolvable TV album identities open through the
+existing playable album route while channels and ordinary playlists are rejected.
 The primary search surface is music-only: songs, albums, and artists. Dormant
 podcast/audiobook components remain for upstream compatibility but are not
 queried or rendered here. The dedicated Tracks view requests up to 50 results

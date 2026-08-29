@@ -584,6 +584,9 @@ async function filterLibraryArtistsFromDiscoverResults(
 
     return artists.filter(
         (artist) =>
+            (artist?.provider === "ytmusic" &&
+                typeof artist?.youtubeChannelId === "string" &&
+                artist.youtubeChannelId.trim().length > 0) ||
             !libraryArtistNames.has(normalizeDiscoverArtistName(artist?.name)),
     );
 }
@@ -933,7 +936,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         }
 
         // Cache TTL: 15 min (900s) -- external API data rarely changes
-        const cacheKey = `search:discover:v5:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
+        const cacheKey = `search:discover:v6:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {

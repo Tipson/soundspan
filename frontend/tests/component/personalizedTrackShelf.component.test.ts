@@ -22,6 +22,8 @@ mock.module("lucide-react", {
         Music: Icon,
         Play: Icon,
         Radio: Icon,
+        ChevronLeft: Icon,
+        ChevronRight: Icon,
     },
 });
 
@@ -144,6 +146,16 @@ test("personalized shelf plays the complete provider queue from the selected tra
     assert.match(container.textContent ?? "", /Alpha/);
     assert.match(container.textContent ?? "", /Artist B/);
     assert.match(container.innerHTML, /YT/);
+    const scrollContainer = container.querySelector(
+        '[data-testid="personalized-track-shelf-scroll"]',
+    );
+    assert.ok(scrollContainer, "scroll container not found");
+    assert.match(scrollContainer.className, /scrollbar-hide/);
+    assert.match(scrollContainer.className, /snap-x/);
+    assert.match(
+        scrollContainer.firstElementChild?.className ?? "",
+        /snap-start/,
+    );
 
     const beta = container.querySelector(
         'button[aria-label="Play Beta by Artist B"]',

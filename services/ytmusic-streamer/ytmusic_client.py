@@ -101,7 +101,7 @@ def _resolve_user_search_strategy(user_id: str) -> Literal["tv", "native"]:
     Resolve the active search strategy for a user.
     - tv:     always use TVHTML parser path
     - native: always use ytmusicapi yt.search()
-    - auto:   start native; pin user to tv after native failure
+    - auto:   start native; authenticated #813 failures pin that user to tv
     """
     if SEARCH_MODE == "tv":
         return "tv"

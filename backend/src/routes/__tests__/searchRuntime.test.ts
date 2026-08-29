@@ -636,7 +636,7 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:v5:yt1:lf1:all:rh:50",
+            "search:discover:v6:yt1:lf1:all:rh:50",
             900,
             expect.any(String),
         );
@@ -844,7 +844,7 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:v5:yt1:lf0:music:linkin park:20",
+            "search:discover:v6:yt1:lf0:music:linkin park:20",
             900,
             expect.any(String),
         );
@@ -1087,7 +1087,7 @@ describe("search route runtime behavior", () => {
         ]);
     });
 
-    it("filters YouTube Music artists already present under a normalized local name", async () => {
+    it("retains a YouTube Music artist identity when a local artist has the same normalized name", async () => {
         mockArtistFindMany.mockResolvedValueOnce([
             { name: "Björk", normalizedName: "bjork" },
         ]);
@@ -1136,7 +1136,16 @@ describe("search route runtime behavior", () => {
             res.body.results.filter(
                 (result: { type: string }) => result.type === "music",
             ),
-        ).toEqual([]);
+        ).toEqual([
+            {
+                type: "music",
+                id: "UCbjork",
+                name: "Bjork",
+                image: "https://img/bjork.jpg",
+                provider: "ytmusic",
+                youtubeChannelId: "UCbjork",
+            },
+        ]);
     });
 
     it("returns ready metadata when a YouTube Music source exceeds the discovery deadline", async () => {
@@ -1256,7 +1265,7 @@ describe("search route runtime behavior", () => {
         expect(res.statusCode).toBe(200);
         expect(mockYtMusicSearch).not.toHaveBeenCalled();
         expect(mockRedisGet).toHaveBeenCalledWith(
-            "search:discover:v5:yt0:lf0:music:radiohead:5",
+            "search:discover:v6:yt0:lf0:music:radiohead:5",
         );
         expect(res.body.results).toEqual([]);
     });

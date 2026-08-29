@@ -291,6 +291,24 @@ describe("youtubeMusic service", () => {
                             title: "Missing browse identity",
                         },
                         {
+                            type: "album",
+                            browseId: "UCnot-an-album",
+                            title: "Artist channel mislabeled as an album",
+                            artist: "Not an album",
+                        },
+                        {
+                            type: "album",
+                            browseId: "VLPLnot-an-album",
+                            title: "Playlist mislabeled as an album",
+                            artist: "Uploader",
+                        },
+                        {
+                            type: "album",
+                            browseId: "VLOLAK5uy_album-2",
+                            title: "Blue Lines",
+                            artist: "Massive Attack",
+                        },
+                        {
                             type: "artist",
                             browseId: "UCnot-an-album",
                             title: "Not an album",
@@ -353,6 +371,18 @@ describe("youtubeMusic service", () => {
                     thumbnailUrl: "https://img/album.jpg",
                     raw: expect.objectContaining({
                         browseId: "MPREb_album-1",
+                    }),
+                },
+                {
+                    mediaType: "album",
+                    provider: "ytmusic",
+                    browseId: "VLOLAK5uy_album-2",
+                    title: "Blue Lines",
+                    artistName: "Massive Attack",
+                    year: null,
+                    thumbnailUrl: null,
+                    raw: expect.objectContaining({
+                        browseId: "VLOLAK5uy_album-2",
                     }),
                 },
             ],

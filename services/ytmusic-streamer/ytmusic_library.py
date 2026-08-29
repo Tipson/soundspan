@@ -14,6 +14,7 @@ from ytmusic_client import (
 )
 from ytmusic_runtime import JsonObject, _sanitized_http_error, app, log
 from ytmusic_stream import BROWSE_TIMEOUT, _browse_public_bounded, _validate_video_id
+from ytmusicapi import YTMusic
 from ytmusicapi.exceptions import YTMusicServerError
 
 from services.common.sidecar_runtime_utils import env_int
@@ -410,14 +411,27 @@ def _format_album_response(browse_id: str, album: JsonObject) -> JsonObject:
     }
 
 
+def _get_album_with_resolved_browse_id(yt: YTMusic, browse_id: str) -> tuple[str, JsonObject]:
+    """Resolve a TV album-playlist identity before using native album browse."""
+    resolved_browse_id = browse_id.strip()
+    if resolved_browse_id.startswith("VLOLAK5uy_"):
+        resolved = yt.get_album_browse_id(resolved_browse_id[2:])
+        if not isinstance(resolved, str) or not resolved.startswith("MPRE"):
+            raise ValueError("Unable to find canonical album browse identity")
+        resolved_browse_id = resolved
+
+    album = yt.get_album(resolved_browse_id)
+    return resolved_browse_id, album
+
+
 async def get_public_album_metadata(browse_id: str) -> JsonObject:
     """Fetch and normalize an album through the public browse client."""
-    album = await _browse_public_bounded(
+    resolved_browse_id, album = await _browse_public_bounded(
         _run_public_ytmusic,
         "native",
-        lambda yt: yt.get_album(browse_id),
+        lambda yt: _get_album_with_resolved_browse_id(yt, browse_id),
     )
-    return _format_album_response(browse_id, album)
+    return _format_album_response(resolved_browse_id, album)
 
 
 @app.get("/album/{browse_id}")
@@ -429,13 +443,13 @@ async def get_album(browse_id: str, user_id: str = Query(...)) -> JsonObject:
     try:
         if user_id == "__public__":
             return await get_public_album_metadata(browse_id)
-        album = await asyncio.to_thread(
+        resolved_browse_id, album = await asyncio.to_thread(
             _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_album({browse_id})",
-            func=lambda yt: yt.get_album(browse_id),
+            func=lambda yt: _get_album_with_resolved_browse_id(yt, browse_id),
         )
-        return _format_album_response(browse_id, album)
+        return _format_album_response(resolved_browse_id, album)
     except HTTPException:
         raise
     except Exception as e:

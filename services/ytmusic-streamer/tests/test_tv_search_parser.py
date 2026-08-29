@@ -273,6 +273,42 @@ def test_tv_search_preserves_browsable_album_and_artist_lockups() -> None:
             ]
         }
     )
+    ambiguous_channel_yt = _FakeYTMusic(
+        {
+            "contents": [
+                browse_lockup(
+                    "LOCKUP_CONTENT_TYPE_CHANNEL",
+                    "UClinkinpark",
+                    "Linkin Park",
+                    [],
+                )
+            ]
+        }
+    )
+    tv_album_yt = _FakeYTMusic(
+        {
+            "contents": [
+                browse_lockup(
+                    "LOCKUP_CONTENT_TYPE_ALBUM",
+                    "VLOLAK5uy_album-1",
+                    "Hybrid Theory",
+                    ["Linkin Park", "2000"],
+                )
+            ]
+        }
+    )
+    playlist_mislabeled_as_album_yt = _FakeYTMusic(
+        {
+            "contents": [
+                browse_lockup(
+                    "LOCKUP_CONTENT_TYPE_CONTENT",
+                    "VLPLnot-an-album",
+                    "Full album playlist",
+                    ["Uploader"],
+                )
+            ]
+        }
+    )
 
     assert app._tv_search(album_yt, "Linkin Park Numb", filter="albums", limit=20) == [
         {
@@ -298,3 +334,53 @@ def test_tv_search_preserves_browsable_album_and_artist_lockups() -> None:
     ]
     assert app._tv_search(artist_yt, "Linkin Park Numb", filter="albums", limit=20) == []
     assert app._tv_search(album_yt, "Linkin Park Numb", filter="artists", limit=20) == []
+    assert app._tv_search(
+        tv_album_yt,
+        "Linkin Park Numb",
+        filter="albums",
+        limit=20,
+    ) == [
+        {
+            "type": "album",
+            "browseId": "VLOLAK5uy_album-1",
+            "title": "Hybrid Theory",
+            "artist": "Linkin Park",
+            "artists": ["Linkin Park"],
+            "year": "2000",
+            "thumbnails": [{"url": "https://img/VLOLAK5uy_album-1.jpg"}],
+            "isExplicit": False,
+        }
+    ]
+    assert (
+        app._tv_search(
+            playlist_mislabeled_as_album_yt,
+            "Linkin Park Numb",
+            filter="albums",
+            limit=20,
+        )
+        == []
+    )
+    assert (
+        app._tv_search(
+            ambiguous_channel_yt,
+            "Linkin Park Numb",
+            filter="albums",
+            limit=20,
+        )
+        == []
+    )
+    assert app._tv_search(
+        ambiguous_channel_yt,
+        "Linkin Park Numb",
+        filter="artists",
+        limit=20,
+    ) == [
+        {
+            "type": "artist",
+            "browseId": "UClinkinpark",
+            "channelId": "UClinkinpark",
+            "title": "Linkin Park",
+            "artist": "Linkin Park",
+            "thumbnails": [{"url": "https://img/UClinkinpark.jpg"}],
+        }
+    ]
