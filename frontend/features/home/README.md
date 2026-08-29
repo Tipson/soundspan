@@ -38,7 +38,9 @@ Start-here guide for `frontend/features/home`.
 ## Playback Behavior
 
 - Home starts with a balanced My Wave queue built from Quick picks, discovery,
-  and Listen again, then marks the queue for automatic provider continuation.
+  and Listen again, resets its direction to For you, then marks the queue for
+  automatic provider continuation. The launch surface describes the continuous
+  flow without exposing the finite seed-window size as a track limit.
 - The primary mobile navigation links directly to Vibe so the endless personal
   radio stays one tap away; podcasts and audiobooks are not promoted on Home or
   in the primary music navigation.
@@ -52,7 +54,9 @@ Start-here guide for `frontend/features/home`.
   Music queue.
 - Vibe exposes For you, New, and Familiar modes. Each mode is sent to the
   personalized endpoint and therefore changes server-side ranking rather than
-  only relabeling the same browser-side list.
+  only relabeling the same browser-side list. Vibe deliberately keeps the
+  player, direction controls, and feedback in one focused radio surface instead
+  of repeating Home's horizontally scrolling preview shelves.
 - When that queue reaches its final item with repeat disabled, the player asks
   the personalized home feed for unseen continuation tracks, sends a bounded
   tail of the existing queue as exclusions, and rotates across later play,

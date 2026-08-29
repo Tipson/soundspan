@@ -1,18 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import Link from "next/link";
-import {
-    Heart,
-    History,
-    ListMusic,
-    Loader2,
-    Play,
-    RotateCcw,
-    SkipForward,
-    ThumbsDown,
-} from "lucide-react";
-import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
+import { Loader2, Play, RotateCcw, SkipForward } from "lucide-react";
 import {
     type PersonalizedHomeMode,
     usePersonalizedHomeFeed,
@@ -48,14 +37,6 @@ const WAVE_MODES: readonly WaveModeDefinition[] = [
         subtitle: "Music you return to and quick picks you know",
     },
 ];
-
-const WAVE_SIGNALS = [
-    { label: "Likes", icon: Heart },
-    { label: "Dislikes", icon: ThumbsDown },
-    { label: "Skips", icon: SkipForward },
-    { label: "Listening", icon: History },
-    { label: "Playlists", icon: ListMusic },
-] as const;
 
 function uniqueTracks(tracks: readonly PersonalizedTrack[]) {
     const seen = new Set<string>();
@@ -163,93 +144,32 @@ export function VibeProviderFallback() {
 
     return (
         <main className="relative min-h-screen overflow-hidden bg-surface px-4 pb-28 pt-5 sm:px-6 sm:pt-7">
-            <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
-                <section className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-surface-raised px-5 py-7 shadow-2xl shadow-black/30 sm:px-8 sm:py-9">
-                    <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-12">
-                        <div className="max-w-2xl">
-                            <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-light">
-                                Your personal radio
-                            </p>
-                            <h1 className="mt-3 text-4xl font-black tracking-[-0.045em] text-white sm:text-5xl">
-                                My Wave
-                            </h1>
-                            <p className="mt-4 max-w-xl text-base leading-7 text-content-secondary">
-                                Your likes, dislikes, listening history, and
-                                playlists steer what comes next. Every choice
-                                reshapes the flow while you listen.
-                            </p>
+            <div className="mx-auto max-w-5xl">
+                <section className="relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-surface-raised shadow-2xl shadow-black/30">
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-brand/20 blur-3xl"
+                    />
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -bottom-40 -right-28 h-96 w-96 rounded-full bg-ai/15 blur-3xl"
+                    />
 
-                            <ul
-                                aria-label="Signals that tune My Wave"
-                                className="mt-6 grid max-w-xl grid-cols-2 gap-2 sm:grid-cols-5"
-                            >
-                                {WAVE_SIGNALS.map((signal) => {
-                                    const SignalIcon = signal.icon;
-                                    return (
-                                        <li
-                                            key={signal.label}
-                                            className="flex items-center gap-2 rounded-full border border-white/8 bg-black/25 px-3 py-2 text-xs font-semibold text-content-body"
-                                        >
-                                            <SignalIcon
-                                                className="h-3.5 w-3.5 shrink-0 text-brand-hover"
-                                                aria-hidden="true"
-                                            />
-                                            {signal.label}
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        </div>
+                    <div className="relative flex min-h-[34rem] flex-col items-center justify-center px-5 py-10 text-center sm:min-h-[40rem] sm:px-10 sm:py-14">
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-light">
+                            Endless personal radio
+                        </p>
+                        <h1 className="mt-3 text-5xl font-black tracking-[-0.055em] text-white sm:text-7xl">
+                            My Wave
+                        </h1>
+                        <p className="mt-4 max-w-xl text-sm leading-6 text-content-secondary sm:text-base sm:leading-7">
+                            Your likes, dislikes, and skips tune what comes
+                            next. Listening and playlists help the Wave learn
+                            your taste over time.
+                        </p>
 
-                        <div className="relative mx-auto grid aspect-square w-[min(78vw,19rem)] place-items-center lg:mx-0">
-                            <span
-                                aria-hidden="true"
-                                className="absolute inset-0 rounded-full border border-brand/15"
-                            />
-                            <span
-                                aria-hidden="true"
-                                className="absolute inset-[12%] rounded-full border border-ai/30 shadow-2xl shadow-ai/20 motion-safe:animate-pulse"
-                            />
-                            <span
-                                aria-hidden="true"
-                                className="absolute inset-[25%] rounded-full border border-cyan-300/25"
-                            />
-                            <button
-                                type="button"
-                                onClick={startWave}
-                                disabled={!canPlay}
-                                className="relative z-10 flex h-32 w-32 flex-col items-center justify-center gap-2 rounded-full bg-brand px-4 text-center text-sm font-black text-black shadow-2xl shadow-brand/25 transition duration-200 hover:scale-[1.03] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none sm:h-36 sm:w-36"
-                                aria-label="Play My Wave"
-                            >
-                                <Play
-                                    className="h-7 w-7 fill-current"
-                                    aria-hidden="true"
-                                />
-                                <span>Play My Wave</span>
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
-                <section
-                    aria-labelledby="wave-mode-title"
-                    className="rounded-2xl border border-white/8 bg-surface-sunken p-3 sm:p-4"
-                >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="px-1">
-                            <h2
-                                id="wave-mode-title"
-                                className="text-sm font-bold text-white"
-                            >
-                                Tune the flow
-                            </h2>
-                            <p className="mt-0.5 text-xs text-content-muted">
-                                Choose a direction, then start or restart your
-                                Wave.
-                            </p>
-                        </div>
                         <div
-                            className="grid grid-cols-3 gap-1 rounded-xl bg-black/35 p-1"
+                            className="mt-7 grid w-full max-w-lg grid-cols-3 gap-1 rounded-2xl border border-white/8 bg-black/30 p-1.5"
                             aria-label="My Wave modes"
                         >
                             {WAVE_MODES.map((mode) => {
@@ -263,11 +183,11 @@ export function VibeProviderFallback() {
                                             setWaveMode(mode.id);
                                         }}
                                         aria-pressed={isActive}
-                                        aria-controls="wave-track-shelf"
-                                        className={`min-h-11 rounded-lg px-3 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:text-sm ${
+                                        aria-controls="wave-start"
+                                        className={`min-h-11 rounded-xl px-2 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:px-4 sm:text-sm ${
                                             isActive
-                                                ? "bg-brand text-black shadow-md shadow-brand/15"
-                                                : "text-content-secondary hover:bg-white/7 hover:text-white"
+                                                ? "bg-white text-black shadow-lg"
+                                                : "text-content-secondary hover:bg-white/8 hover:text-white"
                                         }`}
                                     >
                                         {mode.label}
@@ -275,118 +195,120 @@ export function VibeProviderFallback() {
                                 );
                             })}
                         </div>
-                    </div>
-                </section>
+                        <p className="mt-3 min-h-5 text-xs text-content-muted sm:text-sm">
+                            {activeModeDefinition.subtitle}
+                        </p>
 
-                {currentTrack && (
-                    <section
-                        aria-labelledby="wave-feedback-title"
-                        className="flex flex-col gap-4 rounded-2xl border border-brand/15 bg-brand/[0.055] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
-                    >
-                        <div className="max-w-md">
-                            <h2
-                                id="wave-feedback-title"
-                                className="text-sm font-bold text-white"
-                            >
-                                Shape the next tracks
-                            </h2>
-                            <p className="mt-1 text-xs leading-5 text-content-muted">
-                                Like keeps this direction in your Wave. Dislike
-                                skips this track now and prevents the same track
-                                from returning in future picks.
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                            <NowPlayingConnected
-                                track={currentTrack}
-                                onMapPresent={false}
-                                moodColor={null}
-                                onFlyTo={() => undefined}
+                        <div className="relative mt-7 grid aspect-square w-44 place-items-center sm:w-52">
+                            <span
+                                aria-hidden="true"
+                                className="absolute inset-0 rounded-full border border-brand/15 bg-brand/5"
+                            />
+                            <span
+                                aria-hidden="true"
+                                className="absolute inset-[12%] rounded-full border border-ai/25 motion-safe:animate-pulse"
                             />
                             <button
+                                id="wave-start"
                                 type="button"
-                                onClick={() => advanceQueue("manual")}
-                                aria-label="Skip current track"
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-surface-raised px-4 py-2 text-sm font-semibold text-content-body transition-colors hover:border-brand/35 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                onClick={startWave}
+                                disabled={!canPlay}
+                                className="relative z-10 flex h-32 w-32 flex-col items-center justify-center gap-2 rounded-full bg-brand px-4 text-center text-sm font-black text-black shadow-2xl shadow-brand/25 transition duration-200 hover:scale-[1.03] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none sm:h-36 sm:w-36"
+                                aria-label="Play My Wave"
                             >
-                                <SkipForward
-                                    className="h-4 w-4"
-                                    aria-hidden="true"
-                                />
-                                Skip
-                            </button>
-                        </div>
-                    </section>
-                )}
-
-                <div id="wave-track-shelf" aria-live="polite">
-                    {isLoading ? (
-                        <div
-                            className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-white/8 bg-surface-raised"
-                            aria-label="Tuning My Wave"
-                        >
-                            <Loader2 className="h-6 w-6 animate-spin text-brand-hover motion-reduce:animate-none" />
-                            <p className="text-sm text-content-muted">
-                                Tuning your next tracks…
-                            </p>
-                        </div>
-                    ) : tracks.length > 0 ? (
-                        <PersonalizedTrackShelf
-                            title={activeModeDefinition.label}
-                            subtitle={activeModeDefinition.subtitle}
-                            tracks={tracks}
-                        />
-                    ) : (
-                        <section className="rounded-2xl border border-white/8 bg-surface-raised p-6 sm:p-8">
-                            <h2 className="text-lg font-bold text-white">
-                                {isError
-                                    ? "Your Wave is taking a moment"
-                                    : activeMode === "new"
-                                      ? "No discoveries queued yet"
-                                      : activeMode === "familiar"
-                                        ? "Nothing familiar yet"
-                                        : "Start shaping your Wave"}
-                            </h2>
-                            <p className="mt-2 max-w-xl text-sm leading-6 text-content-muted">
-                                {isError
-                                    ? "Recommendations could not load. Check your connection and try again."
-                                    : "Play a few songs, use like and dislike, or add a playlist. Your next Wave will have more to work with."}
-                            </p>
-                            {isError && (
-                                <button
-                                    type="button"
-                                    onClick={() => void refetch()}
-                                    aria-label="Retry My Wave recommendations"
-                                    className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-brand/35 px-4 py-2 text-sm font-semibold text-brand-light transition-colors hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                                >
-                                    <RotateCcw
-                                        className="h-4 w-4"
+                                {isLoading ? (
+                                    <Loader2
+                                        className="h-7 w-7 animate-spin motion-reduce:animate-none"
                                         aria-hidden="true"
                                     />
-                                    Retry
-                                </button>
-                            )}
+                                ) : (
+                                    <Play
+                                        className="h-7 w-7 fill-current"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                <span>
+                                    {isLoading
+                                        ? "Tuning My Wave"
+                                        : "Play My Wave"}
+                                </span>
+                            </button>
+                        </div>
+                        <p className="mt-5 text-xs font-medium text-content-muted sm:text-sm">
+                            It keeps playing — fresh tracks are added
+                            automatically while you listen.
+                        </p>
+
+                        {!isLoading && tracks.length === 0 && (
+                            <div
+                                className="mt-6 max-w-xl rounded-2xl border border-white/8 bg-black/25 px-5 py-4 text-sm text-content-secondary"
+                                role={isError ? "alert" : "status"}
+                            >
+                                <p>
+                                    {isError
+                                        ? "Recommendations could not load. Check your connection and try again."
+                                        : "Play a few songs, use like and dislike, or add a playlist so My Wave has more to work with."}
+                                </p>
+                                {isError && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void refetch()}
+                                        aria-label="Retry My Wave recommendations"
+                                        className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-brand/35 px-4 py-2 text-sm font-semibold text-brand-light transition-colors hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    >
+                                        <RotateCcw
+                                            className="h-4 w-4"
+                                            aria-hidden="true"
+                                        />
+                                        Retry
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {currentTrack && (
+                        <section
+                            aria-labelledby="wave-now-playing-title"
+                            className="relative border-t border-white/8 bg-black/20 px-4 py-4 backdrop-blur sm:px-6"
+                        >
+                            <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                    <h2
+                                        id="wave-now-playing-title"
+                                        className="text-xs font-bold uppercase tracking-[0.16em] text-brand-light"
+                                    >
+                                        Now playing
+                                    </h2>
+                                    <p className="mt-1 text-xs text-content-muted">
+                                        Like, dislike, or skip — the next picks
+                                        adapt to your choice.
+                                    </p>
+                                </div>
+                                <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+                                    <NowPlayingConnected
+                                        track={currentTrack}
+                                        onMapPresent={false}
+                                        moodColor={null}
+                                        onFlyTo={() => undefined}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => advanceQueue("manual")}
+                                        aria-label="Skip current track"
+                                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-surface-raised px-4 py-2 text-sm font-semibold text-content-body transition-colors hover:border-brand/35 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    >
+                                        <SkipForward
+                                            className="h-4 w-4"
+                                            aria-hidden="true"
+                                        />
+                                        Skip
+                                    </button>
+                                </div>
+                            </div>
                         </section>
                     )}
-                </div>
-
-                <nav
-                    className="flex flex-wrap gap-2 pt-1"
-                    aria-label="Music shortcuts"
-                >
-                    <Link
-                        href="/"
-                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-surface-raised px-5 py-2 text-sm font-semibold text-content-body transition hover:border-brand/40 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                    >
-                        Home
-                    </Link>
-                    <Link
-                        href="/search"
-                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-surface-raised px-5 py-2 text-sm font-semibold text-content-body transition hover:border-brand/40 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                    >
-                        Search music
-                    </Link>
-                </nav>
+                </section>
             </div>
         </main>
     );

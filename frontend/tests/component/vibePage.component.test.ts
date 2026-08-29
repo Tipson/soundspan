@@ -328,16 +328,13 @@ test("Vibe replaces an unusable analysis surface with a plain-language My Wave l
     assert.match(mounted.container.textContent ?? "", /My Wave/);
     assert.match(
         mounted.container.textContent ?? "",
-        /likes, dislikes, listening history, and playlists/i,
+        /likes, dislikes, and skips/i,
     );
-    assert.match(mounted.container.textContent ?? "", /Skips/);
+    assert.match(mounted.container.textContent ?? "", /keeps playing/i);
+    assert.doesNotMatch(mounted.container.textContent ?? "", /tracks ready/i);
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
         /provider|audio[- ]dna|local(?:ly)? (?:files|stored|analyzed)/i,
-    );
-    assert.match(
-        mounted.container.textContent ?? "",
-        /For you:Quick Pick,Discovery Track,Familiar Track,Shared Pick/,
     );
     assert.equal(state.personalizedEnabled, true);
     assert.equal(findButton(mounted.container, "Map"), null);
@@ -357,7 +354,7 @@ test("My Wave remains the primary Vibe page when local audio analysis is disable
     assert.match(mounted.container.textContent ?? "", /My Wave/);
     assert.match(
         mounted.container.textContent ?? "",
-        /likes, dislikes, listening history, and playlists/i,
+        /likes, dislikes, and skips/i,
     );
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
@@ -368,7 +365,7 @@ test("My Wave remains the primary Vibe page when local audio analysis is disable
     await unmountPage(mounted);
 });
 
-test("My Wave mode buttons switch the real shelf and the hero plays the active selection", async () => {
+test("My Wave mode buttons switch the ranked direction and play its active selection", async () => {
     const mounted = await mountPage();
     const newToMe = findButton(mounted.container, "New to me");
     const familiar = findButton(mounted.container, "Familiar");
@@ -380,21 +377,9 @@ test("My Wave mode buttons switch the real shelf and the hero plays the active s
     await React.act(async () => newToMe.click());
     assert.equal(newToMe.getAttribute("aria-pressed"), "true");
     assert.equal(state.personalizedMode, "new");
-    assert.match(
-        mounted.container.textContent ?? "",
-        /New to me:Discovery Track,Shared Pick/,
-    );
-    assert.doesNotMatch(
-        mounted.container.textContent ?? "",
-        /New to me:.*Familiar Track/,
-    );
 
     await React.act(async () => familiar.click());
     assert.equal(state.personalizedMode, "familiar");
-    assert.match(
-        mounted.container.textContent ?? "",
-        /Familiar:Familiar Track/,
-    );
 
     const playWave = findButton(mounted.container, "Play My Wave");
     assert.ok(playWave);
@@ -412,7 +397,7 @@ test("My Wave exposes connected like and dislike controls for the current track"
     state.currentTrack = { id: "yt:playing-1", title: "Playing Track" };
     const mounted = await mountPage();
 
-    assert.match(mounted.container.textContent ?? "", /Shape the next tracks/i);
+    assert.match(mounted.container.textContent ?? "", /Now playing/i);
     assert.equal(
         mounted.container.querySelector('[data-testid="wave-now-playing"]')
             ?.textContent,
@@ -433,10 +418,10 @@ test("Familiar mode falls back to quick picks when listening history is empty", 
 
     assert.ok(familiar);
     await React.act(async () => familiar.click());
-    assert.match(
-        mounted.container.textContent ?? "",
-        /Familiar:Quick Pick,Shared Pick/,
-    );
+    const playWave = findButton(mounted.container, "Play My Wave");
+    assert.ok(playWave);
+    await React.act(async () => playWave.click());
+    assert.deepEqual(state.playedTrackIds, ["yt:radio-1", "yt:shared-1"]);
 
     await unmountPage(mounted);
 });
@@ -446,10 +431,7 @@ test("Vibe still offers My Wave when the unrelated local-track list fails", asyn
     state.tracksFail = true;
     const mounted = await mountPage();
 
-    assert.match(
-        mounted.container.textContent ?? "",
-        /For you:Quick Pick,Discovery Track,Familiar Track,Shared Pick/,
-    );
+    assert.ok(findButton(mounted.container, "Play My Wave"));
     assert.equal(state.personalizedEnabled, true);
 
     await unmountPage(mounted);
@@ -460,11 +442,8 @@ test("Vibe falls back to My Wave when analysis status is unavailable", async () 
     const mounted = await mountPage();
 
     assert.match(mounted.container.textContent ?? "", /My Wave/);
-    assert.match(mounted.container.textContent ?? "", /listening history/i);
-    assert.match(
-        mounted.container.textContent ?? "",
-        /For you:Quick Pick,Discovery Track,Familiar Track,Shared Pick/,
-    );
+    assert.match(mounted.container.textContent ?? "", /listening/i);
+    assert.ok(findButton(mounted.container, "Play My Wave"));
     assert.equal(state.personalizedEnabled, true);
 
     await unmountPage(mounted);
@@ -480,9 +459,7 @@ for (const embeddedTracks of [2, 4, 5]) {
             mounted.container.textContent ?? "",
             /Audio DNA|locally analyzed files|audio fingerprints/,
         );
-        assert.ok(
-            mounted.container.querySelector('[data-testid="provider-radio"]'),
-        );
+        assert.ok(findButton(mounted.container, "Play My Wave"));
         assert.equal(state.personalizedEnabled, true);
         assert.equal(findButton(mounted.container, "Map"), null);
         assert.equal(

@@ -15,6 +15,7 @@ const calls = {
     vibeMode: [] as unknown[],
     vibeQueueIds: [] as unknown[][],
     vibeSourceFeatures: [] as unknown[],
+    waveMode: [] as unknown[],
 };
 
 const Icon = () => React.createElement("i");
@@ -43,6 +44,7 @@ mock.module("@/lib/audio-state-context", {
                 calls.vibeQueueIds.push(value),
             setVibeSourceFeatures: (value: unknown) =>
                 calls.vibeSourceFeatures.push(value),
+            setWaveMode: (value: unknown) => calls.waveMode.push(value),
         }),
     },
 });
@@ -74,6 +76,7 @@ beforeEach(() => {
     calls.vibeMode.length = 0;
     calls.vibeQueueIds.length = 0;
     calls.vibeSourceFeatures.length = 0;
+    calls.waveMode.length = 0;
 });
 
 afterEach(() => {
@@ -124,6 +127,9 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.deepEqual(calls.vibeMode, [true]);
     assert.deepEqual(calls.vibeSourceFeatures, [null]);
     assert.deepEqual(calls.vibeQueueIds, [["quick", "fresh", "again"]]);
+    assert.deepEqual(calls.waveMode, ["for-you"]);
+    assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
+    assert.match(container.textContent ?? "", /keeps playing/i);
 
     await act(async () => root.unmount());
 });

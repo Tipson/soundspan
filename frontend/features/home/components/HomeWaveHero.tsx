@@ -52,7 +52,7 @@ export function HomeWaveHero({
     isLoading,
 }: HomeWaveHeroProps) {
     const { playTracks } = useAudioControls();
-    const { setVibeMode, setVibeQueueIds, setVibeSourceFeatures } =
+    const { setVibeMode, setVibeQueueIds, setVibeSourceFeatures, setWaveMode } =
         useAudioState();
     const tracks = useMemo(
         () => balancedUniqueTracks(personalizedFeed?.shelves),
@@ -63,6 +63,7 @@ export function HomeWaveHero({
 
     const startWave = useCallback(() => {
         if (queue.length === 0) return;
+        setWaveMode("for-you");
         playTracks(queue, 0, true);
         setVibeMode(true);
         setVibeSourceFeatures(null);
@@ -73,6 +74,7 @@ export function HomeWaveHero({
         setVibeMode,
         setVibeQueueIds,
         setVibeSourceFeatures,
+        setWaveMode,
     ]);
 
     const playLabel = isLoading
@@ -102,13 +104,13 @@ export function HomeWaveHero({
                     </h1>
                     <p className="mt-4 max-w-2xl text-sm leading-6 text-content-secondary sm:text-lg sm:leading-7">
                         <span className="sm:hidden">
-                            Familiar favorites, fresh finds, and an endless next
-                            track.
+                            Familiar favorites, fresh finds, and music that
+                            keeps playing.
                         </span>
                         <span className="hidden sm:inline">
                             My Wave blends familiar favorites with fresh finds
-                            and keeps the next track ready without making you
-                            build a queue.
+                            and keeps playing without making you build or manage
+                            a queue.
                         </span>
                     </p>
                 </div>
@@ -160,11 +162,6 @@ export function HomeWaveHero({
                             aria-hidden="true"
                         />
                         <span>{playLabel}</span>
-                        {canPlay && (
-                            <span className="text-[10px] font-semibold opacity-70 sm:text-[11px]">
-                                {queue.length} tracks ready
-                            </span>
-                        )}
                     </button>
                 </div>
             </div>
