@@ -8,7 +8,6 @@ import { cn } from "@/utils/cn";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useAudioState } from "@/lib/audio-state-context";
-import { useActiveListenSessions } from "@/hooks/useActiveListenSessions";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useToast } from "@/lib/toast-context";
 import { EqBars } from "@/components/ui/EqBars";
@@ -52,7 +51,9 @@ export function Sidebar() {
     const { toast } = useToast();
     const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
         useAudioState();
-    const hasActiveSessions = useActiveListenSessions();
+    // Listen Together is intentionally outside primary navigation, so the
+    // sidebar must not start its optional polling loop.
+    const hasActiveSessions = false;
     const likedQuery = useLikedPlaylistQuery(1);
     const likedTotal = likedQuery.data?.total ?? 0;
     const { federation } = useFeatures();

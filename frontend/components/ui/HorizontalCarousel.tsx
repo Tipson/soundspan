@@ -11,6 +11,7 @@ interface HorizontalCarouselProps {
     itemClassName?: string;
     showArrows?: boolean;
     gap?: "sm" | "md" | "lg";
+    "aria-label"?: string;
 }
 
 /**
@@ -22,6 +23,7 @@ export function HorizontalCarousel({
     itemClassName: _itemClassName,
     showArrows = true,
     gap = "md",
+    "aria-label": ariaLabel,
 }: HorizontalCarouselProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -76,12 +78,13 @@ export function HorizontalCarousel({
             {/* Left arrow */}
             {showArrows && !isMobileOrTablet && canScrollLeft && (
                 <button
+                    type="button"
                     onClick={() => scroll("left")}
                     className={cn(
                         "absolute left-0 top-1/2 -translate-y-1/2 z-10",
-                        "w-10 h-10 rounded-full bg-black/80 ",
+                        "h-11 w-11 rounded-full bg-black/80 ",
                         "flex items-center justify-center",
-                        "opacity-0 group-hover/carousel:opacity-100 transition-opacity",
+                        "opacity-0 transition-opacity group-hover/carousel:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none",
                         "hover:bg-black hover:scale-105 transition-all",
                         "border border-white/10 shadow-lg",
                         "-translate-x-1/2",
@@ -95,8 +98,9 @@ export function HorizontalCarousel({
             {/* Scrollable container */}
             <div
                 ref={scrollRef}
+                aria-label={ariaLabel}
                 className={cn(
-                    "flex overflow-x-auto scrollbar-hide scroll-smooth",
+                    "flex touch-pan-x overflow-x-auto overscroll-x-contain scrollbar-hide scroll-smooth motion-reduce:scroll-auto",
                     "snap-x snap-mandatory",
                     gapClass,
                     // Padding for edge items
@@ -109,12 +113,13 @@ export function HorizontalCarousel({
             {/* Right arrow */}
             {showArrows && !isMobileOrTablet && canScrollRight && (
                 <button
+                    type="button"
                     onClick={() => scroll("right")}
                     className={cn(
                         "absolute right-0 top-1/2 -translate-y-1/2 z-10",
-                        "w-10 h-10 rounded-full bg-black/80 ",
+                        "h-11 w-11 rounded-full bg-black/80 ",
                         "flex items-center justify-center",
-                        "opacity-0 group-hover/carousel:opacity-100 transition-opacity",
+                        "opacity-0 transition-opacity group-hover/carousel:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none",
                         "hover:bg-black hover:scale-105 transition-all",
                         "border border-white/10 shadow-lg",
                         "translate-x-1/2",

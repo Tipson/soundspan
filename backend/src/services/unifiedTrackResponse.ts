@@ -3,6 +3,8 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 
+const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
 /**
  * Canonical normalized track contract used across local and remote sources.
  */
@@ -121,6 +123,15 @@ export interface UnifiedPlaylistTrackItemResponse {
         message: string | null;
     };
     track: Record<string, unknown> | null;
+}
+
+function resolveYtMusicCoverArt(
+    thumbnailUrl: string | null | undefined,
+    videoId: string,
+): string | null {
+    if (thumbnailUrl?.trim()) return thumbnailUrl;
+    if (!YOUTUBE_VIDEO_ID_PATTERN.test(videoId)) return null;
+    return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }
 
 /**
@@ -260,7 +271,7 @@ export function normalizeYtMusicTrack(
         album: {
             id: yt.albumId ?? null,
             title: yt.album || "Single",
-            coverArt: yt.thumbnailUrl || null,
+            coverArt: resolveYtMusicCoverArt(yt.thumbnailUrl, youtubeVideoId),
         },
         source: "youtube",
         provider: {

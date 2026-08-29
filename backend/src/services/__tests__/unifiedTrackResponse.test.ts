@@ -169,6 +169,36 @@ describe("unifiedTrackResponse", () => {
         });
     });
 
+    it("uses deterministic artwork for a valid youtube id without a thumbnail", () => {
+        const result = normalizeYtMusicTrack({
+            id: "yt-fallback",
+            videoId: "dQw4w9WgXcQ",
+            title: "YT Song",
+            artist: "YT Artist",
+            album: "YT Album",
+            duration: 199,
+            thumbnailUrl: null,
+        });
+
+        expect(result.album.coverArt).toBe(
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+        );
+    });
+
+    it("does not derive youtube artwork from an invalid provider id", () => {
+        const result = normalizeYtMusicTrack({
+            id: "yt-invalid",
+            videoId: "not-a-video-id",
+            title: "YT Song",
+            artist: "YT Artist",
+            album: "YT Album",
+            duration: 199,
+            thumbnailUrl: null,
+        });
+
+        expect(result.album.coverArt).toBeNull();
+    });
+
     it("formats local playlist items with compatibility wrapper", () => {
         const result = formatUnifiedTrackItem({
             id: "pli-local-1",
@@ -235,6 +265,31 @@ describe("unifiedTrackResponse", () => {
             id: "tidal:991",
             streamSource: "tidal",
             tidalTrackId: 991,
+        });
+
+        const youtubeWithFallbackArtwork = formatUnifiedTrackItem({
+            id: "pli-yt-fallback",
+            playlistId: "pl-1",
+            trackId: null,
+            trackTidalId: null,
+            trackYtMusicId: "yt-fallback",
+            sort: 3,
+            track: null,
+            trackTidal: null,
+            trackYtMusic: {
+                id: "yt-fallback",
+                videoId: "dQw4w9WgXcQ",
+                title: "YT Song",
+                artist: "YT Artist",
+                album: "YT Album",
+                duration: 199,
+                thumbnailUrl: null,
+            },
+        });
+        expect(youtubeWithFallbackArtwork.track).toMatchObject({
+            album: {
+                coverArt: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+            },
         });
 
         const youtubeMissingId = formatUnifiedTrackItem({

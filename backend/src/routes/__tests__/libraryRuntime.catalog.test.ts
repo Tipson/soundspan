@@ -2035,7 +2035,7 @@ describe("library catalog list runtime coverage", () => {
                     artist: "YT Artist",
                     album: "Single",
                     duration: 180,
-                    thumbnailUrl: "https://lh3.googleusercontent.com/thumb",
+                    thumbnailUrl: null,
                     createdAt: new Date("2026-03-01T09:00:00.000Z"),
                 },
             },
@@ -2085,6 +2085,9 @@ describe("library catalog list runtime coverage", () => {
         expect(ytTrack.filePath).toBeNull();
         expect(ytTrack.artist.name).toBe("YT Artist");
         expect(ytTrack.album.title).toBe("Single");
+        expect(ytTrack.album.coverArt).toBe(
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+        );
         expect(ytTrack.source).toBe("youtube");
 
         // Tidal remote track

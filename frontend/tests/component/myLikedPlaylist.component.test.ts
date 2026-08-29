@@ -150,6 +150,30 @@ mock.module("@/components/ui/PlaylistSelector", {
     },
 });
 
+mock.module(
+    "@/features/device-offline/components/DeviceCollectionDownloadButton",
+    {
+        namedExports: {
+            DeviceCollectionDownloadButton: ({
+                tracks,
+                collectionId,
+                collectionLabel,
+            }: {
+                tracks: Array<{ id: string }>;
+                collectionId: string;
+                collectionLabel: string;
+            }) =>
+                React.createElement("button", {
+                    type: "button",
+                    "data-testid": "device-collection-download",
+                    "data-collection-id": collectionId,
+                    "data-collection-label": collectionLabel,
+                    "data-track-ids": tracks.map((track) => track.id).join(","),
+                }),
+        },
+    },
+);
+
 mock.module("@/lib/trackRef", {
     namedExports: {
         toAddToPlaylistRef: (track: Record<string, unknown>) => track,
@@ -362,6 +386,42 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     assert.match(html, /title="Add all to queue"/);
     assert.match(html, /title="Add all to playlist"/);
     assert.match(html, /title="Start playlist radio"/);
+});
+
+test("My Liked offers a manual device download for downloadable tracks only", async () => {
+    state.likedData = {
+        playlist: { id: "my-liked", name: "My Liked" },
+        tracks: [
+            {
+                ...makeTrack("local-1", "Local"),
+                source: "local",
+            },
+            {
+                ...makeTrack("yt:video-1", "YouTube"),
+                source: "youtube",
+                streamSource: "youtube",
+                youtubeVideoId: "video-1",
+            },
+            {
+                ...makeTrack("peer-1", "Peer only"),
+                source: "peer",
+            },
+            {
+                ...makeTrack("tidal-missing", "Missing TIDAL id"),
+                source: "tidal",
+                streamSource: "tidal",
+            },
+        ],
+        total: 4,
+    };
+
+    const mod = await import("../../app/playlist/my-liked/page");
+    const html = renderWithQueryClient(mod.default);
+
+    assert.match(html, /data-testid="device-collection-download"/);
+    assert.match(html, /data-collection-id="playlist:my-liked"/);
+    assert.match(html, /data-collection-label="My Liked"/);
+    assert.match(html, /data-track-ids="local-1,yt:video-1"/);
 });
 
 test("shows Pause primary action and active like controls when a liked track is currently playing", async () => {

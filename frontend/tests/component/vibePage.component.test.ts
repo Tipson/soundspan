@@ -97,6 +97,7 @@ mock.module("lucide-react", {
         Shuffle: Icon,
         X: Icon,
         AudioWaveform: Icon,
+        Check: Icon,
         Map: Icon,
         Heart: Icon,
         History: Icon,
@@ -321,6 +322,17 @@ function findButton(
     );
 }
 
+function findButtonByLabel(
+    container: HTMLElement,
+    label: string,
+): HTMLButtonElement | null {
+    return (
+        Array.from(container.querySelectorAll("button")).find(
+            (button) => button.getAttribute("aria-label") === label,
+        ) ?? null
+    );
+}
+
 test("Vibe replaces an unusable analysis surface with a plain-language My Wave landing", async () => {
     state.embeddedTracks = 1;
     const mounted = await mountPage();
@@ -365,20 +377,53 @@ test("My Wave remains the primary Vibe page when local audio analysis is disable
     await unmountPage(mounted);
 });
 
-test("My Wave mode buttons switch the ranked direction and play its active selection", async () => {
+test("Tune My Wave stages a supported direction before applying it", async () => {
     const mounted = await mountPage();
-    const newToMe = findButton(mounted.container, "New to me");
-    const familiar = findButton(mounted.container, "Familiar");
+    const tune = findButton(mounted.container, "Tune");
+
+    assert.ok(tune);
+    assert.equal(mounted.container.querySelector('[role="dialog"]'), null);
+
+    await React.act(async () => tune.click());
+
+    const dialog = mounted.container.querySelector<HTMLElement>(
+        '[role="dialog"][aria-labelledby="wave-direction-title"]',
+    );
+    assert.ok(dialog);
+    assert.match(dialog.textContent ?? "", /Tune My Wave/);
+
+    const newToMe = findButtonByLabel(dialog, "New to me");
+    const familiar = findButtonByLabel(dialog, "Familiar");
 
     assert.ok(newToMe);
     assert.ok(familiar);
-    assert.equal(newToMe.getAttribute("aria-pressed"), "false");
+    assert.equal(newToMe.getAttribute("role"), "radio");
+    assert.equal(newToMe.getAttribute("aria-checked"), "false");
 
     await React.act(async () => newToMe.click());
-    assert.equal(newToMe.getAttribute("aria-pressed"), "true");
-    assert.equal(state.personalizedMode, "new");
+    assert.equal(newToMe.getAttribute("aria-checked"), "true");
+    assert.equal(state.personalizedMode, "for-you");
 
-    await React.act(async () => familiar.click());
+    const applyNew = findButton(dialog, "Use New to me");
+    assert.ok(applyNew);
+    await React.act(async () => applyNew.click());
+    assert.equal(state.personalizedMode, "new");
+    assert.equal(mounted.container.querySelector('[role="dialog"]'), null);
+
+    const reopenTune = findButton(mounted.container, "Tune");
+    assert.ok(reopenTune);
+    await React.act(async () => reopenTune.click());
+
+    const reopenedDialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(reopenedDialog);
+    const reopenedFamiliar = findButtonByLabel(reopenedDialog, "Familiar");
+    assert.ok(reopenedFamiliar);
+    await React.act(async () => reopenedFamiliar.click());
+
+    const applyFamiliar = findButton(reopenedDialog, "Use Familiar");
+    assert.ok(applyFamiliar);
+    await React.act(async () => applyFamiliar.click());
     assert.equal(state.personalizedMode, "familiar");
 
     const playWave = findButton(mounted.container, "Play My Wave");
@@ -389,6 +434,65 @@ test("My Wave mode buttons switch the ranked direction and play its active selec
     assert.equal(state.vibeModeEnabled, true);
     assert.equal(state.waveMode, "familiar");
     assert.deepEqual(state.vibeQueueIds, ["yt:familiar-1"]);
+
+    await unmountPage(mounted);
+});
+
+test("Tune My Wave closes on Escape without applying a draft direction", async () => {
+    const mounted = await mountPage();
+    const tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+
+    await React.act(async () => tune.click());
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+
+    const newToMe = findButtonByLabel(dialog, "New to me");
+    assert.ok(newToMe);
+    await React.act(async () => newToMe.click());
+    assert.equal(state.personalizedMode, "for-you");
+
+    await React.act(async () => {
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+    });
+
+    assert.equal(mounted.container.querySelector('[role="dialog"]'), null);
+    assert.equal(state.personalizedMode, "for-you");
+
+    await unmountPage(mounted);
+});
+
+test("Tune My Wave supports arrow-key radio navigation", async () => {
+    const mounted = await mountPage();
+    const tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+
+    await React.act(async () => tune.click());
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+
+    const forYou = findButtonByLabel(dialog, "For you");
+    const newToMe = findButtonByLabel(dialog, "New to me");
+    assert.ok(forYou);
+    assert.ok(newToMe);
+    forYou.focus();
+
+    await React.act(async () => {
+        forYou.dispatchEvent(
+            new KeyboardEvent("keydown", {
+                key: "ArrowDown",
+                bubbles: true,
+            }),
+        );
+    });
+
+    assert.equal(newToMe.getAttribute("aria-checked"), "true");
+    assert.equal(document.activeElement, newToMe);
+    assert.equal(state.personalizedMode, "for-you");
 
     await unmountPage(mounted);
 });
@@ -423,10 +527,21 @@ test("My Wave exposes connected like and dislike controls for the current track"
 test("Familiar mode falls back to quick picks when listening history is empty", async () => {
     state.personalizedFeed.shelves.listenAgain = [];
     const mounted = await mountPage();
-    const familiar = findButton(mounted.container, "Familiar");
+    const tune = findButton(mounted.container, "Tune");
+
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const familiar = findButtonByLabel(dialog, "Familiar");
 
     assert.ok(familiar);
     await React.act(async () => familiar.click());
+    const applyFamiliar = findButton(dialog, "Use Familiar");
+    assert.ok(applyFamiliar);
+    await React.act(async () => applyFamiliar.click());
     const playWave = findButton(mounted.container, "Play My Wave");
     assert.ok(playWave);
     await React.act(async () => playWave.click());

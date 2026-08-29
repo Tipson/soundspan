@@ -13,17 +13,14 @@ export interface MobileQuickLinkItem {
 
 export const SIDEBAR_NAVIGATION: SidebarNavigationItem[] = [
     { name: "Home", href: "/" },
-    { name: "Explore", href: "/explore" },
     { name: "Library", href: "/library" },
     { name: "Vibe", href: "/vibe", accent: "vibe" },
-    { name: "Listen Together", href: "/listen-together" },
 ];
 // No blank line above on purpose (issue #111) — see check-targeted-coverage.mjs.
 export const MOBILE_QUICK_LINKS: MobileQuickLinkItem[] = [
     { name: "Home", href: "/" },
-    { name: "Explore", href: "/explore" },
+    { name: "Library", href: "/library" },
     { name: "Vibe", href: "/vibe" },
-    { name: "Listen Together", href: "/listen-together" },
 ];
 
 /**

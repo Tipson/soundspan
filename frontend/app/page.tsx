@@ -1,77 +1,62 @@
 "use client";
 
-import { Heart, Zap, RefreshCw } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import {
-    HorizontalCarousel,
-    CarouselItem,
-} from "@/components/ui/HorizontalCarousel";
-import { MixCard } from "@/components/MixCard";
-import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
-import { HomeQuickActions } from "@/features/home/components/HomeQuickActions";
-import { SectionHeader } from "@/features/home/components/SectionHeader";
-import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
-import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
-import { FeaturedPlaylistsGrid } from "@/features/home/components/FeaturedPlaylistsGrid";
-import { StaticPlaylistCard } from "@/features/home/components/StaticPlaylistCard";
-import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
-import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { LastFmBadge } from "@/components/ui/LastFmBadge";
-import { useFeatures } from "@/lib/features-context";
+import { MadeForYouSection } from "@/features/explore/components/MadeForYouSection";
+import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
+import { HomeOnlineDiscovery } from "@/features/home/components/HomeOnlineDiscovery";
+import { HomeQuickActions } from "@/features/home/components/HomeQuickActions";
+import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
+import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
+import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
+import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
 
-// Loading skeleton for playlist cards
 function PlaylistSkeleton() {
     return (
-        <div className="flex gap-3 overflow-hidden">
-            {[...Array(8)].map((_, i) => (
+        <div className="flex gap-3 overflow-hidden" aria-hidden="true">
+            {[...Array(6)].map((_, index) => (
                 <div
-                    key={i}
-                    className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-[170px] lg:w-[180px] p-3"
+                    key={index}
+                    className="w-[140px] shrink-0 p-3 sm:w-[160px] md:w-[170px]"
                 >
-                    <div className="aspect-square rounded-md bg-white/5 animate-pulse mb-3" />
-                    <div className="h-4 bg-white/5 rounded animate-pulse w-3/4 mb-2" />
-                    <div className="h-3 bg-white/5 rounded animate-pulse w-1/2" />
+                    <div className="mb-3 aspect-square animate-pulse rounded-lg bg-white/5" />
+                    <div className="mb-2 h-4 w-3/4 animate-pulse rounded bg-white/5" />
+                    <div className="h-3 w-1/2 animate-pulse rounded bg-white/5" />
                 </div>
             ))}
         </div>
     );
 }
 
-/**
- * Home page — personal-radio landing with immediate playback, quick access,
- * personalized shelves, and broader discovery recommendations.
- */
+/** Unified online-first music landing: immediate Wave, personal feed, catalog. */
 export default function HomePage() {
     const {
         recommended,
         mixes,
-        likedSummary,
         discoverWeekly,
         popularArtists,
-        communityPlaylists,
         personalizedFeed,
+        showYtMusicExplore,
+        homeShelves,
+        chartPlaylists,
+        moodCategories,
+        genreCategories,
+        ytMusicMixes,
         isLoading,
         isRefreshingMixes,
-        isCommunityPlaylistsLoading,
         isPersonalizedLoading,
         isPersonalizedUnavailable,
+        isMoodsLoading,
         handleRefreshMixes,
     } = useHomeData();
-    const { autoPlaylists } = useFeatures();
 
-    if (isLoading) {
-        return <LoadingScreen />;
-    }
-
-    const hasMadeForYou =
-        likedSummary !== null || discoverWeekly !== null || mixes.length > 0;
+    if (isLoading) return <LoadingScreen />;
 
     return (
         <div className="relative min-h-screen bg-surface pb-28 pt-4 sm:pt-6">
             <div className="relative mx-auto max-w-[1800px] px-4 sm:px-6">
-                <div className="space-y-7 sm:space-y-9">
+                <div className="space-y-6 sm:space-y-8">
                     <HomeWaveHero
                         personalizedFeed={personalizedFeed}
                         isLoading={isPersonalizedLoading}
@@ -116,89 +101,28 @@ export default function HomePage() {
                             role="status"
                             className="rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning"
                         >
-                            Personal radio is temporarily unavailable. Your
-                            liked tracks, playlists, and search still work
-                            normally.
+                            Personal radio is temporarily unavailable. Search,
+                            playlists, and the online catalog still work.
                         </p>
                     )}
 
-                    {/* Made For You */}
-                    {hasMadeForYou && (
-                        <section>
-                            <SectionHeader
-                                title="Made For You"
-                                rightAction={
-                                    autoPlaylists ? (
-                                        <button
-                                            onClick={handleRefreshMixes}
-                                            disabled={isRefreshingMixes}
-                                            className="group flex min-h-11 items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
-                                        >
-                                            {isRefreshingMixes ? (
-                                                <GradientSpinner size="sm" />
-                                            ) : (
-                                                <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-                                            )}
-                                            <span className="hidden sm:inline">
-                                                {isRefreshingMixes
-                                                    ? "Refreshing..."
-                                                    : "Refresh"}
-                                            </span>
-                                        </button>
-                                    ) : undefined
-                                }
-                            />
-                            <HorizontalCarousel>
-                                {likedSummary && (
-                                    <CarouselItem key="my-liked">
-                                        <StaticPlaylistCard
-                                            href="/playlist/my-liked"
-                                            coverUrl={likedSummary.coverUrl}
-                                            title="My Liked"
-                                            subtitle={`${likedSummary.total} tracks`}
-                                            placeholderIcon={
-                                                <Heart className="h-12 w-12 fill-brand/25 text-brand-light" />
-                                            }
-                                            overlayIcon={
-                                                <Heart
-                                                    className="h-6 w-6 text-brand-light"
-                                                    strokeWidth={2.5}
-                                                />
-                                            }
-                                            index={0}
-                                        />
-                                    </CarouselItem>
-                                )}
-                                {discoverWeekly && (
-                                    <CarouselItem key="discover-weekly">
-                                        <StaticPlaylistCard
-                                            href="/discover"
-                                            coverUrl={discoverWeekly.coverUrl}
-                                            title="Discover Weekly"
-                                            subtitle={`${discoverWeekly.totalCount} tracks`}
-                                            placeholderIcon={
-                                                <Zap className="h-12 w-12 text-ai-hover" />
-                                            }
-                                            overlayIcon={
-                                                <Zap
-                                                    className="h-6 w-6 text-ai-hover"
-                                                    strokeWidth={2.5}
-                                                />
-                                            }
-                                            index={1}
-                                        />
-                                    </CarouselItem>
-                                )}
-                                {mixes.map((mix, index) => (
-                                    <CarouselItem key={mix.id}>
-                                        <MixCard mix={mix} index={index + 2} />
-                                    </CarouselItem>
-                                ))}
-                            </HorizontalCarousel>
-                        </section>
-                    )}
+                    <MadeForYouSection
+                        discoverWeekly={discoverWeekly}
+                        mixes={mixes}
+                        isRefreshingMixes={isRefreshingMixes}
+                        handleRefreshMixes={handleRefreshMixes}
+                    />
 
-                    {/* Recommended For You */}
+                    <HomeOnlineDiscovery
+                        enabled={showYtMusicExplore}
+                        ytMusicMixes={ytMusicMixes}
+                        moodCategories={moodCategories}
+                        genreCategories={genreCategories}
+                        isMoodsLoading={isMoodsLoading}
+                        homeShelves={homeShelves}
+                        chartPlaylists={chartPlaylists}
+                    />
+
                     {recommended.length > 0 && (
                         <section>
                             <SectionHeader
@@ -210,26 +134,6 @@ export default function HomePage() {
                         </section>
                     )}
 
-                    {/* Trending Community Playlists */}
-                    {(isCommunityPlaylistsLoading ||
-                        communityPlaylists.length > 0) && (
-                        <section>
-                            <SectionHeader
-                                title="Trending Community Playlists"
-                                badge={<YouTubeBadge />}
-                            />
-                            {isCommunityPlaylistsLoading &&
-                            communityPlaylists.length === 0 ? (
-                                <PlaylistSkeleton />
-                            ) : (
-                                <FeaturedPlaylistsGrid
-                                    playlists={communityPlaylists}
-                                />
-                            )}
-                        </section>
-                    )}
-
-                    {/* Popular Artists */}
                     {popularArtists.length > 0 && (
                         <section>
                             <SectionHeader

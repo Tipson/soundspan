@@ -1,10 +1,10 @@
 /**
  * Made For You section for the Explore page.
  *
- * Shows a unified carousel with My Liked, Discover Weekly, and generated mixes.
+ * Shows only recommendation playlists that already exist and contain tracks.
  */
 
-import { RefreshCw, Heart, Zap } from "lucide-react";
+import { RefreshCw, Zap } from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import {
     HorizontalCarousel,
@@ -15,13 +15,9 @@ import { useFeatures } from "@/lib/features-context";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { StaticPlaylistCard } from "@/features/home/components/StaticPlaylistCard";
 import type { Mix } from "@/features/home/types";
-import type {
-    LikedPlaylistSummary,
-    DiscoverWeeklySummary,
-} from "@/features/explore/hooks/useExploreData";
+import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 
 interface MadeForYouSectionProps {
-    likedSummary: LikedPlaylistSummary | null;
     discoverWeekly: DiscoverWeeklySummary | null;
     mixes: Mix[];
     isRefreshingMixes: boolean;
@@ -32,7 +28,6 @@ interface MadeForYouSectionProps {
  * Renders the Made For You section content.
  */
 export function MadeForYouSection({
-    likedSummary,
     discoverWeekly,
     mixes,
     isRefreshingMixes,
@@ -41,8 +36,11 @@ export function MadeForYouSection({
     // Mix refresh hits /api/mixes/refresh, which is gated behind the
     // autoPlaylists feature flag — hide the action when the flag is off.
     const { autoPlaylists } = useFeatures();
+    const playableDiscoverWeekly =
+        discoverWeekly && discoverWeekly.totalCount > 0 ? discoverWeekly : null;
+    const playableMixes = mixes.filter((mix) => mix.trackCount > 0);
     const hasMadeForYou =
-        likedSummary !== null || discoverWeekly !== null || mixes.length > 0;
+        playableDiscoverWeekly !== null || playableMixes.length > 0;
 
     if (!hasMadeForYou) return null;
 
@@ -55,7 +53,7 @@ export function MadeForYouSection({
                         <button
                             onClick={handleRefreshMixes}
                             disabled={isRefreshingMixes}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors font-semibold group bg-white/5 hover:bg-white/10 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="group flex min-h-11 items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                         >
                             {isRefreshingMixes ? (
                                 <GradientSpinner size="sm" />
@@ -72,33 +70,13 @@ export function MadeForYouSection({
                 }
             />
             <HorizontalCarousel>
-                {likedSummary && (
-                    <CarouselItem key="my-liked">
-                        <StaticPlaylistCard
-                            href="/playlist/my-liked"
-                            coverUrl={likedSummary.coverUrl}
-                            title="My Liked"
-                            subtitle={`${likedSummary.total} tracks`}
-                            placeholderIcon={
-                                <Heart className="w-12 h-12 text-pink-500 fill-pink-500" />
-                            }
-                            overlayIcon={
-                                <Heart
-                                    className="w-6 h-6 text-pink-500"
-                                    strokeWidth={2.5}
-                                />
-                            }
-                            index={0}
-                        />
-                    </CarouselItem>
-                )}
-                {discoverWeekly && (
+                {playableDiscoverWeekly && (
                     <CarouselItem key="discover-weekly">
                         <StaticPlaylistCard
                             href="/discover"
-                            coverUrl={discoverWeekly.coverUrl}
+                            coverUrl={playableDiscoverWeekly.coverUrl}
                             title="Discover Weekly"
-                            subtitle={`${discoverWeekly.totalCount} tracks`}
+                            subtitle={`${playableDiscoverWeekly.totalCount} tracks`}
                             placeholderIcon={
                                 <Zap className="w-12 h-12 text-blue-400" />
                             }
@@ -108,13 +86,13 @@ export function MadeForYouSection({
                                     strokeWidth={2.5}
                                 />
                             }
-                            index={1}
+                            index={0}
                         />
                     </CarouselItem>
                 )}
-                {mixes.map((mix, index) => (
+                {playableMixes.map((mix, index) => (
                     <CarouselItem key={mix.id}>
-                        <MixCard mix={mix} index={index + 2} />
+                        <MixCard mix={mix} index={index + 1} />
                     </CarouselItem>
                 ))}
             </HorizontalCarousel>

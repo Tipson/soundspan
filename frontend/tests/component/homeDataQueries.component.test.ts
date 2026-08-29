@@ -10,6 +10,8 @@ const forbiddenCalls = {
     podcasts: 0,
     audiobooks: 0,
 };
+const featureState = { discovery: true, autoPlaylists: true };
+let popularArtistsEnabled: boolean | undefined;
 
 const queryResult = <T>(data: T) => ({
     data,
@@ -23,7 +25,16 @@ mock.module("@/lib/auth-context", {
 
 mock.module("@/lib/features-context", {
     namedExports: {
-        useFeatures: () => ({ discovery: true, autoPlaylists: true }),
+        useFeatures: () => featureState,
+    },
+});
+
+mock.module("@/features/explore/hooks/useUserSettingsExplorePrefs", {
+    namedExports: {
+        useUserSettingsExplorePrefs: () => ({
+            showYtMusicExplore: true,
+            showTidalExplore: false,
+        }),
     },
 });
 
@@ -97,8 +108,19 @@ mock.module("@/hooks/useQueries", {
         useLikedPlaylistQuery: () => queryResult({ total: 1, tracks: [] }),
         useDiscoverWeeklySummaryQuery: () => queryResult(null),
         useMixesQuery: () => queryResult([]),
-        usePopularArtistsQuery: () => queryResult({ artists: [] }),
+        usePopularArtistsQuery: (
+            _limit: number,
+            options?: { enabled?: boolean },
+        ) => {
+            popularArtistsEnabled = options?.enabled;
+            return queryResult({ artists: [] });
+        },
         useYtMusicHomeShelvesQuery: () => queryResult([]),
+        useYtMusicChartsQuery: () => queryResult({}),
+        useYtMusicCategoriesQuery: () =>
+            queryResult({ moodCategories: [], genreCategories: [] }),
+        useYtMusicMixesQuery: () => queryResult([]),
+        mapYtMusicChartsToFeaturedPlaylists: () => [],
         useRefreshMixesMutation: () => ({
             mutateAsync: async () => undefined,
             isPending: false,
@@ -112,6 +134,29 @@ beforeEach(() => {
     forbiddenCalls.recentlyAdded = 0;
     forbiddenCalls.podcasts = 0;
     forbiddenCalls.audiobooks = 0;
+    featureState.discovery = true;
+    featureState.autoPlaylists = true;
+    popularArtistsEnabled = undefined;
+});
+
+test("Home gates Last.fm popular artists with the discovery feature", async () => {
+    featureState.discovery = false;
+    const { useHomeData } =
+        await import("../../features/home/hooks/useHomeData");
+    const Probe = () => {
+        useHomeData();
+        return null;
+    };
+
+    renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: new QueryClient() },
+            React.createElement(Probe),
+        ),
+    );
+
+    assert.equal(popularArtistsEnabled, false);
 });
 
 test("Home loads music recommendations without legacy local-media queries", async () => {

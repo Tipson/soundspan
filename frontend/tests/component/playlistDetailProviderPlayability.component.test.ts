@@ -78,6 +78,30 @@ mock.module("@/components/ui/ShareLinkModal", {
     },
 });
 
+mock.module(
+    "@/features/device-offline/components/DeviceCollectionDownloadButton",
+    {
+        namedExports: {
+            DeviceCollectionDownloadButton: ({
+                tracks,
+                collectionId,
+                collectionLabel,
+            }: {
+                tracks: Array<{ id: string }>;
+                collectionId: string;
+                collectionLabel: string;
+            }) =>
+                React.createElement("button", {
+                    type: "button",
+                    "data-testid": "device-collection-download",
+                    "data-collection-id": collectionId,
+                    "data-collection-label": collectionLabel,
+                    "data-track-ids": tracks.map((track) => track.id).join(","),
+                }),
+        },
+    },
+);
+
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
         TrackPreferenceButtons: ({ mode }: { mode?: string }) =>
@@ -445,6 +469,27 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     assert.match(html, /title="Add all to queue"/);
     assert.match(html, /title="Like all tracks"/);
     assert.match(html, /title="Start playlist radio"/);
+});
+
+test("playlist detail offers a device download for playable tracks only", async () => {
+    const mod = await import("../../app/playlist/[id]/page");
+    const PlaylistDetailPage = mod.default;
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(PlaylistDetailPage),
+        ),
+    );
+
+    assert.match(html, /data-testid="device-collection-download"/);
+    assert.match(html, /data-collection-id="playlist:playlist-1"/);
+    assert.match(html, /data-collection-label="Mixed Playlist"/);
+    assert.match(
+        html,
+        /data-track-ids="track-local-1,tidal:991,yt:yt-video-7"/,
+    );
 });
 
 test("generated radio playlist detail adds append and regenerate actions", async () => {

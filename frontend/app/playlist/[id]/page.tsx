@@ -78,6 +78,7 @@ import {
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useCollectionLikeAll } from "@/hooks/useCollectionLikeAll";
 import type { LikeableTrack } from "@/hooks/useCollectionLikeAll";
+import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
 import { ShareLinkModal } from "@/components/ui/ShareLinkModal";
 import { RadioPlaylistActions } from "./RadioPlaylistActions";
 import { formatPlaylistDuration } from "./playlistDuration";
@@ -757,7 +758,6 @@ export default function PlaylistDetailPage() {
                         </button>
                     )}
 
-                    {/* Like All Button */}
                     {playableTracks.length > 0 && (
                         <button
                             onClick={toggleLikeAll}
@@ -788,8 +788,11 @@ export default function PlaylistDetailPage() {
                             )}
                         </button>
                     )}
-
-                    {/* Radio Button */}
+                    <DeviceCollectionDownloadButton
+                        tracks={playableTracks}
+                        collectionId={`playlist:${playlistId}`}
+                        collectionLabel={playlist.name}
+                    />
                     {trackItems.length > 0 && (
                         <button
                             onClick={handleStartRadio}
@@ -799,7 +802,6 @@ export default function PlaylistDetailPage() {
                             <Radio className="w-5 h-5" />
                         </button>
                     )}
-
                     <RadioPlaylistActions
                         enabled={Boolean(
                             playlist.isOwner &&
@@ -808,10 +810,8 @@ export default function PlaylistDetailPage() {
                         playlistId={playlistId}
                     />
 
-                    {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* Share Toggle Button (owner only) */}
                     {playlist.isOwner && (
                         <button
                             onClick={handleToggleShare}

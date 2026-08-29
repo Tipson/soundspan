@@ -77,6 +77,15 @@ mock.module("@/components/ui/ShareLinkModal", {
     },
 });
 
+mock.module(
+    "@/features/device-offline/components/DeviceCollectionDownloadButton",
+    {
+        namedExports: {
+            DeviceCollectionDownloadButton: () => null,
+        },
+    },
+);
+
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
         TrackPreferenceButtons: () =>

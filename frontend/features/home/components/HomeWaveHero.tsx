@@ -84,25 +84,32 @@ export function HomeWaveHero({
           : "More signals needed";
 
     return (
-        <section className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-surface-raised shadow-2xl shadow-black/25">
+        <section
+            data-home-wave-layout="compact"
+            aria-labelledby="home-wave-title"
+            className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-surface-raised shadow-xl shadow-black/20"
+        >
             <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/20 via-ai/5 to-transparent"
             />
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -left-20 top-1/2 h-44 w-44 -translate-y-1/2 rounded-full border border-brand/10 sm:h-72 sm:w-72"
+                className="pointer-events-none absolute -left-16 top-1/2 h-40 w-40 -translate-y-1/2 rounded-full border border-brand/10 sm:h-56 sm:w-56"
             />
 
-            <div className="relative grid grid-cols-[minmax(0,1fr)_9.5rem] items-end gap-x-3 gap-y-4 px-5 py-6 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-center sm:gap-x-8 sm:gap-y-5 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-x-12 lg:px-10 lg:py-10">
+            <div className="relative grid grid-cols-[minmax(0,1fr)_7.5rem] items-end gap-x-3 gap-y-3 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-center sm:gap-x-7 sm:px-7 sm:py-6 lg:grid-cols-[minmax(0,1fr)_15rem] lg:px-8 lg:py-7">
                 <div className="col-span-2 max-w-3xl sm:col-span-1 sm:col-start-1 sm:row-start-1">
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-light">
                         Your personal station
                     </p>
-                    <h1 className="mt-3 max-w-3xl text-3xl font-black leading-[0.98] tracking-[-0.045em] text-content sm:text-5xl lg:text-6xl">
-                        Your music, already in motion.
+                    <h1
+                        id="home-wave-title"
+                        className="mt-2 max-w-3xl text-3xl font-black leading-[0.98] tracking-[-0.045em] text-content sm:text-4xl lg:text-5xl"
+                    >
+                        Your music in motion.
                     </h1>
-                    <p className="mt-4 max-w-2xl text-sm leading-6 text-content-secondary sm:text-lg sm:leading-7">
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-content-secondary sm:text-base sm:leading-6">
                         <span className="sm:hidden">
                             Familiar favorites, fresh finds, and music that
                             keeps playing.
@@ -137,7 +144,7 @@ export function HomeWaveHero({
                     </Link>
                 </div>
 
-                <div className="relative col-start-2 row-start-2 mx-auto grid aspect-square w-full place-items-center sm:row-span-2 sm:row-start-1 sm:w-[min(36vw,18rem)] lg:w-[min(28vw,19rem)]">
+                <div className="relative col-start-2 row-start-2 mx-auto grid aspect-square w-full place-items-center sm:row-span-2 sm:row-start-1 sm:w-[min(28vw,13rem)] lg:w-[min(20vw,15rem)]">
                     <span
                         aria-hidden="true"
                         className="absolute inset-0 rounded-full border border-brand/15 bg-black/10"
@@ -155,7 +162,7 @@ export function HomeWaveHero({
                         onClick={startWave}
                         disabled={!canPlay}
                         aria-label="Play My Wave"
-                        className="relative z-10 flex h-28 w-28 flex-col items-center justify-center gap-1 rounded-full bg-brand px-3 text-center text-xs font-black text-black shadow-2xl shadow-brand/25 transition duration-200 hover:scale-[1.03] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none sm:h-36 sm:w-36 sm:gap-2 sm:px-5 sm:text-sm lg:h-40 lg:w-40"
+                        className="relative z-10 flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-full bg-brand px-3 text-center text-xs font-black text-black shadow-2xl shadow-brand/25 transition duration-200 hover:scale-[1.03] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none sm:h-28 sm:w-28 sm:gap-2 sm:px-4 sm:text-sm lg:h-32 lg:w-32"
                     >
                         <Play
                             className="h-6 w-6 fill-current sm:h-7 sm:w-7"

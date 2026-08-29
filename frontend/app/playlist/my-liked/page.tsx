@@ -39,6 +39,8 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { toAudioTrack } from "./likedPlaylistUtils";
 import { TrackList, TrackListHeader } from "@/components/track";
 import type { TrackRowItem, TrackRowSlots } from "@/components/track";
+import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
+import { isLikedPlaylistTrackDownloadable } from "@/features/device-offline/likedAutomation";
 
 const EMPTY_TRACKS: LikedPlaylistTrack[] = [];
 
@@ -197,6 +199,13 @@ export default function MyLikedPlaylistPage() {
     );
     const audioTracks = useMemo(
         () => likedTracks.map((track) => toAudioTrack(track)),
+        [likedTracks],
+    );
+    const deviceDownloadTracks = useMemo(
+        () =>
+            likedTracks
+                .filter((track) => isLikedPlaylistTrackDownloadable(track))
+                .map((track) => toAudioTrack(track)),
         [likedTracks],
     );
     const totalDuration = useMemo(
@@ -506,6 +515,11 @@ export default function MyLikedPlaylistPage() {
                             <Shuffle className="h-5 w-5" />
                         </button>
                     )}
+                    <DeviceCollectionDownloadButton
+                        tracks={deviceDownloadTracks}
+                        collectionId="playlist:my-liked"
+                        collectionLabel={data.playlist.name}
+                    />
                     {likedTracks.length > 0 && (
                         <button
                             onClick={handleAddAllToQueue}

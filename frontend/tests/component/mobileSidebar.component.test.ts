@@ -114,7 +114,7 @@ test("returns null when closed", async () => {
     assert.equal(html, "");
 });
 
-test("renders quick links and omits my history", async () => {
+test("renders the focused music quick links and omits secondary routes", async () => {
     const { MobileSidebar } =
         await import("../../components/layout/MobileSidebar");
 
@@ -128,14 +128,15 @@ test("renders quick links and omits my history", async () => {
 
     assert.match(html, /Quick Links/);
     assert.match(html, />Home</);
-    assert.match(html, />Explore</);
-    assert.match(html, />Listen Together</);
+    assert.match(html, />Library</);
+    assert.match(html, />Vibe</);
+    assert.doesNotMatch(html, />Explore</);
+    assert.doesNotMatch(html, />Listen Together</);
     assert.doesNotMatch(html, /My History/);
 });
 
-test("shows listen-together marker when sessions are active", async () => {
-    state.hasActiveSessions = true;
-    state.pathname = "/listen-together";
+test("marks Vibe as current without exposing a social quick link", async () => {
+    state.pathname = "/vibe";
 
     const { MobileSidebar } =
         await import("../../components/layout/MobileSidebar");
@@ -148,7 +149,9 @@ test("shows listen-together marker when sessions are active", async () => {
         }),
     );
 
-    assert.match(html, /eq-bars/);
+    assert.match(html, /href="\/vibe"/);
+    assert.match(html, /aria-current="page"/);
+    assert.doesNotMatch(html, /eq-bars|Listen Together/);
 });
 
 test("admins see Requests and Admin links; users see neither", async () => {

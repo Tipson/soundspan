@@ -185,7 +185,7 @@ export function useExploreData(options?: {
     const chartsQuery = useYtMusicChartsQuery({
         enabled: showYtMusicExplore,
     });
-    const popularQuery = usePopularArtistsQuery(20);
+    const popularQuery = usePopularArtistsQuery(20, { enabled: discovery });
     const { data: shelvesData } = shelvesQuery;
     const { data: chartsData } = chartsQuery;
     const { data: popularData } = popularQuery;
@@ -385,7 +385,7 @@ export function useExploreData(options?: {
         recommended: discovery ? (recommendedData?.artists ?? []) : [],
         homeShelves: shelvesData ?? [],
         charts: chartsData ?? {},
-        popularArtists: popularData?.artists ?? [],
+        popularArtists: discovery ? (popularData?.artists ?? []) : [],
         quickStartStations: libraryRadioData.quickStartStations,
         genreStations: libraryRadioData.genreStations,
         decadeStations: libraryRadioData.decadeStations,

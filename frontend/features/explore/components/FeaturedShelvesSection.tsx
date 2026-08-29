@@ -9,6 +9,10 @@ import { api } from "@/lib/api";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import type { YtMusicHomeShelf } from "@/hooks/useQueries";
 import { BrowseCard } from "./BrowseCard";
+import {
+    CarouselItem,
+    HorizontalCarousel,
+} from "@/components/ui/HorizontalCarousel";
 
 interface FeaturedShelvesSectionProps {
     homeShelves: YtMusicHomeShelf[];
@@ -38,7 +42,10 @@ export function FeaturedShelvesSection({
                         title={shelf.title ?? "Featured"}
                         badge={<YouTubeBadge />}
                     />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    <HorizontalCarousel
+                        gap="lg"
+                        aria-label={shelf.title ?? "Featured"}
+                    >
                         {shelf.contents?.slice(0, 12).map((item, i) => {
                             const href = item.playlistId
                                 ? `/explore/yt-playlist/${encodeURIComponent(item.playlistId)}`
@@ -46,27 +53,30 @@ export function FeaturedShelvesSection({
                                   ? `/explore/yt-playlist/${encodeURIComponent(item.browseId)}?type=album`
                                   : null;
                             return (
-                                <BrowseCard
+                                <CarouselItem
                                     key={
                                         item.playlistId ??
                                         item.browseId ??
                                         item.videoId ??
                                         i
                                     }
-                                    href={href}
-                                    imageUrl={
-                                        item.thumbnailUrl
-                                            ? api.getBrowseImageUrl(
-                                                  item.thumbnailUrl,
-                                              )
-                                            : null
-                                    }
-                                    title={item.title ?? ""}
-                                    subtitle={item.subtitle}
-                                />
+                                >
+                                    <BrowseCard
+                                        href={href}
+                                        imageUrl={
+                                            item.thumbnailUrl
+                                                ? api.getBrowseImageUrl(
+                                                      item.thumbnailUrl,
+                                                  )
+                                                : null
+                                        }
+                                        title={item.title ?? ""}
+                                        subtitle={item.subtitle}
+                                    />
+                                </CarouselItem>
                             );
                         })}
-                    </div>
+                    </HorizontalCarousel>
                 </section>
             ))}
         </>

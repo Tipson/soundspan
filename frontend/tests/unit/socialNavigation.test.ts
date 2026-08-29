@@ -33,25 +33,25 @@ test("hasMyHistoryLink returns false for empty navigation", () => {
     assert.equal(hasMyHistoryLink([]), false);
 });
 
-test("quick links and sidebar include listen together destination", () => {
+test("primary navigation keeps Listen Together outside the music flow", () => {
     assert.equal(
         MOBILE_QUICK_LINKS.some((link) => link.href === "/listen-together"),
-        true,
+        false,
     );
     assert.equal(
         SIDEBAR_NAVIGATION.some((link) => link.href === "/listen-together"),
-        true,
+        false,
     );
 });
 
-test("navigation exposes explore as default landing destination", () => {
+test("navigation folds Explore into Home instead of duplicating it", () => {
     assert.equal(
         SIDEBAR_NAVIGATION.some((link) => link.href === "/explore"),
-        true,
+        false,
     );
     assert.equal(
         MOBILE_QUICK_LINKS.some((link) => link.href === "/explore"),
-        true,
+        false,
     );
 });
 

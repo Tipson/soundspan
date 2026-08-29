@@ -793,11 +793,15 @@ export function useMixQuery(id: string | undefined) {
  * @example
  * const { data } = usePopularArtistsQuery(20);
  */
-export function usePopularArtistsQuery(limit: number = 20) {
+export function usePopularArtistsQuery(
+    limit: number = 20,
+    options?: { enabled?: boolean },
+) {
     return useQuery({
         queryKey: queryKeys.popularArtists(limit),
         queryFn: () => api.getPopularArtists(limit),
         staleTime: 10 * 60 * 1000, // 10 minutes
+        enabled: options?.enabled ?? true,
     });
 }
 

@@ -61,6 +61,25 @@ mock.module("@/components/ui/YouTubeBadge", {
     namedExports: { YouTubeBadge: marker("yt-badge") },
 });
 
+mock.module("@/components/ui/HorizontalCarousel", {
+    namedExports: {
+        HorizontalCarousel: ({
+            children,
+            "aria-label": ariaLabel,
+        }: {
+            children: React.ReactNode;
+            "aria-label"?: string;
+        }) =>
+            React.createElement(
+                "div",
+                { "data-scroll-shelf": ariaLabel },
+                children,
+            ),
+        CarouselItem: ({ children }: { children: React.ReactNode }) =>
+            React.createElement("div", null, children),
+    },
+});
+
 beforeEach(() => {
     state.homeShelves = [
         {
@@ -80,6 +99,7 @@ test("FeaturedShelvesSection renders shelves section when shelves exist", async 
     );
 
     assert.match(html, /Featured/);
+    assert.match(html, /data-scroll-shelf="Featured"/);
 });
 
 test("FeaturedShelvesSection returns null when shelves empty", async () => {

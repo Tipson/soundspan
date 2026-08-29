@@ -19,6 +19,10 @@ import {
     setDeviceOfflineRuntimeState,
 } from "../../features/device-offline/playbackResolver";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
+import {
+    clearPlaybackHeartbeat,
+    hasFreshPlaybackHeartbeat,
+} from "../../lib/audio/playback-liveness";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -1210,6 +1214,7 @@ before(async () => {
 beforeEach(() => {
     resetHarnessState();
     playbackMachine.state = "IDLE";
+    clearPlaybackHeartbeat();
 });
 
 afterEach(() => {
@@ -1333,6 +1338,23 @@ for (const hookName of extractedHookNames) {
         assert.doesNotThrow(() => hookRuntime.unmount());
     });
 }
+
+test("live engine load, play, and progress refresh service-worker playback liveness", () => {
+    audioState.currentTrack = makeTrack("heartbeat-track");
+    audioState.playbackType = "track";
+    renderOrchestrator();
+
+    assert.equal(hasFreshPlaybackHeartbeat(), true);
+
+    engine.playing = true;
+    engine.emit("play");
+    assert.equal(hasFreshPlaybackHeartbeat(), true);
+
+    clearPlaybackHeartbeat();
+    engine.currentTime = 1;
+    engine.emit("timeupdate", { timeSec: 1 });
+    assert.equal(hasFreshPlaybackHeartbeat(), true);
+});
 
 test("recoverable autoplay rejection preserves the track without scheduling a skip", async () => {
     mock.timers.enable();

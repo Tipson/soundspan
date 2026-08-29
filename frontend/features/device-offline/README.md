@@ -48,11 +48,18 @@ server-side bulk-download job.
   JavaScript bundle cannot create another stuck transfer even when its shell
   cache was already evicted. Primary Library navigation on both mobile and
   desktop hard-loads the precached Downloads document while offline, avoiding
-  an uncached Next.js route-transition request.
-- Album and YouTube Music collection pages can queue every playable track with
-  `Download to this device`. Library > Downloads shows queued, active,
-  interrupted, failed, and verified-ready states and is the management surface
-  for play, retry, and delete.
+  an uncached Next.js route-transition request. A waiting worker defers that
+  activation only when the current JavaScript runtime has both an active player
+  state and a fresh engine heartbeat; a stale persisted play flag cannot hold
+  an update forever.
+- Album, artist, owned-playlist, My Liked, and YouTube Music collection pages
+  can queue their currently playable tracks with `Download to this device`.
+  Artist downloads are deliberately bounded to the top tracks exposed on the
+  page instead of crawling an unbounded discography. Library > Downloads shows
+  queued, active, interrupted, failed, and verified-ready states and is the
+  management surface for play, retry, and delete. Choosing a whole collection
+  also promotes any automatic liked copies in it to manual retention without
+  fetching the same bytes again.
 - Settings > Offline on this device can opt in to gradual liked-song downloads.
   The default is off. The current browser imports up to the selected 25, 50,
   100, or 200 newest liked songs and resumes only while the PWA is visible and

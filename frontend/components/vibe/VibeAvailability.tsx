@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { Loader2, Play, RotateCcw, SkipForward } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+    AudioWaveform,
+    Loader2,
+    Play,
+    RotateCcw,
+    SkipForward,
+} from "lucide-react";
 import {
     type PersonalizedHomeMode,
     usePersonalizedHomeFeed,
@@ -11,32 +17,13 @@ import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { NowPlayingConnected } from "./NowPlayingConnected";
+import {
+    WaveDirectionSheet,
+    WAVE_MODES,
+    type WaveFeedMode,
+} from "./WaveDirectionSheet";
 
-type WaveFeedMode = PersonalizedHomeMode;
-
-interface WaveModeDefinition {
-    id: WaveFeedMode;
-    label: string;
-    subtitle: string;
-}
-
-const WAVE_MODES: readonly WaveModeDefinition[] = [
-    {
-        id: "for-you",
-        label: "For you",
-        subtitle: "A balanced flow of favorites and fresh finds",
-    },
-    {
-        id: "new",
-        label: "New to me",
-        subtitle: "Discovery picks outside your usual rotation",
-    },
-    {
-        id: "familiar",
-        label: "Familiar",
-        subtitle: "Music you return to and quick picks you know",
-    },
-];
+type SupportedPersonalizedMode = Extract<PersonalizedHomeMode, WaveFeedMode>;
 
 function uniqueTracks(tracks: readonly PersonalizedTrack[]) {
     const seen = new Set<string>();
@@ -103,7 +90,10 @@ function selectWaveTracks(
 
 /** Online-first personal radio with explicit direction and feedback controls. */
 export function VibeProviderFallback() {
-    const [activeMode, setActiveMode] = useState<WaveFeedMode>("for-you");
+    const [activeMode, setActiveMode] =
+        useState<SupportedPersonalizedMode>("for-you");
+    const [isTuneOpen, setIsTuneOpen] = useState(false);
+    const tuneButtonRef = useRef<HTMLButtonElement>(null);
     const { advanceQueue, playTracks } = useAudioControls();
     const {
         currentTrack,
@@ -124,6 +114,24 @@ export function VibeProviderFallback() {
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
     const activeModeDefinition =
         WAVE_MODES.find((mode) => mode.id === activeMode) ?? WAVE_MODES[0];
+    const spectralField =
+        activeMode === "new"
+            ? {
+                  primary: "bg-ai/25",
+                  secondary: "bg-brand-light/15",
+                  ring: "border-ai-hover/30",
+              }
+            : activeMode === "familiar"
+              ? {
+                    primary: "bg-brand/25",
+                    secondary: "bg-brand-light/20",
+                    ring: "border-brand-light/30",
+                }
+              : {
+                    primary: "bg-brand/20",
+                    secondary: "bg-ai/15",
+                    ring: "border-brand/25",
+                };
     const canPlay = queue.length > 0 && !isLoading;
     const startWave = useCallback(() => {
         if (queue.length === 0) return;
@@ -141,21 +149,41 @@ export function VibeProviderFallback() {
         setVibeSourceFeatures,
         setWaveMode,
     ]);
+    const closeTune = useCallback(() => {
+        setIsTuneOpen(false);
+        queueMicrotask(() => tuneButtonRef.current?.focus());
+    }, []);
+    const applyDirection = useCallback(
+        (mode: WaveFeedMode) => {
+            setActiveMode(mode);
+            setWaveMode(mode);
+            setIsTuneOpen(false);
+            queueMicrotask(() => tuneButtonRef.current?.focus());
+        },
+        [setWaveMode],
+    );
 
     return (
-        <main className="relative min-h-full overflow-hidden bg-surface px-4 pb-4 pt-5 sm:px-6 sm:pb-8 sm:pt-7">
+        <main
+            data-wave-mode={activeMode}
+            className="relative min-h-full overflow-hidden bg-surface px-4 pb-4 pt-5 sm:px-6 sm:pb-8 sm:pt-7"
+        >
             <div className="mx-auto max-w-5xl">
                 <section className="relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-surface-raised shadow-2xl shadow-black/30">
                     <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-brand/20 blur-3xl"
+                        className={`pointer-events-none absolute -left-36 -top-36 h-[28rem] w-[28rem] rounded-full blur-3xl transition-colors duration-700 motion-reduce:transition-none ${spectralField.primary}`}
                     />
                     <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute -bottom-40 -right-28 h-96 w-96 rounded-full bg-ai/15 blur-3xl"
+                        className={`pointer-events-none absolute -bottom-48 -right-36 h-[32rem] w-[32rem] rounded-full blur-3xl transition-colors duration-700 motion-reduce:transition-none ${spectralField.secondary}`}
+                    />
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-x-[12%] top-8 h-48 rounded-[50%] bg-white/[0.025] blur-2xl"
                     />
 
-                    <div className="relative flex min-h-[34rem] flex-col items-center justify-center px-5 py-10 text-center sm:min-h-[40rem] sm:px-10 sm:py-14">
+                    <div className="relative flex min-h-[34rem] flex-col items-center justify-center px-5 py-9 text-center sm:min-h-[40rem] sm:px-10 sm:py-14">
                         <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-light">
                             Endless personal radio
                         </p>
@@ -168,41 +196,44 @@ export function VibeProviderFallback() {
                             your taste over time.
                         </p>
 
-                        <div
-                            className="mt-7 grid w-full max-w-lg grid-cols-3 gap-1 rounded-2xl border border-white/8 bg-black/30 p-1.5"
-                            aria-label="My Wave modes"
-                        >
-                            {WAVE_MODES.map((mode) => {
-                                const isActive = mode.id === activeMode;
-                                return (
-                                    <button
-                                        key={mode.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setActiveMode(mode.id);
-                                            setWaveMode(mode.id);
-                                        }}
-                                        aria-pressed={isActive}
-                                        aria-controls="wave-start"
-                                        className={`min-h-11 rounded-xl px-2 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:px-4 sm:text-sm ${
-                                            isActive
-                                                ? "bg-white text-black shadow-lg"
-                                                : "text-content-secondary hover:bg-white/8 hover:text-white"
-                                        }`}
-                                    >
-                                        {mode.label}
-                                    </button>
-                                );
-                            })}
+                        <div className="mt-7 flex w-full max-w-md items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 p-2 pl-4 text-left backdrop-blur-sm">
+                            <span className="min-w-0">
+                                <span className="block text-[0.65rem] font-bold uppercase tracking-[0.16em] text-content-muted">
+                                    Direction
+                                </span>
+                                <span
+                                    aria-live="polite"
+                                    className="mt-0.5 block truncate text-sm font-bold text-content sm:text-base"
+                                >
+                                    {activeModeDefinition.shortLabel}
+                                    <span className="font-medium text-content-muted">
+                                        {` · ${activeModeDefinition.label}`}
+                                    </span>
+                                </span>
+                            </span>
+                            <button
+                                ref={tuneButtonRef}
+                                type="button"
+                                onClick={() => setIsTuneOpen(true)}
+                                aria-haspopup="dialog"
+                                aria-expanded={isTuneOpen}
+                                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 py-2 text-sm font-bold text-brand-light transition-colors hover:border-brand/50 hover:bg-brand/15 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            >
+                                <AudioWaveform
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
+                                Tune
+                            </button>
                         </div>
-                        <p className="mt-3 min-h-5 text-xs text-content-muted sm:text-sm">
+                        <p className="mt-3 min-h-5 max-w-lg text-xs text-content-muted sm:text-sm">
                             {activeModeDefinition.subtitle}
                         </p>
 
                         <div className="relative mt-7 grid aspect-square w-44 place-items-center sm:w-52">
                             <span
                                 aria-hidden="true"
-                                className="absolute inset-0 rounded-full border border-brand/15 bg-brand/5"
+                                className={`absolute inset-0 rounded-full border bg-black/10 transition-colors duration-700 motion-reduce:transition-none ${spectralField.ring}`}
                             />
                             <span
                                 aria-hidden="true"
@@ -310,6 +341,14 @@ export function VibeProviderFallback() {
                     )}
                 </section>
             </div>
+
+            {isTuneOpen && (
+                <WaveDirectionSheet
+                    activeMode={activeMode}
+                    onApply={applyDirection}
+                    onClose={closeTune}
+                />
+            )}
         </main>
     );
 }

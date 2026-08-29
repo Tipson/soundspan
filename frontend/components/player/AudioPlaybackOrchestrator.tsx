@@ -27,6 +27,7 @@ import {
 } from "./audioPlaybackOrchestratorPolicy";
 import { readMigratingStorageItem } from "@/lib/storage-migration";
 import { playbackStateMachine } from "@/lib/audio";
+import { markPlaybackHeartbeat } from "@/lib/audio/playback-liveness";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, memo } from "react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -251,6 +252,9 @@ export const AudioPlaybackOrchestrator = memo(
                     typeof data.timeSec === "number"
                         ? data.timeSec
                         : (data.time ?? 0);
+                if (audioEngine.isPlaying()) {
+                    markPlaybackHeartbeat();
+                }
                 const invocationTrackId =
                     playbackType === "track"
                         ? (currentTrack?.id ?? null)
@@ -599,6 +603,7 @@ export const AudioPlaybackOrchestrator = memo(
             });
 
             const handlePlay = () => {
+                markPlaybackHeartbeat();
                 playbackStateMachine.transition("PLAYING");
                 clearUnexpectedPauseRecoveryCheck();
                 clearStartupPlaybackRecovery();
@@ -998,6 +1003,11 @@ export const AudioPlaybackOrchestrator = memo(
 
             // Transition state machine to LOADING
             playbackStateMachine.forceTransition("LOADING");
+            // Protect an in-flight first load from a waiting service-worker
+            // activation before the engine can emit its first play/progress
+            // event. The heartbeat expires, so a genuinely stuck load still
+            // cannot postpone an update indefinitely.
+            markPlaybackHeartbeat();
 
             let streamUrl: string | null = null;
             let startTime = 0;

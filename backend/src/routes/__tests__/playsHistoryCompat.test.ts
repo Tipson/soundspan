@@ -541,6 +541,41 @@ describe("plays history compatibility", () => {
         });
     });
 
+    it("returns deterministic artwork for youtube history without a stored thumbnail", async () => {
+        mockPlayFindMany.mockResolvedValueOnce([
+            {
+                id: "play-youtube",
+                playedAt: new Date("2026-03-01T10:00:00.000Z"),
+                source: "YOUTUBE_MUSIC",
+                track: null,
+                trackTidal: null,
+                trackYtMusic: {
+                    id: "yt-row-1",
+                    videoId: "dQw4w9WgXcQ",
+                    title: "YouTube Song",
+                    artist: "YouTube Artist",
+                    album: "Single",
+                    duration: 212,
+                    thumbnailUrl: null,
+                },
+            },
+        ]);
+        const res = createRes();
+
+        await listPlaysHandler(
+            {
+                user: { id: "user-1" },
+                query: {},
+            } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body[0].track.album.coverArt).toBe(
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+        );
+    });
+
     it.each([
         ["99999999", 200],
         ["abc", 50],

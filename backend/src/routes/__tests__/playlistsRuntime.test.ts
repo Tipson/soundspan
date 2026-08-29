@@ -988,7 +988,7 @@ describe("playlists route runtime", () => {
         prisma.trackYtMusic.findMany.mockResolvedValueOnce([
             {
                 id: "yt-1",
-                videoId: "yt-video-7",
+                videoId: "dQw4w9WgXcQ",
                 duration: 199,
             },
         ]);
@@ -1053,12 +1053,12 @@ describe("playlists route runtime", () => {
                     trackTidal: null,
                     trackYtMusic: {
                         id: "yt-1",
-                        videoId: "yt-video-7",
+                        videoId: "dQw4w9WgXcQ",
                         title: "YT Song",
                         artist: "YT Artist",
                         album: "YT Album",
                         duration: 199,
-                        thumbnailUrl: "https://yt/thumb.jpg",
+                        thumbnailUrl: null,
                     },
                 },
                 {
@@ -1116,7 +1116,10 @@ describe("playlists route runtime", () => {
         expect(ytItem).toBeDefined();
         expect(ytItem.playback.isPlayable).toBe(true);
         expect(ytItem.track.streamSource).toBe("youtube");
-        expect(ytItem.track.youtubeVideoId).toBe("yt-video-7");
+        expect(ytItem.track.youtubeVideoId).toBe("dQw4w9WgXcQ");
+        expect(ytItem.track.album.coverArt).toBe(
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+        );
 
         const unknownItem = res.body.items.find(
             (entry: any) => entry.provider?.source === "unknown",

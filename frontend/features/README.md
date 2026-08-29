@@ -37,8 +37,16 @@ files, audio embeddings, or the legacy map components that remain in this
 directory.
 
 Vibe stays in this recognized location to avoid broad import churn. Extend the
-personal-radio surface in `VibeAvailability.tsx` and cover user-visible behavior
-in `frontend/tests/component/vibePage.component.test.ts`.
+personal-radio surface in `VibeAvailability.tsx`; its accessible mobile sheet /
+desktop dialog for the supported For you, New to me, and Familiar directions is
+isolated in `WaveDirectionSheet.tsx`. Cover user-visible behavior in
+`frontend/tests/component/vibePage.component.test.ts`.
+
+Home is the single online-first landing page. It composes the personal feed with
+live provider discovery in `home/components/HomeOnlineDiscovery.tsx`; the old
+`/explore` root redirects to Home while its nested provider collection routes
+remain valid. Main navigation intentionally contains only Home, Library, and
+Vibe.
 
 ## Update Rule
 

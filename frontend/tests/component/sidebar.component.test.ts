@@ -174,33 +174,25 @@ test("returns null for auth routes", async () => {
     assert.equal(html, "");
 });
 
-test("renders social navigation without my history link", async () => {
+test("renders focused music navigation without duplicated or social entries", async () => {
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
-    assert.match(html, />Explore</);
+    assert.match(html, />Home</);
     assert.match(html, />Library</);
-    assert.match(html, />Listen Together</);
+    assert.match(html, />Vibe</);
+    assert.doesNotMatch(html, />Explore</);
+    assert.doesNotMatch(html, />Listen Together</);
     assert.doesNotMatch(html, />Audiobooks</);
     assert.doesNotMatch(html, />Podcasts</);
     assert.doesNotMatch(html, /My History/);
-});
-
-test("shows listen-together equalizer marker when active sessions exist", async () => {
-    state.hasActiveSessions = true;
-    state.pathname = "/listen-together";
-
-    const { Sidebar } = await import("../../components/layout/Sidebar");
-    const html = renderToStaticMarkup(React.createElement(Sidebar));
-
-    assert.match(html, /eq-bars/);
 });
 
 test("keeps prefetch enabled for primary sidebar navigation links", async () => {
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
-    const navHrefs = ["/explore", "/library", "/listen-together"];
+    const navHrefs = ["/", "/library", "/vibe"];
 
     for (const href of navHrefs) {
         const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
