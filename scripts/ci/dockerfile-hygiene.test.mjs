@@ -66,6 +66,28 @@ const probeNames = ["livenessProbe", "readinessProbe"];
 const npmToolchainRemovalPattern =
     /rm -rf\s+\/usr\/local\/lib\/node_modules\s+\/usr\/local\/bin\/npm\s+\/usr\/local\/bin\/npx\s+\/usr\/local\/bin\/corepack\b/;
 
+test("AIO skips local audio-analysis processes when the feature is disabled", () => {
+    const dockerfile = readRepoFile("Dockerfile");
+    assert.match(
+        dockerfile,
+        /export AUDIO_ANALYSIS_ENABLED="\$\{AUDIO_ANALYSIS_ENABLED:-true\}"/,
+    );
+    const gatedPrograms = ["audio-analyzer", "vibe-provider-dclap"];
+    for (const program of gatedPrograms) {
+        const programBlock = dockerfile.match(
+            new RegExp(
+                `\\[program:${program}\\]([\\s\\S]*?)(?=\\n\\[program:|\\nEOF)`,
+            ),
+        )?.[1];
+        assert.ok(programBlock, `missing AIO supervisor program ${program}`);
+        assert.match(
+            programBlock,
+            /autostart=%\(ENV_AUDIO_ANALYSIS_ENABLED\)s/,
+            `${program} must follow AUDIO_ANALYSIS_ENABLED`,
+        );
+    }
+});
+
 function readRepoFile(relativePath) {
     return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }

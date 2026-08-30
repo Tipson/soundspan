@@ -379,7 +379,7 @@ priority=40
 [program:audio-analyzer]
 command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer && python3 analyzer.py"
 user=soundspan
-autostart=true
+autostart=%(ENV_AUDIO_ANALYSIS_ENABLED)s
 autorestart=unexpected
 startretries=3
 startsecs=10
@@ -393,7 +393,7 @@ priority=50
 [program:vibe-provider-dclap]
 command=python3 __main__.py
 user=soundspan
-autostart=true
+autostart=%(ENV_AUDIO_ANALYSIS_ENABLED)s
 autorestart=unexpected
 startretries=3
 startsecs=10
@@ -670,6 +670,7 @@ echo "✓ Schema ready flag created"
 gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w stop
 
 # Map AIO/chart tuning variables to the analyzer runtime contract.
+export AUDIO_ANALYSIS_ENABLED="${AUDIO_ANALYSIS_ENABLED:-true}"
 export NUM_WORKERS="${AUDIO_ANALYSIS_WORKERS:-2}"
 export THREADS_PER_WORKER="${AUDIO_ANALYSIS_THREADS_PER_WORKER:-1}"
 export BATCH_SIZE="${AUDIO_ANALYSIS_BATCH_SIZE:-10}"
