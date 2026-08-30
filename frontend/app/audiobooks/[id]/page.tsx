@@ -54,7 +54,7 @@ export default function AudiobookDetailPage() {
     if (!audiobook) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">Audiobook not found</p>
+                <p className="text-gray-400">Аудиокнига не найдена</p>
             </div>
         );
     }
@@ -116,7 +116,7 @@ export default function AudiobookDetailPage() {
                     {/* Description / About */}
                     {showDescription && (
                         <section className="hidden md:block">
-                            <h2 className="text-xl font-bold mb-4">About</h2>
+                            <h2 className="text-xl font-bold mb-4">Описание</h2>
                             <div className="bg-white/5 rounded-md p-4">
                                 <p className="text-sm text-white/70 leading-relaxed">
                                     {cleanDescription}
@@ -128,14 +128,14 @@ export default function AudiobookDetailPage() {
                     {/* Series info */}
                     {audiobook.series && (
                         <section>
-                            <h2 className="text-xl font-bold mb-4">Series</h2>
+                            <h2 className="text-xl font-bold mb-4">Серия</h2>
                             <div className="flex items-center gap-3 text-sm">
                                 <span className="text-brand font-medium">
                                     {audiobook.series.name}
                                 </span>
                                 <span className="text-white/40">•</span>
                                 <span className="text-white/70">
-                                    Book {audiobook.series.sequence}
+                                    Книга {audiobook.series.sequence}
                                 </span>
                             </div>
                         </section>
@@ -143,8 +143,8 @@ export default function AudiobookDetailPage() {
 
                     {/* Playback hint - more subtle */}
                     <p className="text-xs text-white/40 pt-4">
-                        Use the player controls in the bottom bar for playback
-                        speed, seeking, and volume.
+                        В нижней панели можно изменить скорость, перейти к
+                        нужному месту и настроить громкость.
                     </p>
                 </div>
             </div>

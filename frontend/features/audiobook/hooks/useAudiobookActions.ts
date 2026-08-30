@@ -88,11 +88,11 @@ export function useAudiobookActions(
                 });
             }
 
-            toast.success("Marked as completed");
+            toast.success("Отмечено как прослушанное");
             refetch();
         } catch (error) {
             sharedFrontendLogger.error("Failed to mark as completed:", error);
-            toast.error("Failed to mark as completed");
+            toast.error("Не удалось отметить как прослушанное");
         }
     }, [
         audiobook,
@@ -124,11 +124,11 @@ export function useAudiobookActions(
                 updateCurrentTime(0);
             }
 
-            toast.success("Progress reset");
+            toast.success("Прогресс сброшен");
             refetch();
         } catch (error) {
             sharedFrontendLogger.error("Failed to reset progress:", error);
-            toast.error("Failed to reset progress");
+            toast.error("Не удалось сбросить прогресс");
         }
     }, [
         audiobookId,
