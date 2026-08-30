@@ -141,6 +141,9 @@ export async function completeDeviceAudioDownload(
             totalBytes: retained.receipt.bytes,
             integrityVersion: 1,
             contentType: retained.receipt.contentType,
+            persistenceGranted:
+                retained.receipt.persistenceGranted ??
+                record.persistenceGranted,
             errorCode: null,
             errorMessage: null,
             updatedAt: input.now(),

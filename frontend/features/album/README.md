@@ -45,6 +45,7 @@ album tracks in the current browser/PWA. Server acquisition and request actions
 are not mounted in this bar. Removing or saving an album never mutates another
 device's offline queue.
 
-The responsive album page keeps complete long titles visible, stacks artwork
-above metadata on narrow screens, wraps its touch-sized actions, and plays a
+The responsive album page uses the shared artwork-led music-detail hero,
+touch-sized action dock, and canonical track surface. It keeps complete long
+titles visible, stacks artwork above metadata on narrow screens, and plays a
 selected row within the album's ordered playable context.

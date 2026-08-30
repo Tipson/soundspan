@@ -152,6 +152,7 @@ test("personalized shelf plays the complete provider queue from the selected tra
     assert.ok(scrollContainer, "scroll container not found");
     assert.match(scrollContainer.className, /scrollbar-hide/);
     assert.match(scrollContainer.className, /snap-x/);
+    assert.doesNotMatch(scrollContainer.className, /grid-rows-2/);
     assert.match(
         scrollContainer.firstElementChild?.className ?? "",
         /snap-start/,

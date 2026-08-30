@@ -62,11 +62,14 @@ AA.
 
 ### Typography
 
-- **Display:** `Unbounded`, used sparingly for the Wave title, major editorial
-  moments, and branded section markers. It must not be used in dense lists.
-- **Interface/body:** `Onest`, with Cyrillic support, for navigation, controls,
-  metadata, and long-form settings copy.
-- **Utility:** tabular numerals from `Onest` for times, progress, and bitrate.
+- **Display:** the platform interface stack at a stronger weight with optical
+  sizing and tighter tracking, used sparingly for the Wave title and editorial
+  moments. Artwork, not a novelty font, carries product personality.
+- **Interface/body:** the native system UI stack, which provides consistent
+  Cyrillic support and platform-appropriate metrics on Windows, Android, and
+  iOS. The Soundspan wordmark keeps its dedicated brand face.
+- **Utility:** tabular numerals from the system stack for times, progress, and
+  bitrate.
 - Minimum body size is 14 px on desktop and 15 px on mobile; touch controls use
   at least 14 px labels. Secondary text must remain visibly readable.
 

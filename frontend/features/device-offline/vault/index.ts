@@ -1,4 +1,9 @@
 export { createBrowserDirectoryDeviceAudioVault } from "./browserDirectoryVault";
+export {
+    createBrowserPrivateDeviceAudioVault,
+    type BrowserPrivateDeviceAudioVaultOptions,
+    type BrowserPrivateStorageLike,
+} from "./browserPrivateVault";
 export { createBrowserDeviceAudioVaultRuntime } from "./browserRuntime";
 export { createIndexedDbDeviceAudioDirectoryRegistry } from "./indexedDbDirectoryRegistry";
 export {
@@ -8,6 +13,8 @@ export {
     type DeviceAudioAccessState,
     type DeviceAudioDirectoryHandle,
     type DeviceAudioDirectoryRegistry,
+    type DeviceAudioExportRequest,
+    type DeviceAudioExportResult,
     type DeviceAudioFileHandle,
     type DeviceAudioInspectRequest,
     type DeviceAudioInspectResult,
@@ -17,6 +24,7 @@ export {
     type DeviceAudioRemoveRequest,
     type DeviceAudioRemoveResult,
     type DeviceAudioRetainInput,
+    type DeviceAudioStorageKind,
     type DeviceAudioTrackDescriptor,
     type DeviceAudioVault,
     type DeviceAudioVaultErrorCode,
@@ -27,17 +35,47 @@ export {
 } from "./types";
 
 import { createBrowserDirectoryDeviceAudioVault } from "./browserDirectoryVault";
+import {
+    createBrowserPrivateDeviceAudioVault,
+    type BrowserPrivateStorageLike,
+} from "./browserPrivateVault";
 import { createBrowserDeviceAudioVaultRuntime } from "./browserRuntime";
 import { createIndexedDbDeviceAudioDirectoryRegistry } from "./indexedDbDirectoryRegistry";
-import type { DeviceAudioVault } from "./types";
+import type {
+    DeviceAudioDirectoryRegistry,
+    DeviceAudioVault,
+    DeviceAudioVaultRuntime,
+} from "./types";
 
 type DeviceAudioVaultFactory = () => DeviceAudioVault;
 
-const defaultFactory: DeviceAudioVaultFactory = () =>
-    createBrowserDirectoryDeviceAudioVault({
-        registry: createIndexedDbDeviceAudioDirectoryRegistry(),
-        runtime: createBrowserDeviceAudioVaultRuntime(),
+export interface BrowserDeviceAudioVaultOptions {
+    directoryRegistry?: DeviceAudioDirectoryRegistry;
+    directoryRuntime?: DeviceAudioVaultRuntime;
+    privateStorage?: BrowserPrivateStorageLike | null;
+}
+
+/** Prefer normal user-visible files, using private per-device storage only when required. */
+export function createBrowserDeviceAudioVault(
+    input: BrowserDeviceAudioVaultOptions = {},
+): DeviceAudioVault {
+    const directoryRuntime =
+        input.directoryRuntime ?? createBrowserDeviceAudioVaultRuntime();
+    if (directoryRuntime.isSupported()) {
+        return createBrowserDirectoryDeviceAudioVault({
+            registry:
+                input.directoryRegistry ??
+                createIndexedDbDeviceAudioDirectoryRegistry(),
+            runtime: directoryRuntime,
+        });
+    }
+    return createBrowserPrivateDeviceAudioVault({
+        storage: input.privateStorage,
+        runtime: directoryRuntime,
     });
+}
+
+const defaultFactory: DeviceAudioVaultFactory = createBrowserDeviceAudioVault;
 
 let installedFactory: DeviceAudioVaultFactory = defaultFactory;
 let singleton: DeviceAudioVault | null = null;

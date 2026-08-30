@@ -77,7 +77,7 @@ export function SearchArtistsGrid({
 
     return (
         <div
-            className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6"
             data-tv-section="search-results-artists"
         >
             {visibleArtists.map((card, index) => {
@@ -120,9 +120,9 @@ export function SearchArtistsGrid({
                         data-tv-card
                         data-tv-card-index={index}
                         tabIndex={0}
-                        className="group rounded-lg bg-surface-sunken p-4 transition-colors hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        className="group min-w-0 rounded-2xl border border-transparent bg-white/[0.025] p-3 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.1] hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-4"
                     >
-                        <div className="relative mb-4 flex aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-elevated">
+                        <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/15 sm:mb-4">
                             {imageUrl ? (
                                 <Image
                                     src={imageUrl}
@@ -134,10 +134,10 @@ export function SearchArtistsGrid({
                                     unoptimized
                                 />
                             ) : (
-                                <Music className="h-12 w-12 text-gray-400" />
+                                <Music className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
                             )}
                         </div>
-                        <h3 className="mb-1 line-clamp-1 text-base font-bold text-white">
+                        <h3 className="mb-1 line-clamp-1 text-sm font-bold text-content sm:text-base">
                             {artistName}
                         </h3>
                         <div className="flex items-center gap-2">

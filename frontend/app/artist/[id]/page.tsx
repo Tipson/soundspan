@@ -580,25 +580,24 @@ export default function ArtistPage() {
                 />
             </ArtistHero>
 
-            {/* Main Content - fills remaining viewport height */}
-            <div className="relative min-h-[50vh] flex-1">
-                {/* Dynamic color gradient background */}
+            <div className="relative min-h-[50vh] flex-1 bg-surface">
                 <div
-                    className="absolute inset-0 pointer-events-none"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-80 opacity-70"
                     style={{
                         background: colors
-                            ? `linear-gradient(to bottom, ${colors.vibrant}15 0%, ${colors.vibrant}08 15%, ${colors.darkVibrant}05 30%, transparent 50%)`
-                            : "transparent",
+                            ? `linear-gradient(to bottom, ${colors.vibrant}1f 0%, ${colors.darkVibrant}0d 52%, transparent 100%)`
+                            : "linear-gradient(to bottom, color-mix(in srgb, var(--music-action) 8%, transparent), transparent)",
                     }}
                 />
-                <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,rgba(16,16,16,0.4)_100%)] pointer-events-none" />
 
-                <div className="relative mx-auto w-full max-w-[1800px] space-y-10 px-4 py-7 sm:px-6 lg:px-8">
-                    <ArtistViewTabs
-                        activeView={activeView}
-                        pathname={pathname}
-                        searchParams={serializedSearchParams}
-                    />
+                <div className="relative mx-auto w-full max-w-[1800px] space-y-10 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+                    <div className="sticky top-2 z-20 rounded-[18px] border border-white/[0.08] bg-black/55 p-2 shadow-[0_18px_48px_rgb(0_0_0/0.2)] backdrop-blur-xl">
+                        <ArtistViewTabs
+                            activeView={activeView}
+                            pathname={pathname}
+                            searchParams={serializedSearchParams}
+                        />
+                    </div>
 
                     {/* Popular Tracks */}
                     {showTracks && visibleArtistTracks.length > 0 ? (

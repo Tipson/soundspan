@@ -457,7 +457,7 @@ test("shows Pause primary action and active like controls when a liked track is 
     assert.match(html, /data-mode="up-only"/);
     assert.match(html, /data-signal="thumbs_up"/);
     assert.match(html, /data-resolve-from-query="false"/);
-    assert.match(html, /data-button-size="h-8 w-8"/);
+    assert.match(html, /data-button-size="h-11 w-11"/);
     assert.match(html, /data-icon-size="h-4 w-4"/);
 
     assert.doesNotMatch(html, /Delete Playlist/i);

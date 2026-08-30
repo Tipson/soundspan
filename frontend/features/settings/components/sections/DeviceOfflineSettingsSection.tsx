@@ -42,6 +42,7 @@ export function DeviceOfflineSettingsSection() {
     const reconnectRememberedFolder =
         Boolean(storage.directoryName) &&
         (storage.status === "needs-setup" || storage.status === "error");
+    const usesPrivateStorage = storage.storageKind === "browser-private";
 
     const chooseStorage = async () => {
         setIsSaving(true);
@@ -116,15 +117,23 @@ export function DeviceOfflineSettingsSection() {
                 {storage.status === "ready" ? (
                     <>
                         <p className="text-sm font-semibold text-content-heading">
-                            Device folder ready
+                            {usesPrivateStorage
+                                ? "Private offline storage ready"
+                                : "Device folder ready"}
                         </p>
                         <p className="mt-1 text-sm text-content-muted">
-                            New downloads will use{" "}
-                            <span className="font-medium text-content-body">
-                                {storage.directoryName ??
-                                    "the selected Soundspan folder"}
-                            </span>
-                            .
+                            {usesPrivateStorage ? (
+                                storage.explanation
+                            ) : (
+                                <>
+                                    New downloads will use{" "}
+                                    <span className="font-medium text-content-body">
+                                        {storage.directoryName ??
+                                            "the selected Soundspan folder"}
+                                    </span>
+                                    .
+                                </>
+                            )}
                         </p>
                     </>
                 ) : (
@@ -171,7 +180,7 @@ export function DeviceOfflineSettingsSection() {
             <SettingsRow
                 htmlFor="device-auto-download-liked"
                 label="Automatically download liked songs on this device"
-                description="Off by default. After a device folder is ready, Soundspan saves liked songs gradually while the app is open, visible, and online, then resumes later after an interruption."
+                description="Off by default. After offline storage is ready, Soundspan saves liked songs gradually while the app is open, visible, and online, then resumes later after an interruption."
             >
                 <SettingsToggle
                     id="device-auto-download-liked"

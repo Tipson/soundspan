@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Music } from "lucide-react";
+import { ArrowUpRight, Music } from "lucide-react";
 import { api } from "@/lib/api";
 import { Artist, DiscoverResult } from "../types";
 import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
@@ -56,6 +56,7 @@ export function TopResult({
         <section
             data-tv-section="search-top-result"
             aria-labelledby="search-top-result-title"
+            className="min-w-0"
         >
             <h2
                 id="search-top-result-title"
@@ -65,14 +66,14 @@ export function TopResult({
             </h2>
             <Link
                 href={artistHref}
-                className="group relative isolate flex min-h-[13rem] w-full items-end overflow-hidden rounded-[1.5rem] border border-white/[0.08] bg-surface-sunken p-5 shadow-xl shadow-black/20 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.15] hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:min-h-[15rem] sm:p-6"
+                className="group relative isolate flex min-h-[13.5rem] w-full items-end overflow-hidden rounded-[1.5rem] border border-white/[0.09] bg-white/[0.035] p-5 shadow-xl shadow-black/20 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.16] hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:min-h-[15rem] sm:p-6"
                 data-tv-card
                 data-tv-card-index={0}
                 tabIndex={0}
             >
                 <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/20 via-transparent to-transparent"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/25 via-brand/[0.04] to-transparent"
                 />
                 <div className="relative z-10 h-24 w-24 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface-elevated shadow-2xl shadow-black/40 sm:h-28 sm:w-28">
                     {imageUrl ? (
@@ -112,8 +113,9 @@ export function TopResult({
                             />
                         )}
                 </div>
-                <span className="relative z-10 hidden min-h-11 shrink-0 items-center rounded-full bg-content px-4 text-xs font-black text-surface shadow-lg transition-transform duration-200 group-hover:scale-[1.02] motion-reduce:transition-none sm:inline-flex">
-                    View artist
+                <span className="relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-content text-surface shadow-lg transition-transform duration-200 group-hover:scale-[1.04] motion-reduce:transition-none">
+                    <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
+                    <span className="sr-only">View artist</span>
                 </span>
             </Link>
         </section>

@@ -174,7 +174,10 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                 >
                     <MediaControlsHandler />
                     <TopBar isActivityPanelOpen={activityPanel.isOpen} />
-                    <div className="desktop-shell-workspace flex min-h-0 flex-1 gap-2 overflow-hidden px-2 pb-2">
+                    <div
+                        data-shell-workspace="desktop"
+                        className="desktop-shell-workspace flex min-h-0 flex-1 gap-2 overflow-hidden px-2 pb-2"
+                    >
                         <Sidebar />
                         <main
                             id="main-content"

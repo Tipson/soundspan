@@ -30,7 +30,7 @@ function AccountCollectionCard({ card }: { card: CollectionCard }) {
     return (
         <Link
             href={card.href}
-            className={`group relative flex min-h-28 flex-col justify-between overflow-hidden rounded-2xl border p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+            className={`group relative flex min-h-28 flex-col justify-between overflow-hidden rounded-[20px] border p-4 transition-[transform,background-color,border-color] hover:-translate-y-0.5 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none ${
                 card.featured
                     ? "col-span-2 border-brand/25 bg-gradient-to-br from-brand/30 via-ai/10 to-surface-raised hover:border-brand/40"
                     : "border-white/8 bg-surface-raised hover:border-white/15 hover:bg-surface-elevated"

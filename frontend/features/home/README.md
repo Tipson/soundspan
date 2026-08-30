@@ -22,6 +22,7 @@ Start-here guide for `frontend/features/home`.
 | `components/HomeHero.tsx` | components |
 | `components/HomeQuickActions.tsx` | direct links to liked tracks, history, import, and search |
 | `components/HomeWaveHero.tsx` | personalized My Wave launch surface |
+| `components/HomeMadeForYou.tsx` | bounded set of distinct account-backed and generated mixes |
 | `components/LibraryRadioStations.tsx` | components |
 | `components/libraryRadioStationsGenreSelection.ts` | components |
 | `components/MixesGrid.tsx` | components |
@@ -38,19 +39,22 @@ Start-here guide for `frontend/features/home`.
 
 ## Playback Behavior
 
-- Home starts with a balanced My Wave queue built from Quick picks, discovery,
+- Home opens with a compact balanced My Wave action built from Quick picks, discovery,
   and Listen again, resets its direction to For you, then marks the queue for
   automatic provider continuation. The launch surface describes the continuous
   flow without exposing the finite seed-window size as a track limit. Its
   artwork fan comes from that account's current feed rather than decorative or
   placeholder recommendations.
-- Made For You combines only playable generated collections and non-empty
-  account shelves. Quick picks, Fresh finds, and Listen again are launchable as
-  complete queues; an empty Discover Weekly or mix never produces a dead card.
-- Home keeps online discovery intentionally short. It removes non-navigable and
-  duplicate rows, limits regional catalog spillover and shows at most three
-  prioritized provider shelves, eight items per shelf, and compact mood, genre,
-  mix, and chart previews. The full catalog remains reachable through search.
+- Continue listening is one resumable track row and disappears when the account
+  has no recent provider history.
+- Made For You exposes at most six playable collections. It derives distinct
+  Daily blend, Fresh finds, Back in rotation, and Quick picks recipes from
+  independent account signals, deduplicates identical recipes, then fills any
+  remaining slots with non-empty Discover Weekly and generated mixes.
+- Home folds online discovery into at most one station row and one discovery
+  row, deduplicates items across both, filters regional spillover, and hides
+  either row when it has nothing navigable. A single context grid links Calm,
+  Energy, Focus, Workout, Favorites, and Forgotten directly into Vibe.
 - The primary mobile navigation links directly to Vibe so the endless personal
   radio stays one tap away; podcasts and audiobooks are not promoted on Home or
   in the primary music navigation.

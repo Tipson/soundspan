@@ -9,9 +9,10 @@ const forbiddenCalls = {
     recentlyAdded: 0,
     podcasts: 0,
     audiobooks: 0,
+    recommendations: 0,
+    popularArtists: 0,
 };
 const featureState = { discovery: true, autoPlaylists: true };
-let popularArtistsEnabled: boolean | undefined;
 
 const queryResult = <T>(data: T) => ({
     data,
@@ -104,15 +105,15 @@ mock.module("@/hooks/useQueries", {
             forbiddenCalls.audiobooks += 1;
             return queryResult([]);
         },
-        useRecommendationsQuery: () => queryResult({ artists: [] }),
+        useRecommendationsQuery: () => {
+            forbiddenCalls.recommendations += 1;
+            return queryResult({ artists: [] });
+        },
         useLikedPlaylistQuery: () => queryResult({ total: 1, tracks: [] }),
         useDiscoverWeeklySummaryQuery: () => queryResult(null),
         useMixesQuery: () => queryResult([]),
-        usePopularArtistsQuery: (
-            _limit: number,
-            options?: { enabled?: boolean },
-        ) => {
-            popularArtistsEnabled = options?.enabled;
+        usePopularArtistsQuery: () => {
+            forbiddenCalls.popularArtists += 1;
             return queryResult({ artists: [] });
         },
         useYtMusicHomeShelvesQuery: () => queryResult([]),
@@ -134,13 +135,13 @@ beforeEach(() => {
     forbiddenCalls.recentlyAdded = 0;
     forbiddenCalls.podcasts = 0;
     forbiddenCalls.audiobooks = 0;
+    forbiddenCalls.recommendations = 0;
+    forbiddenCalls.popularArtists = 0;
     featureState.discovery = true;
     featureState.autoPlaylists = true;
-    popularArtistsEnabled = undefined;
 });
 
-test("Home gates Last.fm popular artists with the discovery feature", async () => {
-    featureState.discovery = false;
+test("Home does not mount generic Last.fm shelves on the personal landing", async () => {
     const { useHomeData } =
         await import("../../features/home/hooks/useHomeData");
     const Probe = () => {
@@ -156,10 +157,11 @@ test("Home gates Last.fm popular artists with the discovery feature", async () =
         ),
     );
 
-    assert.equal(popularArtistsEnabled, false);
+    assert.equal(forbiddenCalls.recommendations, 0);
+    assert.equal(forbiddenCalls.popularArtists, 0);
 });
 
-test("Home loads music recommendations without legacy local-media queries", async () => {
+test("Home loads the personal online feed without legacy local-media queries", async () => {
     const { useHomeData } =
         await import("../../features/home/hooks/useHomeData");
     let result: ReturnType<typeof useHomeData> | null = null;
@@ -182,6 +184,8 @@ test("Home loads music recommendations without legacy local-media queries", asyn
         recentlyAdded: 0,
         podcasts: 0,
         audiobooks: 0,
+        recommendations: 0,
+        popularArtists: 0,
     });
     assert.equal("recentPodcasts" in result, false);
     assert.equal("recentAudiobooks" in result, false);

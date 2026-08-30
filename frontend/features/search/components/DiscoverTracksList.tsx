@@ -170,7 +170,7 @@ export function DiscoverTracksList({
     }
 
     return (
-        <div className="space-y-1" data-tv-section="search-discover-tracks">
+        <div className="space-y-1.5" data-tv-section="search-discover-tracks">
             {visibleTracks.map((track, index) => {
                 const imageUrl = getProxiedImageUrl(track.image);
                 const key = rowKey(track, index);
@@ -200,14 +200,14 @@ export function DiscoverTracksList({
                                 handleRowClick(track, key);
                             }
                         }}
-                        className="group flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                        className="group flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-transparent px-2.5 py-2 transition-colors hover:border-white/[0.06] hover:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:gap-4 sm:px-3"
                         aria-label={
                             isPlayable
                                 ? `Play ${track.name} by ${track.artist ?? ""}`
                                 : `Go to ${track.artist ?? "artist"}`
                         }
                     >
-                        <div className="relative w-10 h-10 rounded bg-surface-elevated flex items-center justify-center overflow-hidden shrink-0">
+                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-elevated">
                             {imageUrl ? (
                                 <Image
                                     src={imageUrl}
@@ -218,7 +218,7 @@ export function DiscoverTracksList({
                                     unoptimized
                                 />
                             ) : (
-                                <Music className="w-5 h-5 text-gray-400" />
+                                <Music className="h-5 w-5 text-content-muted" />
                             )}
                             {isPlayable && (
                                 <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/50">
@@ -227,14 +227,14 @@ export function DiscoverTracksList({
                             )}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                            <p className="flex truncate text-sm font-semibold text-content items-center gap-1.5">
                                 <span className="truncate">{track.name}</span>
                                 {match?.source === "tidal" && <TidalBadge />}
                                 {match?.source === "youtube" && (
                                     <YouTubeBadge />
                                 )}
                             </p>
-                            <p className="text-xs text-gray-400 truncate">
+                            <p className="truncate text-xs text-content-secondary">
                                 {track.artist}
                                 {track.album ? ` — ${track.album}` : ""}
                             </p>

@@ -3,66 +3,34 @@ import { mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-mock.module("@/features/explore/components/YtMusicMixesSection", {
+const Icon = () => React.createElement("i");
+
+mock.module("lucide-react", {
     namedExports: {
-        YtMusicMixesSection: ({ mixes }: { mixes: unknown[] }) =>
-            React.createElement("div", null, `provider-mixes:${mixes.length}`),
+        ChevronRight: Icon,
+        Dumbbell: Icon,
+        Flame: Icon,
+        Heart: Icon,
+        History: Icon,
+        Leaf: Icon,
+        Music2: Icon,
+        Sparkles: Icon,
+        Zap: Icon,
     },
 });
 
-mock.module("@/features/explore/components/MoodsGenresSection", {
+mock.module("@/components/ui/CachedImage", {
     namedExports: {
-        MoodsGenresSection: ({
-            moodCategories,
-            genreCategories,
-        }: {
-            moodCategories: unknown[];
-            genreCategories: unknown[];
-        }) =>
-            React.createElement(
-                "div",
-                null,
-                `provider-categories:${moodCategories.length}:${genreCategories.length}`,
-            ),
+        CachedImage: ({ alt }: { alt: string }) =>
+            React.createElement("img", { alt }),
     },
 });
 
-mock.module("@/features/explore/components/FeaturedShelvesSection", {
+mock.module("@/lib/api", {
     namedExports: {
-        FeaturedShelvesSection: ({
-            homeShelves,
-        }: {
-            homeShelves: Array<{ title?: string }>;
-        }) =>
-            React.createElement(
-                "div",
-                null,
-                `provider-shelves:${homeShelves.map((shelf) => shelf.title).join("|")}`,
-            ),
-    },
-});
-
-mock.module("@/features/home/components/FeaturedPlaylistsGrid", {
-    namedExports: {
-        FeaturedPlaylistsGrid: ({ playlists }: { playlists: unknown[] }) =>
-            React.createElement(
-                "div",
-                null,
-                `provider-charts:${playlists.length}`,
-            ),
-    },
-});
-
-mock.module("@/features/home/components/SectionHeader", {
-    namedExports: {
-        SectionHeader: ({ title }: { title: string }) =>
-            React.createElement("h2", null, title),
-    },
-});
-
-mock.module("@/components/ui/YouTubeBadge", {
-    namedExports: {
-        YouTubeBadge: () => React.createElement("span", null, "YouTube Music"),
+        api: {
+            getBrowseImageUrl: (value: string) => value,
+        },
     },
 });
 
@@ -71,79 +39,76 @@ const props = {
     ytMusicMixes: [
         {
             playlistId: "mix",
-            title: "Provider mix",
+            title: "Your provider mix",
             description: "Personal provider mix",
-            thumbnails: [],
+            thumbnails: [{ url: "/mix.jpg", width: 240 }],
             count: null,
         },
     ],
-    moodCategories: [
-        { title: "Mood", items: [{ title: "Focus", params: "focus" }] },
-    ],
-    genreCategories: [
-        { title: "Genre", items: [{ title: "Rock", params: "rock" }] },
-    ],
-    isMoodsLoading: false,
     homeShelves: [
         {
             title: "Made for you",
             contents: [
                 {
-                    title: "Personal playlist",
+                    title: "Personal station",
                     playlistId: "personal",
+                    thumbnailUrl: "/personal.jpg",
                 },
             ],
         },
         {
             title: "Schlager essentials",
-            contents: [{ title: "Regional playlist", playlistId: "regional" }],
+            contents: [{ title: "Wrong region", playlistId: "regional" }],
         },
         {
             title: "New releases",
             contents: [
-                { title: "Fresh album", browseId: "album", type: "album" },
+                {
+                    title: "Fresh album",
+                    browseId: "album",
+                    type: "album",
+                    thumbnailUrl: "/album.jpg",
+                },
+                {
+                    title: "Duplicate station",
+                    playlistId: "personal",
+                },
             ],
-        },
-        {
-            title: "Popular right now",
-            contents: [{ title: "Popular playlist", playlistId: "popular" }],
-        },
-        {
-            title: "A fourth generic shelf",
-            contents: [{ title: "Generic playlist", playlistId: "generic" }],
         },
     ],
     chartPlaylists: [
         {
             id: "chart",
-            source: "ytmusic" as const,
-            type: "track" as const,
+            source: "ytmusic",
+            type: "track",
             title: "Chart track",
             description: "Artist",
             creator: "Artist",
-            imageUrl: null,
+            imageUrl: "/chart.jpg",
             url: "https://music.youtube.com/watch?v=chart",
         },
     ],
 };
 
-test("Home online discovery renders live provider-backed sections", async () => {
+test("Home discovery becomes one station row, one discovery row, and one context row", async () => {
     const { HomeOnlineDiscovery } =
         await import("../../features/home/components/HomeOnlineDiscovery");
     const html = renderToStaticMarkup(
         React.createElement(HomeOnlineDiscovery, props),
     );
 
-    assert.match(html, /Explore something new/);
-    assert.match(html, /provider-mixes:1/);
-    assert.match(html, /provider-categories:1:1/);
-    assert.match(
-        html,
-        /provider-shelves:Made for you\|New releases\|Popular right now/,
-    );
-    assert.doesNotMatch(html, /Schlager|A fourth generic shelf/);
-    assert.match(html, /provider-charts:1/);
-    assert.match(html, /YouTube Music/);
+    assert.match(html, /Stations for you/);
+    assert.match(html, /Your provider mix/);
+    assert.match(html, /Personal station/);
+    assert.match(html, /New &amp; noteworthy/);
+    assert.match(html, /Fresh album/);
+    assert.match(html, /Chart track/);
+    assert.match(html, /href="\/explore\/yt-playlist\/chart"/);
+    assert.match(html, /Pick a moment/);
+    assert.match(html, /href="\/vibe\?mood=calm"/);
+    assert.match(html, /href="\/vibe\?mood=workout"/);
+    assert.doesNotMatch(html, /Schlager|Wrong region/);
+    assert.equal((html.match(/Personal station/g) ?? []).length, 1);
 });
 
 test("Home shelf curation removes duplicate and non-navigable provider rows", async () => {
@@ -201,12 +166,50 @@ test("Home shelf curation recognizes Russian personal and discovery shelves", as
     );
 });
 
-test("Home online discovery does not invent content when provider browsing is off", async () => {
+test("Home discovery deduplicates chart playlists against provider shelves by playlist id", async () => {
+    const { buildHomeDiscoveryRows } =
+        await import("../../features/home/components/HomeOnlineDiscovery");
+
+    const rows = buildHomeDiscoveryRows({
+        ytMusicMixes: [],
+        homeShelves: [
+            {
+                title: "New releases",
+                contents: [
+                    {
+                        title: "Provider playlist",
+                        playlistId: "shared-playlist",
+                    },
+                ],
+            },
+        ],
+        chartPlaylists: [
+            {
+                id: "shared-playlist",
+                source: "ytmusic",
+                type: "playlist",
+                title: "Duplicate chart playlist",
+                description: null,
+                creator: "Provider",
+                imageUrl: null,
+                url: "https://music.youtube.com/playlist?list=shared-playlist",
+            },
+        ],
+    });
+
+    assert.deepEqual(
+        rows.discoveries.map((item) => item.title),
+        ["Provider playlist"],
+    );
+});
+
+test("Home keeps mood shortcuts when provider browsing is off", async () => {
     const { HomeOnlineDiscovery } =
         await import("../../features/home/components/HomeOnlineDiscovery");
     const html = renderToStaticMarkup(
         React.createElement(HomeOnlineDiscovery, { ...props, enabled: false }),
     );
 
-    assert.equal(html, "");
+    assert.match(html, /Pick a moment/);
+    assert.doesNotMatch(html, /Stations for you|New &amp; noteworthy/);
 });

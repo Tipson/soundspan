@@ -217,7 +217,7 @@ export function WaveDirectionSheet({
 
     return (
         <div
-            className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/80 px-0 backdrop-blur-md sm:items-center sm:px-5"
+            className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/65 px-0 backdrop-blur-sm sm:items-center sm:px-5"
             onMouseDown={(event) => {
                 if (event.target === event.currentTarget) onClose();
             }}
@@ -225,16 +225,17 @@ export function WaveDirectionSheet({
         >
             <div
                 ref={dialogRef}
+                data-testid="wave-tune-sheet"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="wave-direction-title"
                 aria-describedby="wave-direction-description"
-                className="max-h-[88dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-surface-raised px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/60 sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
+                className="wave-material max-h-[90dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-surface-raised/95 px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:max-w-2xl sm:rounded-[2rem] sm:p-7"
             >
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-light">
-                            What should come next?
+                            Change the feel
                         </p>
                         <h2
                             id="wave-direction-title"
@@ -247,8 +248,8 @@ export function WaveDirectionSheet({
                             className="mt-2 max-w-md text-sm leading-6 text-content-secondary"
                         >
                             Choose how close the next picks stay to your
-                            listening history. Your current song keeps playing
-                            while the Wave changes course.
+                            listening history, then add a mood. Your current
+                            song keeps playing while the Wave changes course.
                         </p>
                     </div>
                     <button
@@ -270,7 +271,7 @@ export function WaveDirectionSheet({
                     aria-label="My Wave direction"
                     tabIndex={-1}
                     onKeyDown={handleRadioKeyDown}
-                    className="mt-6 grid gap-3 sm:grid-cols-3"
+                    className="mt-3 grid gap-2 sm:grid-cols-3"
                 >
                     {WAVE_MODES.map((mode) => {
                         const selected = mode.id === draftMode;
@@ -283,14 +284,14 @@ export function WaveDirectionSheet({
                                 aria-label={mode.label}
                                 tabIndex={selected ? 0 : -1}
                                 onClick={() => setDraftMode(mode.id)}
-                                className={`group flex min-h-[7.5rem] w-full items-center gap-4 rounded-2xl border px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:min-h-[12rem] sm:flex-col sm:items-start ${
+                                className={`group flex min-h-[5.5rem] w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-[transform,background-color,border-color] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                     selected
                                         ? "border-brand/50 bg-brand/12"
                                         : "border-white/8 bg-black/20 hover:border-white/15 hover:bg-white/[0.055]"
                                 }`}
                             >
                                 <span
-                                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition-colors motion-reduce:transition-none ${
+                                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors motion-reduce:transition-none ${
                                         selected
                                             ? "bg-brand text-black"
                                             : "bg-white/[0.06] text-content-secondary group-hover:text-content"
@@ -309,13 +310,13 @@ export function WaveDirectionSheet({
                                     )}
                                 </span>
                                 <span className="min-w-0 flex-1 whitespace-normal break-words">
-                                    <span className="block text-[0.65rem] font-bold uppercase tracking-[0.14em] text-brand-light">
+                                    <span className="block text-[0.62rem] font-bold uppercase tracking-[0.14em] text-brand-light">
                                         {mode.shortLabel}
                                     </span>
-                                    <span className="mt-1 block text-base font-bold text-content">
+                                    <span className="mt-0.5 block text-sm font-bold text-content">
                                         {mode.label}
                                     </span>
-                                    <span className="mt-1 block text-xs leading-5 text-content-muted sm:text-sm">
+                                    <span className="mt-0.5 block text-xs leading-4 text-content-muted">
                                         {mode.subtitle}
                                     </span>
                                 </span>
@@ -324,14 +325,13 @@ export function WaveDirectionSheet({
                     })}
                 </div>
 
-                <div className="mt-7 border-t border-white/8 pt-6">
+                <div className="mt-6 border-t border-white/8 pt-5">
                     <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
                             Mood or moment
                         </p>
                         <p className="mt-1 text-sm leading-6 text-content-secondary">
-                            This changes what My Wave searches and ranks; it
-                            does not replace the direction above.
+                            Add a moment without changing the direction above.
                         </p>
                     </div>
                     <div
@@ -339,7 +339,7 @@ export function WaveDirectionSheet({
                         aria-label="My Wave mood"
                         tabIndex={-1}
                         onKeyDown={handleMoodRadioKeyDown}
-                        className="mt-4 grid gap-2 sm:grid-cols-2"
+                        className="mt-3 flex flex-wrap gap-2"
                     >
                         {WAVE_MOODS.map((mood) => {
                             const selected = mood.id === draftMood;
@@ -352,14 +352,14 @@ export function WaveDirectionSheet({
                                     aria-label={mood.label}
                                     tabIndex={selected ? 0 : -1}
                                     onClick={() => setDraftMood(mood.id)}
-                                    className={`group flex min-h-[4.75rem] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                                    className={`group flex min-h-11 min-w-[9.5rem] flex-1 items-center gap-2.5 rounded-full border px-3.5 py-2.5 text-left transition-[transform,background-color,border-color] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                         selected
                                             ? "border-brand/50 bg-brand/12"
                                             : "border-white/8 bg-black/20 hover:border-white/15 hover:bg-white/[0.055]"
                                     }`}
                                 >
                                     <span
-                                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
+                                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
                                             selected
                                                 ? "bg-brand text-black"
                                                 : "bg-white/[0.06] text-content-secondary"
@@ -381,7 +381,7 @@ export function WaveDirectionSheet({
                                         <span className="block text-sm font-bold text-content">
                                             {mood.label}
                                         </span>
-                                        <span className="mt-0.5 block text-xs leading-5 text-content-muted">
+                                        <span className="mt-0.5 hidden text-xs leading-4 text-content-muted min-[480px]:block">
                                             {mood.subtitle}
                                         </span>
                                     </span>

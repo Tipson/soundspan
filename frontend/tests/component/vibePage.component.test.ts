@@ -20,6 +20,8 @@ const state = {
     personalizedMood: null as string | null,
     playedTrackIds: [] as string[],
     playedAsVibeQueue: false,
+    isShuffle: true,
+    shuffleIndices: [2, 1, 0] as number[],
     vibeModeEnabled: false,
     waveMode: "for-you",
     vibeQueueIds: [] as string[],
@@ -27,6 +29,9 @@ const state = {
     upcomingQueueCalls: [] as string[][],
     upcomingPreservesOrder: false,
     advanceOrigins: [] as string[],
+    isPlaying: false,
+    pauseCount: 0,
+    playCount: 0,
     currentTrack: null as null | { id: string; title: string },
     personalizedFeed: createPersonalizedFeed(),
 };
@@ -107,6 +112,7 @@ mock.module("lucide-react", {
         History: Icon,
         ListMusic: Icon,
         SkipForward: Icon,
+        Pause: Icon,
         ThumbsDown: Icon,
     },
 });
@@ -154,6 +160,12 @@ mock.module("@/lib/audio-controls-context", {
                 state.playedAsVibeQueue = isVibeQueue === true;
             },
             advanceQueue: (origin: string) => state.advanceOrigins.push(origin),
+            pause: () => {
+                state.pauseCount += 1;
+            },
+            play: () => {
+                state.playCount += 1;
+            },
             setUpcoming: (
                 tracks: Array<{ id: string }>,
                 preserveOrder?: boolean,
@@ -166,6 +178,12 @@ mock.module("@/lib/audio-controls-context", {
     },
 });
 
+mock.module("@/lib/audio-playback-context", {
+    namedExports: {
+        usePlaybackStatus: () => ({ isPlaying: state.isPlaying }),
+    },
+});
+
 mock.module("@/lib/audio/providerRadioContinuation", {
     namedExports: {
         toProviderPlaybackTrack: (track: { id: string }) => track,
@@ -175,6 +193,12 @@ mock.module("@/lib/audio/providerRadioContinuation", {
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
+            setIsShuffle: (enabled: boolean) => {
+                state.isShuffle = enabled;
+            },
+            setShuffleIndices: (indices: number[]) => {
+                state.shuffleIndices = indices;
+            },
             setVibeMode: (enabled: boolean) => {
                 state.vibeModeEnabled = enabled;
             },
@@ -296,6 +320,8 @@ beforeEach(() => {
     state.personalizedMood = null;
     state.playedTrackIds = [];
     state.playedAsVibeQueue = false;
+    state.isShuffle = true;
+    state.shuffleIndices = [2, 1, 0];
     state.vibeModeEnabled = false;
     state.waveMode = "for-you";
     state.vibeQueueIds = [];
@@ -303,6 +329,9 @@ beforeEach(() => {
     state.upcomingQueueCalls = [];
     state.upcomingPreservesOrder = false;
     state.advanceOrigins = [];
+    state.isPlaying = false;
+    state.pauseCount = 0;
+    state.playCount = 0;
     state.currentTrack = null;
     state.personalizedFeed = createPersonalizedFeed();
     window.localStorage.clear();
@@ -387,34 +416,53 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     const surface = mounted.container.querySelector<HTMLElement>(
         '[data-testid="wave-surface"]',
     );
-    const signalDial = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="wave-signal-dial"]',
+    const ambientField = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-ambient-field"]',
     );
-    const directionCard = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="wave-direction-card"]',
+    const currentTuning = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-current-tuning"]',
     );
     const heading = mounted.container.querySelector("h1");
 
     assert.ok(surface);
     assert.equal(surface.getAttribute("aria-labelledby"), "wave-title");
-    assert.ok(signalDial);
-    assert.ok(directionCard);
+    assert.ok(ambientField);
+    assert.ok(currentTuning);
     assert.equal(heading?.id, "wave-title");
     assert.equal(heading?.textContent?.trim(), "My Wave");
     assert.match(
         mounted.container.textContent ?? "",
-        /starts with a few picks, then keeps finding what comes next/i,
+        /keeps finding what comes next/i,
     );
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
         /\b\d+\s+(?:tracks?|songs?)\s+(?:ready|queued)\b/i,
     );
-    assert.doesNotMatch(directionCard.className, /\btruncate\b/);
+    assert.doesNotMatch(currentTuning.className, /\btruncate\b/);
+    assert.doesNotMatch(mounted.container.textContent ?? "", /\bLive\b|radar/i);
 
     const playWave = findButton(mounted.container, "Play My Wave");
     assert.ok(playWave);
-    assert.match(playWave.className, /min-h-36/);
-    assert.match(playWave.className, /min-w-36/);
+    assert.equal(playWave.getAttribute("data-testid"), "wave-main-toggle");
+    assert.match(playWave.className, /min-h-20/);
+    assert.match(playWave.className, /min-w-20/);
+
+    await unmountPage(mounted);
+});
+
+test("the single primary Wave control pauses active Wave playback", async () => {
+    state.currentTrack = { id: "yt:playing-1", title: "Playing Track" };
+    state.vibeModeEnabled = true;
+    state.isPlaying = true;
+    const mounted = await mountPage();
+
+    const pauseWave = findButton(mounted.container, "Pause My Wave");
+    assert.ok(pauseWave);
+    assert.equal(pauseWave.getAttribute("data-testid"), "wave-main-toggle");
+    await React.act(async () => pauseWave.click());
+
+    assert.equal(state.pauseCount, 1);
+    assert.deepEqual(state.playedTrackIds, []);
 
     await unmountPage(mounted);
 });
@@ -451,6 +499,7 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
         '[role="dialog"][aria-labelledby="wave-direction-title"]',
     );
     assert.ok(dialog);
+    assert.equal(dialog.getAttribute("data-testid"), "wave-tune-sheet");
     assert.match(dialog.textContent ?? "", /Tune My Wave/);
 
     const newToMe = findButtonByLabel(dialog, "New to me");
@@ -477,6 +526,7 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
     assert.match(dialog.textContent ?? "", /Stay close/i);
     assert.equal(newToMe.getAttribute("role"), "radio");
     assert.equal(newToMe.getAttribute("aria-checked"), "false");
+    assert.doesNotMatch(newToMe.className, /sm:min-h-\[12rem\]/);
     for (const option of directionOptions) {
         assert.doesNotMatch((option as HTMLElement).className, /\btruncate\b/);
     }
@@ -669,11 +719,7 @@ test("My Wave exposes connected like and dislike controls for the current track"
         '[aria-labelledby="wave-now-playing-title"]',
     );
     assert.ok(inlineNowPlaying);
-    assert.match(inlineNowPlaying.className, /(?:^|\s)hidden(?:\s|$)/);
-    assert.match(
-        inlineNowPlaying.className,
-        /(?:^|\s)min-\[1025px\]:block(?:\s|$)/,
-    );
+    assert.doesNotMatch(inlineNowPlaying.className, /(?:^|\s)hidden(?:\s|$)/);
     assert.equal(
         mounted.container.querySelector('[data-testid="wave-now-playing"]')
             ?.textContent,

@@ -12,6 +12,8 @@ GlobalRegistrator.register();
 
 const calls = {
     playTracks: [] as unknown[][],
+    isShuffle: [] as unknown[],
+    shuffleIndices: [] as unknown[][],
     vibeMode: [] as unknown[],
     vibeQueueIds: [] as unknown[][],
     vibeSourceFeatures: [] as unknown[],
@@ -54,6 +56,9 @@ mock.module("@/lib/audio-controls-context", {
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
+            setIsShuffle: (value: unknown) => calls.isShuffle.push(value),
+            setShuffleIndices: (value: unknown[]) =>
+                calls.shuffleIndices.push(value),
             setVibeMode: (value: unknown) => calls.vibeMode.push(value),
             setVibeQueueIds: (value: unknown[]) =>
                 calls.vibeQueueIds.push(value),
@@ -88,6 +93,8 @@ const track = (id: string, title: string, coverArt: string | null = null) => ({
 
 beforeEach(() => {
     calls.playTracks.length = 0;
+    calls.isShuffle.length = 0;
+    calls.shuffleIndices.length = 0;
     calls.vibeMode.length = 0;
     calls.vibeQueueIds.length = 0;
     calls.vibeSourceFeatures.length = 0;
@@ -127,7 +134,7 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         'button[aria-label="Play My Wave"]',
     );
     assert.ok(playButton);
-    assert.ok(container.querySelector('[data-home-wave-layout="immersive"]'));
+    assert.ok(container.querySelector('[data-home-wave-layout="compact"]'));
     assert.equal(container.querySelectorAll("[data-wave-cover]").length, 3);
 
     await act(async () => {
@@ -141,12 +148,14 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         ["quick", "fresh", "again"],
     );
     assert.deepEqual(calls.playTracks[0]?.slice(1), [0, true]);
+    assert.deepEqual(calls.isShuffle, [false]);
+    assert.deepEqual(calls.shuffleIndices, [[]]);
     assert.deepEqual(calls.vibeMode, [true]);
     assert.deepEqual(calls.vibeSourceFeatures, [null]);
     assert.deepEqual(calls.vibeQueueIds, [["quick", "fresh", "again"]]);
     assert.deepEqual(calls.waveMode, ["for-you"]);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
-    assert.match(container.textContent ?? "", /endless flow/i);
+    assert.match(container.textContent ?? "", /keeps going/i);
 
     await act(async () => root.unmount());
 });

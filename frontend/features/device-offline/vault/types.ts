@@ -21,6 +21,8 @@ export type DeviceAudioVaultErrorCode =
 
 export type DeviceAudioVaultRecovery = "retry" | "user-action" | "none";
 
+export type DeviceAudioStorageKind = "desktop-directory" | "browser-private";
+
 /** Stable error contract shared by platform adapters and callers. */
 export class DeviceAudioVaultError extends Error {
     constructor(
@@ -49,7 +51,7 @@ export type DeviceAudioAccessState = {
         | "permission_denied"
         | "unsupported"
         | "io";
-    storageKind: "desktop-directory" | null;
+    storageKind: DeviceAudioStorageKind | null;
     label: string;
     reason: string;
 };
@@ -75,6 +77,8 @@ export interface DeviceAudioReceipt {
     bytes: number;
     contentType: string | null;
     displayName: string;
+    /** Whether the browser granted durable retention for browser-managed storage. */
+    persistenceGranted?: boolean | null;
     /** Remove only the just-retained file, even after an auth rotation. */
     discard(): Promise<void>;
 }
@@ -91,6 +95,12 @@ export interface DeviceAudioPlayRequest {
     expectedBytes?: number | null;
 }
 
+export interface DeviceAudioExportRequest {
+    kind: "export";
+    ref: DeviceAudioVaultRef;
+    expectedBytes?: number | null;
+}
+
 export interface DeviceAudioRemoveRequest {
     kind: "remove";
     ref: DeviceAudioVaultRef;
@@ -99,6 +109,7 @@ export interface DeviceAudioRemoveRequest {
 export type DeviceAudioAccessRequest =
     | DeviceAudioInspectRequest
     | DeviceAudioPlayRequest
+    | DeviceAudioExportRequest
     | DeviceAudioRemoveRequest;
 
 export interface DeviceAudioInspectResult {
@@ -113,6 +124,14 @@ export interface DeviceAudioPlayResult {
     release(): void;
 }
 
+export interface DeviceAudioExportResult {
+    kind: "export";
+    url: string;
+    displayName: string;
+    bytes: number;
+    release(): void;
+}
+
 export interface DeviceAudioRemoveResult {
     kind: "remove";
     removed: boolean;
@@ -123,13 +142,15 @@ export type DeviceAudioAccessResult<T extends DeviceAudioAccessRequest> =
         ? DeviceAudioInspectResult
         : T extends DeviceAudioPlayRequest
           ? DeviceAudioPlayResult
-          : DeviceAudioRemoveResult;
+          : T extends DeviceAudioExportRequest
+            ? DeviceAudioExportResult
+            : DeviceAudioRemoveResult;
 
 export interface DeviceAudioVaultSession {
     readonly ownerId: string;
     readonly authGeneration: number;
     readonly storage: {
-        kind: "desktop-directory";
+        kind: DeviceAudioStorageKind;
         label: string;
     };
     retain(input: DeviceAudioRetainInput): Promise<DeviceAudioReceipt>;

@@ -1,5 +1,4 @@
 import React, { memo, useCallback, useMemo } from "react";
-import { Card } from "@/components/ui/Card";
 import { Play, Pause, Volume2, Disc } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { Track, Album, AlbumSource } from "../types";
@@ -19,6 +18,7 @@ import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { isAlbumTrackPlayable } from "../albumPlayback";
+import { MusicDetailTrackSurface } from "@/components/music-detail";
 
 interface TrackListProps {
     tracks: Track[];
@@ -281,21 +281,19 @@ export const TrackList = memo(function TrackList({
     );
 
     return (
-        <section>
-            <Card>
-                <SharedTrackList<Track>
-                    items={tracks}
-                    toRowItem={toRowItem}
-                    onPlay={handlePlay}
-                    rowSlots={rowSlots}
-                    separator={separator}
-                    showCoverArt={false}
-                    rowClassName="grid-cols-[28px_minmax(0,1fr)_auto] sm:grid-cols-[40px_minmax(0,1fr)_auto]"
-                    accentColor={colors?.vibrant || "#5b5bff"}
-                    tvSection="tracks"
-                    className="divide-y divide-surface-active"
-                />
-            </Card>
-        </section>
+        <MusicDetailTrackSurface label={`${album.title} tracks`}>
+            <SharedTrackList<Track>
+                items={tracks}
+                toRowItem={toRowItem}
+                onPlay={handlePlay}
+                rowSlots={rowSlots}
+                separator={separator}
+                showCoverArt={false}
+                rowClassName="grid-cols-[28px_minmax(0,1fr)_auto] sm:grid-cols-[40px_minmax(0,1fr)_auto]"
+                accentColor={colors?.vibrant || "var(--music-action)"}
+                tvSection="tracks"
+                className="divide-y divide-white/[0.06]"
+            />
+        </MusicDetailTrackSurface>
     );
 });

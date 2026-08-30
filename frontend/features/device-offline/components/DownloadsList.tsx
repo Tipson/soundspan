@@ -1,6 +1,13 @@
 "use client";
 
-import { HardDriveDownload, Play, RotateCcw, Trash2 } from "lucide-react";
+import { useState } from "react";
+import {
+    Download,
+    HardDriveDownload,
+    Play,
+    RotateCcw,
+    Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Track } from "@/lib/audio-state-context";
@@ -101,6 +108,7 @@ function queueStatusCopy(item: DeviceOfflineQueueItem): string {
 }
 
 export function DownloadsList() {
+    const [exportingKey, setExportingKey] = useState<string | null>(null);
     const { playNow } = useAudioControls();
     const {
         isHydrated,
@@ -113,6 +121,7 @@ export function DownloadsList() {
         setupStorage,
         cancelQueuedDownload,
         deleteDownload,
+        exportDownload,
         preparePlayback,
         resume,
         enqueueCollection,
@@ -129,14 +138,27 @@ export function DownloadsList() {
     const reconnectRememberedFolder =
         Boolean(storage.directoryName) &&
         (storage.status === "needs-setup" || storage.status === "error");
+    const usesPrivateStorage = storage.storageKind === "browser-private";
     const storageNotice =
         storage.status === "ready" ? (
             <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
-                Device folder:{" "}
-                <span className="font-medium text-white/85">
-                    {storage.directoryName ?? "selected Soundspan folder"}
-                </span>
-                . {capability.explanation}
+                {usesPrivateStorage ? (
+                    <>
+                        <span className="font-medium text-white/85">
+                            Private Soundspan storage.
+                        </span>{" "}
+                        {storage.explanation} {capability.explanation}
+                    </>
+                ) : (
+                    <>
+                        Device folder:{" "}
+                        <span className="font-medium text-white/85">
+                            {storage.directoryName ??
+                                "selected Soundspan folder"}
+                        </span>
+                        . {capability.explanation}
+                    </>
+                )}
             </div>
         ) : (
             <div className="flex flex-col gap-3 rounded-xl border border-warning/25 bg-warning/10 px-4 py-4 text-sm text-content-body sm:flex-row sm:items-center sm:justify-between">
@@ -381,6 +403,40 @@ export function DownloadsList() {
                                         title="Retry download"
                                     >
                                         <RotateCcw className="h-4 w-4" />
+                                    </button>
+                                )}
+                            {record.status === "ready" &&
+                                Boolean(record.mediaRef) &&
+                                usesPrivateStorage && (
+                                    <button
+                                        type="button"
+                                        disabled={exportingKey === record.key}
+                                        onClick={() => {
+                                            if (exportingKey) return;
+                                            setExportingKey(record.key);
+                                            void exportDownload(record)
+                                                .then((displayName) =>
+                                                    toast.success(
+                                                        `Save action opened for ${displayName}. Choose a device location if asked.`,
+                                                    ),
+                                                )
+                                                .catch(() =>
+                                                    toast.error(
+                                                        "Could not open the browser save action for this file.",
+                                                    ),
+                                                )
+                                                .finally(() =>
+                                                    setExportingKey(null),
+                                                );
+                                        }}
+                                        className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-45"
+                                        aria-label={`Save ${record.track.title} as a normal file on this device`}
+                                        title="Save as a normal file"
+                                    >
+                                        <Download
+                                            className="h-4 w-4"
+                                            aria-hidden="true"
+                                        />
                                     </button>
                                 )}
                             <button

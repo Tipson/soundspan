@@ -1,15 +1,11 @@
 "use client";
 
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
-import { LastFmBadge } from "@/components/ui/LastFmBadge";
-import { MadeForYouSection } from "@/features/explore/components/MadeForYouSection";
-import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
+import { HomeMadeForYou } from "@/features/home/components/HomeMadeForYou";
 import { HomeOnlineDiscovery } from "@/features/home/components/HomeOnlineDiscovery";
 import { HomeQuickActions } from "@/features/home/components/HomeQuickActions";
 import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
 import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
-import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
-import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
 
 function PlaylistSkeleton() {
@@ -32,35 +28,33 @@ function PlaylistSkeleton() {
 /** Unified online-first music landing: immediate Wave, personal feed, catalog. */
 export default function HomePage() {
     const {
-        recommended,
         mixes,
         discoverWeekly,
-        popularArtists,
         personalizedFeed,
         showYtMusicExplore,
         homeShelves,
         chartPlaylists,
-        moodCategories,
-        genreCategories,
         ytMusicMixes,
         isLoading,
         isRefreshingMixes,
         isPersonalizedLoading,
         isPersonalizedUnavailable,
-        isMoodsLoading,
         handleRefreshMixes,
     } = useHomeData();
 
     if (isLoading) return <LoadingScreen />;
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-surface pb-40 pt-3 sm:pb-32 sm:pt-5">
+        <div
+            data-home-layout="editorial"
+            className="relative min-h-screen overflow-x-clip bg-transparent pb-40 pt-3 sm:pb-32 sm:pt-5"
+        >
             <div
                 aria-hidden="true"
                 className="pointer-events-none absolute left-1/2 top-0 h-[34rem] w-[72rem] max-w-[120vw] -translate-x-1/2 rounded-full bg-brand/[0.055] blur-3xl"
             />
-            <div className="relative mx-auto max-w-[1600px] px-3 sm:px-6 lg:px-8">
-                <div className="space-y-8 sm:space-y-10">
+            <div className="relative mx-auto max-w-[1520px] px-3 sm:px-6 lg:px-8">
+                <div className="space-y-7 sm:space-y-9">
                     <HomeWaveHero
                         personalizedFeed={personalizedFeed}
                         isLoading={isPersonalizedLoading}
@@ -90,7 +84,15 @@ export default function HomePage() {
                         </p>
                     )}
 
-                    <MadeForYouSection
+                    {personalizedFeed && (
+                        <PersonalizedTrackShelf
+                            title="Continue listening"
+                            subtitle="Resume the music still in your rotation"
+                            tracks={personalizedFeed.shelves.listenAgain}
+                        />
+                    )}
+
+                    <HomeMadeForYou
                         discoverWeekly={discoverWeekly}
                         mixes={mixes}
                         personalizedFeed={personalizedFeed}
@@ -98,51 +100,12 @@ export default function HomePage() {
                         handleRefreshMixes={handleRefreshMixes}
                     />
 
-                    {personalizedFeed && (
-                        <div className="space-y-8 sm:space-y-10">
-                            <PersonalizedTrackShelf
-                                title="Picked for right now"
-                                subtitle="Start anywhere — the full row keeps playing"
-                                tracks={personalizedFeed.shelves.quickPicks}
-                            />
-                            <PersonalizedTrackShelf
-                                title="Listen again"
-                                subtitle="Music you have recently kept in rotation"
-                                tracks={personalizedFeed.shelves.listenAgain}
-                            />
-                        </div>
-                    )}
-
                     <HomeOnlineDiscovery
                         enabled={showYtMusicExplore}
                         ytMusicMixes={ytMusicMixes}
-                        moodCategories={moodCategories}
-                        genreCategories={genreCategories}
-                        isMoodsLoading={isMoodsLoading}
                         homeShelves={homeShelves}
                         chartPlaylists={chartPlaylists}
                     />
-
-                    {recommended.length > 0 && (
-                        <section>
-                            <SectionHeader
-                                title="Recommended For You"
-                                showAllHref="/discover"
-                                badge="Last.fm"
-                            />
-                            <ArtistsGrid artists={recommended} />
-                        </section>
-                    )}
-
-                    {popularArtists.length > 0 && (
-                        <section>
-                            <SectionHeader
-                                title="Popular Artists"
-                                badge={<LastFmBadge />}
-                            />
-                            <PopularArtistsGrid artists={popularArtists} />
-                        </section>
-                    )}
                 </div>
             </div>
         </div>

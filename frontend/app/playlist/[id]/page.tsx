@@ -3,7 +3,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { CoverMosaic } from "@/components/ui/CoverMosaic";
 import {
     createMosaicCandidates,
     selectMosaicCovers,
@@ -73,7 +72,6 @@ import {
     Radio,
     Globe,
     GlobeLock,
-    Pencil,
     Share2,
 } from "lucide-react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -84,6 +82,11 @@ import { ShareLinkModal } from "@/components/ui/ShareLinkModal";
 import { RadioPlaylistActions } from "./RadioPlaylistActions";
 import { formatPlaylistDuration } from "./playlistDuration";
 import { queryKeys } from "@/lib/queryKeys";
+import {
+    MusicDetailActionDock,
+    MusicDetailTrackSurface,
+} from "@/components/music-detail";
+import { PlaylistDetailHero } from "@/features/playlist/components/PlaylistDetailHero";
 
 type PlaylistItem = PlaylistDetailTrackItem;
 type PendingTrack = PlaylistPendingTrackItem;
@@ -414,21 +417,6 @@ export default function PlaylistDetailPage() {
         toast.success(`Added ${playableTracks.length} tracks to queue`);
     };
 
-    const providerCounts = useMemo(
-        () =>
-            trackItems.reduce(
-                (acc, item) => {
-                    const source = item.provider?.source || "local";
-                    if (source === "tidal") acc.tidal += 1;
-                    else if (source === "youtube") acc.youtube += 1;
-                    else if (source === "local") acc.local += 1;
-                    return acc;
-                },
-                { local: 0, tidal: 0, youtube: 0 },
-            ),
-        [trackItems],
-    );
-
     // Calculate cover arts from playlist tracks for mosaic (memoized, artist+album diversity)
     const coverUrls = useMemo(() => {
         if (trackItems.length === 0) return [];
@@ -635,86 +623,40 @@ export default function PlaylistDetailPage() {
 
     return (
         <div className="min-h-screen">
-            {/* Compact Hero - Spotify Style */}
-            <div className="relative bg-gradient-to-b from-[#3d2a1e] via-surface-hover to-transparent pt-16 pb-10 px-4 md:px-8">
-                <div className="flex items-end gap-6">
-                    {/* Cover Art */}
-                    <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
-                        <CoverMosaic coverUrls={coverUrls} imageSizes="96px" />
-                    </div>
-
-                    {/* Playlist Info - Bottom Aligned */}
-                    <div className="flex-1 min-w-0 pb-1">
-                        <p className="text-xs font-medium text-white/90 mb-1">
-                            {isShared ? "Public Playlist" : "Playlist"}
-                        </p>
-                        {isRenaming ? (
-                            <input
-                                ref={renameInputRef}
-                                aria-label="Playlist name"
-                                value={renameValue}
-                                onChange={(e) => setRenameValue(e.target.value)}
-                                onBlur={handleRename}
-                                onKeyDown={handleRenameKeyDown}
-                                disabled={isSavingName}
-                                maxLength={200}
-                                className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight mb-2 bg-white/10 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-white/30 w-full"
-                            />
-                        ) : (
-                            <h1
-                                className={cn(
-                                    "text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2",
-                                    playlist.isOwner === true && "group/title",
-                                )}
-                            >
-                                {playlist.name}
-                                {playlist.isOwner === true && (
-                                    <button
-                                        ref={renameTriggerRef}
-                                        type="button"
-                                        onClick={handleStartRename}
-                                        aria-label="Rename playlist"
-                                        className="inline-flex items-center ml-2 align-middle opacity-0 hover:opacity-60 focus:opacity-60 transition-opacity group-hover/title:opacity-60"
-                                    >
-                                        <Pencil className="w-4 h-4 md:w-5 md:h-5" />
-                                    </button>
-                                )}
-                            </h1>
-                        )}
-                        <div className="flex items-center gap-1 text-sm text-white/70">
-                            {isShared && playlist.user?.username && (
-                                <>
-                                    <span className="font-medium text-white">
-                                        {playlist.user.username}
-                                    </span>
-                                    <span className="mx-1">•</span>
-                                </>
-                            )}
-                            <span>{trackItems.length} songs</span>
-                            <span className="mx-1">•</span>
-                            <span>
-                                {providerCounts.local} local /{" "}
-                                {providerCounts.tidal} TIDAL /{" "}
-                                {providerCounts.youtube} YouTube
-                            </span>
-                            {totalDuration > 0 && (
-                                <span>
-                                    , {formatPlaylistDuration(totalDuration)}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <PlaylistDetailHero
+                name={playlist.name}
+                coverUrls={coverUrls}
+                kindLabel={isShared ? "Shared playlist" : "Playlist"}
+                ownerName={isShared ? playlist.user?.username : undefined}
+                trackCount={trackItems.length}
+                durationLabel={
+                    totalDuration > 0
+                        ? formatPlaylistDuration(totalDuration)
+                        : undefined
+                }
+                isOwner={playlist.isOwner === true}
+                isRenaming={isRenaming}
+                renameValue={renameValue}
+                isSavingName={isSavingName}
+                renameInputRef={renameInputRef}
+                renameTriggerRef={renameTriggerRef}
+                onRenameChange={(event) => setRenameValue(event.target.value)}
+                onRenameBlur={handleRename}
+                onRenameKeyDown={handleRenameKeyDown}
+                onStartRename={handleStartRename}
+            />
 
             {/* Action Bar */}
-            <div className="bg-gradient-to-b from-surface-hover/60 to-transparent px-4 md:px-8 py-4">
-                <div className="flex items-center gap-4">
+            <div className="relative z-10 mx-auto -mt-5 max-w-[1800px] px-4 pb-5 sm:px-6 lg:px-8">
+                <MusicDetailActionDock
+                    label="Playlist controls"
+                    className="sm:!w-full"
+                >
                     {/* Play Button */}
                     {trackItems.length > 0 && (
                         <button
                             onClick={handlePlayPlaylist}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-hover hover:bg-brand hover:scale-105 shadow-lg transition-all font-semibold text-sm text-black"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none sm:flex-none"
                         >
                             {showPlaySpinner ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -740,8 +682,9 @@ export default function PlaylistDetailPage() {
                                 const shuffled = shuffleArray(playableTracks);
                                 playTracks(shuffled, 0);
                             }}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
                             title="Shuffle play"
+                            aria-label="Shuffle play"
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -751,8 +694,9 @@ export default function PlaylistDetailPage() {
                     {playableTracks.length > 0 && (
                         <button
                             onClick={handleAddAllToQueue}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
                             title="Add all to queue"
+                            aria-label="Add all to queue"
                         >
                             <ListMusic className="w-5 h-5" />
                         </button>
@@ -763,7 +707,7 @@ export default function PlaylistDetailPage() {
                             onClick={toggleLikeAll}
                             disabled={isApplyingLikeAll}
                             className={cn(
-                                "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                                "flex h-11 w-11 items-center justify-center rounded-full transition-colors active:scale-[0.97] motion-reduce:transition-none",
                                 isApplyingLikeAll
                                     ? "cursor-not-allowed text-white/35"
                                     : isAllLiked
@@ -771,6 +715,11 @@ export default function PlaylistDetailPage() {
                                       : "text-white/60 hover:bg-white/10 hover:text-white",
                             )}
                             title={
+                                isAllLiked
+                                    ? "Unlike all tracks"
+                                    : "Like all tracks"
+                            }
+                            aria-label={
                                 isAllLiked
                                     ? "Unlike all tracks"
                                     : "Like all tracks"
@@ -796,8 +745,9 @@ export default function PlaylistDetailPage() {
                     {trackItems.length > 0 && (
                         <button
                             onClick={handleStartRadio}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
                             title="Start playlist radio"
+                            aria-label="Start playlist radio"
                         >
                             <Radio className="w-5 h-5" />
                         </button>
@@ -817,7 +767,7 @@ export default function PlaylistDetailPage() {
                             onClick={handleToggleShare}
                             disabled={isTogglingShare}
                             className={cn(
-                                "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                                "flex h-11 w-11 items-center justify-center rounded-full transition-colors active:scale-[0.97] motion-reduce:transition-none",
                                 playlist.isPublic
                                     ? "text-brand hover:text-brand-dark"
                                     : "text-white/40 hover:text-white",
@@ -828,6 +778,11 @@ export default function PlaylistDetailPage() {
                                 playlist.isPublic
                                     ? "Make private"
                                     : "Share with others"
+                            }
+                            aria-label={
+                                playlist.isPublic
+                                    ? "Make playlist private"
+                                    : "Share playlist with others"
                             }
                         >
                             {playlist.isPublic ? (
@@ -843,8 +798,9 @@ export default function PlaylistDetailPage() {
                         <button
                             type="button"
                             onClick={() => setShowShareModal(true)}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
                             title="Create share link"
+                            aria-label="Create share link"
                         >
                             <Share2 className="w-5 h-5" />
                         </button>
@@ -855,13 +811,18 @@ export default function PlaylistDetailPage() {
                         onClick={handleToggleHide}
                         disabled={isHiding}
                         className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                            "flex h-11 w-11 items-center justify-center rounded-full transition-colors active:scale-[0.97] motion-reduce:transition-none",
                             playlist.isHidden
                                 ? "text-brand hover:text-brand-dark"
                                 : "text-white/40 hover:text-white",
                             isHiding && "opacity-50 cursor-not-allowed",
                         )}
                         title={
+                            playlist.isHidden
+                                ? "Show playlist"
+                                : "Hide playlist"
+                        }
+                        aria-label={
                             playlist.isHidden
                                 ? "Show playlist"
                                 : "Hide playlist"
@@ -878,20 +839,21 @@ export default function PlaylistDetailPage() {
                     {playlist.isOwner && (
                         <button
                             onClick={() => setShowDeleteConfirm(true)}
-                            className="h-8 w-8 rounded-full flex items-center justify-center text-white/40 hover:text-red-400 transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-300 active:scale-[0.97] motion-reduce:transition-none"
                             title="Delete Playlist"
+                            aria-label="Delete playlist"
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>
                     )}
-                </div>
+                </MusicDetailActionDock>
             </div>
 
             {/* Track Listing */}
-            <div className="px-2 md:px-8 pb-32">
+            <div className="mx-auto max-w-[1800px] px-4 pb-32 pt-2 sm:px-6 lg:px-8">
                 {/* Show failed/pending count if any */}
                 {playlist.pendingCount > 0 && (
-                    <div className="mb-4 px-4 py-2 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2">
+                    <div className="mb-4 flex items-center gap-2 rounded-2xl border border-red-500/30 bg-red-900/20 px-4 py-3">
                         <AlertCircle className="w-4 h-4 text-red-400" />
                         <span className="text-sm text-red-200">
                             {playlist.pendingCount} track
@@ -902,7 +864,7 @@ export default function PlaylistDetailPage() {
                 )}
 
                 {unplayableTrackItems.length > 0 && (
-                    <div className="mb-4 px-4 py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg flex items-center gap-2">
+                    <div className="mb-4 flex items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-900/20 px-4 py-3">
                         <AlertCircle className="w-4 h-4 text-amber-300" />
                         <span className="text-sm text-amber-100">
                             {unplayableTrackItems.length} track
@@ -917,7 +879,7 @@ export default function PlaylistDetailPage() {
                 )}
 
                 {trackItems.length > 0 || playlist.pendingTracks?.length > 0 ? (
-                    <div className="w-full">
+                    <MusicDetailTrackSurface label={`${playlist.name} tracks`}>
                         {/* Pending/failed tracks (custom inline - no playback, fundamentally different) */}
                         {(playlist.pendingTracks || []).map(
                             (pendingItem: PendingTrack) => {
@@ -1466,7 +1428,7 @@ export default function PlaylistDetailPage() {
                                 />
                             }
                         />
-                    </div>
+                    </MusicDetailTrackSurface>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-24 text-center">
                         <div className="w-20 h-20 bg-surface-highlight rounded-full flex items-center justify-center mb-4">

@@ -3,30 +3,31 @@ import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-test("overview section header exposes an explicit Show all destination", async () => {
+test("section header keeps its result label visible without hiding content behind Show all", async () => {
     const { SearchSectionHeader } =
         await import("../../features/search/components/SearchSectionHeader");
     const html = renderToStaticMarkup(
         React.createElement(SearchSectionHeader, {
             title: "Tracks",
-            showAllHref: "/search?q=massive%20attack&view=tracks",
+            description: "The strongest matches across every source",
         }),
     );
 
     assert.match(html, /<h2[^>]*>Tracks<\/h2>/);
-    assert.match(
-        html,
-        /href="\/search\?q=massive%20attack&amp;view=tracks"[^>]*>Show all<\/a>/,
-    );
+    assert.match(html, /The strongest matches across every source/);
+    assert.doesNotMatch(html, /Show all/);
 });
 
-test("dedicated result view omits the redundant Show all action", async () => {
+test("section header can include live source status without changing its hierarchy", async () => {
     const { SearchSectionHeader } =
         await import("../../features/search/components/SearchSectionHeader");
     const html = renderToStaticMarkup(
-        React.createElement(SearchSectionHeader, { title: "Tracks" }),
+        React.createElement(SearchSectionHeader, {
+            title: "Tracks",
+            status: React.createElement("span", null, "Searching online"),
+        }),
     );
 
     assert.match(html, />Tracks<\/h2>/);
-    assert.doesNotMatch(html, /Show all/);
+    assert.match(html, /Searching online/);
 });

@@ -27,6 +27,9 @@ export function useMediaSession() {
     const { currentTime } = usePlaybackProgress();
     const { pause, resume, next, previous, seek, skipForward, skipBackward } =
         useAudioControls();
+    const hasActiveMedia = Boolean(
+        currentTrack || currentAudiobook || currentPodcast,
+    );
 
     // Track if this device has initiated playback locally
     // Prevents cross-device media session interference from state sync
@@ -41,10 +44,10 @@ export function useMediaSession() {
 
     // Reset flag when all media is cleared
     useEffect(() => {
-        if (!currentTrack && !currentAudiobook && !currentPodcast) {
+        if (!hasActiveMedia) {
             hasPlayedLocallyRef.current = false;
         }
-    }, [currentTrack, currentAudiobook, currentPodcast]);
+    }, [hasActiveMedia]);
 
     // Convert relative URLs to absolute (required for iOS)
     const getAbsoluteUrl = useCallback((url: string): string => {
@@ -70,8 +73,9 @@ export function useMediaSession() {
 
         // Only set metadata if this device has initiated playback
         // Prevents cross-device interference from state sync
-        if (!hasPlayedLocallyRef.current) {
+        if (!hasActiveMedia || !hasPlayedLocallyRef.current) {
             navigator.mediaSession.metadata = null;
+            navigator.mediaSession.playbackState = "none";
             return;
         }
 
@@ -217,6 +221,7 @@ export function useMediaSession() {
         currentPodcast,
         playbackType,
         isPlaying,
+        hasActiveMedia,
         getAbsoluteUrl,
     ]);
 
@@ -225,7 +230,7 @@ export function useMediaSession() {
 
         // Only register handlers if this device has initiated playback
         // Prevents cross-device interference from state sync
-        if (!hasPlayedLocallyRef.current) {
+        if (!hasActiveMedia || !hasPlayedLocallyRef.current) {
             return;
         }
 
@@ -311,11 +316,9 @@ export function useMediaSession() {
         seek,
         skipForward,
         skipBackward,
-        currentTime,
+        isPlaying,
         playbackType,
-        currentTrack,
-        currentAudiobook,
-        currentPodcast,
+        hasActiveMedia,
     ]);
 
     // Update position state for scrubbing on lock screen
@@ -328,20 +331,42 @@ export function useMediaSession() {
             currentAudiobook?.duration ||
             currentPodcast?.duration;
 
-        if (duration && currentTime !== undefined) {
+        if (
+            !hasActiveMedia ||
+            !hasPlayedLocallyRef.current ||
+            !duration ||
+            currentTime === undefined
+        ) {
             try {
-                navigator.mediaSession.setPositionState({
-                    duration,
-                    playbackRate: 1,
-                    position: Math.min(currentTime, duration),
-                });
+                navigator.mediaSession.setPositionState();
             } catch (error) {
-                // Some browsers may not support position state
                 sharedFrontendLogger.warn(
-                    "[MediaSession] Failed to set position state:",
+                    "[MediaSession] Failed to clear position state:",
                     error,
                 );
             }
+            return;
         }
-    }, [currentTime, currentTrack, currentAudiobook, currentPodcast]);
+
+        try {
+            navigator.mediaSession.setPositionState({
+                duration,
+                playbackRate: 1,
+                position: Math.min(currentTime, duration),
+            });
+        } catch (error) {
+            // Some browsers may not support position state
+            sharedFrontendLogger.warn(
+                "[MediaSession] Failed to set position state:",
+                error,
+            );
+        }
+    }, [
+        currentTime,
+        currentTrack,
+        currentAudiobook,
+        currentPodcast,
+        isPlaying,
+        hasActiveMedia,
+    ]);
 }

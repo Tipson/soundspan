@@ -134,7 +134,7 @@ export default function LibraryPage() {
         <div className="relative min-h-screen bg-surface pb-36 md:pb-28">
             <LibraryHeader />
 
-            <div className="relative mx-auto max-w-[1800px] space-y-8 px-4 sm:space-y-10 sm:px-6 lg:px-8">
+            <div className="relative mx-auto -mt-5 max-w-[1800px] space-y-8 px-4 sm:space-y-10 sm:px-6 lg:px-8">
                 <LibraryTabs activeTab={activeTab} />
 
                 {activeTab === "overview" && (

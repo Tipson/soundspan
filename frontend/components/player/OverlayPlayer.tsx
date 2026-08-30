@@ -157,6 +157,8 @@ export function OverlayPlayer() {
         onCloseDrawer: () => setIsDrawerOpen(false),
     });
     const isTrackMode = playbackType === "track";
+    const isLongForm =
+        playbackType === "podcast" || playbackType === "audiobook";
     const preferenceTrackId = isTrackMode ? currentTrack?.id : undefined;
     const isDesktopOverlayLayout = canSkip && !isMobileOrTablet;
     // The lyrics tab mounts only while shown, so it owns its own fetch.
@@ -474,6 +476,9 @@ export function OverlayPlayer() {
         <motion.div
             ref={overlayRef}
             tabIndex={-1}
+            data-player-surface="overlay"
+            data-media-kind={playbackType ?? "unknown"}
+            data-player-transition
             initial={
                 shouldReduceMotion
                     ? { opacity: 1, y: 0 }
@@ -492,8 +497,8 @@ export function OverlayPlayer() {
                       }
             }
             className={cn(
-                "fixed inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#121218] to-[#000000] z-[9999] flex flex-col overflow-hidden",
-                !isMobileOrTablet && "bottom-24",
+                "overlay-player-stage fixed inset-0 z-[9999] flex flex-col overflow-hidden",
+                !isMobileOrTablet && "bottom-[104px]",
             )}
             onTouchStart={
                 isMobileOrTablet ? trackSwipeHandlers.onTouchStart : undefined
@@ -505,9 +510,24 @@ export function OverlayPlayer() {
                 isMobileOrTablet ? trackSwipeHandlers.onTouchEnd : undefined
             }
         >
+            {coverUrl && (
+                <div className="overlay-player-atmosphere" aria-hidden="true">
+                    <CachedImage
+                        src={coverUrl}
+                        alt=""
+                        fill
+                        sizes="100vw"
+                        className="object-cover"
+                        priority
+                        unoptimized
+                    />
+                </div>
+            )}
+            <div className="overlay-player-scrim" aria-hidden="true" />
+
             {/* Header */}
             <div
-                className="flex-shrink-0 px-4 pt-3 pb-2"
+                className="overlay-player-chrome relative z-10 flex-shrink-0 px-4 pt-3 pb-2"
                 style={{ paddingTop: "calc(12px + env(safe-area-inset-top))" }}
                 onTouchStart={
                     isMobileOrTablet
@@ -558,7 +578,7 @@ export function OverlayPlayer() {
             {/* Main Content - Portrait vs Landscape */}
             <div
                 className={cn(
-                    "flex-1 min-h-0 px-4 pt-2",
+                    "overlay-player-layout relative z-10 flex-1 min-h-0 px-4 pt-2",
                     isMobileOrTablet
                         ? "overflow-hidden pb-24"
                         : "overflow-hidden pb-6 landscape:px-8",
@@ -589,7 +609,7 @@ export function OverlayPlayer() {
                         >
                             <div
                                 className={cn(
-                                    "absolute inset-0 rounded-2xl blur-2xl opacity-50",
+                                    "overlay-player-artwork-glow absolute inset-0 rounded-2xl blur-2xl opacity-50",
                                     vibeMode
                                         ? "bg-gradient-to-br from-brand/30 via-transparent to-ai/30"
                                         : "bg-gradient-to-br from-brand-hover/20 via-transparent to-ai/20",
@@ -602,7 +622,7 @@ export function OverlayPlayer() {
                                     stiffness: 320,
                                     damping: 34,
                                 }}
-                                className="relative h-full w-full overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a2a2a] to-surface-hover shadow-2xl"
+                                className="overlay-player-artwork relative h-full w-full overflow-hidden rounded-2xl bg-surface-hover"
                             >
                                 {coverUrl ? (
                                     <CachedImage
@@ -644,7 +664,7 @@ export function OverlayPlayer() {
 
                         <div
                             className={cn(
-                                "mx-auto w-full",
+                                "overlay-player-metadata mx-auto w-full",
                                 isMobileOrTablet
                                     ? "mt-3 p-3"
                                     : "mt-5 max-w-[420px] p-4 landscape:max-w-none",
@@ -821,45 +841,40 @@ export function OverlayPlayer() {
                                                 </div>
                                             )}
 
-                                            {/* 7 fixed-size buttons (208px of icons) + ancestor padding
-                                        (px-4 + p-3 = 56px) must fit a 320px-class viewport:
-                                        gap-2 (6x8=48px) fits with 8px slack; >=375px restores the
-                                        roomier gap-4 (6x16=96px, 360px total <= 375). Base class is
-                                        the compact gap, so if the arbitrary variant ever failed to
-                                        compile the row still fits everywhere. */}
-                                            <div className="mb-3 flex items-center justify-center gap-2 min-[375px]:gap-4">
-                                                <button
-                                                    onClick={toggleShuffle}
-                                                    className={cn(
-                                                        "transition-colors",
-                                                        isShuffle
-                                                            ? "text-brand-hover"
-                                                            : "text-gray-400 hover:text-white",
-                                                    )}
-                                                    title="Shuffle"
-                                                    aria-label="Shuffle"
-                                                >
-                                                    <Shuffle className="h-5 w-5" />
-                                                </button>
+                                            <div className="overlay-player-transport mb-3 flex items-center justify-center gap-2 min-[375px]:gap-4">
+                                                {!isLongForm && (
+                                                    <button
+                                                        onClick={toggleShuffle}
+                                                        className={cn(
+                                                            "player-control transition-colors",
+                                                            isShuffle
+                                                                ? "text-brand-hover"
+                                                                : "text-gray-400 hover:text-white",
+                                                        )}
+                                                        title="Shuffle"
+                                                        aria-label="Shuffle"
+                                                    >
+                                                        <Shuffle className="h-5 w-5" />
+                                                    </button>
+                                                )}
 
-                                                {/* Skip back 15s — a seek, so gated on canSeek like the seek slider
-                                            (false while an uncached podcast episode is still caching);
-                                            independent of queue length */}
-                                                <button
-                                                    onClick={() =>
-                                                        skipBackward(15)
-                                                    }
-                                                    className="text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                                                    disabled={!canSeek}
-                                                    title="Skip back 15 seconds"
-                                                    aria-label="Skip back 15 seconds"
-                                                >
-                                                    <RotateCcw className="h-5 w-5" />
-                                                </button>
+                                                {isLongForm && (
+                                                    <button
+                                                        onClick={() =>
+                                                            skipBackward(15)
+                                                        }
+                                                        className="player-control text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        disabled={!canSeek}
+                                                        title="Skip back 15 seconds"
+                                                        aria-label="Skip back 15 seconds"
+                                                    >
+                                                        <RotateCcw className="h-5 w-5" />
+                                                    </button>
+                                                )}
 
                                                 <button
                                                     onClick={previous}
-                                                    className="text-white/85 transition-colors hover:text-white"
+                                                    className="player-control text-white/85 transition-colors hover:text-white"
                                                     title="Previous"
                                                     aria-label="Previous"
                                                 >
@@ -869,12 +884,12 @@ export function OverlayPlayer() {
                                                 <button
                                                     onClick={handlePlayPause}
                                                     className={cn(
-                                                        "flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full shadow-xl transition-all",
+                                                        "overlay-player-primary player-control-primary flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full shadow-xl transition-all",
                                                         audioError
                                                             ? "bg-red-500 text-white hover:bg-red-400"
                                                             : isBuffering
                                                               ? "bg-white/80 text-black"
-                                                              : "bg-white text-black hover:scale-105",
+                                                              : "bg-white text-black hover:scale-[1.04]",
                                                     )}
                                                     disabled={isBuffering}
                                                     title={
@@ -907,52 +922,54 @@ export function OverlayPlayer() {
 
                                                 <button
                                                     onClick={next}
-                                                    className="text-white/85 transition-colors hover:text-white"
+                                                    className="player-control text-white/85 transition-colors hover:text-white"
                                                     title="Next"
                                                     aria-label="Next"
                                                 >
                                                     <SkipForward className="h-8 w-8" />
                                                 </button>
 
-                                                {/* Skip forward 15s — a seek, so gated on canSeek like the seek slider
-                                            (false while an uncached podcast episode is still caching);
-                                            independent of queue length */}
-                                                <button
-                                                    onClick={() =>
-                                                        skipForward(15)
-                                                    }
-                                                    className="text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                                                    disabled={!canSeek}
-                                                    title="Skip forward 15 seconds"
-                                                    aria-label="Skip forward 15 seconds"
-                                                >
-                                                    <RotateCw className="h-5 w-5" />
-                                                </button>
+                                                {isLongForm && (
+                                                    <button
+                                                        onClick={() =>
+                                                            skipForward(15)
+                                                        }
+                                                        className="player-control text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        disabled={!canSeek}
+                                                        title="Skip forward 15 seconds"
+                                                        aria-label="Skip forward 15 seconds"
+                                                    >
+                                                        <RotateCw className="h-5 w-5" />
+                                                    </button>
+                                                )}
 
-                                                <button
-                                                    onClick={toggleRepeat}
-                                                    className={cn(
-                                                        "transition-colors",
-                                                        repeatMode !== "off"
-                                                            ? "text-brand-hover"
-                                                            : "text-gray-400 hover:text-white",
-                                                    )}
-                                                    title={
-                                                        repeatMode === "one"
-                                                            ? "Repeat One"
-                                                            : repeatMode ===
-                                                                "all"
-                                                              ? "Repeat All"
-                                                              : "Repeat Off"
-                                                    }
-                                                    aria-label="Repeat"
-                                                >
-                                                    {repeatMode === "one" ? (
-                                                        <Repeat1 className="h-5 w-5" />
-                                                    ) : (
-                                                        <Repeat className="h-5 w-5" />
-                                                    )}
-                                                </button>
+                                                {!isLongForm && (
+                                                    <button
+                                                        onClick={toggleRepeat}
+                                                        className={cn(
+                                                            "player-control transition-colors",
+                                                            repeatMode !== "off"
+                                                                ? "text-brand-hover"
+                                                                : "text-gray-400 hover:text-white",
+                                                        )}
+                                                        title={
+                                                            repeatMode === "one"
+                                                                ? "Repeat One"
+                                                                : repeatMode ===
+                                                                    "all"
+                                                                  ? "Repeat All"
+                                                                  : "Repeat Off"
+                                                        }
+                                                        aria-label="Repeat"
+                                                    >
+                                                        {repeatMode ===
+                                                        "one" ? (
+                                                            <Repeat1 className="h-5 w-5" />
+                                                        ) : (
+                                                            <Repeat className="h-5 w-5" />
+                                                        )}
+                                                    </button>
+                                                )}
                                             </div>
                                         </>
                                     ) : (
@@ -996,7 +1013,7 @@ export function OverlayPlayer() {
 
             {canSkip && isMobileOrTablet && !isDrawerOpen && (
                 <div
-                    className="absolute inset-x-0 bottom-0 z-20 border-t border-white/[0.12] bg-[#0b0d12]/95 px-4 pt-2 backdrop-blur-xl"
+                    className="overlay-player-sheet absolute inset-x-0 bottom-0 z-20 border-t border-white/[0.12] px-4 pt-2 backdrop-blur-xl"
                     style={{
                         paddingBottom:
                             "calc(env(safe-area-inset-bottom) + 10px)",
@@ -1077,7 +1094,7 @@ export function OverlayPlayer() {
                             className={cn(
                                 "absolute z-20",
                                 isMobileOrTablet
-                                    ? "inset-0 border-t border-white/[0.12] bg-[#0b0d12]/95 backdrop-blur-xl"
+                                    ? "overlay-player-sheet inset-0 border-t border-white/[0.12] backdrop-blur-xl"
                                     : "inset-y-0 right-0 w-[50%] min-w-[340px] py-24 pr-6",
                             )}
                         >

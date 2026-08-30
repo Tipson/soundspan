@@ -171,7 +171,7 @@ function PersonalizedDownloadAction({ track }: { track: Track }) {
     );
 }
 
-/** Immediate-play, two-row shelf for the user's personal catalog. */
+/** Immediate-play continuation row for the user's personal catalog. */
 export function PersonalizedTrackShelf({
     title,
     subtitle,
@@ -298,7 +298,7 @@ export function PersonalizedTrackShelf({
                 ref={scrollContainerRef}
                 role="list"
                 data-testid="personalized-track-shelf-scroll"
-                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col grid-rows-2 auto-cols-[minmax(252px,82vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth sm:auto-cols-[minmax(286px,360px)] motion-reduce:scroll-auto"
+                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(252px,78vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth sm:auto-cols-[minmax(286px,360px)] motion-reduce:scroll-auto"
             >
                 {tracks.map((track, index) => {
                     const imageUrl = trackImageUrl(track);
@@ -306,7 +306,7 @@ export function PersonalizedTrackShelf({
                         <div
                             key={`${track.id}-${index}`}
                             role="listitem"
-                            className="group flex min-h-[68px] snap-start scroll-ml-0 items-center overflow-hidden rounded-xl border border-white/[0.055] bg-white/[0.035] shadow-sm transition hover:border-white/15 hover:bg-white/[0.075] motion-reduce:transition-none"
+                            className="group flex min-h-[72px] snap-start scroll-ml-0 items-center overflow-hidden rounded-2xl bg-white/[0.04] transition duration-200 hover:bg-white/[0.075] motion-reduce:transition-none"
                         >
                             <button
                                 type="button"

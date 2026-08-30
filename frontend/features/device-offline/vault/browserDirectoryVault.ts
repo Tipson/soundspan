@@ -5,9 +5,11 @@ import {
     type DeviceAudioAccessState,
     type DeviceAudioDirectoryHandle,
     type DeviceAudioDirectoryRegistry,
+    type DeviceAudioExportResult,
     type DeviceAudioPlayResult,
     type DeviceAudioReceipt,
     type DeviceAudioRetainInput,
+    type DeviceAudioStorageKind,
     type DeviceAudioTrackDescriptor,
     type DeviceAudioVault,
     type DeviceAudioVaultRef,
@@ -22,19 +24,31 @@ const MEDIA_REF_VERSION = "fsa1";
 
 const READY_REASON = "Music files are stored in the selected folder.";
 
+interface BrowserDirectoryVaultPresentation {
+    storageKind: DeviceAudioStorageKind;
+    mediaRefVersion: string;
+    readyLabel?: string;
+    readyReason: string;
+}
+
+const DEFAULT_PRESENTATION: BrowserDirectoryVaultPresentation = {
+    storageKind: "desktop-directory",
+    mediaRefVersion: MEDIA_REF_VERSION,
+    readyReason: READY_REASON,
+};
+
 function accessState(
     status: DeviceAudioAccessState["status"],
     code: DeviceAudioAccessState["code"],
     label: string,
     reason: string,
+    storageKind: DeviceAudioStorageKind,
 ): DeviceAudioAccessState {
     return {
         status,
         code,
         storageKind:
-            status === "unsupported" || status === "error"
-                ? null
-                : "desktop-directory",
+            status === "unsupported" || status === "error" ? null : storageKind,
         label,
         reason,
     };
@@ -42,26 +56,30 @@ function accessState(
 
 function readyState(
     handle: DeviceAudioDirectoryHandle,
+    presentation: BrowserDirectoryVaultPresentation,
 ): DeviceAudioAccessState {
     return accessState(
         "ready",
         null,
-        handle.name || "Selected folder",
-        READY_REASON,
+        presentation.readyLabel || handle.name || "Selected folder",
+        presentation.readyReason,
+        presentation.storageKind,
     );
 }
 
 function stateForPermission(
     handle: DeviceAudioDirectoryHandle,
     permission: PermissionState,
+    presentation: BrowserDirectoryVaultPresentation,
 ): DeviceAudioAccessState {
-    if (permission === "granted") return readyState(handle);
+    if (permission === "granted") return readyState(handle, presentation);
     if (permission === "denied") {
         return accessState(
             "denied",
             "permission_denied",
             handle.name || "Selected folder",
             "Soundspan cannot write to the selected folder.",
+            presentation.storageKind,
         );
     }
     return accessState(
@@ -69,15 +87,19 @@ function stateForPermission(
         "permission_required",
         handle.name || "Selected folder",
         "Allow Soundspan to write to the selected folder.",
+        presentation.storageKind,
     );
 }
 
-function setupRequiredState(): DeviceAudioAccessState {
+function setupRequiredState(
+    presentation: BrowserDirectoryVaultPresentation,
+): DeviceAudioAccessState {
     return accessState(
         "setup-required",
         "setup_required",
         "Choose a music folder",
         "Choose a folder before downloading files to this device.",
+        presentation.storageKind,
     );
 }
 
@@ -87,6 +109,7 @@ function unsupportedState(): DeviceAudioAccessState {
         "unsupported",
         "Device files unavailable",
         "This browser cannot write to a user-selected directory.",
+        "desktop-directory",
     );
 }
 
@@ -96,6 +119,7 @@ function ioState(): DeviceAudioAccessState {
         "io",
         "Device storage unavailable",
         "Soundspan could not inspect the selected folder.",
+        "desktop-directory",
     );
 }
 
@@ -224,16 +248,21 @@ function displayName(
     return `${artist} - ${title} -- ${opaqueSuffix(runtime)}.${extensionFor(contentType)}`;
 }
 
-function mediaRef(ownerScope: string, name: string): DeviceAudioVaultRef {
-    return `${MEDIA_REF_VERSION}:${ownerScope}:${encodeURIComponent(name)}` as DeviceAudioVaultRef;
+function mediaRef(
+    mediaRefVersion: string,
+    ownerScope: string,
+    name: string,
+): DeviceAudioVaultRef {
+    return `${mediaRefVersion}:${ownerScope}:${encodeURIComponent(name)}` as DeviceAudioVaultRef;
 }
 
 function parseMediaRef(
     ref: DeviceAudioVaultRef,
     expectedOwnerScope: string,
+    mediaRefVersion: string,
 ): string {
     const parts = String(ref).split(":");
-    if (parts.length !== 3 || parts[0] !== MEDIA_REF_VERSION) {
+    if (parts.length !== 3 || parts[0] !== mediaRefVersion) {
         throw new DeviceAudioVaultError(
             "invalid_ref",
             "The device file reference is invalid.",
@@ -327,7 +356,7 @@ function verifyBytes(
 
 class BrowserDirectorySession implements DeviceAudioVaultSession {
     readonly storage: {
-        kind: "desktop-directory";
+        kind: DeviceAudioStorageKind;
         label: string;
     };
 
@@ -337,10 +366,12 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
         private readonly ownerScope: string,
         private readonly tracksDirectory: DeviceAudioDirectoryHandle,
         private readonly runtime: DeviceAudioVaultRuntime,
+        private readonly mediaRefVersion: string,
+        storageKind: DeviceAudioStorageKind,
         storageLabel: string,
     ) {
         this.storage = {
-            kind: "desktop-directory",
+            kind: storageKind,
             label: storageLabel,
         };
     }
@@ -410,10 +441,11 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
             committed = true;
             let discardPromise: Promise<void> | null = null;
             return {
-                ref: mediaRef(this.ownerScope, name),
+                ref: mediaRef(this.mediaRefVersion, this.ownerScope, name),
                 bytes: file.size,
                 contentType: input.contentType,
                 displayName: name,
+                persistenceGranted: true,
                 discard: () => {
                     discardPromise ??= removeIfPresent(
                         this.tracksDirectory,
@@ -444,7 +476,11 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
         input: T,
     ): Promise<DeviceAudioAccessResult<T>> {
         assertSessionCurrent(this.runtime, this.authGeneration);
-        const name = parseMediaRef(input.ref, this.ownerScope);
+        const name = parseMediaRef(
+            input.ref,
+            this.ownerScope,
+            this.mediaRefVersion,
+        );
         if (input.kind === "remove") {
             return {
                 kind: "remove",
@@ -478,15 +514,21 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
 
         const url = this.runtime.createObjectUrl(file);
         let released = false;
-        const result: DeviceAudioPlayResult = {
-            kind: "play",
-            url,
-            release: () => {
-                if (released) return;
-                released = true;
-                this.runtime.revokeObjectUrl(url);
-            },
+        const release = () => {
+            if (released) return;
+            released = true;
+            this.runtime.revokeObjectUrl(url);
         };
+        const result: DeviceAudioPlayResult | DeviceAudioExportResult =
+            input.kind === "export"
+                ? {
+                      kind: "export",
+                      url,
+                      displayName: name,
+                      bytes: file.size,
+                      release,
+                  }
+                : { kind: "play", url, release };
         return result as DeviceAudioAccessResult<T>;
     }
 }
@@ -498,6 +540,7 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
     constructor(
         private readonly registry: DeviceAudioDirectoryRegistry,
         private readonly runtime: DeviceAudioVaultRuntime,
+        private readonly presentation: BrowserDirectoryVaultPresentation,
     ) {}
 
     async inspectAccess(): Promise<DeviceAudioAccessState> {
@@ -507,12 +550,21 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
                 this.cachedHandle = await this.registry.load();
                 this.registryInspected = true;
             }
-            if (!this.cachedHandle) return setupRequiredState();
+            if (!this.cachedHandle) {
+                return setupRequiredState(this.presentation);
+            }
             return stateForPermission(
                 this.cachedHandle,
                 await this.cachedHandle.queryPermission(PERMISSION_OPTIONS),
+                this.presentation,
             );
-        } catch {
+        } catch (error) {
+            if (
+                error instanceof DeviceAudioVaultError &&
+                error.code === "unsupported"
+            ) {
+                return unsupportedState();
+            }
             return ioState();
         }
     }
@@ -551,7 +603,11 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
                 permission === "granted"
                     ? permission
                     : await selected.requestPermission(PERMISSION_OPTIONS);
-            const state = stateForPermission(selected, granted);
+            const state = stateForPermission(
+                selected,
+                granted,
+                this.presentation,
+            );
             if (state.status !== "ready") return state;
             await this.registry.save(selected).catch((error: unknown) => {
                 throw mapIoError(error);
@@ -570,7 +626,11 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
                     : await this.cachedHandle.requestPermission(
                           PERMISSION_OPTIONS,
                       );
-            return stateForPermission(this.cachedHandle, permission);
+            return stateForPermission(
+                this.cachedHandle,
+                permission,
+                this.presentation,
+            );
         } catch (error) {
             throw mapIoError(error);
         }
@@ -621,6 +681,8 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
                 scope,
                 tracksDirectory,
                 this.runtime,
+                this.presentation.mediaRefVersion,
+                this.presentation.storageKind,
                 access.label,
             );
         } catch (error) {
@@ -633,6 +695,10 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
 export function createBrowserDirectoryDeviceAudioVault(input: {
     registry: DeviceAudioDirectoryRegistry;
     runtime: DeviceAudioVaultRuntime;
+    presentation?: Partial<BrowserDirectoryVaultPresentation>;
 }): DeviceAudioVault {
-    return new BrowserDirectoryDeviceAudioVault(input.registry, input.runtime);
+    return new BrowserDirectoryDeviceAudioVault(input.registry, input.runtime, {
+        ...DEFAULT_PRESENTATION,
+        ...input.presentation,
+    });
 }

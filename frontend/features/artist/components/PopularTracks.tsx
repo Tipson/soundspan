@@ -16,6 +16,7 @@ import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButto
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { resolvePreferenceTrackId } from "@/lib/trackRef";
 import { useTrackAlbumResolutions } from "../hooks/useTrackAlbumResolutions";
+import { MusicDetailTrackSurface } from "@/components/music-detail";
 
 /** Default number of popular tracks shown in collapsed state. */
 export const POPULAR_COLLAPSED_COUNT = 5;
@@ -267,15 +268,18 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                     </button>
                 )}
             </div>
-            <TrackList
-                items={visibleTracks}
-                toRowItem={toRowItem}
-                onPlay={handlePlay}
-                rowSlots={rowSlots}
-                rowClassName="grid-cols-[32px_minmax(0,1fr)_auto] sm:grid-cols-[40px_minmax(0,1fr)_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(80px,1fr)_auto]"
-                preferenceMode="both"
-                tvSection="tracks"
-            />
+            <MusicDetailTrackSurface label={`${artist.name} tracks`}>
+                <TrackList
+                    items={visibleTracks}
+                    toRowItem={toRowItem}
+                    onPlay={handlePlay}
+                    rowSlots={rowSlots}
+                    rowClassName="grid-cols-[32px_minmax(0,1fr)_auto] sm:grid-cols-[40px_minmax(0,1fr)_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(80px,1fr)_auto]"
+                    preferenceMode="both"
+                    tvSection="tracks"
+                    className="divide-y divide-white/[0.06]"
+                />
+            </MusicDetailTrackSurface>
             {canExpand && !showAll && (
                 <button
                     onClick={() => setExpanded((prev) => !prev)}

@@ -39,7 +39,7 @@ export function SearchFilters({
     return (
         <nav
             aria-label="Search result type"
-            className="sticky top-0 z-30 -mx-4 mb-8 overflow-x-auto border-b border-white/[0.06] bg-surface/85 px-4 py-3 backdrop-blur-xl scrollbar-hide sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+            className="sticky top-2 z-30 mb-7 overflow-x-auto rounded-2xl border border-white/[0.08] bg-black/60 p-2 shadow-[0_18px_48px_rgb(0_0_0/0.2)] backdrop-blur-xl scrollbar-hide sm:mb-9"
             data-tv-section="search-filters"
         >
             <div className="flex min-w-max gap-2">
@@ -52,7 +52,7 @@ export function SearchFilters({
                             active={isActive}
                             data-tv-card
                             data-tv-card-index={index}
-                            className="min-h-10"
+                            className="min-h-11 px-4"
                         >
                             {view.label}
                         </FilterChip>

@@ -130,7 +130,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 new CustomEvent("toggle-mobile-menu"),
                             );
                         }}
-                        className="mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="shell-control mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         aria-label="Open menu"
                     >
                         <Menu className="w-5 h-5" />
@@ -153,7 +153,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="h-11 w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.055] pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-content-muted hover:bg-white/[0.075] focus:border-brand/60 focus:bg-white/[0.08] focus:ring-2 focus:ring-brand/15"
+                                className="shell-search-field h-11 w-full min-w-0 rounded-xl pl-10 pr-3 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
                             />
                         </div>
                     </form>
@@ -164,7 +164,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 new CustomEvent("toggle-activity-panel"),
                             );
                         }}
-                        className="relative ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="shell-control relative ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-content-secondary hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         aria-label="Notifications"
                         title="Notifications"
                     >
@@ -233,7 +233,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                         autoCapitalize="none"
                                         autoCorrect="off"
                                         tabIndex={0}
-                                        className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] pl-12 pr-14 text-sm text-white outline-none transition-colors placeholder:text-content-muted hover:bg-white/[0.075] focus:border-brand/60 focus:bg-white/[0.08] focus:ring-2 focus:ring-brand/15"
+                                        className="shell-search-field h-12 w-full rounded-2xl pl-12 pr-14 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
                                     />
                                     <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-semibold text-content-muted">
                                         /

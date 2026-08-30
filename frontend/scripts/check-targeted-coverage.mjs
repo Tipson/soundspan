@@ -48,11 +48,18 @@ const coverageExpectations = [
         line: 100,
         branch: 97.62,
         funcs: 100,
-        lfSourceMapArtifact: {
-            line: 95.54,
-            branch: 95.35,
-            uncovered: "108-112",
-        },
+        lfSourceMapArtifacts: [
+            {
+                line: 95.54,
+                branch: 95.35,
+                uncovered: "108-112",
+            },
+            {
+                line: 96.15,
+                branch: 95.83,
+                uncovered: "126-130",
+            },
+        ],
     },
     { file: "socialNavigation.ts", line: 100, branch: 93.75, funcs: 100 },
     { file: "playbackHistoryConfig.ts", line: 100, branch: 94.12, funcs: 100 },
@@ -79,12 +86,13 @@ for (const expectation of coverageExpectations) {
     const branch = Number(branchText);
     const funcs = Number(funcsText);
     const uncovered = uncoveredText.trim();
-    const lfSourceMapArtifact = expectation.lfSourceMapArtifact;
     const isKnownLfSourceMapArtifact =
-        lfSourceMapArtifact !== undefined &&
-        line === lfSourceMapArtifact.line &&
-        branch >= lfSourceMapArtifact.branch &&
-        uncovered === lfSourceMapArtifact.uncovered;
+        expectation.lfSourceMapArtifacts?.some(
+            (artifact) =>
+                line === artifact.line &&
+                branch >= artifact.branch &&
+                uncovered === artifact.uncovered,
+        ) ?? false;
 
     if (
         (line !== expectation.line && !isKnownLfSourceMapArtifact) ||

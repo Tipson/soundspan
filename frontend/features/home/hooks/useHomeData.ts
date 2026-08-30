@@ -9,48 +9,34 @@ import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as log } from "@/lib/logger";
 import { useUserSettingsExplorePrefs } from "@/features/explore/hooks/useUserSettingsExplorePrefs";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
-import type {
-    Artist,
-    Mix,
-    PersonalizedHomeFeed,
-    PopularArtist,
-} from "../types";
+import type { Mix, PersonalizedHomeFeed } from "../types";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import {
     mapYtMusicChartsToFeaturedPlaylists,
     queryKeys,
     useDiscoverWeeklySummaryQuery,
     useMixesQuery,
-    usePopularArtistsQuery,
-    useRecommendationsQuery,
     useRefreshMixesMutation,
-    useYtMusicCategoriesQuery,
     useYtMusicChartsQuery,
     useYtMusicHomeShelvesQuery,
     useYtMusicMixesQuery,
     type PlaylistPreview,
-    type YtMusicCategory,
     type YtMusicHomeShelf,
     type YtMusicMixPreview,
 } from "@/hooks/useQueries";
 
 export interface UseHomeDataReturn {
-    recommended: Artist[];
     mixes: Mix[];
     discoverWeekly: DiscoverWeeklySummary | null;
-    popularArtists: PopularArtist[];
     personalizedFeed: PersonalizedHomeFeed | null;
     showYtMusicExplore: boolean;
     homeShelves: YtMusicHomeShelf[];
     chartPlaylists: PlaylistPreview[];
-    moodCategories: YtMusicCategory[];
-    genreCategories: YtMusicCategory[];
     ytMusicMixes: YtMusicMixPreview[];
     isLoading: boolean;
     isRefreshingMixes: boolean;
     isPersonalizedLoading: boolean;
     isPersonalizedUnavailable: boolean;
-    isMoodsLoading: boolean;
     handleRefreshMixes: () => Promise<void>;
 }
 
@@ -71,18 +57,13 @@ export function useHomeData(): UseHomeDataReturn {
             window.removeEventListener("mixes-updated", handleMixesUpdated);
     }, [queryClient]);
 
-    const recommendedQuery = useRecommendationsQuery(10, discovery);
     const mixesQuery = useMixesQuery(autoPlaylists);
     const discoverQuery = useDiscoverWeeklySummaryQuery(discovery);
-    const popularQuery = usePopularArtistsQuery(20, { enabled: discovery });
 
     const shelvesQuery = useYtMusicHomeShelvesQuery({
         enabled: showYtMusicExplore,
     });
     const chartsQuery = useYtMusicChartsQuery({
-        enabled: showYtMusicExplore,
-    });
-    const categoriesQuery = useYtMusicCategoriesQuery({
         enabled: showYtMusicExplore,
     });
     const ytMusicMixesQuery = useYtMusicMixesQuery({
@@ -121,24 +102,16 @@ export function useHomeData(): UseHomeDataReturn {
         : 0;
     const mixes =
         autoPlaylists && Array.isArray(mixesQuery.data) ? mixesQuery.data : [];
-    const recommended = discovery ? (recommendedQuery.data?.artists ?? []) : [];
-    const popularArtists = discovery ? (popularQuery.data?.artists ?? []) : [];
     const hasPrimaryData =
         personalizedTrackCount > 0 ||
-        recommended.length > 0 ||
         mixes.length > 0 ||
-        popularArtists.length > 0;
+        discoverWeekly !== null;
     const allPrimaryLoading =
-        personalizedQuery.isLoading &&
-        recommendedQuery.isLoading &&
-        mixesQuery.isLoading &&
-        popularQuery.isLoading;
+        personalizedQuery.isLoading && mixesQuery.isLoading;
 
     return {
-        recommended,
         mixes,
         discoverWeekly,
-        popularArtists,
         personalizedFeed: personalizedQuery.data ?? null,
         showYtMusicExplore,
         homeShelves: shelvesQuery.data ?? [],
@@ -146,14 +119,11 @@ export function useHomeData(): UseHomeDataReturn {
             chartsQuery.data,
             12,
         ),
-        moodCategories: categoriesQuery.data?.moodCategories ?? [],
-        genreCategories: categoriesQuery.data?.genreCategories ?? [],
         ytMusicMixes: ytMusicMixesQuery.data ?? [],
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),
         isRefreshingMixes,
         isPersonalizedLoading: personalizedQuery.isLoading,
         isPersonalizedUnavailable: personalizedQuery.isError,
-        isMoodsLoading: categoriesQuery.isLoading,
         handleRefreshMixes,
     };
 }

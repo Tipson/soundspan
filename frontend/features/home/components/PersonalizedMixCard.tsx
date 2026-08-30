@@ -53,10 +53,10 @@ export function PersonalizedMixCard({
             aria-label={`Play ${title}`}
             data-tv-card
             data-tv-card-index={index}
-            className="group block w-full rounded-2xl p-2 text-left transition duration-200 hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+            className="group block w-full min-w-0 rounded-[1.125rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
         >
             <span
-                className={`relative mb-3 grid aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${toneClasses[tone]} shadow-lg shadow-black/25`}
+                className={`relative mb-3 grid aspect-square overflow-hidden rounded-[1.125rem] bg-gradient-to-br ${toneClasses[tone]} shadow-lg shadow-black/25`}
             >
                 {covers.length > 0 ? (
                     <span className="absolute inset-0 grid grid-cols-2 grid-rows-2">
@@ -70,8 +70,8 @@ export function PersonalizedMixCard({
                                     src={api.getCoverArtUrl(cover, 240)}
                                     alt=""
                                     fill
-                                    sizes="(max-width: 640px) 140px, 180px"
-                                    className="object-cover transition duration-300 group-hover:scale-[1.04] motion-reduce:transition-none"
+                                    sizes="(max-width: 640px) 72vw, 190px"
+                                    className="object-cover transition duration-300 group-hover:scale-[1.035] motion-reduce:transition-none"
                                 />
                             </span>
                         ))}
@@ -90,7 +90,7 @@ export function PersonalizedMixCard({
                     />
                 </span>
             </span>
-            <span className="block truncate text-sm font-bold text-content sm:text-base">
+            <span className="block truncate text-sm font-bold text-content sm:text-[0.9375rem]">
                 {title}
             </span>
             <span className="mt-1 block text-xs leading-5 text-content-muted">

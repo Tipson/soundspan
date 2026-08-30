@@ -26,7 +26,7 @@ export function ProviderAlbumsGrid({
             className={
                 embedded
                     ? "contents"
-                    : "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10"
+                    : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6"
             }
             data-tv-section={embedded ? undefined : "search-results-albums"}
         >
@@ -43,27 +43,27 @@ export function ProviderAlbumsGrid({
                         data-tv-card
                         data-tv-card-index={indexOffset + index}
                         tabIndex={0}
-                        className="rounded-lg bg-surface-sunken p-4 transition-colors hover:bg-surface-elevated"
+                        className="group min-w-0 rounded-2xl border border-transparent bg-white/[0.025] p-3 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.1] hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-4"
                     >
-                        <div className="relative mb-4 flex aspect-square items-center justify-center overflow-hidden rounded-md bg-surface-elevated">
+                        <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-surface-elevated shadow-lg shadow-black/15 sm:mb-4">
                             {imageUrl ? (
                                 <Image
                                     src={imageUrl}
                                     alt={album.name}
                                     fill
                                     sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                                    className="object-cover"
+                                    className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
                                     loading="lazy"
                                     unoptimized
                                 />
                             ) : (
-                                <Disc3 className="h-12 w-12 text-gray-400" />
+                                <Disc3 className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
                             )}
                         </div>
-                        <h3 className="mb-1 line-clamp-1 text-base font-bold text-white">
+                        <h3 className="mb-1 line-clamp-1 text-sm font-bold text-content sm:text-base">
                             {album.name}
                         </h3>
-                        <p className="line-clamp-1 text-sm text-gray-400">
+                        <p className="line-clamp-1 text-xs text-content-secondary sm:text-sm">
                             {[album.artist, album.year]
                                 .filter(Boolean)
                                 .join(" · ")}

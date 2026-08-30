@@ -32,16 +32,21 @@ export function SimilarArtistsGrid({
     return (
         <section>
             {titleHref ? (
-                <h2 className="text-2xl font-bold text-white mb-6">
-                    <Link href={titleHref} className="hover:underline">
+                <h2 className="mb-5 text-xl font-black tracking-[-0.025em] text-content sm:text-2xl">
+                    <Link
+                        href={titleHref}
+                        className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                    >
                         {title}
                     </Link>
                 </h2>
             ) : (
-                <h2 className="text-2xl font-bold text-white mb-6">{title}</h2>
+                <h2 className="mb-5 text-xl font-black tracking-[-0.025em] text-content sm:text-2xl">
+                    {title}
+                </h2>
             )}
             <div
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-4"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6"
                 data-tv-section="search-results-artists"
             >
                 {similarArtists.map((result, index) => {
@@ -61,30 +66,29 @@ export function SimilarArtistsGrid({
                             data-tv-card
                             data-tv-card-index={index}
                             tabIndex={0}
+                            className="group min-w-0 rounded-2xl border border-transparent bg-white/[0.025] p-3 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.1] hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-4"
                         >
-                            <div className="bg-surface-sunken hover:bg-surface-elevated transition-all p-4 rounded-lg group cursor-pointer">
-                                <div className="aspect-square bg-surface-elevated rounded-full mb-4 flex items-center justify-center overflow-hidden relative">
-                                    {imageUrl ? (
-                                        <Image
-                                            src={imageUrl}
-                                            alt={result.name}
-                                            fill
-                                            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                                            className="object-cover"
-                                            loading="lazy"
-                                            unoptimized
-                                        />
-                                    ) : (
-                                        <Music className="w-12 h-12 text-gray-400" />
-                                    )}
-                                </div>
-                                <h3 className="text-base font-bold text-white line-clamp-1 mb-1">
-                                    {result.name}
-                                </h3>
-                                <p className="text-sm text-[#b3b3b3]">
-                                    {formatListeners(result.listeners)}
-                                </p>
+                            <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/15 sm:mb-4">
+                                {imageUrl ? (
+                                    <Image
+                                        src={imageUrl}
+                                        alt={result.name}
+                                        fill
+                                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                                        className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
+                                        loading="lazy"
+                                        unoptimized
+                                    />
+                                ) : (
+                                    <Music className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
+                                )}
                             </div>
+                            <h3 className="mb-1 line-clamp-1 text-sm font-bold text-content sm:text-base">
+                                {result.name}
+                            </h3>
+                            <p className="text-xs text-content-secondary sm:text-sm">
+                                {formatListeners(result.listeners)}
+                            </p>
                         </Link>
                     );
                 })}

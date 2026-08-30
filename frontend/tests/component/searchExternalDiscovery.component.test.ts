@@ -7,6 +7,8 @@ mock.module("lucide-react", {
     namedExports: {
         Music: () => React.createElement("svg", { "data-icon": "music" }),
         Disc3: () => React.createElement("svg", { "data-icon": "disc" }),
+        ArrowUpRight: () =>
+            React.createElement("svg", { "data-icon": "arrow-up-right" }),
     },
 });
 

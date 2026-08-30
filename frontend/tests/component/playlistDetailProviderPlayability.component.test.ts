@@ -623,7 +623,7 @@ test("playlist detail renders provider badges and unplayable fallback messaging"
         ),
     );
 
-    assert.match(html, /1 local \/ 1 TIDAL \/ 1 YouTube/);
+    assert.doesNotMatch(html, /1 local \/ 1 TIDAL \/ 1 YouTube/);
     assert.match(html, /Local Song/);
     assert.match(html, /TIDAL/);
     assert.match(html, /YOUTUBE/);

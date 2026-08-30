@@ -563,7 +563,7 @@ export function Sidebar() {
             {!isMobileOrTablet && (
                 <aside
                     data-shell-sidebar="desktop"
-                    className="relative z-10 flex w-[236px] flex-shrink-0 flex-col overflow-hidden rounded-[18px] border border-white/[0.06] bg-surface-raised"
+                    className="shell-sidebar relative z-10 flex w-[236px] flex-shrink-0 flex-col overflow-hidden rounded-[18px]"
                 >
                     {sidebarContent}
                 </aside>

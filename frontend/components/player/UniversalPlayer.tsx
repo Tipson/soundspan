@@ -44,12 +44,14 @@ export function UniversalPlayer() {
                         {playerMode === "overlay" && hasMedia ? (
                             <motion.div
                                 key="overlay-player"
+                                data-player-transition="overlay"
                                 initial={{ opacity: 0, y: 18, scale: 0.995 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 52, scale: 0.992 }}
                                 transition={{
-                                    duration: 0.2,
-                                    ease: [0.22, 1, 0.36, 1],
+                                    type: "spring",
+                                    bounce: 0,
+                                    duration: 0.36,
                                 }}
                             >
                                 <OverlayPlayer />
@@ -58,12 +60,14 @@ export function UniversalPlayer() {
                             /* On mobile/tablet: only mini player (no full player) */
                             <motion.div
                                 key="mini-player"
+                                data-player-transition="mini"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 20 }}
                                 transition={{
-                                    duration: 0.2,
-                                    ease: [0.22, 1, 0.36, 1],
+                                    type: "spring",
+                                    bounce: 0,
+                                    duration: 0.32,
                                 }}
                             >
                                 <MiniPlayer />
@@ -79,12 +83,14 @@ export function UniversalPlayer() {
                         {playerMode === "overlay" && hasMedia && (
                             <motion.div
                                 key="desktop-overlay-player"
+                                data-player-transition="overlay"
                                 initial={{ opacity: 0, y: 18, scale: 0.995 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 22, scale: 0.998 }}
                                 transition={{
-                                    duration: 0.18,
-                                    ease: [0.22, 1, 0.36, 1],
+                                    type: "spring",
+                                    bounce: 0,
+                                    duration: 0.34,
                                 }}
                             >
                                 <OverlayPlayer />

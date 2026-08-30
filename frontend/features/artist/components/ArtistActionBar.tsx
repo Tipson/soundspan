@@ -16,6 +16,7 @@ import type { ArtistSource } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { toast } from "sonner";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
+import { MusicDetailActionDock } from "@/components/music-detail";
 
 const BRAND_PLAY = "var(--color-brand-hover)";
 
@@ -83,7 +84,7 @@ export function ArtistActionBar({
 
     return (
         <div className="w-full space-y-2">
-            <div className="flex w-full max-w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-2.5 py-2 backdrop-blur-md sm:inline-flex sm:w-fit">
+            <MusicDetailActionDock label="Artist controls">
                 {isInListenTogetherGroup ? (
                     <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
                         <button
@@ -196,7 +197,7 @@ export function ArtistActionBar({
                         <Radio className="w-5 h-5" />
                     </button>
                 )}
-            </div>
+            </MusicDetailActionDock>
 
             {isInListenTogetherGroup && (
                 <p className="text-xs text-content-muted">{lockMessage}</p>

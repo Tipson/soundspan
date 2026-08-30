@@ -322,7 +322,7 @@ test("All replaces an exact local album shadow with one canonical provider card"
     assert.deepEqual(calls.providerAlbumIds, [["MPREb_from-zero"]]);
 });
 
-test("All renders an explicit five-track continuation and one six-album shelf", async () => {
+test("All keeps the canonical artist and five popular tracks visible without a Show all gate", async () => {
     const SearchPage = (await import("../../app/search/page")).default;
     const html = renderToStaticMarkup(React.createElement(SearchPage));
 
@@ -332,12 +332,13 @@ test("All renders an explicit five-track continuation and one six-album shelf", 
     assert.ok(canvasClass);
     assert.doesNotMatch(canvasClass, /(?:^|\s)overflow-hidden(?:\s|$)/);
     assert.match(html, /data-search-ambient-clip="true"/);
+    assert.match(html, /data-search-query-heading="true"/);
+    assert.match(html, /Results for/);
+    assert.match(html, /massive attack/);
+    assert.match(html, /data-search-primary-grid="true"/);
 
     assert.match(html, />Tracks<\/h2>/);
-    assert.match(
-        html,
-        /href="\/search\?q=massive%20attack&amp;view=tracks"[^>]*>Show all<\/a>/,
-    );
+    assert.doesNotMatch(html, /Show all/);
     assert.deepEqual(calls.libraryTrackLimits, [3]);
     assert.deepEqual(calls.discoverTrackLimits, [2]);
     assert.deepEqual(calls.libraryAlbumLimits, [4]);

@@ -10,7 +10,7 @@ Start-here guide for `frontend/features/search`.
 - `npm --prefix backend test -- --runInBand src/routes/__tests__/searchRuntime.test.ts src/routes/__tests__/browseRuntime.test.ts`
 - `npm --prefix backend test -- --runInBand src/services/__tests__/searchService.test.ts`
 - `cd frontend && node --test --import tsx tests/unit/searchSongsPriority.test.ts tests/unit/discoverySelection.test.ts tests/unit/searchAlbumDedup.test.ts`
-- `cd frontend && node --test --experimental-test-module-mocks --import tsx tests/component/searchPageResults.component.test.ts tests/component/searchRowActions.component.test.ts tests/component/libraryTracksList.component.test.ts`
+- `cd frontend && node --test --experimental-test-module-mocks --import tsx tests/component/searchPageResults.component.test.ts tests/component/searchEmptyState.component.test.ts tests/component/searchFiltersFederation.component.test.ts tests/component/searchSectionHeader.component.test.ts tests/component/searchRowActions.component.test.ts tests/component/libraryTracksList.component.test.ts`
 
 External song results retain Last.fm metadata and merge exact YouTube Music
 provider identities when that integration is enabled. Rows with a provider
@@ -22,15 +22,19 @@ album, search keeps one card and uses the provider route so the full online
 profile/catalog opens; non-canonical discovery metadata cannot displace a local
 entity. Canonical native or resolvable TV album identities open through the
 existing playable album route while channels and ordinary playlists are rejected.
-The primary search surface is music-only and uses All, Tracks, Artists, and
-Albums views. Dormant podcast/audiobook components remain for upstream
-compatibility but are not queried or rendered here. All shows a confident
-exact-aware artist beside five tracks total across owned and external sources,
-with an explicit Show all action; its single Albums shelf contains at most six
-owned and provider albums total. Tracks requests and renders at most 50 tracks
-across those sources. Clicking a visible result snapshots only visible playable
-rows in screen order, excluding hidden, offline, and unmatched rows. Obvious
-long-form/video presentations are ranked after songs.
+The primary search surface is music-only and uses URL-backed All, Tracks,
+Artists, and Albums views. Dormant podcast/audiobook components remain for
+upstream compatibility but are not queried or rendered here. All immediately
+shows a confident exact-aware artist beside five popular tracks across owned
+and external sources; no primary result is hidden behind a Show all gate. Its
+single Albums shelf contains at most six owned and provider albums total.
+Tracks requests and renders at most 50 tracks across those sources. Clicking a
+visible result snapshots only visible playable rows in screen order, excluding
+hidden, offline, and unmatched rows. Obvious long-form/video presentations are
+ranked after songs. The route uses the same editorial spacing, translucent
+surfaces, card geometry, and responsive hierarchy as Home and catalog detail
+pages, with a dedicated 375px single-column layout and a two-column primary
+result at desktop widths.
 Discovery source work is bounded independently (1.5s alias correction plus a
 9s provider deadline); the browser allows 14s and the default proxy allows 20s,
 so a slow provider yields available partial results instead of erasing them.

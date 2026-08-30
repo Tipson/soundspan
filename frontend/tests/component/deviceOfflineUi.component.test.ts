@@ -14,6 +14,7 @@ const calls = {
     queueCancels: [] as string[],
     resumes: [] as string[],
     prepares: [] as string[],
+    exports: [] as string[],
     plays: [] as string[],
     settingUpdates: [] as Array<Record<string, unknown>>,
     collectionEnqueues: [] as Array<Record<string, unknown>>,
@@ -37,7 +38,18 @@ let deleteFailure: Error | null = null;
 let prepareFailure: Error | null = null;
 let isHydrated = true;
 let storageError: string | null = null;
-let storage = {
+let storage: {
+    status:
+        | "checking"
+        | "needs-setup"
+        | "requesting"
+        | "ready"
+        | "unsupported"
+        | "error";
+    directoryName: string | null;
+    explanation: string;
+    storageKind?: "desktop-directory" | "browser-private" | null;
+} = {
     status: "ready" as
         | "checking"
         | "needs-setup"
@@ -83,6 +95,10 @@ const offlineContext = {
     preparePlayback: async (record: { key: string }) => {
         calls.prepares.push(record.key);
         if (prepareFailure) throw prepareFailure;
+    },
+    exportDownload: async (record: { key: string }) => {
+        calls.exports.push(record.key);
+        return "Artist - Alpha.mp3";
     },
     get recordForTrack() {
         return () => trackRecord;
@@ -232,6 +248,7 @@ beforeEach(() => {
     calls.queueCancels.length = 0;
     calls.resumes.length = 0;
     calls.prepares.length = 0;
+    calls.exports.length = 0;
     calls.plays.length = 0;
     calls.settingUpdates.length = 0;
     calls.collectionEnqueues.length = 0;
@@ -908,6 +925,63 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
     assert.deepEqual(calls.plays, ["yt:video-a"]);
     assert.deepEqual(calls.resumes, ["retry-key"]);
     assert.deepEqual(calls.deletes, ["ready-key"]);
+    view.unmount();
+});
+
+test("browser-private Downloads offers an explicit normal-file export without replacing offline playback", async () => {
+    storage = {
+        status: "ready",
+        directoryName: "Soundspan on this device",
+        storageKind: "browser-private",
+        explanation:
+            "Offline playback works, but the browser declined durable private storage. Use Save as file in Downloads because browser data may be cleared.",
+    };
+    records = [
+        {
+            ownerId: "user-1",
+            trackIdentity: "youtube:video-a",
+            quality: "auto",
+            sourceUrl: "/api/ytmusic/stream/video-a",
+            track,
+            status: "ready",
+            transferMode: "foreground",
+            backgroundFetchId: null,
+            bytesReceived: 6,
+            totalBytes: 6,
+            contentType: "audio/mpeg",
+            persistenceGranted: false,
+            attempt: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            errorCode: null,
+            errorMessage: null,
+            key: "private-ready-key",
+            virtualUrl: "/__offline/audio/private-ready-key",
+            mediaRef: "opfs1:owner:file",
+        },
+    ];
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+
+    assert.match(
+        view.container.textContent ?? "",
+        /private Soundspan storage/i,
+    );
+    assert.match(
+        view.container.textContent ?? "",
+        /browser data may be cleared/i,
+    );
+    const save = view.container.querySelector(
+        'button[aria-label="Save Alpha as a normal file on this device"]',
+    ) as HTMLButtonElement;
+    assert.ok(save);
+    await React.act(async () => {
+        save.click();
+        await Promise.resolve();
+    });
+    assert.deepEqual(calls.exports, ["private-ready-key"]);
+    assert.ok(view.container.querySelector('button[aria-label="Play Alpha"]'));
     view.unmount();
 });
 

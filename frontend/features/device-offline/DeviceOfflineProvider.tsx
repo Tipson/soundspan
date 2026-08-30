@@ -40,10 +40,15 @@ import {
     resolveBrowserDeviceOfflineTransferCapability,
     resolveDeviceOfflineTransferCapability,
 } from "./platform";
+import { startPhysicalFileDownload } from "./physicalFileExport";
 import { DeviceOfflineSessionGuard } from "./sessionGuard";
 import { getDeviceDownloadSourceUrl } from "./sourceUrl";
 import { resolveDeviceOfflineTrackIdentity } from "./trackIdentity";
-import { getDeviceAudioVault, type DeviceAudioAccessState } from "./vault";
+import {
+    getDeviceAudioVault,
+    type DeviceAudioAccessState,
+    type DeviceAudioStorageKind,
+} from "./vault";
 import type {
     DeviceOfflineDownloadInput,
     DeviceOfflineDownloadRecord,
@@ -66,15 +71,17 @@ export interface DeviceOfflineStorageState {
         | "unsupported"
         | "error";
     directoryName: string | null;
+    storageKind: DeviceAudioStorageKind | null;
     explanation: string;
 }
 
 const DEVICE_FOLDER_UNSUPPORTED_EXPLANATION =
-    "Safari and Firefox PWAs, and other browsers without directory access, cannot save a managed music library as normal device files. Use Chrome or Edge on a computer, or a current Chrome on Android. iPhone and iPad require a native Soundspan build.";
+    "This browser cannot provide writable device storage. Update the browser, use Chrome or Edge for a normal music folder where supported, or use a native Soundspan build.";
 
 const INITIAL_DEVICE_OFFLINE_STORAGE: DeviceOfflineStorageState = {
     status: "checking",
     directoryName: null,
+    storageKind: null,
     explanation: "Checking whether this device can store music files…",
 };
 
@@ -85,6 +92,7 @@ function toDeviceOfflineStorageState(
         return {
             status: "ready",
             directoryName: access.label || null,
+            storageKind: access.storageKind,
             explanation: access.reason,
         };
     }
@@ -95,6 +103,7 @@ function toDeviceOfflineStorageState(
         return {
             status: "needs-setup",
             directoryName: access.label || null,
+            storageKind: access.storageKind,
             explanation: access.reason,
         };
     }
@@ -102,12 +111,14 @@ function toDeviceOfflineStorageState(
         return {
             status: "unsupported",
             directoryName: null,
+            storageKind: null,
             explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
         };
     }
     return {
         status: "error",
         directoryName: access.label || null,
+        storageKind: access.storageKind,
         explanation: access.reason,
     };
 }
@@ -123,6 +134,7 @@ function toDeviceOfflineStorageFailure(
         return {
             status: "needs-setup",
             directoryName: null,
+            storageKind: null,
             explanation:
                 "No folder was selected. Choose a music folder when you are ready to download.",
         };
@@ -131,12 +143,14 @@ function toDeviceOfflineStorageFailure(
         return {
             status: "unsupported",
             directoryName: null,
+            storageKind: null,
             explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
         };
     }
     return {
         status: "error",
         directoryName: null,
+        storageKind: null,
         explanation:
             error instanceof Error && error.message
                 ? error.message
@@ -158,6 +172,7 @@ export interface DeviceOfflineContextValue {
     ): Promise<DeviceOfflineDownloadRecord>;
     resume(record: DeviceOfflineDownloadRecord): Promise<void>;
     preparePlayback(record: DeviceOfflineDownloadRecord): Promise<void>;
+    exportDownload(record: DeviceOfflineDownloadRecord): Promise<string>;
     deleteDownload(key: string): Promise<void>;
     cancelQueuedDownload(item: DeviceOfflineQueueItem): Promise<void>;
     recordForTrack(
@@ -349,6 +364,7 @@ export function DeviceOfflineProvider({
             setStorage({
                 status: "unsupported",
                 directoryName: null,
+                storageKind: null,
                 explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
             });
             return;
@@ -371,6 +387,7 @@ export function DeviceOfflineProvider({
                     setStorage({
                         status: "error",
                         directoryName: null,
+                        storageKind: null,
                         explanation:
                             "Soundspan could not inspect device-folder access. Try choosing the folder again.",
                     });
@@ -684,6 +701,7 @@ export function DeviceOfflineProvider({
             const unsupported: DeviceOfflineStorageState = {
                 status: "unsupported",
                 directoryName: null,
+                storageKind: null,
                 explanation: DEVICE_FOLDER_UNSUPPORTED_EXPLANATION,
             };
             setStorage(unsupported);
@@ -696,6 +714,7 @@ export function DeviceOfflineProvider({
         setStorage({
             status: "requesting",
             directoryName: storage.directoryName,
+            storageKind: storage.storageKind,
             explanation:
                 "Choose a folder in the device picker and allow Soundspan to write music files there.",
         });
@@ -980,6 +999,36 @@ export function DeviceOfflineProvider({
         [load, manager, ownerId],
     );
 
+    const exportDownload = useCallback(
+        async (record: DeviceOfflineDownloadRecord): Promise<string> => {
+            if (
+                !vault ||
+                !ownerId ||
+                !ownerAuthRuntimeLease ||
+                record.ownerId !== ownerId
+            ) {
+                throw new Error("This device copy belongs to another account");
+            }
+            if (record.status !== "ready" || !record.mediaRef) {
+                throw new Error(
+                    "This device copy is not ready to save as a file",
+                );
+            }
+            const session = await vault.open({
+                ownerId,
+                authGeneration: ownerAuthRuntimeLease.generation,
+            });
+            const exported = await session.access({
+                kind: "export",
+                ref: record.mediaRef,
+                expectedBytes: record.totalBytes,
+            });
+            startPhysicalFileDownload(exported);
+            return exported.displayName;
+        },
+        [ownerAuthRuntimeLease, ownerId, vault],
+    );
+
     const recordForTrack = useCallback(
         (track: DeviceOfflineTrack) => {
             const identity = resolveDeviceOfflineTrackIdentity(track);
@@ -1049,7 +1098,7 @@ export function DeviceOfflineProvider({
                 storage.status !== "ready"
             ) {
                 throw new Error(
-                    "Choose a device folder before enabling automatic downloads",
+                    "Prepare offline storage before enabling automatic downloads",
                 );
             }
             const next = await queueManager.updateSettings(ownerId, patch);
@@ -1092,6 +1141,7 @@ export function DeviceOfflineProvider({
             download,
             resume,
             preparePlayback,
+            exportDownload,
             deleteDownload,
             cancelQueuedDownload,
             recordForTrack,
@@ -1109,6 +1159,7 @@ export function DeviceOfflineProvider({
             deleteDownload,
             download,
             enqueueCollection,
+            exportDownload,
             isHydrated,
             isQueueHydrated,
             load,

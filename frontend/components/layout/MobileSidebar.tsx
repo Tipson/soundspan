@@ -95,7 +95,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             />
 
             <aside
-                className="fixed inset-y-0 left-0 z-[60] flex w-[min(88vw,320px)] flex-col overflow-hidden border-r border-white/[0.08] bg-surface-raised shadow-2xl shadow-black/60"
+                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(88vw,320px)] flex-col overflow-hidden"
                 style={{
                     paddingTop: "var(--safe-area-top)",
                     paddingBottom: "var(--safe-area-bottom)",

@@ -351,6 +351,7 @@ const overlayState = {
     queue: [{}],
     currentIndex: 0,
 };
+let isMobileViewport = true;
 
 const overlayCalls = {
     skipBackward: [] as number[],
@@ -430,10 +431,9 @@ mock.module("framer-motion", {
     namedExports: {
         AnimatePresence: ({ children }: { children?: React.ReactNode }) =>
             (children ?? null) as React.ReactElement | null,
-        motion: new Proxy(
-            {},
-            {
-                get: (_target, tagName: string) => {
+        motion: new Proxy(new Map<string, React.ElementType>(), {
+            get: (elements, tagName: string) => {
+                if (!elements.has(tagName)) {
                     const MotionTag = React.forwardRef(
                         (props: { children?: React.ReactNode }, ref) =>
                             React.createElement(
@@ -443,17 +443,18 @@ mock.module("framer-motion", {
                             ),
                     );
                     MotionTag.displayName = `motion.${String(tagName)}`;
-                    return MotionTag;
-                },
+                    elements.set(tagName, MotionTag);
+                }
+                return elements.get(tagName);
             },
-        ),
+        }),
         useReducedMotion: () => false,
     },
 });
 
 mock.module("@/hooks/useMediaQuery", {
     namedExports: {
-        useIsMobile: () => true,
+        useIsMobile: () => isMobileViewport,
         useIsTablet: () => false,
     },
 });
@@ -562,6 +563,7 @@ beforeEach(() => {
     };
     overlayState.queue = [{}];
     overlayState.canSeek = true;
+    isMobileViewport = true;
 });
 
 async function mount(element: React.ReactElement) {
@@ -600,7 +602,7 @@ function withQueryClient(element: React.ReactElement) {
 // FullPlayer
 // ---------------------------------------------------------------------------
 
-test("FullPlayer renders Skip back/forward 15 seconds buttons alongside unchanged Previous/Next", async () => {
+test("FullPlayer keeps the music transport focused on shuffle, previous, next, and repeat", async () => {
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const mounted = await mount(React.createElement(FullPlayer));
 
@@ -615,8 +617,8 @@ test("FullPlayer renders Skip back/forward 15 seconds buttons alongside unchange
     );
     const next = mounted.container.querySelector('[aria-label="Next track"]');
 
-    assert.ok(skipBack, "expected a 'Skip back 15 seconds' button");
-    assert.ok(skipForward, "expected a 'Skip forward 15 seconds' button");
+    assert.equal(skipBack, null);
+    assert.equal(skipForward, null);
     assert.ok(previous, "Previous track button must still be present");
     assert.ok(next, "Next track button must still be present");
 
@@ -639,6 +641,13 @@ test("FullPlayer dislike control uses the track-preference mutation", async () =
 });
 
 test("FullPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", async () => {
+    fullPlayerState.currentTrack =
+        null as unknown as typeof fullPlayerState.currentTrack;
+    fullPlayerState.currentPodcast = {
+        id: "podcast-1",
+        duration: 1800,
+    };
+    fullPlayerState.playbackType = "podcast";
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const mounted = await mount(React.createElement(FullPlayer));
 
@@ -658,6 +667,13 @@ test("FullPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", async
 });
 
 test("FullPlayer: clicking 'Skip forward 15 seconds' calls skipForward(15)", async () => {
+    fullPlayerState.currentTrack =
+        null as unknown as typeof fullPlayerState.currentTrack;
+    fullPlayerState.currentPodcast = {
+        id: "podcast-1",
+        duration: 1800,
+    };
+    fullPlayerState.playbackType = "podcast";
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const mounted = await mount(React.createElement(FullPlayer));
 
@@ -702,7 +718,7 @@ test("FullPlayer: Previous/Next buttons are unchanged (still call previous()/nex
     await unmount(mounted);
 });
 
-test("FullPlayer: skip buttons are disabled when no media is loaded", async () => {
+test("FullPlayer: skip buttons stay hidden when no long-form media is loaded", async () => {
     fullPlayerState.currentTrack =
         null as unknown as typeof fullPlayerState.currentTrack;
     fullPlayerState.playbackType = null;
@@ -718,16 +734,8 @@ test("FullPlayer: skip buttons are disabled when no media is loaded", async () =
         '[aria-label="Skip forward 15 seconds"]',
     ) as HTMLButtonElement | null;
 
-    assert.ok(
-        skipBack,
-        "expected a 'Skip back 15 seconds' button even without media",
-    );
-    assert.ok(
-        skipForward,
-        "expected a 'Skip forward 15 seconds' button even without media",
-    );
-    assert.equal(skipBack!.disabled, true);
-    assert.equal(skipForward!.disabled, true);
+    assert.equal(skipBack, null);
+    assert.equal(skipForward, null);
 
     await unmount(mounted);
 });
@@ -739,6 +747,13 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
     // so they must too. Previous/Next are track switches, not seeks, and
     // must NOT be gated on canSeek.
     fullPlayerState.canSeek = false;
+    fullPlayerState.currentTrack =
+        null as unknown as typeof fullPlayerState.currentTrack;
+    fullPlayerState.currentPodcast = {
+        id: "podcast-1",
+        duration: 1800,
+    };
+    fullPlayerState.playbackType = "podcast";
 
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const mounted = await mount(React.createElement(FullPlayer));
@@ -803,6 +818,26 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
 // OverlayPlayer
 // ---------------------------------------------------------------------------
 
+test("OverlayPlayer leaves the complete desktop dock and seekbar uncovered", async () => {
+    isMobileViewport = false;
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+
+    const overlay = mounted.container.querySelector(
+        '[data-player-surface="overlay"]',
+    );
+    assert.ok(overlay);
+    assert.ok(
+        overlay.classList.contains("bottom-[104px]"),
+        "desktop overlay must stop above the 96px player and its 8px outer padding",
+    );
+
+    await unmount(mounted);
+});
+
 test("OverlayPlayer renders Skip back/forward 15 seconds buttons for podcast playback", async () => {
     const { OverlayPlayer } =
         await import("../../components/player/OverlayPlayer");
@@ -819,6 +854,69 @@ test("OverlayPlayer renders Skip back/forward 15 seconds buttons for podcast pla
 
     assert.ok(skipBack, "expected a 'Skip back 15 seconds' button");
     assert.ok(skipForward, "expected a 'Skip forward 15 seconds' button");
+
+    await unmount(mounted);
+});
+
+test("OverlayPlayer keeps the long-form transport narrow enough for a phone", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+
+    assert.equal(
+        mounted.container.querySelector('[aria-label="Shuffle"]'),
+        null,
+    );
+    assert.equal(
+        mounted.container.querySelector('[aria-label="Repeat"]'),
+        null,
+    );
+    assert.ok(
+        mounted.container.querySelector('[aria-label="Skip back 15 seconds"]'),
+    );
+    assert.ok(mounted.container.querySelector('[aria-label="Previous"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Next"]'));
+    assert.ok(
+        mounted.container.querySelector(
+            '[aria-label="Skip forward 15 seconds"]',
+        ),
+    );
+
+    await unmount(mounted);
+});
+
+test("OverlayPlayer keeps the music transport focused on shuffle, previous, next, and repeat", async () => {
+    overlayState.playbackType = "track";
+    overlayState.currentTrack = {
+        id: "yt:overlay-track",
+        title: "Overlay Track",
+        duration: 240,
+        streamSource: "youtube",
+        artist: { id: "artist-1", name: "Overlay Artist" },
+        album: { id: "album-1", title: "Overlay Album" },
+    };
+    overlayState.currentPodcast = null;
+
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+
+    assert.equal(
+        mounted.container.querySelector('[aria-label="Skip back 15 seconds"]'),
+        null,
+    );
+    assert.equal(
+        mounted.container.querySelector(
+            '[aria-label="Skip forward 15 seconds"]',
+        ),
+        null,
+    );
+    assert.ok(mounted.container.querySelector('[aria-label="Previous"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Next"]'));
 
     await unmount(mounted);
 });

@@ -685,7 +685,7 @@ export class DeviceOfflineDownloadManager {
         const attempt = (previous?.attempt ?? 0) + 1;
         const foregroundLeaseId = `${key}:${attempt}`;
         const persistenceGranted = this.dependencies.audioVault
-            ? true
+            ? null
             : await this.dependencies
                   .requestPersistentStorage()
                   .catch(() => null);

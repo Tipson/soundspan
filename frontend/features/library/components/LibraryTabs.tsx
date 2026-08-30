@@ -38,16 +38,16 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
             aria-label="Library sections"
             data-tv-section="library-tabs"
             data-overflow-cue="horizontal"
-            className="relative"
+            className="relative rounded-[20px] border border-white/[0.08] bg-black/30 p-2 shadow-[0_18px_48px_rgb(0_0_0/0.2)] backdrop-blur-xl"
         >
             <span className="sr-only">
                 Scroll horizontally for more Library sections
             </span>
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-surface to-transparent sm:hidden"
+                className="pointer-events-none absolute inset-y-2 right-2 z-10 w-10 rounded-r-xl bg-gradient-to-l from-surface-raised to-transparent sm:hidden"
             />
-            <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-2 pr-12 scroll-px-4 [scrollbar-width:none] sm:-mx-1 sm:px-1 sm:pr-1 [&::-webkit-scrollbar]:hidden">
+            <div className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto pr-12 scroll-px-2 [scrollbar-width:none] sm:pr-0 [&::-webkit-scrollbar]:hidden">
                 {TABS.map((tab, index) => {
                     const active = tab.id === activeTab;
                     return (
@@ -59,11 +59,11 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
                             data-tv-card-index={index}
                             aria-current={active ? "page" : undefined}
                             className={cn(
-                                "inline-flex min-h-11 shrink-0 snap-start items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors",
+                                "inline-flex min-h-11 shrink-0 snap-start items-center rounded-xl border px-4 py-2 text-sm font-semibold transition-colors active:scale-[0.98]",
                                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                 active
-                                    ? "bg-content text-surface"
-                                    : "bg-white/[0.07] text-content-secondary hover:bg-white/10 hover:text-content",
+                                    ? "border-brand/45 bg-brand/18 text-content shadow-[inset_0_1px_0_rgb(255_255_255/0.08)]"
+                                    : "border-transparent text-content-secondary hover:bg-white/[0.07] hover:text-content",
                             )}
                         >
                             {tab.label}

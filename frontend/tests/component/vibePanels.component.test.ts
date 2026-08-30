@@ -486,6 +486,30 @@ test("NowPlayingCard disables fly-to when the track isn't on the map", async () 
     assert.doesNotMatch(html, /Find on map/);
 });
 
+test("NowPlayingCard can defer playback to the single primary Wave control", async () => {
+    const NowPlayingCard = await nowPlayingCard();
+    const html = renderToStaticMarkup(
+        React.createElement(NowPlayingCard, {
+            track: {
+                id: "t-wave",
+                title: "Wave Song",
+                artist: { name: "Wave Artist" },
+                album: { coverArt: null },
+            },
+            isPlaying: true,
+            onMapPresent: false,
+            moodColor: null,
+            onFlyTo: noop,
+            onTogglePlay: noop,
+            showPlaybackToggle: false,
+        }),
+    );
+
+    assert.match(html, /Wave Song/);
+    assert.doesNotMatch(html, /aria-label="Pause"/);
+    assert.doesNotMatch(html, /aria-label="Play"/);
+});
+
 test("NowPlayingCard renders nothing when there is no track", async () => {
     const NowPlayingCard = await nowPlayingCard();
     const html = renderToStaticMarkup(

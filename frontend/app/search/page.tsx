@@ -60,11 +60,6 @@ export default function SearchPage() {
     const isAlbumsView = sectionView === "albums";
     const isArtistsView = sectionView === "artists";
     const showTracksView = sectionView === null || isTracksView;
-    const sectionViewLinks = {
-        tracks: `/search?q=${encodeURIComponent(query)}&view=tracks`,
-        albums: `/search?q=${encodeURIComponent(query)}&view=albums`,
-        artists: `/search?q=${encodeURIComponent(query)}&view=artists`,
-    };
     const searchCatalogPolicy = resolveSearchCatalogPolicy({
         isTracksView,
         isAlbumsView,
@@ -219,35 +214,37 @@ export default function SearchPage() {
         router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
     };
 
+    const activeViewLabel =
+        activeView === "tracks"
+            ? "Tracks"
+            : activeView === "albums"
+              ? "Albums"
+              : activeView === "artists"
+                ? "Artists"
+                : "Best matches";
+
     const trackStatus =
         primarySongsSurface === "playable" &&
         (isSoulseekSearching || isSoulseekPolling) ? (
             <span className="inline-flex items-center gap-2 text-sm font-normal text-gray-400">
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                    <circle
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeDasharray="40 20"
-                    />
-                </svg>
+                <span
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-brand motion-reduce:animate-none"
+                />
                 Adding more sources…
             </span>
         ) : undefined;
 
     const tracksSection =
         hasSearched && showTracksView && primarySongsSurface !== "empty" ? (
-            <section>
+            <section className="min-w-0 rounded-[1.5rem] border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
                 {primarySongsSurface === "soulseek" ? null : (
                     <SearchSectionHeader
                         title="Tracks"
-                        showAllHref={
+                        description={
                             sectionView === null
-                                ? sectionViewLinks.tracks
-                                : undefined
+                                ? "Popular playable matches from every source"
+                                : "Up to 50 playable matches, ranked for this search"
                         }
                         status={trackStatus}
                     />
@@ -305,16 +302,43 @@ export default function SearchPage() {
     return (
         <div
             data-search-results-canvas="true"
-            className="relative mx-auto min-h-screen max-w-[1600px] px-4 pb-36 pt-4 sm:px-6 sm:pt-6 lg:px-8"
+            className="relative mx-auto min-h-full max-w-[1520px] overflow-x-clip px-3 pb-40 pt-3 sm:px-6 sm:pb-32 sm:pt-5 lg:px-8"
         >
             <div
                 aria-hidden="true"
                 data-search-ambient-clip="true"
                 className="pointer-events-none absolute inset-0 overflow-hidden"
             >
-                <div className="absolute -right-48 -top-64 h-[38rem] w-[38rem] rounded-full bg-brand/[0.07] blur-3xl" />
+                <div className="absolute -right-48 -top-64 h-[38rem] w-[38rem] rounded-full bg-brand/[0.075] blur-3xl" />
+                <div className="absolute -left-56 top-72 h-[30rem] w-[30rem] rounded-full bg-violet-500/[0.045] blur-3xl" />
             </div>
-            <TVSearchInput initialQuery={query} onSearch={handleTVSearch} />
+            <TVSearchInput
+                key={query}
+                initialQuery={query}
+                onSearch={handleTVSearch}
+            />
+
+            {hasSearched ? (
+                <header
+                    data-search-query-heading="true"
+                    className="relative mb-5 pt-2 sm:mb-6 sm:pt-4"
+                >
+                    <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.18em] text-content-muted">
+                        Search
+                    </p>
+                    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+                        <h1 className="min-w-0 text-balance text-3xl font-black tracking-[-0.045em] text-content sm:text-5xl">
+                            Results for{" "}
+                            <span className="text-content-secondary">
+                                “{query.trim()}”
+                            </span>
+                        </h1>
+                        <p className="pb-1 text-sm font-semibold text-content-secondary">
+                            {activeViewLabel}
+                        </p>
+                    </div>
+                </header>
+            ) : null}
 
             <SearchFilters
                 activeView={activeView}
@@ -322,7 +346,7 @@ export default function SearchPage() {
                 hasSearched={hasSearched}
             />
 
-            <div className="relative space-y-10 sm:space-y-12">
+            <div className="relative space-y-8 sm:space-y-10">
                 {hasSearched && aliasInfo ? (
                     <AliasResolutionBanner aliasInfo={aliasInfo} />
                 ) : null}
@@ -369,26 +393,12 @@ export default function SearchPage() {
                 ) : null}
 
                 {showPrimaryLoadingState ? (
-                    <div className="relative z-10 flex flex-col items-center justify-center py-16">
-                        <div className="relative mb-4 h-16 w-16">
-                            <svg
-                                className="h-16 w-16 animate-spin"
-                                viewBox="0 0 64 64"
-                            >
-                                <circle
-                                    cx="32"
-                                    cy="32"
-                                    r="28"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    strokeLinecap="round"
-                                    strokeDasharray="140 40"
-                                    className="text-brand"
-                                />
-                            </svg>
-                        </div>
-                        <p className="text-sm text-gray-400">
+                    <div className="relative z-10 flex min-h-[18rem] flex-col items-center justify-center rounded-[1.5rem] border border-white/[0.08] bg-white/[0.025] py-16">
+                        <span
+                            aria-hidden="true"
+                            className="mb-4 h-12 w-12 animate-spin rounded-full border-[3px] border-white/10 border-t-brand motion-reduce:animate-none"
+                        />
+                        <p className="text-sm text-content-secondary">
                             {isSoulseekSearching || isSoulseekPolling
                                 ? `Searching… (${soulseekResults.length} found)`
                                 : "Searching…"}
@@ -397,7 +407,10 @@ export default function SearchPage() {
                 ) : null}
 
                 {topResult && tracksSection ? (
-                    <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(20rem,2fr)_minmax(0,3fr)]">
+                    <div
+                        data-search-primary-grid="true"
+                        className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(17rem,0.85fr)_minmax(0,1.35fr)]"
+                    >
                         {topResult}
                         {tracksSection}
                     </div>
@@ -414,14 +427,10 @@ export default function SearchPage() {
                     <section>
                         <SearchSectionHeader
                             title="Albums"
-                            showAllHref={
-                                sectionView === null
-                                    ? sectionViewLinks.albums
-                                    : undefined
-                            }
+                            description="Full releases and catalog matches"
                         />
                         <div
-                            className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10"
+                            className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6"
                             data-tv-section="search-results-albums"
                         >
                             {albumLimits.primaryLimit > 0 ? (
@@ -450,11 +459,7 @@ export default function SearchPage() {
                     <section>
                         <SearchSectionHeader
                             title="Artists"
-                            showAllHref={
-                                sectionView === null
-                                    ? sectionViewLinks.artists
-                                    : undefined
-                            }
+                            description="Artists that best match this search"
                         />
                         <SearchArtistsGrid
                             libraryArtists={libraryArtists}
@@ -484,15 +489,27 @@ export default function SearchPage() {
                 !activeViewHasResults &&
                 !videoInfo &&
                 !ytPlaylistInfo ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <SearchIcon className="mb-4 h-16 w-16 text-gray-400" />
-                        <h3 className="mb-2 text-xl font-bold text-white">
-                            No results found
-                        </h3>
-                        <p className="text-gray-400">
-                            Try searching for something else
+                    <section
+                        aria-labelledby="search-no-results-title"
+                        className="flex min-h-[22rem] flex-col items-center justify-center rounded-[1.5rem] border border-white/[0.08] bg-white/[0.025] px-6 py-16 text-center"
+                    >
+                        <span className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-white/[0.05] text-content-muted">
+                            <SearchIcon
+                                className="h-6 w-6"
+                                aria-hidden="true"
+                            />
+                        </span>
+                        <h2
+                            id="search-no-results-title"
+                            className="mb-2 text-2xl font-black tracking-[-0.035em] text-content"
+                        >
+                            Nothing matched “{query.trim()}”
+                        </h2>
+                        <p className="max-w-md text-sm leading-6 text-content-secondary">
+                            Check the spelling or try a track, artist, or album
+                            name.
                         </p>
-                    </div>
+                    </section>
                 ) : null}
             </div>
         </div>

@@ -20,6 +20,7 @@ import {
     getAlbumActionVisibility,
     type AlbumActionVisibility,
 } from "../albumActionVisibility";
+import { MusicDetailActionDock } from "@/components/music-detail";
 
 const BRAND_PLAY = "var(--color-brand-hover)";
 const LOCK_MESSAGE =
@@ -296,7 +297,7 @@ function ActionControlRow(props: {
         return null;
     }
     return (
-        <div className="flex w-full max-w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-2.5 py-2 backdrop-blur-md sm:inline-flex sm:w-fit">
+        <MusicDetailActionDock label="Album controls">
             {actions.isInListenTogetherGroup && visibility.hasLockedControls ? (
                 <LockedControls
                     visibility={visibility}
@@ -328,7 +329,7 @@ function ActionControlRow(props: {
                 librarySaveControl={actions.librarySaveControl}
                 deviceDownloadControl={actions.deviceDownloadControl}
             />
-        </div>
+        </MusicDetailActionDock>
     );
 }
 

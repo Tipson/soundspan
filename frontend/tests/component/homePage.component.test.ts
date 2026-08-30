@@ -80,9 +80,9 @@ mock.module("@/features/home/components/PersonalizedTrackShelf", {
     },
 });
 
-mock.module("@/features/explore/components/MadeForYouSection", {
+mock.module("@/features/home/components/HomeMadeForYou", {
     namedExports: {
-        MadeForYouSection: ({
+        HomeMadeForYou: ({
             discoverWeekly,
             mixes,
             personalizedFeed,
@@ -174,21 +174,20 @@ test("Home unifies personal playback and real online discovery", async () => {
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
     assert.match(html, /compact-wave-hero/);
-    assert.match(html, /Picked for right now:Quick One/);
-    assert.match(html, /Listen again:Again One/);
-    assert.doesNotMatch(html, /Fresh for you:Fresh One/);
+    assert.match(html, /Continue listening:Again One/);
+    assert.doesNotMatch(html, /Picked for right now:Quick One/);
     assert.match(html, /made-for-you:weekly:1:1/);
     assert.match(html, /online-discovery:true:1/);
     assert.ok(
         html.indexOf("compact-wave-hero") < html.indexOf("home-quick-actions"),
     );
     assert.ok(
-        html.indexOf("home-quick-actions") < html.indexOf("made-for-you"),
+        html.indexOf("home-quick-actions") < html.indexOf("Continue listening"),
     );
     assert.ok(
-        html.indexOf("made-for-you") < html.indexOf("Picked for right now"),
+        html.indexOf("Continue listening") < html.indexOf("made-for-you"),
     );
-    assert.ok(html.indexOf("Listen again") < html.indexOf("online-discovery"));
+    assert.ok(html.indexOf("made-for-you") < html.indexOf("online-discovery"));
 });
 
 test("Home omits legacy local-library Explore surfaces", async () => {
@@ -205,9 +204,8 @@ test("Home keeps real personal shelves when generated mixes are unavailable", as
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /Picked for right now:Quick One/);
-    assert.match(html, /Listen again:Again One/);
-    assert.doesNotMatch(html, /Fresh for you:Fresh One/);
+    assert.match(html, /Continue listening:Again One/);
+    assert.doesNotMatch(html, /Picked for right now:Quick One/);
     assert.match(html, /made-for-you:none:0:1/);
     assert.doesNotMatch(html, /Daily Mix|Discover Weekly/);
 });

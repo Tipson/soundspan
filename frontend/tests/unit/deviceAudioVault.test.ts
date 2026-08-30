@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     DeviceAudioVaultError,
+    createBrowserDeviceAudioVault,
     createBrowserDirectoryDeviceAudioVault,
+    createBrowserPrivateDeviceAudioVault,
     type DeviceAudioDirectoryHandle,
     type DeviceAudioDirectoryRegistry,
     type DeviceAudioFileHandle,
@@ -16,19 +18,26 @@ class MemoryFileHandle implements DeviceAudioFileHandle {
     private bytes = new Uint8Array();
     private contentType = "";
     onClose: (() => void) | null = null;
+    createWritableCalls = 0;
+    writeCalls = 0;
+    closeCalls = 0;
+    abortCalls = 0;
 
     constructor(readonly name: string) {}
 
     async createWritable(): Promise<DeviceAudioWritable> {
+        this.createWritableCalls += 1;
         const chunks: Uint8Array[] = [];
         let aborted = false;
         return {
             write: async (chunk) => {
                 if (aborted) throw new Error("writer aborted");
+                this.writeCalls += 1;
                 chunks.push(Uint8Array.from(chunk));
             },
             close: async () => {
                 if (aborted) throw new Error("writer aborted");
+                this.closeCalls += 1;
                 const length = chunks.reduce(
                     (total, chunk) => total + chunk.byteLength,
                     0,
@@ -42,6 +51,7 @@ class MemoryFileHandle implements DeviceAudioFileHandle {
                 this.onClose?.();
             },
             abort: async () => {
+                this.abortCalls += 1;
                 aborted = true;
             },
         };
@@ -346,6 +356,19 @@ test("access inspects, opens a revocable Blob URL, rejects another owner, and re
     playback.release();
     assert.deepEqual(revokedUrls, ["blob:soundspan/1"]);
 
+    const exported = await ownerOne.access({
+        kind: "export",
+        ref: receipt.ref,
+        expectedBytes: 3,
+    });
+    assert.equal(exported.kind, "export");
+    assert.equal(exported.url, "blob:soundspan/2");
+    assert.equal(exported.displayName, receipt.displayName);
+    assert.equal(exported.bytes, 3);
+    exported.release();
+    exported.release();
+    assert.deepEqual(revokedUrls, ["blob:soundspan/1", "blob:soundspan/2"]);
+
     await assert.rejects(
         ownerTwo.access({ kind: "play", ref: receipt.ref }),
         (error: unknown) =>
@@ -638,4 +661,273 @@ test("the IndexedDB registry retries a failed open and then persists the selecte
     await registry.save(root);
     assert.equal(await registry.load(), root);
     assert.equal(openCalls, 2);
+});
+
+test("browser-private storage retains an owner-scoped file and reopens it after an app restart", async () => {
+    const root = new MemoryDirectoryHandle("OPFS");
+    const base = createHarness({ picked: root });
+    let persistCalls = 0;
+    const storage = {
+        getDirectory: async () => root,
+        persisted: async () => false,
+        persist: async () => {
+            persistCalls += 1;
+            return true;
+        },
+    };
+    const vault = createBrowserPrivateDeviceAudioVault({
+        storage,
+        runtime: base.runtime,
+    });
+
+    assert.deepEqual(await vault.inspectAccess(), {
+        status: "ready",
+        code: null,
+        storageKind: "browser-private",
+        label: "Soundspan on this device",
+        reason: "Offline playback uses private Soundspan storage. Use Save as file in Downloads to create a normal file outside the browser.",
+    });
+    assert.equal(persistCalls, 1);
+
+    const ownerOne = await vault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    assert.equal(ownerOne.storage.kind, "browser-private");
+    const receipt = await ownerOne.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([1, 2, 3, 4]),
+        contentType: "audio/mpeg",
+        expectedBytes: 4,
+    });
+    assert.match(receipt.ref, /^opfs1:scope-user-1:/);
+    assert.equal(receipt.persistenceGranted, true);
+
+    const restartedVault = createBrowserPrivateDeviceAudioVault({
+        storage,
+        runtime: base.runtime,
+    });
+    const restartedOwner = await restartedVault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const playback = await restartedOwner.access({
+        kind: "play",
+        ref: receipt.ref,
+        expectedBytes: 4,
+    });
+    assert.equal(playback.kind, "play");
+    assert.equal(playback.url, "blob:soundspan/1");
+    playback.release();
+
+    const otherOwner = await restartedVault.open({
+        ownerId: "user-2",
+        authGeneration: 1,
+    });
+    await assert.rejects(
+        otherOwner.access({ kind: "play", ref: receipt.ref }),
+        (error: unknown) =>
+            error instanceof DeviceAudioVaultError &&
+            error.code === "owner_mismatch",
+    );
+});
+
+test("browser-private storage reports when durable persistence was declined", async () => {
+    const root = new MemoryDirectoryHandle("OPFS");
+    const base = createHarness({ picked: root });
+    const vault = createBrowserPrivateDeviceAudioVault({
+        storage: {
+            getDirectory: async () => root,
+            persisted: async () => false,
+            persist: async () => false,
+        },
+        runtime: base.runtime,
+    });
+
+    assert.deepEqual(await vault.inspectAccess(), {
+        status: "ready",
+        code: null,
+        storageKind: "browser-private",
+        label: "Soundspan on this device",
+        reason: "Offline playback works, but the browser declined durable private storage. Use Save as file in Downloads because browser data may be cleared.",
+    });
+    const session = await vault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const receipt = await session.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([1, 2, 3]),
+        contentType: "audio/mpeg",
+        expectedBytes: 3,
+    });
+    assert.equal(receipt.persistenceGranted, false);
+});
+
+test("browser-private access proves a real zero-byte write and removes its capability file", async () => {
+    const root = new MemoryDirectoryHandle("OPFS");
+    const base = createHarness({ picked: root });
+    const capabilities: MemoryFileHandle[] = [];
+    root.onFileCreated = (file) => {
+        if (file.name === ".soundspan-write-capability") {
+            capabilities.push(file);
+        }
+    };
+    const vault = createBrowserPrivateDeviceAudioVault({
+        storage: {
+            getDirectory: async () => root,
+            persisted: async () => true,
+        },
+        runtime: base.runtime,
+    });
+
+    assert.equal((await vault.inspectAccess()).status, "ready");
+    const capability = capabilities[0];
+    assert.ok(capability);
+    assert.equal(capability.createWritableCalls, 1);
+    assert.equal(capability.writeCalls, 1);
+    assert.equal(capability.closeCalls, 1);
+    assert.equal(capability.abortCalls, 0);
+    assert.deepEqual(capability.snapshot(), []);
+    assert.equal(root.files.has(".soundspan-write-capability"), false);
+});
+
+test("browser-private access aborts a failed capability write and still removes its probe", async () => {
+    let abortCalls = 0;
+    let removeCalls = 0;
+    const root = {
+        kind: "directory" as const,
+        name: "OPFS",
+        getDirectoryHandle: async () => root,
+        getFileHandle: async (name: string) => ({
+            kind: "file" as const,
+            name,
+            createWritable: async () => ({
+                write: async () => {
+                    throw new Error("write unavailable");
+                },
+                close: async () => undefined,
+                abort: async () => {
+                    abortCalls += 1;
+                },
+            }),
+            getFile: async () => new Blob(),
+        }),
+        removeEntry: async () => {
+            removeCalls += 1;
+        },
+    };
+    const base = createHarness();
+    const vault = createBrowserPrivateDeviceAudioVault({
+        storage: {
+            getDirectory: async () => root,
+            persisted: async () => true,
+        },
+        runtime: base.runtime,
+    });
+
+    assert.equal((await vault.inspectAccess()).status, "unsupported");
+    assert.equal(abortCalls, 1);
+    assert.equal(removeCalls, 1);
+});
+
+test("explicit null disables browser-private storage even when navigator exposes OPFS", async (t) => {
+    const originalNavigator = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    t.after(() => {
+        if (originalNavigator) {
+            Object.defineProperty(globalThis, "navigator", originalNavigator);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+
+    let getDirectoryCalls = 0;
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            storage: {
+                getDirectory: async () => {
+                    getDirectoryCalls += 1;
+                    return new MemoryDirectoryHandle("unexpected OPFS");
+                },
+            },
+        },
+    });
+    const base = createHarness();
+    const vault = createBrowserPrivateDeviceAudioVault({
+        storage: null,
+        runtime: base.runtime,
+    });
+
+    assert.equal((await vault.inspectAccess()).status, "unsupported");
+    assert.equal(getDirectoryCalls, 0);
+});
+
+test("the browser vault prefers a normal directory and falls back to private storage only without a picker", async () => {
+    const directory = createHarness();
+    const privateRoot = new MemoryDirectoryHandle("OPFS");
+    const privateStorage = {
+        getDirectory: async () => privateRoot,
+        persisted: async () => true,
+        persist: async () => true,
+    };
+
+    const normalFiles = createBrowserDeviceAudioVault({
+        directoryRegistry: directory.registry,
+        directoryRuntime: directory.runtime,
+        privateStorage,
+    });
+    assert.equal(
+        (await normalFiles.inspectAccess()).storageKind,
+        "desktop-directory",
+    );
+
+    const noPickerRuntime: DeviceAudioVaultRuntime = {
+        ...directory.runtime,
+        isSupported: () => false,
+    };
+    const privateFiles = createBrowserDeviceAudioVault({
+        directoryRegistry: new MemoryRegistry(),
+        directoryRuntime: noPickerRuntime,
+        privateStorage,
+    });
+    assert.equal(
+        (await privateFiles.inspectAccess()).storageKind,
+        "browser-private",
+    );
+});
+
+test("an older private file system without writable streams stays explicitly unsupported", async () => {
+    const root = {
+        kind: "directory" as const,
+        name: "OPFS",
+        getDirectoryHandle: async () => root,
+        getFileHandle: async (name: string) => ({
+            kind: "file" as const,
+            name,
+            getFile: async () => new Blob(),
+        }),
+        removeEntry: async () => undefined,
+    };
+    const base = createHarness();
+    const vault = createBrowserPrivateDeviceAudioVault({
+        storage: {
+            getDirectory: async () => root,
+            persisted: async () => true,
+        },
+        runtime: base.runtime,
+    });
+
+    assert.deepEqual(await vault.inspectAccess(), {
+        status: "unsupported",
+        code: "unsupported",
+        storageKind: null,
+        label: "Device files unavailable",
+        reason: "This browser cannot write to a user-selected directory.",
+    });
 });

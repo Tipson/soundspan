@@ -48,7 +48,9 @@ popular tracks in the current browser/PWA only.
 
 The responsive artist page presents playable Popular tracks before the longer
 About biography, keeps the selected visible track list as playback context, and
-uses a stacked artwork hero plus wrapping action bar on narrow screens.
+uses the shared artwork-led music-detail hero, touch-sized action dock, and
+canonical track surface. Those surfaces stack without horizontal overflow on
+narrow screens while keeping long names and artist filters visible.
 
 Artist content is addressable through `?view=overview|tracks|albums|singles`.
 The Tracks view exposes every track returned by the artist data source as one

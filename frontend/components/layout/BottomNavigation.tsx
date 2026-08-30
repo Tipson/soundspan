@@ -88,7 +88,7 @@ export function BottomNavigation() {
                                     : undefined
                             }
                             className={cn(
-                                "group relative flex min-h-11 h-full flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light",
+                                "shell-nav-item group relative flex min-h-11 h-full flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light",
                                 isActive
                                     ? "text-white"
                                     : "text-content-muted active:text-content-secondary",

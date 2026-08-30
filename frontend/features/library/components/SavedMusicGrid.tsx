@@ -113,10 +113,10 @@ export function SavedMusicGrid({
                     <Link
                         key={entity.id}
                         href={getSavedMusicEntityHref(entity)}
-                        className="group min-w-0 rounded-2xl p-2 transition-colors hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        className="group min-w-0 rounded-[20px] border border-transparent p-2 transition-[transform,background-color,border-color] hover:-translate-y-0.5 hover:border-white/[0.08] hover:bg-white/[0.045] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none"
                     >
                         <div
-                            className={`relative mb-3 flex aspect-square items-center justify-center overflow-hidden bg-surface-highlight ${rounded}`}
+                            className={`relative mb-3 flex aspect-square items-center justify-center overflow-hidden bg-surface-highlight shadow-[0_16px_42px_rgb(0_0_0/0.2)] ring-1 ring-white/[0.06] ${rounded}`}
                         >
                             {type === "artist" ? (
                                 <UserRound className="h-10 w-10 text-content-muted" />

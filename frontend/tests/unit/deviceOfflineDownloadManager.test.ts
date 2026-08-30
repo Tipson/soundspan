@@ -228,6 +228,7 @@ class MemoryDeviceAudioVault implements DeviceAudioVault {
         private readonly isAuthGenerationCurrent: (
             generation: number,
         ) => boolean = () => true,
+        private readonly persistenceGranted: boolean | null = true,
     ) {
         this.retainStarted = new Promise((resolve) => {
             this.signalRetainStarted = resolve;
@@ -309,6 +310,7 @@ class MemoryDeviceAudioVault implements DeviceAudioVault {
                     bytes,
                     contentType: request.contentType,
                     displayName: `track-${this.sequence}.mp3`,
+                    persistenceGranted: this.persistenceGranted,
                     discard: async () => {
                         this.removed.push(ref);
                         this.files.delete(ref);
@@ -786,6 +788,21 @@ test("configured device-file storage retains new audio outside CacheStorage", as
     assert.equal(audioVault.retainCalls, 1);
     assert.equal(audioVault.files.size, 1);
     assert.equal(deps.audioCache.putCalls, 0);
+});
+
+test("browser-private storage publishes a declined durable-persistence result", async () => {
+    const audioVault = new MemoryDeviceAudioVault(false, () => true, false);
+    const deps = createDependencies({ audioVault });
+    const manager = new DeviceOfflineDownloadManager(deps);
+
+    const record = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+
+    assert.equal(record.status, "ready");
+    assert.equal(record.persistenceGranted, false);
 });
 
 test("real-file progress is throttled instead of writing metadata for every stream chunk", async () => {

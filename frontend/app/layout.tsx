@@ -21,17 +21,6 @@ import {
 import { APP_VIEWPORT } from "@/lib/viewportConfig";
 import { ImportCompletionMonitor } from "@/components/activity/ImportCompletionMonitor";
 
-// Self-hosted latin variable instance (weights 300-800) of the same font the
-// build previously fetched from Google at build time - CI must not depend on
-// fonts.gstatic.com availability. License: assets/fonts/OFL-Montserrat.txt.
-const montserrat = localFont({
-    src: "../assets/fonts/montserrat-latin-wght-normal.woff2",
-    weight: "300 800",
-    style: "normal",
-    display: "swap",
-    variable: "--font-montserrat",
-});
-
 const polea = localFont({
     src: "../assets/fonts/Polea Extra Bold DEMO.otf",
     display: "swap",
@@ -74,8 +63,8 @@ export default async function RootLayout({
     return (
         <html lang="en">
             <body
-                className={`${montserrat.variable} ${polea.variable} antialiased`}
-                style={{ fontFamily: "var(--font-montserrat)" }}
+                className={`${polea.variable} antialiased`}
+                style={{ fontFamily: "var(--font-interface)" }}
             >
                 <Script src="/runtime-config" strategy="beforeInteractive" />
                 <GlobalErrorBoundary>

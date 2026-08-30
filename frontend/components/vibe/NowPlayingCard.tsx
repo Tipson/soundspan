@@ -25,6 +25,8 @@ export interface NowPlayingCardProps {
     currentTime?: number;
     duration?: number;
     likeSlot?: ReactNode;
+    appearance?: "floating" | "wave";
+    showPlaybackToggle?: boolean;
 }
 
 const DEFAULT_COLOR = VIBE_ACCENTS.edge;
@@ -50,11 +52,13 @@ function CoverButton({
     onMap,
     color,
     onFlyTo,
+    decorativeOnly = false,
 }: {
     track: NowPlayingCardTrack;
     onMap: boolean;
     color: string;
     onFlyTo: () => void;
+    decorativeOnly?: boolean;
 }) {
     const rawCover = track.album?.coverArt ?? null;
     const cover =
@@ -64,6 +68,41 @@ function CoverButton({
         !rawCover.startsWith("blob:")
             ? api.getCoverArtUrl(rawCover, 96)
             : rawCover;
+    const artwork = (
+        <span className="relative block flex-shrink-0">
+            {cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={cover}
+                    alt=""
+                    loading="lazy"
+                    className="h-12 w-12 rounded-lg object-cover"
+                />
+            ) : (
+                <span
+                    className="grid h-12 w-12 place-items-center rounded-lg"
+                    style={{ backgroundColor: `${color}33` }}
+                >
+                    <Music className="h-5 w-5" style={{ color }} />
+                </span>
+            )}
+            {onMap && !decorativeOnly && (
+                <span
+                    className="vibe-np-dot"
+                    style={{
+                        backgroundColor: color,
+                        boxShadow: `0 0 6px 1px ${color}`,
+                    }}
+                    aria-hidden="true"
+                />
+            )}
+        </span>
+    );
+
+    if (decorativeOnly) {
+        return <span className="flex-shrink-0">{artwork}</span>;
+    }
+
     return (
         <button
             type="button"
@@ -82,39 +121,18 @@ function CoverButton({
             }
             className="group flex-shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:cursor-default"
         >
-            <span className="relative flex-shrink-0 block">
-                {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={cover}
-                        alt=""
-                        loading="lazy"
-                        className="w-12 h-12 rounded-lg object-cover"
-                    />
-                ) : (
-                    <span
-                        className="w-12 h-12 rounded-lg grid place-items-center"
-                        style={{ backgroundColor: `${color}33` }}
-                    >
-                        <Music className="w-5 h-5" style={{ color }} />
-                    </span>
-                )}
-                {onMap && (
-                    <span
-                        className="vibe-np-dot"
-                        style={{
-                            backgroundColor: color,
-                            boxShadow: `0 0 6px 1px ${color}`,
-                        }}
-                        aria-hidden="true"
-                    />
-                )}
-            </span>
+            {artwork}
         </button>
     );
 }
 
-function TrackLabels({ track }: { track: NowPlayingCardTrack }) {
+function TrackLabels({
+    track,
+    wide = false,
+}: {
+    track: NowPlayingCardTrack;
+    wide?: boolean;
+}) {
     const artist = track.artist?.name ?? "";
     const artistId = track.artist?.id ?? "";
     const albumId = track.album?.id ?? "";
@@ -141,7 +159,9 @@ function TrackLabels({ track }: { track: NowPlayingCardTrack }) {
         </span>
     );
     return (
-        <span className="min-w-0 max-w-[min(38vw,9rem)] flex flex-col">
+        <span
+            className={`flex min-w-0 flex-col ${wide ? "max-w-[min(28vw,20rem)] sm:max-w-[min(44vw,20rem)]" : "max-w-[min(38vw,9rem)]"}`}
+        >
             {title}
             {artist && artistLabel}
         </span>
@@ -235,15 +255,24 @@ function ProgressStrip({
 export function NowPlayingCard(props: NowPlayingCardProps) {
     if (!props.track) return null;
     const color = props.moodColor ?? DEFAULT_COLOR;
+    const appearance = props.appearance ?? "floating";
+    const showPlaybackToggle = props.showPlaybackToggle ?? true;
     return (
-        <div className="pointer-events-auto relative flex items-center gap-1.5 sm:gap-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-xl shadow-lg p-2">
+        <div
+            className={`pointer-events-auto relative flex items-center gap-1.5 sm:gap-2 ${
+                appearance === "wave"
+                    ? "bg-transparent"
+                    : "rounded-xl border border-white/10 bg-black/60 p-2 shadow-lg backdrop-blur-md"
+            }`}
+        >
             <CoverButton
                 track={props.track}
                 onMap={props.onMapPresent}
                 color={color}
                 onFlyTo={props.onFlyTo}
+                decorativeOnly={appearance === "wave"}
             />
-            <TrackLabels track={props.track} />
+            <TrackLabels track={props.track} wide={appearance === "wave"} />
             {props.likeSlot && (
                 <span className="flex-shrink-0">{props.likeSlot}</span>
             )}
@@ -254,7 +283,12 @@ export function NowPlayingCard(props: NowPlayingCardProps) {
                     onFlyTo={props.onFlyTo}
                 />
             )}
-            <PlayButton playing={props.isPlaying} toggle={props.onTogglePlay} />
+            {showPlaybackToggle && (
+                <PlayButton
+                    playing={props.isPlaying}
+                    toggle={props.onTogglePlay}
+                />
+            )}
             <ProgressStrip
                 currentTime={props.currentTime}
                 duration={props.duration}
