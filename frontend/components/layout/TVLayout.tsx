@@ -302,7 +302,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     onClick={handleSync}
                     disabled={isSyncing}
                     className="tv-sync-btn"
-                    title="Sync Library"
+                    title="Обновить медиатеку"
                 >
                     <RefreshCw
                         className={cn("w-4 h-4", isSyncing && "animate-spin")}
@@ -344,7 +344,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     <button
                         onClick={toggleShuffle}
                         className={cn("tv-np-ctrl", isShuffle && "active")}
-                        title="Shuffle"
+                        title="Перемешать"
                     >
                         <Shuffle className="w-4 h-4" />
                     </button>
@@ -353,7 +353,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     <button
                         onClick={previous}
                         className="tv-np-ctrl"
-                        title="Previous"
+                        title="Предыдущий трек"
                     >
                         <SkipBack className="w-4 h-4" />
                     </button>
@@ -386,7 +386,11 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     </button>
 
                     {/* Next */}
-                    <button onClick={next} className="tv-np-ctrl" title="Next">
+                    <button
+                        onClick={next}
+                        className="tv-np-ctrl"
+                        title="Следующий трек"
+                    >
                         <SkipForward className="w-4 h-4" />
                     </button>
 
@@ -399,10 +403,10 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                         )}
                         title={
                             repeatMode === "one"
-                                ? "Repeat One"
+                                ? "Повторять один трек"
                                 : repeatMode === "all"
-                                  ? "Repeat All"
-                                  : "Repeat Off"
+                                  ? "Повторять всё"
+                                  : "Повтор выключен"
                         }
                     >
                         <Repeat className="w-4 h-4" />

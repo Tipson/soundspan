@@ -103,7 +103,7 @@ export function PWAInstallPrompt() {
                 <button
                     onClick={handleDismiss}
                     className="absolute top-2 right-2 p-1 text-white/50 hover:text-white/80 transition-colors"
-                    aria-label="Dismiss"
+                    aria-label="Закрыть"
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -114,22 +114,22 @@ export function PWAInstallPrompt() {
                     </div>
                     <div className="flex-1">
                         <h3 className="text-white font-semibold text-sm mb-1">
-                            Install {BRAND_NAME}
+                            Установить {BRAND_NAME}
                         </h3>
                         {isIOS ? (
                             <p className="text-white/60 text-xs leading-relaxed">
-                                Tap the{" "}
-                                <span className="text-white">Share</span>{" "}
-                                button, then{" "}
+                                Нажмите{" "}
+                                <span className="text-white">«Поделиться»</span>
+                                , затем выберите{" "}
                                 <span className="text-white">
-                                    &quot;Add to Home Screen&quot;
+                                    «На экран “Домой”»
                                 </span>{" "}
-                                for the best experience.
+                                — так приложение будет всегда под рукой.
                             </p>
                         ) : (
                             <p className="text-white/60 text-xs leading-relaxed">
-                                Add {BRAND_NAME} to your home screen for quick
-                                access and background audio.
+                                Добавьте {BRAND_NAME} на главный экран для
+                                быстрого доступа и фонового воспроизведения.
                             </p>
                         )}
                     </div>
@@ -141,7 +141,7 @@ export function PWAInstallPrompt() {
                         className="w-full mt-3 py-2 px-4 bg-brand text-black font-semibold text-sm rounded-lg hover:bg-brand-light transition-colors flex items-center justify-center gap-2"
                     >
                         <Download className="w-4 h-4" />
-                        Install App
+                        Установить приложение
                     </button>
                 )}
             </div>

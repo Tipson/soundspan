@@ -4,11 +4,11 @@ export interface TvNavigationItem {
 }
 
 export const TV_NAVIGATION: TvNavigationItem[] = [
-    { name: "Home", href: "/" },
-    { name: "Search", href: "/search" },
-    { name: "Library", href: "/library" },
-    { name: "Discovery", href: "/discover" },
-    { name: "Playlists", href: "/playlists" },
+    { name: "Главная", href: "/" },
+    { name: "Поиск", href: "/search" },
+    { name: "Медиатека", href: "/library" },
+    { name: "Открытия", href: "/discover" },
+    { name: "Плейлисты", href: "/playlists" },
 ];
 
 /**

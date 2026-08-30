@@ -116,10 +116,10 @@ test("both mode renders accessible like and dislike controls", async () => {
         }),
     );
 
-    assert.match(html, /aria-label="Like"/);
-    assert.match(html, /aria-label="Dislike"/);
-    assert.match(html, /title="Like"/);
-    assert.match(html, /title="Dislike"/);
+    assert.match(html, /aria-label="Нравится"/);
+    assert.match(html, /aria-label="Не нравится"/);
+    assert.match(html, /title="Нравится"/);
+    assert.match(html, /title="Не нравится"/);
     assert.match(html, /data-icon="thumbs-down-outline"/);
     assert.equal((html.match(/aria-pressed="false"/g) ?? []).length, 2);
 });
@@ -134,8 +134,8 @@ test("down-only mode omits the like control", async () => {
         }),
     );
 
-    assert.doesNotMatch(html, /aria-label="Like"/);
-    assert.match(html, /aria-label="Dislike"/);
+    assert.doesNotMatch(html, /aria-label="Нравится"/);
+    assert.match(html, /aria-label="Не нравится"/);
 });
 
 test("active dislike is pressed and offers to remove the dislike", async () => {
@@ -150,8 +150,8 @@ test("active dislike is pressed and offers to remove the dislike", async () => {
         }),
     );
 
-    assert.match(html, /aria-label="Remove dislike"/);
-    assert.match(html, /title="Remove dislike"/);
+    assert.match(html, /aria-label="Убрать отметку «Не нравится»"/);
+    assert.match(html, /title="Убрать отметку «Не нравится»"/);
     assert.match(html, /aria-pressed="true"/);
     assert.match(html, /data-icon="thumbs-down-filled"/);
 });
@@ -175,7 +175,7 @@ test("notifies Wave only after the dislike mutation is confirmed", async () => {
         );
     });
     const dislikeButton = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Dislike"]',
+        'button[aria-label="Не нравится"]',
     );
     assert.ok(dislikeButton);
 
@@ -207,7 +207,7 @@ test("removing an existing dislike does not advance Wave", async () => {
         );
     });
     const dislikeButton = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Remove dislike"]',
+        'button[aria-label="Убрать отметку «Не нравится»"]',
     );
     assert.ok(dislikeButton);
 

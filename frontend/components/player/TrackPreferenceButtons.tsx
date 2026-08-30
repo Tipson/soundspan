@@ -83,8 +83,10 @@ function TrackPreferenceButtonsContent({
 }: TrackPreferenceButtonsContentProps) {
     const isLiked = preferenceSignal === "thumbs_up";
     const isDisliked = preferenceSignal === "thumbs_down";
-    const likeLabel = isLiked ? "Unlike" : "Like";
-    const dislikeLabel = isDisliked ? "Remove dislike" : "Dislike";
+    const likeLabel = isLiked ? "Убрать отметку «Нравится»" : "Нравится";
+    const dislikeLabel = isDisliked
+        ? "Убрать отметку «Не нравится»"
+        : "Не нравится";
     const showLike = mode !== "down-only";
     const showDislike = mode !== "up-only";
 
@@ -97,7 +99,7 @@ function TrackPreferenceButtonsContent({
         <div
             className={cn("flex items-center gap-2", className)}
             role="group"
-            aria-label="Track preference"
+            aria-label="Оценка трека"
         >
             {showLike && (
                 <button

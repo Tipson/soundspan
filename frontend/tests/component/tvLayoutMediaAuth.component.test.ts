@@ -101,4 +101,8 @@ test("TV now-playing renders protected cover art without the unauthenticated Nex
 
     assert.match(html, /\/api\/library\/cover-art\/cover-1\?size=96/);
     assert.equal(capturedImageProps?.unoptimized, true);
+    assert.match(html, /title="Обновить медиатеку"/);
+    assert.match(html, /title="Перемешать"/);
+    assert.match(html, /title="Следующий трек"/);
+    assert.match(html, /title="Повтор выключен"/);
 });
