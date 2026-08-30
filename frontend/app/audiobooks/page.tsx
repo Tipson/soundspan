@@ -16,6 +16,7 @@ import {
     removeMigratingStorageItem,
 } from "@/lib/storage-migration";
 import { Book, ListTree, Shuffle } from "lucide-react";
+import { pluralRu } from "@/lib/i18n/ru";
 import { shuffleArray } from "@/utils/shuffle";
 import { BRAND_NAME } from "@/lib/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -255,14 +256,14 @@ export default function AudiobooksPage() {
     // Shuffle all audiobooks
     const handleShuffleAudiobooks = () => {
         if (audiobooks.length === 0) {
-            toast.error("No audiobooks to shuffle");
+            toast.error("Нет аудиокниг для случайного выбора");
             return;
         }
         // Shuffle the array
         const shuffled = shuffleArray(audiobooks);
         // Play the first one (audiobooks don't have a shuffle queue like tracks)
         if (shuffled[0]) {
-            toast.success(`Playing random audiobook: ${shuffled[0].title}`);
+            toast.success(`Случайная аудиокнига: ${shuffled[0].title}`);
             // Navigate to the audiobook
             router.push(`/audiobooks/${shuffled[0].id}`);
         }
@@ -295,11 +296,11 @@ export default function AudiobooksPage() {
                     {/* Title Section */}
                     <div className="text-center mb-16">
                         <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 tracking-tight">
-                            Audiobooks
+                            Аудиокниги
                         </h1>
                         <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto">
-                            Connect Audiobookshelf to unlock your audiobook
-                            library
+                            Подключите Audiobookshelf, чтобы открыть свою
+                            библиотеку аудиокниг
                         </p>
                     </div>
 
@@ -310,11 +311,11 @@ export default function AudiobooksPage() {
                                 01
                             </div>
                             <h3 className="text-xl font-bold text-white mb-3">
-                                Install Audiobookshelf
+                                Установите Audiobookshelf
                             </h3>
                             <p className="text-gray-400 text-sm leading-relaxed">
-                                Set up your own Audiobookshelf instance via
-                                Docker or use an existing installation
+                                Разверните Audiobookshelf через Docker или
+                                используйте существующую установку
                             </p>
                         </div>
 
@@ -323,11 +324,11 @@ export default function AudiobooksPage() {
                                 02
                             </div>
                             <h3 className="text-xl font-bold text-white mb-3">
-                                Get API Key
+                                Получите ключ API
                             </h3>
                             <p className="text-gray-400 text-sm leading-relaxed">
-                                Settings → Users → Click your user → API Tokens
-                                → Generate
+                                Settings → Users → выберите пользователя → API
+                                Tokens → Generate
                             </p>
                         </div>
 
@@ -336,11 +337,11 @@ export default function AudiobooksPage() {
                                 03
                             </div>
                             <h3 className="text-xl font-bold text-white mb-3">
-                                Configure
+                                Подключите
                             </h3>
                             <p className="text-gray-400 text-sm leading-relaxed">
-                                Enter your Audiobookshelf URL and API key in
-                                {BRAND_NAME} settings
+                                Укажите адрес Audiobookshelf и ключ API в
+                                настройках {BRAND_NAME}
                             </p>
                         </div>
                     </div>
@@ -355,7 +356,7 @@ export default function AudiobooksPage() {
                             }
                             className="flex-1 py-6 text-lg font-semibold"
                         >
-                            Configure Audiobookshelf
+                            Настроить Audiobookshelf
                         </Button>
                         <Button
                             variant="secondary"
@@ -367,20 +368,22 @@ export default function AudiobooksPage() {
                             }
                             className="flex-1 py-6 text-lg font-semibold"
                         >
-                            Install via Docker
+                            Установить через Docker
                         </Button>
                     </div>
 
                     {/* Footer Link */}
                     <div className="text-center">
-                        <p className="text-gray-400 text-sm mb-2">Need help?</p>
+                        <p className="text-gray-400 text-sm mb-2">
+                            Нужна помощь?
+                        </p>
                         <a
                             href="https://github.com/advplyr/audiobookshelf"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-gray-400 hover:text-white text-sm transition-colors"
                         >
-                            View Documentation
+                            Открыть документацию
                         </a>
                     </div>
                 </div>
@@ -406,8 +409,8 @@ export default function AudiobooksPage() {
             <div className="relative">
                 <div className="px-4 md:px-8 py-6">
                     <PageHeader
-                        title="Audiobooks"
-                        subtitle="Your Audiobookshelf library"
+                        title="Аудиокниги"
+                        subtitle="Ваша библиотека Audiobookshelf"
                         icon={Book}
                         className="mb-0"
                     />
@@ -427,7 +430,7 @@ export default function AudiobooksPage() {
                                     : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10"
                             }`}
                         >
-                            All Books
+                            Все книги
                         </button>
                         <button
                             onClick={() => setFilter("finished")}
@@ -437,7 +440,7 @@ export default function AudiobooksPage() {
                                     : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10"
                             }`}
                         >
-                            Finished
+                            Прослушанные
                         </button>
 
                         {/* Shuffle Button */}
@@ -447,14 +450,18 @@ export default function AudiobooksPage() {
                         >
                             <Shuffle className="w-4 h-4" />
                             <span className="hidden sm:inline">
-                                Random Book
+                                Случайная книга
                             </span>
                         </button>
 
                         {/* Results Count - Desktop only */}
                         <span className="hidden md:inline text-sm text-gray-400 ml-auto">
                             {filteredBooks.length}{" "}
-                            {filteredBooks.length === 1 ? "book" : "books"}
+                            {pluralRu(filteredBooks.length, [
+                                "книга",
+                                "книги",
+                                "книг",
+                            ])}
                         </span>
                     </div>
 
@@ -467,10 +474,10 @@ export default function AudiobooksPage() {
                             }
                             className="px-4 py-2 bg-surface-hover border border-white/10 rounded-full text-white text-sm focus:outline-none focus:border-blue-500 focus:bg-[#252525] transition-all [&>option]:bg-surface-hover [&>option]:text-white"
                         >
-                            <option value="title">Title</option>
-                            <option value="author">Author</option>
-                            <option value="recent">Recently Played</option>
-                            <option value="series">Series</option>
+                            <option value="title">По названию</option>
+                            <option value="author">По автору</option>
+                            <option value="recent">Недавно слушали</option>
+                            <option value="series">По серии</option>
                         </select>
 
                         <button
@@ -480,12 +487,10 @@ export default function AudiobooksPage() {
                                     ? "bg-white text-black"
                                     : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10"
                             }`}
-                            title="Show series as single cards (like artist view)"
+                            title="Объединять книги одной серии в карточку"
                         >
                             <ListTree className="w-4 h-4" />
-                            <span className="hidden sm:inline">
-                                Series View
-                            </span>
+                            <span className="hidden sm:inline">По сериям</span>
                         </button>
 
                         {allGenres.length > 0 && (
@@ -496,7 +501,7 @@ export default function AudiobooksPage() {
                                 }
                                 className="flex-1 min-w-0 md:flex-initial md:min-w-[140px] px-4 py-2 bg-surface-hover border border-white/10 rounded-full text-white text-sm focus:outline-none focus:border-blue-500 focus:bg-[#252525] transition-all truncate [&>option]:bg-surface-hover [&>option]:text-white"
                             >
-                                <option value="">All Genres</option>
+                                <option value="">Все жанры</option>
                                 {allGenres.map((genre) => (
                                     <option key={genre} value={genre}>
                                         {genre}
@@ -514,17 +519,21 @@ export default function AudiobooksPage() {
                             }}
                             className="px-4 py-2 bg-surface-hover border border-white/10 rounded-full text-white text-sm focus:outline-none focus:border-blue-500 [&>option]:bg-surface-hover [&>option]:text-white"
                         >
-                            <option value={25}>25 per page</option>
-                            <option value={50}>50 per page</option>
-                            <option value={100}>100 per page</option>
-                            <option value={250}>250 per page</option>
+                            <option value={25}>25 на странице</option>
+                            <option value={50}>50 на странице</option>
+                            <option value={100}>100 на странице</option>
+                            <option value={250}>250 на странице</option>
                         </select>
                     </div>
 
                     {/* Results Count - Mobile only */}
                     <div className="md:hidden text-sm text-gray-400">
                         {filteredBooks.length}{" "}
-                        {filteredBooks.length === 1 ? "book" : "books"}
+                        {pluralRu(filteredBooks.length, [
+                            "книга",
+                            "книги",
+                            "книг",
+                        ])}
                     </div>
                 </div>
 
@@ -535,7 +544,7 @@ export default function AudiobooksPage() {
                         !groupBySeries && (
                             <section>
                                 <h2 className="text-xl font-bold text-white mb-6">
-                                    Continue Listening
+                                    Продолжить слушать
                                 </h2>
                                 <div
                                     className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6"
@@ -567,7 +576,7 @@ export default function AudiobooksPage() {
                                 {series.length > 0 && (
                                     <section>
                                         <h2 className="text-xl font-bold text-white mb-6">
-                                            Series
+                                            Серии
                                         </h2>
                                         <div
                                             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6"
@@ -579,7 +588,7 @@ export default function AudiobooksPage() {
                                                     index,
                                                 ) => {
                                                     const firstBook = books[0];
-                                                    const bookCount = `${books.length} ${books.length === 1 ? "book" : "books"}`;
+                                                    const bookCount = `${books.length} ${pluralRu(books.length, ["книга", "книги", "книг"])}`;
                                                     return (
                                                         <AudiobookCard
                                                             key={seriesName}
@@ -610,7 +619,7 @@ export default function AudiobooksPage() {
                                 {standalone.length > 0 && (
                                     <section>
                                         <h2 className="text-xl font-bold text-white mb-6">
-                                            Standalone Books
+                                            Отдельные книги
                                         </h2>
                                         <div
                                             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6"
@@ -659,15 +668,15 @@ export default function AudiobooksPage() {
                             icon={<Book className="w-12 h-12" />}
                             title={
                                 filter === "listening"
-                                    ? "No audiobooks in progress"
+                                    ? "Нет начатых аудиокниг"
                                     : filter === "finished"
-                                      ? "No finished audiobooks"
-                                      : "No audiobooks found"
+                                      ? "Нет прослушанных аудиокниг"
+                                      : "Аудиокниги не найдены"
                             }
                             description={
                                 filter === "all"
-                                    ? "Add audiobooks to your Audiobookshelf library to get started"
-                                    : "Start listening to some audiobooks"
+                                    ? "Добавьте книги в библиотеку Audiobookshelf, чтобы начать"
+                                    : "Начните слушать любую аудиокнигу"
                             }
                         />
                     )}
@@ -680,7 +689,7 @@ export default function AudiobooksPage() {
                                 disabled={currentPage === 1}
                                 className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                First
+                                Первая
                             </button>
                             <button
                                 onClick={() =>
@@ -689,10 +698,10 @@ export default function AudiobooksPage() {
                                 disabled={currentPage === 1}
                                 className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Prev
+                                Назад
                             </button>
                             <span className="px-4 py-2 text-sm text-white">
-                                Page {currentPage} of {totalPages}
+                                Страница {currentPage} из {totalPages}
                             </span>
                             <button
                                 onClick={() =>
@@ -703,14 +712,14 @@ export default function AudiobooksPage() {
                                 disabled={currentPage === totalPages}
                                 className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Next
+                                Далее
                             </button>
                             <button
                                 onClick={() => setCurrentPage(totalPages)}
                                 disabled={currentPage === totalPages}
                                 className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Last
+                                Последняя
                             </button>
                         </div>
                     )}
