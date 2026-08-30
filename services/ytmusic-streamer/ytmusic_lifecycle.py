@@ -4,6 +4,7 @@ from ytmusic_browse import YTMUSIC_HOME_FILTERED_SHELVES
 from ytmusic_client import (
     SEARCH_MODE,
     YTMUSIC_LANGUAGE,
+    YTMUSIC_LOCATION,
     _ytmusic_auto_tv_fallback_users,
     _ytmusic_instances,
     _ytmusic_instances_lock,
@@ -46,6 +47,7 @@ async def startup() -> None:
     )
     log.info(
         f"Browse config: language={YTMUSIC_LANGUAGE}, "
+        f"location={YTMUSIC_LOCATION or '(provider default)'}, "
         f"home_filtered_shelves={YTMUSIC_HOME_FILTERED_SHELVES or '(none)'}"
     )
 

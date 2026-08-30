@@ -36,7 +36,7 @@ import { cn } from "@/utils/cn";
 import { formatTime, clampTime } from "@/utils/formatTime";
 import { SeekSlider } from "./SeekSlider";
 import { SyncBadge } from "@/components/player/SyncBadge";
-import { TrackPreferenceButtons } from "./TrackPreferenceButtons";
+import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaybackQualityBadgeWithStats } from "./PlaybackQualityBadgeWithStats";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
@@ -701,7 +701,7 @@ export function FullPlayer() {
                             )}
 
                             {/* Track preferences */}
-                            <TrackPreferenceButtons
+                            <CurrentTrackPreferenceButtons
                                 trackId={preferenceTrackId}
                                 mode="both"
                                 buttonSizeClassName="h-11 w-11"

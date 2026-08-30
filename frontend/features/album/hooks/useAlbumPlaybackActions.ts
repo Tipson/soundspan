@@ -2,7 +2,10 @@ import { useAudioControls } from "@/lib/audio-context";
 import { shuffleArray } from "@/utils/shuffle";
 import { toast } from "sonner";
 import type { Album, Track } from "../types";
-import { toAlbumPlaybackTrack } from "../albumPlayback";
+import {
+    selectAlbumPlaybackQueue,
+    toAlbumPlaybackTrack,
+} from "../albumPlayback";
 
 type AudioControls = ReturnType<typeof useAudioControls>;
 
@@ -12,12 +15,6 @@ function requireAlbum(album: Album | null): album is Album {
     return false;
 }
 
-function availablePlaybackTracks(album: Album) {
-    return (album.tracks || [])
-        .filter((track) => track.source !== "federated" || track.peer?.online)
-        .map((track) => toAlbumPlaybackTrack(track, album));
-}
-
 function playAlbum(
     album: Album | null,
     startIndex: number,
@@ -25,13 +22,15 @@ function playAlbum(
 ): void {
     if (!requireAlbum(album)) return;
     if (!album.tracks) return;
-    controls.playTracks(availablePlaybackTracks(album), startIndex);
+    const selection = selectAlbumPlaybackQueue(album, startIndex);
+    controls.playTracks(selection.tracks, selection.startIndex);
 }
 
 function shufflePlay(album: Album | null, controls: AudioControls): void {
     if (!requireAlbum(album)) return;
     if (!album.tracks) return;
-    controls.playTracks(shuffleArray(availablePlaybackTracks(album)), 0);
+    const selection = selectAlbumPlaybackQueue(album, 0);
+    controls.playTracks(shuffleArray(selection.tracks), 0);
 }
 
 function playTrack(
@@ -45,9 +44,7 @@ function playTrack(
 
 function addAllToQueue(album: Album | null, controls: AudioControls): void {
     if (!requireAlbum(album)) return;
-    const tracks = (album.tracks || []).map((track) =>
-        toAlbumPlaybackTrack(track, album),
-    );
+    const tracks = selectAlbumPlaybackQueue(album, 0).tracks;
     if (tracks.length === 0) {
         toast.info("No tracks available to add");
         return;

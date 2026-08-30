@@ -410,10 +410,10 @@ class TestBrowseAlbumEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# Language parameter tests
+# Language and location parameter tests
 # ---------------------------------------------------------------------------
-class TestYTMusicLanguageParam:
-    """Verify that YTMUSIC_LANGUAGE is forwarded to YTMusic constructors."""
+class TestYTMusicLocaleParams:
+    """Verify that the configured catalog locale reaches every YTMusic client."""
 
     def test_language_passed_to_public_ytmusic(self) -> None:
         """Public (unauthenticated) YTMusic should receive language kwarg."""
@@ -432,6 +432,8 @@ class TestYTMusicLanguageParam:
             _, kwargs = MockYTMusic.call_args
             assert "language" in kwargs
             assert kwargs["language"] == "en"
+            assert "location" in kwargs
+            assert kwargs["location"] == ""
 
         # Clean up
         _public_ytmusic_instances.clear()
@@ -473,6 +475,8 @@ class TestYTMusicLanguageParam:
             call_args = MockYTMusic.call_args
             assert "language" in call_args.kwargs
             assert call_args.kwargs["language"] == "en"
+            assert "location" in call_args.kwargs
+            assert call_args.kwargs["location"] == ""
 
         # Clean up
         _ytmusic_instances.pop(user_id, None)

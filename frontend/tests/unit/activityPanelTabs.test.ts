@@ -5,6 +5,7 @@ import {
     getActivityTabBadge,
     getVisibleActivityTabIds,
     isActivityTabVisible,
+    isUserFacingActivityNotification,
     resolveActivityTab,
     type ActivityTab,
 } from "../../components/layout/activityPanelTabs";
@@ -22,11 +23,11 @@ test("admin sees every activity tab", () => {
     assert.equal(isActivityTabVisible("history", true), true);
 });
 
-test("non-admin hides download tabs but keeps personal imports visible", () => {
+test("non-admin keeps only personal notifications and imports visible", () => {
     const visibleTabs = getVisibleActivityTabIds(false);
-    assert.deepEqual(visibleTabs, ["notifications", "imports", "social"]);
+    assert.deepEqual(visibleTabs, ["notifications", "imports"]);
     assert.equal(isActivityTabVisible("notifications", false), true);
-    assert.equal(isActivityTabVisible("social", false), true);
+    assert.equal(isActivityTabVisible("social", false), false);
     assert.equal(isActivityTabVisible("active", false), false);
     assert.equal(isActivityTabVisible("history", false), false);
     assert.equal(isActivityTabVisible("imports", false), true);
@@ -100,7 +101,7 @@ test("getActivityPanelBadgeState suppresses active badge for non-admin users", (
     );
 });
 
-test("getActivityPanelBadgeState counts social-only activity for non-admin users", () => {
+test("getActivityPanelBadgeState hides social-only activity from non-admin users", () => {
     assert.deepEqual(
         getActivityPanelBadgeState({
             unreadCount: 0,
@@ -111,8 +112,8 @@ test("getActivityPanelBadgeState counts social-only activity for non-admin users
         {
             notificationBadge: null,
             activeBadge: null,
-            socialBadge: 5,
-            hasActivity: true,
+            socialBadge: null,
+            hasActivity: false,
         },
     );
 });
@@ -201,4 +202,35 @@ test("getActivityTabBadge returns the right badge for each tab branch", () => {
 
 test("resolveActivityTab uses notifications as the default fallback", () => {
     assert.equal(resolveActivityTab("history", []), "notifications");
+});
+
+test("ordinary users do not receive library maintenance notifications", () => {
+    assert.equal(
+        isUserFacingActivityNotification(
+            { type: "system", title: "Enrichment Complete" },
+            false,
+        ),
+        false,
+    );
+    assert.equal(
+        isUserFacingActivityNotification(
+            { type: "system", title: "Library Scan Complete" },
+            false,
+        ),
+        false,
+    );
+    assert.equal(
+        isUserFacingActivityNotification(
+            { type: "import_complete", title: "Import Complete" },
+            false,
+        ),
+        true,
+    );
+    assert.equal(
+        isUserFacingActivityNotification(
+            { type: "system", title: "Enrichment Complete" },
+            true,
+        ),
+        true,
+    );
 });

@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Home, Search, Menu, Bell, ChevronLeft } from "lucide-react";
+import { Search, Menu, Bell, ChevronLeft } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
 import { UserAvatarMenu } from "./UserAvatarMenu";
-import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import Image from "next/image";
 
@@ -22,10 +21,24 @@ interface TopBarProps {
 export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
     const pathname = usePathname();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
-    const [searchQuery, setSearchQuery] = useState("");
+    const routeSearchQuery =
+        pathname === "/search" ? (searchParams.get("q") ?? "") : "";
+    const routeSearchKey = `${pathname}\u0000${routeSearchQuery}`;
+    const [searchDraft, setSearchDraft] = useState(() => ({
+        routeKey: routeSearchKey,
+        value: routeSearchQuery,
+    }));
+    const searchQuery =
+        searchDraft.routeKey === routeSearchKey
+            ? searchDraft.value
+            : routeSearchQuery;
+    const updateSearchQuery = (value: string) => {
+        setSearchDraft({ routeKey: routeSearchKey, value });
+    };
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -68,23 +81,6 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
         };
     }, [searchQuery, router, pathname]);
 
-    // Sync search query with URL on page change
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const q = params.get("q");
-
-        if (pathname === "/search" && q) {
-            // Only update if different to avoid loops
-            if (q !== searchQuery) {
-                setSearchQuery(q);
-            }
-        } else if (pathname !== "/search" && searchQuery) {
-            // Clear search when leaving search page
-            setSearchQuery("");
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname]); // Only re-run when pathname changes
-
     // Global "/" keyboard shortcut to focus search
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,11 +103,12 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
 
     return (
         <header
-            className="fixed top-0 left-0 right-0 bg-black flex items-center px-3 z-50"
+            data-shell-topbar={isMobileOrTablet ? "mobile" : "desktop"}
+            className="shell-topbar pwa-titlebar-drag fixed inset-x-0 top-0 z-50 flex items-center"
             style={{
                 height: isMobileOrTablet
-                    ? "calc(58px + var(--safe-area-top))"
-                    : "64px",
+                    ? "calc(var(--app-topbar-height) + var(--safe-area-top))"
+                    : "var(--app-topbar-height-desktop)",
                 paddingTop: isMobileOrTablet
                     ? "var(--safe-area-top)"
                     : undefined,
@@ -123,10 +120,9 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                     : undefined,
             }}
         >
-            {/* Mobile/Tablet Layout: Hamburger + Home + Search + Bell */}
+            {/* Mobile keeps only the three controls that earn the scarce width. */}
             {isMobileOrTablet ? (
                 <>
-                    {/* Hamburger menu button */}
                     <button
                         onClick={() => {
                             // Dispatch custom event to toggle mobile menu
@@ -134,72 +130,41 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 new CustomEvent("toggle-mobile-menu"),
                             );
                         }}
-                        className="h-11 w-11 flex items-center justify-center bg-surface-raised border border-line rounded-md text-white hover:bg-surface-overlay transition-colors mr-2 flex-shrink-0"
+                        className="mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         aria-label="Open menu"
                     >
                         <Menu className="w-5 h-5" />
                     </button>
 
-                    {/* Back slot (reserved to keep search position stable across routes) */}
-                    <div className="h-11 w-11 mr-1 flex items-center justify-center flex-shrink-0">
-                        {pathname !== "/" ? (
-                            <button
-                                onClick={() => router.back()}
-                                className="h-11 w-11 rounded-full flex items-center justify-center transition-all bg-surface text-gray-400 hover:bg-surface-hover hover:text-white"
-                                aria-label="Go back"
-                                title="Go back"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                        ) : (
-                            <span className="h-11 w-11" aria-hidden="true" />
-                        )}
-                    </div>
-
-                    {/* Home */}
-                    <Link
-                        href="/"
-                        className={cn(
-                            "h-11 w-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 mr-1",
-                            pathname === "/"
-                                ? "bg-white text-black"
-                                : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white",
-                        )}
-                        aria-label="Home"
-                        title="Home"
-                    >
-                        <Home className="w-5 h-5" />
-                    </Link>
-
-                    {/* Search */}
                     <form onSubmit={handleSearch} className="flex-1 min-w-0">
                         <div
-                            className="relative"
+                            className="group relative"
                             data-tv-section="search-input"
                         >
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
                             <input
                                 type="text"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search..."
+                                onChange={(e) =>
+                                    updateSearchQuery(e.target.value)
+                                }
+                                placeholder="Search music"
                                 aria-label="Search"
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="w-full h-11 pl-10 pr-3 bg-surface-hover hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all outline-none"
+                                className="h-11 w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.055] pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-content-muted hover:bg-white/[0.075] focus:border-brand/60 focus:bg-white/[0.08] focus:ring-2 focus:ring-brand/15"
                             />
                         </div>
                     </form>
 
-                    {/* Notification Bell */}
                     <button
                         onClick={() => {
                             window.dispatchEvent(
                                 new CustomEvent("toggle-activity-panel"),
                             );
                         }}
-                        className="h-11 w-11 flex items-center justify-center text-gray-400 hover:text-white transition-colors ml-2 flex-shrink-0 relative"
+                        className="relative ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         aria-label="Notifications"
                         title="Notifications"
                     >
@@ -208,85 +173,77 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                 </>
             ) : (
                 <>
-                    {/* Desktop Layout */}
-                    {/* Logo - Far Left */}
-                    <div className="w-64 flex items-center px-2">
+                    <div className="flex w-[236px] flex-shrink-0 items-center px-3">
                         <Link
                             href="/"
-                            className="flex items-center gap-2 group"
+                            className="group flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         >
                             <Image
                                 src="/assets/images/soundspan.webp"
                                 alt={BRAND_NAME}
-                                width={46}
-                                height={46}
-                                sizes="46px"
-                                className="group-hover:scale-105 transition-transform"
+                                width={38}
+                                height={38}
+                                sizes="38px"
+                                className="transition-transform duration-200 group-hover:scale-[1.04]"
                             />
-                            <span className="brand-wordmark text-[2.15rem] font-bold bg-gradient-to-r from-white via-white to-gray-300 bg-clip-text text-transparent">
+                            <span className="brand-wordmark text-[1.85rem] font-bold text-white">
                                 {BRAND_NAME}
                             </span>
                         </Link>
                     </div>
 
-                    {/* Center - Search stays centered; Back/Home hug search edge */}
-                    <div className="flex-1 min-w-0 flex items-center justify-center">
-                        <div className="relative w-full max-w-md">
-                            <div className="absolute right-full top-1/2 -translate-y-1/2 pr-2 flex items-center gap-2">
-                                {/* Back */}
-                                {pathname !== "/" && (
+                    <div className="flex min-w-0 flex-1 items-center justify-center px-4">
+                        <div className="flex w-full max-w-[620px] items-center gap-2">
+                            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center">
+                                {pathname !== "/" ? (
                                     <button
                                         onClick={() => router.back()}
-                                        className="w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0 bg-surface text-gray-400 hover:bg-surface-hover hover:text-white hover:scale-105"
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                                         aria-label="Go back"
                                         title="Go back"
                                     >
-                                        <ChevronLeft className="w-6 h-6" />
+                                        <ChevronLeft className="h-5 w-5" />
                                     </button>
+                                ) : (
+                                    <span
+                                        className="h-11 w-11"
+                                        aria-hidden="true"
+                                    />
                                 )}
-
-                                <Link
-                                    href="/"
-                                    className={cn(
-                                        "w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0",
-                                        pathname === "/"
-                                            ? "bg-white text-black"
-                                            : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white hover:scale-105",
-                                    )}
-                                    aria-label="Home"
-                                    title="Home"
-                                >
-                                    <Home className="w-6 h-6" />
-                                </Link>
                             </div>
 
-                            <form onSubmit={handleSearch} className="w-full">
+                            <form
+                                onSubmit={handleSearch}
+                                className="min-w-0 flex-1"
+                            >
                                 <div
-                                    className="relative"
+                                    className="group relative"
                                     data-tv-section="search-input"
                                 >
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
                                     <input
                                         ref={searchInputRef}
                                         type="text"
                                         value={searchQuery}
                                         onChange={(e) =>
-                                            setSearchQuery(e.target.value)
+                                            updateSearchQuery(e.target.value)
                                         }
                                         placeholder="What do you want to play?"
                                         aria-label="Search"
                                         autoCapitalize="none"
                                         autoCorrect="off"
                                         tabIndex={0}
-                                        className="w-full h-12 pl-12 pr-4 bg-surface-hover hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all outline-none"
+                                        className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] pl-12 pr-14 text-sm text-white outline-none transition-colors placeholder:text-content-muted hover:bg-white/[0.075] focus:border-brand/60 focus:bg-white/[0.08] focus:ring-2 focus:ring-brand/15"
                                     />
+                                    <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-semibold text-content-muted">
+                                        /
+                                    </kbd>
                                 </div>
                             </form>
                         </div>
                     </div>
 
-                    {/* Right - Activity & User */}
-                    <div className="w-64 flex items-center justify-end gap-2 px-2">
+                    <div className="flex w-[236px] flex-shrink-0 items-center justify-end gap-2 px-3">
                         <ActivityPanelToggle
                             pollingEnabled={!isActivityPanelOpen}
                         />

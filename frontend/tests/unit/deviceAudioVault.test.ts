@@ -181,6 +181,7 @@ function createHarness(options?: {
         picked,
         createdUrls,
         revokedUrls,
+        runtime,
         vault: createBrowserDirectoryDeviceAudioVault({ registry, runtime }),
     };
 }
@@ -363,6 +364,59 @@ test("access inspects, opens a revocable Blob URL, rejects another owner, and re
     assert.deepEqual(
         await ownerOne.access({ kind: "inspect", ref: receipt.ref }),
         { kind: "inspect", exists: false, bytes: null },
+    );
+});
+
+test("a persisted device folder reopens an owner-scoped file after an app restart", async () => {
+    const firstRun = createHarness();
+    await firstRun.vault.requestAccess();
+    const firstSession = await firstRun.vault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const receipt = await firstSession.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([4, 5, 6]),
+        contentType: "audio/mpeg",
+        expectedBytes: 3,
+    });
+
+    const restartedVault = createBrowserDirectoryDeviceAudioVault({
+        registry: firstRun.registry,
+        runtime: firstRun.runtime,
+    });
+    assert.equal((await restartedVault.inspectAccess()).status, "ready");
+
+    const restartedSession = await restartedVault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    assert.deepEqual(
+        await restartedSession.access({
+            kind: "inspect",
+            ref: receipt.ref,
+            expectedBytes: 3,
+        }),
+        { kind: "inspect", exists: true, bytes: 3 },
+    );
+    const playback = await restartedSession.access({
+        kind: "play",
+        ref: receipt.ref,
+        expectedBytes: 3,
+    });
+    assert.equal(playback.url, "blob:soundspan/1");
+    playback.release();
+
+    const otherOwner = await restartedVault.open({
+        ownerId: "user-2",
+        authGeneration: 1,
+    });
+    await assert.rejects(
+        otherOwner.access({ kind: "play", ref: receipt.ref }),
+        (error: unknown) =>
+            error instanceof DeviceAudioVaultError &&
+            error.code === "owner_mismatch",
     );
 });
 

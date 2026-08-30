@@ -124,7 +124,18 @@ test("personal Library failures provide touch-sized retry actions", async () => 
 
 mock.module("@/features/device-offline/DeviceOfflineProvider", {
     namedExports: {
-        useDeviceOffline: () => ({ records: [{ key: "download-1" }] }),
+        useDeviceOffline: () => ({
+            records: [
+                {
+                    key: "ready-download",
+                    status: "ready",
+                    integrityVersion: 1,
+                },
+                { key: "active-download", status: "downloading" },
+                { key: "interrupted-download", status: "interrupted" },
+                { key: "failed-download", status: "error" },
+            ],
+        }),
     },
 });
 
@@ -150,6 +161,8 @@ test("Library overview is a personal collection hub without server catalog contr
     assert.match(html, /ordinary files/i);
     assert.match(html, /browser profile/i);
     assert.match(html, /clearing site data does not delete/i);
+    assert.match(html, /1 offline track/);
+    assert.doesNotMatch(html, /4 offline tracks/);
     assert.doesNotMatch(html, /copies stay in this browser/i);
     assert.match(html, /Meteora/);
     assert.match(html, /Linkin Park/);
@@ -164,7 +177,8 @@ test("Library tabs expose account-saved entities and existing device downloads",
     tab = "albums";
     const albumsHtml = renderToStaticMarkup(React.createElement(LibraryPage));
     assert.match(albumsHtml, /Meteora/);
-    assert.match(albumsHtml, /Saved albums stay with your account/);
+    assert.match(albumsHtml, /Albums you kept for later/);
+    assert.match(albumsHtml, /downloads separately on each device/);
     assert.match(albumsHtml, /Load more albums/);
 
     tab = "downloads";

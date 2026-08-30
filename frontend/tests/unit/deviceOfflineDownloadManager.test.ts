@@ -1422,7 +1422,7 @@ test("quota preflight fails without leaving partial audio in CacheStorage", asyn
     assert.equal(deps.audioCache.responses.size, 0);
 });
 
-test("records and playback resolution are isolated by owner and quality", async () => {
+test("unverified playback records stay isolated and cannot shadow the network URL", async () => {
     const deps = createDependencies();
     const manager = new DeviceOfflineDownloadManager(deps);
     const first = await manager.download({
@@ -1453,7 +1453,7 @@ test("records and playback resolution are isolated by owner and quality", async 
             "https://soundspan.test/api/library/tracks/track-1/stream",
             "high",
         ),
-        high.virtualUrl,
+        "https://soundspan.test/api/library/tracks/track-1/stream",
     );
 
     setDeviceOfflineRuntimeState("user-2", [otherOwner]);
@@ -1463,7 +1463,7 @@ test("records and playback resolution are isolated by owner and quality", async 
             "https://soundspan.test/api/library/tracks/track-1/stream",
             "high",
         ),
-        otherOwner.virtualUrl,
+        "https://soundspan.test/api/library/tracks/track-1/stream",
     );
 
     clearDeviceOfflineRuntimeState();

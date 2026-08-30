@@ -82,12 +82,14 @@ function SectionHeading({
     href?: string;
 }) {
     return (
-        <div className="mb-4 flex items-end justify-between gap-4">
-            <div>
+        <div className="mb-4 flex items-end justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
                 <h2 className="text-xl font-black tracking-tight text-content sm:text-2xl">
                     {title}
                 </h2>
-                <p className="mt-1 text-sm text-content-muted">{description}</p>
+                <p className="mt-1 max-w-3xl text-sm leading-5 text-content-muted">
+                    {description}
+                </p>
             </div>
             {href && (
                 <Link
@@ -111,6 +113,9 @@ export default function LibraryPage() {
     const playlistsQuery = usePlaylistsQuery();
     const likedQuery = useLikedPlaylistQuery(1);
     const { records: deviceDownloads } = useDeviceOffline();
+    const readyDeviceDownloadTotal = deviceDownloads.filter(
+        (record) => record.status === "ready",
+    ).length;
 
     const playlists = useMemo(
         () =>
@@ -126,10 +131,10 @@ export default function LibraryPage() {
     );
 
     return (
-        <div className="relative min-h-screen bg-surface pb-28">
+        <div className="relative min-h-screen bg-surface pb-36 md:pb-28">
             <LibraryHeader />
 
-            <div className="relative mx-auto max-w-[1800px] space-y-7 px-4 sm:space-y-9 sm:px-6 lg:px-8">
+            <div className="relative mx-auto max-w-[1800px] space-y-8 px-4 sm:space-y-10 sm:px-6 lg:px-8">
                 <LibraryTabs activeTab={activeTab} />
 
                 {activeTab === "overview" && (
@@ -139,7 +144,7 @@ export default function LibraryPage() {
                             playlistTotal={playlists.length}
                             albumTotal={albumCollection.total}
                             artistTotal={artistCollection.total}
-                            downloadTotal={deviceDownloads.length}
+                            downloadTotal={readyDeviceDownloadTotal}
                         />
 
                         {playlistsQuery.isLoading ||
@@ -263,7 +268,7 @@ export default function LibraryPage() {
                     <section>
                         <SectionHeading
                             title="Saved albums"
-                            description="Saved albums stay with your account; download only where you want offline playback"
+                            description="Albums you kept for later. Choose downloads separately on each device."
                         />
                         <SavedMusicGrid
                             type="album"
@@ -284,7 +289,7 @@ export default function LibraryPage() {
                     <section>
                         <SectionHeading
                             title="Saved artists"
-                            description="Artists saved to your account from the music catalog"
+                            description="Artists you follow across the music catalog"
                         />
                         <SavedMusicGrid
                             type="artist"
@@ -305,7 +310,7 @@ export default function LibraryPage() {
                     <section>
                         <SectionHeading
                             title="Downloads on this device"
-                            description="Music saved as ordinary files in your selected device folder. Their status and folder permission belong to this browser profile; clearing site data does not delete the files."
+                            description="Offline music is stored as ordinary files on this phone or computer. Folder access belongs to this browser profile; clearing site data does not delete the files or affect other devices."
                         />
                         <DownloadsList />
                     </section>

@@ -19,19 +19,11 @@ import {
     getActivityPanelBadgeState,
     getActivityTabBadge,
     getVisibleActivityTabIds,
+    isUserFacingActivityNotification,
     resolveActivityTab,
     type ActivityTab,
 } from "@/components/layout/activityPanelTabs";
-import {
-    Bell,
-    Download,
-    FileInput,
-    History,
-    Users,
-    ChevronLeft,
-    ChevronRight,
-    X,
-} from "lucide-react";
+import { Bell, Download, FileInput, History, Users, X } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
@@ -42,11 +34,6 @@ const TABS: { id: ActivityTab; label: string; icon: React.ElementType }[] = [
     { id: "imports", label: "Imports", icon: FileInput },
     { id: "social", label: "Social", icon: Users },
 ];
-const DESKTOP_PANEL_WIDTH = 380;
-const DESKTOP_COLLAPSED_STRIP_WIDTH = 48;
-const DESKTOP_COLLAPSED_OFFSET =
-    DESKTOP_PANEL_WIDTH - DESKTOP_COLLAPSED_STRIP_WIDTH;
-
 interface ActivityPanelProps {
     isOpen: boolean;
     onToggle: () => void;
@@ -99,13 +86,27 @@ export function ActivityPanel({
     );
     const {
         notifications,
-        unreadCount,
         isLoading: isNotificationsLoading,
         error: notificationsError,
         markAsRead,
         clearNotification,
         clearAll,
     } = useNotifications(pollingOptions);
+    const visibleNotifications = useMemo(
+        () =>
+            (notifications ?? []).filter((notification) =>
+                isUserFacingActivityNotification(notification, isAdmin),
+            ),
+        [isAdmin, notifications],
+    );
+    const visibleUnreadCount = useMemo(
+        () =>
+            visibleNotifications.reduce(
+                (count, notification) => count + (notification.read ? 0 : 1),
+                0,
+            ),
+        [visibleNotifications],
+    );
     const {
         users: socialUsers,
         isLoading: isSocialLoading,
@@ -135,13 +136,12 @@ export function ActivityPanel({
     const isMobileOrTablet = isMobile || isTablet;
 
     const badgeState = getActivityPanelBadgeState({
-        unreadCount,
+        unreadCount: visibleUnreadCount,
         activeDownloadCount:
             downloadStatus.activeDownloads.length + ytActiveCount,
         socialUserCount: socialUsers.length,
         isAdmin,
     });
-    const { hasActivity } = badgeState;
 
     // Mobile/Tablet: Full-screen overlay
     if (isMobileOrTablet) {
@@ -150,7 +150,9 @@ export function ActivityPanel({
         return (
             <>
                 {/* Backdrop */}
-                <div
+                <button
+                    type="button"
+                    aria-label="Close activity"
                     className="fixed inset-0 bg-black/60  z-[100]"
                     onClick={onToggle}
                 />
@@ -217,7 +219,7 @@ export function ActivityPanel({
                     <div className="flex-1 overflow-hidden">
                         {effectiveActiveTab === "notifications" && (
                             <NotificationsTab
-                                notifications={notifications}
+                                notifications={visibleNotifications}
                                 loading={isNotificationsLoading}
                                 error={notificationsError}
                                 markAsRead={markAsRead}
@@ -250,152 +252,109 @@ export function ActivityPanel({
         );
     }
 
-    // Desktop: Side panel - uses transform instead of width for GPU-accelerated animation
+    // The top-bar bell owns the closed state. Keeping a collapsed rail here
+    // permanently stole content width and made Home reflow whenever Activity
+    // was opened, so desktop Activity is an overlay just like mobile.
+    if (!isOpen) return null;
+
     return (
-        <div
-            className="shrink-0 h-full relative z-10"
-            style={{
-                width: isOpen
-                    ? DESKTOP_PANEL_WIDTH
-                    : DESKTOP_COLLAPSED_STRIP_WIDTH,
-            }}
+        <aside
+            data-activity-panel-layout="overlay"
+            aria-label="Activity"
+            className="fixed bottom-[calc(6.5rem+var(--safe-area-bottom))] right-3 top-[4.5rem] z-[90] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d0d]/98 shadow-2xl shadow-black/60 backdrop-blur-xl"
         >
-            {/* Panel container - slides via transform (GPU-accelerated, no layout recalc) */}
-            <div
-                className="absolute inset-y-0 right-0 bg-[#0d0d0d] rounded-tl-lg rounded-bl-lg border-l border-white/5 flex flex-col overflow-hidden transition-transform duration-200 ease-out"
-                style={{
-                    width: DESKTOP_PANEL_WIDTH,
-                    transform: isOpen
-                        ? "translateX(0)"
-                        : `translateX(${DESKTOP_COLLAPSED_OFFSET}px)`,
-                    willChange: "transform",
-                }}
-            >
-                {/* Collapsed state overlay - clickable strip on left */}
-                <div
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                <h2 className="whitespace-nowrap text-base font-semibold text-white">
+                    Activity
+                </h2>
+                <button
                     onClick={onToggle}
-                    className={cn(
-                        "absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center cursor-pointer hover:bg-surface-overlay transition-colors z-10",
-                        isOpen && "pointer-events-none opacity-0",
-                    )}
-                    title="Open activity panel"
+                    className="grid min-h-11 min-w-11 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    title="Close panel"
+                    aria-label="Close activity"
                 >
-                    <ChevronLeft className="w-5 h-5 text-white/40" />
-
-                    {/* Activity badge */}
-                    {hasActivity && (
-                        <span className="absolute top-4 right-3 w-2.5 h-2.5 rounded-full bg-brand" />
-                    )}
-                </div>
-
-                {/* Expanded content */}
-                <div
-                    className={cn(
-                        "flex flex-col h-full transition-opacity duration-150",
-                        isOpen
-                            ? "opacity-100"
-                            : "opacity-0 pointer-events-none",
-                    )}
-                >
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-                        <h2 className="text-base font-semibold text-white whitespace-nowrap">
-                            Activity
-                        </h2>
-                        <button
-                            onClick={onToggle}
-                            className="p-1.5 hover:bg-white/10 rounded transition-colors"
-                            title="Close panel"
-                        >
-                            <ChevronRight className="w-5 h-5 text-white/60" />
-                        </button>
-                    </div>
-
-                    {/* Tabs — icon-only, expand to show label on hover/active */}
-                    <div className="flex border-b border-white/10 px-2 gap-1">
-                        {visibleTabs.map((tab) => {
-                            const Icon = tab.icon;
-                            const badge = getActivityTabBadge(
-                                tab.id,
-                                badgeState,
-                            );
-                            const isActive = effectiveActiveTab === tab.id;
-
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setResolvedActiveTab(tab.id)}
-                                    className={cn(
-                                        "group flex items-center justify-center gap-2 py-3 px-3 transition-all duration-200 relative",
-                                        isActive
-                                            ? "text-white border-b-2 border-brand flex-[2]"
-                                            : "text-white/50 hover:text-white/70 hover:flex-[2] flex-1",
-                                    )}
-                                    title={tab.label}
-                                >
-                                    <Icon className="w-5 h-5 shrink-0" />
-                                    <span
-                                        className={cn(
-                                            "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-200",
-                                            isActive
-                                                ? "max-w-[100px] opacity-100"
-                                                : "max-w-0 opacity-0 group-hover:max-w-[100px] group-hover:opacity-100",
-                                        )}
-                                    >
-                                        {tab.label}
-                                    </span>
-                                    {badge && (
-                                        <span
-                                            className={cn(
-                                                "absolute top-1.5 right-1 min-w-[16px] h-[16px] px-0.5 rounded-full text-[10px] font-bold flex items-center justify-center",
-                                                tab.id === "active"
-                                                    ? "bg-blue-500 text-white"
-                                                    : "bg-brand text-black",
-                                            )}
-                                        >
-                                            {badge > 99 ? "99+" : badge}
-                                        </span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* Tab Content */}
-                    <div className="flex-1 overflow-hidden">
-                        {effectiveActiveTab === "notifications" && (
-                            <NotificationsTab
-                                notifications={notifications}
-                                loading={isNotificationsLoading}
-                                error={notificationsError}
-                                markAsRead={markAsRead}
-                                clearNotification={clearNotification}
-                                clearAll={clearAll}
-                                queryEnabled={false}
-                            />
-                        )}
-                        {effectiveActiveTab === "active" && (
-                            <ActiveDownloadsTab
-                                downloads={combinedActiveDownloads}
-                                loading={false}
-                                refetch={refetchActiveDownloads}
-                                queryEnabled={false}
-                            />
-                        )}
-                        {effectiveActiveTab === "history" && <HistoryTab />}
-                        {effectiveActiveTab === "imports" && <ImportsTab />}
-                        {effectiveActiveTab === "social" && (
-                            <SocialTab
-                                users={socialUsers}
-                                isLoading={isSocialLoading}
-                                error={socialError}
-                                queryEnabled={false}
-                            />
-                        )}
-                    </div>
-                </div>
+                    <X className="h-5 w-5" />
+                </button>
             </div>
-        </div>
+
+            <div className="flex gap-1 border-b border-white/10 px-2">
+                {visibleTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const badge = getActivityTabBadge(tab.id, badgeState);
+                    const isActive = effectiveActiveTab === tab.id;
+
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setResolvedActiveTab(tab.id)}
+                            className={cn(
+                                "group flex items-center justify-center gap-2 py-3 px-3 transition-all duration-200 relative",
+                                isActive
+                                    ? "text-white border-b-2 border-brand flex-[2]"
+                                    : "text-white/50 hover:text-white/70 hover:flex-[2] flex-1",
+                            )}
+                            title={tab.label}
+                        >
+                            <Icon className="w-5 h-5 shrink-0" />
+                            <span
+                                className={cn(
+                                    "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-200",
+                                    isActive
+                                        ? "max-w-[100px] opacity-100"
+                                        : "max-w-0 opacity-0 group-hover:max-w-[100px] group-hover:opacity-100",
+                                )}
+                            >
+                                {tab.label}
+                            </span>
+                            {badge && (
+                                <span
+                                    className={cn(
+                                        "absolute top-1.5 right-1 min-w-[16px] h-[16px] px-0.5 rounded-full text-[10px] font-bold flex items-center justify-center",
+                                        tab.id === "active"
+                                            ? "bg-blue-500 text-white"
+                                            : "bg-brand text-black",
+                                    )}
+                                >
+                                    {badge > 99 ? "99+" : badge}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+                {effectiveActiveTab === "notifications" && (
+                    <NotificationsTab
+                        notifications={visibleNotifications}
+                        loading={isNotificationsLoading}
+                        error={notificationsError}
+                        markAsRead={markAsRead}
+                        clearNotification={clearNotification}
+                        clearAll={clearAll}
+                        queryEnabled={false}
+                    />
+                )}
+                {effectiveActiveTab === "active" && (
+                    <ActiveDownloadsTab
+                        downloads={combinedActiveDownloads}
+                        loading={false}
+                        refetch={refetchActiveDownloads}
+                        queryEnabled={false}
+                    />
+                )}
+                {effectiveActiveTab === "history" && <HistoryTab />}
+                {effectiveActiveTab === "imports" && <ImportsTab />}
+                {effectiveActiveTab === "social" && (
+                    <SocialTab
+                        users={socialUsers}
+                        isLoading={isSocialLoading}
+                        error={socialError}
+                        queryEnabled={false}
+                    />
+                )}
+            </div>
+        </aside>
     );
 }
 
@@ -407,7 +366,8 @@ export function ActivityPanelToggle({
     pollingEnabled = true,
 }: { pollingEnabled?: boolean } = {}) {
     const { downloadStatus } = useDownloadContext();
-    const { unreadCount } = useNotifications({ enabled: pollingEnabled });
+    const { user } = useAuth();
+    const { notifications } = useNotifications({ enabled: pollingEnabled });
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
 
@@ -415,6 +375,14 @@ export function ActivityPanelToggle({
         return null;
     }
 
+    const unreadCount = (notifications ?? []).filter(
+        (notification) =>
+            !notification.read &&
+            isUserFacingActivityNotification(
+                notification,
+                user?.role === "admin",
+            ),
+    ).length;
     const hasActivity =
         unreadCount > 0 || downloadStatus.activeDownloads.length > 0;
 

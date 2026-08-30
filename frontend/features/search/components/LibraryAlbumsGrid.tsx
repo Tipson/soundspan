@@ -8,6 +8,8 @@ import { PeerBadge } from "@/components/ui/PeerBadge";
 interface LibraryAlbumsGridProps {
     albums: Album[];
     limit?: number | null;
+    embedded?: boolean;
+    indexOffset?: number;
 }
 
 /**
@@ -16,14 +18,20 @@ interface LibraryAlbumsGridProps {
 export function LibraryAlbumsGrid({
     albums,
     limit = 6,
+    embedded = false,
+    indexOffset = 0,
 }: LibraryAlbumsGridProps) {
     const visibleAlbums =
         typeof limit === "number" ? albums.slice(0, limit) : albums;
 
     return (
         <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-4"
-            data-tv-section="search-results-albums"
+            className={
+                embedded
+                    ? "contents"
+                    : "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10"
+            }
+            data-tv-section={embedded ? undefined : "search-results-albums"}
         >
             {visibleAlbums.map((album, index) => {
                 const coverArtId = album.coverUrl || album.albumId;
@@ -32,7 +40,7 @@ export function LibraryAlbumsGrid({
                         key={album.id}
                         href={`/album/${album.id}`}
                         data-tv-card
-                        data-tv-card-index={index}
+                        data-tv-card-index={indexOffset + index}
                         tabIndex={0}
                     >
                         <div className="bg-surface-sunken hover:bg-surface-elevated transition-all p-4 rounded-lg group cursor-pointer">

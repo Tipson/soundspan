@@ -179,6 +179,7 @@ test("renders focused music navigation without duplicated or social entries", as
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
     assert.match(html, />Home</);
+    assert.match(html, />Search</);
     assert.match(html, />Library</);
     assert.match(html, />Vibe</);
     assert.doesNotMatch(html, />Explore</);
@@ -192,7 +193,7 @@ test("keeps prefetch enabled for primary sidebar navigation links", async () => 
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
-    const navHrefs = ["/", "/library", "/vibe"];
+    const navHrefs = ["/", "/search", "/vibe", "/library"];
 
     for (const href of navHrefs) {
         const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -206,6 +207,15 @@ test("keeps prefetch enabled for primary sidebar navigation links", async () => 
             `Primary nav link ${href} should not force prefetch off`,
         );
     }
+});
+
+test("desktop sidebar exposes a restrained shell landmark", async () => {
+    const { Sidebar } = await import("../../components/layout/Sidebar");
+    const html = renderToStaticMarkup(React.createElement(Sidebar));
+
+    assert.match(html, /data-shell-sidebar="desktop"/);
+    assert.match(html, /aria-label="Create playlist"/);
+    assert.doesNotMatch(html, /Sync Library/);
 });
 
 test("desktop Library navigation can enter the precached Downloads shell offline", async () => {

@@ -44,3 +44,7 @@ account-scoped bookmark, while Download to this device queues only playable
 album tracks in the current browser/PWA. Server acquisition and request actions
 are not mounted in this bar. Removing or saving an album never mutates another
 device's offline queue.
+
+The responsive album page keeps complete long titles visible, stacks artwork
+above metadata on narrow screens, wraps its touch-sized actions, and plays a
+selected row within the album's ordered playable context.

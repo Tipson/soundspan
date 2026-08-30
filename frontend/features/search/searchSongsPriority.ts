@@ -13,7 +13,20 @@ interface SearchCatalogPolicyInput {
 interface SearchCatalogPolicy {
     discoverType: "music";
     discoverLimit: number;
-    discoverTrackDisplayLimit: number | null;
+    libraryType: "all" | "tracks" | "albums" | "artists";
+    libraryLimit: number;
+    trackDisplayLimit: number;
+    albumDisplayLimit: number;
+}
+
+interface SearchResultLimitInput {
+    primaryCount: number;
+    totalLimit: number;
+}
+
+interface SearchResultLimits {
+    primaryLimit: number;
+    secondaryLimit: number;
 }
 
 interface PrimarySongsSurfaceInput {
@@ -47,10 +60,33 @@ export function resolveSearchCatalogPolicy({
     isArtistsView = false,
 }: SearchCatalogPolicyInput): SearchCatalogPolicy {
     const isExpandedMusicView = isTracksView || isAlbumsView || isArtistsView;
+    const libraryType = isTracksView
+        ? "tracks"
+        : isAlbumsView
+          ? "albums"
+          : isArtistsView
+            ? "artists"
+            : "all";
     return {
         discoverType: "music",
         discoverLimit: isExpandedMusicView ? 50 : 20,
-        discoverTrackDisplayLimit: isTracksView ? null : 10,
+        libraryType,
+        libraryLimit: isExpandedMusicView ? 50 : 20,
+        trackDisplayLimit: isTracksView ? 50 : 5,
+        albumDisplayLimit: isAlbumsView ? 50 : 6,
+    };
+}
+
+/** Allocate one visible cap across primary and continuation result sources. */
+export function allocateSearchResultLimits({
+    primaryCount,
+    totalLimit,
+}: SearchResultLimitInput): SearchResultLimits {
+    const safeTotalLimit = Math.max(0, totalLimit);
+    const primaryLimit = Math.min(Math.max(0, primaryCount), safeTotalLimit);
+    return {
+        primaryLimit,
+        secondaryLimit: safeTotalLimit - primaryLimit,
     };
 }
 

@@ -286,6 +286,8 @@ test("AlbumActionBar icon controls are touch-sized and have accessible names", a
         assert.ok(button, `missing accessible button: ${label}`);
         assert.match(button, /h-11 w-11/);
     }
+    assert.match(html, /w-full/);
+    assert.match(html, /sm:w-fit/);
 });
 
 test("AlbumActionBar hides acquisition controls for a synthetic remote release group", async () => {

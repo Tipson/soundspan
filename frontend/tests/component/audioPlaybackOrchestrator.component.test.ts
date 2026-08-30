@@ -1557,7 +1557,106 @@ test("unavailable YouTube Music playback keeps the existing skip when no alterna
     assert.equal(controlCalls.next, 1);
 });
 
-test("preparing a downloaded copy keeps the ready-record media identity stable", async () => {
+test("distinct provider tracks confirmed unavailable continue past the system breaker threshold", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const unavailableTracks = [
+        makeTrack("yt:unavail0001", {
+            streamSource: "youtube",
+            youtubeVideoId: "unavail0001",
+            artist: { name: "Unavailable Artist 1" },
+        }),
+        makeTrack("yt:unavail0002", {
+            streamSource: "youtube",
+            youtubeVideoId: "unavail0002",
+            artist: { name: "Unavailable Artist 2" },
+        }),
+        makeTrack("yt:unavail0003", {
+            streamSource: "youtube",
+            youtubeVideoId: "unavail0003",
+            artist: { name: "Unavailable Artist 3" },
+        }),
+    ];
+    audioState.currentTrack = unavailableTracks[0];
+    audioState.queue = [
+        ...unavailableTracks,
+        makeTrack("playable-after-unavailable"),
+    ];
+    recoverUnavailableYtMusicTrackImpl = async (input) => ({
+        status: "no_candidate",
+        originalVideoId: input.originalVideoId,
+        replacement: null,
+        persisted: false,
+    });
+
+    renderOrchestrator();
+    await flushAsync();
+
+    for (let index = 0; index < unavailableTracks.length; index += 1) {
+        await emitFatalLoadError();
+        t.mock.timers.tick(1_201);
+        await flushAsync();
+        assert.equal(controlCalls.next, index + 1);
+
+        if (index < unavailableTracks.length - 1) {
+            selectTrack(unavailableTracks, index + 1);
+            await flushAsync();
+        }
+    }
+
+    assert.equal(isPlaybackAutoRestartSuppressed(), false);
+    assert.doesNotMatch(toastErrors.join(" "), /multiple tracks failed/i);
+});
+
+test("a repeated confirmed-unavailable provider item stops a queue recovery cycle", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    const firstUnavailable = makeTrack("yt:repeat00001", {
+        streamSource: "youtube",
+        youtubeVideoId: "repeat00001",
+        artist: { name: "Unavailable Artist 1" },
+    });
+    const secondUnavailable = makeTrack("yt:repeat00002", {
+        streamSource: "youtube",
+        youtubeVideoId: "repeat00002",
+        artist: { name: "Unavailable Artist 2" },
+    });
+    const tracks = [
+        firstUnavailable,
+        secondUnavailable,
+        { ...firstUnavailable },
+        makeTrack("must-not-loop-forever"),
+    ];
+    audioState.currentTrack = tracks[0];
+    audioState.queue = tracks;
+    recoverUnavailableYtMusicTrackImpl = async (input) => ({
+        status: "no_candidate",
+        originalVideoId: input.originalVideoId,
+        replacement: null,
+        persisted: false,
+    });
+
+    renderOrchestrator();
+    await flushAsync();
+
+    for (const index of [0, 1]) {
+        await emitFatalLoadError();
+        t.mock.timers.tick(1_201);
+        await flushAsync();
+        assert.equal(controlCalls.next, index + 1);
+        selectTrack(tracks, index + 1);
+        await flushAsync();
+    }
+
+    await emitFatalLoadError();
+    t.mock.timers.tick(1_201);
+    await flushAsync();
+
+    assert.equal(controlCalls.next, 2);
+    assert.equal(isPlaybackAutoRestartSuppressed(), true);
+});
+
+test("preparing a verified legacy copy keeps its media identity without shadowing the active network source", async () => {
     const track = makeTrack("downloaded-track", {
         streamSource: "youtube",
         youtubeVideoId: "downloaded-video",
@@ -1591,7 +1690,7 @@ test("preparing a downloaded copy keeps the ready-record media identity stable",
     await flushAsync();
     assert.equal(
         engine.loadCalls.at(-1)?.args[0],
-        "/__offline/audio/downloaded-key",
+        "https://stream.test/yt/downloaded-video",
     );
 
     assert.equal(
@@ -1610,7 +1709,7 @@ test("preparing a downloaded copy keeps the ready-record media identity stable",
 
     assert.equal(
         engine.loadCalls.at(-1)?.args[0],
-        "/__offline/audio/downloaded-key",
+        "https://stream.test/yt/downloaded-video",
     );
     assert.equal(engine.loadCalls.length, 1);
 });

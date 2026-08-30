@@ -22,7 +22,7 @@ import {
 import { cn } from "@/utils/cn";
 import { clampTime } from "@/utils/formatTime";
 import { SyncBadge } from "@/components/player/SyncBadge";
-import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
+import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaybackQualityBadgeWithStats } from "@/components/player/PlaybackQualityBadgeWithStats";
 
@@ -86,21 +86,19 @@ export function MiniPlayer() {
 
     return (
         <div
-            className="fixed inset-x-0 z-50"
-            style={{
-                bottom: "calc(56px + var(--safe-area-bottom))",
-            }}
+            data-mobile-player="dock"
+            className="mobile-player-dock pointer-events-none fixed z-50"
         >
-            <div className="overflow-hidden border-t border-white/10 bg-black/95 backdrop-blur-sm">
-                <div className="relative h-[2px] w-full bg-white/10">
+            <div className="mobile-player-surface pointer-events-auto overflow-hidden rounded-2xl">
+                <div className="relative h-[2px] w-full bg-white/[0.08]">
                     <div
-                        className="h-full bg-brand-hover transition-all duration-150"
+                        className="shell-signal-progress h-full transition-[width] duration-150"
                         style={{ width: `${progress}%` }}
                     />
                 </div>
 
                 <div
-                    className="flex items-center gap-3 px-3 py-2.5"
+                    className="flex min-h-[70px] items-center gap-2 px-3 py-2"
                     style={{
                         paddingLeft: "calc(0.75rem + var(--safe-area-left))",
                         paddingRight: "calc(0.75rem + var(--safe-area-right))",
@@ -123,14 +121,14 @@ export function MiniPlayer() {
                             stiffness: 320,
                             damping: 34,
                         }}
-                        className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-black/30"
+                        className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-black/30 ring-1 ring-white/10"
                     >
                         {coverUrl ? (
                             <CachedImage
                                 src={coverUrl}
                                 alt={title}
                                 fill
-                                sizes="48px"
+                                sizes="44px"
                                 className="object-cover"
                                 unoptimized
                             />
@@ -144,7 +142,7 @@ export function MiniPlayer() {
                     <div className="min-w-0 flex-1">
                         {audioError ? (
                             <>
-                                <p className="truncate text-sm font-medium text-red-300">
+                                <p className="truncate text-sm font-semibold text-red-300">
                                     Playback Error
                                 </p>
                                 <p className="truncate text-xs text-red-200/70">
@@ -153,7 +151,7 @@ export function MiniPlayer() {
                             </>
                         ) : (
                             <>
-                                <p className="truncate text-sm font-medium text-white">
+                                <p className="truncate text-[13px] font-semibold text-white min-[360px]:text-sm">
                                     {title}
                                 </p>
                                 <div className="mt-0.5 flex items-center gap-1.5">
@@ -161,12 +159,16 @@ export function MiniPlayer() {
                                         {subtitle}
                                     </p>
                                     {qualityBadge ? (
-                                        <PlaybackQualityBadgeWithStats
-                                            badge={qualityBadge}
-                                            size="mini"
-                                        />
+                                        <span className="hidden min-[400px]:inline-flex">
+                                            <PlaybackQualityBadgeWithStats
+                                                badge={qualityBadge}
+                                                size="mini"
+                                            />
+                                        </span>
                                     ) : null}
-                                    <SyncBadge compact />
+                                    <span className="hidden min-[400px]:inline-flex">
+                                        <SyncBadge compact />
+                                    </span>
                                 </div>
                             </>
                         )}
@@ -174,10 +176,13 @@ export function MiniPlayer() {
 
                     {playbackType === "track" && currentTrack?.id && (
                         <div
-                            className="flex flex-shrink-0 items-center"
+                            className="hidden flex-shrink-0 items-center min-[360px]:flex"
                             onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            role="group"
+                            aria-label="Track preference"
                         >
-                            <TrackPreferenceButtons
+                            <CurrentTrackPreferenceButtons
                                 trackId={currentTrack.id}
                                 mode="both"
                                 buttonSizeClassName="h-11 w-11"
@@ -190,6 +195,7 @@ export function MiniPlayer() {
                     <div
                         className="flex flex-shrink-0 items-center gap-1"
                         onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         role="group"
                         aria-label="Playback controls"
                     >
@@ -245,7 +251,7 @@ export function MiniPlayer() {
                         </button>
                         <button
                             onClick={() => next()}
-                            className="h-11 w-11 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                            className="hidden h-11 w-11 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white min-[380px]:flex"
                             aria-label="Next track"
                             title="Next track"
                         >

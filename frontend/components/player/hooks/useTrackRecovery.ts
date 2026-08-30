@@ -51,6 +51,10 @@ interface UseTrackRecoveryOptions {
     ) => void;
 }
 
+type TrackErrorSkipDisposition =
+    | { kind: "system_failure" }
+    | { kind: "confirmed_provider_unavailable"; failureKey: string };
+
 /** Preserves startup, transient-error, and queue-skip recovery callbacks. */
 export function useTrackRecovery({
     refs,
@@ -292,7 +296,12 @@ export function useTrackRecovery({
     }, [isLoadingRef, setIsBuffering]);
 
     const scheduleTrackErrorSkip = useCallback(
-        (failedTrackId: string | null): boolean => {
+        (
+            failedTrackId: string | null,
+            disposition: TrackErrorSkipDisposition = {
+                kind: "system_failure",
+            },
+        ): boolean => {
             if (
                 pendingTrackErrorSkipRef.current &&
                 pendingTrackErrorTrackIdRef.current === failedTrackId
@@ -304,9 +313,10 @@ export function useTrackRecovery({
                 return true;
             }
 
-            // Record the error in the circuit breaker. If it trips (3 consecutive
-            // errors without a successful play), halt auto-advance to prevent
-            // infinite rapid error loops.
+            // System/transport failures use the consecutive-error threshold.
+            // A backend-confirmed unavailable provider item is instead remembered
+            // by occurrence: distinct unavailable entries can be skipped, while a
+            // repeat proves the queue has cycled and trips the same stop guard.
             // Error-driven repeat-one and unchanged-track LT recovery must prove
             // progress again. Non-error LT resyncs leave the breaker unchanged,
             // so they need no second confirmation; podcast seek-reload does not
@@ -317,7 +327,11 @@ export function useTrackRecovery({
                     failedTrackId,
                 );
             const justTripped =
-                consecutiveErrorBreakerRef.current.recordError();
+                disposition.kind === "confirmed_provider_unavailable"
+                    ? consecutiveErrorBreakerRef.current.recordConfirmedUnavailable(
+                          disposition.failureKey,
+                      )
+                    : consecutiveErrorBreakerRef.current.recordError();
             if (consecutiveErrorBreakerRef.current.isTripped()) {
                 stopAutomaticPlaybackRestarts();
                 if (justTripped) {
@@ -326,10 +340,13 @@ export function useTrackRecovery({
                         {
                             consecutiveErrors:
                                 consecutiveErrorBreakerRef.current.getErrorCount(),
+                            failureKind: disposition.kind,
                         },
                     );
                     toast.error(
-                        "Playback stopped — multiple tracks failed in a row. Check your connection or try again.",
+                        disposition.kind === "confirmed_provider_unavailable"
+                            ? "Playback stopped — the remaining provider tracks are unavailable. Choose another track or try again later."
+                            : "Playback stopped — multiple tracks failed in a row. Check your connection or try again.",
                         { duration: 6000 },
                     );
                 }

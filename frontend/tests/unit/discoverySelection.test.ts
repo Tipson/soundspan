@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
     deriveDiscoverySelection,
+    isExactArtistSearchMatch,
     normalizeArtistName,
 } from "../../features/search/discoverySelection";
 import type { DiscoverResult } from "../../features/search/types";
@@ -29,6 +30,18 @@ const album = (name: string, artistName: string): DiscoverResult => ({
 test("normalizeArtistName strips case, whitespace, and diacritics", () => {
     assert.equal(normalizeArtistName("  Björk "), "bjork");
     assert.equal(normalizeArtistName("DRAKE"), "drake");
+});
+
+test("top-result confidence accepts exact and corrected names, not fuzzy first hits", () => {
+    assert.equal(
+        isExactArtistSearchMatch("Massive Attack", "massive attack", null),
+        true,
+    );
+    assert.equal(
+        isExactArtistSearchMatch("The Beatles", "beatles", "The Beatles"),
+        true,
+    );
+    assert.equal(isExactArtistSearchMatch("Nick Drake", "drake", null), false);
 });
 
 test("exact external match beats a fuzzy library match", () => {

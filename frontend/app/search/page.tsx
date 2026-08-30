@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
 import { useSearchData } from "@/features/search/hooks/useSearchData";
 import { dedupeDiscoverTracks } from "@/features/search/songDedup";
-import { dedupeDiscoverAlbums } from "@/features/search/albumDedup";
+import { mergeSearchAlbums } from "@/features/search/albumDedup";
 import { useSoulseekSearch } from "@/features/search/hooks/useSoulseekSearch";
 import { useYouTubeUrl } from "@/features/search/hooks/useYouTubeUrl";
 import { YouTubePreviewCard } from "@/features/search/components/YouTubePreviewCard";
 import { useYouTubePlaylist } from "@/features/search/hooks/useYouTubePlaylist";
 import { YouTubePlaylistPreviewCard } from "@/features/search/components/YouTubePlaylistPreviewCard";
 import { SearchFilters } from "@/features/search/components/SearchFilters";
+import { SearchSectionHeader } from "@/features/search/components/SearchSectionHeader";
+import { SearchArtistsGrid } from "@/features/search/components/SearchArtistsGrid";
 import { TopResult } from "@/features/search/components/TopResult";
 import { EmptyState } from "@/features/search/components/EmptyState";
 import { LibraryAlbumsGrid } from "@/features/search/components/LibraryAlbumsGrid";
@@ -22,36 +22,32 @@ import { DiscoverTracksList } from "@/features/search/components/DiscoverTracksL
 import { ProviderAlbumsGrid } from "@/features/search/components/ProviderAlbumsGrid";
 import {
     deriveDiscoverySelection,
+    hasCanonicalProviderArtistIdentity,
+    isExactArtistSearchMatch,
     normalizeArtistName,
 } from "@/features/search/discoverySelection";
 import { AliasResolutionBanner } from "@/features/search/components/AliasResolutionBanner";
 import { SoulseekSongsList } from "@/features/search/components/SoulseekSongsList";
 import { TVSearchInput } from "@/features/search/components/TVSearchInput";
 import { useAuth } from "@/lib/auth-context";
-import type { FilterTab } from "@/features/search/types";
-import { useFeatures } from "@/lib/features-context";
+import type { SearchResultView } from "@/features/search/types";
 import {
+    allocateSearchResultLimits,
     hasVisibleTrackResults,
     resolveSearchCatalogPolicy,
     resolvePrimarySongsSurface,
     shouldShowSearchLoadingState,
 } from "@/features/search/searchSongsPriority";
 
-type SearchSectionView = "tracks" | "albums" | "artists" | null;
+type SearchSectionView = Exclude<SearchResultView, "all"> | null;
 
-/**
- * Renders the SearchPage component.
- */
+/** Render one music-first search with entity-scoped result views. */
 export default function SearchPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    // Downloads are admin-only app-wide (mirrors lib/download-context.tsx and
-    // the backend's requireAdmin gate on /api/youtube download endpoints).
     const { user } = useAuth();
-    const { federation } = useFeatures();
     const canDownloadYouTube = user?.role === "admin";
-    const [filterTab, setFilterTab] = useState<FilterTab>("all");
-    const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+    const query = searchParams.get("q") ?? "";
     const viewParam = searchParams.get("view");
     const sectionView: SearchSectionView =
         viewParam === "tracks" ||
@@ -59,10 +55,11 @@ export default function SearchPage() {
         viewParam === "artists"
             ? viewParam
             : null;
+    const activeView: SearchResultView = sectionView ?? "all";
     const isTracksView = sectionView === "tracks";
     const isAlbumsView = sectionView === "albums";
     const isArtistsView = sectionView === "artists";
-    const isSectionView = sectionView !== null;
+    const showTracksView = sectionView === null || isTracksView;
     const sectionViewLinks = {
         tracks: `/search?q=${encodeURIComponent(query)}&view=tracks`,
         albums: `/search?q=${encodeURIComponent(query)}&view=albums`,
@@ -74,7 +71,6 @@ export default function SearchPage() {
         isArtistsView,
     });
 
-    // Custom hooks
     const {
         libraryResults,
         discoverResults,
@@ -85,21 +81,20 @@ export default function SearchPage() {
         hasSearched,
     } = useSearchData({
         query,
-        libraryType: "all",
+        libraryType: searchCatalogPolicy.libraryType,
         discoverType: searchCatalogPolicy.discoverType,
-        libraryLimit: isTracksView || isAlbumsView ? 100 : 20,
+        libraryLimit: searchCatalogPolicy.libraryLimit,
         discoverLimit: searchCatalogPolicy.discoverLimit,
         similarArtistsLimit: isArtistsView ? 50 : 6,
-        source: filterTab === "peers" ? "peers" : "all",
+        source: "all",
     });
     const {
         soulseekResults,
         isSoulseekSearching,
         isSoulseekPolling,
-        soulseekEnabled,
         downloadingFiles,
         handleDownload,
-    } = useSoulseekSearch({ query });
+    } = useSoulseekSearch({ query: showTracksView ? query : "" });
     const {
         videoInfo,
         isLoading: isYtLoading,
@@ -108,7 +103,6 @@ export default function SearchPage() {
         handlePlay: handleYtPlay,
         handleDownload: handleYtDownload,
     } = useYouTubeUrl({ query });
-
     const {
         playlistInfo: ytPlaylistInfo,
         isLoading: isYtPlaylistLoading,
@@ -119,137 +113,211 @@ export default function SearchPage() {
         handleCancel: handleYtPlaylistCancel,
     } = useYouTubePlaylist({ query });
 
-    // Sync query from URL params on navigation.
-    const urlQuery = searchParams.get("q") ?? "";
-    useEffect(() => {
-        if (urlQuery) {
-            setQuery(urlQuery);
-        }
-    }, [urlQuery]);
-
-    // Derived state
-    const showLibrary =
-        filterTab === "all" || filterTab === "library" || filterTab === "peers";
-    const showDiscover = filterTab === "all" || filterTab === "discover";
-    const showSoulseek = filterTab === "all" || filterTab === "soulseek";
-    // Only offer the library artist as a top result when the active
-    // filter shows library sources at all.
-    const visibleLibraryTopArtist = showLibrary
-        ? libraryResults?.artists?.[0]
-        : undefined;
-    // An exact-name external match beats a fuzzy library match, so
-    // searching "Drake" surfaces Drake rather than an owned "Nick Drake".
+    const libraryArtists = libraryResults?.artists ?? [];
+    const libraryTracks = libraryResults?.tracks ?? [];
+    const libraryAlbums = libraryResults?.albums ?? [];
+    const exactLibraryTopArtist = libraryArtists.find((artist) =>
+        isExactArtistSearchMatch(artist.name, query, aliasInfo?.canonical),
+    );
     const {
         topArtist,
         preferDiscovery: preferDiscoveryTopResult,
-        secondaryArtists: secondaryDiscoverArtists,
         tracks: discoverTracks,
         albums: discoverAlbums,
     } = deriveDiscoverySelection({
         discoverResults,
         query,
         aliasCanonical: aliasInfo?.canonical,
-        libraryTopName: visibleLibraryTopArtist?.name ?? null,
-        showDiscover,
+        libraryTopName: exactLibraryTopArtist?.name ?? null,
+        showDiscover: true,
     });
-    // Related Artists should never repeat the artist shown as top result.
-    const visibleSimilarArtists = topArtist
+    const exactDiscoveryTopArtist =
+        topArtist &&
+        isExactArtistSearchMatch(topArtist.name, query, aliasInfo?.canonical)
+            ? topArtist
+            : undefined;
+    const displayedTopName =
+        exactLibraryTopArtist?.name ?? exactDiscoveryTopArtist?.name;
+    const shouldPreferDiscoveryTopResult =
+        preferDiscoveryTopResult ||
+        Boolean(
+            exactLibraryTopArtist &&
+            hasCanonicalProviderArtistIdentity(exactDiscoveryTopArtist),
+        );
+    const hasTopResult = Boolean(
+        exactLibraryTopArtist || exactDiscoveryTopArtist,
+    );
+    const discoverArtistResults = discoverResults.filter(
+        (result) => result.type === "music",
+    );
+    const visibleSimilarArtists = displayedTopName
         ? similarArtists.filter(
               (candidate) =>
                   normalizeArtistName(candidate.name) !==
-                      normalizeArtistName(topArtist.name) &&
-                  (!candidate.mbid || candidate.mbid !== topArtist.mbid),
+                  normalizeArtistName(displayedTopName),
           )
-        : similarArtists;
-    const isLoading =
-        isLibrarySearching ||
-        isDiscoverSearching ||
-        isSoulseekSearching ||
-        isSoulseekPolling;
-    const libraryTracks = libraryResults?.tracks ?? [];
-    const libraryAlbums = libraryResults?.albums ?? [];
-    const unownedDiscoverAlbums = showDiscover
-        ? dedupeDiscoverAlbums(discoverAlbums, libraryAlbums)
         : [];
-    // One Songs section: external matches continue the owned list, minus
-    // songs the library results already cover.
-    const unownedDiscoverTracks = showDiscover
-        ? dedupeDiscoverTracks(discoverTracks, libraryTracks)
-        : [];
+    const unownedDiscoverTracks = dedupeDiscoverTracks(
+        discoverTracks,
+        libraryTracks,
+    );
+    const mergedAlbums = mergeSearchAlbums(discoverAlbums, libraryAlbums);
+    const trackLimits = allocateSearchResultLimits({
+        primaryCount: libraryTracks.length,
+        totalLimit: searchCatalogPolicy.trackDisplayLimit,
+    });
+    const albumLimits = allocateSearchResultLimits({
+        primaryCount: mergedAlbums.libraryAlbums.length,
+        totalLimit: searchCatalogPolicy.albumDisplayLimit,
+    });
 
-    // Determine if we should show the 2-column layout
-    const hasTopResult = visibleLibraryTopArtist || topArtist;
     const hasTracks = hasVisibleTrackResults({
         libraryTrackCount: libraryTracks.length,
         discoverTrackCount: unownedDiscoverTracks.length,
         soulseekResultCount: soulseekResults.length,
-        showLibrary,
-        showDiscover,
-        showSoulseek,
+        showLibrary: true,
+        showDiscover: true,
+        showSoulseek: true,
     });
+    const hasAlbums =
+        mergedAlbums.libraryAlbums.length > 0 ||
+        mergedAlbums.discoverAlbums.length > 0;
+    const hasArtists =
+        libraryArtists.length > 0 || discoverArtistResults.length > 0;
     const primarySongsSurface = resolvePrimarySongsSurface({
-        playableTrackCount:
-            (showLibrary ? libraryTracks.length : 0) +
-            unownedDiscoverTracks.length,
+        playableTrackCount: libraryTracks.length + unownedDiscoverTracks.length,
         soulseekResultCount: soulseekResults.length,
         soulseekSearching: isSoulseekSearching || isSoulseekPolling,
-        showSoulseek,
+        showSoulseek: true,
     });
-    const showPrimaryLoadingState = shouldShowSearchLoadingState({
+    const isLoading =
+        isLibrarySearching ||
+        isDiscoverSearching ||
+        (showTracksView && (isSoulseekSearching || isSoulseekPolling));
+    const trackLoadingState = shouldShowSearchLoadingState({
         hasSearched,
-        anySourceSearching:
-            isLibrarySearching ||
-            isDiscoverSearching ||
-            isSoulseekSearching ||
-            isSoulseekPolling,
-        hasArtistResult: Boolean(libraryResults?.artists?.length),
+        anySourceSearching: isLoading,
+        hasArtistResult: libraryArtists.length > 0,
         discoverResultCount: discoverResults.length,
         primarySongsSurface,
     });
-    const show2ColumnLayout =
-        hasSearched &&
-        hasTopResult &&
-        hasTracks &&
-        (showLibrary || showDiscover) &&
-        !isSectionView;
+    const activeViewHasResults =
+        activeView === "tracks"
+            ? hasTracks
+            : activeView === "albums"
+              ? hasAlbums
+              : activeView === "artists"
+                ? hasArtists || visibleSimilarArtists.length > 0
+                : hasTopResult || hasTracks || hasAlbums || hasArtists;
+    const showPrimaryLoadingState = showTracksView
+        ? trackLoadingState
+        : hasSearched &&
+          (isLibrarySearching || isDiscoverSearching) &&
+          !activeViewHasResults;
 
-    // Handle TV search
     const handleTVSearch = (searchQuery: string) => {
-        setQuery(searchQuery);
         router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
     };
 
+    const trackStatus =
+        primarySongsSurface === "playable" &&
+        (isSoulseekSearching || isSoulseekPolling) ? (
+            <span className="inline-flex items-center gap-2 text-sm font-normal text-gray-400">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                    <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeDasharray="40 20"
+                    />
+                </svg>
+                Adding more sources…
+            </span>
+        ) : undefined;
+
+    const tracksSection =
+        hasSearched && showTracksView && primarySongsSurface !== "empty" ? (
+            <section>
+                {primarySongsSurface === "soulseek" ? null : (
+                    <SearchSectionHeader
+                        title="Tracks"
+                        showAllHref={
+                            sectionView === null
+                                ? sectionViewLinks.tracks
+                                : undefined
+                        }
+                        status={trackStatus}
+                    />
+                )}
+                {primarySongsSurface === "playable" ? (
+                    <>
+                        {trackLimits.primaryLimit > 0 ? (
+                            <LibraryTracksList
+                                tracks={libraryTracks}
+                                limit={trackLimits.primaryLimit}
+                            />
+                        ) : null}
+                        {trackLimits.secondaryLimit > 0 &&
+                        unownedDiscoverTracks.length > 0 ? (
+                            <DiscoverTracksList
+                                tracks={unownedDiscoverTracks}
+                                limit={trackLimits.secondaryLimit}
+                            />
+                        ) : null}
+                    </>
+                ) : primarySongsSurface === "soulseek" ? (
+                    <SoulseekSongsList
+                        soulseekResults={soulseekResults}
+                        downloadingFiles={downloadingFiles}
+                        onDownload={handleDownload}
+                    />
+                ) : (
+                    <div className="space-y-2">
+                        {[1, 2, 3].map((index) => (
+                            <div
+                                key={index}
+                                className="flex animate-pulse items-center gap-4 rounded-lg bg-white/5 p-3"
+                            >
+                                <div className="h-10 w-10 rounded bg-white/10" />
+                                <div className="flex-1 space-y-2">
+                                    <div className="h-4 w-3/4 rounded bg-white/10" />
+                                    <div className="h-3 w-1/2 rounded bg-white/10" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
+        ) : null;
+
+    const topResult =
+        hasSearched && sectionView === null && hasTopResult ? (
+            <TopResult
+                libraryArtist={exactLibraryTopArtist}
+                discoveryArtist={exactDiscoveryTopArtist}
+                preferDiscovery={shouldPreferDiscoveryTopResult}
+            />
+        ) : null;
+
     return (
         <div className="min-h-screen px-6 py-6">
-            {/* TV Search Input - only visible in TV mode */}
             <TVSearchInput initialQuery={query} onSearch={handleTVSearch} />
 
             <SearchFilters
-                filterTab={filterTab}
-                onFilterChange={setFilterTab}
-                soulseekEnabled={soulseekEnabled}
-                federationEnabled={federation}
+                activeView={activeView}
+                query={query}
                 hasSearched={hasSearched}
             />
 
-            {hasSearched && isSectionView && (
-                <div className="mb-6">
-                    <Link
-                        href={`/search?q=${encodeURIComponent(query)}`}
-                        className="text-sm font-semibold text-gray-300 hover:text-white hover:underline"
-                    >
-                        Back to All Results
-                    </Link>
-                </div>
-            )}
-
-            <div className="pb-24 space-y-12">
-                {hasSearched && aliasInfo && (
+            <div className="space-y-12 pb-24">
+                {hasSearched && aliasInfo ? (
                     <AliasResolutionBanner aliasInfo={aliasInfo} />
-                )}
+                ) : null}
 
-                {/* YouTube single-video URL Preview Card */}
-                {(videoInfo || isYtLoading) && (
+                {activeView === "all" && (videoInfo || isYtLoading) ? (
                     <YouTubePreviewCard
                         videoInfo={videoInfo!}
                         isLoading={isYtLoading}
@@ -259,10 +327,10 @@ export default function SearchPage() {
                         onPlay={handleYtPlay}
                         onDownload={handleYtDownload}
                     />
-                )}
+                ) : null}
 
-                {/* YouTube playlist/channel bulk-download Preview Card */}
-                {(ytPlaylistInfo || isYtPlaylistLoading || ytPlaylistError) && (
+                {activeView === "all" &&
+                (ytPlaylistInfo || isYtPlaylistLoading || ytPlaylistError) ? (
                     <YouTubePlaylistPreviewCard
                         playlistInfo={ytPlaylistInfo}
                         isLoading={isYtPlaylistLoading}
@@ -273,362 +341,149 @@ export default function SearchPage() {
                         onDownloadAll={handleYtDownloadAll}
                         onCancel={handleYtPlaylistCancel}
                     />
-                )}
+                ) : null}
 
                 <EmptyState hasSearched={hasSearched} isLoading={isLoading} />
 
-                {/* Loading spinner */}
-                {showPrimaryLoadingState && (
-                    <div className="flex flex-col items-center justify-center py-16 relative z-10">
-                        <div className="relative w-16 h-16 mb-4">
+                {hasSearched && isDiscoverSearching && activeViewHasResults ? (
+                    <p
+                        role="status"
+                        className="-mb-7 inline-flex items-center gap-2 text-sm text-content-secondary"
+                    >
+                        <span
+                            aria-hidden="true"
+                            className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-brand motion-reduce:animate-none"
+                        />
+                        Searching online catalog…
+                    </p>
+                ) : null}
+
+                {showPrimaryLoadingState ? (
+                    <div className="relative z-10 flex flex-col items-center justify-center py-16">
+                        <div className="relative mb-4 h-16 w-16">
                             <svg
-                                className="w-16 h-16 animate-spin"
+                                className="h-16 w-16 animate-spin"
                                 viewBox="0 0 64 64"
                             >
-                                <defs>
-                                    <linearGradient
-                                        id="spinnerGrad"
-                                        x1="0%"
-                                        y1="0%"
-                                        x2="100%"
-                                        y2="100%"
-                                    >
-                                        <stop
-                                            offset="0%"
-                                            style={{
-                                                stopColor: "#facc15",
-                                                stopOpacity: 1,
-                                            }}
-                                        />
-                                        <stop
-                                            offset="25%"
-                                            style={{
-                                                stopColor: "#f59e0b",
-                                                stopOpacity: 1,
-                                            }}
-                                        />
-                                        <stop
-                                            offset="50%"
-                                            style={{
-                                                stopColor: "#c026d3",
-                                                stopOpacity: 1,
-                                            }}
-                                        />
-                                        <stop
-                                            offset="75%"
-                                            style={{
-                                                stopColor: "#2323FF",
-                                                stopOpacity: 1,
-                                            }}
-                                        />
-                                        <stop
-                                            offset="100%"
-                                            style={{
-                                                stopColor: "#facc15",
-                                                stopOpacity: 1,
-                                            }}
-                                        />
-                                    </linearGradient>
-                                </defs>
                                 <circle
                                     cx="32"
                                     cy="32"
                                     r="28"
                                     fill="none"
-                                    stroke="url(#spinnerGrad)"
+                                    stroke="currentColor"
                                     strokeWidth="4"
                                     strokeLinecap="round"
                                     strokeDasharray="140 40"
+                                    className="text-brand"
                                 />
                             </svg>
                         </div>
-                        <p className="text-gray-400 text-sm">
+                        <p className="text-sm text-gray-400">
                             {isSoulseekSearching || isSoulseekPolling
                                 ? `Searching... (${soulseekResults.length} found)`
                                 : "Searching..."}
                         </p>
                     </div>
-                )}
+                ) : null}
 
-                {/* 2-Column Layout: Top Result (left) + Songs (right) */}
-                {show2ColumnLayout ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Left Column: Top Result */}
-                        <div>
-                            <TopResult
-                                libraryArtist={visibleLibraryTopArtist}
-                                discoveryArtist={topArtist}
-                                preferDiscovery={preferDiscoveryTopResult}
-                            />
-                        </div>
-
-                        {/* Right Column: Songs */}
-                        <div>
-                            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                                <Link
-                                    href={sectionViewLinks.tracks}
-                                    className="hover:underline"
-                                >
-                                    Songs
-                                </Link>
-                                {primarySongsSurface === "playable" &&
-                                    showSoulseek &&
-                                    (isSoulseekSearching ||
-                                        isSoulseekPolling) && (
-                                        <span className="inline-flex items-center gap-2 text-sm font-normal text-gray-400">
-                                            <svg
-                                                className="w-4 h-4 animate-spin"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <circle
-                                                    cx="12"
-                                                    cy="12"
-                                                    r="10"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2"
-                                                    strokeDasharray="40 20"
-                                                />
-                                            </svg>
-                                            Adding more sources…
-                                        </span>
-                                    )}
-                            </h2>
-                            {primarySongsSurface === "playable" ? (
-                                <>
-                                    {showLibrary &&
-                                        libraryTracks.length > 0 && (
-                                            <LibraryTracksList
-                                                tracks={libraryTracks}
-                                                limit={isTracksView ? null : 10}
-                                            />
-                                        )}
-                                    {unownedDiscoverTracks.length > 0 && (
-                                        <DiscoverTracksList
-                                            tracks={unownedDiscoverTracks}
-                                            limit={
-                                                searchCatalogPolicy.discoverTrackDisplayLimit
-                                            }
-                                        />
-                                    )}
-                                </>
-                            ) : primarySongsSurface === "soulseek" ? (
-                                <SoulseekSongsList
-                                    soulseekResults={soulseekResults}
-                                    downloadingFiles={downloadingFiles}
-                                    onDownload={handleDownload}
-                                />
-                            ) : primarySongsSurface === "soulseek-loading" ? (
-                                <div className="space-y-2">
-                                    {[1, 2, 3].map((i) => (
-                                        <div
-                                            key={i}
-                                            className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse"
-                                        >
-                                            <div className="w-10 h-10 rounded bg-white/10" />
-                                            <div className="flex-1 space-y-2">
-                                                <div className="h-4 bg-white/10 rounded w-3/4" />
-                                                <div className="h-3 bg-white/10 rounded w-1/2" />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : null}
-                        </div>
+                {topResult && tracksSection ? (
+                    <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(20rem,2fr)_minmax(0,3fr)]">
+                        {topResult}
+                        {tracksSection}
                     </div>
                 ) : (
                     <>
-                        {/* Original single-column layout when not showing 2-column */}
-                        {hasSearched &&
-                            (showDiscover || showLibrary) &&
-                            hasTopResult && (
-                                <div>
-                                    <TopResult
-                                        libraryArtist={visibleLibraryTopArtist}
-                                        discoveryArtist={topArtist}
-                                        preferDiscovery={
-                                            preferDiscoveryTopResult
-                                        }
-                                    />
-                                </div>
-                            )}
-
-                        {/* Songs — owned results with unowned continuation */}
-                        {hasSearched &&
-                            (sectionView === null || isTracksView) &&
-                            primarySongsSurface === "playable" && (
-                                <section>
-                                    <h2 className="text-2xl font-bold text-white mb-6">
-                                        <Link
-                                            href={sectionViewLinks.tracks}
-                                            className="hover:underline"
-                                        >
-                                            Songs
-                                        </Link>
-                                    </h2>
-                                    {showLibrary &&
-                                        libraryTracks.length > 0 && (
-                                            <LibraryTracksList
-                                                tracks={libraryTracks}
-                                                limit={isTracksView ? null : 10}
-                                            />
-                                        )}
-                                    {unownedDiscoverTracks.length > 0 && (
-                                        <DiscoverTracksList
-                                            tracks={unownedDiscoverTracks}
-                                            limit={
-                                                searchCatalogPolicy.discoverTrackDisplayLimit
-                                            }
-                                        />
-                                    )}
-                                </section>
-                            )}
-
-                        {/* Soulseek is a fallback only when no result can play immediately. */}
-                        {hasSearched && primarySongsSurface === "soulseek" && (
-                            <section>
-                                <SoulseekSongsList
-                                    soulseekResults={soulseekResults}
-                                    downloadingFiles={downloadingFiles}
-                                    onDownload={handleDownload}
-                                />
-                            </section>
-                        )}
-
-                        {/* Soulseek Loading State */}
-                        {hasSearched &&
-                            primarySongsSurface === "soulseek-loading" && (
-                                <section>
-                                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                                        <span>Soulseek</span>
-                                        <span className="inline-flex items-center gap-2 text-sm font-normal text-gray-400">
-                                            <svg
-                                                className="w-4 h-4 animate-spin"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <circle
-                                                    cx="12"
-                                                    cy="12"
-                                                    r="10"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2"
-                                                    strokeDasharray="40 20"
-                                                />
-                                            </svg>
-                                            Searching P2P network... (~45s)
-                                        </span>
-                                    </h2>
-                                    <div className="space-y-2">
-                                        {[1, 2, 3].map((i) => (
-                                            <div
-                                                key={i}
-                                                className="flex items-center gap-4 p-3 rounded-lg bg-white/5 animate-pulse"
-                                            >
-                                                <div className="w-10 h-10 rounded bg-white/10" />
-                                                <div className="flex-1 space-y-2">
-                                                    <div className="h-4 bg-white/10 rounded w-3/4" />
-                                                    <div className="h-3 bg-white/10 rounded w-1/2" />
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
+                        {topResult}
+                        {tracksSection}
                     </>
                 )}
 
-                {/* Library Albums */}
                 {hasSearched &&
-                    showLibrary &&
-                    (sectionView === null || isAlbumsView) &&
-                    libraryAlbums.length > 0 && (
-                        <section>
-                            <h2 className="text-2xl font-bold text-white mb-6">
-                                <Link
-                                    href={sectionViewLinks.albums}
-                                    className="hover:underline"
-                                >
-                                    Your Albums
-                                </Link>
-                            </h2>
-                            <LibraryAlbumsGrid
-                                albums={libraryAlbums}
-                                limit={isAlbumsView ? null : 6}
-                            />
-                        </section>
-                    )}
-
-                {/* Provider Albums */}
-                {hasSearched &&
-                    showDiscover &&
-                    (sectionView === null || isAlbumsView) &&
-                    unownedDiscoverAlbums.length > 0 && (
-                        <section>
-                            <h2 className="mb-6 text-2xl font-bold text-white">
-                                <Link
-                                    href={sectionViewLinks.albums}
-                                    className="hover:underline"
-                                >
-                                    Albums from YouTube Music
-                                </Link>
-                            </h2>
-                            <ProviderAlbumsGrid
-                                albums={unownedDiscoverAlbums}
-                                limit={isAlbumsView ? null : 6}
-                            />
-                        </section>
-                    )}
-
-                {/* Discover Artists — external matches beyond the top result */}
-                {hasSearched &&
-                    showDiscover &&
-                    (sectionView === null || isArtistsView) &&
-                    secondaryDiscoverArtists.length > 0 && (
-                        <SimilarArtistsGrid
-                            similarArtists={secondaryDiscoverArtists}
-                            title="Artists"
+                (sectionView === null || isAlbumsView) &&
+                hasAlbums ? (
+                    <section>
+                        <SearchSectionHeader
+                            title="Albums"
+                            showAllHref={
+                                sectionView === null
+                                    ? sectionViewLinks.albums
+                                    : undefined
+                            }
                         />
-                    )}
-
-                {/* Songs to Discover merged into the unified Songs section
-                    above; external rows continue the owned list with badges
-                    instead of living four sections away. */}
-
-                {/* Related Artists */}
-                {hasSearched &&
-                    showDiscover &&
-                    (sectionView === null || isArtistsView) &&
-                    visibleSimilarArtists.length > 0 && (
-                        <SimilarArtistsGrid
-                            similarArtists={visibleSimilarArtists}
-                            titleHref={sectionViewLinks.artists}
-                        />
-                    )}
-
-                {/* No Results */}
-                {hasSearched &&
-                    !isLoading &&
-                    !topArtist &&
-                    secondaryDiscoverArtists.length === 0 &&
-                    discoverTracks.length === 0 &&
-                    discoverAlbums.length === 0 &&
-                    (!showSoulseek || soulseekResults.length === 0) &&
-                    (!showLibrary ||
-                        !libraryResults ||
-                        (!libraryResults.artists?.length &&
-                            !libraryResults.albums?.length &&
-                            !libraryResults.tracks?.length)) && (
-                        <div className="flex flex-col items-center justify-center py-24 text-center">
-                            <SearchIcon className="w-16 h-16 text-gray-400 mb-4" />
-                            <h3 className="text-xl font-bold text-white mb-2">
-                                No results found
-                            </h3>
-                            <p className="text-gray-400">
-                                Try searching for something else
-                            </p>
+                        <div
+                            className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10"
+                            data-tv-section="search-results-albums"
+                        >
+                            {albumLimits.primaryLimit > 0 ? (
+                                <LibraryAlbumsGrid
+                                    albums={mergedAlbums.libraryAlbums}
+                                    limit={albumLimits.primaryLimit}
+                                    embedded
+                                />
+                            ) : null}
+                            {albumLimits.secondaryLimit > 0 &&
+                            mergedAlbums.discoverAlbums.length > 0 ? (
+                                <ProviderAlbumsGrid
+                                    albums={mergedAlbums.discoverAlbums}
+                                    limit={albumLimits.secondaryLimit}
+                                    embedded
+                                    indexOffset={albumLimits.primaryLimit}
+                                />
+                            ) : null}
                         </div>
-                    )}
+                    </section>
+                ) : null}
+
+                {hasSearched &&
+                (sectionView === null || isArtistsView) &&
+                hasArtists ? (
+                    <section>
+                        <SearchSectionHeader
+                            title="Artists"
+                            showAllHref={
+                                sectionView === null
+                                    ? sectionViewLinks.artists
+                                    : undefined
+                            }
+                        />
+                        <SearchArtistsGrid
+                            libraryArtists={libraryArtists}
+                            discoveryArtists={discoverArtistResults}
+                            excludeNames={
+                                sectionView === null && displayedTopName
+                                    ? [displayedTopName]
+                                    : []
+                            }
+                            limit={isArtistsView ? 50 : 6}
+                        />
+                    </section>
+                ) : null}
+
+                {hasSearched &&
+                isArtistsView &&
+                hasTopResult &&
+                visibleSimilarArtists.length > 0 ? (
+                    <SimilarArtistsGrid
+                        similarArtists={visibleSimilarArtists}
+                        title="Related Artists"
+                    />
+                ) : null}
+
+                {hasSearched &&
+                !isLoading &&
+                !activeViewHasResults &&
+                !videoInfo &&
+                !ytPlaylistInfo ? (
+                    <div className="flex flex-col items-center justify-center py-24 text-center">
+                        <SearchIcon className="mb-4 h-16 w-16 text-gray-400" />
+                        <h3 className="mb-2 text-xl font-bold text-white">
+                            No results found
+                        </h3>
+                        <p className="text-gray-400">
+                            Try searching for something else
+                        </p>
+                    </div>
+                ) : null}
             </div>
         </div>
     );

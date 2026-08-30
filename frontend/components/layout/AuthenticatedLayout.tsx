@@ -11,7 +11,6 @@ import { UniversalPlayer } from "../player/UniversalPlayer";
 import { MediaControlsHandler } from "../player/MediaControlsHandler";
 import { PlayerModeWrapper } from "../player/PlayerModeWrapper";
 import { ActivityPanel } from "./ActivityPanel";
-import { GalaxyBackground } from "../ui/GalaxyBackground";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { PWAInstallPrompt } from "../PWAInstallPrompt";
 import { PullToRefresh } from "../ui/PullToRefresh";
@@ -117,7 +116,10 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     >
                         Skip to main content
                     </a>
-                    <div className="h-dvh bg-black overflow-hidden flex flex-col">
+                    <div
+                        data-shell-frame="mobile"
+                        className="mobile-shell-frame h-dvh overflow-hidden"
+                    >
                         <MediaControlsHandler />
                         <TopBar isActivityPanelOpen={activityPanel.isOpen} />
 
@@ -132,23 +134,17 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             onTabChange={activityPanel.setActiveTab}
                         />
 
-                        {/* Main content area with rounded corners */}
                         <PullToRefresh>
                             <main
                                 id="main-content"
                                 tabIndex={-1}
                                 data-app-scroll-container
-                                className="flex-1 bg-gradient-to-b from-surface-hover via-black to-black mx-2 mb-2 rounded-lg overflow-y-auto relative focus:outline-none"
-                                style={{
-                                    marginTop:
-                                        "calc(58px + var(--safe-area-top))",
-                                    marginBottom:
-                                        "calc(56px + var(--safe-area-bottom) + 8px)",
-                                }}
+                                data-shell-surface="content"
+                                className="mobile-app-stage relative overflow-y-auto rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
                             >
-                                <GalaxyBackground />
-                                {/* Padding at bottom for mini player floating above */}
-                                <div className="pb-24">{children}</div>
+                                <div className="mobile-stage-content">
+                                    {children}
+                                </div>
                             </main>
                         </PullToRefresh>
 
@@ -173,20 +169,20 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     Skip to main content
                 </a>
                 <div
-                    className="h-dvh bg-black overflow-hidden flex flex-col"
-                    style={{ paddingTop: "64px" }}
+                    data-shell-frame="desktop"
+                    className="desktop-shell-frame h-dvh overflow-hidden"
                 >
                     <MediaControlsHandler />
                     <TopBar isActivityPanelOpen={activityPanel.isOpen} />
-                    <div className="flex-1 flex gap-2 p-2 pt-0 overflow-hidden">
+                    <div className="desktop-shell-workspace flex min-h-0 flex-1 gap-2 overflow-hidden px-2 pb-2">
                         <Sidebar />
                         <main
                             id="main-content"
                             tabIndex={-1}
                             data-app-scroll-container
-                            className="flex-1 bg-gradient-to-b from-surface-hover via-black to-black rounded-lg overflow-y-auto relative focus:outline-none"
+                            data-shell-surface="content"
+                            className="desktop-content-stage relative min-w-0 flex-1 overflow-y-auto rounded-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
                         >
-                            <GalaxyBackground />
                             {children}
                         </main>
                         <ActivityPanel

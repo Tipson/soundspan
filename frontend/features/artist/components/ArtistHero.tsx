@@ -82,17 +82,15 @@ export function ArtistHero({
                 />
             )}
 
-            {/* Compact Hero Content - Full Width */}
-            <div className="relative px-4 md:px-8 pt-16 pb-6">
-                <div className="flex items-end gap-6">
-                    {/* Artist Image - Circular */}
-                    <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded-full shadow-2xl shrink-0 overflow-hidden relative">
+            <div className="relative mx-auto max-w-[1800px] px-4 pb-5 pt-10 sm:px-6 sm:pb-6 sm:pt-16 lg:px-8">
+                <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-end sm:gap-7 sm:text-left">
+                    <div className="relative h-36 w-36 shrink-0 overflow-hidden rounded-full bg-surface-highlight shadow-2xl ring-1 ring-white/10 sm:h-48 sm:w-48">
                         {heroImage ? (
                             <Image
                                 src={heroImage}
                                 alt={displayData.name}
                                 fill
-                                sizes="(max-width: 768px) 140px, 192px"
+                                sizes="(max-width: 640px) 144px, 192px"
                                 className="object-cover"
                                 priority
                                 unoptimized
@@ -104,13 +102,12 @@ export function ArtistHero({
                         )}
                     </div>
 
-                    {/* Artist Info - Bottom Aligned */}
-                    <div className="flex-1 min-w-0 pb-1">
-                        <p className="text-xs font-medium text-white/90 mb-1">
+                    <div className="min-w-0 w-full flex-1 pb-1">
+                        <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-white/75">
                             Artist
                         </p>
-                        <div className="flex items-center gap-3 group mb-2">
-                            <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2">
+                        <div className="group mb-2 flex min-w-0 items-start justify-center gap-3 sm:justify-start">
+                            <h1 className="min-w-0 max-w-full text-[clamp(2rem,9vw,4.5rem)] font-black leading-[0.98] tracking-[-0.045em] text-white [overflow-wrap:anywhere]">
                                 {displayData.name}
                             </h1>
                             {displayData.hasUserOverrides && (
@@ -149,7 +146,7 @@ export function ArtistHero({
                                 </Suspense>
                             )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-1 text-sm text-white/70">
+                        <div className="flex flex-wrap items-center justify-center gap-1 text-sm text-white/70 sm:justify-start">
                             {artist.listeners && artist.listeners > 0 && (
                                 <>
                                     <span>
@@ -177,9 +174,10 @@ export function ArtistHero({
                 </div>
             </div>
 
-            {/* Action Bar - Full Width */}
             {children && (
-                <div className="relative px-4 md:px-8 pb-4">{children}</div>
+                <div className="relative mx-auto max-w-[1800px] px-4 pb-5 sm:px-6 lg:px-8">
+                    {children}
+                </div>
             )}
         </div>
     );

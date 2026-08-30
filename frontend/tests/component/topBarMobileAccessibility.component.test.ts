@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const Icon = () => React.createElement("svg");
+const state = {
+    pathname: "/library",
+    isMobile: true,
+    isTablet: false,
+};
 
 mock.module("lucide-react", {
     namedExports: {
@@ -16,8 +21,9 @@ mock.module("lucide-react", {
 });
 mock.module("next/navigation", {
     namedExports: {
-        usePathname: () => "/library",
+        usePathname: () => state.pathname,
         useRouter: () => ({ back() {}, push() {} }),
+        useSearchParams: () => ({ get: () => null }),
     },
 });
 mock.module("next/link", {
@@ -30,9 +36,15 @@ mock.module("next/image", {
 });
 mock.module("@/hooks/useMediaQuery", {
     namedExports: {
-        useIsMobile: () => true,
-        useIsTablet: () => false,
+        useIsMobile: () => state.isMobile,
+        useIsTablet: () => state.isTablet,
     },
+});
+
+beforeEach(() => {
+    state.pathname = "/library";
+    state.isMobile = true;
+    state.isTablet = false;
 });
 mock.module("@/components/layout/ActivityPanel", {
     namedExports: { ActivityPanelToggle: () => null },
@@ -47,7 +59,7 @@ mock.module("@/utils/cn", {
     },
 });
 
-test("mobile top bar owns top and horizontal safe areas with 44px controls", async () => {
+test("mobile top bar stays compact at 320px while keeping 44px controls", async () => {
     const { TopBar } = await import("../../components/layout/TopBar");
     const html = renderToStaticMarkup(React.createElement(TopBar));
 
@@ -60,12 +72,29 @@ test("mobile top bar owns top and horizontal safe areas with 44px controls", asy
         html,
         /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
     );
-    for (const label of ["Open menu", "Go back", "Home", "Notifications"]) {
+    for (const label of ["Open menu", "Notifications"]) {
         const control = html.match(
             new RegExp(`<(?:button|a)[^>]*aria-label="${label}"[^>]*>`),
         )?.[0];
         assert.ok(control, `missing ${label}`);
         assert.match(control, /h-11 w-11/);
     }
+    assert.doesNotMatch(html, /aria-label="Go back"/);
+    assert.doesNotMatch(html, /aria-label="Home"/);
     assert.match(html, /aria-label="Search"[^>]*class="[^"]*h-11/);
+    assert.match(html, /placeholder="Search music"/);
+    assert.match(html, /data-shell-topbar="mobile"/);
+});
+
+test("desktop top bar keeps global search centered in the music shell", async () => {
+    state.isMobile = false;
+
+    const { TopBar } = await import("../../components/layout/TopBar");
+    const html = renderToStaticMarkup(React.createElement(TopBar));
+
+    assert.match(html, /data-shell-topbar="desktop"/);
+    assert.match(html, /placeholder="What do you want to play\?"/);
+    assert.match(html, /max-w-\[620px\]/);
+    assert.match(html, /aria-label="Go back"/);
+    assert.match(html, />\/<\/kbd>/);
 });

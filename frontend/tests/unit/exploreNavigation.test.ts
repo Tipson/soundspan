@@ -5,13 +5,14 @@ import {
     MOBILE_QUICK_LINKS,
 } from "../../components/layout/socialNavigation";
 
-test("sidebar navigation keeps the three primary music destinations", () => {
+test("sidebar navigation keeps the four primary music destinations", () => {
     assert.deepEqual(
         SIDEBAR_NAVIGATION.map(({ name, href }) => ({ name, href })),
         [
             { name: "Home", href: "/" },
-            { name: "Library", href: "/library" },
+            { name: "Search", href: "/search" },
             { name: "Vibe", href: "/vibe" },
+            { name: "Library", href: "/library" },
         ],
     );
 });
@@ -43,8 +44,9 @@ test("mobile quick links mirror the primary music destinations", () => {
         MOBILE_QUICK_LINKS.map(({ name, href }) => ({ name, href })),
         [
             { name: "Home", href: "/" },
-            { name: "Library", href: "/library" },
+            { name: "Search", href: "/search" },
             { name: "Vibe", href: "/vibe" },
+            { name: "Library", href: "/library" },
         ],
     );
 });

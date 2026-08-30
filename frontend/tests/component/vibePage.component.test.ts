@@ -22,6 +22,9 @@ const state = {
     vibeModeEnabled: false,
     waveMode: "for-you",
     vibeQueueIds: [] as string[],
+    upcomingTrackIds: [] as string[],
+    upcomingQueueCalls: [] as string[][],
+    upcomingPreservesOrder: false,
     advanceOrigins: [] as string[],
     currentTrack: null as null | { id: string; title: string },
     personalizedFeed: createPersonalizedFeed(),
@@ -150,6 +153,14 @@ mock.module("@/lib/audio-controls-context", {
                 state.playedAsVibeQueue = isVibeQueue === true;
             },
             advanceQueue: (origin: string) => state.advanceOrigins.push(origin),
+            setUpcoming: (
+                tracks: Array<{ id: string }>,
+                preserveOrder?: boolean,
+            ) => {
+                state.upcomingTrackIds = tracks.map((track) => track.id);
+                state.upcomingQueueCalls.push(state.upcomingTrackIds);
+                state.upcomingPreservesOrder = preserveOrder === true;
+            },
         }),
     },
 });
@@ -174,6 +185,7 @@ mock.module("@/lib/audio-state-context", {
                 state.vibeQueueIds = ids;
             },
             currentTrack: state.currentTrack,
+            vibeMode: state.vibeModeEnabled,
         }),
     },
 });
@@ -280,6 +292,9 @@ beforeEach(() => {
     state.vibeModeEnabled = false;
     state.waveMode = "for-you";
     state.vibeQueueIds = [];
+    state.upcomingTrackIds = [];
+    state.upcomingQueueCalls = [];
+    state.upcomingPreservesOrder = false;
     state.advanceOrigins = [];
     state.currentTrack = null;
     state.personalizedFeed = createPersonalizedFeed();
@@ -358,6 +373,44 @@ test("Vibe replaces an unusable analysis surface with a plain-language My Wave l
     await unmountPage(mounted);
 });
 
+test("My Wave presents one immersive continuous-radio stage without a finite queue count", async () => {
+    const mounted = await mountPage();
+
+    const surface = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-surface"]',
+    );
+    const signalDial = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-signal-dial"]',
+    );
+    const directionCard = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-direction-card"]',
+    );
+    const heading = mounted.container.querySelector("h1");
+
+    assert.ok(surface);
+    assert.equal(surface.getAttribute("aria-labelledby"), "wave-title");
+    assert.ok(signalDial);
+    assert.ok(directionCard);
+    assert.equal(heading?.id, "wave-title");
+    assert.equal(heading?.textContent?.trim(), "My Wave");
+    assert.match(
+        mounted.container.textContent ?? "",
+        /starts with a few picks, then keeps finding what comes next/i,
+    );
+    assert.doesNotMatch(
+        mounted.container.textContent ?? "",
+        /\b\d+\s+(?:tracks?|songs?)\s+(?:ready|queued)\b/i,
+    );
+    assert.doesNotMatch(directionCard.className, /\btruncate\b/);
+
+    const playWave = findButton(mounted.container, "Play My Wave");
+    assert.ok(playWave);
+    assert.match(playWave.className, /min-h-36/);
+    assert.match(playWave.className, /min-w-36/);
+
+    await unmountPage(mounted);
+});
+
 test("My Wave remains the primary Vibe page when local audio analysis is disabled", async () => {
     state.vibeEmbeddings = false;
     state.audioAnalysis = false;
@@ -394,11 +447,23 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
 
     const newToMe = findButtonByLabel(dialog, "New to me");
     const familiar = findButtonByLabel(dialog, "Familiar");
+    const directionOptions = dialog.querySelectorAll('[role="radio"]');
 
     assert.ok(newToMe);
     assert.ok(familiar);
+    assert.equal(directionOptions.length, 3);
+    assert.match(
+        dialog.textContent ?? "",
+        /how close the next picks stay to your listening history/i,
+    );
+    assert.match(dialog.textContent ?? "", /Your mix/i);
+    assert.match(dialog.textContent ?? "", /Open up/i);
+    assert.match(dialog.textContent ?? "", /Stay close/i);
     assert.equal(newToMe.getAttribute("role"), "radio");
     assert.equal(newToMe.getAttribute("aria-checked"), "false");
+    for (const option of directionOptions) {
+        assert.doesNotMatch((option as HTMLElement).className, /\btruncate\b/);
+    }
 
     await React.act(async () => newToMe.click());
     assert.equal(newToMe.getAttribute("aria-checked"), "true");
@@ -408,6 +473,7 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
     assert.ok(applyNew);
     await React.act(async () => applyNew.click());
     assert.equal(state.personalizedMode, "new");
+    assert.deepEqual(state.upcomingQueueCalls, []);
     assert.equal(mounted.container.querySelector('[role="dialog"]'), null);
 
     const reopenTune = findButton(mounted.container, "Tune");
@@ -434,6 +500,44 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
     assert.equal(state.vibeModeEnabled, true);
     assert.equal(state.waveMode, "familiar");
     assert.deepEqual(state.vibeQueueIds, ["yt:familiar-1"]);
+
+    await unmountPage(mounted);
+});
+
+test("Tune after Play replaces the upcoming Wave queue with the new direction", async () => {
+    const mounted = await mountPage();
+    const playWave = findButton(mounted.container, "Play My Wave");
+    assert.ok(playWave);
+
+    await React.act(async () => playWave.click());
+    state.currentTrack = {
+        id: "yt:discovery-1",
+        title: "Discovery Track",
+    };
+
+    const tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const newToMe = findButtonByLabel(dialog, "New to me");
+    assert.ok(newToMe);
+    await React.act(async () => newToMe.click());
+
+    const applyNew = findButton(dialog, "Use New to me");
+    assert.ok(applyNew);
+    await React.act(async () => {
+        applyNew.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(state.waveMode, "new");
+    assert.deepEqual(state.upcomingTrackIds, ["yt:shared-1"]);
+    assert.deepEqual(state.upcomingQueueCalls, [["yt:shared-1"]]);
+    assert.equal(state.upcomingPreservesOrder, true);
+    assert.deepEqual(state.vibeQueueIds, ["yt:discovery-1", "yt:shared-1"]);
 
     await unmountPage(mounted);
 });

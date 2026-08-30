@@ -3,7 +3,7 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 
-export type FilterTab = "all" | "library" | "discover" | "peers" | "soulseek";
+export type SearchResultView = "all" | "tracks" | "artists" | "albums";
 
 export interface Artist {
     id: string;

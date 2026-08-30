@@ -42,3 +42,7 @@ The artist action bar exposes playback, account Library, playlist, preference,
 radio, and current-device offline controls. It does not mount permanent server
 acquisition actions; Download to this device queues the artist's playable
 popular tracks in the current browser/PWA only.
+
+The responsive artist page presents playable Popular tracks before the longer
+About biography, keeps the selected visible track list as playback context, and
+uses a stacked artwork hero plus wrapping action bar on narrow screens.

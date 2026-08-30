@@ -178,7 +178,7 @@ test("managed device playback opens an owner-scoped vault lease", async (t) => {
     assert.equal(releases, 1);
 });
 
-test("legacy records retain the virtual URL without opening the vault", async (t) => {
+test("an unverified legacy record falls back to the clean network URL", async (t) => {
     let openCalls = 0;
     const restore = installDeviceAudioVaultFactory(() =>
         fakeVault(async () => {
@@ -196,8 +196,27 @@ test("legacy records retain the virtual URL without opening the vault", async (t
         new AbortController().signal,
     );
 
-    assert.equal(source.url, record.virtualUrl);
+    assert.equal(source.url, "/network");
     assert.equal(openCalls, 0);
+});
+
+test("a prepared legacy record keeps using its verified local Blob URL", async () => {
+    const record = readyRecord("user-1", "prepared-legacy-key");
+    setDeviceOfflineRuntimeState("user-1", [record]);
+    prepareDeviceOfflinePlaybackSource(
+        "user-1",
+        record,
+        "blob:https://soundspan.test/prepared-legacy",
+        () => undefined,
+    );
+
+    const source = await acquireDeviceOfflinePlaybackSource(
+        TRACK,
+        "/network",
+        new AbortController().signal,
+    );
+
+    assert.equal(source.url, "blob:https://soundspan.test/prepared-legacy");
 });
 
 test("a recoverable vault access failure falls back to the clean network URL", async (t) => {
@@ -320,7 +339,7 @@ test("prepared playback sources are account-scoped and revoked on owner change",
     assert.equal(revoked, 1);
     assert.equal(
         resolveDeviceOfflinePlaybackUrl(TRACK, "/network-user-two"),
-        userTwo.virtualUrl,
+        "/network-user-two",
     );
     assert.equal(
         prepareDeviceOfflinePlaybackSource(

@@ -19,7 +19,8 @@ test("home quick actions expose the four everyday music routes", async () => {
         await import("../../features/home/components/HomeQuickActions");
     const html = renderToStaticMarkup(React.createElement(HomeQuickActions));
 
-    assert.match(html, /Quick access/);
+    assert.match(html, /Jump back in/);
+    assert.match(html, /aria-label="Jump back in"/);
     assert.match(html, /href="\/playlist\/my-liked"[^>]*>[\s\S]*Liked songs/);
     assert.match(html, /href="\/my-history"[^>]*>[\s\S]*Listening history/);
     assert.match(html, /href="\/import"[^>]*>[\s\S]*Import playlists/);

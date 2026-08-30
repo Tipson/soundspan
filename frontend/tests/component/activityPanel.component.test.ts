@@ -28,7 +28,18 @@ mock.module("@/hooks/useNotifications", {
     namedExports: {
         useNotifications: (options?: { enabled?: boolean }) => {
             state.notificationHookOptions.push(options);
-            return { unreadCount: state.unreadCount };
+            return {
+                unreadCount: state.unreadCount,
+                notifications: Array.from(
+                    { length: state.unreadCount },
+                    (_, index) => ({
+                        id: `n-${index}`,
+                        type: "import_complete",
+                        title: "Import complete",
+                        read: false,
+                    }),
+                ),
+            };
         },
         useActiveDownloads: (options?: { enabled?: boolean }) => {
             state.activeDownloadsHookOptions.push(options);
@@ -184,7 +195,7 @@ test("shows all tabs for admin users on desktop", async () => {
     );
 });
 
-test("hides admin-only tabs for non-admin users and falls back from hidden active tab", async () => {
+test("keeps ordinary-user activity focused on notifications and imports", async () => {
     state.userRole = "user";
     state.socialUsers = [{ id: "u1" }];
 
@@ -201,7 +212,7 @@ test("hides admin-only tabs for non-admin users and falls back from hidden activ
 
     assert.match(html, />Notifications</);
     assert.match(html, />Imports</);
-    assert.match(html, />Social</);
+    assert.doesNotMatch(html, />Social</);
     assert.doesNotMatch(html, />Active</);
     assert.doesNotMatch(html, />History</);
     assert.match(html, /notifications-tab/);
@@ -275,7 +286,7 @@ test("returns null for closed mobile panel", async () => {
     assert.equal(html, "");
 });
 
-test("renders collapsed desktop strip without the panel badge when idle", async () => {
+test("closed desktop activity does not reserve a permanent sidebar strip", async () => {
     const { ActivityPanel } =
         await import("../../components/layout/ActivityPanel");
 
@@ -286,9 +297,7 @@ test("renders collapsed desktop strip without the panel badge when idle", async 
         }),
     );
 
-    assert.match(html, /Open activity panel/);
-    assert.match(html, /translateX\(332px\)/);
-    assert.doesNotMatch(html, /w-2\.5 h-2\.5/);
+    assert.equal(html, "");
     assert.equal(
         state.notificationHookOptions.some(
             (options) => options?.enabled === false,
@@ -301,6 +310,21 @@ test("renders collapsed desktop strip without the panel badge when idle", async 
         ),
         true,
     );
+});
+
+test("open desktop activity overlays content instead of shrinking it", async () => {
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
+
+    const html = renderToStaticMarkup(
+        React.createElement(ActivityPanel, {
+            isOpen: true,
+            onToggle: () => undefined,
+        }),
+    );
+
+    assert.match(html, /data-activity-panel-layout="overlay"/);
+    assert.doesNotMatch(html, /Open activity panel/);
 });
 
 test("activity panel toggle hides on mobile and renders on desktop", async () => {

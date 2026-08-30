@@ -14,12 +14,14 @@ import { MixCard } from "@/components/MixCard";
 import { useFeatures } from "@/lib/features-context";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { StaticPlaylistCard } from "@/features/home/components/StaticPlaylistCard";
-import type { Mix } from "@/features/home/types";
+import { PersonalizedMixCard } from "@/features/home/components/PersonalizedMixCard";
+import type { Mix, PersonalizedHomeFeed } from "@/features/home/types";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 
 interface MadeForYouSectionProps {
     discoverWeekly: DiscoverWeeklySummary | null;
     mixes: Mix[];
+    personalizedFeed?: PersonalizedHomeFeed | null;
     isRefreshingMixes: boolean;
     handleRefreshMixes: () => Promise<void>;
 }
@@ -30,6 +32,7 @@ interface MadeForYouSectionProps {
 export function MadeForYouSection({
     discoverWeekly,
     mixes,
+    personalizedFeed = null,
     isRefreshingMixes,
     handleRefreshMixes,
 }: MadeForYouSectionProps) {
@@ -39,13 +42,40 @@ export function MadeForYouSection({
     const playableDiscoverWeekly =
         discoverWeekly && discoverWeekly.totalCount > 0 ? discoverWeekly : null;
     const playableMixes = mixes.filter((mix) => mix.trackCount > 0);
+    const personalizedShelves = personalizedFeed
+        ? [
+              {
+                  key: "quick-picks",
+                  title: "Quick picks",
+                  description: "A fast route into what fits right now",
+                  tracks: personalizedFeed.shelves.quickPicks,
+                  tone: "violet" as const,
+              },
+              {
+                  key: "fresh-finds",
+                  title: "Fresh finds",
+                  description: "New music shaped by your listening",
+                  tracks: personalizedFeed.shelves.discovery,
+                  tone: "blue" as const,
+              },
+              {
+                  key: "listen-again",
+                  title: "Listen again",
+                  description: "Recent favorites worth another play",
+                  tracks: personalizedFeed.shelves.listenAgain,
+                  tone: "amber" as const,
+              },
+          ].filter((shelf) => shelf.tracks.length > 0)
+        : [];
     const hasMadeForYou =
-        playableDiscoverWeekly !== null || playableMixes.length > 0;
+        personalizedShelves.length > 0 ||
+        playableDiscoverWeekly !== null ||
+        playableMixes.length > 0;
 
     if (!hasMadeForYou) return null;
 
     return (
-        <section>
+        <section aria-label="Made For You">
             <SectionHeader
                 title="Made For You"
                 rightAction={
@@ -69,7 +99,22 @@ export function MadeForYouSection({
                     ) : undefined
                 }
             />
-            <HorizontalCarousel>
+            <p className="-mt-2 mb-4 max-w-2xl text-sm leading-6 text-content-muted">
+                Different ways into your music, built only from collections that
+                are ready to play.
+            </p>
+            <HorizontalCarousel aria-label="Made For You">
+                {personalizedShelves.map((shelf, index) => (
+                    <CarouselItem key={shelf.key}>
+                        <PersonalizedMixCard
+                            title={shelf.title}
+                            description={shelf.description}
+                            tracks={shelf.tracks}
+                            tone={shelf.tone}
+                            index={index}
+                        />
+                    </CarouselItem>
+                ))}
                 {playableDiscoverWeekly && (
                     <CarouselItem key="discover-weekly">
                         <StaticPlaylistCard
@@ -78,21 +123,28 @@ export function MadeForYouSection({
                             title="Discover Weekly"
                             subtitle={`${playableDiscoverWeekly.totalCount} tracks`}
                             placeholderIcon={
-                                <Zap className="w-12 h-12 text-blue-400" />
+                                <Zap className="h-12 w-12 text-info" />
                             }
                             overlayIcon={
                                 <Zap
-                                    className="w-6 h-6 text-pink-500"
+                                    className="h-6 w-6 text-brand-light"
                                     strokeWidth={2.5}
                                 />
                             }
-                            index={0}
+                            index={personalizedShelves.length}
                         />
                     </CarouselItem>
                 )}
-                {playableMixes.map((mix, index) => (
+                {playableMixes.slice(0, 8).map((mix, index) => (
                     <CarouselItem key={mix.id}>
-                        <MixCard mix={mix} index={index + 1} />
+                        <MixCard
+                            mix={mix}
+                            index={
+                                personalizedShelves.length +
+                                (playableDiscoverWeekly ? 1 : 0) +
+                                index
+                            }
+                        />
                     </CarouselItem>
                 ))}
             </HorizontalCarousel>

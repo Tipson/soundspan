@@ -25,7 +25,7 @@ interface PopularTracksProps {
     artist: Artist;
     currentTrackId: string | undefined;
     colors: ColorPalette | null;
-    onPlayTrack: (track: Track) => void;
+    onPlayTrack: (track: Track, index: number, visibleTracks: Track[]) => void;
     isProviderMatching?: boolean;
     popularHref?: string;
     onAddAllToQueue?: (visibleTracks: Track[]) => void;
@@ -71,7 +71,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
     );
 
     const handlePlay = useCallback(
-        (track: Track) => {
+        (track: Track, index: number) => {
             const isYtMusic =
                 track.streamSource === "youtube" && !!track.youtubeVideoId;
             const isTidalTrack =
@@ -86,9 +86,9 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                 isYtMusic;
 
             if (!isPlayable) return;
-            onPlayTrack(track);
+            onPlayTrack(track, index, visibleTracks);
         },
-        [onPlayTrack],
+        [onPlayTrack, visibleTracks],
     );
 
     const rowSlots = useCallback(
@@ -176,16 +176,19 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                     <div
                         className="flex items-center justify-end gap-1"
                         onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        role="group"
+                        aria-label={`Actions for ${track.displayTitle ?? track.title}`}
                     >
                         {track.duration > 0 && (
-                            <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
+                            <span className="hidden w-10 text-right text-xs tabular-nums text-gray-400 sm:inline">
                                 {formatTime(track.duration)}
                             </span>
                         )}
                         <TrackPreferenceButtons
                             trackId={preferenceTrackId}
                             mode="both"
-                            buttonSizeClassName="h-8 w-8"
+                            buttonSizeClassName="h-11 w-11"
                             iconSizeClassName="h-4 w-4"
                             metadata={buildPreferenceMetadata({
                                 ...track,
@@ -235,8 +238,8 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
 
     return (
         <section id="popular" className="scroll-mt-28">
-            <div className="mb-4 flex items-center gap-2">
-                <h2 className="text-xl font-bold">
+            <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="text-2xl font-black tracking-tight">
                     {popularHref ? (
                         <Link
                             href={popularHref}
@@ -251,8 +254,9 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                 {onAddAllToQueue && (
                     <button
                         onClick={() => onAddAllToQueue(visibleTracks)}
-                        className="h-7 w-7 rounded-full hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         title="Add visible popular tracks to queue"
+                        aria-label="Add visible popular tracks to queue"
                     >
                         <Plus className="w-4 h-4" />
                     </button>
@@ -263,14 +267,14 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                 toRowItem={toRowItem}
                 onPlay={handlePlay}
                 rowSlots={rowSlots}
-                rowClassName="grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(80px,1fr)_auto]"
+                rowClassName="grid-cols-[32px_minmax(0,1fr)_auto] sm:grid-cols-[40px_minmax(0,1fr)_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(80px,1fr)_auto]"
                 preferenceMode="both"
                 tvSection="tracks"
             />
             {canExpand && (
                 <button
                     onClick={() => setExpanded((prev) => !prev)}
-                    className="mt-2 flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors"
+                    className="mt-2 flex min-h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
                     {expanded ? (
                         <>

@@ -7,19 +7,30 @@ import type { DiscoverResult } from "../types";
 interface ProviderAlbumsGridProps {
     albums: DiscoverResult[];
     limit?: number | null;
+    embedded?: boolean;
+    indexOffset?: number;
 }
 
 /** Render browsable YouTube Music albums returned by global search. */
 export function ProviderAlbumsGrid({
     albums,
     limit = 6,
+    embedded = false,
+    indexOffset = 0,
 }: ProviderAlbumsGridProps) {
     const visibleAlbums =
         typeof limit === "number" ? albums.slice(0, limit) : albums;
 
     return (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10">
-            {visibleAlbums.map((album) => {
+        <div
+            className={
+                embedded
+                    ? "contents"
+                    : "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10"
+            }
+            data-tv-section={embedded ? undefined : "search-results-albums"}
+        >
+            {visibleAlbums.map((album, index) => {
                 const browseId = album.browseId || album.id;
                 if (!browseId) return null;
                 const imageUrl = album.image
@@ -29,6 +40,9 @@ export function ProviderAlbumsGrid({
                     <Link
                         key={browseId}
                         href={`/explore/yt-playlist/${encodeURIComponent(browseId)}?type=album`}
+                        data-tv-card
+                        data-tv-card-index={indexOffset + index}
+                        tabIndex={0}
                         className="rounded-lg bg-surface-sunken p-4 transition-colors hover:bg-surface-elevated"
                     >
                         <div className="relative mb-4 flex aspect-square items-center justify-center overflow-hidden rounded-md bg-surface-elevated">

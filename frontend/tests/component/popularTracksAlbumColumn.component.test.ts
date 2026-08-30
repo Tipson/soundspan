@@ -6,6 +6,7 @@ import {
     installTrackOverflowHarness,
     trackOverflowIcon,
 } from "../trackOverflowHarness";
+import type { Track } from "../../features/artist/types";
 
 GlobalRegistrator.register();
 (
@@ -154,6 +155,11 @@ const artist = { id: "artist-1", name: "Test Artist" };
 
 async function renderPopular(
     tracks: unknown[],
+    onPlayTrack: (
+        track: Track,
+        index: number,
+        visibleTracks: Track[],
+    ) => void = () => undefined,
 ): Promise<{ container: HTMLElement; unmount: () => void }> {
     const { PopularTracks } =
         await import("../../features/artist/components/PopularTracks");
@@ -169,7 +175,7 @@ async function renderPopular(
                 artist: artist as never,
                 currentTrackId: undefined,
                 colors: null,
-                onPlayTrack: () => undefined,
+                onPlayTrack,
             }),
         );
     });
@@ -243,5 +249,52 @@ test("unowned rows without a resolution render no album link", async () => {
     ]);
 
     assert.equal(container.querySelector('a[href^="/album/"]'), null);
+    unmount();
+});
+
+test("collapsed popular-track click forwards the exact visible queue snapshot", async () => {
+    const calls: Array<{
+        trackId: string;
+        index: number;
+        visibleIds: string[];
+    }> = [];
+    const tracks = Array.from({ length: 6 }, (_, index) => ({
+        id: `visible-${index + 1}`,
+        title: `Visible ${index + 1}`,
+        duration: 180 + index,
+        artist,
+        album: { id: `album-${index + 1}`, title: "Album" },
+        filePath: `/music/${index + 1}.flac`,
+    }));
+    const { container, unmount } = await renderPopular(
+        tracks,
+        (track, index, visibleTracks) => {
+            calls.push({
+                trackId: track.id as string,
+                index,
+                visibleIds: visibleTracks.map((item) => item.id as string),
+            });
+        },
+    );
+
+    const secondRow = container.querySelector<HTMLElement>(
+        '[data-track-id="visible-2"]',
+    );
+    assert.ok(secondRow);
+    await React.act(async () => secondRow.click());
+
+    assert.deepEqual(calls, [
+        {
+            trackId: "visible-2",
+            index: 1,
+            visibleIds: [
+                "visible-1",
+                "visible-2",
+                "visible-3",
+                "visible-4",
+                "visible-5",
+            ],
+        },
+    ]);
     unmount();
 });

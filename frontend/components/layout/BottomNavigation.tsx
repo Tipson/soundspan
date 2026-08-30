@@ -49,7 +49,8 @@ export function BottomNavigation() {
 
     return (
         <nav
-            className="fixed bottom-0 left-0 right-0 z-40 bg-black border-t border-white/10"
+            data-shell-bottom-navigation="true"
+            className="mobile-bottom-navigation fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08]"
             role="navigation"
             aria-label="Main navigation"
             style={{
@@ -57,7 +58,7 @@ export function BottomNavigation() {
             }}
         >
             <div
-                className="flex h-14 items-center justify-around"
+                className="flex h-[var(--app-bottom-nav-height)] items-center justify-around px-1"
                 style={{
                     paddingLeft: "var(--safe-area-left)",
                     paddingRight: "var(--safe-area-right)",
@@ -87,24 +88,30 @@ export function BottomNavigation() {
                                     : undefined
                             }
                             className={cn(
-                                "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                                "group relative flex min-h-11 h-full flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light",
                                 isActive
                                     ? "text-white"
-                                    : "text-gray-400 active:text-gray-300",
+                                    : "text-content-muted active:text-content-secondary",
                             )}
                             aria-label={item.name}
                             aria-current={isActive ? "page" : undefined}
                         >
-                            <Icon
-                                className={cn(
-                                    "w-5 h-5 mb-1",
-                                    isActive && "text-white",
-                                )}
-                                strokeWidth={isActive ? 2.5 : 2}
-                            />
                             <span
                                 className={cn(
-                                    "text-[10px] tracking-wide",
+                                    "flex h-7 min-w-10 items-center justify-center rounded-full px-2 transition-colors",
+                                    isActive
+                                        ? "bg-white/[0.1] text-white"
+                                        : "group-active:bg-white/[0.05]",
+                                )}
+                            >
+                                <Icon
+                                    className="h-5 w-5"
+                                    strokeWidth={isActive ? 2.5 : 2}
+                                />
+                            </span>
+                            <span
+                                className={cn(
+                                    "text-[10px] leading-none tracking-wide",
                                     isActive ? "font-semibold" : "font-medium",
                                 )}
                             >

@@ -82,13 +82,13 @@ export function ArtistActionBar({
     };
 
     return (
-        <div className="space-y-2">
-            <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-2.5 py-2 backdrop-blur-sm">
+        <div className="w-full space-y-2">
+            <div className="flex w-full max-w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-2.5 py-2 backdrop-blur-md sm:inline-flex sm:w-fit">
                 {isInListenTogetherGroup ? (
                     <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
                         <button
                             onClick={handleLockedAction}
-                            className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm border border-white/15 bg-white/10 text-content-muted"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-content-muted shadow-lg sm:flex-none"
                             title={lockMessage}
                         >
                             {showPause ? (
@@ -113,7 +113,7 @@ export function ArtistActionBar({
                         {/* Play Button */}
                         <button
                             onClick={handlePlayPauseClick}
-                            className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] motion-reduce:transition-none sm:flex-none"
                             style={{ backgroundColor: BRAND_PLAY }}
                         >
                             {showPlaySpinner ? (

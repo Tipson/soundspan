@@ -68,7 +68,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
             <button
                 type="button"
                 onClick={props.onPlayPause}
-                className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm text-black transition-all hover:scale-105"
+                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] motion-reduce:transition-none sm:flex-none"
                 style={{ backgroundColor: BRAND_PLAY }}
             >
                 {props.showSpinner ? (
@@ -110,7 +110,7 @@ function LockedPlaybackControls({ showPause }: { showPause: boolean }) {
             <button
                 type="button"
                 onClick={() => toast.error(LOCK_MESSAGE)}
-                className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-full shadow-lg font-semibold text-sm border border-white/15 bg-white/10 text-content-muted"
+                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-content-muted shadow-lg sm:flex-none"
                 title={LOCK_MESSAGE}
             >
                 {showPause ? (
@@ -296,7 +296,7 @@ function ActionControlRow(props: {
         return null;
     }
     return (
-        <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-2.5 py-2 backdrop-blur-sm">
+        <div className="flex w-full max-w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-2.5 py-2 backdrop-blur-md sm:inline-flex sm:w-fit">
             {actions.isInListenTogetherGroup && visibility.hasLockedControls ? (
                 <LockedControls
                     visibility={visibility}
@@ -359,7 +359,7 @@ export function AlbumActionBar(props: AlbumActionBarProps) {
     const openShare = () => setShowShareModal(true);
 
     return (
-        <div className="space-y-2">
+        <div className="w-full space-y-2">
             <ActionControlRow
                 actions={props}
                 visibility={visibility}

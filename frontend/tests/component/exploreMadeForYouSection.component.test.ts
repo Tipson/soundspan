@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type {
+    PersonalizedHomeFeed,
+    PersonalizedTrack,
+} from "../../features/home/types";
 
 const featuresState = { autoPlaylists: true };
 const Icon = () => React.createElement("i");
@@ -56,6 +60,23 @@ mock.module("@/components/MixCard", {
     },
 });
 
+mock.module("@/features/home/components/PersonalizedMixCard", {
+    namedExports: {
+        PersonalizedMixCard: ({
+            title,
+            tracks,
+        }: {
+            title: string;
+            tracks: unknown[];
+        }) =>
+            React.createElement(
+                "div",
+                null,
+                `personal:${title}:${tracks.length}`,
+            ),
+    },
+});
+
 mock.module("lucide-react", {
     namedExports: { RefreshCw: Icon, Zap: Icon },
 });
@@ -75,6 +96,28 @@ const mixes = [
         trackCount: 10,
     },
 ];
+const personalizedTrack = (id: string): PersonalizedTrack => ({
+    id,
+    title: id,
+    duration: 180,
+    trackNo: null,
+    artist: { id: null, name: "Artist" },
+    album: { id: null, title: "Album", coverArt: null },
+    source: "youtube",
+    provider: { tidalTrackId: null, youtubeVideoId: id },
+    streamSource: "youtube",
+    youtubeVideoId: id,
+});
+const personalizedFeed: PersonalizedHomeFeed = {
+    shelves: {
+        quickPicks: [personalizedTrack("quick")],
+        discovery: [personalizedTrack("fresh")],
+        listenAgain: [personalizedTrack("again")],
+    },
+    degraded: false,
+    reason: null,
+    seedCount: 3,
+};
 
 beforeEach(() => {
     featuresState.autoPlaylists = true;
@@ -84,6 +127,7 @@ async function renderMadeForYou(overrides?: {
     discoverWeekly?: typeof discoverWeekly | null;
     mixes?: typeof mixes;
     isRefreshingMixes?: boolean;
+    personalizedFeed?: typeof personalizedFeed | null;
 }) {
     const { MadeForYouSection } =
         await import("../../features/explore/components/MadeForYouSection");
@@ -94,6 +138,10 @@ async function renderMadeForYou(overrides?: {
                     ? discoverWeekly
                     : overrides.discoverWeekly,
             mixes: overrides?.mixes ?? mixes,
+            personalizedFeed:
+                overrides?.personalizedFeed === undefined
+                    ? personalizedFeed
+                    : overrides.personalizedFeed,
             isRefreshingMixes: overrides?.isRefreshingMixes ?? false,
             handleRefreshMixes: async () => undefined,
         }),
@@ -107,6 +155,9 @@ test("Made For You contains only real generated recommendations", async () => {
     assert.match(html, /Discover Weekly/);
     assert.match(html, /25 tracks/);
     assert.match(html, /mix:Daily Mix 1/);
+    assert.match(html, /personal:Quick picks:1/);
+    assert.match(html, /personal:Fresh finds:1/);
+    assert.match(html, /personal:Listen again:1/);
     assert.doesNotMatch(html, /My Liked/);
 });
 
@@ -114,6 +165,14 @@ test("Made For You filters empty generated entities", async () => {
     const html = await renderMadeForYou({
         discoverWeekly: { ...discoverWeekly, totalCount: 0 },
         mixes: [{ ...mixes[0], trackCount: 0 }],
+        personalizedFeed: {
+            ...personalizedFeed,
+            shelves: {
+                quickPicks: [],
+                discovery: [],
+                listenAgain: [],
+            },
+        },
     });
 
     assert.equal(html, "");
@@ -124,10 +183,24 @@ test("Made For You stays absent when automatic playlists are disabled", async ()
     const html = await renderMadeForYou({
         discoverWeekly: null,
         mixes: [],
+        personalizedFeed: null,
     });
 
     assert.equal(html, "");
     assert.doesNotMatch(html, /Discover Weekly|Daily Mix|My Liked/);
+});
+
+test("account-backed Made For You shelves remain when generated playlists are disabled", async () => {
+    featuresState.autoPlaylists = false;
+    const html = await renderMadeForYou({
+        discoverWeekly: null,
+        mixes: [],
+    });
+
+    assert.match(html, /personal:Quick picks:1/);
+    assert.match(html, /personal:Fresh finds:1/);
+    assert.match(html, /personal:Listen again:1/);
+    assert.doesNotMatch(html, /Refresh/);
 });
 
 test("Made For You exposes refresh only for enabled generated mixes", async () => {

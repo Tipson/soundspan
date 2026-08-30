@@ -1,19 +1,16 @@
 /**
  * iOS Standalone PWA AudioContext Bridge
  *
- * In standalone (installed) PWAs, iOS suspends background audio behavior
- * of a bare `HTMLAudioElement`: the next track fails to auto-play at
- * track end and MediaSession controls go dead while the UI still claims
- * "playing" (WebKit bug 261858; iOS standalone only — Safari-tab
- * playback is unaffected). Routing the element through an `AudioContext`
- * (`createMediaElementSource` → `destination`) holds the audio session
- * durably across backgrounding.
+ * WebKit suspends an `AudioContext` when an installed PWA leaves the
+ * foreground while allowing the underlying `HTMLAudioElement` clock to
+ * continue. Routing a media element through that suspended context makes
+ * the lock-screen timer advance without audible output and can leave a
+ * short repeated sample when playback is paused.
  *
- * This is the ONE sanctioned AudioContext path for the native element
- * engine (GH #42 §7). The gate is exactly: iOS user agent AND standalone
- * display mode. Desktop, Android, and iOS Safari tabs keep the bare
- * element pipeline for hi-res playback. iOS hardware output is 48 kHz
- * regardless, so the bridge costs nothing there.
+ * The production gate therefore remains closed on every platform. The
+ * bridge implementation stays isolated and injectable so the engine
+ * policy can be regression-tested without putting Web Audio back in the
+ * production playback path.
  */
 
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -30,20 +27,15 @@ export interface IosStandaloneBridgeEnvironmentInput {
 }
 
 /**
- * Returns true only for iOS devices running as an installed (standalone)
- * PWA — the exact platform where the bare element loses its background
- * audio session.
+ * Returns whether production playback may route its media element through
+ * Web Audio. This is deliberately false: iOS standalone PWAs need the bare
+ * media-element pipeline for audible background playback, and no other
+ * platform requires this bridge.
  */
 export function shouldUseIosStandaloneAudioBridge(
-    input: IosStandaloneBridgeEnvironmentInput,
+    _input: IosStandaloneBridgeEnvironmentInput,
 ): boolean {
-    const isClassicIosDevice = /iphone|ipad|ipod/i.test(input.userAgent);
-    const isIpadOsDesktopMode =
-        /macintosh/i.test(input.userAgent) && input.maxTouchPoints > 1;
-    const isIosDevice = isClassicIosDevice || isIpadOsDesktopMode;
-    const isStandalone =
-        input.isStandaloneDisplayMode || input.isLegacyNavigatorStandalone;
-    return isIosDevice && isStandalone;
+    return false;
 }
 
 /**
@@ -99,10 +91,10 @@ const createDefaultAudioContext = (): BridgeAudioContextLike | null => {
 };
 
 /**
- * Lazily routes a single audio element through an AudioContext so iOS
- * holds the audio session in standalone PWAs. Set up on the first
- * user-gesture play; `createMediaElementSource` is called at most once
- * per element (calling it twice throws).
+ * Isolated compatibility implementation for controlled experiments. The
+ * production gate is closed because Web Audio is not background-safe in an
+ * installed iOS PWA. `createMediaElementSource` is called at most once per
+ * element (calling it twice throws).
  */
 export class IosStandaloneAudioContextBridge {
     private context: BridgeAudioContextLike | null = null;

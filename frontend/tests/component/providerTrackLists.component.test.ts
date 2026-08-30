@@ -171,6 +171,11 @@ test("album TrackList renders disc separators and provider loading badges for un
     assert.match(html, /Disc 1/);
     assert.match(html, /Disc 2/);
     assert.match(html, /LOADING/);
+    assert.match(
+        html,
+        /aria-disabled="true"/,
+        "metadata-only discovery rows should not be row-playable",
+    );
     assert.equal(
         (html.match(/Track actions/g) || []).length,
         0,

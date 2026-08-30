@@ -64,6 +64,14 @@ test("mobile navigation prioritizes the four music discovery destinations", asyn
     assert.doesNotMatch(html, /Playlists/);
     assert.match(html, /padding-left:var\(--safe-area-left\)/);
     assert.match(html, /padding-right:var\(--safe-area-right\)/);
+    assert.match(html, /data-shell-bottom-navigation="true"/);
+    for (const label of ["Home", "Search", "Vibe", "Library"]) {
+        const link = html.match(
+            new RegExp(`<a[^>]*aria-label="${label}"[^>]*>`),
+        )?.[0];
+        assert.ok(link, `missing ${label}`);
+        assert.match(link, /min-h-11/);
+    }
 
     assert.ok(libraryClick);
     const hardNavigations: string[] = [];

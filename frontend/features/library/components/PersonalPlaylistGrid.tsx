@@ -65,7 +65,7 @@ export function PersonalPlaylistGrid({
 }: PersonalPlaylistGridProps) {
     if (isLoading) {
         return (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
                 {Array.from({ length: 6 }).map((_, index) => (
                     <div key={index} className="space-y-3 p-2">
                         <div className="aspect-square animate-pulse rounded-2xl bg-white/[0.06]" />
@@ -119,7 +119,7 @@ export function PersonalPlaylistGrid({
     }
 
     return (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
             {playlists.map((playlist) => (
                 <Link
                     key={playlist.id}
@@ -129,7 +129,7 @@ export function PersonalPlaylistGrid({
                     <div className="mb-3 aspect-square overflow-hidden rounded-2xl bg-surface-highlight">
                         <PlaylistCover playlist={playlist} />
                     </div>
-                    <h3 className="truncate text-sm font-bold text-content sm:text-base">
+                    <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                         {playlist.name}
                     </h3>
                     <p className="mt-1 truncate text-xs text-content-muted">

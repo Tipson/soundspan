@@ -42,7 +42,7 @@ import {
     readMigratingStorageItem,
     writeMigratingStorageItem,
 } from "@/lib/storage-migration";
-import { TrackPreferenceButtons } from "./TrackPreferenceButtons";
+import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { OverlayQueueTab } from "./overlay-tabs/OverlayQueueTab";
@@ -742,7 +742,7 @@ export function OverlayPlayer() {
                                         <>
                                             {isTrackMode && (
                                                 <div className="mb-3 flex items-center justify-center gap-3">
-                                                    <TrackPreferenceButtons
+                                                    <CurrentTrackPreferenceButtons
                                                         trackId={
                                                             preferenceTrackId
                                                         }

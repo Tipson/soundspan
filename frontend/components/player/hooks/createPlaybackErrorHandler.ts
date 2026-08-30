@@ -43,8 +43,22 @@ interface PlaybackErrorHandlerOptions {
         failedTrackId: string | null,
         error: unknown,
     ): boolean;
-    scheduleTrackErrorSkip(failedTrackId: string | null): boolean;
+    scheduleTrackErrorSkip(
+        failedTrackId: string | null,
+        disposition?:
+            | { kind: "system_failure" }
+            | {
+                  kind: "confirmed_provider_unavailable";
+                  failureKey: string;
+              },
+    ): boolean;
     finishFailedPlay(): void;
+}
+
+function getConfirmedProviderUnavailableFailureKey(track: Track): string {
+    const occurrenceKey = track.playlistItemId?.trim() || track.id;
+    const providerKey = track.youtubeVideoId?.trim() || track.id;
+    return `${occurrenceKey}\u0000youtube:${providerKey}`;
 }
 
 /** Build the current-render error delegate consumed by stable engine bindings. */
@@ -138,6 +152,7 @@ export function createPlaybackErrorHandler({
             return;
         }
 
+        let confirmedProviderUnavailableFailureKey: string | null = null;
         if (playbackType === "track") {
             logPlaybackClientMetric("player.playback_error", {
                 trackId: currentTrack?.id ?? null,
@@ -168,6 +183,14 @@ export function createPlaybackErrorHandler({
                 unavailableOutcome === "stale"
             ) {
                 return;
+            }
+            // `no_candidate` is the only terminal provider outcome backed by
+            // the server contract: the original returned 404/451 and no exact
+            // playable alternate survived validation. Request failures and an
+            // `original_available` probe remain system failures.
+            if (unavailableOutcome === "no_candidate" && currentTrack) {
+                confirmedProviderUnavailableFailureKey =
+                    getConfirmedProviderUnavailableFailureKey(currentTrack);
             }
         }
 
@@ -207,13 +230,34 @@ export function createPlaybackErrorHandler({
         if (playbackType === "track") {
             const failedTrackId = currentTrack?.id ?? null;
             if (getListenTogetherSessionSnapshot()?.groupId) {
-                if (scheduleTrackErrorSkip(failedTrackId)) return;
+                if (
+                    scheduleTrackErrorSkip(
+                        failedTrackId,
+                        confirmedProviderUnavailableFailureKey
+                            ? {
+                                  kind: "confirmed_provider_unavailable",
+                                  failureKey:
+                                      confirmedProviderUnavailableFailureKey,
+                              }
+                            : undefined,
+                    )
+                )
+                    return;
                 playbackStateMachine.forceTransition("LOADING");
                 setIsBuffering(true);
                 return;
             }
             if (queueLength > 1) {
-                scheduleTrackErrorSkip(failedTrackId);
+                scheduleTrackErrorSkip(
+                    failedTrackId,
+                    confirmedProviderUnavailableFailureKey
+                        ? {
+                              kind: "confirmed_provider_unavailable",
+                              failureKey:
+                                  confirmedProviderUnavailableFailureKey,
+                          }
+                        : undefined,
+                );
                 return;
             }
             clearPendingTrackErrorSkip();

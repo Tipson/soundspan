@@ -40,13 +40,16 @@ mock.module("next/image", {
 mock.module("lucide-react", {
     namedExports: {
         Settings: Icon,
-        RefreshCw: Icon,
         LogOut: Icon,
-        Compass: Icon,
+        Search: Icon,
+        Home: Icon,
+        Library: Icon,
+        AudioWaveform: Icon,
+        ListMusic: Icon,
+        Upload: Icon,
+        Download: Icon,
         Heart: Icon,
         X: Icon,
-        Radio: Icon,
-        Users: Icon,
         Inbox: Icon,
         Shield: Icon,
     },
@@ -126,10 +129,14 @@ test("renders the focused music quick links and omits secondary routes", async (
         }),
     );
 
-    assert.match(html, /Quick Links/);
+    assert.match(html, />Listen</);
     assert.match(html, />Home</);
+    assert.match(html, />Search</);
     assert.match(html, />Library</);
     assert.match(html, />Vibe</);
+    assert.match(html, />Liked songs</);
+    assert.match(html, />Downloads</);
+    assert.match(html, />Import playlist</);
     assert.doesNotMatch(html, />Explore</);
     assert.doesNotMatch(html, />Listen Together</);
     assert.doesNotMatch(html, /My History/);

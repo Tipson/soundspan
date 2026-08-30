@@ -28,6 +28,7 @@ Start-here guide for `frontend/features/home`.
 | `components/PodcastsGrid.tsx` | components |
 | `components/PopularArtistsGrid.tsx` | components |
 | `components/PersonalizedTrackShelf.tsx` | personalized provider tracks |
+| `components/PersonalizedMixCard.tsx` | playable card backed by one real personalized feed shelf |
 | `components/SectionHeader.tsx` | components |
 | `components/StaticPlaylistCard.tsx` | components |
 | `hooks/useHomeData.ts` | hooks |
@@ -40,7 +41,16 @@ Start-here guide for `frontend/features/home`.
 - Home starts with a balanced My Wave queue built from Quick picks, discovery,
   and Listen again, resets its direction to For you, then marks the queue for
   automatic provider continuation. The launch surface describes the continuous
-  flow without exposing the finite seed-window size as a track limit.
+  flow without exposing the finite seed-window size as a track limit. Its
+  artwork fan comes from that account's current feed rather than decorative or
+  placeholder recommendations.
+- Made For You combines only playable generated collections and non-empty
+  account shelves. Quick picks, Fresh finds, and Listen again are launchable as
+  complete queues; an empty Discover Weekly or mix never produces a dead card.
+- Home keeps online discovery intentionally short. It removes non-navigable and
+  duplicate rows, limits regional catalog spillover and shows at most three
+  prioritized provider shelves, eight items per shelf, and compact mood, genre,
+  mix, and chart previews. The full catalog remains reachable through search.
 - The primary mobile navigation links directly to Vibe so the endless personal
   radio stays one tap away; podcasts and audiobooks are not promoted on Home or
   in the primary music navigation.

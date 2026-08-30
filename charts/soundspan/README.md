@@ -310,10 +310,16 @@ tidalSidecar:
 
 ytmusicStreamer:
   enabled: true
+  env:
+    # Pin these when the Kubernetes region differs from the listeners.
+    YTMUSIC_LANGUAGE: "ru"
+    YTMUSIC_LOCATION: "RU"
 ```
 
 These **sidecars** work in both AIO and Individual modes.
 In AIO mode, they run as separate pods alongside the all-in-one container.
+`YTMUSIC_LANGUAGE` controls response language, while `YTMUSIC_LOCATION` pins
+the public catalog region independently of the cluster's geo-IP.
 
 #### YouTube downloads and the music volume
 

@@ -92,7 +92,7 @@ export default function ArtistPage() {
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = usePlaybackStatus();
-    const { playTracks, playNow, pause, addTracksToQueue } = useAudioControls();
+    const { playTracks, pause, addTracksToQueue } = useAudioControls();
     const { isPendingByMbid, downloadsEnabled } = useDownloadContext();
     const { isInGroup } = useListenTogether();
 
@@ -298,9 +298,28 @@ export default function ArtistPage() {
         playTracks(orderedTracks.map(formatTrackForPlayback), 0);
     }
 
-    // Play track handler (for popular tracks)
-    function handlePlayTrack(track: Track) {
-        playNow(formatTrackForPlayback(track));
+    // A row click starts the artist's ordered popular-track context. This
+    // keeps the following track predictable; provider radio can extend the
+    // queue only after the visible artist context has been consumed.
+    function handlePlayTrack(
+        track: Track,
+        _index: number,
+        visibleTracks: Track[],
+    ) {
+        if (!artist) return;
+        const contextTracks = visibleTracks.filter(
+            (candidate: Track) =>
+                (candidate.source === "federated" &&
+                    candidate.peer?.online === true) ||
+                Boolean(candidate.filePath) ||
+                (candidate.streamSource === "tidal" &&
+                    Boolean(candidate.tidalTrackId)) ||
+                (candidate.streamSource === "youtube" &&
+                    Boolean(candidate.youtubeVideoId)),
+        );
+        const selectedIndex = contextTracks.indexOf(track);
+        if (selectedIndex < 0) return;
+        playTracks(contextTracks.map(formatTrackForPlayback), selectedIndex);
     }
 
     function handleAddAllPopularToQueue(visibleTracks: Track[]) {
@@ -430,7 +449,7 @@ export default function ArtistPage() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col">
+        <div className="flex min-h-screen flex-col pb-32 md:pb-24">
             <ArtistHero
                 artist={artist}
                 source={source || "discovery"}
@@ -511,12 +530,7 @@ export default function ArtistPage() {
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,rgba(16,16,16,0.4)_100%)] pointer-events-none" />
 
-                <div className="relative px-4 md:px-8 py-6 space-y-8">
-                    {/* Bio / About */}
-                    {(artist.bio || artist.summary) && (
-                        <ArtistBio bio={artist.bio || artist.summary || ""} />
-                    )}
-
+                <div className="relative mx-auto w-full max-w-[1800px] space-y-10 px-4 py-7 sm:px-6 lg:px-8">
                     {/* Popular Tracks */}
                     {artist.topTracks && artist.topTracks.length > 0 ? (
                         <PopularTracks
@@ -537,6 +551,12 @@ export default function ArtistPage() {
                         showProgressivePlaceholders && (
                             <ListSectionSkeleton title="Popular" />
                         )
+                    )}
+
+                    {/* About follows the music so mobile listeners reach
+                        playable content before long biographies. */}
+                    {(artist.bio || artist.summary) && (
+                        <ArtistBio bio={artist.bio || artist.summary || ""} />
                     )}
 
                     {/* Discography (Owned Albums) */}

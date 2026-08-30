@@ -72,6 +72,12 @@
     --color-warning: #f59e0b;
     --color-error: #ef4444;
     --color-info: #3b82f6;
+
+    /* Authenticated music shell geometry */
+    --app-topbar-height: 64px;
+    --app-topbar-height-desktop: 72px;
+    --app-bottom-nav-height: 64px;
+    --app-mini-player-height: 72px;
 }
 
 * {
@@ -110,6 +116,90 @@ body {
 
 .nav-vibe-glow:hover {
     color: var(--color-brand-light);
+}
+
+/* =====================================================
+   Authenticated music shell
+   ===================================================== */
+
+.shell-topbar {
+    border-bottom: 1px solid color-mix(in srgb, white 7%, transparent);
+    background: color-mix(in srgb, var(--bg-primary) 90%, transparent);
+    backdrop-filter: blur(18px) saturate(130%);
+}
+
+.desktop-shell-frame,
+.mobile-shell-frame {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+}
+
+.desktop-shell-frame {
+    padding-top: var(--app-topbar-height-desktop);
+}
+
+.desktop-content-stage,
+.mobile-app-stage {
+    background:
+        radial-gradient(
+            ellipse at 12% 0%,
+            color-mix(in srgb, var(--color-brand) 8%, transparent),
+            transparent 34rem
+        ),
+        var(--bg-primary);
+    border: 1px solid color-mix(in srgb, white 7%, transparent);
+}
+
+.mobile-shell-frame {
+    padding-top: calc(var(--app-topbar-height) + var(--safe-area-top));
+    padding-bottom: calc(
+        var(--app-bottom-nav-height) + var(--safe-area-bottom)
+    );
+}
+
+.mobile-app-stage {
+    min-height: 0;
+    flex: 1 1 auto;
+    margin-left: calc(8px + var(--safe-area-left));
+    margin-right: calc(8px + var(--safe-area-right));
+    margin-bottom: 8px;
+}
+
+.mobile-stage-content {
+    min-height: 100%;
+    padding-bottom: calc(var(--app-mini-player-height) + 16px);
+}
+
+.mobile-player-dock {
+    bottom: calc(var(--app-bottom-nav-height) + var(--safe-area-bottom) + 6px);
+    left: 8px;
+    right: 8px;
+    min-height: var(--app-mini-player-height);
+}
+
+.mobile-player-surface {
+    min-height: var(--app-mini-player-height);
+    background: color-mix(in srgb, var(--bg-tertiary) 94%, transparent);
+    border: 1px solid color-mix(in srgb, white 10%, transparent);
+    box-shadow: 0 16px 48px color-mix(in srgb, black 55%, transparent);
+    backdrop-filter: blur(20px) saturate(140%);
+}
+
+.shell-signal-progress {
+    background: linear-gradient(
+        90deg,
+        var(--color-brand),
+        var(--color-ai-hover),
+        var(--color-brand-light)
+    );
+    box-shadow: 0 0 14px color-mix(in srgb, var(--color-ai) 65%, transparent);
+}
+
+.mobile-bottom-navigation {
+    min-height: calc(var(--app-bottom-nav-height) + var(--safe-area-bottom));
+    background: color-mix(in srgb, var(--bg-primary) 94%, transparent);
+    backdrop-filter: blur(18px) saturate(125%);
 }
 
 /* Make all buttons have pointer cursor */

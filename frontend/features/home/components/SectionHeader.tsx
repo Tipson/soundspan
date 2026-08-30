@@ -17,9 +17,11 @@ const SectionHeader = memo(function SectionHeader({
     badge,
 }: SectionHeaderProps) {
     return (
-        <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-white">{title}</h2>
+        <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                <h2 className="truncate text-xl font-black tracking-[-0.025em] text-content sm:text-2xl">
+                    {title}
+                </h2>
                 {badge && <Badge variant="ai">{badge}</Badge>}
             </div>
             {rightAction ? (
@@ -27,10 +29,10 @@ const SectionHeader = memo(function SectionHeader({
             ) : showAllHref ? (
                 <Link
                     href={showAllHref}
-                    className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors font-semibold group"
+                    className="group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2 text-sm font-semibold text-content-muted transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
                     Show all
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
                 </Link>
             ) : null}
         </div>

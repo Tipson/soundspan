@@ -25,20 +25,23 @@ export const WAVE_MODES: readonly WaveModeDefinition[] = [
     {
         id: "for-you",
         label: "For you",
-        shortLabel: "Balanced",
-        subtitle: "Familiar favorites and fresh finds in one continuous flow.",
+        shortLabel: "Your mix",
+        subtitle:
+            "Favorites, recent listens, and new finds in one balanced flow.",
     },
     {
         id: "new",
         label: "New to me",
-        shortLabel: "Discover",
-        subtitle: "More music outside your usual rotation.",
+        shortLabel: "Open up",
+        subtitle:
+            "Lean further into artists and tracks outside your usual rotation.",
     },
     {
         id: "familiar",
         label: "Familiar",
-        shortLabel: "Favorites",
-        subtitle: "Music you return to and quick picks you already know.",
+        shortLabel: "Stay close",
+        subtitle:
+            "Stay near music you return to and quick picks you already know.",
     },
 ];
 
@@ -143,7 +146,7 @@ export function WaveDirectionSheet({
 
     return (
         <div
-            className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm sm:items-center sm:px-5"
+            className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/80 px-0 backdrop-blur-md sm:items-center sm:px-5"
             onMouseDown={(event) => {
                 if (event.target === event.currentTarget) onClose();
             }}
@@ -155,12 +158,12 @@ export function WaveDirectionSheet({
                 aria-modal="true"
                 aria-labelledby="wave-direction-title"
                 aria-describedby="wave-direction-description"
-                className="max-h-[88dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-surface-raised px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/60 sm:max-w-xl sm:rounded-[2rem] sm:p-7"
+                className="max-h-[88dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-surface-raised px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/60 sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
             >
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-light">
-                            Direction
+                            What should come next?
                         </p>
                         <h2
                             id="wave-direction-title"
@@ -172,8 +175,9 @@ export function WaveDirectionSheet({
                             id="wave-direction-description"
                             className="mt-2 max-w-md text-sm leading-6 text-content-secondary"
                         >
-                            Choose what you want more of right now. You can
-                            change direction without rebuilding your queue.
+                            Choose how close the next picks stay to your
+                            listening history. Your current song keeps playing
+                            while the Wave changes course.
                         </p>
                     </div>
                     <button
@@ -192,7 +196,7 @@ export function WaveDirectionSheet({
                     aria-label="My Wave direction"
                     tabIndex={-1}
                     onKeyDown={handleRadioKeyDown}
-                    className="mt-6 grid gap-2"
+                    className="mt-6 grid gap-3 sm:grid-cols-3"
                 >
                     {WAVE_MODES.map((mode) => {
                         const selected = mode.id === draftMode;
@@ -205,7 +209,7 @@ export function WaveDirectionSheet({
                                 aria-label={mode.label}
                                 tabIndex={selected ? 0 : -1}
                                 onClick={() => setDraftMode(mode.id)}
-                                className={`group flex min-h-[4.75rem] w-full items-center gap-4 rounded-2xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                                className={`group flex min-h-[7.5rem] w-full items-center gap-4 rounded-2xl border px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:min-h-[12rem] sm:flex-col sm:items-start ${
                                     selected
                                         ? "border-brand/50 bg-brand/12"
                                         : "border-white/8 bg-black/20 hover:border-white/15 hover:bg-white/[0.055]"
@@ -230,8 +234,11 @@ export function WaveDirectionSheet({
                                         />
                                     )}
                                 </span>
-                                <span className="min-w-0 flex-1">
-                                    <span className="block text-base font-bold text-content">
+                                <span className="min-w-0 flex-1 whitespace-normal break-words">
+                                    <span className="block text-[0.65rem] font-bold uppercase tracking-[0.14em] text-brand-light">
+                                        {mode.shortLabel}
+                                    </span>
+                                    <span className="mt-1 block text-base font-bold text-content">
                                         {mode.label}
                                     </span>
                                     <span className="mt-1 block text-xs leading-5 text-content-muted sm:text-sm">
@@ -243,21 +250,27 @@ export function WaveDirectionSheet({
                     })}
                 </div>
 
-                <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onApply(draftMode)}
-                        className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
-                    >
-                        Use {selectedDefinition.label}
-                    </button>
+                <div className="mt-6 grid gap-4 border-t border-white/8 pt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <p className="text-sm text-content-secondary">
+                        Selected: {selectedDefinition.shortLabel}. You can tune
+                        again at any time.
+                    </p>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onApply(draftMode)}
+                            className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
+                        >
+                            Use {selectedDefinition.label}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

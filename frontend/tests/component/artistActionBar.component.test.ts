@@ -162,6 +162,8 @@ test("ArtistActionBar icon controls are touch-sized and have accessible names", 
         assert.ok(button, `missing accessible button: ${label}`);
         assert.match(button, /h-11 w-11/);
     }
+    assert.match(html, /w-full/);
+    assert.match(html, /sm:w-fit/);
 });
 
 test("ArtistActionBar hides Add to Queue when callback is not provided", async () => {

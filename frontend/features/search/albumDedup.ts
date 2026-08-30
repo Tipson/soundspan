@@ -13,24 +13,61 @@ const normalizeAlbumPart = (value: string): string =>
 const albumKey = (artist: string, title: string): string =>
     `${normalizeAlbumPart(artist)}::${normalizeAlbumPart(title)}`;
 
-/** Remove provider albums already owned locally and duplicate provider rows. */
-export function dedupeDiscoverAlbums(
+interface MergedSearchAlbums {
+    libraryAlbums: Album[];
+    discoverAlbums: DiscoverResult[];
+}
+
+function hasCanonicalProviderAlbumIdentity(album: DiscoverResult): boolean {
+    return Boolean(
+        typeof album.browseId === "string" && album.browseId.trim().length > 0,
+    );
+}
+
+/** Keep one album card, preferring a provider identity that opens the full catalog. */
+export function mergeSearchAlbums(
     discoverAlbums: DiscoverResult[],
     libraryAlbums: Album[],
-): DiscoverResult[] {
-    const ownedKeys = new Set(
+): MergedSearchAlbums {
+    const libraryKeys = new Set(
         libraryAlbums.map((album) =>
             albumKey(album.artist?.name ?? "", album.title),
         ),
     );
     const seenProviderIds = new Set<string>();
+    const canonicalProviderKeys = new Set<string>();
+    const mergedDiscoverAlbums: DiscoverResult[] = [];
 
-    return discoverAlbums.filter((album) => {
+    for (const album of discoverAlbums) {
         const providerId = album.browseId || album.id;
         if (!providerId || seenProviderIds.has(providerId)) {
-            return false;
+            continue;
         }
         seenProviderIds.add(providerId);
-        return !ownedKeys.has(albumKey(album.artist ?? "", album.name));
-    });
+        const key = albumKey(album.artist ?? "", album.name);
+        const isLibraryDuplicate = libraryKeys.has(key);
+        if (isLibraryDuplicate && !hasCanonicalProviderAlbumIdentity(album)) {
+            continue;
+        }
+        if (isLibraryDuplicate) canonicalProviderKeys.add(key);
+        mergedDiscoverAlbums.push(album);
+    }
+
+    return {
+        libraryAlbums: libraryAlbums.filter(
+            (album) =>
+                !canonicalProviderKeys.has(
+                    albumKey(album.artist?.name ?? "", album.title),
+                ),
+        ),
+        discoverAlbums: mergedDiscoverAlbums,
+    };
+}
+
+/** Backward-compatible provider-only view of the merged search albums. */
+export function dedupeDiscoverAlbums(
+    discoverAlbums: DiscoverResult[],
+    libraryAlbums: Album[],
+): DiscoverResult[] {
+    return mergeSearchAlbums(discoverAlbums, libraryAlbums).discoverAlbums;
 }

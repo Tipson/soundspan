@@ -76,19 +76,19 @@ export function LibraryOverview({
         {
             href: "/library?tab=playlists",
             label: "Playlists",
-            detail: String(playlistTotal),
+            detail: `${playlistTotal} ${playlistTotal === 1 ? "playlist" : "playlists"}`,
             icon: ListMusic,
         },
         {
             href: "/library?tab=albums",
             label: "Saved albums",
-            detail: String(albumTotal),
+            detail: `${albumTotal} ${albumTotal === 1 ? "album" : "albums"}`,
             icon: Album,
         },
         {
             href: "/library?tab=artists",
             label: "Saved artists",
-            detail: String(artistTotal),
+            detail: `${artistTotal} ${artistTotal === 1 ? "artist" : "artists"}`,
             icon: UserRound,
         },
     ];
@@ -106,22 +106,22 @@ export function LibraryOverview({
                     Saved to your account
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-content-muted">
-                    Likes, playlists, albums, and artists follow you everywhere.
+                    Available on every signed-in device.
                 </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {accountCards.map((card) => (
                     <AccountCollectionCard key={card.href} card={card} />
                 ))}
             </div>
 
-            <div className="rounded-2xl border border-white/8 bg-surface-sunken p-3 sm:p-4">
+            <div className="rounded-2xl border border-white/8 bg-surface-sunken p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h3 className="text-sm font-bold text-content">
                             Only on this device
                         </h3>
-                        <p className="mt-1 text-xs leading-5 text-content-muted">
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-content-muted sm:text-sm">
                             Offline music is saved as ordinary files in your
                             selected device folder. Their status and folder
                             permission belong to this browser profile; clearing

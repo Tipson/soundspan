@@ -110,6 +110,51 @@ test("success between errors prevents tripping", () => {
     assert.equal(breaker.getErrorCount(), 2);
 });
 
+test("distinct confirmed-unavailable provider items do not count as a system outage", () => {
+    const breaker = createConsecutiveErrorBreaker(3);
+
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-1"), false);
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-2"), false);
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-3"), false);
+
+    assert.equal(breaker.getErrorCount(), 0);
+    assert.equal(breaker.isTripped(), false);
+});
+
+test("revisiting the same confirmed-unavailable provider item trips the loop guard", () => {
+    const breaker = createConsecutiveErrorBreaker(3);
+
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-1"), false);
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-2"), false);
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-1"), true);
+
+    assert.equal(breaker.getErrorCount(), 0);
+    assert.equal(breaker.isTripped(), true);
+});
+
+test("confirmed progress clears unavailable-item loop history", () => {
+    const breaker = createConsecutiveErrorBreaker(3);
+
+    breaker.recordConfirmedUnavailable("playlist:item-1");
+    breaker.recordSuccess();
+
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-1"), false);
+    assert.equal(breaker.isTripped(), false);
+});
+
+test("confirmed catalog misses do not erase a real consecutive system outage", () => {
+    const breaker = createConsecutiveErrorBreaker(3);
+
+    assert.equal(breaker.recordError(), false);
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-1"), false);
+    assert.equal(breaker.recordError(), false);
+    assert.equal(breaker.recordConfirmedUnavailable("playlist:item-2"), false);
+    assert.equal(breaker.recordError(), true);
+
+    assert.equal(breaker.getErrorCount(), 3);
+    assert.equal(breaker.isTripped(), true);
+});
+
 test("half-opens for one probe after the cooldown elapses", () => {
     const harness = createBreakerHarness();
     harness.breaker.recordError();

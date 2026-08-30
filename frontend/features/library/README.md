@@ -17,6 +17,7 @@ Start-here guide for `frontend/features/library`.
 - The overview labels account-saved collections separately from offline copies on the current device so users do not mistake one for the other.
 - Saving an album or artist records its exact Soundspan or provider identity. It does not infer album state from liked tracks and does not download media to the server.
 - The user-facing route intentionally does not expose the server-file catalog, scan filters, or destructive media controls. Administrative server-media management remains separate.
+- Compact screens use one horizontally scrollable, active-tab-aware section rail. Card titles wrap instead of clipping, and every tab view leaves room for the persistent mobile player.
 
 ## Directory Contents
 

@@ -110,7 +110,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     const {
         playAlbum,
         shufflePlay,
-        playTrackNow,
         addAllToQueue,
         downloadAlbum,
         setAlbumPreference,
@@ -167,7 +166,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     const showTrackPlaceholder = detailsLoading && !hasTracks;
     const { highlightTrackId } = useTrackDeepLink(
         album,
-        (track) => playTrackNow(track, album!),
+        (_track, index) => playAlbum(album!, index),
         hasTracks,
     );
 
@@ -240,8 +239,8 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     }
 
     // Event handlers
-    const handlePlayTrack = (track: AlbumTrack, _index: number) => {
-        playTrackNow(track, album);
+    const handlePlayTrack = (_track: AlbumTrack, index: number) => {
+        playAlbum(album, index);
     };
 
     const openPlaylistSelector = (
@@ -303,7 +302,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     };
 
     return (
-        <div className="min-h-screen flex flex-col">
+        <div className="flex min-h-screen flex-col pb-32 md:pb-24">
             <AlbumHero
                 album={album}
                 source={source || "discovery"}
@@ -387,7 +386,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     }}
                 />
 
-                <div className="relative px-2 md:px-8 py-6 space-y-8">
+                <div className="relative mx-auto w-full max-w-[1800px] space-y-10 px-4 py-7 sm:px-6 lg:px-8">
                     {hasTracks && (
                         <TrackList
                             tracks={album.tracks}

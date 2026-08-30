@@ -18,6 +18,7 @@ import type { TrackRowItem, TrackRowSlots, RowState } from "@/components/track";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
+import { isAlbumTrackPlayable } from "../albumPlayback";
 
 interface TrackListProps {
     tracks: Track[];
@@ -47,8 +48,6 @@ export const TrackList = memo(function TrackList({
     isProviderMatching = false,
     highlightTrackId = null,
 }: TrackListProps) {
-    const isOwned = source === "library";
-
     const isMultiDisc = useMemo(() => {
         if (!tracks?.length) return false;
         const discs = new Set(tracks.map((t) => t.discNumber ?? t.discNo ?? 1));
@@ -63,14 +62,13 @@ export const TrackList = memo(function TrackList({
             artistName: track.artist?.name ?? album.artist?.name ?? "",
             duration: track.duration,
             coverArtUrl: null, // Album page doesn't show per-row cover art
-            isPlayable:
-                track.source !== "federated" || track.peer?.online === true,
+            isPlayable: isAlbumTrackPlayable(track, source),
             unplayableReason:
                 track.source === "federated" && track.peer?.online === false
                     ? "peer_offline"
                     : undefined,
         }),
-        [album.artist?.name],
+        [album.artist?.name, source],
     );
 
     const handlePlay = useCallback(
@@ -78,7 +76,6 @@ export const TrackList = memo(function TrackList({
             const isYouTubeTrack = track.streamSource === "youtube";
             const isTidalTrack =
                 track.streamSource === "tidal" && !!track.tidalTrackId;
-            const isFederated = track.source === "federated";
             const hasLocalFile =
                 typeof track.filePath === "string" &&
                 track.filePath.trim().length > 0;
@@ -87,9 +84,7 @@ export const TrackList = memo(function TrackList({
                 !hasLocalFile &&
                 !isTidalTrack &&
                 !isYouTubeTrack;
-            const isPlayable = isFederated
-                ? track.peer?.online === true
-                : isOwned || isTidalTrack || isYouTubeTrack;
+            const isPlayable = isAlbumTrackPlayable(track, source);
             const isPreviewOnly = !isPlayable && !isAwaitingProviderMatch;
 
             if (isAwaitingProviderMatch) return;
@@ -101,7 +96,7 @@ export const TrackList = memo(function TrackList({
             }
             onPlayTrack(track, index);
         },
-        [isOwned, isProviderMatching, onPlayTrack, onPreview],
+        [isProviderMatching, onPlayTrack, onPreview, source],
     );
 
     const rowSlots = useCallback(
@@ -118,9 +113,7 @@ export const TrackList = memo(function TrackList({
                 !hasLocalFile &&
                 !isTidalTrack &&
                 !isYouTubeTrack;
-            const isPlayable = isFederated
-                ? track.peer?.online === true
-                : isOwned || isTidalTrack || isYouTubeTrack;
+            const isPlayable = isAlbumTrackPlayable(track, source);
             const isPreviewOnly = !isPlayable && !isAwaitingProviderMatch;
             const isPreviewPlaying =
                 previewTrack === track.id && previewPlaying;
@@ -172,6 +165,9 @@ export const TrackList = memo(function TrackList({
                     <div
                         className="flex items-center gap-1"
                         onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        role="group"
+                        aria-label={`Actions for ${track.displayTitle ?? track.title}`}
                     >
                         {isPlayable &&
                             track.playCount !== undefined &&
@@ -201,13 +197,13 @@ export const TrackList = memo(function TrackList({
                                 )}
                             </button>
                         )}
-                        <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
+                        <span className="hidden w-10 text-right text-xs tabular-nums text-gray-400 sm:inline">
                             {track.duration ? formatTime(track.duration) : ""}
                         </span>
                         <TrackPreferenceButtons
                             trackId={track.id}
                             mode="both"
-                            buttonSizeClassName="h-8 w-8"
+                            buttonSizeClassName="h-11 w-11"
                             iconSizeClassName="h-4 w-4"
                             metadata={buildPreferenceMetadata(track)}
                         />
@@ -253,12 +249,12 @@ export const TrackList = memo(function TrackList({
         },
         [
             album,
-            isOwned,
             isProviderMatching,
             previewTrack,
             previewPlaying,
             onPreview,
             highlightTrackId,
+            source,
         ],
     );
 
@@ -294,7 +290,7 @@ export const TrackList = memo(function TrackList({
                     rowSlots={rowSlots}
                     separator={separator}
                     showCoverArt={false}
-                    rowClassName="grid-cols-[32px_1fr_auto] md:grid-cols-[40px_1fr_auto]"
+                    rowClassName="grid-cols-[28px_minmax(0,1fr)_auto] sm:grid-cols-[40px_minmax(0,1fr)_auto]"
                     accentColor={colors?.vibrant || "#5b5bff"}
                     tvSection="tracks"
                     className="divide-y divide-surface-active"

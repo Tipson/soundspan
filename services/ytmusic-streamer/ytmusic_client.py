@@ -27,6 +27,10 @@ if SEARCH_MODE not in {"tv", "native", "auto"}:
 
 # BCP-47 language code forwarded to all YTMusic() constructors.
 YTMUSIC_LANGUAGE = (os.getenv("YTMUSIC_LANGUAGE", "en") or "en").strip()
+# Optional ISO 3166-1 alpha-2 catalog location.  Passing it explicitly prevents
+# public Home and browse calls from silently inheriting the sidecar host's
+# geo-IP (which is rarely the listener's actual region on a remote VPS).
+YTMUSIC_LOCATION = (os.getenv("YTMUSIC_LOCATION", "") or "").strip().upper()
 TV_CLIENT_NAME = "TVHTML5"
 TV_CLIENT_VERSION = "7.20250101.00.00"
 # Keep transport work inside the sidecar's default 30-second browse and shutdown budgets.
@@ -128,6 +132,7 @@ def _create_public_ytmusic(
     try:
         yt = YTMusic(
             language=YTMUSIC_LANGUAGE,
+            location=YTMUSIC_LOCATION,
             requests_session=request_session,
         )
         setattr(yt, _SOUNDSPAN_REQUEST_SESSION_ATTRIBUTE, request_session)
@@ -380,12 +385,14 @@ def _get_ytmusic(user_id: str) -> YTMusic:
                     str(oauth_path),
                     oauth_credentials=oauth_creds,
                     language=YTMUSIC_LANGUAGE,
+                    location=YTMUSIC_LOCATION,
                     requests_session=request_session,
                 )
             else:
                 yt = YTMusic(
                     str(oauth_path),
                     language=YTMUSIC_LANGUAGE,
+                    location=YTMUSIC_LOCATION,
                     requests_session=request_session,
                 )
 

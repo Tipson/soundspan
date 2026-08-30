@@ -85,14 +85,18 @@ mock.module("@/features/explore/components/MadeForYouSection", {
         MadeForYouSection: ({
             discoverWeekly,
             mixes,
+            personalizedFeed,
         }: {
             discoverWeekly: unknown;
             mixes: unknown[];
+            personalizedFeed: {
+                shelves?: { discovery?: unknown[] };
+            } | null;
         }) =>
             React.createElement(
                 "div",
                 null,
-                `made-for-you:${discoverWeekly ? "weekly" : "none"}:${mixes.length}`,
+                `made-for-you:${discoverWeekly ? "weekly" : "none"}:${mixes.length}:${personalizedFeed?.shelves?.discovery?.length ?? 0}`,
             ),
     },
 });
@@ -170,13 +174,21 @@ test("Home unifies personal playback and real online discovery", async () => {
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
     assert.match(html, /compact-wave-hero/);
-    assert.match(html, /Quick picks:Quick One/);
+    assert.match(html, /Picked for right now:Quick One/);
     assert.match(html, /Listen again:Again One/);
-    assert.match(html, /Fresh for you:Fresh One/);
-    assert.match(html, /made-for-you:weekly:1/);
+    assert.doesNotMatch(html, /Fresh for you:Fresh One/);
+    assert.match(html, /made-for-you:weekly:1:1/);
     assert.match(html, /online-discovery:true:1/);
-    assert.ok(html.indexOf("compact-wave-hero") < html.indexOf("Quick picks"));
-    assert.ok(html.indexOf("Fresh for you") < html.indexOf("online-discovery"));
+    assert.ok(
+        html.indexOf("compact-wave-hero") < html.indexOf("home-quick-actions"),
+    );
+    assert.ok(
+        html.indexOf("home-quick-actions") < html.indexOf("made-for-you"),
+    );
+    assert.ok(
+        html.indexOf("made-for-you") < html.indexOf("Picked for right now"),
+    );
+    assert.ok(html.indexOf("Listen again") < html.indexOf("online-discovery"));
 });
 
 test("Home omits legacy local-library Explore surfaces", async () => {
@@ -193,9 +205,9 @@ test("Home keeps real personal shelves when generated mixes are unavailable", as
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /Quick picks:Quick One/);
+    assert.match(html, /Picked for right now:Quick One/);
     assert.match(html, /Listen again:Again One/);
-    assert.match(html, /Fresh for you:Fresh One/);
-    assert.match(html, /made-for-you:none:0/);
+    assert.doesNotMatch(html, /Fresh for you:Fresh One/);
+    assert.match(html, /made-for-you:none:0:1/);
     assert.doesNotMatch(html, /Daily Mix|Discover Weekly/);
 });

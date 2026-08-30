@@ -28,6 +28,21 @@ mock.module("lucide-react", {
     },
 });
 
+mock.module("@/components/ui/CachedImage", {
+    namedExports: {
+        CachedImage: ({ alt }: { alt: string }) =>
+            React.createElement("img", { alt }),
+    },
+});
+
+mock.module("@/lib/api", {
+    namedExports: {
+        api: {
+            getCoverArtUrl: (value: string) => value,
+        },
+    },
+});
+
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
@@ -58,13 +73,13 @@ mock.module("@/lib/audio/providerRadioContinuation", {
     },
 });
 
-const track = (id: string, title: string) => ({
+const track = (id: string, title: string, coverArt: string | null = null) => ({
     id,
     title,
     duration: 180,
     trackNo: null,
     artist: { id: null, name: "Artist" },
-    album: { id: null, title: "Single", coverArt: null },
+    album: { id: null, title: "Single", coverArt },
     source: "youtube" as const,
     provider: { tidalTrackId: null, youtubeVideoId: id },
     streamSource: "youtube" as const,
@@ -95,9 +110,9 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
             React.createElement(HomeWaveHero, {
                 personalizedFeed: {
                     shelves: {
-                        quickPicks: [track("quick", "Quick")],
-                        discovery: [track("fresh", "Fresh")],
-                        listenAgain: [track("again", "Again")],
+                        quickPicks: [track("quick", "Quick", "/quick.jpg")],
+                        discovery: [track("fresh", "Fresh", "/fresh.jpg")],
+                        listenAgain: [track("again", "Again", "/again.jpg")],
                     },
                     degraded: false,
                     reason: null,
@@ -112,7 +127,8 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         'button[aria-label="Play My Wave"]',
     );
     assert.ok(playButton);
-    assert.ok(container.querySelector('[data-home-wave-layout="compact"]'));
+    assert.ok(container.querySelector('[data-home-wave-layout="immersive"]'));
+    assert.equal(container.querySelectorAll("[data-wave-cover]").length, 3);
 
     await act(async () => {
         playButton.click();
@@ -130,7 +146,7 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.deepEqual(calls.vibeQueueIds, [["quick", "fresh", "again"]]);
     assert.deepEqual(calls.waveMode, ["for-you"]);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
-    assert.match(container.textContent ?? "", /keeps playing/i);
+    assert.match(container.textContent ?? "", /endless flow/i);
 
     await act(async () => root.unmount());
 });

@@ -32,15 +32,14 @@ export function ArtistBio({ bio }: ArtistBioProps) {
     if (!safeBio) return null;
 
     return (
-        <section>
-            <h2 className="text-xl font-bold mb-4">About</h2>
-            <div className="bg-white/5 rounded-md p-4">
+        <section className="max-w-4xl">
+            <h2 className="mb-4 text-2xl font-black tracking-tight">About</h2>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.045] p-5 sm:p-6">
                 <div
                     className={cn(
-                        "prose prose-sm md:prose-base prose-invert max-w-none leading-relaxed [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline",
+                        "prose prose-sm md:prose-base prose-invert max-w-none leading-relaxed text-content-secondary [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline",
                         shouldCollapse && "max-h-28 overflow-hidden",
                     )}
-                    style={{ color: "#b3b3b3" }}
                     dangerouslySetInnerHTML={{
                         __html: DOMPurify.sanitize(safeBio),
                     }}

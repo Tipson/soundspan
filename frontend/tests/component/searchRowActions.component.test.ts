@@ -294,7 +294,9 @@ test("metadata-only rows keep their original match key beside direct provider ro
 
     assert.equal(state.routed.length, 0);
     assert.equal(state.played.length, 1);
-    const played = state.played[0].tracks[0] as {
+    assert.equal(state.played[0].tracks.length, 2);
+    assert.equal(state.played[0].index, 1);
+    const played = state.played[0].tracks[1] as {
         id: string;
         streamSource: string;
         tidalTrackId: number;
@@ -304,6 +306,65 @@ test("metadata-only rows keep their original match key beside direct provider ro
     assert.equal(played.streamSource, "tidal");
     assert.equal(played.tidalTrackId, 84);
     assert.equal(played.title, "Metadata Song");
+    unmount();
+});
+
+test("discover row click snapshots playable visible rows in visual order", async () => {
+    state.tidalMatches = [null];
+    const { DiscoverTracksList } =
+        await import("../../features/search/components/DiscoverTracksList");
+    const { container, unmount } = await render(
+        React.createElement(DiscoverTracksList, {
+            tracks: [
+                {
+                    type: "track" as const,
+                    id: "visible-one",
+                    name: "Visible One",
+                    artist: "Artist One",
+                    streamSource: "youtube" as const,
+                    youtubeVideoId: "visible-one",
+                },
+                {
+                    type: "track" as const,
+                    id: "unmatched",
+                    name: "Unmatched",
+                    artist: "No Provider",
+                },
+                {
+                    type: "track" as const,
+                    id: "visible-two",
+                    name: "Visible Two",
+                    artist: "Artist Two",
+                    streamSource: "youtube" as const,
+                    youtubeVideoId: "visible-two",
+                },
+                {
+                    type: "track" as const,
+                    id: "hidden-by-limit",
+                    name: "Hidden",
+                    artist: "Artist Three",
+                    streamSource: "youtube" as const,
+                    youtubeVideoId: "hidden-by-limit",
+                },
+            ],
+            limit: 3,
+        }),
+    );
+
+    const rows = container.querySelectorAll('[role="button"]');
+    assert.equal(rows.length, 3);
+    await React.act(async () => {
+        (rows[2] as HTMLElement).click();
+    });
+
+    assert.equal(state.played.length, 1);
+    assert.deepEqual(
+        (state.played[0].tracks as Array<{ id: string }>).map(
+            (track) => track.id,
+        ),
+        ["yt:visible-one", "yt:visible-two"],
+    );
+    assert.equal(state.played[0].index, 1);
     unmount();
 });
 

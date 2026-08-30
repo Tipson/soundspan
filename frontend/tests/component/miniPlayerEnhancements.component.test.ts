@@ -224,10 +224,13 @@ mock.module("@/components/player/SyncBadge", {
     },
 });
 
-// Mock TrackPreferenceButtons
-mock.module("@/components/player/TrackPreferenceButtons", {
+// Mock the active-track wrapper; its skip guard is covered separately.
+mock.module("@/components/player/CurrentTrackPreferenceButtons", {
     namedExports: {
-        TrackPreferenceButtons: (props: { trackId: string; mode?: string }) =>
+        CurrentTrackPreferenceButtons: (props: {
+            trackId: string;
+            mode?: string;
+        }) =>
             React.createElement(
                 "div",
                 {
@@ -279,6 +282,10 @@ test("MiniPlayer renders Next Track button", async () => {
         html,
         /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
     );
+    assert.match(html, /data-mobile-player="dock"/);
+    assert.match(html, /hidden flex-shrink-0 items-center min-\[360px\]:flex/);
+    assert.match(nextButton, /class="[^"]*\bhidden\b/);
+    assert.match(nextButton, /min-\[380px\]:flex/);
 });
 
 test("MiniPlayer renders like and dislike preferences for tracks", async () => {

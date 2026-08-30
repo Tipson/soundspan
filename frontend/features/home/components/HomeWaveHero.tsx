@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useMemo } from "react";
 import { AudioWaveform, ChevronRight, Play } from "lucide-react";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
@@ -59,6 +61,17 @@ export function HomeWaveHero({
         [personalizedFeed?.shelves],
     );
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
+    const coverTracks = useMemo(() => {
+        const seen = new Set<string>();
+        return tracks
+            .filter((track) => {
+                const cover = track.album.coverArt;
+                if (!cover || seen.has(cover)) return false;
+                seen.add(cover);
+                return true;
+            })
+            .slice(0, 3);
+    }, [tracks]);
     const canPlay = queue.length > 0 && !isLoading;
 
     const startWave = useCallback(() => {
@@ -85,91 +98,123 @@ export function HomeWaveHero({
 
     return (
         <section
-            data-home-wave-layout="compact"
+            data-home-wave-layout="immersive"
             aria-labelledby="home-wave-title"
-            className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-surface-raised shadow-xl shadow-black/20"
+            className="relative isolate overflow-hidden rounded-[1.75rem] border border-white/10 bg-surface-raised shadow-2xl shadow-black/25 sm:rounded-[2rem]"
         >
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/20 via-ai/5 to-transparent"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/30 via-ai/10 to-transparent"
             />
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -left-16 top-1/2 h-40 w-40 -translate-y-1/2 rounded-full border border-brand/10 sm:h-56 sm:w-56"
+                className="pointer-events-none absolute -right-24 -top-36 h-[32rem] w-[32rem] rounded-full bg-info/10 blur-3xl"
+            />
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-0 left-0 h-2/3 w-2/3 bg-gradient-to-tr from-black/35 to-transparent"
             />
 
-            <div className="relative grid grid-cols-[minmax(0,1fr)_7.5rem] items-end gap-x-3 gap-y-3 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-center sm:gap-x-7 sm:px-7 sm:py-6 lg:grid-cols-[minmax(0,1fr)_15rem] lg:px-8 lg:py-7">
-                <div className="col-span-2 max-w-3xl sm:col-span-1 sm:col-start-1 sm:row-start-1">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-light">
-                        Your personal station
+            <div className="relative grid gap-3 px-5 pb-5 pt-7 sm:px-8 sm:pb-7 sm:pt-9 lg:min-h-[25rem] lg:grid-cols-[minmax(0,0.95fr)_minmax(21rem,0.75fr)] lg:items-center lg:gap-10 lg:px-10 lg:py-9 xl:px-12">
+                <div className="relative z-20 max-w-3xl">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-light">
+                        My Wave
                     </p>
                     <h1
                         id="home-wave-title"
-                        className="mt-2 max-w-3xl text-3xl font-black leading-[0.98] tracking-[-0.045em] text-content sm:text-4xl lg:text-5xl"
+                        className="mt-3 max-w-3xl text-[2.35rem] font-black leading-[0.92] tracking-[-0.06em] text-content sm:text-5xl lg:text-6xl xl:text-7xl"
                     >
-                        Your music in motion.
+                        Your music.
+                        <span className="block text-content-secondary">
+                            One endless flow.
+                        </span>
                     </h1>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-content-secondary sm:text-base sm:leading-6">
-                        <span className="sm:hidden">
-                            Familiar favorites, fresh finds, and music that
-                            keeps playing.
-                        </span>
-                        <span className="hidden sm:inline">
-                            My Wave blends familiar favorites with fresh finds
-                            and keeps playing without making you build or manage
-                            a queue.
-                        </span>
+                    <p className="mt-4 max-w-xl text-sm leading-6 text-content-secondary sm:text-base sm:leading-7">
+                        Favorites, forgotten tracks, and new discoveries keep
+                        moving with you. Like, dislike, or skip — the next song
+                        adapts.
+                    </p>
+
+                    <div className="mt-6 flex flex-wrap items-center gap-2.5 sm:mt-7">
+                        <button
+                            type="button"
+                            onClick={startWave}
+                            disabled={!canPlay}
+                            aria-label="Play My Wave"
+                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-content px-5 py-3 text-sm font-black text-surface shadow-xl shadow-black/25 transition duration-200 hover:scale-[1.02] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none sm:px-6 sm:text-base"
+                        >
+                            <Play
+                                className="h-5 w-5 fill-current"
+                                aria-hidden="true"
+                            />
+                            <span>{playLabel}</span>
+                        </button>
+                        <Link
+                            href="/vibe"
+                            className="inline-flex min-h-12 items-center gap-1 rounded-full border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-content-secondary transition-colors duration-200 hover:border-white/20 hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        >
+                            Tune the flow
+                            <ChevronRight
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                            />
+                        </Link>
+                    </div>
+
+                    <p className="mt-4 flex items-center gap-2 text-xs leading-5 text-content-muted sm:text-sm">
+                        <AudioWaveform
+                            className="h-4 w-4 shrink-0 text-brand-light"
+                            aria-hidden="true"
+                        />
+                        Likes, skips, and listening tune what comes next.
                     </p>
                 </div>
 
-                <div className="col-start-1 row-start-2 min-w-0 text-sm text-content-body sm:flex sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
-                    <span className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/8 bg-black/20 px-3 py-2 sm:inline-flex sm:rounded-full sm:px-4">
-                        <AudioWaveform
-                            className="h-4 w-4 shrink-0 text-brand-hover"
+                <div className="relative mx-auto h-[15.5rem] w-full max-w-[25rem] lg:h-[21rem] lg:max-w-none">
+                    <span
+                        aria-hidden="true"
+                        className="absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-brand/10 blur-sm lg:h-64 lg:w-64"
+                    />
+                    {coverTracks.length > 0 ? (
+                        coverTracks.map((track, index) => {
+                            const positions = [
+                                "left-[3%] top-[18%] -rotate-[11deg]",
+                                "left-1/2 top-[3%] z-10 -translate-x-1/2",
+                                "right-[3%] top-[18%] rotate-[11deg]",
+                            ];
+                            return (
+                                <span
+                                    key={track.album.coverArt}
+                                    data-wave-cover
+                                    aria-hidden="true"
+                                    className={`absolute aspect-square w-[43%] max-w-[12.5rem] overflow-hidden rounded-[1.25rem] border border-white/15 bg-surface-highlight shadow-2xl shadow-black/50 ${positions[index]}`}
+                                >
+                                    <CachedImage
+                                        src={api.getCoverArtUrl(
+                                            track.album.coverArt ?? "",
+                                            360,
+                                        )}
+                                        alt=""
+                                        fill
+                                        sizes="(max-width: 1024px) 43vw, 200px"
+                                        className="object-cover"
+                                    />
+                                    <span className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+                                </span>
+                            );
+                        })
+                    ) : (
+                        <span
                             aria-hidden="true"
-                        />
-                        <span className="sm:hidden">
-                            Tuned by your likes and listening
+                            className="absolute left-1/2 top-1/2 grid h-40 w-40 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-black/20 text-brand-light lg:h-52 lg:w-52"
+                        >
+                            <AudioWaveform className="h-14 w-14" />
                         </span>
-                        <span className="hidden sm:inline">
-                            Likes, skips, and listening tune what comes next
-                        </span>
+                    )}
+                    <span className="absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-black/70 px-3 py-2 text-xs font-bold text-content shadow-xl backdrop-blur-md lg:bottom-4">
+                        <span className="h-2 w-2 rounded-full bg-brand-light shadow-[0_0_16px_currentColor]" />
+                        Tuned to this account
                     </span>
-                    <Link
-                        href="/vibe"
-                        className="mt-1 inline-flex min-h-11 items-center gap-1 rounded-full px-2 py-2 font-semibold text-brand-light transition-colors duration-200 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:mt-0 sm:px-3"
-                    >
-                        Tune the flow
-                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                </div>
-
-                <div className="relative col-start-2 row-start-2 mx-auto grid aspect-square w-full place-items-center sm:row-span-2 sm:row-start-1 sm:w-[min(28vw,13rem)] lg:w-[min(20vw,15rem)]">
-                    <span
-                        aria-hidden="true"
-                        className="absolute inset-0 rounded-full border border-brand/15 bg-black/10"
-                    />
-                    <span
-                        aria-hidden="true"
-                        className="absolute inset-[12%] rounded-full border border-ai/25"
-                    />
-                    <span
-                        aria-hidden="true"
-                        className="absolute inset-[25%] rounded-full border border-brand-light/20 bg-brand/5"
-                    />
-                    <button
-                        type="button"
-                        onClick={startWave}
-                        disabled={!canPlay}
-                        aria-label="Play My Wave"
-                        className="relative z-10 flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-full bg-brand px-3 text-center text-xs font-black text-black shadow-2xl shadow-brand/25 transition duration-200 hover:scale-[1.03] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none sm:h-28 sm:w-28 sm:gap-2 sm:px-4 sm:text-sm lg:h-32 lg:w-32"
-                    >
-                        <Play
-                            className="h-6 w-6 fill-current sm:h-7 sm:w-7"
-                            aria-hidden="true"
-                        />
-                        <span>{playLabel}</span>
-                    </button>
                 </div>
             </div>
         </section>

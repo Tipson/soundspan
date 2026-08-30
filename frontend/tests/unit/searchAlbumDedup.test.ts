@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dedupeDiscoverAlbums } from "../../features/search/albumDedup";
+import { mergeSearchAlbums } from "../../features/search/albumDedup";
 import type { Album, DiscoverResult } from "../../features/search/types";
 
-test("provider albums duplicate neither local albums nor each other", () => {
+test("canonical provider albums replace sparse local shadows without duplicates", () => {
     const libraryAlbums: Album[] = [
         {
             id: "local-mezzanine",
@@ -35,11 +35,11 @@ test("provider albums duplicate neither local albums nor each other", () => {
         },
     ];
 
+    const merged = mergeSearchAlbums(providerAlbums, libraryAlbums);
+    assert.deepEqual(merged.libraryAlbums, []);
     assert.deepEqual(
-        dedupeDiscoverAlbums(providerAlbums, libraryAlbums).map(
-            (result) => result.browseId,
-        ),
-        ["MPREb_heligoland"],
+        merged.discoverAlbums.map((result) => result.browseId),
+        ["MPREb_mezzanine", "MPREb_heligoland"],
     );
 });
 
@@ -60,10 +60,32 @@ test("meaningful parenthetical album titles are not treated as editions", () => 
         },
     ];
 
+    const merged = mergeSearchAlbums(providerAlbums, libraryAlbums);
+    assert.deepEqual(merged.libraryAlbums, libraryAlbums);
     assert.deepEqual(
-        dedupeDiscoverAlbums(providerAlbums, libraryAlbums).map(
-            (result) => result.browseId,
-        ),
+        merged.discoverAlbums.map((result) => result.browseId),
         ["MPREb_music-for-airports"],
     );
+});
+
+test("a non-canonical discovery duplicate cannot displace a local album", () => {
+    const libraryAlbums: Album[] = [
+        {
+            id: "local-from-zero",
+            title: "From Zero",
+            artist: { name: "Linkin Park" },
+        },
+    ];
+    const providerAlbums: DiscoverResult[] = [
+        {
+            type: "album",
+            name: "From Zero",
+            artist: "Linkin Park",
+        },
+    ];
+
+    assert.deepEqual(mergeSearchAlbums(providerAlbums, libraryAlbums), {
+        libraryAlbums,
+        discoverAlbums: [],
+    });
 });

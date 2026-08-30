@@ -133,6 +133,11 @@ const capture = {
     discoverActionBar: null as Record<string, unknown> | null,
     providerAlbums: null as Record<string, unknown> | null,
     playedTracks: null as Array<Record<string, unknown>> | null,
+    playedStartIndex: null as number | null,
+    playNowTrack: null as Record<string, unknown> | null,
+    albumPlayAlbum: null as Record<string, unknown> | null,
+    albumPlayStartIndex: null as number | null,
+    albumPlayNowTrack: null as Record<string, unknown> | null,
 };
 
 mock.module("next/navigation", {
@@ -157,10 +162,16 @@ mock.module("@/lib/audio-context", {
         }),
         useAudioControls: () => ({
             pause: () => undefined,
-            playTracks: (tracks: Array<Record<string, unknown>>) => {
+            playTracks: (
+                tracks: Array<Record<string, unknown>>,
+                startIndex = 0,
+            ) => {
                 capture.playedTracks = tracks;
+                capture.playedStartIndex = startIndex;
             },
-            playNow: () => undefined,
+            playNow: (track: Record<string, unknown>) => {
+                capture.playNowTrack = track;
+            },
         }),
     },
 });
@@ -301,9 +312,14 @@ mock.module("@/features/album/hooks/useAlbumRequest", {
 mock.module("@/features/album/hooks/useAlbumActions", {
     namedExports: {
         useAlbumActions: () => ({
-            playAlbum: () => undefined,
+            playAlbum: (album: Record<string, unknown>, startIndex = 0) => {
+                capture.albumPlayAlbum = album;
+                capture.albumPlayStartIndex = startIndex;
+            },
             shufflePlay: () => undefined,
-            playTrackNow: () => undefined,
+            playTrackNow: (track: Record<string, unknown>) => {
+                capture.albumPlayNowTrack = track;
+            },
             addAllToQueue: () => undefined,
             downloadAlbum: () => undefined,
             setAlbumPreference: async () => undefined,
@@ -667,6 +683,11 @@ beforeEach(() => {
     capture.discoverActionBar = null;
     capture.providerAlbums = null;
     capture.playedTracks = null;
+    capture.playedStartIndex = null;
+    capture.playNowTrack = null;
+    capture.albumPlayAlbum = null;
+    capture.albumPlayStartIndex = null;
+    capture.albumPlayNowTrack = null;
 });
 
 function resolvedParams(id: string) {
@@ -744,6 +765,38 @@ test("album route forwards provider matching and discovery fallback source to ch
     assert.equal(capture.albumActionBar?.source, "discovery");
 });
 
+test("album track selection starts the album queue at the selected row", async () => {
+    const tracks = [
+        { id: "album-track-1", title: "First", duration: 180 },
+        { id: "album-track-2", title: "Second", duration: 181 },
+        { id: "album-track-3", title: "Third", duration: 182 },
+    ];
+    albumState.album = {
+        id: "album-queue",
+        title: "Queue Album",
+        artist: { id: "artist-queue", name: "Queue Artist" },
+        tracks,
+        similarAlbums: [],
+    };
+
+    const AlbumPage = (await import("../../app/album/[id]/page")).default;
+    renderToStaticMarkup(
+        React.createElement(AlbumPage, {
+            params: resolvedParams("album-queue"),
+        }),
+    );
+
+    const onPlayTrack = capture.albumTrackList?.onPlayTrack as
+        | ((track: Record<string, unknown>, index: number) => void)
+        | undefined;
+    assert.ok(onPlayTrack);
+    onPlayTrack(tracks[1], 1);
+
+    assert.equal(capture.albumPlayAlbum?.id, "album-queue");
+    assert.equal(capture.albumPlayStartIndex, 1);
+    assert.equal(capture.albumPlayNowTrack, null);
+});
+
 test("artist route shows loading state for initial artist request", async () => {
     artistState.loading = true;
 
@@ -818,6 +871,93 @@ test("artist route renders popular tracks and provider matching metadata", async
         "/artist/artist-1/popular",
     );
     assert.equal(capture.artistActionBar?.source, "discovery");
+});
+
+test("artist route puts playable music before the long About section", async () => {
+    artistState.source = "discovery";
+    artistState.artist = {
+        id: "artist-1",
+        name: "Artist One",
+        bio: "A long artist biography",
+        topTracks: [
+            {
+                id: "top-1",
+                title: "Top Track",
+                duration: 200,
+                streamSource: "youtube",
+                youtubeVideoId: "top-track",
+            },
+        ],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.ok(html.indexOf("popular-tracks") < html.indexOf("artist-bio"));
+    assert.match(html, /pb-32/);
+});
+
+test("artist popular-track selection starts the visible artist queue at that row", async () => {
+    const topTracks = [
+        {
+            id: "yt:artist-track-1",
+            title: "First",
+            duration: 200,
+            streamSource: "youtube",
+            youtubeVideoId: "artist-track-1",
+            artist: { id: "artist-queue", name: "Queue Artist" },
+            album: { title: "Singles" },
+        },
+        {
+            id: "yt:artist-track-2",
+            title: "Second",
+            duration: 201,
+            streamSource: "youtube",
+            youtubeVideoId: "artist-track-2",
+            artist: { id: "artist-queue", name: "Queue Artist" },
+            album: { title: "Singles" },
+        },
+        {
+            id: "yt:artist-track-3",
+            title: "Third",
+            duration: 202,
+            streamSource: "youtube",
+            youtubeVideoId: "artist-track-3",
+            artist: { id: "artist-queue", name: "Queue Artist" },
+            album: { title: "Singles" },
+        },
+    ];
+    artistState.source = "discovery";
+    artistState.artistProvider = "ytmusic";
+    artistState.artist = {
+        id: "ytartist:artist-queue",
+        name: "Queue Artist",
+        topTracks,
+        similarArtists: [],
+    };
+    artistState.albums = [];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    renderToStaticMarkup(React.createElement(ArtistPage));
+
+    const onPlayTrack = capture.artistPopularTracks?.onPlayTrack as
+        | ((
+              track: Record<string, unknown>,
+              index: number,
+              visibleTracks: Array<Record<string, unknown>>,
+          ) => void)
+        | undefined;
+    assert.ok(onPlayTrack);
+    onPlayTrack(topTracks[1], 1, topTracks);
+
+    assert.deepEqual(
+        capture.playedTracks?.map((track) => track.youtubeVideoId),
+        ["artist-track-1", "artist-track-2", "artist-track-3"],
+    );
+    assert.equal(capture.playedStartIndex, 1);
+    assert.equal(capture.playNowTrack, null);
 });
 
 test("YouTube Music artist route exposes playable tracks and provider albums", async () => {

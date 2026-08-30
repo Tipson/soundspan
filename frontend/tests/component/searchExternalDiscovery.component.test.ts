@@ -161,6 +161,42 @@ test("YouTube Music-only related artists use the provider-aware artist route", a
     );
 });
 
+test("search artists keep one exact duplicate and prefer its canonical provider route", async () => {
+    const { SearchArtistsGrid } =
+        await import("../../features/search/components/SearchArtistsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(SearchArtistsGrid, {
+            libraryArtists: [
+                { id: "local-portishead", name: "Portishead", heroUrl: "" },
+            ],
+            discoveryArtists: [
+                {
+                    type: "music",
+                    name: "Portishead",
+                    youtubeChannelId: "UCduplicate",
+                },
+                {
+                    type: "music",
+                    name: "Massive Attack",
+                    youtubeChannelId: "UCmassiveattack",
+                },
+            ],
+            limit: 2,
+        } as never),
+    );
+
+    assert.doesNotMatch(html, /href="\/artist\/local-portishead"/);
+    assert.match(
+        html,
+        /href="\/artist\/Portishead\?provider=ytmusic&amp;channelId=UCduplicate"/,
+    );
+    assert.match(
+        html,
+        /href="\/artist\/Massive%20Attack\?provider=ytmusic&amp;channelId=UCmassiveattack"/,
+    );
+    assert.equal((html.match(/>Portishead</g) ?? []).length, 1);
+});
+
 test("discover tracks render artist links and album context", async () => {
     const { DiscoverTracksList } =
         await import("../../features/search/components/DiscoverTracksList");

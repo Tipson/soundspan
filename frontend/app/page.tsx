@@ -54,9 +54,13 @@ export default function HomePage() {
     if (isLoading) return <LoadingScreen />;
 
     return (
-        <div className="relative min-h-screen bg-surface pb-28 pt-4 sm:pt-6">
-            <div className="relative mx-auto max-w-[1800px] px-4 sm:px-6">
-                <div className="space-y-6 sm:space-y-8">
+        <div className="relative min-h-screen overflow-hidden bg-surface pb-40 pt-3 sm:pb-32 sm:pt-5">
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute left-1/2 top-0 h-[34rem] w-[72rem] max-w-[120vw] -translate-x-1/2 rounded-full bg-brand/[0.055] blur-3xl"
+            />
+            <div className="relative mx-auto max-w-[1600px] px-3 sm:px-6 lg:px-8">
+                <div className="space-y-8 sm:space-y-10">
                     <HomeWaveHero
                         personalizedFeed={personalizedFeed}
                         isLoading={isPersonalizedLoading}
@@ -74,26 +78,6 @@ export default function HomePage() {
                         </section>
                     )}
 
-                    {personalizedFeed && (
-                        <>
-                            <PersonalizedTrackShelf
-                                title="Quick picks"
-                                subtitle="Ready to play from your likes and playlists"
-                                tracks={personalizedFeed.shelves.quickPicks}
-                            />
-                            <PersonalizedTrackShelf
-                                title="Listen again"
-                                subtitle="Music you recently played"
-                                tracks={personalizedFeed.shelves.listenAgain}
-                            />
-                            <PersonalizedTrackShelf
-                                title="Fresh for you"
-                                subtitle="New tracks from your personal radio"
-                                tracks={personalizedFeed.shelves.discovery}
-                            />
-                        </>
-                    )}
-
                     {(isPersonalizedUnavailable ||
                         personalizedFeed?.reason ===
                             "provider_unavailable") && (
@@ -109,9 +93,25 @@ export default function HomePage() {
                     <MadeForYouSection
                         discoverWeekly={discoverWeekly}
                         mixes={mixes}
+                        personalizedFeed={personalizedFeed}
                         isRefreshingMixes={isRefreshingMixes}
                         handleRefreshMixes={handleRefreshMixes}
                     />
+
+                    {personalizedFeed && (
+                        <div className="space-y-8 sm:space-y-10">
+                            <PersonalizedTrackShelf
+                                title="Picked for right now"
+                                subtitle="Start anywhere — the full row keeps playing"
+                                tracks={personalizedFeed.shelves.quickPicks}
+                            />
+                            <PersonalizedTrackShelf
+                                title="Listen again"
+                                subtitle="Music you have recently kept in rotation"
+                                tracks={personalizedFeed.shelves.listenAgain}
+                            />
+                        </div>
+                    )}
 
                     <HomeOnlineDiscovery
                         enabled={showYtMusicExplore}

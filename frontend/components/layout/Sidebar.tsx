@@ -3,18 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Plus, RefreshCw, ArrowUpDown, Heart } from "lucide-react";
+import {
+    ArrowUpDown,
+    AudioWaveform,
+    Heart,
+    Home,
+    Library,
+    Plus,
+    Search,
+} from "lucide-react";
 import { cn } from "@/utils/cn";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useAudioState } from "@/lib/audio-state-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
-import { useToast } from "@/lib/toast-context";
-import { EqBars } from "@/components/ui/EqBars";
-import Image from "next/image";
 import { MobileSidebar } from "./MobileSidebar";
 import { SIDEBAR_NAVIGATION } from "./socialNavigation";
-import { BRAND_NAME } from "@/lib/brand";
 import { useLikedPlaylistQuery } from "@/hooks/useQueries";
 import { usePeerPlaylists } from "@/features/social/hooks/usePeerPlaylists";
 import { useFeatures } from "@/lib/features-context";
@@ -39,6 +42,13 @@ interface Playlist {
     user?: { username: string };
 }
 
+const sidebarNavigationIcons = {
+    "/": Home,
+    "/search": Search,
+    "/vibe": AudioWaveform,
+    "/library": Library,
+} as const;
+
 type PlaylistSort = UnifiedPlaylistSort;
 type PlaylistFilter = UnifiedPlaylistFilter;
 
@@ -48,9 +58,6 @@ type PlaylistFilter = UnifiedPlaylistFilter;
 export function Sidebar() {
     const pathname = usePathname();
     const { isAuthenticated } = useAuth();
-    const { toast } = useToast();
-    const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
-        useAudioState();
     // Listen Together is intentionally outside primary navigation, so the
     // sidebar must not start its optional polling loop.
     const hasActiveSessions = false;
@@ -64,7 +71,6 @@ export function Sidebar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
     const [playlistSort, setPlaylistSort] = useState<PlaylistSort>("updated");
     const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
     const [isSortFilterOpen, setIsSortFilterOpen] = useState(false);
@@ -76,33 +82,18 @@ export function Sidebar() {
     const sortFilterBtnRef = useRef<HTMLButtonElement>(null);
     const hasLoadedPlaylists = useRef(false);
 
-    // Handle library sync - no toast, notification bar handles feedback
-    const handleSync = async () => {
-        if (isSyncing) return;
-
-        try {
-            setIsSyncing(true);
-            await api.scanLibrary();
-            // No toast - notification will appear in the activity panel
-            window.dispatchEvent(new CustomEvent("notifications-changed"));
-        } catch (error) {
-            sharedFrontendLogger.error(
-                "Failed to trigger library scan:",
-                error,
-            );
-            toast.error("Failed to start scan. Please try again.");
-        } finally {
-            // Keep syncing for a bit to show the animation
-            setTimeout(() => setIsSyncing(false), 2000);
-        }
-    };
-
     // Load playlists only once
     useEffect(() => {
         let loadingTimeout: NodeJS.Timeout | null = null;
 
         const loadPlaylists = async () => {
-            if (!isAuthenticated || hasLoadedPlaylists.current) return;
+            if (
+                !isAuthenticated ||
+                isMobileOrTablet ||
+                hasLoadedPlaylists.current
+            ) {
+                return;
+            }
 
             // Delay showing loading state to avoid flicker
             loadingTimeout = setTimeout(() => setIsLoadingPlaylists(true), 200);
@@ -123,7 +114,7 @@ export function Sidebar() {
 
         // Listen for playlist events to refresh playlists
         const handlePlaylistEvent = async () => {
-            if (!isAuthenticated) return;
+            if (!isAuthenticated || isMobileOrTablet) return;
             try {
                 const data = await api.getPlaylists();
                 setPlaylists(data);
@@ -147,12 +138,7 @@ export function Sidebar() {
             window.removeEventListener("playlist-updated", handlePlaylistEvent);
             window.removeEventListener("playlist-deleted", handlePlaylistEvent);
         };
-    }, [isAuthenticated]);
-
-    // Close mobile menu when route changes
-    useEffect(() => {
-        setIsMobileMenuOpen(false);
-    }, [pathname]);
+    }, [isAuthenticated, isMobileOrTablet]);
 
     // Close mobile menu on escape key
     useEffect(() => {
@@ -216,146 +202,78 @@ export function Sidebar() {
     // Render sidebar content inline to prevent component recreation
     const sidebarContent = (
         <>
-            {/* Mobile Only - Logo and App Info */}
-            {isMobileOrTablet && (
-                <div className="px-6 pt-8 pb-6 border-b border-white/[0.08]">
-                    {/* Logo and Title */}
-                    <div className="flex items-center gap-4 mb-5">
-                        <Image
-                            src="/assets/images/soundspan.webp"
-                            alt={BRAND_NAME}
-                            width={48}
-                            height={48}
-                            sizes="48px"
-                            className="flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                            <h2 className="brand-wordmark text-2xl font-black text-white tracking-tight">
-                                {BRAND_NAME}
-                            </h2>
-                            {!currentTrack &&
-                            !currentAudiobook &&
-                            !currentPodcast ? (
-                                <p className="text-sm text-gray-400 font-medium">
-                                    Stream Your Way
-                                </p>
-                            ) : (
-                                <div className="text-xs text-gray-400 truncate">
-                                    <span className="text-gray-400">
-                                        Listening to:{" "}
-                                    </span>
-                                    <span className="text-white font-medium">
-                                        {playbackType === "track" &&
-                                        currentTrack
-                                            ? `${currentTrack.artist?.name} - ${currentTrack.album?.title}`
-                                            : playbackType === "audiobook" &&
-                                                currentAudiobook
-                                              ? currentAudiobook.title
-                                              : playbackType === "podcast" &&
-                                                  currentPodcast
-                                                ? currentPodcast.podcastTitle
-                                                : ""}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Quick Actions - Sync */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            className={cn(
-                                "w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300",
-                                isSyncing
-                                    ? "bg-[#1DB954] text-black"
-                                    : "bg-white/10 text-white hover:bg-white/15 active:scale-95",
-                            )}
-                            aria-label={
-                                isSyncing ? "Syncing library" : "Sync library"
-                            }
-                            title={isSyncing ? "Syncing..." : "Sync Library"}
-                        >
-                            <RefreshCw
-                                className={cn(
-                                    "w-4 h-4 transition-transform",
-                                    isSyncing && "animate-spin",
-                                )}
-                            />
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Navigation */}
             <nav
-                className={cn(
-                    isMobileOrTablet
-                        ? "pt-4 space-y-1 px-6"
-                        : "pt-6 space-y-1 px-3",
-                )}
+                className="px-3 pt-4"
                 role="navigation"
                 aria-label="Main navigation"
             >
-                {SIDEBAR_NAVIGATION.map((item) => {
-                    const isActive = pathname === item.href;
-                    const badge = "badge" in item ? item.badge : null;
-                    const isListenTogether = item.href === "/listen-together";
-                    const hasVibeAccent = item.accent === "vibe" && !isActive;
+                <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
+                    Listen
+                </p>
+                <div className="space-y-1">
+                    {SIDEBAR_NAVIGATION.map((item) => {
+                        const isActive =
+                            item.href === "/"
+                                ? pathname === "/"
+                                : pathname.startsWith(item.href);
+                        const badge = "badge" in item ? item.badge : null;
+                        const hasVibeAccent =
+                            item.accent === "vibe" && !isActive;
+                        const Icon =
+                            sidebarNavigationIcons[
+                                item.href as keyof typeof sidebarNavigationIcons
+                            ];
 
-                    return (
-                        <Link
-                            key={item.name}
-                            href={item.href}
-                            onClick={
-                                item.href === "/library"
-                                    ? (event) => {
-                                          handleOfflineLibraryNavigation({
-                                              isOnline: navigator.onLine,
-                                              preventDefault: () =>
-                                                  event.preventDefault(),
-                                              hardNavigate: (path) =>
-                                                  window.location.assign(path),
-                                          });
-                                      }
-                                    : undefined
-                            }
-                            aria-current={isActive ? "page" : undefined}
-                            className={cn(
-                                "block rounded-lg transition-all duration-200 group relative overflow-hidden",
-                                isMobileOrTablet ? "px-4 py-3.5" : "px-4 py-3",
-                                isActive
-                                    ? "bg-white/10 text-white"
-                                    : "text-gray-400 hover:text-white hover:bg-white/5 active:bg-white/[0.07]",
-                            )}
-                        >
-                            <div className="relative z-10 flex items-center gap-2">
-                                <span
+                        return (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                onClick={
+                                    item.href === "/library"
+                                        ? (event) => {
+                                              handleOfflineLibraryNavigation({
+                                                  isOnline: navigator.onLine,
+                                                  preventDefault: () =>
+                                                      event.preventDefault(),
+                                                  hardNavigate: (path) =>
+                                                      window.location.assign(
+                                                          path,
+                                                      ),
+                                              });
+                                          }
+                                        : undefined
+                                }
+                                aria-current={isActive ? "page" : undefined}
+                                className={cn(
+                                    "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
+                                    isActive
+                                        ? "bg-white/[0.09] text-white"
+                                        : "text-content-secondary hover:bg-white/[0.055] hover:text-white",
+                                )}
+                            >
+                                {isActive ? (
+                                    <span
+                                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand-hover"
+                                        aria-hidden="true"
+                                    />
+                                ) : null}
+                                <Icon
                                     className={cn(
-                                        "font-semibold transition-all duration-200",
-                                        isMobileOrTablet
-                                            ? "text-base"
-                                            : "text-sm",
-                                        isActive && "text-white",
-                                        hasVibeAccent &&
-                                            "nav-vibe-glow font-bold",
+                                        "h-[18px] w-[18px] flex-shrink-0",
+                                        hasVibeAccent && "text-ai-hover",
                                     )}
-                                >
-                                    {item.name}
-                                </span>
+                                    strokeWidth={isActive ? 2.4 : 2}
+                                />
+                                <span>{item.name}</span>
                                 {badge && (
                                     <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-brand/20 text-brand border border-brand/30">
                                         {badge}
                                     </span>
                                 )}
-                                {isListenTogether && hasActiveSessions && (
-                                    <EqBars />
-                                )}
-                            </div>
-                        </Link>
-                    );
-                })}
+                            </Link>
+                        );
+                    })}
+                </div>
             </nav>
 
             {/* Playlists Section */}
@@ -374,9 +292,9 @@ export function Sidebar() {
                     <Link
                         href="/playlists"
                         prefetch={false}
-                        className="relative group/link"
+                        className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                     >
-                        <span className="text-[10px] font-black text-gray-400 group-hover/link:text-transparent group-hover/link:bg-clip-text group-hover/link:bg-gradient-to-r group-hover/link:from-ai-hover group-hover/link:to-[#00c8ff] transition-all duration-300 uppercase tracking-[0.15em]">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted transition-colors hover:text-white">
                             {effectiveFilter === "others"
                                 ? "Shared playlists"
                                 : effectiveFilter === "mine"
@@ -385,7 +303,6 @@ export function Sidebar() {
                                     ? "Peer playlists"
                                     : "All playlists"}
                         </span>
-                        <div className="absolute -bottom-0.5 left-0 right-0 h-px bg-gradient-to-r from-ai/0 via-ai/50 to-ai/0 opacity-0 group-hover/link:opacity-100 transition-opacity duration-300" />
                     </Link>
                     <div className="flex items-center gap-1">
                         <div ref={sortFilterRef} className="relative">
@@ -405,15 +322,15 @@ export function Sidebar() {
                                     });
                                 }}
                                 className={cn(
-                                    "w-7 h-7 flex items-center justify-center rounded-md transition-all duration-300 border border-white/5",
+                                    "flex h-9 w-9 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
                                     isFiltered
-                                        ? "bg-ai/20 text-ai-hover border-ai/30"
-                                        : "bg-white/5 text-gray-400 hover:text-white hover:bg-gradient-to-br hover:from-ai hover:to-[#00c8ff] hover:scale-110 shadow-lg shadow-transparent hover:shadow-ai/30 hover:border-transparent",
+                                        ? "border-brand/40 bg-brand/15 text-brand-light"
+                                        : "border-white/5 bg-white/[0.04] text-content-muted hover:border-white/10 hover:bg-white/[0.07] hover:text-white",
                                 )}
                                 aria-label="Sort and filter playlists"
                                 title="Sort & Filter"
                             >
-                                <ArrowUpDown className="w-3.5 h-3.5" />
+                                <ArrowUpDown className="h-4 w-4" />
                             </button>
 
                             {isSortFilterOpen && sortFilterPos && (
@@ -480,7 +397,7 @@ export function Sidebar() {
                         <Link
                             href="/playlists"
                             prefetch={false}
-                            className="w-7 h-7 flex items-center justify-center rounded-md bg-white/5 text-gray-400 hover:text-white hover:bg-gradient-to-br hover:from-ai hover:to-[#00c8ff] hover:scale-110 transition-all duration-300 shadow-lg shadow-transparent hover:shadow-ai/30 border border-white/5 hover:border-transparent"
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/5 bg-white/[0.04] text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                             aria-label="Create playlist"
                             title="Create Playlist"
                         >
@@ -490,7 +407,7 @@ export function Sidebar() {
                 </div>
                 <div
                     className={cn(
-                        "flex-1 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-[#1c1c1c] scrollbar-track-transparent",
+                        "flex-1 overflow-y-auto space-y-1 scrollbar-thin scrollbar-track-transparent",
                         isMobileOrTablet ? "px-6" : "px-3",
                     )}
                 >
@@ -504,23 +421,20 @@ export function Sidebar() {
                                     href="/playlist/my-liked"
                                     prefetch={false}
                                     className={cn(
-                                        "block px-3 py-2.5 rounded-lg transition-all duration-300 group relative overflow-hidden",
+                                        "group block rounded-xl border px-3 py-2.5 transition-colors",
                                         isLikedActive
-                                            ? "bg-gradient-to-r from-ai/10 to-transparent text-white border-l-2 border-ai shadow-md shadow-ai/5"
-                                            : "text-gray-400 hover:text-white hover:bg-white/[0.05] border-l-2 border-transparent hover:border-l-2 hover:border-ai/30",
+                                            ? "border-brand/25 bg-brand/10 text-white"
+                                            : "border-transparent text-content-secondary hover:border-white/5 hover:bg-white/[0.045] hover:text-white",
                                     )}
                                 >
-                                    {!isLikedActive && (
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-ai/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                                    )}
                                     <div className="flex items-center gap-1.5">
                                         <Heart className="w-3.5 h-3.5 shrink-0 text-brand fill-brand relative z-10" />
                                         <div
                                             className={cn(
-                                                "text-sm font-medium truncate relative z-10 transition-all duration-200 flex-1",
+                                                "relative z-10 flex-1 truncate text-sm font-medium",
                                                 isLikedActive
                                                     ? "font-semibold"
-                                                    : "group-hover:translate-x-0.5",
+                                                    : "",
                                             )}
                                         >
                                             My Liked
@@ -548,12 +462,6 @@ export function Sidebar() {
                                     key={i}
                                     className="px-3 py-2.5 rounded-lg relative overflow-hidden bg-white/[0.02] border-l-2 border-transparent"
                                 >
-                                    <div
-                                        className="absolute inset-0 bg-gradient-to-r from-transparent via-ai/10 to-transparent"
-                                        style={{
-                                            animation: "shimmer 2s infinite",
-                                        }}
-                                    />
                                     <div className="h-4 bg-white/5 rounded w-3/4 mb-2 relative"></div>
                                     <div className="h-3 bg-white/5 rounded w-1/2 relative"></div>
                                 </div>
@@ -570,24 +478,17 @@ export function Sidebar() {
                                     href={playlist.href}
                                     prefetch={false}
                                     className={cn(
-                                        "block px-3 py-2.5 rounded-lg transition-all duration-300 group relative overflow-hidden",
+                                        "group block rounded-xl border px-3 py-2.5 transition-colors",
                                         isActive
-                                            ? "bg-gradient-to-r from-ai/10 to-transparent text-white border-l-2 border-ai shadow-md shadow-ai/5"
-                                            : "text-gray-400 hover:text-white hover:bg-white/[0.05] border-l-2 border-transparent hover:border-l-2 hover:border-ai/30",
+                                            ? "border-brand/25 bg-brand/10 text-white"
+                                            : "border-transparent text-content-secondary hover:border-white/5 hover:bg-white/[0.045] hover:text-white",
                                     )}
                                 >
-                                    {/* Hover shimmer effect */}
-                                    {!isActive && (
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-ai/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                                    )}
-
                                     <div className="flex items-center gap-1.5">
                                         <div
                                             className={cn(
-                                                "text-sm font-medium truncate relative z-10 transition-all duration-200 flex-1",
-                                                isActive
-                                                    ? "font-semibold"
-                                                    : "group-hover:translate-x-0.5",
+                                                "relative z-10 flex-1 truncate text-sm font-medium",
+                                                isActive ? "font-semibold" : "",
                                             )}
                                         >
                                             {playlist.name}
@@ -660,7 +561,10 @@ export function Sidebar() {
 
             {/* Desktop Sidebar */}
             {!isMobileOrTablet && (
-                <aside className="w-64 bg-surface-raised rounded-lg flex flex-col overflow-hidden relative z-10 border border-white/[0.03]">
+                <aside
+                    data-shell-sidebar="desktop"
+                    className="relative z-10 flex w-[236px] flex-shrink-0 flex-col overflow-hidden rounded-[18px] border border-white/[0.06] bg-surface-raised"
+                >
                     {sidebarContent}
                 </aside>
             )}

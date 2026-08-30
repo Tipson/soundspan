@@ -40,6 +40,34 @@ function toRowItem(track: LibraryTrack): TrackRowItem {
     };
 }
 
+function isTrackPlayable(track: LibraryTrack): boolean {
+    return track.source !== "federated" || track.peer?.online === true;
+}
+
+function toPlaybackTrack(track: LibraryTrack) {
+    return {
+        id: track.id,
+        title: track.title,
+        displayTitle: track.displayTitle,
+        duration: track.duration,
+        artist: {
+            id: track.album.artist.id,
+            name: track.album.artist.name,
+        },
+        album: {
+            id: track.album.id,
+            title: track.album.title,
+            coverArt: track.album.coverUrl,
+            albumLoudnessLufs: track.album.albumLoudnessLufs ?? null,
+            albumTruePeakDb: track.album.albumTruePeakDb ?? null,
+        },
+        loudnessLufs: track.loudnessLufs ?? null,
+        truePeakDb: track.truePeakDb ?? null,
+        source: track.source,
+        peer: track.peer,
+    };
+}
+
 /**
  * Renders the LibraryTracksList component.
  */
@@ -53,9 +81,15 @@ export function LibraryTracksList({
     const allTracks = tracks ?? [];
     const visibleTracks =
         typeof limit === "number" ? allTracks.slice(0, limit) : allTracks;
+    const playableVisibleTracks = visibleTracks.filter(isTrackPlayable);
 
     const handlePlay = useCallback(
-        (track: LibraryTrack, index: number) => {
+        (track: LibraryTrack) => {
+            const playableIndex = playableVisibleTracks.findIndex(
+                (candidate) => candidate.id === track.id,
+            );
+            if (playableIndex < 0) return;
+
             if (currentTrack?.id === track.id) {
                 if (isPlaying) {
                     pause();
@@ -63,31 +97,20 @@ export function LibraryTracksList({
                     resume();
                 }
             } else {
-                const formattedTracks = allTracks.map((t) => ({
-                    id: t.id,
-                    title: t.title,
-                    displayTitle: t.displayTitle,
-                    duration: t.duration,
-                    artist: {
-                        id: t.album.artist.id,
-                        name: t.album.artist.name,
-                    },
-                    album: {
-                        id: t.album.id,
-                        title: t.album.title,
-                        coverArt: t.album.coverUrl,
-                        albumLoudnessLufs: t.album.albumLoudnessLufs ?? null,
-                        albumTruePeakDb: t.album.albumTruePeakDb ?? null,
-                    },
-                    loudnessLufs: t.loudnessLufs ?? null,
-                    truePeakDb: t.truePeakDb ?? null,
-                    source: t.source,
-                    peer: t.peer,
-                }));
-                playTracks(formattedTracks, index);
+                playTracks(
+                    playableVisibleTracks.map(toPlaybackTrack),
+                    playableIndex,
+                );
             }
         },
-        [allTracks, currentTrack?.id, isPlaying, playTracks, pause, resume],
+        [
+            currentTrack?.id,
+            isPlaying,
+            pause,
+            playTracks,
+            playableVisibleTracks,
+            resume,
+        ],
     );
 
     const rowSlots = useCallback(

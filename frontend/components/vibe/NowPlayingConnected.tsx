@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback } from "react";
 import { useAudioState, type Track } from "@/lib/audio-state-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import {
     usePlaybackStatus,
     usePlaybackProgress,
 } from "@/lib/audio-playback-context";
-import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
+import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { NowPlayingCard } from "./NowPlayingCard";
 
@@ -40,24 +40,13 @@ export function NowPlayingConnected({
     const { isPlaying, duration } = usePlaybackStatus();
     // Now-playing card shows the position; it is a legitimate clock consumer.
     const { currentTime } = usePlaybackProgress();
-    const { pause, play, advanceQueue } = useAudioControls();
+    const { pause, play } = useAudioControls();
     const { playbackType } = useAudioState();
     const onTogglePlay = useCallback(
         () => (isPlaying ? pause() : play()),
         [isPlaying, pause, play],
     );
     const preferenceTrackId = playbackType === "track" ? track?.id : undefined;
-    const activePreferenceTrackIdRef = useRef(preferenceTrackId);
-    useLayoutEffect(() => {
-        activePreferenceTrackIdRef.current = preferenceTrackId;
-    }, [preferenceTrackId]);
-    const onThumbsDownApplied = useCallback(
-        (appliedTrackId: string) => {
-            if (activePreferenceTrackIdRef.current !== appliedTrackId) return;
-            advanceQueue("feedback");
-        },
-        [advanceQueue],
-    );
     return (
         <NowPlayingCard
             track={track}
@@ -69,14 +58,13 @@ export function NowPlayingConnected({
             currentTime={currentTime}
             duration={duration}
             likeSlot={
-                <TrackPreferenceButtons
+                <CurrentTrackPreferenceButtons
                     trackId={preferenceTrackId}
                     mode="both"
                     resolveFromQuery
                     buttonSizeClassName="h-11 w-11"
                     iconSizeClassName="w-5 h-5"
                     metadata={buildPreferenceMetadata(track)}
-                    onThumbsDownApplied={onThumbsDownApplied}
                 />
             }
         />

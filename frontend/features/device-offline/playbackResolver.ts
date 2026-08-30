@@ -208,7 +208,7 @@ export function hasDeviceOfflinePlaybackCopy(
     return resolveReadyPlaybackRecord(track, preferredQuality) !== null;
 }
 
-/** Acquire a revocable device-file URL, or a no-op legacy/network lease. */
+/** Acquire a revocable verified device-file URL, or a clean network lease. */
 export async function acquireDeviceOfflinePlaybackSource(
     track: DeviceOfflinePlaybackTrack,
     networkUrl: string,
@@ -219,12 +219,15 @@ export async function acquireDeviceOfflinePlaybackSource(
 
     const selected = resolveReadyPlaybackRecord(track, preferredQuality);
     if (!selected?.mediaRef) {
-        return immediatePlaybackSource(
-            selected
-                ? (preparedSources.get(selected.key)?.url ??
-                      selected.virtualUrl)
-                : networkUrl,
-        );
+        const preparedUrl = selected
+            ? preparedSources.get(selected.key)?.url
+            : undefined;
+        // Legacy metadata can outlive its CacheStorage body (for example after
+        // an interrupted Background Fetch or browser eviction). Never replace
+        // a healthy online stream with that unverified virtual URL. Downloads
+        // explicitly verify the legacy bytes and register a Blob URL before
+        // they are eligible for device playback.
+        return immediatePlaybackSource(preparedUrl ?? networkUrl);
     }
 
     const ownerId = selected.ownerId;
@@ -290,5 +293,5 @@ export function resolveDeviceOfflinePlaybackUrl(
 ): string {
     const selected = resolveReadyPlaybackRecord(track, preferredQuality);
     if (!selected) return networkUrl;
-    return preparedSources.get(selected.key)?.url ?? selected.virtualUrl;
+    return preparedSources.get(selected.key)?.url ?? networkUrl;
 }

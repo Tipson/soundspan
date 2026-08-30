@@ -133,17 +133,36 @@ export function DiscoverTracksList({
         return merged;
     }, [directMatches, resolvedMatches]);
 
+    const playableQueue = useMemo(
+        () =>
+            visibleTracks.flatMap((track, index) => {
+                const key = rowKey(track, index);
+                const match = matches.get(key);
+                return match
+                    ? [{ key, track: toPlaybackTrack(track, key, match) }]
+                    : [];
+            }),
+        [matches, visibleTracks],
+    );
+
     const handleRowClick = useCallback(
         (track: DiscoverResult, key: string) => {
             const match = matches.get(key);
             if (match) {
-                playTracks([toPlaybackTrack(track, key, match)], 0);
+                const selectedIndex = playableQueue.findIndex(
+                    (candidate) => candidate.key === key,
+                );
+                if (selectedIndex < 0) return;
+                playTracks(
+                    playableQueue.map((candidate) => candidate.track),
+                    selectedIndex,
+                );
                 return;
             }
             const artistHref = getTrackArtistHref(track);
             if (artistHref) router.push(artistHref);
         },
-        [matches, playTracks, router],
+        [matches, playableQueue, playTracks, router],
     );
 
     if (tracks.length === 0) {

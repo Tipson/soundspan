@@ -492,6 +492,10 @@ ytmusicStreamer:
     # - tv: legacy TV parser only
     # - native: ytmusicapi yt.search() only
     YTMUSIC_SEARCH_MODE: "auto"
+    # BCP-47 response language and ISO 3166-1 alpha-2 catalog location.
+    # Set YTMUSIC_LOCATION when the cluster region differs from the listeners.
+    YTMUSIC_LANGUAGE: "en"
+    YTMUSIC_LOCATION: ""
     # Destination for YouTube URL downloads inside the music volume.
     # Uncomment to override the chart default ("/music/YouTube Downloads").
     # YT_DOWNLOAD_DIR: "/music/YouTube Downloads"

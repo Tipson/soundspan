@@ -1,23 +1,36 @@
-import { Download, Network } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/utils/cn";
-import { FilterTab } from "../types";
+import type { SearchResultView } from "../types";
 
 interface SearchFiltersProps {
-    filterTab: FilterTab;
-    onFilterChange: (tab: FilterTab) => void;
-    soulseekEnabled: boolean;
-    federationEnabled: boolean;
+    activeView: SearchResultView;
+    query: string;
     hasSearched: boolean;
 }
 
+const SEARCH_RESULT_VIEWS: ReadonlyArray<{
+    id: SearchResultView;
+    label: string;
+}> = [
+    { id: "all", label: "All" },
+    { id: "tracks", label: "Tracks" },
+    { id: "artists", label: "Artists" },
+    { id: "albums", label: "Albums" },
+];
+
+function searchViewHref(query: string, view: SearchResultView): string {
+    const queryString = `q=${encodeURIComponent(query)}`;
+    return view === "all"
+        ? `/search?${queryString}`
+        : `/search?${queryString}&view=${view}`;
+}
+
 /**
- * Renders the SearchFilters component.
+ * Navigate between entity-scoped views of the same aggregated music search.
  */
 export function SearchFilters({
-    filterTab,
-    onFilterChange,
-    soulseekEnabled,
-    federationEnabled,
+    activeView,
+    query,
     hasSearched,
 }: SearchFiltersProps) {
     if (!hasSearched) {
@@ -25,83 +38,35 @@ export function SearchFilters({
     }
 
     return (
-        <div className="flex gap-2 mb-8" data-tv-section="search-filters">
-            <button
-                data-tv-card
-                data-tv-card-index={0}
-                tabIndex={0}
-                onClick={() => onFilterChange("all")}
-                className={cn(
-                    "px-4 py-2 text-sm font-bold rounded-full transition-all",
-                    filterTab === "all"
-                        ? "bg-white text-black"
-                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
-                )}
-            >
-                All
-            </button>
-            <button
-                data-tv-card
-                data-tv-card-index={1}
-                tabIndex={0}
-                onClick={() => onFilterChange("library")}
-                className={cn(
-                    "px-4 py-2 text-sm font-bold rounded-full transition-all",
-                    filterTab === "library"
-                        ? "bg-white text-black"
-                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
-                )}
-            >
-                My Library
-            </button>
-            <button
-                data-tv-card
-                data-tv-card-index={2}
-                tabIndex={0}
-                onClick={() => onFilterChange("discover")}
-                className={cn(
-                    "px-4 py-2 text-sm font-bold rounded-full transition-all",
-                    filterTab === "discover"
-                        ? "bg-white text-black"
-                        : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
-                )}
-            >
-                Discover
-            </button>
-            {federationEnabled && (
-                <button
-                    data-tv-card
-                    data-tv-card-index={3}
-                    tabIndex={0}
-                    onClick={() => onFilterChange("peers")}
-                    className={cn(
-                        "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all",
-                        filterTab === "peers"
-                            ? "bg-brand text-black"
-                            : "bg-surface-hover text-white hover:bg-surface-highlight",
-                    )}
-                >
-                    <Network className="h-4 w-4" />
-                    Peers
-                </button>
-            )}
-            {soulseekEnabled && (
-                <button
-                    data-tv-card
-                    data-tv-card-index={federationEnabled ? 4 : 3}
-                    tabIndex={0}
-                    onClick={() => onFilterChange("soulseek")}
-                    className={cn(
-                        "px-4 py-2 text-sm font-bold rounded-full transition-all flex items-center gap-2",
-                        filterTab === "soulseek"
-                            ? "bg-brand text-black"
-                            : "bg-[#232323] text-white hover:bg-[#2a2a2a]",
-                    )}
-                >
-                    <Download className="w-4 h-4" />
-                    Soulseek
-                </button>
-            )}
-        </div>
+        <nav
+            aria-label="Search result type"
+            className="mb-8 overflow-x-auto scrollbar-hide"
+            data-tv-section="search-filters"
+        >
+            <div className="flex min-w-max gap-2">
+                {SEARCH_RESULT_VIEWS.map((view, index) => {
+                    const isActive = activeView === view.id;
+                    return (
+                        <Link
+                            key={view.id}
+                            href={searchViewHref(query, view.id)}
+                            aria-current={isActive ? "page" : undefined}
+                            data-tv-card
+                            data-tv-card-index={index}
+                            tabIndex={0}
+                            className={cn(
+                                "rounded-full px-4 py-2 text-sm font-bold transition-colors",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+                                isActive
+                                    ? "bg-brand text-black"
+                                    : "bg-surface-highlight text-white hover:bg-surface-elevated",
+                            )}
+                        >
+                            {view.label}
+                        </Link>
+                    );
+                })}
+            </div>
+        </nav>
     );
 }

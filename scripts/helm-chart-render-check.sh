@@ -587,6 +587,8 @@ helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set deploymentMode=individual \
   --set tidalSidecar.enabled=true \
   --set ytmusicStreamer.enabled=true \
+  --set-string ytmusicStreamer.env.YTMUSIC_LANGUAGE=ru \
+  --set-string ytmusicStreamer.env.YTMUSIC_LOCATION=RU \
   >"$tmp_sidecars"
 
 for sidecar in tidal ytmusic; do
@@ -606,6 +608,8 @@ for sidecar in tidal ytmusic; do
   fi
 done
 assert_deployment_termination_grace "${RELEASE_NAME}-ytmusic" "30" "$tmp_sidecars"
+assert_deployment_env_value "${RELEASE_NAME}-ytmusic" "YTMUSIC_LANGUAGE" "ru" "$tmp_sidecars"
+assert_deployment_env_value "${RELEASE_NAME}-ytmusic" "YTMUSIC_LOCATION" "RU" "$tmp_sidecars"
 assert_service_selectors_isolated "individual with HTTP sidecars" "$tmp_sidecars"
 
 echo "[CHECK] render default-off DCLAP provider in individual mode"

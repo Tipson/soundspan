@@ -31,6 +31,30 @@ export function normalizeArtistName(value: string): string {
     return value.trim().toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
 }
 
+/** Check whether an artist is exact for the typed or provider-corrected query. */
+export function isExactArtistSearchMatch(
+    artistName: string,
+    query: string,
+    aliasCanonical?: string | null,
+): boolean {
+    const normalizedArtist = normalizeArtistName(artistName);
+    return [query, aliasCanonical ?? ""]
+        .map((value) => normalizeArtistName(value))
+        .filter(Boolean)
+        .includes(normalizedArtist);
+}
+
+/** Whether discovery can reopen the provider's full artist catalog directly. */
+export function hasCanonicalProviderArtistIdentity(
+    artist: DiscoverResult | null | undefined,
+): boolean {
+    return Boolean(
+        artist?.type === "music" &&
+        typeof artist.youtubeChannelId === "string" &&
+        artist.youtubeChannelId.trim(),
+    );
+}
+
 /**
  * Derives which external search results to surface and whether an
  * exact-name external match should beat a fuzzy library match, honoring
@@ -59,12 +83,8 @@ export function deriveDiscoverySelection({
     const tracks = discoverResults.filter((r) => r.type === "track");
     const albums = discoverResults.filter((r) => r.type === "album");
 
-    const exactTargets = [query, aliasCanonical ?? ""]
-        .map((value) => normalizeArtistName(value))
-        .filter(Boolean);
-
     const matchesExactly = (name: string) =>
-        exactTargets.includes(normalizeArtistName(name));
+        isExactArtistSearchMatch(name, query, aliasCanonical);
 
     const exactArtist = artists.find((artist) => matchesExactly(artist.name));
     const libraryTopIsExact =

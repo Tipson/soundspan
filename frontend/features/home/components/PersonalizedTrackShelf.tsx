@@ -237,23 +237,22 @@ export function PersonalizedTrackShelf({
     if (tracks.length === 0) return null;
 
     return (
-        <section
-            aria-labelledby={titleId}
-            className="relative overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-white/[0.075] via-white/[0.035] to-brand/[0.08] p-4 sm:p-5"
-        >
-            <div className="mb-4 flex items-end justify-between gap-4">
+        <section aria-labelledby={titleId} className="relative min-w-0">
+            <div className="mb-3 flex items-end justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2.5">
                         <h2
                             id={titleId}
-                            className="truncate text-xl font-bold tracking-tight text-white sm:text-2xl"
+                            className="truncate text-xl font-black tracking-[-0.025em] text-content sm:text-2xl"
                         >
                             {title}
                         </h2>
                         <YouTubeBadge />
                     </div>
                     {subtitle && (
-                        <p className="mt-1 text-sm text-white/55">{subtitle}</p>
+                        <p className="mt-1 text-sm text-content-muted">
+                            {subtitle}
+                        </p>
                     )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -299,7 +298,7 @@ export function PersonalizedTrackShelf({
                 ref={scrollContainerRef}
                 role="list"
                 data-testid="personalized-track-shelf-scroll"
-                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col grid-rows-2 auto-cols-[minmax(260px,82vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth pb-1 sm:auto-cols-[minmax(300px,380px)] motion-reduce:scroll-auto"
+                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col grid-rows-2 auto-cols-[minmax(252px,82vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth sm:auto-cols-[minmax(286px,360px)] motion-reduce:scroll-auto"
             >
                 {tracks.map((track, index) => {
                     const imageUrl = trackImageUrl(track);
@@ -307,7 +306,7 @@ export function PersonalizedTrackShelf({
                         <div
                             key={`${track.id}-${index}`}
                             role="listitem"
-                            className="group flex min-h-[68px] snap-start scroll-ml-0 items-center overflow-hidden rounded-xl border border-white/[0.055] bg-black/25 transition hover:border-white/15 hover:bg-white/[0.09]"
+                            className="group flex min-h-[68px] snap-start scroll-ml-0 items-center overflow-hidden rounded-xl border border-white/[0.055] bg-white/[0.035] shadow-sm transition hover:border-white/15 hover:bg-white/[0.075] motion-reduce:transition-none"
                         >
                             <button
                                 type="button"

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
+    allocateSearchResultLimits,
     hasVisibleTrackResults,
     resolveSearchCatalogPolicy,
     resolvePrimarySongsSurface,
@@ -16,7 +16,10 @@ test("general music search excludes podcasts and expands the dedicated tracks vi
         {
             discoverType: "music",
             discoverLimit: 20,
-            discoverTrackDisplayLimit: 10,
+            libraryType: "all",
+            libraryLimit: 20,
+            trackDisplayLimit: 5,
+            albumDisplayLimit: 6,
         },
     );
     assert.deepEqual(
@@ -26,22 +29,40 @@ test("general music search excludes podcasts and expands the dedicated tracks vi
         {
             discoverType: "music",
             discoverLimit: 50,
-            discoverTrackDisplayLimit: null,
+            libraryType: "tracks",
+            libraryLimit: 50,
+            trackDisplayLimit: 50,
+            albumDisplayLimit: 6,
         },
     );
 });
 
 test("dedicated album and artist views request the expanded provider catalog", () => {
     for (const view of ["albums", "artists"] as const) {
-        assert.equal(
-            resolveSearchCatalogPolicy({
-                isTracksView: false,
-                isAlbumsView: view === "albums",
-                isArtistsView: view === "artists",
-            }).discoverLimit,
-            50,
-        );
+        const policy = resolveSearchCatalogPolicy({
+            isTracksView: false,
+            isAlbumsView: view === "albums",
+            isArtistsView: view === "artists",
+        });
+        assert.equal(policy.discoverLimit, 50);
+        assert.equal(policy.libraryLimit, 50);
+        assert.equal(policy.libraryType, view);
     }
+});
+
+test("overview and dedicated views cap merged result shelves, not each source independently", () => {
+    assert.deepEqual(
+        allocateSearchResultLimits({ primaryCount: 3, totalLimit: 5 }),
+        { primaryLimit: 3, secondaryLimit: 2 },
+    );
+    assert.deepEqual(
+        allocateSearchResultLimits({ primaryCount: 42, totalLimit: 50 }),
+        { primaryLimit: 42, secondaryLimit: 8 },
+    );
+    assert.deepEqual(
+        allocateSearchResultLimits({ primaryCount: 80, totalLimit: 50 }),
+        { primaryLimit: 50, secondaryLimit: 0 },
+    );
 });
 
 test("hidden sources do not count as tracks for the active search filter", () => {
@@ -123,46 +144,4 @@ test("a background acquisition lookup cannot cover playable catalog rows with a 
         }),
         true,
     );
-});
-
-test("the single-column page renders playable songs before acquisition fallbacks", async () => {
-    const source = await readFile(
-        new URL("../../app/search/page.tsx", import.meta.url),
-        "utf8",
-    );
-    const branchStart = source.indexOf(
-        "Original single-column layout when not showing 2-column",
-    );
-    const branchEnd = source.indexOf("{/* Library Albums */}", branchStart);
-    assert.ok(branchStart >= 0 && branchEnd > branchStart);
-    const singleColumnBranch = source.slice(branchStart, branchEnd);
-
-    const playableIndex = singleColumnBranch.indexOf(
-        'primarySongsSurface === "playable"',
-    );
-    const acquisitionIndex = singleColumnBranch.indexOf(
-        'primarySongsSurface === "soulseek"',
-    );
-    assert.ok(playableIndex >= 0, "playable single-column surface is missing");
-    assert.ok(
-        acquisitionIndex > playableIndex,
-        "Soulseek must not precede instantly playable catalog rows",
-    );
-    assert.match(
-        singleColumnBranch,
-        /primarySongsSurface === "soulseek-loading"/,
-    );
-});
-
-test("the primary search surface stays music-only when no audiobook catalog is configured", async () => {
-    const source = await readFile(
-        new URL("../../app/search/page.tsx", import.meta.url),
-        "utf8",
-    );
-
-    assert.doesNotMatch(source, /LibraryAudiobooksGrid/);
-    assert.doesNotMatch(source, /LibraryPodcastsGrid/);
-    assert.doesNotMatch(source, /DiscoverPodcastsGrid/);
-    assert.doesNotMatch(source, />Audiobooks</);
-    assert.doesNotMatch(source, />Discover Podcasts</);
 });
