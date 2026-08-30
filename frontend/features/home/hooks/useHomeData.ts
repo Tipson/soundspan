@@ -19,10 +19,8 @@ import {
     useRefreshMixesMutation,
     useYtMusicChartsQuery,
     useYtMusicHomeShelvesQuery,
-    useYtMusicMixesQuery,
     type PlaylistPreview,
     type YtMusicHomeShelf,
-    type YtMusicMixPreview,
 } from "@/hooks/useQueries";
 
 export interface UseHomeDataReturn {
@@ -32,7 +30,6 @@ export interface UseHomeDataReturn {
     showYtMusicExplore: boolean;
     homeShelves: YtMusicHomeShelf[];
     chartPlaylists: PlaylistPreview[];
-    ytMusicMixes: YtMusicMixPreview[];
     isLoading: boolean;
     isRefreshingMixes: boolean;
     isPersonalizedLoading: boolean;
@@ -66,10 +63,6 @@ export function useHomeData(): UseHomeDataReturn {
     const chartsQuery = useYtMusicChartsQuery({
         enabled: showYtMusicExplore,
     });
-    const ytMusicMixesQuery = useYtMusicMixesQuery({
-        enabled: showYtMusicExplore,
-    });
-
     const { mutateAsync: refreshMixes, isPending: isRefreshingMixes } =
         useRefreshMixesMutation();
 
@@ -119,7 +112,6 @@ export function useHomeData(): UseHomeDataReturn {
             chartsQuery.data,
             12,
         ),
-        ytMusicMixes: ytMusicMixesQuery.data ?? [],
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),
         isRefreshingMixes,
         isPersonalizedLoading: personalizedQuery.isLoading,

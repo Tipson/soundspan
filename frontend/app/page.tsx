@@ -33,7 +33,6 @@ export default function HomePage() {
         showYtMusicExplore,
         homeShelves,
         chartPlaylists,
-        ytMusicMixes,
         isLoading,
         isRefreshingMixes,
         isPersonalizedLoading,
@@ -104,7 +103,6 @@ export default function HomePage() {
 
                     <HomeOnlineDiscovery
                         enabled={showYtMusicExplore}
-                        ytMusicMixes={ytMusicMixes}
                         homeShelves={homeShelves}
                         chartPlaylists={chartPlaylists}
                     />

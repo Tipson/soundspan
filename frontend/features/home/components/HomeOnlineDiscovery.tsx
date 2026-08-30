@@ -5,7 +5,6 @@ import { api } from "@/lib/api";
 import type {
     PlaylistPreview,
     YtMusicHomeShelf,
-    YtMusicMixPreview,
     YtMusicShelfItem,
 } from "@/hooks/useQueries";
 import { SectionHeader } from "./SectionHeader";
@@ -27,7 +26,6 @@ interface HomeMediaItem {
 
 interface HomeOnlineDiscoveryProps {
     enabled: boolean;
-    ytMusicMixes: YtMusicMixPreview[];
     homeShelves: YtMusicHomeShelf[];
     chartPlaylists: PlaylistPreview[];
 }
@@ -126,7 +124,6 @@ function addUniqueMedia(
 
 /** Folds provider data into one station row and one discovery row. */
 export function buildHomeDiscoveryRows({
-    ytMusicMixes,
     homeShelves,
     chartPlaylists,
 }: Omit<HomeOnlineDiscoveryProps, "enabled">): {
@@ -137,27 +134,6 @@ export function buildHomeDiscoveryRows({
     const discoveries: HomeMediaItem[] = [];
     const seen = new Set<string>();
     const curatedShelves = curateHomeShelves(homeShelves);
-
-    ytMusicMixes.forEach((mix) => {
-        if (!mix.playlistId.trim() || !mix.title.trim()) return;
-        const thumbnail =
-            mix.thumbnails.find((item) => item.width >= 200) ??
-            mix.thumbnails[0];
-        addUniqueMedia(
-            stations,
-            {
-                key: mix.playlistId,
-                href: `/explore/yt-playlist/${encodeURIComponent(mix.playlistId)}`,
-                title: mix.title.trim(),
-                subtitle: mix.description || "Personal station",
-                imageUrl: thumbnail?.url
-                    ? api.getBrowseImageUrl(thumbnail.url)
-                    : null,
-            },
-            seen,
-            6,
-        );
-    });
 
     curatedShelves
         .filter((shelf) => PERSONAL_SHELF_PATTERN.test(shelf.title ?? ""))
@@ -256,13 +232,11 @@ function HomeMediaRow({
 /** A compact merged Explore surface with no duplicate provider shelves. */
 export function HomeOnlineDiscovery({
     enabled,
-    ytMusicMixes,
     homeShelves,
     chartPlaylists,
 }: HomeOnlineDiscoveryProps) {
     const { stations, discoveries } = enabled
         ? buildHomeDiscoveryRows({
-              ytMusicMixes,
               homeShelves,
               chartPlaylists,
           })

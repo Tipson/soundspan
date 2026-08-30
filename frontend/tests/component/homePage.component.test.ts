@@ -44,7 +44,6 @@ mock.module("@/features/home/hooks/useHomeData", {
             chartPlaylists: [{ id: "chart-1" }],
             moodCategories: [{ title: "Moods" }],
             genreCategories: [{ title: "Genres" }],
-            ytMusicMixes: [{ playlistId: "mix-provider-1" }],
             isMoodsLoading: false,
             handleRefreshMixes: async () => undefined,
         }),

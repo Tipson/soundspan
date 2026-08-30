@@ -36,15 +36,6 @@ mock.module("@/lib/api", {
 
 const props = {
     enabled: true,
-    ytMusicMixes: [
-        {
-            playlistId: "mix",
-            title: "Your provider mix",
-            description: "Personal provider mix",
-            thumbnails: [{ url: "/mix.jpg", width: 240 }],
-            count: null,
-        },
-    ],
     homeShelves: [
         {
             title: "Made for you",
@@ -98,7 +89,7 @@ test("Home discovery keeps provider rows without duplicating Vibe mood controls"
     );
 
     assert.match(html, /Stations for you/);
-    assert.match(html, /Your provider mix/);
+    assert.doesNotMatch(html, /Your provider mix/);
     assert.match(html, /Personal station/);
     assert.match(html, /New &amp; noteworthy/);
     assert.match(html, /Fresh album/);
@@ -213,7 +204,6 @@ test("Home discovery deduplicates chart playlists against provider shelves by pl
         await import("../../features/home/components/HomeOnlineDiscovery");
 
     const rows = buildHomeDiscoveryRows({
-        ytMusicMixes: [],
         homeShelves: [
             {
                 title: "New releases",
