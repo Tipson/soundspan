@@ -29,6 +29,11 @@ import { useQueuedTrackIds } from "@/hooks/useQueuedTrackIds";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    formatMixDuration,
+    formatMixTrackCount,
+    mixRu,
+} from "@/lib/i18n/musicPagesRu";
 
 interface MixTrack {
     id: string;
@@ -65,13 +70,15 @@ export default function MixPage() {
     if (!autoPlaylists) {
         return (
             <div className="p-6">
-                <h1 className="text-xl font-semibold text-white mb-4">Mix</h1>
+                <h1 className="text-xl font-semibold text-white mb-4">
+                    {mixRu.title}
+                </h1>
                 <div className="bg-surface-raised border border-surface-active rounded-lg p-6">
                     <p className="text-content-secondary mb-2">
-                        Feature not available
+                        {mixRu.unavailable}
                     </p>
                     <p className="text-sm text-content-muted">
-                        Auto-generated mixes are disabled on this server.
+                        {mixRu.disabled}
                     </p>
                 </div>
             </div>
@@ -104,15 +111,6 @@ function MixPageContent() {
             0,
         );
     }, [mix?.tracks]);
-
-    const formatTotalDuration = (seconds: number) => {
-        const hours = Math.floor(seconds / 3600);
-        const mins = Math.floor((seconds % 3600) / 60);
-        if (hours > 0) {
-            return `about ${hours} hr ${mins} min`;
-        }
-        return `${mins} min`;
-    };
 
     // Check if this mix is currently playing
     const mixTrackIds = useMemo(() => {
@@ -196,7 +194,7 @@ function MixPageContent() {
         setIsSaving(true);
         try {
             const result = await api.saveMixAsPlaylist(mixId);
-            toast.success(`Saved as "${result.name}" playlist!`);
+            toast.success(`${mixRu.saveSuccess}: «${result.name}»`);
             window.dispatchEvent(new Event("playlist-created"));
             setTimeout(() => {
                 router.push(`/playlist/${result.id}`);
@@ -211,16 +209,14 @@ function MixPageContent() {
                 data?: { playlistId?: string };
             };
             if (err?.status === 409) {
-                toast.info("You've already saved this mix as a playlist.");
+                toast.info(mixRu.alreadySaved);
                 if (err?.data?.playlistId) {
                     setTimeout(() => {
                         router.push(`/playlist/${err.data!.playlistId}`);
                     }, 1000);
                 }
-            } else if (error instanceof Error) {
-                toast.error(error.message);
             } else {
-                toast.error("Failed to save mix as playlist");
+                toast.error(mixRu.saveFailed);
             }
         } finally {
             setIsSaving(false);
@@ -238,7 +234,7 @@ function MixPageContent() {
     if (!mix) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">Mix not found</p>
+                <p className="text-gray-400">{mixRu.notFound}</p>
             </div>
         );
     }
@@ -273,7 +269,7 @@ function MixPageContent() {
                     {/* Mix Info - Bottom Aligned */}
                     <div className="flex-1 min-w-0 pb-1">
                         <p className="text-xs font-medium text-white/90 mb-1">
-                            Mix
+                            {mixRu.title}
                         </p>
                         <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
                             {mix.name}
@@ -285,12 +281,13 @@ function MixPageContent() {
                         )}
                         <div className="flex items-center gap-1 text-sm text-white/70">
                             <span>
-                                {mix.trackCount || mix.tracks?.length || 0}{" "}
-                                songs
+                                {formatMixTrackCount(
+                                    mix.trackCount || mix.tracks?.length || 0,
+                                )}
                             </span>
                             {totalDuration > 0 && (
                                 <span>
-                                    , {formatTotalDuration(totalDuration)}
+                                    , {formatMixDuration(totalDuration)}
                                 </span>
                             )}
                         </div>
@@ -322,7 +319,8 @@ function MixPageContent() {
                         <button
                             onClick={handleShuffle}
                             className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                            title="Shuffle play"
+                            title={mixRu.shuffle}
+                            aria-label={mixRu.shuffle}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -336,7 +334,7 @@ function MixPageContent() {
                     >
                         <Save className="w-4 h-4" />
                         <span className="hidden sm:inline">
-                            {isSaving ? "Saving..." : "Save as Playlist"}
+                            {isSaving ? mixRu.saving : mixRu.saveAsPlaylist}
                         </span>
                     </button>
                 </div>
@@ -349,9 +347,11 @@ function MixPageContent() {
                         {/* Table Header */}
                         <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 text-xs text-gray-400 uppercase tracking-wider border-b border-white/10 mb-2">
                             <span className="text-center">#</span>
-                            <span>Title</span>
-                            <span>Album</span>
-                            <span className="text-right">Duration</span>
+                            <span>{mixRu.tableTitle}</span>
+                            <span>{mixRu.tableAlbum}</span>
+                            <span className="text-right">
+                                {mixRu.tableDuration}
+                            </span>
                         </div>
 
                         {/* Track Rows */}
@@ -434,7 +434,7 @@ function MixPageContent() {
                                                         </span>
                                                         {isInQueue && (
                                                             <span className="shrink-0 text-[10px] bg-brand/15 text-brand-light px-1.5 py-0.5 rounded border border-brand/30 font-medium">
-                                                                IN QUEUE
+                                                                {mixRu.inQueue}
                                                             </span>
                                                         )}
                                                     </p>
@@ -460,7 +460,10 @@ function MixPageContent() {
                                                         e.stopPropagation();
                                                         handleAddToQueue(track);
                                                     }}
-                                                    title="Add to Queue"
+                                                    title={mixRu.addToQueue}
+                                                    aria-label={
+                                                        mixRu.addToQueue
+                                                    }
                                                 >
                                                     <ListPlus className="w-4 h-4" />
                                                 </button>
@@ -480,11 +483,9 @@ function MixPageContent() {
                             <Music className="w-10 h-10 text-gray-400" />
                         </div>
                         <h3 className="text-lg font-medium text-white mb-1">
-                            No tracks
+                            {mixRu.noTracks}
                         </h3>
-                        <p className="text-sm text-gray-400">
-                            This mix is empty
-                        </p>
+                        <p className="text-sm text-gray-400">{mixRu.empty}</p>
                     </div>
                 )}
             </div>

@@ -39,6 +39,7 @@ import { SimilarAlbums } from "@/features/album/components/SimilarAlbums";
 import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
 import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
 import { toAlbumPlaybackTrack } from "@/features/album/albumPlayback";
+import { albumRu } from "@/lib/i18n/musicPagesRu";
 
 interface AlbumPageProps {
     params: Promise<{
@@ -216,7 +217,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
 
     // Loading and error states
     if (loading) {
-        return <LoadingScreen />;
+        return <LoadingScreen message={albumRu.loading} />;
     }
 
     if (!album) {
@@ -224,14 +225,14 @@ export default function AlbumPage({ params }: AlbumPageProps) {
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold mb-4">
-                        Error Loading Album
+                        {albumRu.loadErrorTitle}
                     </h1>
-                    <p className="text-gray-400 mb-4">Album not found</p>
+                    <p className="text-gray-400 mb-4">{albumRu.notFound}</p>
                     <button
                         onClick={() => router.push("/albums")}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
                     >
-                        Back to Albums
+                        {albumRu.backToAlbums}
                     </button>
                 </div>
             </div>
@@ -290,12 +291,12 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         setIsDeletingAlbum(true);
         try {
             if (currentTrack?.album?.id === album.id) pause();
-            const result = await api.deleteAlbum(album.id);
-            toast.success(result.message || `Deleted “${album.title}”`);
+            await api.deleteAlbum(album.id);
+            toast.success(`${albumRu.deleted}: «${album.title}»`);
             router.replace("/library?tab=albums");
         } catch (error) {
             sharedFrontendLogger.error("Failed to delete album:", error);
-            toast.error("Could not delete this album. Please try again.");
+            toast.error(albumRu.deleteFailed);
         } finally {
             setIsDeletingAlbum(false);
         }
@@ -423,9 +424,11 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                 isOpen={showDeleteConfirm}
                 onClose={() => setShowDeleteConfirm(false)}
                 onConfirm={() => void handleDeleteAlbum()}
-                title="Delete album from server?"
-                message={`This permanently removes “${album.title}” and its audio files from the server library. This cannot be undone.`}
-                confirmText={isDeletingAlbum ? "Deleting…" : "Delete album"}
+                title={albumRu.deleteTitle}
+                message={`«${album.title}». ${albumRu.deleteMessage}`}
+                confirmText={
+                    isDeletingAlbum ? albumRu.deleting : albumRu.deleteAlbum
+                }
                 variant="danger"
             />
         </div>

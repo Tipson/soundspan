@@ -6,12 +6,13 @@ import {
     selectAlbumPlaybackQueue,
     toAlbumPlaybackTrack,
 } from "../albumPlayback";
+import { albumRu } from "@/lib/i18n/musicPagesRu";
 
 type AudioControls = ReturnType<typeof useAudioControls>;
 
 function requireAlbum(album: Album | null): album is Album {
     if (album) return true;
-    toast.error("Album data not available");
+    toast.error(albumRu.dataUnavailable);
     return false;
 }
 
@@ -46,7 +47,7 @@ function addAllToQueue(album: Album | null, controls: AudioControls): void {
     if (!requireAlbum(album)) return;
     const tracks = selectAlbumPlaybackQueue(album, 0).tracks;
     if (tracks.length === 0) {
-        toast.info("No tracks available to add");
+        toast.info(albumRu.noTracksToAdd);
         return;
     }
     controls.addTracksToQueue(tracks);

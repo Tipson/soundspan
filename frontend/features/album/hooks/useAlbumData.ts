@@ -6,6 +6,7 @@ import { queryKeys } from "@/hooks/useQueries";
 import { useDownloadContext } from "@/lib/download-context";
 import { loadAlbumDetails, loadCoreAlbum } from "../albumHydration";
 import { resolveAlbumSource, type AlbumSource } from "../types";
+import { albumRu } from "@/lib/i18n/musicPagesRu";
 
 function useCoreAlbumQuery(albumId: string, hasActiveDownloads: boolean) {
     return useQuery({
@@ -44,7 +45,7 @@ function useAlbumLoadError(error: Error | null, loading: boolean) {
     const router = useRouter();
     useEffect(() => {
         if (error && !loading) {
-            toast.error("Failed to load album");
+            toast.error(albumRu.loadFailed);
             router.back();
         }
     }, [error, loading, router]);

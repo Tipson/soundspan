@@ -44,6 +44,12 @@ import { toAddToPlaylistRef } from "@/lib/trackRef";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import {
+    formatQueueCount,
+    formatQueueSaveDescription,
+    formatQueueSaved,
+    queueRu,
+} from "@/lib/i18n/musicPagesRu";
 
 /**
  * Rows rendered on the first pass before react-virtuoso measures the
@@ -100,14 +106,12 @@ export default function QueuePage() {
 
     const handleClearQueue = () => {
         clearQueue();
-        toast.success(
-            isInGroup ? "Listen Together queue cleared" : "Queue cleared",
-        );
+        toast.success(isInGroup ? queueRu.sharedCleared : queueRu.cleared);
     };
 
     const handleRemoveTrack = (index: number) => {
         removeFromQueue(index);
-        toast.success("Removed from queue");
+        toast.success(queueRu.removed);
     };
 
     const handlePlayFromQueue = (index: number) => {
@@ -117,28 +121,26 @@ export default function QueuePage() {
             queueTrack.source === "federated" &&
             queueTrack.peer?.online === false
         ) {
-            toast.info("This peer is offline");
+            toast.info(queueRu.peerOffline);
             return;
         }
         const availability = isInGroup
             ? trackAvailability.get(index)
             : undefined;
         if (availability?.available === false) {
-            toast.info(
-                "Track unavailable for your account in this Listen Together session",
-            );
+            toast.info(queueRu.unavailableInSession);
             return;
         }
         if (isInGroup) {
             if (!isHost) {
-                toast.info("Only the host can change the current track");
+                toast.info(queueRu.hostOnly);
                 return;
             }
             syncSetTrack(index);
             return;
         }
         playQueueIndex(index);
-        toast.success("Playing from queue");
+        toast.success(queueRu.playingFromQueue);
     };
 
     // Both the arrow actions and drag-and-drop route through the shared
@@ -243,7 +245,8 @@ export default function QueuePage() {
 
     const handleSaveAsPlaylist = async () => {
         const name =
-            playlistName.trim() || `Queue — ${new Date().toLocaleDateString()}`;
+            playlistName.trim() ||
+            `${queueRu.title} — ${new Date().toLocaleDateString("ru-RU")}`;
         setIsSaving(true);
         try {
             const playlist = await api.createPlaylist(name);
@@ -253,12 +256,12 @@ export default function QueuePage() {
                     toAddToPlaylistRef(track),
                 );
             }
-            toast.success(`Saved ${playlistTracks.length} tracks to "${name}"`);
+            toast.success(formatQueueSaved(playlistTracks.length, name));
             setShowSaveDialog(false);
             setPlaylistName("");
             router.push(`/playlist/${playlist.id}`);
         } catch {
-            toast.error("Failed to save playlist");
+            toast.error(queueRu.saveFailed);
         } finally {
             setIsSaving(false);
         }
@@ -286,8 +289,8 @@ export default function QueuePage() {
             <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6">
                 {/* Header */}
                 <PageHeader
-                    title={isInGroup ? "Listen Together Queue" : "Queue"}
-                    subtitle={`${queue.length} item${queue.length !== 1 ? "s" : ""} in queue`}
+                    title={isInGroup ? queueRu.sharedTitle : queueRu.title}
+                    subtitle={formatQueueCount(queue.length)}
                     icon={ListMusic}
                     iconClassName="text-brand"
                     className="mb-8"
@@ -299,14 +302,14 @@ export default function QueuePage() {
                                     onClick={() => setShowSaveDialog(true)}
                                 >
                                     <Save className="w-4 h-4 mr-2" />
-                                    Save as Playlist
+                                    {queueRu.saveAsPlaylist}
                                 </Button>
                                 <Button
                                     variant="secondary"
                                     onClick={handleClearQueue}
                                 >
                                     <Trash2 className="w-4 h-4 mr-2" />
-                                    Clear Queue
+                                    {queueRu.clearQueue}
                                 </Button>
                             </div>
                         ) : null
@@ -317,10 +320,10 @@ export default function QueuePage() {
                 {queue.length === 0 && (
                     <EmptyState
                         icon={<ListMusic />}
-                        title="No tracks in queue"
-                        description="Start playing music to see your queue here"
+                        title={queueRu.emptyTitle}
+                        description={queueRu.emptyDescription}
                         action={{
-                            label: "Browse Library",
+                            label: queueRu.browseLibrary,
                             onClick: () => router.push("/library"),
                         }}
                     />
@@ -330,7 +333,7 @@ export default function QueuePage() {
                 {currentTrack && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Now Playing
+                            {queueRu.nowPlaying}
                         </h2>
                         <Card>
                             <div
@@ -369,7 +372,7 @@ export default function QueuePage() {
                                     <div className="mt-1 flex items-center gap-2">
                                         {isCurrentUnavailable ? (
                                             <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
-                                                Unavailable
+                                                {queueRu.unavailable}
                                             </span>
                                         ) : null}
                                         {isInGroup &&
@@ -430,7 +433,7 @@ export default function QueuePage() {
                 {currentEpisode && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Now Playing
+                            {queueRu.nowPlaying}
                         </h2>
                         <Card>
                             <div className="flex items-center gap-4 p-4 bg-surface-hover border-l-2 border-ai">
@@ -473,7 +476,7 @@ export default function QueuePage() {
                 {nextTracks.length > 0 && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Next Up ({nextTracks.length})
+                            {queueRu.nextUp} ({nextTracks.length})
                         </h2>
                         <Card>
                             <Virtuoso
@@ -572,7 +575,7 @@ export default function QueuePage() {
                 {previousTracks.length > 0 && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Previously Played ({previousTracks.length})
+                            {queueRu.previouslyPlayed} ({previousTracks.length})
                         </h2>
                         <Card>
                             <Virtuoso
@@ -632,12 +635,12 @@ export default function QueuePage() {
                     >
                         <div className="p-6">
                             <h2 className="text-lg font-bold text-white mb-1">
-                                Save Queue as Playlist
+                                {queueRu.saveDialogTitle}
                             </h2>
                             <p className="text-sm text-gray-400 mb-4">
-                                Save {playlistTracks.length} track
-                                {playlistTracks.length !== 1 ? "s" : ""} to a
-                                new playlist
+                                {formatQueueSaveDescription(
+                                    playlistTracks.length,
+                                )}
                             </p>
                             <input
                                 type="text"
@@ -648,7 +651,7 @@ export default function QueuePage() {
                                 onKeyDown={(e) =>
                                     e.key === "Enter" && handleSaveAsPlaylist()
                                 }
-                                placeholder={`Queue — ${new Date().toLocaleDateString()}`}
+                                placeholder={`${queueRu.title} — ${new Date().toLocaleDateString("ru-RU")}`}
                                 className="w-full px-3 py-2 bg-surface-hover border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-brand/50"
                                 autoFocus
                             />
@@ -658,14 +661,14 @@ export default function QueuePage() {
                                 onClick={() => setShowSaveDialog(false)}
                                 className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-medium rounded-lg transition-colors border border-white/10"
                             >
-                                Cancel
+                                {queueRu.cancel}
                             </button>
                             <button
                                 onClick={handleSaveAsPlaylist}
                                 disabled={isSaving}
                                 className="flex-1 px-4 py-2.5 bg-brand hover:bg-brand-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                             >
-                                {isSaving ? "Saving..." : "Save"}
+                                {isSaving ? queueRu.saving : queueRu.save}
                             </button>
                         </div>
                     </div>
@@ -699,8 +702,8 @@ function EpisodeQueueRow({
                 <button
                     {...dragHandleProps}
                     className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white cursor-grab active:cursor-grabbing"
-                    title="Drag to reorder"
-                    aria-label="Drag to reorder"
+                    title={queueRu.dragToReorder}
+                    aria-label={queueRu.dragToReorder}
                 >
                     <GripVertical className="w-5 h-5" />
                 </button>
@@ -729,7 +732,7 @@ function EpisodeQueueRow({
                     {episode.podcastTitle}
                 </p>
                 <p className="text-[11px] text-gray-400 truncate">
-                    Podcast episode
+                    {queueRu.podcastEpisode}
                 </p>
             </div>
             {(onPlay || onRemove) && (
@@ -738,8 +741,8 @@ function EpisodeQueueRow({
                         <button
                             onClick={onPlay}
                             className="p-2 hover:bg-surface rounded-md transition-colors"
-                            title="Play now"
-                            aria-label="Play now"
+                            title={queueRu.playNow}
+                            aria-label={queueRu.playNow}
                         >
                             <Play className="w-4 h-4" />
                         </button>
@@ -748,7 +751,8 @@ function EpisodeQueueRow({
                         <button
                             onClick={onRemove}
                             className="p-2 hover:bg-surface rounded-md transition-colors text-red-400 hover:text-red-300"
-                            title="Remove from queue"
+                            title={queueRu.removeFromQueue}
+                            aria-label={queueRu.removeFromQueue}
                         >
                             <X className="w-4 h-4" />
                         </button>
@@ -811,8 +815,8 @@ function NextTrackRow({
                 <button
                     {...dragHandleProps}
                     className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white cursor-grab active:cursor-grabbing"
-                    title="Drag to reorder"
-                    aria-label="Drag to reorder"
+                    title={queueRu.dragToReorder}
+                    aria-label={queueRu.dragToReorder}
                 >
                     <GripVertical className="w-5 h-5" />
                 </button>
@@ -843,7 +847,7 @@ function NextTrackRow({
                 <div className="mt-1 flex items-center gap-2">
                     {isUnavailable ? (
                         <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
-                            Unavailable
+                            {queueRu.unavailable}
                         </span>
                     ) : null}
                     {isInGroup && resolvedSource === "tidal" ? (
@@ -872,8 +876,8 @@ function NextTrackRow({
                             onClick={() => onMoveUp(queueIndex)}
                             disabled={queueIndex <= currentIndex + 1}
                             className="p-2 hover:bg-surface rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move up"
-                            aria-label="Move up"
+                            title={queueRu.moveUp}
+                            aria-label={queueRu.moveUp}
                         >
                             <ChevronUp className="w-4 h-4" />
                         </button>
@@ -881,8 +885,8 @@ function NextTrackRow({
                             onClick={() => onMoveDown(queueIndex)}
                             disabled={queueIndex >= queueLength - 1}
                             className="p-2 hover:bg-surface rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move down"
-                            aria-label="Move down"
+                            title={queueRu.moveDown}
+                            aria-label={queueRu.moveDown}
                         >
                             <ChevronDown className="w-4 h-4" />
                         </button>
@@ -892,8 +896,8 @@ function NextTrackRow({
                     onClick={() => onPlay(queueIndex)}
                     disabled={isUnavailable}
                     className="p-2 hover:bg-surface rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Play now"
-                    aria-label="Play now"
+                    title={queueRu.playNow}
+                    aria-label={queueRu.playNow}
                 >
                     <Play className="w-4 h-4" />
                 </button>
@@ -920,7 +924,7 @@ function NextTrackRow({
                                 onRemove(queueIndex);
                             }}
                             icon={<X className="h-4 w-4" />}
-                            label="Remove from queue"
+                            label={queueRu.removeFromQueue}
                             className="text-red-400 hover:text-red-300"
                         />
                     }
@@ -983,7 +987,7 @@ function PreviousTrackRow({
                 <div className="mt-1 flex items-center gap-2">
                     {isUnavailable ? (
                         <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
-                            Unavailable
+                            {queueRu.unavailable}
                         </span>
                     ) : null}
                     {isInGroup && resolvedSource === "tidal" ? (

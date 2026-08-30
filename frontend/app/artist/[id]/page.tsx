@@ -50,6 +50,14 @@ import {
     filterArtistReleases,
     mergeArtistTracks,
 } from "@/features/artist/artistView";
+import {
+    artistRu,
+    formatArtistAlbumPlaying,
+    formatArtistLoadMoreTracks,
+    formatArtistProviderLoadMoreTracks,
+    formatArtistRadioPlaying,
+    formatArtistSharedRadioMessage,
+} from "@/lib/i18n/musicPagesRu";
 
 function ListSectionSkeleton({
     title,
@@ -306,10 +314,10 @@ export default function ArtistPage() {
                     }),
                 );
                 playTracks(tracksWithAlbum, 0);
-                toast.success(`Playing ${albumTitle}`);
+                toast.success(formatArtistAlbumPlaying(albumTitle));
             }
         } catch {
-            toast.error("Failed to play album");
+            toast.error(artistRu.playAlbumFailed);
         }
     }
 
@@ -325,7 +333,7 @@ export default function ArtistPage() {
             id: t.artist?.id || artist!.id,
         },
         album: {
-            title: t.album?.title || "Unknown",
+            title: t.album?.title || artistRu.unknownAlbum,
             coverArt: t.album?.coverArt,
             id: t.album?.id,
         },
@@ -363,7 +371,7 @@ export default function ArtistPage() {
                 track.streamSource === "youtube" && !!track.youtubeVideoId,
         );
         if (playableTracks.length === 0) {
-            toast.error("No playable tracks found for this artist");
+            toast.error(artistRu.noPlayableTracks);
             return;
         }
         const orderedTracks = shuffle
@@ -450,7 +458,7 @@ export default function ArtistPage() {
         if (!artist) return;
 
         try {
-            toast.success(`Starting ${artist.name} Radio...`);
+            toast.success(artistRu.radioStarting);
             const response = await api.getRadioTracks("artist", artist.id);
 
             if (response.tracks && response.tracks.length > 0) {
@@ -465,15 +473,16 @@ export default function ArtistPage() {
                 // Backend already returns properly formatted tracks - just pass them through
                 playTracks(response.tracks, 0);
                 toast.success(
-                    `Playing ${artist.name} Radio (${response.tracks.length} tracks)`,
+                    formatArtistRadioPlaying(
+                        artist.name,
+                        response.tracks.length,
+                    ),
                 );
             } else {
-                toast.error(
-                    "Not enough similar music in your library for artist radio",
-                );
+                toast.error(artistRu.radioNotEnough);
             }
         } catch {
-            toast.error("Failed to start artist radio");
+            toast.error(artistRu.radioStartFailed);
         }
     }
 
@@ -482,13 +491,16 @@ export default function ArtistPage() {
         radioConfirmedRef.current = true;
         playTracks(radioConfirm.tracks as Parameters<typeof playTracks>[0], 0);
         toast.success(
-            `Playing ${artist?.name ?? "Artist"} Radio (${radioConfirm.count} tracks)`,
+            formatArtistRadioPlaying(
+                artist?.name ?? artistRu.fallbackName,
+                radioConfirm.count,
+            ),
         );
     };
 
     const handleCloseRadioConfirm = () => {
         if (!radioConfirmedRef.current) {
-            toast.info("Artist radio cancelled");
+            toast.info(artistRu.radioCancelled);
         }
         radioConfirmedRef.current = false;
         setRadioConfirm(null);
@@ -496,7 +508,7 @@ export default function ArtistPage() {
 
     // Loading state for initial/core request only
     if (loading) {
-        return <LoadingScreen message="Loading artist..." />;
+        return <LoadingScreen message={artistRu.loading} />;
     }
 
     // Error or not found state
@@ -506,16 +518,16 @@ export default function ArtistPage() {
                 <div className="text-center space-y-4">
                     <div className="text-6xl text-white/20">♪</div>
                     <h1 className="text-2xl font-semibold text-white">
-                        Artist Not Found
+                        {artistRu.notFound}
                     </h1>
                     <p className="text-neutral-400">
-                        This artist isn&apos;t in your library yet.
+                        {artistRu.notFoundDescription}
                     </p>
                     <button
                         onClick={() => router.back()}
                         className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-white transition-colors"
                     >
-                        Go Back
+                        {artistRu.goBack}
                     </button>
                 </div>
             </div>
@@ -634,11 +646,11 @@ export default function ArtistPage() {
                         />
                     ) : showTracks &&
                       (showProgressivePlaceholders || isArtistTracksLoading) ? (
-                        <ListSectionSkeleton title="Popular" />
+                        <ListSectionSkeleton title={artistRu.popular} />
                     ) : showTracks && activeView === "tracks" ? (
                         <ArtistViewEmptyState
-                            title="No tracks available"
-                            description="The connected music sources did not return playable tracks for this artist."
+                            title={artistRu.noTracks}
+                            description={artistRu.noTracksDescription}
                         />
                     ) : null}
 
@@ -657,8 +669,11 @@ export default function ArtistPage() {
                                     className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
                                 >
                                     {artistTracksQuery.isFetchingNextPage
-                                        ? "Loading tracks…"
-                                        : `Load more tracks (${artistTracksQuery.tracks.length} of ${artistTracksQuery.total})`}
+                                        ? artistRu.loadingTracks
+                                        : formatArtistLoadMoreTracks(
+                                              artistTracksQuery.tracks.length,
+                                              artistTracksQuery.total,
+                                          )}
                                 </button>
                             </div>
                         )}
@@ -678,8 +693,11 @@ export default function ArtistPage() {
                                     className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
                                 >
                                     {providerArtistTracksQuery.isFetchingNextPage
-                                        ? "Loading tracks…"
-                                        : `Load more tracks (${providerArtistTracksQuery.loadedReleaseCount} of ${providerArtistTracksQuery.totalReleaseCount} releases scanned)`}
+                                        ? artistRu.loadingTracks
+                                        : formatArtistProviderLoadMoreTracks(
+                                              providerArtistTracksQuery.loadedReleaseCount,
+                                              providerArtistTracksQuery.totalReleaseCount,
+                                          )}
                                 </button>
                             </div>
                         )}
@@ -691,10 +709,10 @@ export default function ArtistPage() {
                             <ArtistViewEmptyState
                                 title={
                                     activeView === "singles"
-                                        ? "No singles or EPs available"
-                                        : "No albums available"
+                                        ? artistRu.noSingles
+                                        : artistRu.noAlbums
                                 }
-                                description="The connected music sources did not classify any releases for this view."
+                                description={artistRu.noReleasesDescription}
                             />
                         )}
 
@@ -714,8 +732,8 @@ export default function ArtistPage() {
                             onSortChange={setSortBy}
                             title={
                                 activeView === "singles"
-                                    ? "Singles and EPs"
-                                    : "Discography"
+                                    ? artistRu.singlesAndEps
+                                    : artistRu.discography
                             }
                         />
                     )}
@@ -724,8 +742,8 @@ export default function ArtistPage() {
                         <section>
                             <h2 className="mb-4 text-xl font-bold">
                                 {activeView === "singles"
-                                    ? "Singles and EPs"
-                                    : "Albums"}
+                                    ? artistRu.singlesAndEps
+                                    : artistRu.albums}
                             </h2>
                             <ProviderAlbumsGrid
                                 albums={visibleProviderAlbums}
@@ -748,7 +766,7 @@ export default function ArtistPage() {
                             requestControls={albumRequestControls}
                         />
                     ) : showReleases && showProgressivePlaceholders ? (
-                        <GridSectionSkeleton title="Albums Available" />
+                        <GridSectionSkeleton title={artistRu.albumsAvailable} />
                     ) : null}
 
                     {/* Similar Artists */}
@@ -763,7 +781,7 @@ export default function ArtistPage() {
                         />
                     ) : activeView === "overview" &&
                       showProgressivePlaceholders ? (
-                        <GridSectionSkeleton title="Fans Also Like" />
+                        <GridSectionSkeleton title={artistRu.fansAlsoLike} />
                     ) : null}
                 </div>
             </div>
@@ -785,17 +803,19 @@ export default function ArtistPage() {
                 onClose={() => setShowPlaylistSelector(false)}
                 onSelectPlaylist={handlePlaylistSelected}
                 isLoading={isAddingToPlaylist}
-                loadingMessage="Adding tracks..."
+                loadingMessage={artistRu.addingTracks}
             />
 
             <ConfirmDialog
                 isOpen={radioConfirm !== null}
                 onClose={handleCloseRadioConfirm}
                 onConfirm={handleConfirmRadio}
-                title="Add to shared queue?"
-                message={`You're in a Listen Together group. Starting artist radio will add ${radioConfirm?.count ?? 0} song${(radioConfirm?.count ?? 0) === 1 ? "" : "s"} to the shared queue. Continue?`}
-                confirmText="Continue"
-                cancelText="Cancel"
+                title={artistRu.sharedQueueTitle}
+                message={formatArtistSharedRadioMessage(
+                    radioConfirm?.count ?? 0,
+                )}
+                confirmText={artistRu.continue}
+                cancelText={artistRu.cancel}
                 variant="info"
             />
         </div>

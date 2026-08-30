@@ -763,9 +763,9 @@ test("album route shows error state when album payload is missing", async () => 
         React.createElement(AlbumPage, { params: resolvedParams("album-404") }),
     );
 
-    assert.match(html, /Error Loading Album/);
-    assert.match(html, /Album not found/);
-    assert.match(html, /Back to Albums/);
+    assert.match(html, /Не удалось загрузить альбом/);
+    assert.match(html, /Альбом не найден/);
+    assert.match(html, /Вернуться к альбомам/);
 });
 
 test("album route renders placeholders while details are loading without tracks", async () => {
@@ -850,7 +850,7 @@ test("artist route shows loading state for initial artist request", async () => 
     const html = renderToStaticMarkup(React.createElement(ArtistPage));
 
     assert.match(html, /loading-screen/);
-    assert.match(html, /Loading artist/);
+    assert.match(html, /Загружаем исполнителя/);
 });
 
 test("artist route shows not-found fallback when data fails", async () => {
@@ -860,8 +860,8 @@ test("artist route shows not-found fallback when data fails", async () => {
     const ArtistPage = (await import("../../app/artist/[id]/page")).default;
     const html = renderToStaticMarkup(React.createElement(ArtistPage));
 
-    assert.match(html, /Artist Not Found/);
-    assert.match(html, /Go Back/);
+    assert.match(html, /Исполнитель не найден/);
+    assert.match(html, /Назад/);
 });
 
 test("artist route shows progressive placeholders for library artist with details still loading", async () => {
@@ -878,9 +878,9 @@ test("artist route shows progressive placeholders for library artist with detail
     const ArtistPage = (await import("../../app/artist/[id]/page")).default;
     const html = renderToStaticMarkup(React.createElement(ArtistPage));
 
-    assert.match(html, /Popular/);
-    assert.match(html, /Albums Available/);
-    assert.match(html, /Fans Also Like/);
+    assert.match(html, /Популярные треки/);
+    assert.match(html, /Доступные альбомы/);
+    assert.match(html, /Похожие исполнители/);
     assert.doesNotMatch(html, /popular-tracks/);
 });
 
@@ -1082,14 +1082,14 @@ test("YouTube Music Tracks view waits for release aggregation instead of showing
 
     const ArtistPage = (await import("../../app/artist/[id]/page")).default;
     const loadingHtml = renderToStaticMarkup(React.createElement(ArtistPage));
-    assert.match(loadingHtml, /Popular/);
-    assert.doesNotMatch(loadingHtml, /No tracks available/);
+    assert.match(loadingHtml, /Популярные треки/);
+    assert.doesNotMatch(loadingHtml, /Нет доступных треков/);
 
     artistState.providerCatalogLoading = false;
     artistState.providerCatalogHasNextPage = true;
     const partialHtml = renderToStaticMarkup(React.createElement(ArtistPage));
-    assert.match(partialHtml, /Load more tracks/);
-    assert.doesNotMatch(partialHtml, /No tracks available/);
+    assert.match(partialHtml, /Показать ещё треки/);
+    assert.doesNotMatch(partialHtml, /Нет доступных треков/);
 
     artistState.providerCatalogHasNextPage = false;
     artistState.providerCatalogLoading = false;
@@ -1106,7 +1106,7 @@ test("YouTube Music Tracks view waits for release aggregation instead of showing
     ];
     const loadedHtml = renderToStaticMarkup(React.createElement(ArtistPage));
     assert.match(loadedHtml, /popular-tracks/);
-    assert.doesNotMatch(loadedHtml, /No tracks available/);
+    assert.doesNotMatch(loadedHtml, /Нет доступных треков/);
 });
 
 test("discover route shows spinner while loading", async () => {

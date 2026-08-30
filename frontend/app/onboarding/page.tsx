@@ -8,7 +8,12 @@ import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useFeatures } from "@/lib/features-context";
 import { useAuth } from "@/lib/auth-context";
 import { revokeAuthenticatedRuntime } from "@/lib/auth-runtime";
-import { BRAND_MARKETING_TAGLINE, BRAND_NAME } from "@/lib/brand";
+import { BRAND_NAME } from "@/lib/brand";
+import {
+    formatOnboardingConnectionFailure,
+    formatOnboardingConnectionSuccess,
+    onboardingRu,
+} from "@/lib/i18n/musicPagesRu";
 
 /**
  * Renders the OnboardingPage component.
@@ -27,9 +32,8 @@ export default function OnboardingPage() {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const hasCheckedSession = useRef(false);
-    const showPasswordMismatch = error === "Passwords don't match";
-    const showPasswordTooShort =
-        error === "Password must be at least 6 characters";
+    const showPasswordMismatch = error === onboardingRu.passwordMismatch;
+    const showPasswordTooShort = error === onboardingRu.passwordTooShort;
 
     // Step 1: Account creation
     const [username, setUsername] = useState("");
@@ -94,12 +98,12 @@ export default function OnboardingPage() {
         setSuccess("");
 
         if (password !== confirmPassword) {
-            setError("Passwords don't match");
+            setError(onboardingRu.passwordMismatch);
             return;
         }
 
         if (password.length < 6) {
-            setError("Password must be at least 6 characters");
+            setError(onboardingRu.passwordTooShort);
             return;
         }
 
@@ -121,11 +125,9 @@ export default function OnboardingPage() {
             const message = err instanceof Error ? err.message : String(err);
             // Check if user already exists
             if (message?.includes("already taken")) {
-                setError(
-                    "Username already taken. If this is you, please refresh and continue where you left off.",
-                );
+                setError(onboardingRu.usernameTaken);
             } else {
-                setError(message || "Failed to create account");
+                setError(onboardingRu.accountCreationFailed);
             }
         } finally {
             setLoading(false);
@@ -142,7 +144,7 @@ export default function OnboardingPage() {
         try {
             if (type === "lidarr") {
                 if (!lidarr.url || !lidarr.apiKey) {
-                    throw new Error("URL and API key are required");
+                    throw new Error(onboardingRu.urlApiRequired);
                 }
                 await api.post("/system-settings/test-lidarr", {
                     url: lidarr.url,
@@ -150,7 +152,7 @@ export default function OnboardingPage() {
                 });
             } else if (type === "audiobookshelf") {
                 if (!audiobookshelf.url || !audiobookshelf.apiKey) {
-                    throw new Error("URL and API key are required");
+                    throw new Error(onboardingRu.urlApiRequired);
                 }
                 await api.post("/system-settings/test-audiobookshelf", {
                     url: audiobookshelf.url,
@@ -158,19 +160,21 @@ export default function OnboardingPage() {
                 });
             } else if (type === "soulseek") {
                 if (!soulseek.username || !soulseek.password) {
-                    throw new Error("Username and password are required");
+                    throw new Error(onboardingRu.soulseekCredentialsRequired);
                 }
                 await api.post("/system-settings/test-soulseek", {
                     username: soulseek.username,
                     password: soulseek.password,
                 });
             }
-            setSuccess(`${type} connected successfully!`);
+            setSuccess(formatOnboardingConnectionSuccess(type));
         } catch (err: unknown) {
             const errorMessage =
-                err instanceof Error
+                err instanceof Error &&
+                (err.message === onboardingRu.urlApiRequired ||
+                    err.message === onboardingRu.soulseekCredentialsRequired)
                     ? err.message
-                    : `Failed to connect to ${type}`;
+                    : formatOnboardingConnectionFailure(type);
             setError(errorMessage);
         } finally {
             setLoading(false);
@@ -195,12 +199,8 @@ export default function OnboardingPage() {
                 await api.post("/onboarding/complete");
                 router.push("/sync");
             }
-        } catch (err: unknown) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to save configuration",
-            );
+        } catch {
+            setError(onboardingRu.configurationSaveFailed);
         } finally {
             setLoading(false);
         }
@@ -218,7 +218,9 @@ export default function OnboardingPage() {
                 <div className="relative z-10 min-h-screen flex items-center justify-center">
                     <div className="text-center">
                         <GradientSpinner size="lg" />
-                        <p className="text-white/60 mt-4">Loading...</p>
+                        <p className="text-white/60 mt-4">
+                            {onboardingRu.loading}
+                        </p>
                     </div>
                 </div>
             ) : (
@@ -243,17 +245,22 @@ export default function OnboardingPage() {
                                 </h1>
                             </div>
                             <p className="text-white/60 text-lg">
-                                Welcome to your personal music streaming
-                                platform
+                                {onboardingRu.welcome}
                             </p>
                         </div>
 
                         {/* Progress Steps */}
                         <div className="flex items-center justify-center gap-3 mb-8">
                             {[
-                                { num: 1, label: "Account" },
-                                { num: 2, label: "Integrations" },
-                                { num: 3, label: "Enrichment" },
+                                { num: 1, label: onboardingRu.stepAccount },
+                                {
+                                    num: 2,
+                                    label: onboardingRu.stepIntegrations,
+                                },
+                                {
+                                    num: 3,
+                                    label: onboardingRu.stepEnrichment,
+                                },
                             ].map((s, idx) => (
                                 <div key={s.num} className="flex items-center">
                                     <div className="flex flex-col items-center">
@@ -298,11 +305,12 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                Create Your Account
+                                                {onboardingRu.createAccount}
                                             </h2>
                                             <p className="text-white/60">
-                                                Let&apos;s get you set up with
-                                                your personal music library
+                                                {
+                                                    onboardingRu.createAccountDescription
+                                                }
                                             </p>
                                         </div>
 
@@ -312,7 +320,7 @@ export default function OnboardingPage() {
                                         >
                                             <div>
                                                 <label className="block text-sm font-medium text-white/90 mb-1.5">
-                                                    Username
+                                                    {onboardingRu.username}
                                                 </label>
                                                 <input
                                                     type="text"
@@ -323,7 +331,9 @@ export default function OnboardingPage() {
                                                         )
                                                     }
                                                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
-                                                    placeholder="Choose a username"
+                                                    placeholder={
+                                                        onboardingRu.usernamePlaceholder
+                                                    }
                                                     required
                                                     minLength={3}
                                                 />
@@ -331,7 +341,7 @@ export default function OnboardingPage() {
 
                                             <div>
                                                 <label className="block text-sm font-medium text-white/90 mb-1.5">
-                                                    Password
+                                                    {onboardingRu.password}
                                                 </label>
                                                 <input
                                                     type="password"
@@ -346,7 +356,9 @@ export default function OnboardingPage() {
                                                             ? "border-red-500/50"
                                                             : "border-white/10"
                                                     }`}
-                                                    placeholder="At least 6 characters"
+                                                    placeholder={
+                                                        onboardingRu.passwordPlaceholder
+                                                    }
                                                     required
                                                     minLength={6}
                                                 />
@@ -354,7 +366,9 @@ export default function OnboardingPage() {
 
                                             <div>
                                                 <label className="block text-sm font-medium text-white/90 mb-1.5">
-                                                    Confirm Password
+                                                    {
+                                                        onboardingRu.confirmPassword
+                                                    }
                                                 </label>
                                                 <input
                                                     type="password"
@@ -369,7 +383,9 @@ export default function OnboardingPage() {
                                                             ? "border-red-500/50"
                                                             : "border-white/10"
                                                     }`}
-                                                    placeholder="Confirm your password"
+                                                    placeholder={
+                                                        onboardingRu.confirmPasswordPlaceholder
+                                                    }
                                                     required
                                                 />
                                             </div>
@@ -389,10 +405,12 @@ export default function OnboardingPage() {
                                                     {loading ? (
                                                         <>
                                                             <GradientSpinner size="sm" />
-                                                            Creating Account...
+                                                            {
+                                                                onboardingRu.creatingAccount
+                                                            }
                                                         </>
                                                     ) : (
-                                                        "Continue"
+                                                        onboardingRu.continue
                                                     )}
                                                 </span>
                                             </button>
@@ -404,19 +422,22 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                Connect Your Services
+                                                {onboardingRu.connectServices}
                                             </h2>
                                             <p className="text-white/60">
-                                                Optional integrations to enhance
-                                                your music library
+                                                {
+                                                    onboardingRu.connectServicesDescription
+                                                }
                                             </p>
                                         </div>
 
                                         <div className="space-y-4 mt-8">
                                             {/* Lidarr */}
                                             <IntegrationCard
-                                                title="Lidarr"
-                                                description="Automatic music library management"
+                                                title={onboardingRu.lidarr}
+                                                description={
+                                                    onboardingRu.lidarrDescription
+                                                }
                                                 localPort="localhost:8686"
                                                 icon={
                                                     <svg
@@ -463,8 +484,12 @@ export default function OnboardingPage() {
 
                                             {/* Audiobookshelf */}
                                             <IntegrationCard
-                                                title="Audiobookshelf"
-                                                description="Audiobook library management"
+                                                title={
+                                                    onboardingRu.audiobookshelf
+                                                }
+                                                description={
+                                                    onboardingRu.audiobookshelfDescription
+                                                }
                                                 localPort="localhost:13378"
                                                 icon={
                                                     <svg
@@ -568,7 +593,7 @@ export default function OnboardingPage() {
                                                 tabIndex={0}
                                                 className="flex-1 bg-white/5 border border-white/10 text-white/70 font-medium py-3.5 rounded-lg hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-brand/30"
                                             >
-                                                Skip for Now
+                                                {onboardingRu.skipForNow}
                                             </button>
                                             <button
                                                 onClick={handleNextStep}
@@ -582,8 +607,8 @@ export default function OnboardingPage() {
                                                 className="flex-1 py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/30"
                                             >
                                                 {loading
-                                                    ? "Saving..."
-                                                    : "Continue"}
+                                                    ? onboardingRu.saving
+                                                    : onboardingRu.continue}
                                             </button>
                                         </div>
                                     </div>
@@ -593,25 +618,29 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                Analysis Features
+                                                {onboardingRu.analysisFeatures}
                                             </h2>
                                             <p className="text-white/60">
-                                                Advanced audio analysis
-                                                capabilities detected
+                                                {
+                                                    onboardingRu.analysisFeaturesDescription
+                                                }
                                             </p>
                                         </div>
 
                                         <div className="bg-surface-raised border border-white/10 rounded-lg p-6 mt-8">
                                             <h3 className="text-lg font-semibold text-white mb-4">
-                                                Detected Analysis Features
+                                                {
+                                                    onboardingRu.detectedAnalysisFeatures
+                                                }
                                             </h3>
 
                                             {featuresLoading ? (
                                                 <div className="flex items-center gap-3 text-gray-400">
                                                     <GradientSpinner size="sm" />
                                                     <span>
-                                                        Detecting available
-                                                        features...
+                                                        {
+                                                            onboardingRu.detectingFeatures
+                                                        }
                                                     </span>
                                                 </div>
                                             ) : (
@@ -634,19 +663,15 @@ export default function OnboardingPage() {
                                                             <span
                                                                 className={`font-medium ${musicCNN ? "text-white" : "text-gray-400"}`}
                                                             >
-                                                                MusicCNN Audio
-                                                                Analysis
+                                                                {
+                                                                    onboardingRu.musicCnnTitle
+                                                                }
                                                             </span>
                                                         </div>
                                                         <p className="text-sm text-white/50 ml-7">
-                                                            Extracts BPM,
-                                                            musical key, mood,
-                                                            energy,
-                                                            danceability, and
-                                                            other audio features
-                                                            using neural
-                                                            networks trained on
-                                                            music.
+                                                            {
+                                                                onboardingRu.musicCnnDescription
+                                                            }
                                                         </p>
                                                     </div>
                                                     <div
@@ -667,19 +692,15 @@ export default function OnboardingPage() {
                                                             <span
                                                                 className={`font-medium ${vibeEmbeddings ? "text-white" : "text-gray-400"}`}
                                                             >
-                                                                CLAP Vibe
-                                                                Embeddings
+                                                                {
+                                                                    onboardingRu.clapTitle
+                                                                }
                                                             </span>
                                                         </div>
                                                         <p className="text-sm text-white/50 ml-7">
-                                                            Creates audio
-                                                            fingerprints that
-                                                            capture the overall
-                                                            &quot;vibe&quot; of
-                                                            each track, enabling
-                                                            &quot;find similar
-                                                            tracks&quot;
-                                                            functionality.
+                                                            {
+                                                                onboardingRu.clapDescription
+                                                            }
                                                         </p>
                                                     </div>
                                                 </div>
@@ -690,43 +711,47 @@ export default function OnboardingPage() {
                                                     {musicCNN ||
                                                     vibeEmbeddings ? (
                                                         <>
-                                                            Analysis workloads
-                                                            run in the
-                                                            background and can
-                                                            peak well above 4
-                                                            GiB of memory.
-                                                            Review the{" "}
+                                                            {
+                                                                onboardingRu.analysisCapacityLead
+                                                            }{" "}
+                                                            Откройте{" "}
                                                             <a
                                                                 href="https://github.com/soundspan/soundspan/blob/main/docs/DEPLOYMENT.md"
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="text-brand hover:underline"
                                                             >
-                                                                deployment guide
+                                                                {
+                                                                    onboardingRu.deploymentGuide
+                                                                }
                                                             </a>{" "}
-                                                            for capacity
-                                                            planning on
-                                                            constrained hosts.
-                                                            To disable them,
-                                                            copy{" "}
+                                                            {
+                                                                onboardingRu.analysisCapacityTail
+                                                            }{" "}
                                                             <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
                                                                 docker-compose.override.lite-mode.yml
                                                             </code>{" "}
-                                                            to{" "}
+                                                            {
+                                                                onboardingRu.copyTo
+                                                            }{" "}
                                                             <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
                                                                 docker-compose.override.yml
                                                             </code>{" "}
-                                                            and restart.
+                                                            {
+                                                                onboardingRu.andRestart
+                                                            }
                                                         </>
                                                     ) : (
                                                         <>
-                                                            Running in lite
-                                                            mode. To enable
-                                                            analyzers, remove{" "}
+                                                            {
+                                                                onboardingRu.liteModeLead
+                                                            }{" "}
                                                             <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
                                                                 docker-compose.override.yml
                                                             </code>{" "}
-                                                            and restart with{" "}
+                                                            {
+                                                                onboardingRu.restartWith
+                                                            }{" "}
                                                             <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
                                                                 docker compose
                                                                 up -d
@@ -757,19 +782,14 @@ export default function OnboardingPage() {
                                                 </div>
                                                 <div>
                                                     <h3 className="text-lg font-bold text-white mb-2">
-                                                        Artist Enrichment
+                                                        {
+                                                            onboardingRu.artistEnrichment
+                                                        }
                                                     </h3>
                                                     <p className="text-white/60 text-sm leading-relaxed">
-                                                        Enrichment automatically
-                                                        fetches additional
-                                                        metadata like artist
-                                                        bios, high-quality
-                                                        images, genres, and
-                                                        relationships from
-                                                        external sources. This
-                                                        powers smart features
-                                                        and provides a richer
-                                                        listening experience.
+                                                        {
+                                                            onboardingRu.artistEnrichmentDescription
+                                                        }
                                                     </p>
                                                 </div>
                                             </div>
@@ -798,10 +818,12 @@ export default function OnboardingPage() {
                                                     {loading ? (
                                                         <>
                                                             <GradientSpinner size="sm" />
-                                                            Finishing Setup...
+                                                            {
+                                                                onboardingRu.finishingSetup
+                                                            }
                                                         </>
                                                     ) : (
-                                                        "Complete Setup"
+                                                        onboardingRu.completeSetup
                                                     )}
                                                 </span>
                                             </button>
@@ -813,7 +835,7 @@ export default function OnboardingPage() {
 
                         {/* Footer */}
                         <p className="text-center text-white/40 text-sm mt-6">
-                            © 2025 {BRAND_NAME}. {BRAND_MARKETING_TAGLINE}
+                            © 2025 {BRAND_NAME}. {onboardingRu.footerTagline}
                         </p>
                     </div>
                 </div>
@@ -910,7 +932,7 @@ function IntegrationCard({
                             type="url"
                             value={url}
                             onChange={(e) => onUrlChange(e.target.value)}
-                            placeholder={`Server URL (e.g., http://${
+                            placeholder={`${onboardingRu.serverUrlPlaceholder} (например, http://${
                                 localPort || "localhost:PORT"
                             })`}
                             className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
@@ -923,7 +945,9 @@ function IntegrationCard({
                                     onChange={(e) =>
                                         onUsernameChange?.(e.target.value)
                                     }
-                                    placeholder="Soulseek Username"
+                                    placeholder={
+                                        onboardingRu.soulseekUsernamePlaceholder
+                                    }
                                     className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
                                 />
                                 <input
@@ -932,12 +956,13 @@ function IntegrationCard({
                                     onChange={(e) =>
                                         onPasswordChange?.(e.target.value)
                                     }
-                                    placeholder="Soulseek Password"
+                                    placeholder={
+                                        onboardingRu.soulseekPasswordPlaceholder
+                                    }
                                     className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
                                 />
                                 <p className="text-xs text-white/50 mt-2">
-                                    These are your Soulseek network credentials,
-                                    not your Slskd login
+                                    {onboardingRu.soulseekCredentialsHint}
                                 </p>
                             </>
                         ) : (
@@ -947,7 +972,7 @@ function IntegrationCard({
                                 onChange={(e) =>
                                     onApiKeyChange?.(e.target.value)
                                 }
-                                placeholder="API Key"
+                                placeholder={onboardingRu.apiKeyPlaceholder}
                                 className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
                             />
                         )}
@@ -969,7 +994,7 @@ function IntegrationCard({
                             tabIndex={0}
                             className="w-full bg-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand/30"
                         >
-                            Test Connection
+                            {onboardingRu.testConnection}
                         </button>
                     </div>
                 )}
@@ -1034,7 +1059,7 @@ function SoulseekCard({
                         <div>
                             <h3 className="text-white font-bold">Soulseek</h3>
                             <p className="text-sm text-white/50">
-                                Peer-to-peer music discovery
+                                {onboardingRu.soulseekDescription}
                             </p>
                         </div>
                     </div>
@@ -1060,18 +1085,22 @@ function SoulseekCard({
                             type="text"
                             value={username}
                             onChange={(e) => onUsernameChange(e.target.value)}
-                            placeholder="Soulseek Username"
+                            placeholder={
+                                onboardingRu.soulseekUsernamePlaceholder
+                            }
                             className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
                         />
                         <input
                             type="password"
                             value={password}
                             onChange={(e) => onPasswordChange(e.target.value)}
-                            placeholder="Soulseek Password"
+                            placeholder={
+                                onboardingRu.soulseekPasswordPlaceholder
+                            }
                             className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
                         />
                         <p className="text-xs text-white/50">
-                            Create an account at{" "}
+                            {onboardingRu.createSoulseekAccount}{" "}
                             <a
                                 href="https://www.slsknet.org/news/node/1"
                                 target="_blank"
@@ -1094,7 +1123,7 @@ function SoulseekCard({
                             tabIndex={0}
                             className="w-full bg-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand/30"
                         >
-                            Test Connection
+                            {onboardingRu.testConnection}
                         </button>
                     </div>
                 )}
