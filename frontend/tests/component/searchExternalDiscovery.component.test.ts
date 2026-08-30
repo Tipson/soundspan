@@ -133,6 +133,32 @@ test("top result prefers the library artist by default", async () => {
     assert.match(html, /href="\/artist\/lib-1"/);
 });
 
+test("exact library artists retain the matching YouTube Music catalog identity", async () => {
+    const { TopResult } =
+        await import("../../features/search/components/TopResult");
+    const html = renderToStaticMarkup(
+        React.createElement(TopResult, {
+            libraryArtist: {
+                id: "library-linkin-park",
+                name: "Linkin Park",
+                heroUrl: "https://img/library-linkin-park.jpg",
+            },
+            discoveryArtist: {
+                type: "music",
+                name: "Linkin Park",
+                youtubeChannelId: "UC-linkin-park",
+                image: "https://img/provider-linkin-park.jpg",
+            },
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/artist\/Linkin%20Park\?provider=ytmusic&amp;channelId=UC-linkin-park"/,
+    );
+    assert.match(html, /\/proxied\/https:\/\/img\/library-linkin-park\.jpg/);
+});
+
 test("top result prefers an exact external match when asked", async () => {
     const html = await renderTopResult(true);
     assert.match(html, />Drake</);

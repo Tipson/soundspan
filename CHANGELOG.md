@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Opening an exact local-shadow artist by its saved library ID now extends Tracks, Albums, and Singles & EPs from the matching YouTube Music catalog instead of leaving legacy artist links with an empty online discography; exact search top results preserve the same provider identity.
 - Device collection downloads retry transient network, provider, and device-I/O failures with bounded backoff and continue later tracks after an exhausted or permanent failure. Ready files reopen through their original directory or browser-private adapter after a PWA restart, offline playback never falls through to an unreachable network URL, and interrupted or failed entries expose Retry without appearing playable.
 - Rapid manual track changes invalidate late callbacks from the superseded audio source before they can stop or autoplay the replacement, and replacement-only intent no longer lets queue actions hide a genuine playback failure. Clicking the currently playing queue occurrence now pauses and resumes it without rebuilding the queue, while repeated playlist occurrences remain distinct.
 - An active Vibe mood now travels with the player session, so endless provider continuation keeps the selected context after navigating away from the Vibe page instead of silently reverting to an unfiltered Wave.

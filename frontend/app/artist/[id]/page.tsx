@@ -28,6 +28,7 @@ import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks
 import { useTidalTopTracks } from "@/features/artist/hooks/useTidalTopTracks";
 import { useArtistTracks } from "@/features/artist/hooks/useArtistTracks";
 import { useProviderArtistTracks } from "@/features/artist/hooks/useProviderArtistTracks";
+import { useProviderArtistFallback } from "@/features/artist/hooks/useProviderArtistFallback";
 import type { Track, Album } from "@/features/artist/types";
 
 // Components
@@ -159,9 +160,22 @@ export default function ArtistPage() {
         artist?.id,
         libraryArtistTracksEnabled,
     );
+    const shouldResolveProviderFallback =
+        source === "library" && Boolean(artist?.name);
+    const providerArtistFallback = useProviderArtistFallback(
+        artist?.name ?? "",
+        shouldResolveProviderFallback,
+    );
+    const fallbackProviderData = providerArtistFallback.data;
+    const providerReleases = isDirectYtMusicArtist
+        ? providerAlbums
+        : (fallbackProviderData?.providerAlbums ?? []);
+    const providerCatalogEnabled =
+        activeView === "tracks" &&
+        (isDirectYtMusicArtist || Boolean(fallbackProviderData));
     const providerArtistTracksQuery = useProviderArtistTracks(
-        providerAlbums,
-        activeView === "tracks" && isDirectYtMusicArtist,
+        providerReleases,
+        providerCatalogEnabled,
     );
 
     const artistAlbumRequests = useArtistAlbumRequests(artist?.name || "");
@@ -219,19 +233,38 @@ export default function ArtistPage() {
           isTidalMatching ||
           isYtMatching;
     const popularTracks = enrichedTopTracks || artist?.topTracks || [];
+    const fallbackProviderTracks = fallbackProviderData
+        ? mergeArtistTracks(
+              fallbackProviderData.artist.topTracks ?? [],
+              providerArtistTracksQuery.tracks,
+          )
+        : [];
     const visibleArtistTracks =
         isDirectYtMusicArtist && activeView === "tracks"
             ? mergeArtistTracks(popularTracks, providerArtistTracksQuery.tracks)
             : libraryArtistTracksEnabled
-              ? mergeArtistTracks(popularTracks, artistTracksQuery.tracks)
-              : popularTracks;
+              ? mergeArtistTracks(
+                    popularTracks,
+                    mergeArtistTracks(
+                        artistTracksQuery.tracks,
+                        fallbackProviderTracks,
+                    ),
+                )
+              : source === "library" && fallbackProviderTracks.length > 0
+                ? mergeArtistTracks(popularTracks, fallbackProviderTracks)
+                : popularTracks;
     const isArtistTracksLoading =
         visibleArtistTracks.length === 0 &&
         ((libraryArtistTracksEnabled && artistTracksQuery.isLoading) ||
             (isDirectYtMusicArtist &&
                 activeView === "tracks" &&
                 (providerArtistTracksQuery.isLoading ||
-                    providerArtistTracksQuery.hasNextPage)));
+                    providerArtistTracksQuery.hasNextPage)) ||
+            (shouldResolveProviderFallback &&
+                (providerArtistFallback.isLoading ||
+                    (providerCatalogEnabled &&
+                        (providerArtistTracksQuery.isLoading ||
+                            providerArtistTracksQuery.hasNextPage)))));
 
     // Separate owned and available albums
     const ownedAlbums = albums.filter((a) => a.owned);
@@ -241,7 +274,7 @@ export default function ArtistPage() {
         availableAlbums,
         activeView,
     );
-    const visibleProviderAlbums = providerAlbums.filter((release) => {
+    const visibleProviderAlbums = providerReleases.filter((release) => {
         const isSingle = /(?:single|ep)/i.test(release.releaseType ?? "");
         if (activeView === "singles") return isSingle;
         if (activeView === "albums") return !isSingle;
@@ -363,6 +396,8 @@ export default function ArtistPage() {
                     Boolean(track.youtubeVideoId)),
         )
         .map(formatTrackForPlayback);
+    const hasProviderTrackContext =
+        isDirectYtMusicArtist || fallbackProviderTracks.length > 0;
 
     function handlePlayProviderArtist(shuffle: boolean) {
         if (!artist) return;
@@ -552,17 +587,17 @@ export default function ArtistPage() {
                     source={source || "discovery"}
                     colors={colors}
                     onPlayAll={() =>
-                        isDirectYtMusicArtist
+                        hasProviderTrackContext
                             ? handlePlayProviderArtist(false)
                             : playAll(artist, albums)
                     }
                     onAddAllToQueue={() =>
-                        isDirectYtMusicArtist
+                        hasProviderTrackContext
                             ? handleAddAllPopularToQueue(visibleArtistTracks)
                             : addAllToQueue(artist, albums)
                     }
                     onShuffle={() =>
-                        isDirectYtMusicArtist
+                        hasProviderTrackContext
                             ? handlePlayProviderArtist(true)
                             : shufflePlay(artist, albums)
                     }
@@ -679,7 +714,7 @@ export default function ArtistPage() {
                         )}
 
                     {activeView === "tracks" &&
-                        isDirectYtMusicArtist &&
+                        providerCatalogEnabled &&
                         providerArtistTracksQuery.hasNextPage && (
                             <div className="-mt-7 flex justify-center">
                                 <button

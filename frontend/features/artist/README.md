@@ -28,12 +28,14 @@ Start-here guide for `frontend/features/artist`.
 | `hooks/useArtistAlbumRequests.ts` | hooks |
 | `hooks/useArtistData.ts` | hooks |
 | `hooks/useArtistTracks.ts` | hooks |
+| `hooks/useProviderArtistFallback.ts` | hooks |
 | `hooks/useDownloadActions.ts` | hooks |
 | `hooks/useTidalTopTracks.ts` | hooks |
 | `hooks/useTrackAlbumResolutions.ts` | hooks |
 | `hooks/useYtMusicTopTracks.ts` | hooks |
 | `types.ts` | root |
 | `artistView.ts` | root |
+| `providerArtistFallback.ts` | root |
 
 ## Update Rule
 
@@ -58,3 +60,8 @@ ordered playback context. Library artists use a bounded paginated track read;
 provider-only artists expose the complete song set returned by that provider's
 artist response. Albums include untyped releases; Singles & EPs only includes
 releases explicitly classified as singles or EPs.
+
+An exact local artist shadow is extended with the same-name YouTube Music
+catalog. The Tracks view merges provider releases with every indexed track,
+while Albums and Singles & EPs expose the provider releases directly. Fuzzy
+artist matches are rejected rather than mixed into the local profile.

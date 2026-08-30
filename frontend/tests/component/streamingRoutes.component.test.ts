@@ -67,8 +67,14 @@ const artistState = {
     providerAlbums: [] as Array<Record<string, unknown>>,
     artistProvider: null as "ytmusic" | null,
     providerCatalogTracks: [] as Array<Record<string, unknown>>,
+    libraryArtistTracks: [] as Array<Record<string, unknown>>,
     providerCatalogLoading: false,
     providerCatalogHasNextPage: false,
+    providerFallbackData: null as {
+        artist: { topTracks?: Array<Record<string, unknown>> };
+        providerAlbums: Array<Record<string, unknown>>;
+    } | null,
+    providerFallbackLoading: false,
     tidalTopTracks: {
         enrichedTopTracks: null as unknown[] | null,
         isMatching: false,
@@ -139,6 +145,7 @@ const capture = {
     artistActionBar: null as Record<string, unknown> | null,
     discoverActionBar: null as Record<string, unknown> | null,
     providerAlbums: null as Record<string, unknown> | null,
+    providerFallbackEnabled: false,
     playedTracks: null as Array<Record<string, unknown>> | null,
     playedStartIndex: null as number | null,
     playNowTrack: null as Record<string, unknown> | null,
@@ -412,8 +419,8 @@ mock.module("@/features/artist/hooks/useArtistData", {
 mock.module("@/features/artist/hooks/useArtistTracks", {
     namedExports: {
         useArtistTracks: () => ({
-            tracks: [],
-            total: 0,
+            tracks: artistState.libraryArtistTracks,
+            total: artistState.libraryArtistTracks.length,
             isLoading: false,
             hasNextPage: false,
             isFetchingNextPage: false,
@@ -434,6 +441,22 @@ mock.module("@/features/artist/hooks/useProviderArtistTracks", {
             isFetchingNextPage: false,
             fetchNextPage: () => undefined,
         }),
+    },
+});
+
+mock.module("@/features/artist/hooks/useProviderArtistFallback", {
+    namedExports: {
+        useProviderArtistFallback: (_artistName: string, enabled: boolean) => {
+            capture.providerFallbackEnabled = enabled;
+            return {
+                data: artistState.providerFallbackData,
+                channelId: artistState.providerFallbackData
+                    ? "UCprovider"
+                    : null,
+                isLoading: artistState.providerFallbackLoading,
+                isError: false,
+            };
+        },
     },
 });
 
@@ -677,8 +700,11 @@ beforeEach(() => {
     artistState.providerAlbums = [];
     artistState.artistProvider = null;
     artistState.providerCatalogTracks = [];
+    artistState.libraryArtistTracks = [];
     artistState.providerCatalogLoading = false;
     artistState.providerCatalogHasNextPage = false;
+    artistState.providerFallbackData = null;
+    artistState.providerFallbackLoading = false;
     navigationState.artistView = null;
     artistState.tidalTopTracks = {
         enrichedTopTracks: null,
@@ -728,6 +754,7 @@ beforeEach(() => {
     capture.artistActionBar = null;
     capture.discoverActionBar = null;
     capture.providerAlbums = null;
+    capture.providerFallbackEnabled = false;
     capture.playedTracks = null;
     capture.playedStartIndex = null;
     capture.playNowTrack = null;
@@ -1107,6 +1134,141 @@ test("YouTube Music Tracks view waits for release aggregation instead of showing
     const loadedHtml = renderToStaticMarkup(React.createElement(ArtistPage));
     assert.match(loadedHtml, /popular-tracks/);
     assert.doesNotMatch(loadedHtml, /Нет доступных треков/);
+});
+
+test("local artist Tracks view merges indexed and exact provider tracks", async () => {
+    navigationState.artistView = "tracks";
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-linkin-park",
+        name: "Linkin Park",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.libraryArtistTracks = [
+        {
+            id: "local-numb",
+            title: "Numb",
+            duration: 187,
+            filePath: "/music/Numb.flac",
+            artist: { name: "Linkin Park" },
+            album: { title: "Meteora" },
+        },
+    ];
+    artistState.providerFallbackData = {
+        artist: { topTracks: [] },
+        providerAlbums: [
+            {
+                type: "album",
+                id: "MPREb_from-zero",
+                browseId: "MPREb_from-zero",
+                name: "From Zero",
+                artist: "Linkin Park",
+                provider: "ytmusic",
+            },
+        ],
+    };
+    artistState.providerCatalogTracks = [
+        {
+            id: "yt:the-emptiness-machine",
+            title: "The Emptiness Machine",
+            duration: 190,
+            streamSource: "youtube",
+            youtubeVideoId: "the-emptiness-machine",
+            artist: { name: "Linkin Park" },
+            album: { title: "From Zero" },
+        },
+    ];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.equal(capture.providerFallbackEnabled, true);
+    assert.match(html, /popular-tracks/);
+    assert.deepEqual(
+        (capture.artistPopularTracks?.tracks as Array<{ title: string }>).map(
+            (track) => track.title,
+        ),
+        ["Numb", "The Emptiness Machine"],
+    );
+    assert.doesNotMatch(html, /Нет доступных треков/);
+});
+
+test("local artist Overview actions use exact provider top tracks", async () => {
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-linkin-park",
+        name: "Linkin Park",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerFallbackData = {
+        artist: {
+            topTracks: [
+                {
+                    id: "yt:numb",
+                    title: "Numb",
+                    duration: 187,
+                    streamSource: "youtube",
+                    youtubeVideoId: "numb",
+                    artist: { name: "Linkin Park" },
+                    album: { title: "Meteora" },
+                },
+            ],
+        },
+        providerAlbums: [],
+    };
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.deepEqual(
+        (capture.artistPopularTracks?.tracks as Array<{ title: string }>).map(
+            (track) => track.title,
+        ),
+        ["Numb"],
+    );
+    (capture.artistActionBar?.onPlayAll as () => void)();
+    assert.equal(capture.playedTracks?.[0]?.youtubeVideoId, "numb");
+});
+
+test("local artist release views expose the exact provider catalog", async () => {
+    navigationState.artistView = "albums";
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-rammstein",
+        name: "Rammstein",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerFallbackData = {
+        artist: { topTracks: [] },
+        providerAlbums: [
+            {
+                type: "album",
+                id: "MPREb_mutter",
+                browseId: "MPREb_mutter",
+                name: "Mutter",
+                artist: "Rammstein",
+                provider: "ytmusic",
+            },
+        ],
+    };
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.equal(capture.providerFallbackEnabled, true);
+    assert.match(html, /provider-albums/);
+    assert.deepEqual(
+        (capture.providerAlbums?.albums as Array<{ browseId: string }>).map(
+            (album) => album.browseId,
+        ),
+        ["MPREb_mutter"],
+    );
 });
 
 test("discover route shows spinner while loading", async () => {

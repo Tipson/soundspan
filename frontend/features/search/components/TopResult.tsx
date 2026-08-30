@@ -6,6 +6,7 @@ import { Artist, DiscoverResult } from "../types";
 import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { ru } from "@/lib/i18n/ru";
+import { normalizeArtistName } from "../discoverySelection";
 interface TopResultProps {
     libraryArtist?: Artist;
     discoveryArtist?: DiscoverResult;
@@ -34,19 +35,35 @@ export function TopResult({
         ? libraryArtist?.name || ""
         : discoveryArtist?.name || "";
 
-    // Keep provider-only identities out of the generic artist ID route.
-    const artistHref = isLibrary
-        ? getArtistHref({
-              id: libraryArtist?.id,
-              mbid: libraryArtist?.mbid,
-              name: libraryArtist?.name,
+    const matchingProviderArtist =
+        isLibrary &&
+        discoveryArtist?.youtubeChannelId &&
+        normalizeArtistName(discoveryArtist.name) ===
+            normalizeArtistName(libraryArtist?.name ?? "")
+            ? discoveryArtist
+            : null;
+    // When search merged an exact library row with a provider result, keep
+    // the library artwork but open the provider-aware page. The generic local
+    // route can only enumerate files/federated rows, not the online catalog.
+    const artistHref = matchingProviderArtist
+        ? getDiscoveryArtistHref({
+              id: matchingProviderArtist.id,
+              mbid: matchingProviderArtist.mbid,
+              name: matchingProviderArtist.name,
+              youtubeChannelId: matchingProviderArtist.youtubeChannelId,
           }) || `/artist/${encodeURIComponent(name)}`
-        : getDiscoveryArtistHref({
-              id: discoveryArtist?.id,
-              mbid: discoveryArtist?.mbid,
-              name: discoveryArtist?.name,
-              youtubeChannelId: discoveryArtist?.youtubeChannelId,
-          }) || `/artist/${encodeURIComponent(name)}`;
+        : isLibrary
+          ? getArtistHref({
+                id: libraryArtist?.id,
+                mbid: libraryArtist?.mbid,
+                name: libraryArtist?.name,
+            }) || `/artist/${encodeURIComponent(name)}`
+          : getDiscoveryArtistHref({
+                id: discoveryArtist?.id,
+                mbid: discoveryArtist?.mbid,
+                name: discoveryArtist?.name,
+                youtubeChannelId: discoveryArtist?.youtubeChannelId,
+            }) || `/artist/${encodeURIComponent(name)}`;
 
     // Get the image URL
     const imageUrl = isLibrary
