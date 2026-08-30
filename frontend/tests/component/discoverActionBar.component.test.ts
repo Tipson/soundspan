@@ -105,12 +105,12 @@ test("DiscoverActionBar renders all consolidated buttons when playlist has track
         React.createElement(DiscoverActionBar, baseProps),
     );
 
-    assert.match(html, /<span>Play All<\/span>/);
-    assert.match(html, /title="Shuffle all"/);
-    assert.match(html, /title="Add all to queue"/);
-    assert.match(html, /title="Add all to playlist"/);
-    assert.match(html, /title="Regenerate"/);
-    assert.match(html, /title="Settings"/);
+    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /title="Перемешать всё"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Добавить всё в плейлист"/);
+    assert.match(html, /title="Собрать заново"/);
+    assert.match(html, /title="Настройки"/);
 });
 
 test("DiscoverActionBar hides play-related buttons when playlist is null", async () => {
@@ -123,13 +123,13 @@ test("DiscoverActionBar hides play-related buttons when playlist is null", async
         }),
     );
 
-    assert.doesNotMatch(html, /<span>Play All<\/span>/);
-    assert.doesNotMatch(html, /title="Shuffle all"/);
-    assert.doesNotMatch(html, /title="Add all to queue"/);
-    assert.doesNotMatch(html, /title="Add all to playlist"/);
+    assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
+    assert.doesNotMatch(html, /title="Перемешать всё"/);
+    assert.doesNotMatch(html, /title="Добавить всё в очередь"/);
+    assert.doesNotMatch(html, /title="Добавить всё в плейлист"/);
     // Regenerate and Settings should still be visible
-    assert.match(html, /title="Generate"/);
-    assert.match(html, /title="Settings"/);
+    assert.match(html, /title="Собрать"/);
+    assert.match(html, /title="Настройки"/);
 });
 
 test("DiscoverActionBar hides play-related buttons when playlist has no tracks", async () => {
@@ -142,9 +142,9 @@ test("DiscoverActionBar hides play-related buttons when playlist has no tracks",
         }),
     );
 
-    assert.doesNotMatch(html, /<span>Play All<\/span>/);
-    assert.doesNotMatch(html, /title="Shuffle all"/);
-    assert.doesNotMatch(html, /title="Add all to queue"/);
+    assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
+    assert.doesNotMatch(html, /title="Перемешать всё"/);
+    assert.doesNotMatch(html, /title="Добавить всё в очередь"/);
 });
 
 test("DiscoverActionBar shows Pause when playlist is playing", async () => {
@@ -158,8 +158,8 @@ test("DiscoverActionBar shows Pause when playlist is playing", async () => {
         }),
     );
 
-    assert.match(html, /<span>Pause<\/span>/);
-    assert.doesNotMatch(html, /<span>Play All<\/span>/);
+    assert.match(html, /<span>Пауза<\/span>/);
+    assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
 });
 
 test("DiscoverActionBar hides Shuffle when onShuffle is not provided", async () => {
@@ -172,9 +172,9 @@ test("DiscoverActionBar hides Shuffle when onShuffle is not provided", async () 
         }),
     );
 
-    assert.doesNotMatch(html, /title="Shuffle all"/);
+    assert.doesNotMatch(html, /title="Перемешать всё"/);
     // Other buttons should still be present
-    assert.match(html, /title="Add all to queue"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
 });
 
 test("DiscoverActionBar hides Add to Queue when onAddAllToQueue is not provided", async () => {
@@ -187,6 +187,6 @@ test("DiscoverActionBar hides Add to Queue when onAddAllToQueue is not provided"
         }),
     );
 
-    assert.doesNotMatch(html, /title="Add all to queue"/);
-    assert.match(html, /title="Shuffle all"/);
+    assert.doesNotMatch(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Перемешать всё"/);
 });

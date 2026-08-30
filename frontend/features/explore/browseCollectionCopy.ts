@@ -8,18 +8,19 @@ export type BrowseCollectionKind = "playlist" | "mix";
 
 /** Title-case label for a collection kind ("Playlist" / "Mix"). */
 export function kindTitle(kind: BrowseCollectionKind): string {
-    return kind === "playlist" ? "Playlist" : "Mix";
+    return kind === "playlist" ? "Плейлист" : "Микс";
 }
 
 /** Copy bundle used across the browse collection page states. */
 export function browseCollectionCopy(kind: BrowseCollectionKind) {
+    const genitive = kind === "playlist" ? "плейлист" : "микс";
     return {
         heroLabel: `TIDAL ${kindTitle(kind)}`,
-        loadErrorFallback: `Failed to load ${kind}`,
-        noPlayableTracks: `No playable tracks in this ${kind}`,
-        notFoundTitle: `${kindTitle(kind)} not found`,
-        notFoundFallback: `This ${kind} may be private or no longer available.`,
-        emptyMessage: `This ${kind} appears to be empty`,
+        loadErrorFallback: `Не удалось загрузить ${genitive}`,
+        noPlayableTracks: `В этом ${kind === "playlist" ? "плейлисте" : "миксе"} нет доступных треков`,
+        notFoundTitle: `${kindTitle(kind)} не найден`,
+        notFoundFallback: `${kindTitle(kind)} может быть приватным или уже недоступным.`,
+        emptyMessage: `${kindTitle(kind)}, похоже, пуст`,
     };
 }
 
@@ -30,7 +31,7 @@ export function formatTotalDuration(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     if (hours > 0) {
-        return `about ${hours} hr ${mins} min`;
+        return `около ${hours} ч ${mins} мин`;
     }
-    return `${mins} min`;
+    return `${mins} мин`;
 }

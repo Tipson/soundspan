@@ -21,6 +21,7 @@ import { HowItWorks } from "@/features/discover/components/HowItWorks";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useFeatures } from "@/lib/features-context";
 import { toAddToPlaylistRef } from "@/lib/trackRef";
+import { discoverAddedCount, discoverRu } from "@/lib/i18n/discoverRu";
 
 const DISCOVER_RECENT_GENERATION_WINDOW_MS = 45 * 60 * 1000;
 const DISCOVER_RECOVERY_MAX_ATTEMPTS = 4;
@@ -47,14 +48,14 @@ export default function DiscoverWeeklyPage() {
         return (
             <div className="p-6">
                 <h1 className="text-xl font-semibold text-white mb-4">
-                    Discover Weekly
+                    {discoverRu.name}
                 </h1>
                 <div className="bg-surface-raised border border-surface-active rounded-lg p-6">
                     <p className="text-content-secondary mb-2">
-                        Feature not available
+                        {discoverRu.unavailableTitle}
                     </p>
                     <p className="text-sm text-content-muted">
-                        Discovery is disabled on this server.
+                        {discoverRu.unavailableHint}
                     </p>
                 </div>
             </div>
@@ -168,16 +169,14 @@ function DiscoverWeeklyPageContent() {
                     toAddToPlaylistRef(track),
                 );
             }
-            toast.success(
-                `Added ${displayPlaylist.tracks.length} tracks to playlist`,
-            );
+            toast.success(discoverAddedCount(displayPlaylist.tracks.length));
             setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 error,
             );
-            toast.error("Failed to add some tracks to playlist");
+            toast.error(discoverRu.toast.addFailed);
         } finally {
             setIsAddingToPlaylist(false);
         }
@@ -229,12 +228,13 @@ function DiscoverWeeklyPageContent() {
                         {hasDiscoverTracks ? (
                             <>
                                 <p className="text-xs text-gray-400">
-                                    Source mix: {providerCounts.local} local
+                                    {discoverRu.sourceMix}:{" "}
+                                    {providerCounts.local} {discoverRu.local}
                                     {providerCounts.tidal > 0
-                                        ? ` • ${providerCounts.tidal} TIDAL gap-fill`
+                                        ? ` • ${providerCounts.tidal} TIDAL — ${discoverRu.gapFill}`
                                         : ""}
                                     {providerCounts.youtube > 0
-                                        ? ` • ${providerCounts.youtube} YouTube Music gap-fill`
+                                        ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
                                         : ""}
                                 </p>
                                 <TrackList
@@ -248,8 +248,7 @@ function DiscoverWeeklyPageContent() {
                             </>
                         ) : (
                             <p className="text-sm text-gray-400">
-                                We are still finishing this week&apos;s track
-                                list.
+                                {discoverRu.status.finishingList}
                             </p>
                         )}
 
@@ -265,11 +264,10 @@ function DiscoverWeeklyPageContent() {
                     <div className="flex flex-col items-center justify-center py-24 text-center">
                         <GradientSpinner size="md" />
                         <h3 className="mt-4 text-lg font-medium text-white">
-                            Loading your latest Discover Weekly
+                            {discoverRu.status.loadingLatest}
                         </h3>
                         <p className="mt-1 text-sm text-gray-400 max-w-md">
-                            Your playlist has been generated and can take a few
-                            seconds to fully appear.
+                            {discoverRu.status.loadingLatestHint}
                         </p>
                     </div>
                 ) : (
@@ -278,11 +276,10 @@ function DiscoverWeeklyPageContent() {
                             <Music2 className="w-10 h-10 text-ai-hover" />
                         </div>
                         <h3 className="text-lg font-medium text-white mb-1">
-                            No Discover Weekly Yet
+                            {discoverRu.status.emptyTitle}
                         </h3>
                         <p className="text-sm text-gray-400 mb-6 max-w-md">
-                            Generate your first playlist based on your listening
-                            history!
+                            {discoverRu.status.emptyHint}
                         </p>
                         <button
                             onClick={handleGenerate}
@@ -298,15 +295,15 @@ function DiscoverWeeklyPageContent() {
                                 <>
                                     <GradientSpinner size="sm" />
                                     {batchStatus?.status === "scanning"
-                                        ? "Finalizing recommendations..."
+                                        ? discoverRu.status.finalizing
                                         : batchStatus?.status === "generating"
-                                          ? "Refreshing recommendations..."
-                                          : `Working... ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
+                                          ? discoverRu.status.refreshing
+                                          : `${discoverRu.status.working} ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
                                 </>
                             ) : (
                                 <>
                                     <RefreshCw className="w-5 h-5" />
-                                    Generate Now
+                                    {discoverRu.action.generateNow}
                                 </>
                             )}
                         </button>
@@ -319,7 +316,7 @@ function DiscoverWeeklyPageContent() {
                 onClose={() => setShowPlaylistSelector(false)}
                 onSelectPlaylist={handlePlaylistSelected}
                 isLoading={isAddingToPlaylist}
-                loadingMessage="Adding tracks..."
+                loadingMessage={discoverRu.toast.adding}
             />
         </div>
     );

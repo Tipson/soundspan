@@ -350,10 +350,10 @@ export function useExploreData(options?: {
     const handleRefreshMixes = async () => {
         try {
             await refreshMixes();
-            toast.success("Mixes refreshed! Check out your new daily picks");
+            toast.success("Миксы обновлены — новые подборки уже готовы");
         } catch (error) {
             log.error("Failed to refresh mixes:", error);
-            toast.error("Failed to refresh mixes");
+            toast.error("Не удалось обновить миксы");
         }
     };
 

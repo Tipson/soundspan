@@ -14,6 +14,7 @@ import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import type { DiscoverPlaylist, DiscoverConfig } from "../types";
+import { discoverRu } from "@/lib/i18n/discoverRu";
 
 interface BatchStatus {
     active: boolean;
@@ -62,18 +63,18 @@ export function DiscoverActionBar({
         if (!isGenerating) return null;
 
         if (batchStatus?.status === "scanning") {
-            return "Finalizing recommendations...";
+            return discoverRu.status.finalizing;
         }
 
         if (batchStatus?.status === "generating") {
-            return "Refreshing recommendations...";
+            return discoverRu.status.refreshing;
         }
 
         if (batchStatus?.total) {
-            return `Progress ${batchStatus.completed || 0}%`;
+            return `${discoverRu.status.progress}: ${batchStatus.completed || 0}%`;
         }
 
-        return "Starting...";
+        return discoverRu.status.starting;
     };
 
     const handlePlayToggle = () => {
@@ -105,8 +106,8 @@ export function DiscoverActionBar({
                         )}
                         <span>
                             {isPlaylistPlaying && isPlaying
-                                ? "Pause"
-                                : "Play All"}
+                                ? discoverRu.action.pause
+                                : discoverRu.action.playAll}
                         </span>
                     </button>
                 )}
@@ -122,7 +123,7 @@ export function DiscoverActionBar({
                                 ? "text-white/30 cursor-not-allowed"
                                 : "text-white/60 hover:text-white hover:bg-white/10",
                         )}
-                        title="Shuffle all"
+                        title={discoverRu.action.shuffleAll}
                     >
                         <Shuffle className="w-5 h-5" />
                     </button>
@@ -139,7 +140,7 @@ export function DiscoverActionBar({
                                 ? "text-white/30 cursor-not-allowed"
                                 : "text-white/60 hover:text-white hover:bg-white/10",
                         )}
-                        title="Add all to queue"
+                        title={discoverRu.action.addAllToQueue}
                     >
                         <ListMusic className="w-5 h-5" />
                     </button>
@@ -150,7 +151,7 @@ export function DiscoverActionBar({
                     <button
                         onClick={onAddToPlaylist}
                         className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all"
-                        title="Add all to playlist"
+                        title={discoverRu.action.addAllToPlaylist}
                     >
                         <Plus className="w-5 h-5" />
                     </button>
@@ -168,10 +169,10 @@ export function DiscoverActionBar({
                     )}
                     title={
                         isGenerating
-                            ? getStatusText() || "Generating..."
+                            ? getStatusText() || discoverRu.action.generating
                             : playlist
-                              ? "Regenerate"
-                              : "Generate"
+                              ? discoverRu.action.regenerate
+                              : discoverRu.action.generate
                     }
                 >
                     {isGenerating ? (
@@ -194,7 +195,7 @@ export function DiscoverActionBar({
                             ? "text-white/30 cursor-not-allowed"
                             : "text-white/60 hover:text-white hover:bg-white/10",
                     )}
-                    title="Settings"
+                    title={discoverRu.action.settings}
                 >
                     <Settings className="w-5 h-5" />
                 </button>

@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import type { MapTrack } from "./types";
 import {
     compassNeighbors,
@@ -104,7 +105,7 @@ function useNeighborRequest(currentId: string | null, inTravel: boolean) {
                     });
             })
             .catch(() => {
-                if (!cancelled) setError("Couldn't load nearby vibes");
+                if (!cancelled) setError(vibeMapRu.travel.loadFailed);
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

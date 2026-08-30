@@ -17,6 +17,7 @@ import { StaticPlaylistCard } from "@/features/home/components/StaticPlaylistCar
 import { PersonalizedMixCard } from "@/features/home/components/PersonalizedMixCard";
 import type { Mix, PersonalizedHomeFeed } from "@/features/home/types";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
+import { pluralRu } from "@/lib/i18n/ru";
 
 interface MadeForYouSectionProps {
     discoverWeekly: DiscoverWeeklySummary | null;
@@ -46,22 +47,23 @@ export function MadeForYouSection({
         ? [
               {
                   key: "quick-picks",
-                  title: "Quick picks",
-                  description: "A fast route into what fits right now",
+                  title: "Быстрый выбор",
+                  description: "Музыка, которая подходит прямо сейчас",
                   tracks: personalizedFeed.shelves.quickPicks,
                   tone: "violet" as const,
               },
               {
                   key: "fresh-finds",
-                  title: "Fresh finds",
-                  description: "New music shaped by your listening",
+                  title: "Новые находки",
+                  description: "Новая музыка с учётом ваших прослушиваний",
                   tracks: personalizedFeed.shelves.discovery,
                   tone: "blue" as const,
               },
               {
                   key: "listen-again",
-                  title: "Listen again",
-                  description: "Recent favorites worth another play",
+                  title: "Послушать снова",
+                  description:
+                      "Недавние любимые треки, к которым стоит вернуться",
                   tracks: personalizedFeed.shelves.listenAgain,
                   tone: "amber" as const,
               },
@@ -75,9 +77,9 @@ export function MadeForYouSection({
     if (!hasMadeForYou) return null;
 
     return (
-        <section aria-label="Made For You">
+        <section aria-label="Для вас">
             <SectionHeader
-                title="Made For You"
+                title="Для вас"
                 rightAction={
                     autoPlaylists ? (
                         <button
@@ -91,19 +93,17 @@ export function MadeForYouSection({
                                 <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
                             )}
                             <span className="hidden sm:inline">
-                                {isRefreshingMixes
-                                    ? "Refreshing..."
-                                    : "Refresh"}
+                                {isRefreshingMixes ? "Обновляем…" : "Обновить"}
                             </span>
                         </button>
                     ) : undefined
                 }
             />
             <p className="-mt-2 mb-4 max-w-2xl text-sm leading-6 text-content-muted">
-                Different ways into your music, built only from collections that
-                are ready to play.
+                Разные способы начать слушать — только готовые подборки, которые
+                можно включить сразу.
             </p>
-            <HorizontalCarousel aria-label="Made For You">
+            <HorizontalCarousel aria-label="Для вас">
                 {personalizedShelves.map((shelf, index) => (
                     <CarouselItem key={shelf.key}>
                         <PersonalizedMixCard
@@ -120,8 +120,8 @@ export function MadeForYouSection({
                         <StaticPlaylistCard
                             href="/discover"
                             coverUrl={playableDiscoverWeekly.coverUrl}
-                            title="Discover Weekly"
-                            subtitle={`${playableDiscoverWeekly.totalCount} tracks`}
+                            title="Открытия недели"
+                            subtitle={`${playableDiscoverWeekly.totalCount} ${pluralRu(playableDiscoverWeekly.totalCount, ["трек", "трека", "треков"])}`}
                             placeholderIcon={
                                 <Zap className="h-12 w-12 text-info" />
                             }

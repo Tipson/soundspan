@@ -17,26 +17,26 @@ interface HomeQuickAction {
 const HOME_QUICK_ACTIONS: readonly HomeQuickAction[] = [
     {
         href: "/playlist/my-liked",
-        label: "Liked songs",
-        description: "Everything you saved",
+        label: "Любимые треки",
+        description: "Всё, что вы сохранили",
         icon: Heart,
     },
     {
         href: "/my-history",
-        label: "Listening history",
-        description: "Pick up where you left off",
+        label: "История прослушиваний",
+        description: "Продолжите с того места, где остановились",
         icon: Clock3,
     },
     {
         href: "/import",
-        label: "Import playlists",
-        description: "Bring over a Spotify playlist",
+        label: "Импорт плейлистов",
+        description: "Перенесите плейлист из Spotify",
         icon: ArrowDownToLine,
     },
     {
         href: "/search",
-        label: "Search music",
-        description: "Tracks, albums, and artists",
+        label: "Поиск музыки",
+        description: "Треки, альбомы и исполнители",
         icon: Search,
     },
 ];
@@ -44,9 +44,9 @@ const HOME_QUICK_ACTIONS: readonly HomeQuickAction[] = [
 /** Direct links to the user's most common music actions. */
 export function HomeQuickActions() {
     return (
-        <section aria-label="Your shortcuts">
+        <section aria-label="Быстрые действия">
             <h2 id="home-quick-access-title" className="sr-only">
-                Your shortcuts
+                Быстрые действия
             </h2>
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                 {HOME_QUICK_ACTIONS.map((action) => {

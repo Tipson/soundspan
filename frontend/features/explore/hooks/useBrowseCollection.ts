@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { TidalBrowseCollection } from "@/features/explore/browseTrack";
+import { userFacingError } from "@/lib/i18n/ru";
 
 /**
  * Fetch state for a TIDAL browse collection page. Reloads when the id or
@@ -32,10 +33,7 @@ export function useBrowseCollection(
                     setCollection(data);
                 }
             } catch (fetchError) {
-                const message =
-                    fetchError instanceof Error
-                        ? fetchError.message
-                        : loadErrorFallback;
+                const message = userFacingError(fetchError, loadErrorFallback);
                 if (isActive) {
                     setError(message);
                 }

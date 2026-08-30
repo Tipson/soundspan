@@ -4,6 +4,7 @@
 
 import { useEffect, useState, type RefObject } from "react";
 import { api } from "@/lib/api";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import type { MapDims } from "./mapViewport";
 import type { MapTrack } from "./types";
 
@@ -39,9 +40,7 @@ function useMapTracks() {
                         if (attempts > BUILDING_POLL_LIMIT) {
                             setBuilding(false);
                             setLoading(false);
-                            setError(
-                                "The map is still being built — try again in a few minutes",
-                            );
+                            setError(vibeMapRu.map.buildingRetry);
                             return;
                         }
                         setBuilding(true);
@@ -56,7 +55,7 @@ function useMapTracks() {
                     if (cancelled) return;
                     setBuilding(false);
                     setLoading(false);
-                    setError("Failed to load vibe map data");
+                    setError(vibeMapRu.map.loadFailed);
                 });
         };
         load();

@@ -16,6 +16,7 @@ import {
     browseTrackToQueueTrack,
     type TidalBrowseCollection,
 } from "@/features/explore/browseTrack";
+import { pluralRu } from "@/lib/i18n/ru";
 
 /**
  * Playback, queue, playlist, and like actions for a browse collection page.
@@ -92,7 +93,9 @@ export function useBrowseCollectionActions(
         const tracks = playableQueueTracks();
         if (tracks.length === 0) return;
         addTracksToQueue(tracks);
-        toast.success(`Added ${tracks.length} tracks to queue`);
+        toast.success(
+            `Добавлено в очередь: ${tracks.length} ${pluralRu(tracks.length, ["трек", "трека", "треков"])}`,
+        );
     };
 
     const handleShuffle = () => {
@@ -123,7 +126,7 @@ export function useBrowseCollectionActions(
                 );
             }
             toast.success(
-                `Added ${collection.tracks.length} tracks to playlist`,
+                `Добавлено в плейлист: ${collection.tracks.length} ${pluralRu(collection.tracks.length, ["трек", "трека", "треков"])}`,
             );
             setShowPlaylistSelector(false);
         } catch (addError) {
@@ -131,7 +134,7 @@ export function useBrowseCollectionActions(
                 "Failed to add tracks to playlist:",
                 addError,
             );
-            toast.error("Failed to add some tracks to playlist");
+            toast.error("Не удалось добавить часть треков в плейлист");
         } finally {
             setIsAddingToPlaylist(false);
         }

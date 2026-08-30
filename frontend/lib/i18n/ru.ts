@@ -115,6 +115,12 @@ export const ru = {
     },
     home: {
         greeting: "Музыка для вас",
+        morning: "Доброе утро",
+        afternoon: "Добрый день",
+        evening: "Добрый вечер",
+        artist: "Исполнитель",
+        podcast: "Подкаст",
+        audiobook: "Аудиокнига",
         madeForYou: "Подобрано для вас",
         madeForYouSubtitle: "Разные подборки на основе ваших прослушиваний.",
         continueListening: "Продолжить слушать",

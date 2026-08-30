@@ -19,6 +19,7 @@ import {
     selectFeaturedRadioGenres,
 } from "./libraryRadioStationsGenreSelection";
 import { queryKeys } from "@/lib/queryKeys";
+import { pluralRu } from "@/lib/i18n/ru";
 
 /**
  * A renderable radio station card plus the playlist filter used to generate
@@ -33,32 +34,32 @@ export type RadioStation = Omit<RadioStationCardStation, "filter"> & {
 const STATIC_STATIONS: RadioStation[] = [
     {
         id: "all",
-        name: "Shuffle All",
-        description: "Your entire library",
+        name: "Перемешать всё",
+        description: "Вся ваша библиотека",
         color: "from-brand/60 to-amber-600/40",
         filter: { type: "all" },
         minTracks: 10,
     },
     {
         id: "workout",
-        name: "Workout",
-        description: "High energy tracks",
+        name: "Тренировка",
+        description: "Энергичные треки",
         color: "from-red-500/50 to-orange-600/40",
         filter: { type: "workout" },
         minTracks: 15,
     },
     {
         id: "discovery",
-        name: "Discovery",
-        description: "Lesser-played gems",
+        name: "Открытия",
+        description: "Редко звучащие находки",
         color: "from-emerald-500/50 to-teal-600/40",
         filter: { type: "discovery" },
         minTracks: 20,
     },
     {
         id: "favorites",
-        name: "Favorites",
-        description: "Most played",
+        name: "Любимое",
+        description: "Самые частые прослушивания",
         color: "from-rose-500/50 to-pink-600/40",
         filter: { type: "favorites" },
         minTracks: 10,
@@ -169,7 +170,7 @@ export function useLibraryRadioData(skip = false) {
             (genresQuery.data ?? []).map((g) => ({
                 id: `genre-${g.genre}`,
                 name: g.genre,
-                description: `${g.count} tracks`,
+                description: `${g.count} ${pluralRu(g.count, ["трек", "трека", "треков"])}`,
                 color: getGenreColor(g.genre),
                 filter: { type: "genre" as const, value: g.genre },
                 minTracks: 15,
@@ -182,7 +183,7 @@ export function useLibraryRadioData(skip = false) {
             (decadesQuery.data ?? []).map((d) => ({
                 id: `decade-${d.decade}`,
                 name: getDecadeName(d.decade),
-                description: `${d.count} tracks`,
+                description: `${d.count} ${pluralRu(d.count, ["трек", "трека", "треков"])}`,
                 color: getDecadeColor(d.decade),
                 filter: { type: "decade" as const, value: d.decade.toString() },
                 minTracks: 15,

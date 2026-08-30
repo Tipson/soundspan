@@ -102,8 +102,8 @@ function YouTubeContent({
         <div className="space-y-8">
             {failures.mixes ? (
                 <ProviderFailureNote
-                    title="Your Mixes"
-                    note="YouTube Music mixes aren't available right now."
+                    title="Ваши миксы"
+                    note="Миксы YouTube Music сейчас недоступны."
                     provider="youtube"
                 />
             ) : (
@@ -111,8 +111,8 @@ function YouTubeContent({
             )}
             {failures.categories ? (
                 <ProviderFailureNote
-                    title="Moods & Genres"
-                    note="YouTube Music moods and genres aren't available right now."
+                    title="Настроения и жанры"
+                    note="Настроения и жанры YouTube Music сейчас недоступны."
                     provider="youtube"
                 />
             ) : (
@@ -124,8 +124,8 @@ function YouTubeContent({
             )}
             {failures.home ? (
                 <ProviderFailureNote
-                    title="Featured"
-                    note="YouTube Music featured shelves aren't available right now."
+                    title="Подборки"
+                    note="Подборки YouTube Music сейчас недоступны."
                     provider="youtube"
                 />
             ) : (
@@ -133,13 +133,13 @@ function YouTubeContent({
             )}
             {failures.charts ? (
                 <ProviderFailureNote
-                    title="Charts"
-                    note="YouTube Music charts aren't available right now."
+                    title="Чарты"
+                    note="Чарты YouTube Music сейчас недоступны."
                     provider="youtube"
                 />
             ) : chartPlaylists.length > 0 ? (
                 <section>
-                    <SectionHeader title="Charts" badge={<YouTubeBadge />} />
+                    <SectionHeader title="Чарты" badge={<YouTubeBadge />} />
                     <FeaturedPlaylistsGrid playlists={chartPlaylists} />
                 </section>
             ) : null}
@@ -164,8 +164,8 @@ function TidalCategories({
         <>
             {failures.moods ? (
                 <ProviderFailureNote
-                    title="Moods"
-                    note="TIDAL moods aren't available right now."
+                    title="Настроения"
+                    note="Настроения TIDAL сейчас недоступны."
                     provider="tidal"
                 />
             ) : (
@@ -173,8 +173,8 @@ function TidalCategories({
             )}
             {failures.genres ? (
                 <ProviderFailureNote
-                    title="Genres"
-                    note="TIDAL genres aren't available right now."
+                    title="Жанры"
+                    note="Жанры TIDAL сейчас недоступны."
                     provider="tidal"
                 />
             ) : (
@@ -206,8 +206,8 @@ function TidalShelves({
         <>
             {failures.home ? (
                 <ProviderFailureNote
-                    title="TIDAL Home"
-                    note="TIDAL home shelves aren't available right now."
+                    title="Главная TIDAL"
+                    note="Подборки с главной TIDAL сейчас недоступны."
                     provider="tidal"
                 />
             ) : (
@@ -218,8 +218,8 @@ function TidalShelves({
             )}
             {failures.explore ? (
                 <ProviderFailureNote
-                    title="TIDAL Explore"
-                    note="TIDAL explore shelves aren't available right now."
+                    title="Обзор TIDAL"
+                    note="Подборки раздела обзора TIDAL сейчас недоступны."
                     provider="tidal"
                 />
             ) : (
@@ -256,8 +256,8 @@ function TidalContent({
         <div className="space-y-8">
             {failures.mixes ? (
                 <ProviderFailureNote
-                    title="TIDAL Mixes"
-                    note="TIDAL mixes aren't available right now."
+                    title="Миксы TIDAL"
+                    note="Миксы TIDAL сейчас недоступны."
                     provider="tidal"
                 />
             ) : (

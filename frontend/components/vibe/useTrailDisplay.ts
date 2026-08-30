@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import {
     fadeAlphaForAge,
     readStoredTrailMode,
@@ -58,13 +59,13 @@ function useTrailSave(trailIds: readonly string[]) {
         if (trailIds.length === 0) return;
         setSaving(true);
         try {
-            const name = `Vibe history — ${formatPlaylistDate()}`;
+            const name = `${vibeMapRu.save.history} — ${formatPlaylistDate()}`;
             const result = await saveTracksAsPlaylist(name, trailIds);
             const outcome = describeSaveResult(name, result);
             if (outcome.tone === "success") toast.success(outcome.message);
             else toast.warning(outcome.message);
         } catch {
-            toast.error("Couldn't save that playlist");
+            toast.error(vibeMapRu.save.failed);
         } finally {
             setSaving(false);
         }
@@ -110,7 +111,7 @@ export function useTrailDisplay({
     const save = useTrailSave(trailIds);
     const clearTrail = useCallback(() => {
         clear();
-        toast.success("Trail cleared");
+        toast.success(vibeMapRu.save.trailCleared);
     }, [clear]);
     return {
         trailIds,

@@ -10,6 +10,7 @@ import {
     CarouselItem,
 } from "@/components/ui/HorizontalCarousel";
 import { memo } from "react";
+import { ru } from "@/lib/i18n/ru";
 
 interface AudiobooksGridProps {
     audiobooks: Audiobook[];
@@ -54,7 +55,7 @@ const AudiobookCard = memo(function AudiobookCard({
                         {audiobook.title}
                     </h3>
                     <p className="text-xs text-gray-400 truncate mt-0.5">
-                        {audiobook.author || "Audiobook"}
+                        {audiobook.author || ru.home.audiobook}
                     </p>
                 </div>
             </Link>

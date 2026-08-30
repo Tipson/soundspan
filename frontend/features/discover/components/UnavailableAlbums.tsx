@@ -3,6 +3,7 @@ import { Play, Pause, Music, ChevronDown, ChevronUp } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/utils/cn";
 import { UnavailableAlbum } from "../types";
+import { discoverAlbumCount, discoverRu } from "@/lib/i18n/discoverRu";
 
 const tierColors: Record<string, string> = {
     high: "text-green-400",
@@ -15,13 +16,13 @@ const tierColors: Record<string, string> = {
 };
 
 const tierLabels: Record<string, string> = {
-    high: "High Match",
-    medium: "Medium Match",
-    explore: "Explore",
-    wildcard: "Wild Card",
+    high: discoverRu.tiers.high,
+    medium: discoverRu.tiers.medium,
+    explore: discoverRu.tiers.explore,
+    wildcard: discoverRu.tiers.wildcard,
     // Legacy mappings
-    low: "Explore",
-    wild: "Wild Card",
+    low: discoverRu.tiers.explore,
+    wild: discoverRu.tiers.wildcard,
 };
 
 interface UnavailableAlbumsProps {
@@ -53,8 +54,7 @@ export function UnavailableAlbums({
                 <div className="flex items-center gap-2">
                     <Music className="w-5 h-5 text-orange-400" />
                     <span className="text-sm font-medium text-gray-400">
-                        {unavailable.length} album
-                        {unavailable.length !== 1 ? "s" : ""} unavailable
+                        {discoverAlbumCount(unavailable.length)}
                     </span>
                 </div>
                 {isExpanded ? (
@@ -67,9 +67,7 @@ export function UnavailableAlbums({
                 <>
                     <div className="px-6 pb-4">
                         <p className="text-sm text-gray-400">
-                            These albums were recommended but couldn&apos;t be
-                            found by your indexers. Listen to 30-second previews
-                            below!
+                            {discoverRu.unavailable.description}
                         </p>
                     </div>
                     <div className="divide-y divide-surface-active">
@@ -78,8 +76,8 @@ export function UnavailableAlbums({
                                 currentPreview === album.id;
                             const attemptLabel =
                                 album.attemptNumber === 0
-                                    ? "Original Recommendation"
-                                    : `Replacement #${album.attemptNumber}`;
+                                    ? discoverRu.unavailable.original
+                                    : `${discoverRu.unavailable.replacement} №${album.attemptNumber}`;
 
                             return (
                                 <div
@@ -126,7 +124,11 @@ export function UnavailableAlbums({
                                                 <>
                                                     <span>•</span>
                                                     <span className="text-orange-400">
-                                                        30s Preview
+                                                        {
+                                                            discoverRu
+                                                                .unavailable
+                                                                .preview
+                                                        }
                                                     </span>
                                                 </>
                                             )}

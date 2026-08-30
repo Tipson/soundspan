@@ -6,6 +6,7 @@
  */
 
 import { FlaskConical, Loader2, Play, X } from "lucide-react";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import {
     VIBE_PANEL_CLASS,
     VIBE_PANEL_STYLE,
@@ -21,7 +22,7 @@ function AlchemyHeader({ view }: { view: AlchemyView }) {
             <div className="flex items-center gap-2 mb-2">
                 <FlaskConical className="w-4 h-4 text-fuchsia-300" />
                 <span className="text-sm font-semibold text-white">
-                    Alchemy
+                    {vibeMapRu.alchemy.title}
                 </span>
                 <span className="text-xs text-gray-400 tabular-nums">
                     {view.ingredients.length}/{MAX_ALCHEMY_INGREDIENTS}
@@ -29,15 +30,15 @@ function AlchemyHeader({ view }: { view: AlchemyView }) {
                 <button
                     type="button"
                     onClick={view.clear}
-                    aria-label="Clear alchemy (Esc)"
-                    title="Clear alchemy (Esc)"
+                    aria-label={vibeMapRu.alchemy.clearEsc}
+                    title={vibeMapRu.alchemy.clearEsc}
                     className={PANEL_CLOSE_CLASS}
                 >
                     <X className="w-4 h-4" />
                 </button>
             </div>
             <p className="text-xs text-gray-400 mb-2">
-                Ctrl/⌘-click dots to add ingredients, then blend.
+                {vibeMapRu.alchemy.hint}
             </p>
         </>
     );
@@ -62,7 +63,7 @@ function IngredientRows({ view }: { view: AlchemyView }) {
                         max={MAX_WEIGHT}
                         step={0.1}
                         value={ingredient.weight}
-                        aria-label={`Weight for ${ingredient.title}`}
+                        aria-label={`${vibeMapRu.alchemy.weight}: ${ingredient.title}`}
                         onChange={(event) =>
                             view.setWeight(
                                 ingredient.id,
@@ -77,8 +78,8 @@ function IngredientRows({ view }: { view: AlchemyView }) {
                     <button
                         type="button"
                         onClick={() => view.remove(ingredient.id)}
-                        aria-label={`Remove ${ingredient.title}`}
-                        title="Remove"
+                        aria-label={`${vibeMapRu.alchemy.remove}: ${ingredient.title}`}
+                        title={vibeMapRu.alchemy.remove}
                         className="shrink-0 inline-flex items-center justify-center w-10 h-10 -my-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                     >
                         <X className="w-4 h-4" />
@@ -104,14 +105,14 @@ function BlendActions({ view }: { view: AlchemyView }) {
                     ) : (
                         <FlaskConical className="w-4 h-4" />
                     )}
-                    Blend
+                    {vibeMapRu.alchemy.blend}
                 </button>
                 <button
                     type="button"
                     onClick={view.clear}
                     className="min-h-[40px] px-3 py-2 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                 >
-                    Clear
+                    {vibeMapRu.alchemy.clear}
                 </button>
             </div>
             {view.error && (
@@ -127,14 +128,14 @@ function BlendResults({ view }: { view: AlchemyView }) {
         <div>
             <div className="flex items-center justify-between mb-1">
                 <p className="text-xs uppercase tracking-wide text-gray-400">
-                    Blend results
+                    {vibeMapRu.alchemy.results}
                 </p>
                 <button
                     type="button"
                     onClick={view.play}
                     className="inline-flex items-center gap-1 min-h-[36px] px-2 rounded-lg text-xs text-fuchsia-300 hover:text-white hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                 >
-                    <Play className="w-3.5 h-3.5" /> Play blend
+                    <Play className="w-3.5 h-3.5" /> {vibeMapRu.alchemy.play}
                 </button>
             </div>
             <div className="flex flex-col">

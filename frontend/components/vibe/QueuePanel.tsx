@@ -10,6 +10,7 @@ import {
     type DropPosition,
 } from "@/components/track/reorderDnd";
 import { isEpisodeQueueItem, type QueueItem } from "@/lib/queue-item";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import {
     VIBE_PANEL_CLASS,
     VIBE_PANEL_STYLE,
@@ -130,12 +131,14 @@ function useQueueDrag(
 function QueueHeader({ close }: { close: () => void }) {
     return (
         <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-semibold text-white">Queue</span>
+            <span className="text-sm font-semibold text-white">
+                {vibeMapRu.queue.title}
+            </span>
             <button
                 type="button"
                 onClick={close}
-                aria-label="Close queue"
-                title="Close queue (Esc)"
+                aria-label={vibeMapRu.queue.close}
+                title={vibeMapRu.queue.closeEsc}
                 className={PANEL_CLOSE_CLASS}
             >
                 <X className="w-4 h-4" />
@@ -158,7 +161,7 @@ function CurrentQueueItem({ item }: { item: QueueItem | null }) {
                 </span>
             </span>
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-indigo-300">
-                Now playing
+                {vibeMapRu.queue.nowPlaying}
             </span>
         </div>
     );
@@ -202,8 +205,8 @@ function QueueRow({
                         onClick={(event) => event.stopPropagation()}
                         onDragStart={(event) => drag.start(idx, event)}
                         onDragEnd={drag.clear}
-                        aria-label={`Drag to reorder ${title}`}
-                        title="Drag to reorder"
+                        aria-label={`${vibeMapRu.queue.drag}: ${title}`}
+                        title={vibeMapRu.queue.drag}
                         className="shrink-0 w-6 h-6 grid place-items-center rounded text-gray-400 hover:text-white cursor-grab active:cursor-grabbing"
                     >
                         <GripVertical className="w-4 h-4" />
@@ -221,8 +224,8 @@ function QueueRow({
                     <button
                         type="button"
                         onClick={() => remove(absoluteIndex)}
-                        aria-label={`Remove ${title} from queue`}
-                        title="Remove from queue"
+                        aria-label={`${vibeMapRu.queue.remove}: ${title}`}
+                        title={vibeMapRu.queue.remove}
                         className="shrink-0 w-7 h-7 grid place-items-center rounded-lg text-gray-400 hover:text-red-400 hover:bg-white/10 transition-colors"
                     >
                         <X className="w-3.5 h-3.5" />
@@ -249,7 +252,7 @@ function UpcomingQueue({
     if (items.length === 0) {
         return (
             <p className="text-xs text-gray-400 py-2">
-                Nothing queued — sweep some dots or play a journey.
+                {vibeMapRu.queue.empty}
             </p>
         );
     }

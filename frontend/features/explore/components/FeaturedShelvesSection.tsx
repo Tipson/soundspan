@@ -39,12 +39,12 @@ export function FeaturedShelvesSection({
             {visibleShelves.map((shelf, idx) => (
                 <section key={shelf.title ?? idx}>
                     <SectionHeader
-                        title={shelf.title ?? "Featured"}
+                        title={shelf.title ?? "Подборки"}
                         badge={<YouTubeBadge />}
                     />
                     <HorizontalCarousel
                         gap="lg"
-                        aria-label={shelf.title ?? "Featured"}
+                        aria-label={shelf.title ?? "Подборки"}
                     >
                         {shelf.contents?.slice(0, 12).map((item, i) => {
                             const href = item.playlistId

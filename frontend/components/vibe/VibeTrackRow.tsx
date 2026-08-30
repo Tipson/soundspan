@@ -18,6 +18,7 @@
 
 import { calibratedMatch } from "./vibeMatch";
 import { cn } from "@/utils/cn";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 
 export interface VibeTrackRowProps {
     title: string;
@@ -127,7 +128,7 @@ function TrackRowContent({
             </span>
             {!onMap && (
                 <span className="shrink-0 text-xs uppercase tracking-wide text-amber-400/80 border border-amber-400/30 rounded px-1 py-0.5">
-                    not on map
+                    {vibeMapRu.map.notOnMap}
                 </span>
             )}
             <span

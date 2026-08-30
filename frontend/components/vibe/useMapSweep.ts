@@ -11,6 +11,7 @@ import {
     type SetStateAction,
 } from "react";
 import { toast } from "sonner";
+import { vibeMapRu, vibeTrackCount } from "@/lib/i18n/vibeMapRu";
 import type { MapTrack } from "./types";
 import type { Viewport } from "./mapViewport";
 import { collectHits, sampleSegment, type SweepPoint } from "./sweepCollect";
@@ -199,7 +200,7 @@ function useSweepPlayback(
         }
         if (tracks.length > 0)
             toast.success(
-                `Queued ${tracks.length} swept track${tracks.length === 1 ? "" : "s"}`,
+                `${vibeMapRu.save.queued}: ${vibeTrackCount(tracks.length)}`,
             );
         setResult(null);
     }, [result, args, setResult]);
@@ -219,7 +220,7 @@ function useSweepSave(
         }
         setSaving(true);
         try {
-            const name = `Vibe sweep — ${formatPlaylistDate()}`;
+            const name = `${vibeMapRu.save.sweep} — ${formatPlaylistDate()}`;
             const outcome = describeSaveResult(
                 name,
                 await saveTracksAsPlaylist(name, result.ids),
@@ -227,7 +228,7 @@ function useSweepSave(
             if (outcome.tone === "success") toast.success(outcome.message);
             else toast.warning(outcome.message);
         } catch {
-            toast.error("Couldn't save that playlist");
+            toast.error(vibeMapRu.save.failed);
         } finally {
             setSaving(false);
             setResult((current) => (current === result ? null : current));

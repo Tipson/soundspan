@@ -4,6 +4,7 @@
 
 import { AudioWaveform, Map } from "lucide-react";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import { MOBILE_PLAYER_CLEARANCE_PX, VibeMap } from "./VibeMap";
 
 /** Host inputs for the full-bleed map tab. */
@@ -28,16 +29,16 @@ export function VibeMapTab({
                 className="flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium text-gray-300 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
             >
                 <AudioWaveform className="w-3.5 h-3.5" />
-                Explore
+                {vibeMapRu.map.explore}
             </button>
             <button
                 type="button"
                 aria-pressed
-                aria-label="Map view (current)"
+                aria-label={vibeMapRu.map.currentView}
                 className="flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium bg-white/15 text-white"
             >
                 <Map className="w-3.5 h-3.5" />
-                Map
+                {vibeMapRu.map.map}
             </button>
         </div>
     );

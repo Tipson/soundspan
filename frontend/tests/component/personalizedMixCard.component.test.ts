@@ -93,7 +93,7 @@ test("personalized mix card renders real shelf artwork and starts its complete q
         2,
     );
     assert.match(container.textContent ?? "", /Fresh finds/);
-    assert.match(container.textContent ?? "", /2 tracks/);
+    assert.match(container.textContent ?? "", /2 трека/);
     assert.equal(
         container.querySelector("button")?.getAttribute("data-tv-card-index"),
         "2",
@@ -102,7 +102,7 @@ test("personalized mix card renders real shelf artwork and starts its complete q
     await act(async () => {
         container
             .querySelector<HTMLButtonElement>(
-                'button[aria-label="Play Fresh finds"]',
+                'button[aria-label="Воспроизвести: Fresh finds"]',
             )
             ?.click();
     });

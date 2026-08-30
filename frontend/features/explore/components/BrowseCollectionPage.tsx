@@ -30,6 +30,7 @@ import {
 } from "@/features/explore/browseCollectionCopy";
 import { useBrowseCollection } from "@/features/explore/hooks/useBrowseCollection";
 import { useBrowseCollectionActions } from "@/features/explore/hooks/useBrowseCollectionActions";
+import { pluralRu } from "@/lib/i18n/ru";
 
 export type { BrowseCollectionKind } from "@/features/explore/browseCollectionCopy";
 
@@ -116,7 +117,7 @@ function BrowseCollectionPageContent({
                 onClose={() => actions.setShowPlaylistSelector(false)}
                 onSelectPlaylist={actions.handlePlaylistSelected}
                 isLoading={actions.isAddingToPlaylist}
-                loadingMessage="Adding tracks..."
+                loadingMessage="Добавляем треки…"
             />
         </div>
     );
@@ -145,7 +146,7 @@ function CollectionNotFound({
                     className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
                 >
                     <ArrowLeft className="w-5 h-5" />
-                    Back
+                    Назад
                 </button>
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
@@ -161,7 +162,7 @@ function CollectionNotFound({
                         onClick={() => router.push("/explore")}
                         className="px-6 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:scale-105 transition-transform"
                     >
-                        Explore playlists
+                        Смотреть подборки
                     </button>
                 </div>
             </div>
@@ -221,7 +222,14 @@ function CollectionHero({
                         {collection.title}
                     </h1>
                     <div className="flex items-center gap-1 text-sm text-white/70">
-                        <span>{collection.trackCount} songs</span>
+                        <span>
+                            {collection.trackCount}{" "}
+                            {pluralRu(collection.trackCount, [
+                                "трек",
+                                "трека",
+                                "треков",
+                            ])}
+                        </span>
                         {totalDuration > 0 && (
                             <span>, {formatTotalDuration(totalDuration)}</span>
                         )}
@@ -257,8 +265,8 @@ function CollectionActionBar({
                     )}
                     <span>
                         {actions.isThisCollectionPlaying && actions.isPlaying
-                            ? "Pause"
-                            : "Play All"}
+                            ? "Пауза"
+                            : "Включить всё"}
                     </span>
                 </button>
 
@@ -266,7 +274,8 @@ function CollectionActionBar({
                     <button
                         onClick={actions.handleShuffle}
                         className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        title="Shuffle play"
+                        title="Перемешать"
+                        aria-label="Перемешать и воспроизвести"
                     >
                         <Shuffle className="w-5 h-5" />
                     </button>
@@ -275,7 +284,8 @@ function CollectionActionBar({
                 <button
                     onClick={actions.handleAddToQueue}
                     className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                    title="Add all to queue"
+                    title="Добавить всё в очередь"
+                    aria-label="Добавить все треки в очередь"
                 >
                     <ListMusic className="w-5 h-5" />
                 </button>
@@ -283,7 +293,8 @@ function CollectionActionBar({
                 <button
                     onClick={() => actions.setShowPlaylistSelector(true)}
                     className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                    title="Add all to playlist"
+                    title="Добавить всё в плейлист"
+                    aria-label="Добавить все треки в плейлист"
                 >
                     <Plus className="w-5 h-5" />
                 </button>
@@ -299,7 +310,7 @@ function CollectionActionBar({
                     className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
                 >
                     <ArrowLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Back</span>
+                    <span className="hidden sm:inline">Назад</span>
                 </button>
             </div>
         </div>
@@ -319,7 +330,16 @@ function LikeAllButton({ actions }: { actions: Actions }) {
                       ? "text-brand hover:bg-white/10"
                       : "text-white/60 hover:bg-white/10 hover:text-white",
             )}
-            title={actions.isAllLiked ? "Unlike all tracks" : "Like all tracks"}
+            title={
+                actions.isAllLiked
+                    ? "Убрать отметку «Нравится» у всех треков"
+                    : "Отметить все треки как понравившиеся"
+            }
+            aria-label={
+                actions.isAllLiked
+                    ? "Убрать отметку «Нравится» у всех треков"
+                    : "Отметить все треки как понравившиеся"
+            }
         >
             {actions.isApplyingLikeAll ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -342,7 +362,7 @@ function EmptyTracks({ message }: { message: string }) {
                 <Music2 className="w-10 h-10 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-white mb-1">
-                No tracks found
+                Треки не найдены
             </h3>
             <p className="text-sm text-gray-400">{message}</p>
         </div>

@@ -4,6 +4,7 @@
 
 import { Loader2 } from "lucide-react";
 import type { RefObject } from "react";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import { MapCanvas } from "./MapCanvas";
 import { MapDecorations } from "./MapDecorations";
 import { MapOverlay } from "./MapOverlay";
@@ -115,8 +116,7 @@ function MapStatus({ model }: { model: VibeMapViewModel }) {
                 <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
                 {model.data.building && (
                     <p className="text-gray-400 text-sm text-center px-4">
-                        Building the vibe map — the first load after a library
-                        change can take a few minutes
+                        {vibeMapRu.map.building}
                     </p>
                 )}
             </div>
@@ -126,8 +126,7 @@ function MapStatus({ model }: { model: VibeMapViewModel }) {
     return (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 pointer-events-none">
             <p className="text-gray-400 text-sm">
-                {model.data.error ??
-                    "No tracks with embeddings available for the map"}
+                {model.data.error ?? vibeMapRu.map.empty}
             </p>
         </div>
     );

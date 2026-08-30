@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Track } from "@/lib/audio-state-context";
+import { userFacingError } from "@/lib/i18n/ru";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import type { MapTrack } from "./types";
 import { annotateOnMap, journeyTracks, mapTrackToTrack } from "./journeyTracks";
 import {
@@ -82,10 +84,10 @@ export interface UseJourneyMode {
 
 function journeyErrorMessage(error: unknown): string {
     const message = error instanceof Error ? error.message : "";
-    if (/no embedding/i.test(message)) return "This track has no embedding yet";
+    if (/no embedding/i.test(message)) return vibeMapRu.journey.noEmbedding;
     if (/enough embedded tracks/i.test(message))
-        return "Not enough analyzed tracks for this mood";
-    return message || "Couldn't build that journey";
+        return vibeMapRu.journey.notEnoughMoodTracks;
+    return userFacingError(error, vibeMapRu.journey.buildFailed);
 }
 
 interface JourneyRequest {
@@ -255,8 +257,11 @@ function useJourneySave(
             route.waypoints,
         );
         if (queue.length === 0) return;
-        const label = route.target?.label ?? route.target?.title ?? "Journey";
-        const name = `Journey to ${label} — ${formatPlaylistDate()}`;
+        const label =
+            route.target?.label ??
+            route.target?.title ??
+            vibeMapRu.journey.title;
+        const name = `${vibeMapRu.save.journey} ${label} — ${formatPlaylistDate()}`;
         const request = ++generation.current;
         setSaving(true);
         try {
@@ -270,7 +275,7 @@ function useJourneySave(
             if (outcome.tone === "success") toast.success(outcome.message);
             else toast.warning(outcome.message);
         } catch {
-            toast.error("Couldn't save that playlist");
+            toast.error(vibeMapRu.save.failed);
         } finally {
             if (request === generation.current) setSaving(false);
         }

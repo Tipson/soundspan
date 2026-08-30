@@ -159,7 +159,7 @@ test("personalized shelf plays the complete provider queue from the selected tra
     );
 
     const beta = container.querySelector(
-        'button[aria-label="Play Beta by Artist B"]',
+        'button[aria-label="Воспроизвести «Beta», исполнитель Artist B"]',
     );
     assert.ok(beta, "playable Beta card not found");
     await React.act(async () => {
@@ -208,7 +208,7 @@ test("personalized shelf shows a meaningful fallback when cover art cannot load"
 
     assert.equal(
         container.querySelector('[role="img"]')?.getAttribute("aria-label"),
-        "Artwork unavailable for Alpha",
+        "Обложка для «Alpha» недоступна",
     );
     unmount();
 });

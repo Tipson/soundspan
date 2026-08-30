@@ -151,13 +151,13 @@ async function renderMadeForYou(overrides?: {
 test("Made For You contains only real generated recommendations", async () => {
     const html = await renderMadeForYou();
 
-    assert.match(html, /Made For You/);
-    assert.match(html, /Discover Weekly/);
-    assert.match(html, /25 tracks/);
+    assert.match(html, /Для вас/);
+    assert.match(html, /Открытия недели/);
+    assert.match(html, /25 треков/);
     assert.match(html, /mix:Daily Mix 1/);
-    assert.match(html, /personal:Quick picks:1/);
-    assert.match(html, /personal:Fresh finds:1/);
-    assert.match(html, /personal:Listen again:1/);
+    assert.match(html, /personal:Быстрый выбор:1/);
+    assert.match(html, /personal:Новые находки:1/);
+    assert.match(html, /personal:Послушать снова:1/);
     assert.doesNotMatch(html, /My Liked/);
 });
 
@@ -197,20 +197,20 @@ test("account-backed Made For You shelves remain when generated playlists are di
         mixes: [],
     });
 
-    assert.match(html, /personal:Quick picks:1/);
-    assert.match(html, /personal:Fresh finds:1/);
-    assert.match(html, /personal:Listen again:1/);
-    assert.doesNotMatch(html, /Refresh/);
+    assert.match(html, /personal:Быстрый выбор:1/);
+    assert.match(html, /personal:Новые находки:1/);
+    assert.match(html, /personal:Послушать снова:1/);
+    assert.doesNotMatch(html, /Обновить/);
 });
 
 test("Made For You exposes refresh only for enabled generated mixes", async () => {
     const html = await renderMadeForYou({ isRefreshingMixes: true });
 
     assert.match(html, /spinner/);
-    assert.match(html, /Refreshing/);
+    assert.match(html, /Обновляем/);
     assert.match(html, /disabled/);
 
     featuresState.autoPlaylists = false;
     const disabledHtml = await renderMadeForYou({ mixes: [] });
-    assert.doesNotMatch(disabledHtml, /Refresh/);
+    assert.doesNotMatch(disabledHtml, /Обновить/);
 });

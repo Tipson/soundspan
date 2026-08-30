@@ -16,6 +16,7 @@ import type {
     RowState,
 } from "@/components/track";
 import type { ReactNode } from "react";
+import { discoverRu } from "@/lib/i18n/discoverRu";
 
 const tierColors: Record<string, string> = {
     high: "text-green-400",
@@ -27,12 +28,12 @@ const tierColors: Record<string, string> = {
 };
 
 const tierLabels: Record<string, string> = {
-    high: "High Match",
-    medium: "Medium Match",
-    explore: "Explore",
-    wildcard: "Wild Card",
-    low: "Explore",
-    wild: "Wild Card",
+    high: discoverRu.tiers.high,
+    medium: discoverRu.tiers.medium,
+    explore: discoverRu.tiers.explore,
+    wildcard: discoverRu.tiers.wildcard,
+    low: discoverRu.tiers.explore,
+    wild: discoverRu.tiers.wildcard,
 };
 
 interface TrackListProps {
@@ -62,16 +63,16 @@ function getSourceBadge(
 
     if (!track.available) {
         if (isMatching) {
-            label = "LOADING";
+            label = discoverRu.source.loading;
             badgeClassName =
                 "bg-gray-500/20 text-gray-300 border border-gray-400/30 animate-pulse";
         } else {
-            label = "PREVIEW";
+            label = discoverRu.source.preview;
             badgeClassName =
                 "bg-blue-500/20 text-blue-400 border border-blue-500/30";
         }
     } else {
-        label = "Local";
+        label = discoverRu.source.local;
         badgeClassName = "bg-emerald-500/20 text-emerald-400";
     }
 
@@ -206,10 +207,16 @@ export function TrackList({
                         className="grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_90px_80px] gap-4 mb-2"
                         columns={[
                             { label: "#", className: "text-center" },
-                            { label: "Title" },
-                            { label: "Album" },
-                            { label: "Match", className: "text-center" },
-                            { label: "Source", className: "text-center" },
+                            { label: discoverRu.columns.title },
+                            { label: discoverRu.columns.album },
+                            {
+                                label: discoverRu.columns.match,
+                                className: "text-center",
+                            },
+                            {
+                                label: discoverRu.columns.source,
+                                className: "text-center",
+                            },
                             { label: "" },
                         ]}
                     />

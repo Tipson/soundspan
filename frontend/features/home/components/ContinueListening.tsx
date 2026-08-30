@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/HorizontalCarousel";
 import { memo } from "react";
 import { getArtistHref } from "@/utils/artistRoute";
+import { ru } from "@/lib/i18n/ru";
 
 interface ContinueListeningItem {
     id: string;
@@ -54,16 +55,16 @@ const getDescriptionLabel = (item: ContinueListeningItem) => {
         ) {
             return item.author;
         }
-        return "Podcast";
+        return ru.home.podcast;
     }
 
     if (item.type === "audiobook") {
         return item.author && item.author.trim().length > 0
             ? item.author
-            : "Audiobook";
+            : ru.home.audiobook;
     }
 
-    return "Artist";
+    return ru.home.artist;
 };
 
 interface ContinueListeningCardProps {

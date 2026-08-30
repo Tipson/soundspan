@@ -126,8 +126,8 @@ export function BrowseTrackList({
                         className="grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto] gap-4 mb-2"
                         columns={[
                             { label: "#", className: "text-center" },
-                            { label: "Title" },
-                            { label: "Album" },
+                            { label: "Название" },
+                            { label: "Альбом" },
                             { label: "" },
                         ]}
                     />

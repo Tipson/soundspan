@@ -3,6 +3,7 @@
 /** Canvas renderer for the vibe map's filtered, highlighted dot sample. */
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { vibeMapRu, vibeMapSummary } from "@/lib/i18n/vibeMapRu";
 import { resolveMapKeyNav } from "./mapKeyboardNav";
 import type { Viewport } from "./mapViewport";
 import { computeDotRadius, fitViewport } from "./mapViewport";
@@ -220,7 +221,7 @@ export function MapCanvas(props: MapCanvasProps) {
     const order = useMemo(() => navigableOrder(tracks, mask), [tracks, mask]);
     const focusedId = tracks[focusedIndex ?? -1]?.id ?? null;
     const summaryId = `${baseId}-summary`;
-    const summary = `Vibe map, ${tracks.length} tracks, ${order.length} shown. Use arrow keys to move between tracks and Enter to explore.`;
+    const summary = vibeMapSummary(tracks.length, order.length);
     const focusedTrack = tracks[focusedIndex ?? -1];
     const handleKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) =>
         handleCanvasKeyDown(event, props, order, focusedIndex, setFocusedIndex);
@@ -242,7 +243,7 @@ export function MapCanvas(props: MapCanvasProps) {
                 ref={canvasRef}
                 className={props.className ?? "absolute inset-0 touch-none"}
                 role="application"
-                aria-roledescription="Vibe map"
+                aria-roledescription={vibeMapRu.map.role}
                 aria-label={summary}
                 aria-describedby={summaryId}
                 tabIndex={0}
@@ -255,7 +256,7 @@ export function MapCanvas(props: MapCanvasProps) {
             />
             <span id={summaryId} className="sr-only" aria-live="polite">
                 {focusedTrack
-                    ? `Focused: ${focusedTrack.title} by ${focusedTrack.artist}.`
+                    ? `${vibeMapRu.map.focused}: ${focusedTrack.title} — ${focusedTrack.artist}.`
                     : summary}
             </span>
         </>

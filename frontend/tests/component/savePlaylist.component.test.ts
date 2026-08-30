@@ -190,11 +190,11 @@ test("describeSaveResult: a full save reads as success", async () => {
         await import("../../components/vibe/savePlaylist");
     assert.deepEqual(
         describeSaveResult("Mix", { id: "p", added: 5, failedTrackIds: [] }),
-        { tone: "success", message: "Saved 5 tracks to Mix" },
+        { tone: "success", message: "5 треков сохранено в плейлист «Mix»" },
     );
     assert.deepEqual(
         describeSaveResult("Mix", { id: "p", added: 1, failedTrackIds: [] }),
-        { tone: "success", message: "Saved 1 track to Mix" },
+        { tone: "success", message: "1 трек сохранён в плейлист «Mix»" },
     );
 });
 
@@ -209,7 +209,8 @@ test("describeSaveResult: a partial save is a warning naming the miss count", as
         }),
         {
             tone: "warning",
-            message: "Saved 3 of 4 tracks to Mix — 1 track couldn't be added",
+            message:
+                "В плейлист «Mix» сохранено 3 из 4 треков. Не удалось добавить: 1.",
         },
     );
     assert.equal(
@@ -227,12 +228,12 @@ test("formatPlaylistDate renders 'MMM D' (e.g. Jul 15)", async () => {
         await import("../../components/vibe/savePlaylist");
     // Local-time construction avoids UTC-offset day-boundary flakiness.
     const d = new Date(2026, 6, 15, 12, 0, 0); // July 15 2026, noon local
-    assert.equal(formatPlaylistDate(d), "Jul 15");
+    assert.equal(formatPlaylistDate(d), "июл. 15");
 });
 
 test("formatPlaylistDate does not zero-pad the day", async () => {
     const { formatPlaylistDate } =
         await import("../../components/vibe/savePlaylist");
     const d = new Date(2026, 0, 5, 12, 0, 0); // January 5
-    assert.equal(formatPlaylistDate(d), "Jan 5");
+    assert.equal(formatPlaylistDate(d), "янв. 5");
 });

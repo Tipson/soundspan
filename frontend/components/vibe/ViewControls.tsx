@@ -20,6 +20,7 @@ import {
     ZoomOut,
 } from "lucide-react";
 import { Fragment } from "react";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import {
     FILTERABLE_MOODS,
     VIBE_ACCENTS,
@@ -32,9 +33,9 @@ export type LayoutMode = "natural" | "spread";
 export type TrailMode = "on" | "fade" | "off";
 
 const TRAIL_MODE_OPTIONS: readonly { mode: TrailMode; label: string }[] = [
-    { mode: "on", label: "On" },
-    { mode: "fade", label: "Fade" },
-    { mode: "off", label: "Off" },
+    { mode: "on", label: vibeMapRu.trailModes.on },
+    { mode: "fade", label: vibeMapRu.trailModes.fade },
+    { mode: "off", label: vibeMapRu.trailModes.off },
 ];
 
 export interface ViewControlsProps {
@@ -113,21 +114,21 @@ function GlyphLegend() {
                         boxShadow: `0 0 4px 1px ${VIBE_ACCENTS.edge}`,
                     }}
                 />
-                Beacon — now playing
+                {vibeMapRu.legend.beacon}
             </li>
             <li className="flex items-center gap-2">
                 <span
                     className="w-4 h-0 shrink-0 border-t-2"
                     style={{ borderColor: VIBE_ACCENTS.trail }}
                 />
-                Solid fading line — your listening trail
+                {vibeMapRu.legend.trail}
             </li>
             <li className="flex items-center gap-2">
                 <span
                     className="w-4 h-0 shrink-0 border-t-2 border-dashed"
                     style={{ borderColor: VIBE_ACCENTS.plan }}
                 />
-                Dashed line — upcoming queue (flight plan)
+                {vibeMapRu.legend.plan}
             </li>
         </ul>
     );
@@ -135,11 +136,11 @@ function GlyphLegend() {
 
 function GestureCheatSheet() {
     const gestures: Array<[string, string]> = [
-        ["Click", "Travel"],
-        ["Shift-drag", "Sweep-to-queue"],
-        ["Ctrl/⌘-click", "Add to alchemy"],
-        ["Wheel / pinch", "Zoom"],
-        ["Esc", "Back"],
+        [vibeMapRu.gestures.click, vibeMapRu.gestures.travel],
+        [vibeMapRu.gestures.shiftDrag, vibeMapRu.gestures.sweep],
+        [vibeMapRu.gestures.ctrlClick, vibeMapRu.gestures.alchemy],
+        [vibeMapRu.gestures.wheelPinch, vibeMapRu.gestures.zoom],
+        ["Esc", vibeMapRu.gestures.back],
     ];
     return (
         <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
@@ -158,35 +159,31 @@ export function AboutMapPopover() {
     return (
         <div
             role="dialog"
-            aria-label="About this map"
+            aria-label={vibeMapRu.legend.about}
             className={`${POPOVER_CLASS} w-72 max-h-[70vh] overflow-y-auto`}
         >
             <p className="text-xs text-gray-300 leading-relaxed">
-                Dots are songs, placed by overall sound (a CLAP embedding,
-                projected with UMAP). Tracks that sound alike cluster together —{" "}
+                {vibeMapRu.legend.descriptionStart}{" "}
                 <strong className="text-white">
-                    neighborhoods are meaningful, but long distances aren&apos;t
-                    proportional
+                    {vibeMapRu.legend.descriptionStrong}
                 </strong>
-                : “half a screen apart” doesn&apos;t mean “twice as different”
-                as a track a quarter-screen away. Percentages shown in panels
-                are calibrated against random pairs from your own library.
+                {vibeMapRu.legend.descriptionEnd}
             </p>
             <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-                    Mood colors
+                    {vibeMapRu.legend.moodColors}
                 </p>
                 <MoodLegend />
             </div>
             <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-                    Lines &amp; glyphs
+                    {vibeMapRu.legend.linesAndGlyphs}
                 </p>
                 <GlyphLegend />
             </div>
             <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-                    Gestures
+                    {vibeMapRu.legend.gestures}
                 </p>
                 <GestureCheatSheet />
             </div>
@@ -201,8 +198,8 @@ function ZoomControls({ props }: { props: ViewControlsProps }) {
                 type="button"
                 onClick={props.onZoomIn}
                 className={BTN}
-                title="Zoom in"
-                aria-label="Zoom in"
+                title={vibeMapRu.controls.zoomIn}
+                aria-label={vibeMapRu.controls.zoomIn}
             >
                 <ZoomIn className="w-5 h-5" />
             </button>
@@ -210,8 +207,8 @@ function ZoomControls({ props }: { props: ViewControlsProps }) {
                 type="button"
                 onClick={props.onZoomOut}
                 className={BTN}
-                title="Zoom out"
-                aria-label="Zoom out"
+                title={vibeMapRu.controls.zoomOut}
+                aria-label={vibeMapRu.controls.zoomOut}
             >
                 <ZoomOut className="w-5 h-5" />
             </button>
@@ -219,8 +216,8 @@ function ZoomControls({ props }: { props: ViewControlsProps }) {
                 type="button"
                 onClick={props.onReset}
                 className={BTN}
-                title="Reset view"
-                aria-label="Reset view"
+                title={vibeMapRu.controls.resetView}
+                aria-label={vibeMapRu.controls.resetView}
             >
                 <RotateCcw className="w-5 h-5" />
             </button>
@@ -243,10 +240,14 @@ function MapActionControls({ props }: { props: ViewControlsProps }) {
                 className={BTN}
                 title={
                     spread
-                        ? "Cluster: return to the natural layout"
-                        : "Spread: uniformly space out crowded clusters"
+                        ? vibeMapRu.controls.cluster
+                        : vibeMapRu.controls.spread
                 }
-                aria-label={spread ? "Cluster layout" : "Spread layout"}
+                aria-label={
+                    spread
+                        ? vibeMapRu.controls.clusterLayout
+                        : vibeMapRu.controls.spreadLayout
+                }
             >
                 {spread ? (
                     <Network className="w-5 h-5" />
@@ -261,10 +262,10 @@ function MapActionControls({ props }: { props: ViewControlsProps }) {
                 className={`${BTN} ${props.brushArmed ? "bg-indigo-500/30 text-white" : ""}`}
                 title={
                     props.brushArmed
-                        ? "Sweep brush armed — drag over dots to collect a queue (click to disarm)"
-                        : "Sweep brush: drag over dots to collect a queue (or hold Shift and drag)"
+                        ? vibeMapRu.controls.brushArmed
+                        : vibeMapRu.controls.brush
                 }
-                aria-label="Sweep brush"
+                aria-label={vibeMapRu.controls.sweepBrush}
             >
                 <Brush className="w-5 h-5" />
             </button>
@@ -274,7 +275,7 @@ function MapActionControls({ props }: { props: ViewControlsProps }) {
                 disabled={!props.canLocate}
                 className={locateClass}
                 title={props.locateHint}
-                aria-label="Locate now playing"
+                aria-label={vibeMapRu.controls.locate}
             >
                 <Crosshair className="w-5 h-5" />
             </button>
@@ -284,7 +285,7 @@ function MapActionControls({ props }: { props: ViewControlsProps }) {
                 disabled={!props.canStartJourney}
                 className={BTN}
                 title={props.journeyHint}
-                aria-label="Start a journey"
+                aria-label={vibeMapRu.controls.startJourney}
             >
                 <Route className="w-5 h-5" />
             </button>
@@ -300,8 +301,8 @@ function QueueControl({ props }: { props: ViewControlsProps }) {
                 onClick={props.onToggleQueue}
                 aria-pressed={props.queueOpen}
                 className={`${BTN} ${props.queueOpen ? "bg-white/10 text-white" : ""}`}
-                title="Show queue"
-                aria-label="Show queue"
+                title={vibeMapRu.controls.showQueue}
+                aria-label={vibeMapRu.controls.showQueue}
             >
                 <ListMusic className="w-5 h-5" />
             </button>
@@ -321,12 +322,12 @@ function TrailPopover({ props }: { props: ViewControlsProps }) {
     return (
         <div
             role="menu"
-            aria-label="Trail display"
+            aria-label={vibeMapRu.controls.trailDisplay}
             className={`${POPOVER_CLASS} w-44`}
         >
             <div
                 role="radiogroup"
-                aria-label="Trail mode"
+                aria-label={vibeMapRu.controls.trailMode}
                 className="flex rounded-lg overflow-hidden border border-white/10"
             >
                 {TRAIL_MODE_OPTIONS.map(({ mode, label }) => (
@@ -348,7 +349,7 @@ function TrailPopover({ props }: { props: ViewControlsProps }) {
                 disabled={props.trailEmpty}
                 className="text-left px-2 py-1.5 rounded-lg text-xs text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
             >
-                Clear history
+                {vibeMapRu.controls.clearHistory}
             </button>
             <button
                 type="button"
@@ -361,7 +362,7 @@ function TrailPopover({ props }: { props: ViewControlsProps }) {
                 ) : (
                     <ListPlus className="w-3.5 h-3.5" />
                 )}
-                Save history as playlist
+                {vibeMapRu.controls.saveHistory}
             </button>
         </div>
     );
@@ -376,8 +377,8 @@ function TrailControl({ props }: { props: ViewControlsProps }) {
                 aria-pressed={props.trailMode !== "off"}
                 aria-expanded={props.trailPopoverOpen}
                 className={`${BTN} ${props.trailPopoverOpen ? "bg-white/10 text-white" : ""}`}
-                title="Session trail settings"
-                aria-label="Session trail settings"
+                title={vibeMapRu.controls.trailSettings}
+                aria-label={vibeMapRu.controls.trailSettings}
             >
                 <Footprints className="w-5 h-5" />
             </button>
@@ -394,8 +395,8 @@ function AboutControl({ props }: { props: ViewControlsProps }) {
                 onClick={props.onToggleAboutPopover}
                 aria-expanded={props.aboutPopoverOpen}
                 className={`${BTN} ${props.aboutPopoverOpen ? "bg-white/10 text-white" : ""}`}
-                title="About this map"
-                aria-label="About this map"
+                title={vibeMapRu.legend.about}
+                aria-label={vibeMapRu.legend.about}
             >
                 <HelpCircle className="w-5 h-5" />
             </button>
@@ -411,9 +412,15 @@ function FullscreenControl({ props }: { props: ViewControlsProps }) {
             onClick={props.onToggleFullscreen}
             aria-pressed={props.isFullscreen}
             className={BTN}
-            title={props.isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}
+            title={
+                props.isFullscreen
+                    ? vibeMapRu.controls.exitFullscreenEsc
+                    : vibeMapRu.controls.fullscreen
+            }
             aria-label={
-                props.isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                props.isFullscreen
+                    ? vibeMapRu.controls.exitFullscreen
+                    : vibeMapRu.controls.enterFullscreen
             }
         >
             {props.isFullscreen ? (

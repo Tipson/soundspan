@@ -19,43 +19,52 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { pluralRu, userFacingError } from "@/lib/i18n/ru";
 
 const MOOD_PILLS: {
     mood: MoodType;
     label: string;
     gradient: string;
 }[] = [
-    { mood: "sad", label: "Sad", gradient: "from-blue-600 to-indigo-700" },
+    { mood: "sad", label: "Грусть", gradient: "from-blue-600 to-indigo-700" },
     {
         mood: "melancholy",
-        label: "Melancholy",
+        label: "Меланхолия",
         gradient: "from-slate-500 to-gray-600",
     },
     {
         mood: "acoustic",
-        label: "Acoustic",
+        label: "Акустика",
         gradient: "from-amber-600 to-yellow-700",
     },
-    { mood: "chill", label: "Chill", gradient: "from-teal-500 to-cyan-600" },
+    {
+        mood: "chill",
+        label: "Спокойствие",
+        gradient: "from-teal-500 to-cyan-600",
+    },
     {
         mood: "focus",
-        label: "Focus",
+        label: "Концентрация",
         gradient: "from-emerald-500 to-green-600",
     },
     {
         mood: "happy",
-        label: "Happy",
+        label: "Радость",
         gradient: "from-yellow-500 to-orange-500",
     },
     {
         mood: "energetic",
-        label: "Energetic",
+        label: "Энергия",
         gradient: "from-orange-500 to-red-500",
     },
-    { mood: "party", label: "Party", gradient: "from-pink-500 to-purple-600" },
+    {
+        mood: "party",
+        label: "Вечеринка",
+        gradient: "from-pink-500 to-purple-600",
+    },
     {
         mood: "aggressive",
-        label: "Aggressive",
+        label: "Напор",
         gradient: "from-red-600 to-rose-700",
     },
 ];
@@ -98,8 +107,8 @@ export function MoodPills() {
         if (generating) return;
         const trackCount = getTrackCount(mood);
         if (trackCount < 5) {
-            toast.error(`Not enough ${label} tracks`, {
-                description: `Need at least 5 tracks (have ${trackCount})`,
+            toast.error(`Недостаточно треков для настроения «${label}»`, {
+                description: `Нужно хотя бы 5 треков, сейчас: ${trackCount}`,
             });
             return;
         }
@@ -112,11 +121,12 @@ export function MoodPills() {
                     id: t.id,
                     title: t.title,
                     artist: {
-                        name: t.album?.artist?.name || "Unknown Artist",
+                        name:
+                            t.album?.artist?.name || "Неизвестный исполнитель",
                         id: t.album?.artist?.id,
                     },
                     album: {
-                        title: t.album?.title || "Unknown Album",
+                        title: t.album?.title || "Неизвестный альбом",
                         coverArt: t.album?.coverUrl,
                         id: t.albumId,
                     },
@@ -124,8 +134,8 @@ export function MoodPills() {
                 }));
                 playTracks(tracks, 0);
                 await api.saveMoodBucketMix(mood);
-                toast.success(`${label} Mix`, {
-                    description: `Playing ${tracks.length} tracks`,
+                toast.success(`Микс «${label}»`, {
+                    description: `Воспроизводится ${tracks.length} ${pluralRu(tracks.length, ["трек", "трека", "треков"])}`,
                 });
                 await queryClient.refetchQueries({
                     queryKey: queryKeys.mixes(),
@@ -133,17 +143,17 @@ export function MoodPills() {
                 window.dispatchEvent(new CustomEvent("mix-generated"));
                 window.dispatchEvent(new CustomEvent("mixes-updated"));
             } else {
-                toast.error("Not enough tracks for this mood", {
+                toast.error("Для этого настроения недостаточно треков", {
                     description:
-                        "Try analyzing more music or choose a different mood",
+                        "Проанализируйте больше музыки или выберите другое настроение",
                 });
             }
         } catch (error: unknown) {
             sharedFrontendLogger.error("Failed to generate mood mix:", error);
-            const errorMessage =
-                error instanceof Error
-                    ? error.message
-                    : "Failed to generate mix";
+            const errorMessage = userFacingError(
+                error,
+                "Не удалось создать микс",
+            );
             toast.error(errorMessage);
         } finally {
             setGenerating(null);
@@ -167,8 +177,8 @@ export function MoodPills() {
                             disabled={generating !== null || isDisabled}
                             title={
                                 isDisabled
-                                    ? `Need at least 5 tracks (have ${trackCount})`
-                                    : `Play ${label} mix`
+                                    ? `Нужно хотя бы 5 треков, сейчас: ${trackCount}`
+                                    : `Включить микс «${label}»`
                             }
                             className={`
                             px-4 py-2 rounded-full text-sm font-medium text-white
@@ -189,7 +199,7 @@ export function MoodPills() {
             {audioAnalysis && (
                 <Link
                     href="/vibe"
-                    title="Vibe Map"
+                    title="Открыть мою волну"
                     className="
                     px-4 py-2 rounded-full text-sm font-medium text-white
                     bg-gradient-to-r from-violet-500 to-fuchsia-600
@@ -199,7 +209,7 @@ export function MoodPills() {
                 "
                 >
                     <AudioWaveform className="w-3.5 h-3.5" />
-                    Vibe Map
+                    Моя волна
                 </Link>
             )}
         </div>

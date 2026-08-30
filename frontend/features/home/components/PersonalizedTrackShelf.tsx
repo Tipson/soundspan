@@ -29,6 +29,7 @@ import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflin
 import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl";
 import { toast } from "sonner";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface PersonalizedTrackShelfProps {
     title: string;
@@ -46,7 +47,7 @@ function ArtworkFallback({ title }: { title: string }) {
     return (
         <span
             role="img"
-            aria-label={`Artwork unavailable for ${title}`}
+            aria-label={`Обложка для «${title}» недоступна`}
             className="flex h-full w-full items-center justify-center"
         >
             <Music className="h-5 w-5 text-white/35" aria-hidden="true" />
@@ -70,60 +71,61 @@ function PersonalizedDownloadAction({ track }: { track: Track }) {
     const actionCopy = (() => {
         if (ready && !autoManagedReady) {
             return {
-                ariaLabel: `${track.title} is available offline`,
-                title: "Available offline",
+                ariaLabel: `Трек «${track.title}» доступен офлайн`,
+                title: "Доступен офлайн",
             };
         }
         if (busy) {
             return {
-                ariaLabel: `Downloading ${track.title}`,
-                title: "Downloading…",
+                ariaLabel: `Скачивается «${track.title}»`,
+                title: "Скачивание…",
             };
         }
         if (storageStatus === "unsupported") {
             return {
-                ariaLabel: "Device downloads are unavailable in this browser",
-                title: "Downloads unavailable in this browser",
+                ariaLabel:
+                    "Скачивание на устройство недоступно в этом браузере",
+                title: "Скачивание недоступно в этом браузере",
             };
         }
         if (storageStatus === "checking") {
             return {
-                ariaLabel: `Checking device storage for ${track.title}`,
-                title: "Checking device storage…",
+                ariaLabel: `Проверяем хранилище перед скачиванием «${track.title}»`,
+                title: "Проверяем хранилище…",
             };
         }
         if (storageStatus === "requesting") {
             return {
-                ariaLabel: `Waiting for folder access for ${track.title}`,
-                title: "Waiting for folder access…",
+                ariaLabel: `Ожидаем доступ к папке для скачивания «${track.title}»`,
+                title: "Ожидаем доступ к папке…",
             };
         }
         if (storageStatus === "needs-setup") {
             return {
-                ariaLabel: `Choose a folder to download ${track.title}`,
-                title: "Choose folder and download",
+                ariaLabel: `Выберите папку для скачивания «${track.title}»`,
+                title: "Выбрать папку и скачать",
             };
         }
         if (storageStatus === "error") {
             const reconnecting = Boolean(deviceOffline.storage.directoryName);
             return {
                 ariaLabel: reconnecting
-                    ? `Reconnect folder to download ${track.title}`
-                    : `Choose a folder to download ${track.title}`,
+                    ? `Переподключите папку для скачивания «${track.title}»`
+                    : `Выберите папку для скачивания «${track.title}»`,
                 title: reconnecting
-                    ? "Reconnect folder and download"
-                    : "Choose folder and download",
+                    ? "Переподключить папку и скачать"
+                    : "Выбрать папку и скачать",
             };
         }
         if (autoManagedReady) {
             return {
-                ariaLabel: `Keep ${track.title} offline on this device`,
-                title: "Keep offline on this device",
+                ariaLabel: `Оставить «${track.title}» офлайн на этом устройстве`,
+                title: "Оставить офлайн на этом устройстве",
             };
         }
         return {
-            ariaLabel: `Download ${track.title} to this device`,
-            title: "Download to device",
+            ariaLabel: `Скачать «${track.title}» на это устройство`,
+            title: "Скачать на устройство",
         };
     })();
 
@@ -141,15 +143,16 @@ function PersonalizedDownloadAction({ track }: { track: Track }) {
                     .then((record) =>
                         toast.success(
                             record.status === "ready"
-                                ? `"${track.title}" is available offline`
-                                : `Download started for "${track.title}"`,
+                                ? `«${track.title}» доступен офлайн`
+                                : `Началось скачивание «${track.title}»`,
                         ),
                     )
                     .catch((error: unknown) =>
                         toast.error(
-                            error instanceof Error
-                                ? error.message
-                                : "Device download failed",
+                            userFacingError(
+                                error,
+                                "Не удалось скачать трек на устройство",
+                            ),
                         ),
                     );
             }}
@@ -262,7 +265,7 @@ export function PersonalizedTrackShelf({
                             disabled={!canScrollLeft}
                             onClick={() => scrollShelf("left")}
                             className="grid min-h-11 min-w-11 place-items-center rounded-full border border-white/10 bg-black/30 text-white transition hover:border-white/20 hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:scroll-auto motion-reduce:transition-none"
-                            aria-label={`Scroll ${title} left`}
+                            aria-label={`Прокрутить раздел «${title}» влево`}
                         >
                             <ChevronLeft
                                 className="h-5 w-5"
@@ -274,7 +277,7 @@ export function PersonalizedTrackShelf({
                             disabled={!canScrollRight}
                             onClick={() => scrollShelf("right")}
                             className="grid min-h-11 min-w-11 place-items-center rounded-full border border-white/10 bg-black/30 text-white transition hover:border-white/20 hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:scroll-auto motion-reduce:transition-none"
-                            aria-label={`Scroll ${title} right`}
+                            aria-label={`Прокрутить раздел «${title}» вправо`}
                         >
                             <ChevronRight
                                 className="h-5 w-5"
@@ -286,10 +289,10 @@ export function PersonalizedTrackShelf({
                         type="button"
                         onClick={() => playTracks(queue, 0)}
                         className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-black shadow-lg shadow-brand/15 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-black motion-reduce:transition-none"
-                        aria-label={`Play all ${title}`}
+                        aria-label={`Воспроизвести весь раздел «${title}»`}
                     >
                         <Radio className="h-4 w-4" aria-hidden="true" />
-                        <span className="hidden sm:inline">Play all</span>
+                        <span className="hidden sm:inline">Включить всё</span>
                     </button>
                 </div>
             </div>
@@ -311,7 +314,7 @@ export function PersonalizedTrackShelf({
                             <button
                                 type="button"
                                 onClick={() => playTracks(queue, index)}
-                                aria-label={`Play ${track.title} by ${track.artist.name}`}
+                                aria-label={`Воспроизвести «${track.title}», исполнитель ${track.artist.name}`}
                                 className="flex min-w-0 flex-1 items-center gap-3 p-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                             >
                                 <span className="relative h-13 w-13 shrink-0 overflow-hidden rounded-lg bg-white/[0.07] shadow-md">

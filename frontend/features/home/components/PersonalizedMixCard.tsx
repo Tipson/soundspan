@@ -6,6 +6,7 @@ import { CachedImage } from "@/components/ui/CachedImage";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
+import { ru, pluralRu } from "@/lib/i18n/ru";
 import type { PersonalizedTrack } from "../types";
 
 interface PersonalizedMixCardProps {
@@ -50,7 +51,7 @@ export function PersonalizedMixCard({
         <button
             type="button"
             onClick={() => playTracks(queue, 0)}
-            aria-label={`Play ${title}`}
+            aria-label={`${ru.common.play}: ${title}`}
             data-tv-card
             data-tv-card-index={index}
             className="group block w-full min-w-0 rounded-[1.125rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
@@ -94,7 +95,8 @@ export function PersonalizedMixCard({
                 {title}
             </span>
             <span className="mt-1 block text-xs leading-5 text-content-muted">
-                {tracks.length} {tracks.length === 1 ? "track" : "tracks"} ·{" "}
+                {tracks.length}{" "}
+                {pluralRu(tracks.length, ["трек", "трека", "треков"])} ·{" "}
                 {description}
             </span>
         </button>

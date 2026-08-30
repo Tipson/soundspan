@@ -24,19 +24,19 @@ export function ExploreDegradedNotice({
         >
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
             <span className="flex-1">
-                Some sections failed to load —{" "}
+                Некоторые разделы не загрузились —{" "}
                 <button
                     type="button"
                     onClick={() => void onRetry()}
                     className="font-medium text-amber-200 underline underline-offset-2 hover:text-white"
                 >
-                    Retry
+                    повторить
                 </button>
             </span>
             <button
                 type="button"
                 onClick={() => setIsDismissed(true)}
-                aria-label="Dismiss degraded results notice"
+                aria-label="Скрыть предупреждение о неполной загрузке"
                 className="rounded p-1 text-amber-200/70 hover:bg-white/10 hover:text-white"
             >
                 <X className="h-4 w-4" />

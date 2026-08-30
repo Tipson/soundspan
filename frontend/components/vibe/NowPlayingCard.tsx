@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Crosshair, Music, Pause, Play } from "lucide-react";
 import { api } from "@/lib/api";
+import { ru } from "@/lib/i18n/ru";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import { VIBE_ACCENTS } from "./types";
 
 export interface NowPlayingCardTrack {
@@ -111,13 +113,13 @@ function CoverButton({
             aria-disabled={!onMap}
             title={
                 onMap
-                    ? "Fly to now playing on the map"
-                    : "Now playing isn't on the map"
+                    ? vibeMapRu.controls.flyToNowPlaying
+                    : vibeMapRu.controls.nowPlayingOffMap
             }
             aria-label={
                 onMap
-                    ? `Fly to ${track.title} on the map`
-                    : `${track.title} — not on the map`
+                    ? `${vibeMapRu.map.findOnMap}: ${track.title}`
+                    : `${track.title} — ${vibeMapRu.map.notOnMap}`
             }
             className="group flex-shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:cursor-default"
         >
@@ -181,14 +183,14 @@ function FindButton({
         <button
             type="button"
             onClick={onFlyTo}
-            title={`Fly to "${track.title}" on the map`}
-            aria-label={`Find ${track.title} on the map`}
+            title={`${vibeMapRu.map.findOnMap}: «${track.title}»`}
+            aria-label={`${vibeMapRu.map.findOnMap}: ${track.title}`}
             className="flex flex-shrink-0 items-center gap-1.5 h-10 px-2.5 sm:px-3 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
             style={{ backgroundColor: `${color}26`, color }}
         >
             <Crosshair className="w-4 h-4" />
             <span className="hidden sm:inline whitespace-nowrap">
-                Find on map
+                {vibeMapRu.map.findOnMap}
             </span>
         </button>
     );
@@ -205,8 +207,8 @@ function PlayButton({
         <button
             type="button"
             onClick={toggle}
-            aria-label={playing ? "Pause" : "Play"}
-            title={playing ? "Pause" : "Play"}
+            aria-label={playing ? ru.common.pause : ru.common.play}
+            title={playing ? ru.common.pause : ru.common.play}
             className="flex flex-shrink-0 items-center justify-center w-10 h-10 rounded-lg text-gray-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 transition-colors"
         >
             {playing ? (
@@ -241,7 +243,7 @@ function ProgressStrip({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(percent)}
-            aria-label="Playback progress"
+            aria-label={vibeMapRu.map.playbackProgress}
             className="absolute inset-x-2 bottom-1 h-[2px] rounded-full bg-white/10 overflow-hidden"
         >
             <div

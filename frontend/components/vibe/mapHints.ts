@@ -8,6 +8,7 @@
  */
 
 import type { MapMode } from "./types";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 
 export const HINTS_DISMISSED_KEY = "vibe:hints-dismissed";
 
@@ -20,19 +21,19 @@ export interface HintContext {
 
 export function hintForMode(mode: MapMode, ctx: HintContext = {}): string {
     if (ctx.sweepArmed) {
-        return "Brush armed — drag across dots to sweep them into a queue";
+        return vibeMapRu.hints.brush;
     }
     switch (mode) {
         case "travel":
-            return "Click a glowing halo to hop there · Shift-click queues it · Esc exits";
+            return vibeMapRu.hints.travel;
         case "journey":
             return ctx.picking
-                ? "Click any dot to set the journey's destination"
-                : "Pick a destination track or mood, then start the journey";
+                ? vibeMapRu.hints.journeyPick
+                : vibeMapRu.hints.journey;
         case "alchemy":
-            return "Click dots to add ingredients · blend 2–10 tracks";
+            return vibeMapRu.hints.alchemy;
         case "explore":
         default:
-            return "Click a dot to play & travel · Shift-click queues · Ctrl-click blends";
+            return vibeMapRu.hints.explore;
     }
 }

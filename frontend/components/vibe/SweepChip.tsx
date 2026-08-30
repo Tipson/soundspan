@@ -10,6 +10,11 @@
  */
 
 import { ListPlus, Loader2, Play, X } from "lucide-react";
+import {
+    sweptTracksLabel,
+    vibeMapRu,
+    vibeTrackCount,
+} from "@/lib/i18n/vibeMapRu";
 
 export interface SweepChipProps {
     count: number;
@@ -44,33 +49,33 @@ function SweepActions({
                 onClick={onPlay}
                 disabled={saving}
                 className={ACTION_CLASS}
-                aria-label={`Play ${count} swept tracks`}
+                aria-label={`${vibeMapRu.sweep.play}: ${vibeTrackCount(count)}`}
             >
-                <Play className="w-4 h-4" /> Play
+                <Play className="w-4 h-4" /> {vibeMapRu.sweep.play}
             </button>
             <button
                 type="button"
                 onClick={onQueue}
                 disabled={saving}
                 className={ACTION_CLASS}
-                aria-label={`Queue ${count} swept tracks`}
+                aria-label={`${vibeMapRu.sweep.queue}: ${vibeTrackCount(count)}`}
             >
-                <ListPlus className="w-4 h-4" /> Queue
+                <ListPlus className="w-4 h-4" /> {vibeMapRu.sweep.queue}
             </button>
             <button
                 type="button"
                 onClick={onSave}
                 disabled={saving}
                 className={ACTION_CLASS}
-                aria-label={`Save ${count} swept tracks as a playlist`}
-                title="Save as playlist"
+                aria-label={`${vibeMapRu.sweep.saveTitle}: ${vibeTrackCount(count)}`}
+                title={vibeMapRu.sweep.saveTitle}
             >
                 {saving ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                     <ListPlus className="w-4 h-4" />
                 )}
-                Save
+                {vibeMapRu.sweep.save}
             </button>
         </>
     );
@@ -93,8 +98,7 @@ export function SweepChip({
         >
             <div className="pointer-events-auto flex items-center gap-0.5 rounded-full bg-black/70 backdrop-blur-md border border-white/10 shadow-lg pl-3 pr-1 py-1">
                 <span className="text-sm text-white tabular-nums whitespace-nowrap mr-1">
-                    {count} track{count === 1 ? "" : "s"} swept
-                    {capped ? " (max)" : ""}
+                    {sweptTracksLabel(count, capped)}
                 </span>
                 <SweepActions
                     count={count}
@@ -106,8 +110,8 @@ export function SweepChip({
                 <button
                     type="button"
                     onClick={onDismiss}
-                    aria-label="Dismiss sweep"
-                    title="Dismiss (Esc)"
+                    aria-label={vibeMapRu.sweep.dismiss}
+                    title={vibeMapRu.sweep.dismissEsc}
                     className="flex items-center justify-center w-9 h-9 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                 >
                     <X className="w-4 h-4" />
