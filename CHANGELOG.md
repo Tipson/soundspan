@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The remaining user-facing shell, player and queue, Search/import, authentication/settings, offline/PWA, device-download, Artist, Album, Mix, and initial-server states now use Russian copy for labels, loading and empty states, confirmations, accessible action names, and safe errors while retaining provider names, protocols, and catalog metadata.
 - User and federation administration now uses complete Russian copy for account creation, invites, roles, connected-user state, server pairing, health, deduplication, and safe actionable errors while preserving provider and protocol names.
 - Cache and enrichment administration now uses complete Russian copy for progress, retries, controls, migration status, storage limits, automation, and actionable errors while preserving provider and analysis technology names.
 - Personalized Quick Picks and Wave radio can use account taste-profile seeds as a moderate positive signal without presenting those seeds as plays or likes, and malformed stored JSON is ignored instead of entering recommendation ranking.
