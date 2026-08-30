@@ -69,7 +69,7 @@ test("Modal exposes labelled modal dialog semantics", async () => {
     const title = mounted.container.querySelector(`h2[id="${titleId}"]`);
     assert.equal(title?.textContent, "Accessible modal");
     assert.ok(
-        mounted.container.querySelector('button[aria-label="Close"]'),
+        mounted.container.querySelector('button[aria-label="Закрыть"]'),
         "expected an accessible close button name",
     );
 

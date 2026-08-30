@@ -2,6 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { Modal } from "./Modal";
+import { ru } from "@/lib/i18n/ru";
 
 interface ConfirmDialogProps {
     isOpen: boolean;
@@ -41,8 +42,8 @@ export function ConfirmDialog({
     onConfirm,
     title,
     message,
-    confirmText = "Confirm",
-    cancelText = "Cancel",
+    confirmText = ru.common.save,
+    cancelText = ru.common.cancel,
     variant = "danger",
 }: ConfirmDialogProps) {
     const styles = variantStyles[variant];

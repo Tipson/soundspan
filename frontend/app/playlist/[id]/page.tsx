@@ -87,6 +87,7 @@ import {
     MusicDetailTrackSurface,
 } from "@/components/music-detail";
 import { PlaylistDetailHero } from "@/features/playlist/components/PlaylistDetailHero";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 type PlaylistItem = PlaylistDetailTrackItem;
 type PendingTrack = PlaylistPendingTrackItem;
@@ -164,7 +165,7 @@ export default function PlaylistDetailPage() {
                     e,
                 );
                 setPlayingPreviewId(null);
-                toast.error("Preview playback failed");
+                toast.error(ru.playlist.previewFailed);
             };
             previewAudioRef.current = audio;
 
@@ -172,7 +173,7 @@ export default function PlaylistDetailPage() {
         } catch (err) {
             sharedFrontendLogger.error("Failed to play Deezer preview:", err);
             setPlayingPreviewId(null);
-            toast.error("No preview available");
+            toast.error(ru.playlist.noPreview);
         }
     };
 
@@ -199,11 +200,11 @@ export default function PlaylistDetailPage() {
                     });
                 }, 10000); // 10 seconds for download + scan
             } else {
-                toast.error(result.message || "Track not found on Soulseek");
+                toast.error(result.message || ru.playlist.soulseekMissing);
             }
         } catch (error) {
             sharedFrontendLogger.error("Failed to retry download:", error);
-            toast.error("Failed to retry download");
+            toast.error(ru.playlist.retryFailed);
         } finally {
             setRetryingTrackId(null);
         }
@@ -258,7 +259,7 @@ export default function PlaylistDetailPage() {
                 "Failed to toggle playlist sharing:",
                 error,
             );
-            toast.error("Failed to update sharing");
+            toast.error(ru.playlist.sharingFailed);
         } finally {
             setIsTogglingShare(false);
         }
@@ -303,7 +304,7 @@ export default function PlaylistDetailPage() {
             );
         } catch (error) {
             sharedFrontendLogger.error("Failed to rename playlist:", error);
-            toast.error("Failed to rename playlist");
+            toast.error(ru.playlist.renameFailed);
             // Revert optimistic update
             queryClient.setQueryData(
                 ["playlist", playlistId],
@@ -414,7 +415,9 @@ export default function PlaylistDetailPage() {
     const handleAddAllToQueue = () => {
         if (playableTracks.length === 0) return;
         addTracksToQueue(playableTracks);
-        toast.success(`Added ${playableTracks.length} tracks to queue`);
+        toast.success(
+            `${ru.playlist.addedToQueue}: ${playableTracks.length} ${pluralRu(playableTracks.length, ["трек", "трека", "треков"])}`,
+        );
     };
 
     // Calculate cover arts from playlist tracks for mosaic (memoized, artist+album diversity)
@@ -459,7 +462,7 @@ export default function PlaylistDetailPage() {
             });
         } catch (error) {
             sharedFrontendLogger.error("Failed to remove track:", error);
-            toast.error("Failed to remove track from playlist");
+            toast.error(ru.playlist.removeFailed);
         }
     };
 
@@ -485,7 +488,7 @@ export default function PlaylistDetailPage() {
             });
         } catch (error) {
             sharedFrontendLogger.error("Failed to reorder playlist:", error);
-            toast.error("Failed to reorder playlist");
+            toast.error(ru.playlist.reorderFailed);
             // Restore the server's order.
             queryClient.invalidateQueries({
                 queryKey: queryKeys.playlist(playlistId),
@@ -552,7 +555,7 @@ export default function PlaylistDetailPage() {
         }
 
         if (playableTracks.length === 0) {
-            toast.error("No playable tracks in this playlist yet");
+            toast.error(ru.playlist.noPlayable);
             return;
         }
 
@@ -575,7 +578,7 @@ export default function PlaylistDetailPage() {
 
     const handleStartRadio = async () => {
         try {
-            toast.info("Starting playlist radio...");
+            toast.info(ru.playlist.startingRadio);
             const response = await api.getRadioTracks("playlist", playlistId);
             if (response.tracks && response.tracks.length > 0) {
                 const tracks = response.tracks.map(
@@ -592,16 +595,18 @@ export default function PlaylistDetailPage() {
                     }),
                 );
                 playTracks(tracks, 0);
-                toast.success(`Playing ${tracks.length} radio tracks`);
+                toast.success(
+                    `Радио запущено: ${tracks.length} ${pluralRu(tracks.length, ["трек", "трека", "треков"])}`,
+                );
             } else {
-                toast.error("No radio tracks found for this playlist");
+                toast.error(ru.playlist.noRadioTracks);
             }
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to start playlist radio:",
                 error,
             );
-            toast.error("Failed to start playlist radio");
+            toast.error(ru.playlist.radioFailed);
         }
     };
 
@@ -616,7 +621,7 @@ export default function PlaylistDetailPage() {
     if (!playlist) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">Playlist not found</p>
+                <p className="text-gray-400">{ru.playlist.notFound}</p>
             </div>
         );
     }
@@ -626,7 +631,9 @@ export default function PlaylistDetailPage() {
             <PlaylistDetailHero
                 name={playlist.name}
                 coverUrls={coverUrls}
-                kindLabel={isShared ? "Shared playlist" : "Playlist"}
+                kindLabel={
+                    isShared ? ru.playlist.sharedPlaylist : ru.playlist.playlist
+                }
                 ownerName={isShared ? playlist.user?.username : undefined}
                 trackCount={trackItems.length}
                 durationLabel={
@@ -649,7 +656,7 @@ export default function PlaylistDetailPage() {
             {/* Action Bar */}
             <div className="relative z-10 mx-auto -mt-5 max-w-[1800px] px-4 pb-5 sm:px-6 lg:px-8">
                 <MusicDetailActionDock
-                    label="Playlist controls"
+                    label={ru.playlist.controls}
                     className="sm:!w-full"
                 >
                     {/* Play Button */}
@@ -667,8 +674,8 @@ export default function PlaylistDetailPage() {
                             )}
                             <span>
                                 {isThisPlaylistPlaying && isPlaying
-                                    ? "Pause"
-                                    : "Play All"}
+                                    ? ru.common.pause
+                                    : ru.common.playAll}
                             </span>
                         </button>
                     )}
@@ -683,8 +690,8 @@ export default function PlaylistDetailPage() {
                                 playTracks(shuffled, 0);
                             }}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Shuffle play"
-                            aria-label="Shuffle play"
+                            title={ru.playlist.shufflePlay}
+                            aria-label={ru.playlist.shufflePlay}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -695,8 +702,8 @@ export default function PlaylistDetailPage() {
                         <button
                             onClick={handleAddAllToQueue}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Add all to queue"
-                            aria-label="Add all to queue"
+                            title={ru.playlist.addAllQueue}
+                            aria-label={ru.playlist.addAllQueue}
                         >
                             <ListMusic className="w-5 h-5" />
                         </button>
@@ -716,13 +723,13 @@ export default function PlaylistDetailPage() {
                             )}
                             title={
                                 isAllLiked
-                                    ? "Unlike all tracks"
-                                    : "Like all tracks"
+                                    ? ru.playlist.unlikeAll
+                                    : ru.playlist.likeAll
                             }
                             aria-label={
                                 isAllLiked
-                                    ? "Unlike all tracks"
-                                    : "Like all tracks"
+                                    ? ru.playlist.unlikeAll
+                                    : ru.playlist.likeAll
                             }
                         >
                             {isApplyingLikeAll ? (
@@ -746,8 +753,8 @@ export default function PlaylistDetailPage() {
                         <button
                             onClick={handleStartRadio}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Start playlist radio"
-                            aria-label="Start playlist radio"
+                            title={ru.playlist.startRadio}
+                            aria-label={ru.playlist.startRadio}
                         >
                             <Radio className="w-5 h-5" />
                         </button>
@@ -776,13 +783,13 @@ export default function PlaylistDetailPage() {
                             )}
                             title={
                                 playlist.isPublic
-                                    ? "Make private"
-                                    : "Share with others"
+                                    ? ru.playlist.makePrivate
+                                    : ru.playlist.shareWithOthers
                             }
                             aria-label={
                                 playlist.isPublic
-                                    ? "Make playlist private"
-                                    : "Share playlist with others"
+                                    ? ru.playlist.makePrivate
+                                    : ru.playlist.shareWithOthers
                             }
                         >
                             {playlist.isPublic ? (
@@ -799,8 +806,8 @@ export default function PlaylistDetailPage() {
                             type="button"
                             onClick={() => setShowShareModal(true)}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Create share link"
-                            aria-label="Create share link"
+                            title={ru.playlist.shareLink}
+                            aria-label={ru.playlist.shareLink}
                         >
                             <Share2 className="w-5 h-5" />
                         </button>
@@ -819,13 +826,13 @@ export default function PlaylistDetailPage() {
                         )}
                         title={
                             playlist.isHidden
-                                ? "Show playlist"
-                                : "Hide playlist"
+                                ? ru.playlist.show
+                                : ru.playlist.hide
                         }
                         aria-label={
                             playlist.isHidden
-                                ? "Show playlist"
-                                : "Hide playlist"
+                                ? ru.playlist.show
+                                : ru.playlist.hide
                         }
                     >
                         {playlist.isHidden ? (
@@ -840,8 +847,8 @@ export default function PlaylistDetailPage() {
                         <button
                             onClick={() => setShowDeleteConfirm(true)}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-300 active:scale-[0.97] motion-reduce:transition-none"
-                            title="Delete Playlist"
-                            aria-label="Delete playlist"
+                            title={ru.playlist.delete}
+                            aria-label={ru.playlist.delete}
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>
@@ -856,9 +863,14 @@ export default function PlaylistDetailPage() {
                     <div className="mb-4 flex items-center gap-2 rounded-2xl border border-red-500/30 bg-red-900/20 px-4 py-3">
                         <AlertCircle className="w-4 h-4 text-red-400" />
                         <span className="text-sm text-red-200">
-                            {playlist.pendingCount} track
-                            {playlist.pendingCount !== 1 ? "s" : ""} failed to
-                            download - will auto-import when available
+                            Не удалось загрузить {playlist.pendingCount}{" "}
+                            {pluralRu(playlist.pendingCount, [
+                                "трек",
+                                "трека",
+                                "треков",
+                            ])}
+                            . Soundspan импортирует их автоматически, когда они
+                            станут доступны.
                         </span>
                     </div>
                 )}
@@ -867,19 +879,21 @@ export default function PlaylistDetailPage() {
                     <div className="mb-4 flex items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-900/20 px-4 py-3">
                         <AlertCircle className="w-4 h-4 text-amber-300" />
                         <span className="text-sm text-amber-100">
-                            {unplayableTrackItems.length} track
-                            {unplayableTrackItems.length !== 1
-                                ? "s are"
-                                : " is"}{" "}
-                            currently not playable.{" "}
-                            {unplayableTrackItems[0]?.playback?.message ||
-                                "Open track details or re-import to restore playback."}
+                            Сейчас недоступно: {unplayableTrackItems.length}{" "}
+                            {pluralRu(unplayableTrackItems.length, [
+                                "трек",
+                                "трека",
+                                "треков",
+                            ])}
+                            . {ru.playlist.unplayableHint}
                         </span>
                     </div>
                 )}
 
                 {trackItems.length > 0 || playlist.pendingTracks?.length > 0 ? (
-                    <MusicDetailTrackSurface label={`${playlist.name} tracks`}>
+                    <MusicDetailTrackSurface
+                        label={`${playlist.name}: ${ru.playlist.tracks}`}
+                    >
                         {/* Pending/failed tracks (custom inline - no playback, fundamentally different) */}
                         {(playlist.pendingTracks || []).map(
                             (pendingItem: PendingTrack) => {
@@ -908,7 +922,9 @@ export default function PlaylistDetailPage() {
                                                         )
                                                     }
                                                     className="w-full h-full flex items-center justify-center hover:bg-white/10 transition-colors"
-                                                    title="Play 30s Deezer preview"
+                                                    title={
+                                                        ru.playlist.preview30
+                                                    }
                                                 >
                                                     {isPreviewPlaying ? (
                                                         <Volume2 className="w-5 h-5 text-brand animate-pulse" />
@@ -931,7 +947,7 @@ export default function PlaylistDetailPage() {
                                         </p>
                                         <div className="flex items-center justify-end gap-1">
                                             <span className="text-xs text-red-400 mr-2 hidden sm:inline">
-                                                Failed
+                                                {ru.playlist.failedDownload}
                                             </span>
                                             {downloadsEnabled && (
                                                 <button
@@ -948,7 +964,10 @@ export default function PlaylistDetailPage() {
                                                             ? "text-brand"
                                                             : "text-gray-400 hover:text-white",
                                                     )}
-                                                    title="Retry download"
+                                                    title={
+                                                        ru.playlist
+                                                            .retryDownload
+                                                    }
                                                 >
                                                     {isRetrying ? (
                                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -967,7 +986,7 @@ export default function PlaylistDetailPage() {
                                                     }}
                                                     disabled={isRemoving}
                                                     className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all"
-                                                    title="Remove from playlist"
+                                                    title={ru.playlist.remove}
                                                 >
                                                     {isRemoving ? (
                                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -993,10 +1012,12 @@ export default function PlaylistDetailPage() {
                             }
                             toRowItem={(item) => ({
                                 id: item.track?.id ?? item.id,
-                                title: item.track?.title || "Unavailable track",
+                                title:
+                                    item.track?.title ||
+                                    ru.playlist.unavailableTrack,
                                 artistName:
                                     item.track?.album?.artist?.name ||
-                                    "Unknown Artist",
+                                    ru.common.unknownArtist,
                                 duration: item.track?.duration || 0,
                                 coverArtUrl: item.track?.album?.coverArt
                                     ? api.getCoverArtUrl(
@@ -1060,11 +1081,11 @@ export default function PlaylistDetailPage() {
                                                 <UnplayableBadge
                                                     label={
                                                         isRemoved
-                                                            ? "REMOVED"
+                                                            ? "УДАЛЁН"
                                                             : item.playback
                                                                     ?.reason ===
                                                                 "peer_offline"
-                                                              ? "OFFLINE"
+                                                              ? "НЕ В СЕТИ"
                                                               : undefined
                                                     }
                                                     title={
@@ -1133,7 +1154,10 @@ export default function PlaylistDetailPage() {
                                                             icon={
                                                                 <ArrowUp className="h-4 w-4" />
                                                             }
-                                                            label="Move up"
+                                                            label={
+                                                                ru.playlist
+                                                                    .moveUp
+                                                            }
                                                         />
                                                     )}
                                                     {index <
@@ -1150,7 +1174,10 @@ export default function PlaylistDetailPage() {
                                                             icon={
                                                                 <ArrowDown className="h-4 w-4" />
                                                             }
-                                                            label="Move down"
+                                                            label={
+                                                                ru.playlist
+                                                                    .moveDown
+                                                            }
                                                         />
                                                     )}
                                                     {index > 0 && (
@@ -1165,7 +1192,10 @@ export default function PlaylistDetailPage() {
                                                             icon={
                                                                 <ArrowUpToLine className="h-4 w-4" />
                                                             }
-                                                            label="Move to top"
+                                                            label={
+                                                                ru.playlist
+                                                                    .moveTop
+                                                            }
                                                         />
                                                     )}
                                                     <TrackMenuButton
@@ -1178,7 +1208,9 @@ export default function PlaylistDetailPage() {
                                                         icon={
                                                             <Trash2 className="h-4 w-4" />
                                                         }
-                                                        label="Remove from playlist"
+                                                        label={
+                                                            ru.playlist.remove
+                                                        }
                                                         className="text-red-400 hover:text-red-300"
                                                     />
                                                 </>
@@ -1208,14 +1240,17 @@ export default function PlaylistDetailPage() {
                                                                 id: localTrackId!,
                                                                 title:
                                                                     track?.title ||
-                                                                    "Unknown title",
+                                                                    ru.playlist
+                                                                        .unknownTitle,
                                                                 artist: {
                                                                     name:
                                                                         track
                                                                             ?.album
                                                                             ?.artist
                                                                             ?.name ||
-                                                                        "Unknown Artist",
+                                                                        ru
+                                                                            .common
+                                                                            .unknownArtist,
                                                                     id: track
                                                                         ?.album
                                                                         ?.artist
@@ -1226,7 +1261,9 @@ export default function PlaylistDetailPage() {
                                                                         track
                                                                             ?.album
                                                                             ?.title ||
-                                                                        "Unknown Album",
+                                                                        ru
+                                                                            .common
+                                                                            .unknownAlbum,
                                                                     coverArt:
                                                                         track
                                                                             ?.album
@@ -1276,14 +1313,17 @@ export default function PlaylistDetailPage() {
                                                                 title:
                                                                     track!
                                                                         .title ||
-                                                                    "Unknown title",
+                                                                    ru.playlist
+                                                                        .unknownTitle,
                                                                 artist: {
                                                                     name:
                                                                         track!
                                                                             .album
                                                                             ?.artist
                                                                             ?.name ||
-                                                                        "Unknown Artist",
+                                                                        ru
+                                                                            .common
+                                                                            .unknownArtist,
                                                                     id: track!
                                                                         .album
                                                                         ?.artist
@@ -1294,7 +1334,9 @@ export default function PlaylistDetailPage() {
                                                                         track!
                                                                             .album
                                                                             ?.title ||
-                                                                        "Unknown Album",
+                                                                        ru
+                                                                            .common
+                                                                            .unknownAlbum,
                                                                     coverArt:
                                                                         track!
                                                                             .album
@@ -1355,7 +1397,10 @@ export default function PlaylistDetailPage() {
                                                                     );
                                                                 }}
                                                                 className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all"
-                                                                title="Move up"
+                                                                title={
+                                                                    ru.playlist
+                                                                        .moveUp
+                                                                }
                                                             >
                                                                 <ArrowUp className="h-4 w-4" />
                                                             </button>
@@ -1375,7 +1420,10 @@ export default function PlaylistDetailPage() {
                                                                     );
                                                                 }}
                                                                 className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all"
-                                                                title="Move down"
+                                                                title={
+                                                                    ru.playlist
+                                                                        .moveDown
+                                                                }
                                                             >
                                                                 <ArrowDown className="h-4 w-4" />
                                                             </button>
@@ -1388,7 +1436,10 @@ export default function PlaylistDetailPage() {
                                                                 );
                                                             }}
                                                             className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-400 transition-all"
-                                                            title="Remove from playlist"
+                                                            title={
+                                                                ru.playlist
+                                                                    .remove
+                                                            }
                                                         >
                                                             <Trash2 className="h-4 w-4" />
                                                         </button>
@@ -1396,7 +1447,7 @@ export default function PlaylistDetailPage() {
                                                 )}
                                                 {!isPlayable && (
                                                     <span className="text-[11px] text-amber-200">
-                                                        Cannot play
+                                                        {ru.playlist.cannotPlay}
                                                     </span>
                                                 )}
                                             </div>
@@ -1421,8 +1472,12 @@ export default function PlaylistDetailPage() {
                                             label: "#",
                                             className: "text-center",
                                         },
-                                        { label: "Title" },
-                                        { label: "Album" },
+                                        {
+                                            label: ru.playlist.titleColumn,
+                                        },
+                                        {
+                                            label: ru.playlist.albumColumn,
+                                        },
                                         { label: "" },
                                     ]}
                                 />
@@ -1435,10 +1490,10 @@ export default function PlaylistDetailPage() {
                             <ListMusic className="w-10 h-10 text-gray-400" />
                         </div>
                         <h3 className="text-lg font-medium text-white mb-1">
-                            No tracks yet
+                            {ru.playlist.noTracks}
                         </h3>
                         <p className="text-sm text-gray-400">
-                            Add some tracks to get started
+                            {ru.playlist.addTracksHint}
                         </p>
                     </div>
                 )}
@@ -1449,10 +1504,10 @@ export default function PlaylistDetailPage() {
                 isOpen={showDeleteConfirm}
                 onClose={() => setShowDeleteConfirm(false)}
                 onConfirm={handleDeletePlaylist}
-                title="Delete Playlist?"
-                message={`Are you sure you want to delete "${playlist.name}"? This action cannot be undone.`}
-                confirmText="Delete"
-                cancelText="Cancel"
+                title={ru.playlist.deleteQuestion}
+                message={`Удалить «${playlist.name}»? ${ru.playlist.deleteWarning}`}
+                confirmText={ru.common.delete}
+                cancelText={ru.common.cancel}
                 variant="danger"
             />
 

@@ -103,7 +103,7 @@ test("renders trigger button with EllipsisVertical icon", async () => {
     );
 
     // Should have a button with aria-label
-    assert.match(html, /Track actions/);
+    assert.match(html, /Действия с треком/);
     assert.match(html, /aria-haspopup="menu"/);
 });
 
@@ -128,7 +128,7 @@ test("renders all standard menu items when track has full metadata", async () =>
 
     // Component should render without crashing and have the trigger
     assert.match(html, /button/);
-    assert.match(html, /Track actions/);
+    assert.match(html, /Действия с треком/);
 });
 
 test("does not render PlaylistSelector when menu is closed", async () => {
@@ -171,7 +171,7 @@ test("respects showPlayNext=false to hide Play Next item", async () => {
     );
 
     // Should render without error
-    assert.match(html, /Track actions/);
+    assert.match(html, /Действия с треком/);
 });
 
 test("renders extraItemsBefore and extraItemsAfter slots", async () => {
@@ -195,7 +195,7 @@ test("renders extraItemsBefore and extraItemsAfter slots", async () => {
         }),
     );
 
-    assert.match(html, /Track actions/);
+    assert.match(html, /Действия с треком/);
 });
 
 test("accepts custom className and triggerClassName", async () => {

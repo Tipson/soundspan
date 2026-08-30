@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
 interface HorizontalCarouselProps {
@@ -89,7 +90,7 @@ export function HorizontalCarousel({
                         "border border-white/10 shadow-lg",
                         "-translate-x-1/2",
                     )}
-                    aria-label="Scroll left"
+                    aria-label={ru.common.scrollLeft}
                 >
                     <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
@@ -124,7 +125,7 @@ export function HorizontalCarousel({
                         "border border-white/10 shadow-lg",
                         "translate-x-1/2",
                     )}
-                    aria-label="Scroll right"
+                    aria-label={ru.common.scrollRight}
                 >
                     <ChevronRight className="w-5 h-5 text-white" />
                 </button>

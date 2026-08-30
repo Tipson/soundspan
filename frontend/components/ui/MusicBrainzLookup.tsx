@@ -94,7 +94,7 @@ export function MusicBrainzLookup({
             toast.error(
                 error instanceof Error
                     ? error.message
-                    : "MusicBrainz search failed",
+                    : "Поиск в MusicBrainz не удался",
             );
         } finally {
             setIsSearching(false);
@@ -145,10 +145,10 @@ export function MusicBrainzLookup({
     return (
         <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-400">Current:</span>
+                <span className="text-gray-400">Текущее значение:</span>
                 {isTempMbid ? (
                     <span className="rounded bg-yellow-500/10 px-2 py-0.5 font-mono text-xs text-yellow-500">
-                        Temporary ID (needs matching)
+                        Временный ID (нужно сопоставление)
                     </span>
                 ) : hasValidMbid ? (
                     <span className="flex items-center gap-1 rounded bg-green-500/10 px-2 py-0.5 font-mono text-xs text-green-500">
@@ -156,7 +156,7 @@ export function MusicBrainzLookup({
                         {currentValue.substring(0, 8)}...
                     </span>
                 ) : (
-                    <span className="text-xs text-gray-400">None</span>
+                    <span className="text-xs text-gray-400">Не задано</span>
                 )}
                 {hasValidMbid && (
                     <a
@@ -164,7 +164,7 @@ export function MusicBrainzLookup({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-400 transition-colors hover:text-blue-300"
-                        title="View in MusicBrainz"
+                        title="Открыть в MusicBrainz"
                     >
                         <ExternalLink className="h-4 w-4" />
                     </a>
@@ -178,7 +178,11 @@ export function MusicBrainzLookup({
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={`Enter ${type} name to search...`}
+                        placeholder={
+                            type === "artist"
+                                ? "Введите имя исполнителя…"
+                                : "Введите название альбома…"
+                        }
                         className="flex-1 rounded border border-white/10 bg-surface-elevated px-4 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
                     />
                     <button
@@ -192,7 +196,7 @@ export function MusicBrainzLookup({
                         ) : (
                             <Search className="h-4 w-4" />
                         )}
-                        Search
+                        Поиск
                     </button>
                 </div>
 
@@ -269,8 +273,8 @@ export function MusicBrainzLookup({
                             )
                         ) : (
                             <div className="p-4 text-center text-sm text-gray-400">
-                                No results found. Try a different search or
-                                paste the MBID directly.
+                                Ничего не найдено. Измените запрос или вставьте
+                                MBID вручную.
                             </div>
                         )}
                     </div>
@@ -284,8 +288,8 @@ export function MusicBrainzLookup({
                     className="text-xs text-gray-400 transition-colors hover:text-white"
                 >
                     {showManualInput
-                        ? "Hide manual entry"
-                        : "Or paste MBID directly"}
+                        ? "Скрыть ручной ввод"
+                        : "Или вставить MBID вручную"}
                 </button>
 
                 {showManualInput && (

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { X, Plus, Music2, Check } from "lucide-react";
 import { GradientSpinner } from "./GradientSpinner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface PlaylistSelectorProps {
     isOpen: boolean;
@@ -137,7 +138,7 @@ export function PlaylistSelector({
 
         if (failures > 0) {
             setConfirmError(
-                `Failed to add to ${failures} playlist${failures > 1 ? "s" : ""}`,
+                `Не удалось добавить в ${failures} ${pluralRu(failures, ["плейлист", "плейлиста", "плейлистов"])}`,
             );
         } else {
             await loadPlaylists();
@@ -160,11 +161,13 @@ export function PlaylistSelector({
             >
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                     <h2 className="text-2xl font-bold text-white">
-                        Add to Playlist
+                        {ru.selector.title}
                     </h2>
                     <button
                         onClick={onClose}
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                        aria-label={ru.selector.close}
+                        title={ru.selector.close}
                     >
                         <X className="w-5 h-5 text-gray-400" />
                     </button>
@@ -173,7 +176,7 @@ export function PlaylistSelector({
                 {isProcessing && (
                     <div className="px-6 py-3 flex items-center gap-3 bg-black/30 border-b border-white/10 text-sm text-gray-300">
                         <GradientSpinner size="sm" />
-                        <span>{loadingMessage || "Adding..."}</span>
+                        <span>{loadingMessage || ru.selector.adding}</span>
                     </div>
                 )}
 
@@ -191,9 +194,11 @@ export function PlaylistSelector({
                     ) : playlists.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                             <Music2 className="w-12 h-12 text-gray-400 mb-3" />
-                            <p className="text-gray-400">No playlists yet</p>
+                            <p className="text-gray-400">
+                                {ru.selector.noPlaylists}
+                            </p>
                             <p className="text-gray-400 text-sm mt-1">
-                                Create one below to get started
+                                {ru.selector.createHint}
                             </p>
                         </div>
                     ) : (
@@ -226,8 +231,16 @@ export function PlaylistSelector({
                                             <p className="text-xs text-gray-400 mt-1">
                                                 {playlist.trackCount || 0}{" "}
                                                 {playlist.trackCount === 1
-                                                    ? "track"
-                                                    : "tracks"}
+                                                    ? "трек"
+                                                    : pluralRu(
+                                                          playlist.trackCount ||
+                                                              0,
+                                                          [
+                                                              "трек",
+                                                              "трека",
+                                                              "треков",
+                                                          ],
+                                                      )}
                                             </p>
                                         </div>
                                         {multiSelect && isSelected ? (
@@ -254,10 +267,10 @@ export function PlaylistSelector({
                             {isConfirming ? (
                                 <>
                                     <GradientSpinner size="sm" />
-                                    Adding...
+                                    {ru.selector.adding}
                                 </>
                             ) : (
-                                `Add to ${selectedIds.size} Playlist${selectedIds.size > 1 ? "s" : ""}`
+                                `Добавить в ${selectedIds.size} ${pluralRu(selectedIds.size, ["плейлист", "плейлиста", "плейлистов"])}`
                             )}
                         </button>
                     </div>
@@ -265,12 +278,12 @@ export function PlaylistSelector({
 
                 <div className="p-6 border-t border-white/10 bg-surface/50">
                     <p className="text-sm text-gray-400 mb-3 font-medium">
-                        Create New Playlist
+                        {ru.selector.createNew}
                     </p>
                     <div className="flex gap-2 mb-3">
                         <input
                             type="text"
-                            placeholder="Enter playlist name..."
+                            placeholder={ru.selector.playlistName}
                             value={newPlaylistName}
                             onChange={(e) => setNewPlaylistName(e.target.value)}
                             onKeyDown={(e) =>
@@ -288,7 +301,9 @@ export function PlaylistSelector({
                             className="px-5 py-3 bg-brand-hover hover:bg-brand disabled:bg-gray-700 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all flex items-center gap-2 disabled:text-gray-400"
                         >
                             <Plus className="w-5 h-5" />
-                            <span className="hidden sm:inline">Create</span>
+                            <span className="hidden sm:inline">
+                                {ru.selector.create}
+                            </span>
                         </button>
                     </div>
                     <label className="flex items-center gap-3 cursor-pointer group">
@@ -303,7 +318,7 @@ export function PlaylistSelector({
                             <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5" />
                         </div>
                         <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">
-                            Share with other users
+                            {ru.selector.shareWithUsers}
                         </span>
                     </label>
                 </div>

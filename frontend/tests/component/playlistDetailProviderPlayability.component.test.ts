@@ -486,11 +486,11 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     );
 
     // Canonical order: Play, Shuffle, Add to Queue, Like All, Radio
-    assert.match(html, /<span>Play All<\/span>/);
-    assert.match(html, /title="Shuffle play"/);
-    assert.match(html, /title="Add all to queue"/);
-    assert.match(html, /title="Like all tracks"/);
-    assert.match(html, /title="Start playlist radio"/);
+    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /title="Воспроизвести вперемешку"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Добавить все треки в любимые"/);
+    assert.match(html, /title="Запустить радио по плейлисту"/);
 });
 
 test("playlist detail offers a device download for playable tracks only", async () => {
@@ -532,8 +532,8 @@ test("generated radio playlist detail adds append and regenerate actions", async
         ),
     );
 
-    assert.match(html, /Add more tracks/);
-    assert.match(html, /Regenerate/);
+    assert.match(html, /Добавить ещё треки/);
+    assert.match(html, /Собрать заново/);
 });
 
 test("playlist detail renders overflow menu for remote tracks (tidal + youtube)", async () => {
@@ -629,9 +629,9 @@ test("playlist detail renders provider badges and unplayable fallback messaging"
     assert.match(html, /YOUTUBE/);
     assert.match(html, /UNPLAYABLE/);
     assert.match(html, /Track mapping missing for this import\./);
-    assert.match(html, /currently not playable/);
-    assert.match(html, /Cannot play/);
-    assert.match(html, /title="Remove from playlist"/);
+    assert.match(html, /Сейчас недоступно/);
+    assert.match(html, /Недоступно для воспроизведения/);
+    assert.match(html, /title="Удалить из плейлиста"/);
 });
 
 test("playlist detail distinguishes removed tracks without changing missing-provider treatment", async () => {
@@ -685,7 +685,7 @@ test("playlist detail distinguishes removed tracks without changing missing-prov
     );
 
     assert.match(html, /Removed Song/);
-    assert.match(html, /REMOVED/);
+    assert.match(html, /УДАЛЁН/);
     assert.match(
         html,
         /title="File removed from library — restore the file to bring it back"/,

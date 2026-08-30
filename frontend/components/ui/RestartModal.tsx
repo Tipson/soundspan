@@ -3,6 +3,7 @@
 import { X, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./Button";
+import { ru } from "@/lib/i18n/ru";
 
 interface RestartModalProps {
     isOpen: boolean;
@@ -47,12 +48,14 @@ export function RestartModal({
                                 <Check className="w-6 h-6 text-green-500" />
                             </div>
                             <h2 className="text-xl font-semibold text-white">
-                                Settings Saved!
+                                Настройки сохранены
                             </h2>
                         </div>
                         <button
                             onClick={onClose}
                             className="text-gray-400 hover:text-white transition-colors"
+                            aria-label={ru.common.close}
+                            title={ru.common.close}
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -61,22 +64,22 @@ export function RestartModal({
                     {/* Content */}
                     <div className="p-6 space-y-4">
                         <p className="text-gray-300">
-                            Your settings have been saved successfully and the
+                            Настройки сохранены, а файл
                             <code className="text-ai-hover bg-surface px-1.5 py-0.5 rounded mx-1">
                                 .env
                             </code>
-                            file has been updated.
+                            обновлён.
                         </p>
 
                         {changedServices.length > 0 && (
                             <>
                                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
                                     <p className="text-sm font-medium text-yellow-500 mb-2">
-                                        Restart Required
+                                        Требуется перезапуск
                                     </p>
                                     <p className="text-sm text-gray-300 mb-3">
-                                        The following services need a restart to
-                                        apply changes:
+                                        Чтобы применить изменения, перезапустите
+                                        следующие сервисы:
                                     </p>
                                     <ul className="space-y-1">
                                         {changedServices.map((service) => (
@@ -93,7 +96,7 @@ export function RestartModal({
 
                                 <div>
                                     <p className="text-sm text-gray-400 mb-2">
-                                        Run this command in your terminal:
+                                        Выполните команду в терминале:
                                     </p>
                                     <div className="relative">
                                         <div className="bg-surface border border-surface-active rounded-md px-4 py-3 pr-12 font-mono text-sm text-white">
@@ -102,7 +105,7 @@ export function RestartModal({
                                         <button
                                             onClick={handleCopy}
                                             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 hover:bg-surface-hover rounded transition-colors"
-                                            title="Copy to clipboard"
+                                            title="Скопировать в буфер обмена"
                                         >
                                             {copied ? (
                                                 <Check className="w-4 h-4 text-green-500" />
@@ -118,8 +121,8 @@ export function RestartModal({
                         {changedServices.length === 0 && (
                             <div className="bg-green-500/10 border border-green-500/30 rounded-md p-4">
                                 <p className="text-sm text-gray-300">
-                                    No restart needed! Changes are applied
-                                    immediately.
+                                    Перезапуск не требуется: изменения уже
+                                    применены.
                                 </p>
                             </div>
                         )}
@@ -136,20 +139,20 @@ export function RestartModal({
                                 {copied ? (
                                     <>
                                         <Check className="w-4 h-4" />
-                                        Copied!
+                                        Скопировано
                                     </>
                                 ) : (
                                     <>
                                         <Copy className="w-4 h-4" />
-                                        Copy Command
+                                        Скопировать команду
                                     </>
                                 )}
                             </Button>
                         )}
                         <Button onClick={onClose}>
                             {changedServices.length > 0
-                                ? "I'll Restart Later"
-                                : "Close"}
+                                ? "Перезапущу позже"
+                                : ru.common.close}
                         </Button>
                     </div>
                 </div>

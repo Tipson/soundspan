@@ -345,7 +345,7 @@ test("owner playlist shows rename button with correct aria-label", async () => {
     const html = await renderPage();
     assert.match(
         html,
-        /aria-label="Rename playlist"/,
+        /aria-label="Переименовать плейлист"/,
         "Expected a rename button with aria-label for owner playlists",
     );
 });
@@ -357,7 +357,7 @@ test("non-owner playlist does not show rename button", async () => {
     const html = await renderPage();
     assert.doesNotMatch(
         html,
-        /aria-label="Rename playlist"/,
+        /aria-label="Переименовать плейлист"/,
         "Non-owner should not see a rename button",
     );
 });
@@ -373,7 +373,7 @@ test("rename input has aria-label attribute in SSR markup", async () => {
     // The rename button should be a real <button> element
     assert.match(
         html,
-        /<button[^>]*aria-label="Rename playlist"[^>]*>/,
+        /<button[^>]*aria-label="Переименовать плейлист"[^>]*>/,
         "Rename trigger should be a <button> with aria-label",
     );
 });
@@ -397,7 +397,7 @@ test("playlist with undefined isOwner does not show rename button", async () => 
     const html = await renderPage();
     assert.doesNotMatch(
         html,
-        /aria-label="Rename playlist"/,
+        /aria-label="Переименовать плейлист"/,
         "Undefined isOwner should not enable rename",
     );
 });
@@ -410,7 +410,7 @@ test("pencil icon is rendered inside rename button for owner", async () => {
     // The mock Icon renders an <svg> element. The rename button contains the Pencil icon.
     // Check that a button with aria-label contains an svg child.
     const btnMatch = html.match(
-        /<button[^>]*aria-label="Rename playlist"[^>]*>[\s\S]*?<\/button>/,
+        /<button[^>]*aria-label="Переименовать плейлист"[^>]*>[\s\S]*?<\/button>/,
     );
     assert.ok(btnMatch, "Should find rename button");
     assert.match(

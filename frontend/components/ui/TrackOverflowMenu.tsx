@@ -27,6 +27,7 @@ import { isRemoteTrack, toAddToPlaylistRef } from "@/lib/trackRef";
 import { canShareTrack } from "@/lib/shareLinks";
 import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface TrackOverflowMenuProps {
     track: Track;
@@ -107,28 +108,31 @@ export function TrackOverflowMenu({
         deviceStorageBlocked;
     const deviceDownloadLabel = (() => {
         if (deviceRecord?.status === "ready" && !isAutoManagedReady) {
-            return "Available offline";
+            return ru.trackMenu.availableOffline;
         }
-        if (deviceRecord?.status === "downloading") return "Downloading…";
+        if (deviceRecord?.status === "downloading")
+            return ru.downloads.downloading;
         if (deviceStorageStatus === "unsupported") {
-            return "Downloads unavailable in this browser";
+            return ru.trackMenu.unavailable;
         }
         if (deviceStorageStatus === "checking") {
-            return "Checking device storage…";
+            return ru.trackMenu.checkingStorage;
         }
         if (deviceStorageStatus === "requesting") {
-            return "Waiting for folder access…";
+            return ru.trackMenu.waitingFolder;
         }
         if (deviceStorageStatus === "needs-setup") {
-            return "Choose folder and download";
+            return ru.trackMenu.chooseFolder;
         }
         if (deviceStorageStatus === "error") {
             return deviceOffline?.storage.directoryName
-                ? "Reconnect folder and download"
-                : "Choose folder and download";
+                ? ru.trackMenu.reconnectFolder
+                : ru.trackMenu.chooseFolder;
         }
-        if (isAutoManagedReady) return "Keep offline on this device";
-        return deviceRecord ? "Retry device download" : "Download to device";
+        if (isAutoManagedReady) return ru.trackMenu.keepOffline;
+        return deviceRecord
+            ? ru.trackMenu.retryDownload
+            : ru.trackMenu.download;
     })();
 
     const effectiveShowMatchVibe = showMatchVibe && !isRemote;
@@ -229,7 +233,7 @@ export function TrackOverflowMenu({
     const handleSelectPlaylist = useCallback(
         async (playlistId: string) => {
             await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef(track));
-            toast.success(`Added "${track.title}" to playlist`);
+            toast.success(`«${track.title}» добавлен в плейлист`);
         },
         [track],
     );
@@ -241,8 +245,8 @@ export function TrackOverflowMenu({
             if (!trackLinkPath) return;
             const url = `${window.location.origin}${trackLinkPath}`;
             void navigator.clipboard.writeText(url).then(
-                () => toast.success("Song link copied"),
-                () => toast.error("Could not copy the song link"),
+                () => toast.success(ru.trackMenu.copySuccess),
+                () => toast.error(ru.trackMenu.copyFailed),
             );
         },
         [trackLinkPath, closeMenu],
@@ -281,7 +285,7 @@ export function TrackOverflowMenu({
                 const result = await controls.startVibeMode();
                 if (result.success) {
                     toast.success(
-                        `Match Vibe: found ${result.trackCount} similar tracks`,
+                        `Найдено ${result.trackCount} ${pluralRu(result.trackCount, ["похожий трек", "похожих трека", "похожих треков"])}`,
                     );
                 }
             }, 500);
@@ -318,9 +322,7 @@ export function TrackOverflowMenu({
                 }
 
                 if (!response) {
-                    toast.error(
-                        "Artist information is required to start radio",
-                    );
+                    toast.error(ru.trackMenu.artistRequired);
                     return;
                 }
 
@@ -331,15 +333,13 @@ export function TrackOverflowMenu({
                     );
                     controls.playTracks([track, ...filtered], 0);
                     toast.success(
-                        `Playing ${track.artist.name} Radio (${filtered.length} tracks)`,
+                        `Радио «${track.artist.name}»: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
                     );
                 } else {
-                    toast.error(
-                        "Not enough similar music in your library for artist radio",
-                    );
+                    toast.error(ru.trackMenu.radioNotEnough);
                 }
             } catch {
-                toast.error("Failed to start artist radio");
+                toast.error(ru.trackMenu.radioFailed);
             }
         },
         [track, controls, closeMenu, isRemote],
@@ -359,15 +359,15 @@ export function TrackOverflowMenu({
                 .then((record) =>
                     toast.success(
                         record.status === "ready"
-                            ? `"${track.title}" is available offline`
-                            : `Download started for "${track.title}"`,
+                            ? `«${track.title}» доступен без интернета`
+                            : `Загрузка «${track.title}» началась`,
                     ),
                 )
                 .catch((error: unknown) =>
                     toast.error(
                         error instanceof Error
                             ? error.message
-                            : "Device download failed",
+                            : ru.trackMenu.downloadFailed,
                     ),
                 );
         },
@@ -393,10 +393,10 @@ export function TrackOverflowMenu({
                             : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
                         triggerClassName,
                     )}
-                    aria-label="Track actions"
+                    aria-label={ru.trackMenu.actions}
                     aria-expanded={isOpen}
                     aria-haspopup="menu"
-                    title="Track actions"
+                    title={ru.trackMenu.actions}
                 >
                     <EllipsisVertical className="h-4 w-4" />
                 </button>
@@ -417,7 +417,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handlePlayNext}
                                 icon={<ListEnd className="h-4 w-4" />}
-                                label="Play next"
+                                label={ru.trackMenu.playNext}
                             />
                         )}
 
@@ -425,7 +425,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleAddToQueue}
                                 icon={<ListPlus className="h-4 w-4" />}
-                                label="Add to queue"
+                                label={ru.trackMenu.addQueue}
                             />
                         )}
 
@@ -433,7 +433,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleAddToPlaylist}
                                 icon={<Plus className="h-4 w-4" />}
-                                label="Add to playlist"
+                                label={ru.trackMenu.addPlaylist}
                             />
                         )}
 
@@ -460,7 +460,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleShare}
                                 icon={<Share2 className="h-4 w-4" />}
-                                label="Share"
+                                label={ru.common.share}
                             />
                         )}
 
@@ -468,7 +468,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleCopyTrackLink}
                                 icon={<LinkIcon className="h-4 w-4" />}
-                                label="Copy link to song"
+                                label={ru.trackMenu.copyLink}
                             />
                         )}
 
@@ -476,7 +476,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleGoToArtist}
                                 icon={<User className="h-4 w-4" />}
-                                label="Go to artist"
+                                label={ru.trackMenu.goArtist}
                             />
                         )}
 
@@ -484,7 +484,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleGoToAlbum}
                                 icon={<Disc3 className="h-4 w-4" />}
-                                label="Go to album"
+                                label={ru.trackMenu.goAlbum}
                             />
                         )}
 
@@ -492,7 +492,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleMatchVibe}
                                 icon={<AudioWaveform className="h-4 w-4" />}
-                                label="Match Vibe"
+                                label={ru.trackMenu.matchVibe}
                             />
                         )}
 
@@ -500,7 +500,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleShowVibeMap}
                                 icon={<MapIcon className="h-4 w-4" />}
-                                label="Show on Vibe Map"
+                                label={ru.trackMenu.showVibeMap}
                             />
                         )}
 
@@ -510,7 +510,7 @@ export function TrackOverflowMenu({
                                 <MenuButton
                                     onClick={handleStartRadio}
                                     icon={<Radio className="h-4 w-4" />}
-                                    label="Start Radio"
+                                    label={ru.trackMenu.startRadio}
                                 />
                             )}
 

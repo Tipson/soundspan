@@ -46,6 +46,7 @@ import {
     MusicDetailHero,
     MusicDetailTrackSurface,
 } from "@/components/music-detail";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 const EMPTY_TRACKS: LikedPlaylistTrack[] = [];
 
@@ -164,8 +165,8 @@ function LikedTrackList({
                         className="grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto] gap-4 mb-2"
                         columns={[
                             { label: "#", className: "text-center" },
-                            { label: "Title" },
-                            { label: "Album" },
+                            { label: ru.playlist.titleColumn },
+                            { label: ru.playlist.albumColumn },
                             { label: "" },
                         ]}
                     />
@@ -264,14 +265,14 @@ export default function MyLikedPlaylistPage() {
                     context.previous,
                 );
             }
-            toast.error("Failed to update liked tracks");
+            toast.error(ru.playlist.likeUpdateFailed);
         },
         onSuccess: (preference) => {
             queryClient.setQueryData(
                 ["track-preference", preference.trackId],
                 preference,
             );
-            toast.success("Removed from My Liked");
+            toast.success(ru.playlist.removedLiked);
         },
         onSettled: () => {
             setRemovingTrackId(null);
@@ -293,7 +294,9 @@ export default function MyLikedPlaylistPage() {
     const handleAddAllToQueue = () => {
         if (audioTracks.length === 0) return;
         addTracksToQueue(audioTracks);
-        toast.success(`Added ${audioTracks.length} tracks to queue`);
+        toast.success(
+            `${ru.playlist.addedToQueue}: ${audioTracks.length} ${pluralRu(audioTracks.length, ["трек", "трека", "треков"])}`,
+        );
     };
 
     const handlePlaylistSelected = async (playlistId: string) => {
@@ -316,14 +319,16 @@ export default function MyLikedPlaylistPage() {
                     }),
                 );
             }
-            toast.success(`Added ${likedTracks.length} tracks to playlist`);
+            toast.success(
+                `Добавлено в плейлист: ${likedTracks.length} ${pluralRu(likedTracks.length, ["трек", "трека", "треков"])}`,
+            );
             setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 error,
             );
-            toast.error("Failed to add some tracks to playlist");
+            toast.error(ru.playlist.addSomeFailed);
         } finally {
             setIsAddingToPlaylist(false);
         }
@@ -355,7 +360,7 @@ export default function MyLikedPlaylistPage() {
     const handleStartRadio = async () => {
         if (!data?.playlist.id) return;
         try {
-            toast.info("Starting playlist radio...");
+            toast.info(ru.playlist.startingRadio);
             const response = await api.getRadioTracks(
                 "playlist",
                 data.playlist.id,
@@ -375,16 +380,18 @@ export default function MyLikedPlaylistPage() {
                     }),
                 );
                 playTracks(tracks, 0);
-                toast.success(`Playing ${tracks.length} radio tracks`);
+                toast.success(
+                    `Радио запущено: ${tracks.length} ${pluralRu(tracks.length, ["трек", "трека", "треков"])}`,
+                );
             } else {
-                toast.error("No radio tracks found for this playlist");
+                toast.error(ru.playlist.noRadioTracks);
             }
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to start playlist radio:",
                 error,
             );
-            toast.error("Failed to start playlist radio");
+            toast.error(ru.playlist.radioFailed);
         }
     };
 
@@ -400,7 +407,7 @@ export default function MyLikedPlaylistPage() {
         return (
             <div className="flex min-h-screen items-center justify-center px-6 text-center">
                 <p className="text-sm text-white/60">
-                    Could not load your liked tracks right now.
+                    Сейчас не удалось загрузить любимые треки.
                 </p>
             </div>
         );
@@ -409,7 +416,7 @@ export default function MyLikedPlaylistPage() {
     return (
         <div className="min-h-screen">
             <MusicDetailHero
-                eyebrow="Playlist"
+                eyebrow={ru.playlist.playlist}
                 title={data.playlist.name}
                 artworkShape="square"
                 backgroundImage={coverUrl}
@@ -417,7 +424,11 @@ export default function MyLikedPlaylistPage() {
                     <>
                         <span>
                             {likedTracks.length}{" "}
-                            {likedTracks.length === 1 ? "song" : "songs"}
+                            {pluralRu(likedTracks.length, [
+                                "трек",
+                                "трека",
+                                "треков",
+                            ])}
                         </span>
                         {totalDuration > 0 && (
                             <>
@@ -428,7 +439,7 @@ export default function MyLikedPlaylistPage() {
                             </>
                         )}
                         <span aria-hidden="true">•</span>
-                        <span>Saved to your account</span>
+                        <span>{ru.playlist.savedToAccount}</span>
                     </>
                 }
                 artwork={
@@ -436,7 +447,7 @@ export default function MyLikedPlaylistPage() {
                         {coverUrl ? (
                             <CachedImage
                                 src={coverUrl}
-                                alt="My Liked"
+                                alt={ru.nav.liked}
                                 fill
                                 className="object-cover"
                                 sizes="(max-width: 640px) 176px, 224px"
@@ -458,7 +469,7 @@ export default function MyLikedPlaylistPage() {
 
             {/* Action Bar */}
             <div className="relative z-10 mx-auto -mt-5 max-w-[1800px] px-4 pb-5 sm:px-6 lg:px-8">
-                <MusicDetailActionDock label="Liked songs controls">
+                <MusicDetailActionDock label={ru.playlist.likedControls}>
                     {likedTracks.length > 0 && (
                         <button
                             onClick={handlePlayAll}
@@ -473,8 +484,8 @@ export default function MyLikedPlaylistPage() {
                             )}
                             <span>
                                 {isThisPlaylistPlaying && isPlaying
-                                    ? "Pause"
-                                    : "Play All"}
+                                    ? ru.common.pause
+                                    : ru.common.playAll}
                             </span>
                         </button>
                     )}
@@ -482,8 +493,8 @@ export default function MyLikedPlaylistPage() {
                         <button
                             onClick={handleShuffle}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Shuffle play"
-                            aria-label="Shuffle play"
+                            title={ru.playlist.shufflePlay}
+                            aria-label={ru.playlist.shufflePlay}
                         >
                             <Shuffle className="h-5 w-5" />
                         </button>
@@ -497,8 +508,8 @@ export default function MyLikedPlaylistPage() {
                         <button
                             onClick={handleAddAllToQueue}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Add all to queue"
-                            aria-label="Add all to queue"
+                            title={ru.playlist.addAllQueue}
+                            aria-label={ru.playlist.addAllQueue}
                         >
                             <ListMusic className="h-5 w-5" />
                         </button>
@@ -507,8 +518,8 @@ export default function MyLikedPlaylistPage() {
                         <button
                             onClick={() => setShowPlaylistSelector(true)}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Add all to playlist"
-                            aria-label="Add all to playlist"
+                            title={ru.playlist.addAllPlaylist}
+                            aria-label={ru.playlist.addAllPlaylist}
                         >
                             <Plus className="h-5 w-5" />
                         </button>
@@ -517,8 +528,8 @@ export default function MyLikedPlaylistPage() {
                         <button
                             onClick={handleStartRadio}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title="Start playlist radio"
-                            aria-label="Start playlist radio"
+                            title={ru.playlist.startRadio}
+                            aria-label={ru.playlist.startRadio}
                         >
                             <Radio className="h-5 w-5" />
                         </button>
@@ -534,14 +545,15 @@ export default function MyLikedPlaylistPage() {
                             <Music className="h-8 w-8 text-white/40" />
                         </div>
                         <h2 className="mb-1 text-lg font-semibold text-white">
-                            No liked tracks yet
+                            Любимых треков пока нет
                         </h2>
                         <p className="text-sm text-white/50">
-                            Tap the heart on any song to add it here.
+                            Нажмите на сердечко рядом с треком, чтобы добавить
+                            его сюда.
                         </p>
                     </div>
                 ) : (
-                    <MusicDetailTrackSurface label="Liked songs tracks">
+                    <MusicDetailTrackSurface label={ru.playlist.likedTracks}>
                         <LikedTrackList
                             tracks={likedTracks}
                             likedTrackIds={likedTrackIds}
@@ -560,7 +572,7 @@ export default function MyLikedPlaylistPage() {
                 onClose={() => setShowPlaylistSelector(false)}
                 onSelectPlaylist={handlePlaylistSelected}
                 isLoading={isAddingToPlaylist}
-                loadingMessage="Adding tracks..."
+                loadingMessage={ru.playlist.addingTracks}
             />
         </div>
     );

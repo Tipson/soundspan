@@ -21,6 +21,7 @@ import { Modal } from "./Modal";
 import { Button } from "./Button";
 import { cn } from "@/utils/cn";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface ReleaseSelectionModalProps {
     isOpen: boolean;
@@ -135,7 +136,7 @@ export function ReleaseSelectionModal({
                 setError(
                     err instanceof Error
                         ? err.message
-                        : "Failed to search for releases",
+                        : "Не удалось найти релизы",
                 );
             } finally {
                 if (isRefresh) {
@@ -241,12 +242,12 @@ export function ReleaseSelectionModal({
 
     const handleGrabRelease = async (release: AlbumRelease) => {
         if (!lidarrAlbumId) {
-            toast.error("Album not ready in Lidarr");
+            toast.error("Альбом ещё не готов в Lidarr");
             return;
         }
 
         if (grabbing || grabbedReleaseGuids.includes(release.guid)) {
-            toast.info("This release is already being processed");
+            toast.info("Этот релиз уже обрабатывается");
             return;
         }
 
@@ -264,7 +265,7 @@ export function ReleaseSelectionModal({
             });
 
             if (result.duplicate) {
-                toast.info(result.message || "Download already in progress");
+                toast.info(result.message || "Загрузка уже выполняется");
                 onClose();
                 return;
             }
@@ -275,17 +276,17 @@ export function ReleaseSelectionModal({
                 albumMbid,
             );
             setGrabbedReleaseGuids((prev) => [...prev, release.guid]);
-            toast.success(`Downloading "${albumTitle}"`, {
-                description: `Selected: ${release.title}`,
+            toast.success(`Загружаем «${albumTitle}»`, {
+                description: `Выбран релиз: ${release.title}`,
             });
             onClose();
         } catch (err: unknown) {
             sharedFrontendLogger.error("Failed to grab release:", err);
-            toast.error("Failed to start download", {
+            toast.error("Не удалось начать загрузку", {
                 description:
                     err instanceof Error
                         ? err.message
-                        : "Unknown release error",
+                        : "Неизвестная ошибка релиза",
             });
         } finally {
             setGrabbing(null);
@@ -296,7 +297,7 @@ export function ReleaseSelectionModal({
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={`Select Release: ${albumTitle}`}
+            title={`Выберите релиз: ${albumTitle}`}
             className="max-h-[80vh] max-w-4xl overflow-hidden p-6"
         >
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -306,14 +307,14 @@ export function ReleaseSelectionModal({
                     onClick={() => void fetchReleases("refresh")}
                     disabled={loading || refreshing}
                     className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/70 transition hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    title="Refresh release results"
+                    title="Обновить список релизов"
                 >
                     {refreshing ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
                         <RefreshCw className="h-3.5 w-3.5" />
                     )}
-                    Refresh
+                    Обновить
                 </button>
             </div>
 
@@ -321,10 +322,10 @@ export function ReleaseSelectionModal({
                 <div className="flex flex-col items-center justify-center gap-4 py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-brand" />
                     <p className="text-sm text-white/60">
-                        Searching indexers for releases...
+                        Ищем релизы в индексаторах…
                     </p>
                     <p className="text-xs text-white/40">
-                        This may take up to 60 seconds
+                        Это может занять до 60 секунд
                     </p>
                 </div>
             ) : error ? (
@@ -336,25 +337,24 @@ export function ReleaseSelectionModal({
                         disabled={refreshing}
                         onClick={() => void fetchReleases("refresh")}
                     >
-                        {refreshing ? "Retrying..." : "Retry"}
+                        {refreshing ? "Повторяем…" : ru.common.retry}
                     </Button>
                 </div>
             ) : releases.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-12">
                     <FileAudio className="h-8 w-8 text-white/40" />
                     <p className="text-sm text-white/60">
-                        No releases found from indexers
+                        Индексаторы не нашли релизов
                     </p>
                     <p className="text-xs text-white/40">
-                        The album may not be available on your configured
-                        indexers
+                        Возможно, альбом недоступен в настроенных индексаторах
                     </p>
                 </div>
             ) : (
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 gap-2 rounded-lg border border-white/10 bg-white/5 p-3 md:grid-cols-4">
                         <label className="text-xs text-white/60">
-                            Sort
+                            Сортировка
                             <select
                                 value={sortBy}
                                 onChange={(event) =>
@@ -364,16 +364,16 @@ export function ReleaseSelectionModal({
                                 }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
-                                <option value="best">Best Match</option>
-                                <option value="quality">Quality</option>
-                                <option value="seeders">Seeders</option>
-                                <option value="size">Size</option>
-                                <option value="indexer">Indexer</option>
+                                <option value="best">Лучшее совпадение</option>
+                                <option value="quality">Качество</option>
+                                <option value="seeders">Сиды</option>
+                                <option value="size">Размер</option>
+                                <option value="indexer">Индексатор</option>
                             </select>
                         </label>
 
                         <label className="text-xs text-white/60">
-                            Quality
+                            Качество
                             <select
                                 value={qualityFilter}
                                 onChange={(event) =>
@@ -381,7 +381,7 @@ export function ReleaseSelectionModal({
                                 }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
-                                <option value="all">All</option>
+                                <option value="all">Все</option>
                                 {qualityOptions.map((quality) => (
                                     <option key={quality} value={quality}>
                                         {quality}
@@ -391,7 +391,7 @@ export function ReleaseSelectionModal({
                         </label>
 
                         <label className="text-xs text-white/60">
-                            Indexer
+                            Индексатор
                             <select
                                 value={indexerFilter}
                                 onChange={(event) =>
@@ -399,7 +399,7 @@ export function ReleaseSelectionModal({
                                 }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
-                                <option value="all">All</option>
+                                <option value="all">Все</option>
                                 {indexerOptions.map((indexer) => (
                                     <option key={indexer} value={indexer}>
                                         {indexer}
@@ -409,7 +409,7 @@ export function ReleaseSelectionModal({
                         </label>
 
                         <label className="text-xs text-white/60">
-                            Seeder Gate
+                            Минимум сидов
                             <select
                                 value={seederFilter}
                                 onChange={(event) =>
@@ -422,9 +422,9 @@ export function ReleaseSelectionModal({
                                 }
                                 className="mt-1 w-full rounded border border-white/15 bg-surface-elevated px-2 py-1.5 text-sm text-white focus:border-white/30 focus:outline-none"
                             >
-                                <option value="all">All</option>
-                                <option value="1">At least 1</option>
-                                <option value="10">At least 10</option>
+                                <option value="all">Любое число</option>
+                                <option value="1">Не менее 1</option>
+                                <option value="10">Не менее 10</option>
                             </select>
                         </label>
                     </div>
@@ -441,14 +441,14 @@ export function ReleaseSelectionModal({
                                 }}
                                 className="text-xs text-white/60 underline-offset-2 transition hover:text-white hover:underline"
                             >
-                                Reset sort/filter controls
+                                Сбросить сортировку и фильтры
                             </button>
                         </div>
                     )}
 
                     {filteredReleases.length === 0 ? (
                         <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-white/60">
-                            No releases match the current filters.
+                            Под текущие фильтры не подходит ни один релиз.
                         </div>
                     ) : (
                         <div className="-mx-6 max-h-[45vh] overflow-y-auto px-6">
@@ -457,7 +457,7 @@ export function ReleaseSelectionModal({
                                     <div className="mb-3 flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 text-green-400" />
                                         <h3 className="text-sm font-medium text-white/80">
-                                            Available Releases (
+                                            Доступные релизы (
                                             {approvedReleases.length})
                                         </h3>
                                     </div>
@@ -496,7 +496,7 @@ export function ReleaseSelectionModal({
                                             )}
                                         />
                                         <XCircle className="h-4 w-4 text-red-400/70" />
-                                        Rejected ({rejectedReleases.length})
+                                        Отклонённые ({rejectedReleases.length})
                                     </button>
 
                                     {showRejected && (
@@ -504,7 +504,8 @@ export function ReleaseSelectionModal({
                                             {rejectionSummary.length > 0 && (
                                                 <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
                                                     <div className="mb-2 text-xs uppercase tracking-wide text-red-300/80">
-                                                        Top rejection reasons
+                                                        Основные причины
+                                                        отклонения
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
                                                         {rejectionSummary.map(
@@ -593,7 +594,7 @@ function ReleaseRow({
                             target="_blank"
                             rel="noopener noreferrer"
                             className="group flex items-start gap-1.5 text-sm text-white hover:text-brand"
-                            title={`Open on ${release.indexer}`}
+                            title={`Открыть в ${release.indexer}`}
                             onClick={(event) => event.stopPropagation()}
                         >
                             <span className="line-clamp-2 break-words">
@@ -622,8 +623,8 @@ function ReleaseRow({
                     )}
                     title={
                         alreadyGrabbed
-                            ? "Release already selected"
-                            : "Grab this release"
+                            ? "Релиз уже выбран"
+                            : "Загрузить этот релиз"
                     }
                 >
                     {grabbing ? (
@@ -649,7 +650,7 @@ function ReleaseRow({
                     </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-white/50">
-                    <div className="flex items-center gap-1" title="Size">
+                    <div className="flex items-center gap-1" title="Размер">
                         <HardDrive className="h-3.5 w-3.5" />
                         <span>{release.sizeFormatted}</span>
                     </div>
@@ -663,7 +664,7 @@ function ReleaseRow({
                                       ? "text-yellow-400"
                                       : "text-red-400",
                             )}
-                            title="Seeders"
+                            title="Сиды"
                         >
                             <Users className="h-3.5 w-3.5" />
                             <span>{release.seeders}</span>
@@ -684,8 +685,12 @@ function ReleaseRow({
                     ))}
                     {release.rejections.length > 3 && (
                         <p className="text-xs text-red-300/70">
-                            +{release.rejections.length - 3} more rejection
-                            reason(s)
+                            +{release.rejections.length - 3}{" "}
+                            {pluralRu(release.rejections.length - 3, [
+                                "другая причина",
+                                "другие причины",
+                                "других причин",
+                            ])}
                         </p>
                     )}
                 </div>

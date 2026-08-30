@@ -82,10 +82,10 @@ test("generated playlist buttons dispatch append and regenerate API calls", asyn
     });
 
     const addMore = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent?.includes("Add more tracks"),
+        (button) => button.textContent?.includes("Добавить ещё треки"),
     );
     const regenerate = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent?.includes("Regenerate"),
+        (button) => button.textContent?.includes("Собрать заново"),
     );
     assert.ok(addMore);
     assert.ok(regenerate);

@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { Button } from "./Button";
 import { nextFocusIndex } from "./focusTrapMath";
+import { ru } from "@/lib/i18n/ru";
 
 const FOCUSABLE_SELECTOR =
     "a:not([tabindex='-1']), button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex='-1'])";
@@ -122,7 +123,7 @@ export function Modal({
                     <Button
                         variant="icon"
                         onClick={onClose}
-                        aria-label="Close"
+                        aria-label={ru.common.close}
                         className="hover:text-gray-300"
                     >
                         <X className="w-5 h-5" />

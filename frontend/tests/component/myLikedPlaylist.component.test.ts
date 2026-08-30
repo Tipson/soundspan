@@ -361,13 +361,13 @@ test("renders empty-state copy and hides action buttons when there are no tracks
 
     const html = renderWithQueryClient(MyLikedPlaylistPage);
 
-    assert.match(html, /No liked tracks yet/);
-    assert.match(html, /Tap the heart on any song to add it here\./);
+    assert.match(html, /Любимых треков пока нет/);
+    assert.match(html, /Нажмите на сердечко рядом с треком/);
 
     // Action buttons should be hidden when there are no tracks
-    assert.doesNotMatch(html, /<span>Play All<\/span>/);
-    assert.doesNotMatch(html, /title="Shuffle/);
-    assert.doesNotMatch(html, /title="Add all to queue/);
+    assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
+    assert.doesNotMatch(html, /title="Воспроизвести вперемешку/);
+    assert.doesNotMatch(html, /title="Добавить всё в очередь/);
 });
 
 test("renders consolidated action bar buttons when tracks exist", async () => {
@@ -381,11 +381,11 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     const html = renderWithQueryClient(mod.default);
 
     // Canonical order: Play, Shuffle, Add to Queue, Add to Playlist, Radio
-    assert.match(html, /<span>Play All<\/span>/);
-    assert.match(html, /title="Shuffle play"/);
-    assert.match(html, /title="Add all to queue"/);
-    assert.match(html, /title="Add all to playlist"/);
-    assert.match(html, /title="Start playlist radio"/);
+    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /title="Воспроизвести вперемешку"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Добавить всё в плейлист"/);
+    assert.match(html, /title="Запустить радио по плейлисту"/);
 });
 
 test("My Liked offers a manual device download for downloadable tracks only", async () => {
@@ -443,7 +443,7 @@ test("shows Pause primary action and active like controls when a liked track is 
     const MyLikedPlaylistPage = mod.default;
     const html = renderWithQueryClient(MyLikedPlaylistPage);
 
-    assert.match(html, /<span>Pause<\/span>/);
+    assert.match(html, /<span>Пауза<\/span>/);
     assert.match(html, /data-icon="pause"/);
 
     const thumbButtons = html.match(/data-testid="liked-track-thumb"/g) ?? [];
